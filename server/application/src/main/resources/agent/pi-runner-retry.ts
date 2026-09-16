@@ -1,3 +1,5 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 /**
  * Repeating a request whose answer the caller cannot afford to lose, with a doubling wait between
  * attempts. Which failures are worth repeating is the caller's to say; why the admission is one of
@@ -5,7 +7,7 @@
  */
 
 /** The wait before attempt n: `baseMs`, then doubling, so a short outage is ridden out without a long stall. */
-export function retryDelayMs(attempt: number, baseMs = 1_000): number {
+export function retryDelayMs(attempt: number, baseMs = 1000): number {
 	if (!Number.isInteger(attempt) || attempt < 1) {
 		throw new Error(`attempt must be a positive integer, got: ${attempt}`);
 	}
@@ -41,27 +43,24 @@ export async function retrying<T>(
 	call: () => Promise<T>,
 	isWorthRetrying: (error: unknown) => boolean,
 	policy: RetryPolicy,
-	onRetry: (attempt: number, error: unknown, delayMs: number) => void = () => {},
+	onRetry?: (attempt: number, error: unknown, delayMs: number) => void,
 ): Promise<T> {
 	if (!Number.isInteger(policy.attempts) || policy.attempts < 1) {
 		throw new Error(`attempts must be a positive integer, got: ${policy.attempts}`);
 	}
-	const sleep =
-		policy.sleep ??
-		((ms: number) =>
-			new Promise<void>((resolve) => {
-				setTimeout(resolve, ms);
-			}));
-	for (let attempt = 1; attempt < policy.attempts; attempt++) {
+	const sleep = policy.sleep ?? delay;
+	for (let attempt = 1; attempt < policy.attempts; attempt += 1) {
 		try {
 			return await call();
 		} catch (error) {
-			if (!isWorthRetrying(error)) throw error;
+			if (!isWorthRetrying(error)) {
+				throw error;
+			}
 			const delayMs = retryDelayMs(attempt, policy.baseMs);
-			onRetry(attempt, error, delayMs);
+			onRetry?.(attempt, error, delayMs);
 			await sleep(delayMs);
 		}
 	}
 	// The last attempt is outside the loop: nothing follows it, so its failure is simply the caller's.
-	return await call();
+	return call();
 }

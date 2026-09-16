@@ -11,6 +11,13 @@ import { expectGenuinelyDisabled } from "@/test/controls";
 import { GUARDED_SURVEY_LEVEL_KINDS, surveyLevel } from "./admin-surveys-search";
 import { AdminSurveyComposer } from "./AdminSurveyComposer";
 
+async function expectPrompts(...values: string[]) {
+	const fields = screen.getAllByRole("textbox", { name: "Question" });
+	for (const [index, value] of values.entries()) {
+		await expect(fields[index]).toHaveValue(value);
+	}
+}
+
 const meta = {
 	component: AdminSurveyComposer,
 	parameters: { layout: "fullscreen", chromatic: { viewports: [1440] } },
@@ -116,12 +123,6 @@ export const ManyQuestions: Story = {
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Move question 6 down" }));
 
 		// Moving swaps the questions themselves, prompts included, not just their numbers.
-		const expectPrompts = async (...values: string[]) => {
-			const fields = screen.getAllByRole("textbox", { name: "Question" });
-			for (const [index, value] of values.entries()) {
-				await expect(fields[index]).toHaveValue(value);
-			}
-		};
 		const [first, second] = screen.getAllByRole("textbox", { name: "Question" });
 		if (!first || !second) {
 			throw new Error("expected two prompts");
@@ -162,7 +163,7 @@ export const Preview: Story = {
 		await expect(dialog.getByRole("progressbar")).toHaveTextContent("Question 1 of 1");
 		await expect(dialog.getByText(/What slowed you down in your first week\?/u)).toBeVisible();
 		await userEvent.keyboard("{Escape}");
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(screen.queryByRole("dialog", { name: "Onboarding check-in" })).toBeNull(),
 		);
 		// Closing the preview is not leaving the composer, so the unsaved-changes guard stays down.

@@ -34,7 +34,8 @@ export interface LeaderboardSchedule {
 }
 
 export const DEFAULT_SCHEDULE: LeaderboardSchedule = {
-	day: 1, // Monday
+	// Monday
+	day: 1,
 	hour: 9,
 	minute: 0,
 };
@@ -115,33 +116,25 @@ export function getDateRangeForPreset(
 
 		case "this-week": {
 			const weekStart = getLeaderboardWeekStart(now, schedule);
-			return {
-				after: weekStart,
-				before: undefined, // Open-ended to show activity "so far"
-			};
+			// Open-ended to show activity "so far"
+			return { after: weekStart, before: undefined };
 		}
 
 		case "last-week": {
 			const lastWeekStart = getLastLeaderboardWeekStart(now, schedule);
 			const lastWeekEnd = getLeaderboardWeekEnd(lastWeekStart);
-			return {
-				after: lastWeekStart,
-				before: lastWeekEnd, // Bounded - it's a completed week
-			};
+			// Bounded - it's a completed week
+			return { after: lastWeekStart, before: lastWeekEnd };
 		}
 
 		case "this-month": {
-			return {
-				after: startOfMonth(now),
-				before: undefined, // Open-ended
-			};
+			// Open-ended
+			return { after: startOfMonth(now), before: undefined };
 		}
 
 		case "last-month": {
-			return {
-				after: startOfMonth(subMonths(now, 1)),
-				before: startOfMonth(now), // Bounded - completed month
-			};
+			// Bounded - completed month
+			return { after: startOfMonth(subMonths(now, 1)), before: startOfMonth(now) };
 		}
 
 		case "custom": {
@@ -153,9 +146,10 @@ export function getDateRangeForPreset(
 				};
 			}
 			if (customRange.to) {
+				// Exclusive end
 				return {
 					after: startOfDay(customRange.from),
-					before: addDays(startOfDay(customRange.to), 1), // Exclusive end
+					before: addDays(startOfDay(customRange.to), 1),
 				};
 			}
 			// Only start date provided - open-ended
@@ -218,7 +212,10 @@ export function detectPresetFromDates(
 	enableAllActivity = false,
 ): TimeframePreset {
 	if (!hasText(afterStr)) {
-		return hasText(beforeStr) ? "custom" : enableAllActivity ? "all-activity" : "this-week";
+		if (hasText(beforeStr)) {
+			return "custom";
+		}
+		return enableAllActivity ? "all-activity" : "this-week";
 	}
 
 	const after = parseISO(afterStr);

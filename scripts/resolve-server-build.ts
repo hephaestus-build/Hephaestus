@@ -30,7 +30,9 @@ export async function resolveServerBuild(
 	defaultBranch: string,
 	api: (path: string) => Promise<unknown>,
 ): Promise<{ runId: number; artifactId: number } | undefined> {
-	if (!/^[a-f\d]{40}$/.test(commit)) throw new Error("Expected an exact commit SHA");
+	if (!/^[a-f\d]{40}$/u.test(commit)) {
+		throw new Error("Expected an exact commit SHA");
+	}
 	const root = `repos/${repository}/actions`;
 	const listing = asRecord(
 		await api(
@@ -49,11 +51,14 @@ export async function resolveServerBuild(
 			asRecord(run.repository, "repository").full_name !== repository ||
 			asRecord(run.head_repository, "head repository").full_name !== repository ||
 			!asString(run.head_branch, "head branch").startsWith(`gh-readonly-queue/${defaultBranch}/`)
-		)
+		) {
 			continue;
+		}
 		const runId = id(run.id);
 		const repositoryId = id(asRecord(run.repository, "repository").id);
-		if (id(asRecord(run.head_repository, "head repository").id) !== repositoryId) continue;
+		if (id(asRecord(run.head_repository, "head repository").id) !== repositoryId) {
+			continue;
+		}
 		const jobPages = asArray(
 			await api(`${root}/runs/${runId}/jobs?filter=latest&per_page=100`),
 			"job pages",
@@ -65,8 +70,9 @@ export async function resolveServerBuild(
 			!requiredJobs.every((name) =>
 				jobs.some((job) => job.name === name && job.conclusion === "success"),
 			)
-		)
+		) {
 			continue;
+		}
 		const artifactPages = asArray(
 			await api(`${root}/runs/${runId}/artifacts?per_page=100`),
 			"artifact pages",
@@ -79,17 +85,19 @@ export async function resolveServerBuild(
 			if (
 				artifact.name !== `server-build-${runId}` ||
 				artifact.expired !== false ||
-				!/^sha256:[a-f\d]{64}$/.test(asString(artifact.digest, "artifact digest"))
-			)
+				!/^sha256:[a-f\d]{64}$/u.test(asString(artifact.digest, "artifact digest"))
+			) {
 				continue;
+			}
 			const origin = asRecord(artifact.workflow_run, "artifact workflow run");
 			if (
 				origin.id !== runId ||
 				origin.head_sha !== commit ||
 				origin.repository_id !== repositoryId ||
 				origin.head_repository_id !== repositoryId
-			)
+			) {
 				continue;
+			}
 			return { runId, artifactId: id(artifact.id) };
 		}
 	}

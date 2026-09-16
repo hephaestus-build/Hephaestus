@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { InstanceLlmSettings } from "@/api/types.gen";
 
-import { InstanceLlmSettingsCard } from "./InstanceLlmSettingsCard";
+import {
+	InstanceLlmSettingsCard,
+	type InstanceLlmSettingsCardProps,
+} from "./InstanceLlmSettingsCard";
 
 const saved: InstanceLlmSettings = {
 	allowedEgressHosts: "api.openai.com",
@@ -16,7 +19,7 @@ const ownProviderSwitch = () =>
 const saveButton = () => screen.getByRole<HTMLButtonElement>("button", { name: "Save settings" });
 
 function renderCard(settings: InstanceLlmSettings = saved) {
-	const onSave = vi.fn();
+	const onSave = vi.fn<InstanceLlmSettingsCardProps["onSave"]>();
 	const view = render(
 		<InstanceLlmSettingsCard
 			settings={settings}
@@ -84,7 +87,7 @@ describe("InstanceLlmSettingsCard", () => {
 				settings={{ allowedEgressHosts: "api.openai.com", allowWorkspaceConnections: false }}
 				isLoading={false}
 				isSubmitting={false}
-				onSave={vi.fn()}
+				onSave={vi.fn<() => void>()}
 			/>,
 		);
 

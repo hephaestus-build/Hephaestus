@@ -27,7 +27,7 @@ it("keeps the main route available when the optional copilot import rejects", as
 		history: createMemoryHistory({ initialEntries: ["/"] }),
 		context: { queryClient, auth: undefined },
 	});
-	const onCaughtError = vi.fn();
+	const onCaughtError = vi.fn<(error: unknown) => void>();
 	const view = render(
 		<QueryClientProvider client={queryClient}>
 			<AuthProvider>

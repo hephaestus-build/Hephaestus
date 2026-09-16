@@ -50,7 +50,7 @@ export const EntryMovesFocusToItsField: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("link", { name: /Give the practice a name/u }));
 		// A frame later: an entry may first have to reveal a collapsed section for its field to exist.
-		await waitFor(() => expect(canvas.getByLabelText("Name")).toHaveFocus());
+		await waitFor(async () => expect(canvas.getByLabelText("Name")).toHaveFocus());
 	},
 };
 

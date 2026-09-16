@@ -1,6 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
+import { ObserverStub } from "@/test/observers";
+
 import { LandingCluster } from "./LandingVisuals";
 
 it.each([
@@ -15,14 +17,7 @@ it.each([
 			.mockReturnValue(Object.assign(mediaQuery, { matches }));
 		// The viewport observer only starts animations after intersection; this test checks the
 		// initial style the reader sees before that callback, not jsdom's nonexistent layout.
-		vi.stubGlobal(
-			"IntersectionObserver",
-			class {
-				observe() {}
-				unobserve() {}
-				disconnect() {}
-			},
-		);
+		vi.stubGlobal("IntersectionObserver", ObserverStub);
 		try {
 			render(
 				<ol>

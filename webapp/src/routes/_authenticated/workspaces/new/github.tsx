@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { getProvidersOptions } from "@/api/@tanstack/react-query.gen";
 import { GithubIcon } from "@/components/icons/brand";
@@ -20,6 +21,38 @@ function GitHubSetupPage() {
 	});
 
 	const appUrl = providers?.github?.appInstallationUrl;
+
+	let installAction: ReactNode;
+	if (isLoading) {
+		installAction = (
+			<div className="flex justify-center py-4">
+				<Spinner />
+			</div>
+		);
+	} else if (hasText(appUrl)) {
+		installAction = (
+			<a
+				href={appUrl}
+				target="_blank"
+				rel="noopener noreferrer"
+				className={buttonVariants({ className: "w-full" })}
+			>
+				<GithubIcon className="mr-2 size-4" />
+				Install GitHub App
+				<ExternalLinkIcon className="ml-2 size-3.5" />
+			</a>
+		);
+	} else {
+		installAction = (
+			<Alert>
+				<AlertTitle>GitHub App not configured</AlertTitle>
+				<AlertDescription>
+					The GitHub App installation URL has not been configured for this deployment. Contact your
+					administrator.
+				</AlertDescription>
+			</Alert>
+		);
+	}
 
 	return (
 		<div className="mx-auto w-full max-w-2xl">
@@ -54,30 +87,7 @@ function GitHubSetupPage() {
 					</ol>
 				</div>
 
-				{isLoading ? (
-					<div className="flex justify-center py-4">
-						<Spinner />
-					</div>
-				) : hasText(appUrl) ? (
-					<a
-						href={appUrl}
-						target="_blank"
-						rel="noopener noreferrer"
-						className={buttonVariants({ className: "w-full" })}
-					>
-						<GithubIcon className="mr-2 size-4" />
-						Install GitHub App
-						<ExternalLinkIcon className="ml-2 size-3.5" />
-					</a>
-				) : (
-					<Alert>
-						<AlertTitle>GitHub App not configured</AlertTitle>
-						<AlertDescription>
-							The GitHub App installation URL has not been configured for this deployment. Contact
-							your administrator.
-						</AlertDescription>
-					</Alert>
-				)}
+				{installAction}
 			</div>
 		</div>
 	);

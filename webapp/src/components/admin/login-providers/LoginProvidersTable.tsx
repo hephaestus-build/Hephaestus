@@ -57,6 +57,15 @@ interface LoginProvidersTableProps {
 
 const SKELETON_ROWS = ["a", "b", "c"];
 
+async function copyRedirect(uri: string) {
+	try {
+		await navigator.clipboard.writeText(uri);
+		toast.success("Redirect URI copied");
+	} catch {
+		toast.error("Could not copy to clipboard");
+	}
+}
+
 export function LoginProvidersTable({
 	providers,
 	isLoading,
@@ -118,15 +127,6 @@ export function LoginProvidersTable({
 		);
 	}
 
-	const copyRedirect = async (uri: string) => {
-		try {
-			await navigator.clipboard.writeText(uri);
-			toast.success("Redirect URI copied");
-		} catch {
-			toast.error("Could not copy to clipboard");
-		}
-	};
-
 	return (
 		<>
 			<Table>
@@ -175,7 +175,9 @@ export function LoginProvidersTable({
 													<InputGroupButton
 														size="icon-xs"
 														aria-label={`Copy redirect URI for ${provider.displayName}`}
-														onClick={() => void copyRedirect(provider.redirectUri)}
+														onClick={() => {
+															void copyRedirect(provider.redirectUri);
+														}}
 													>
 														<Copy aria-hidden />
 													</InputGroupButton>
@@ -249,7 +251,11 @@ export function LoginProvidersTable({
 						<AlertDialogAction
 							variant="destructive"
 							disabled={isDeletePending}
-							onClick={() => deleting && onDelete(deleting)}
+							onClick={() => {
+								if (deleting !== null) {
+									onDelete(deleting);
+								}
+							}}
 						>
 							{isDeletePending ? "Deleting…" : "Delete"}
 						</AlertDialogAction>

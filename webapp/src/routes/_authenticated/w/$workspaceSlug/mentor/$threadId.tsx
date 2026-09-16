@@ -9,6 +9,12 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/$t
 	component: ThreadContainer,
 });
 
+function copyToClipboard(content: string) {
+	navigator.clipboard.writeText(content).catch(() => {
+		toast.error("Couldn't copy that to the clipboard.");
+	});
+}
+
 function ThreadContainer() {
 	const { threadId } = Route.useParams();
 
@@ -25,12 +31,6 @@ function ThreadContainer() {
 
 	const handleVote = (messageId: string, isUpvote: boolean) => {
 		mentorChat.voteMessage(messageId, isUpvote);
-	};
-
-	const handleCopy = (content: string) => {
-		navigator.clipboard.writeText(content).catch(() => {
-			toast.error("Couldn't copy that to the clipboard.");
-		});
 	};
 
 	const handleMessageEdit = (messageId: string, content: string) => {
@@ -99,7 +99,7 @@ function ThreadContainer() {
 			<div className="flex h-full items-center justify-center p-6">
 				<div className="text-center">
 					<p className="mb-4 text-destructive">
-						Failed to load conversation. Thread may not exist or you don't have access to it.
+						Failed to load conversation. Thread may not exist or you don’t have access to it.
 					</p>
 					<p className="text-sm text-muted-foreground">
 						Try refreshing the page or go back to the main chat.
@@ -129,14 +129,14 @@ function ThreadContainer() {
 				attachments={[]}
 				onMessageSubmit={handleMessageSubmit}
 				onMessageEdit={handleMessageEdit}
-				onStop={() => void mentorChat.stop()}
+				onStop={() => {
+					void mentorChat.stop();
+				}}
 				onReload={() => {
 					mentorChat.clearError();
 					void mentorChat.regenerate();
 				}}
-				onFileUpload={() => Promise.resolve([])}
-				onAttachmentsChange={() => {}}
-				onCopy={handleCopy}
+				onCopy={copyToClipboard}
 				onVote={handleVote}
 				inputPlaceholder="Continue the conversation..."
 				disableAttachments

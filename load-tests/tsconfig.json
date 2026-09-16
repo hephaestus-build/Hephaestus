@@ -1,0 +1,19 @@
+{
+	// Type information for oxlint's type-aware rules over the k6 scenarios, which are JavaScript run
+	// by k6, not Node: `globals.d.ts` declares the one global k6 provides beyond `@types/k6`. Nothing
+	// compiles from here (`noEmit`); `test:load:syntax` runs the scenarios through k6 itself.
+	"compilerOptions": {
+		"allowJs": true,
+		"checkJs": true,
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"lib": ["ES2022"],
+		"types": ["k6"],
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"noEmit": true,
+		"skipLibCheck": true
+	},
+	"include": ["**/*.js", "globals.d.ts"]
+}

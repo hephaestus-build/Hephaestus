@@ -37,7 +37,8 @@ export function evidenceQualityRequirement(
 		case "COMPLETE": {
 			return "Must be captured whole";
 		}
-		default: {
+		case "ANY_CAPTURE":
+		case undefined: {
 			return null;
 		}
 	}

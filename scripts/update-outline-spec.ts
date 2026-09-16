@@ -9,13 +9,13 @@
  */
 
 import { renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import path from "node:path";
 
-const SPEC_DIR = resolve(
+const SPEC_DIR = path.resolve(
 	import.meta.dirname,
 	"../server/generated-clients/src/main/resources/openapi/outline",
 );
-const SPEC_FILE = join(SPEC_DIR, "spec3.yml");
+const SPEC_FILE = path.join(SPEC_DIR, "spec3.yml");
 const SPEC_URL = "https://raw.githubusercontent.com/outline/openapi/main/spec3.yml";
 
 // The spec runs a few hundred kilobytes; an error page or a redirect notice is nowhere near.
@@ -42,16 +42,16 @@ function validateSpec(content: string): { valid: boolean; reason?: string } {
 			reason: "Content contains null bytes (possible binary data)",
 		};
 	}
-	if (!/^openapi:\s*3\./m.test(content)) {
+	if (!/^openapi:\s*3\./mu.test(content)) {
 		return { valid: false, reason: "Content is not an OpenAPI 3 document" };
 	}
-	if (!/title:\s*Outline API/.test(content)) {
+	if (!/title:\s*Outline API/u.test(content)) {
 		return {
 			valid: false,
 			reason: "Content is missing the expected 'Outline API' title",
 		};
 	}
-	if (!/^\s*schemas:/m.test(content) || !/^\s*Document:/m.test(content)) {
+	if (!/^\s*schemas:/mu.test(content) || !/^\s*Document:/mu.test(content)) {
 		return {
 			valid: false,
 			reason: "Content is missing expected Outline component schemas",
@@ -105,7 +105,9 @@ async function main(): Promise<void> {
 	}
 }
 
-main().catch((error) => {
+try {
+	await main();
+} catch (error) {
 	console.error("Error updating spec:", error);
 	process.exit(1);
-});
+}

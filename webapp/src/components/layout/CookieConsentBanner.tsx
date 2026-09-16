@@ -20,6 +20,10 @@ export function CookieConsentBanner() {
 	return <ConsentForm editing={consent !== null} reopened={reopen} />;
 }
 
+function restoreFocus() {
+	document.querySelector<HTMLElement>("main")?.focus();
+}
+
 function ConsentForm({ editing, reopened }: { editing: boolean; reopened: boolean }) {
 	const cardRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
@@ -28,7 +32,6 @@ function ConsentForm({ editing, reopened }: { editing: boolean; reopened: boolea
 		}
 	}, [reopened]);
 
-	const restoreFocus = () => document.querySelector<HTMLElement>("main")?.focus();
 	const decide = (errorMonitoring: boolean) => {
 		setStoredConsent({ errorMonitoring });
 		restoreFocus();

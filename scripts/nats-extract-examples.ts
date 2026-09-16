@@ -22,16 +22,24 @@ const messageOf = (error: unknown): string =>
 
 type LogLevel = "debug" | "info" | "silent";
 
-type Logger = {
+interface Logger {
 	debug: (message: string) => void;
 	info: (message: string) => void;
 	error: (message: string) => void;
-};
+}
 
 function createLogger(level: LogLevel): Logger {
 	return {
-		debug: (msg) => level === "debug" && console.log(msg),
-		info: (msg) => level !== "silent" && console.log(msg),
+		debug: (msg) => {
+			if (level === "debug") {
+				console.log(msg);
+			}
+		},
+		info: (msg) => {
+			if (level !== "silent") {
+				console.log(msg);
+			}
+		},
 		error: (msg) => console.error(msg),
 	};
 }
@@ -71,7 +79,7 @@ function parseIsoDate(value: string): Date {
 	if (!trimmed) {
 		throw new InvalidArgumentError("Timestamp cannot be empty");
 	}
-	const hasOffset = /[+-]\d{2}:\d{2}$/.test(trimmed);
+	const hasOffset = /[+-]\d{2}:\d{2}$/u.test(trimmed);
 	const normalized = trimmed.endsWith("Z") || hasOffset ? trimmed : `${trimmed}Z`;
 	const parsed = new Date(normalized);
 	if (Number.isNaN(parsed.getTime())) {
@@ -85,11 +93,11 @@ function parseEventFilters(entries: string[]): Map<string, Set<string>> {
 	for (const entry of entries) {
 		const [eventRaw, actionRaw] = entry.split(":", 2);
 		const event = eventRaw?.trim().toLowerCase();
-		if (!event) {
+		if (event === undefined || event === "") {
 			continue;
 		}
 		const existing = filters.get(event) ?? new Set<string>();
-		if (actionRaw) {
+		if (actionRaw !== undefined) {
 			const action = actionRaw.trim().toLowerCase();
 			if (action) {
 				existing.add(action);
@@ -101,7 +109,7 @@ function parseEventFilters(entries: string[]): Map<string, Set<string>> {
 }
 
 function getExampleFilename(eventType: string, action: string | undefined): string {
-	return action ? `${eventType}.${action}.json` : `${eventType}.json`;
+	return action === undefined ? `${eventType}.json` : `${eventType}.${action}.json`;
 }
 
 async function getExistingExamples(examplesDir: string): Promise<Set<string>> {
@@ -122,7 +130,7 @@ function getMsgTimestamp(msg: JsMsg): Date | null {
 	return Number.isNaN(timestamp.getTime()) ? null : timestamp;
 }
 
-type ExtractOptions = {
+interface ExtractOptions {
 	natsServer: string;
 	examplesDir: string;
 	natsSubject: string;
@@ -136,7 +144,14 @@ type ExtractOptions = {
 	fetchTimeoutMs: number;
 	dryRun: boolean;
 	logLevel: LogLevel;
-};
+}
+
+function deliverPolicyFor(options: ExtractOptions) {
+	if (options.startWithNew) {
+		return DeliverPolicy.New;
+	}
+	return options.since === null ? DeliverPolicy.All : DeliverPolicy.StartTime;
+}
 
 async function extractWebhookExamples(options: ExtractOptions, logger: Logger) {
 	logger.info(`Connecting to NATS server: ${options.natsServer}`);
@@ -155,6 +170,82 @@ async function extractWebhookExamples(options: ExtractOptions, logger: Logger) {
 	let skippedByTime = 0;
 
 	const decoder = new TextDecoder();
+
+	/** Records one message as a new example, or says why it is not one. */
+	function collectExample(msg: JsMsg): void {
+		let payload: Record<string, unknown>;
+		try {
+			const parsed = parseJson(decoder.decode(msg.data));
+			if (!isRecord(parsed)) {
+				throw new TypeError("payload is not a JSON object");
+			}
+			payload = parsed;
+		} catch {
+			logger.info("Skipping invalid JSON message");
+			return;
+		}
+
+		const subjectParts = msg.subject.split(".");
+		if (subjectParts.length < 4) {
+			logger.info(`Unexpected subject format: ${msg.subject}`);
+			return;
+		}
+
+		const eventType = subjectParts[3];
+		if (eventType === undefined || eventType === "") {
+			logger.info(`Unexpected subject format: ${msg.subject}`);
+			return;
+		}
+		const normalizedEventType = eventType.toLowerCase();
+		const action =
+			typeof payload.action === "string" && payload.action !== "" ? payload.action : undefined;
+
+		if (options.eventFilters.size > 0) {
+			const allowedActions = options.eventFilters.get(normalizedEventType);
+			if (!allowedActions) {
+				skippedByFilter += 1;
+				return;
+			}
+			if (allowedActions.size > 0) {
+				const normalizedAction = (action ?? "").toLowerCase();
+				if (!allowedActions.has(normalizedAction)) {
+					skippedByFilter += 1;
+					return;
+				}
+			}
+			matchedCount += 1;
+		}
+
+		const msgTimestamp = getMsgTimestamp(msg);
+		if (options.since && msgTimestamp && msgTimestamp < options.since) {
+			skippedByTime += 1;
+			return;
+		}
+		if (options.until && msgTimestamp && msgTimestamp > options.until) {
+			skippedByTime += 1;
+			return;
+		}
+
+		let filename = getExampleFilename(eventType, action);
+		if (options.allowDuplicates) {
+			const baseName = filename.replace(/\.json$/u, "");
+			const count = filenameCounts.get(baseName) ?? 0;
+			let candidate = filename;
+			let counter = count;
+			while (existingExamples.has(candidate) || extractedExamples.has(candidate)) {
+				counter += 1;
+				candidate = `${baseName}.${counter}.json`;
+			}
+			filenameCounts.set(baseName, counter);
+			filename = candidate;
+		} else if (existingExamples.has(filename) || extractedExamples.has(filename)) {
+			return;
+		}
+
+		extractedExamples.set(filename, payload);
+		logger.debug(`Found new example: ${filename}`);
+	}
+
 	let nc: NatsConnection | null = null;
 	let consumerName: string | null = null;
 	let consumerRef: { delete: () => Promise<boolean> } | null = null;
@@ -172,11 +263,7 @@ async function extractWebhookExamples(options: ExtractOptions, logger: Logger) {
 			logger.info(`Could not get stream info: ${messageOf(error)}`);
 		}
 
-		const deliverPolicy = options.startWithNew
-			? DeliverPolicy.New
-			: options.since
-				? DeliverPolicy.StartTime
-				: DeliverPolicy.All;
+		const deliverPolicy = deliverPolicyFor(options);
 
 		if (deliverPolicy === DeliverPolicy.New) {
 			logger.info("Consumer deliver policy: NEW (future messages only)");
@@ -226,86 +313,7 @@ async function extractWebhookExamples(options: ExtractOptions, logger: Logger) {
 				for await (const msg of msgs) {
 					gotAny = true;
 					processedCount += 1;
-
-					let payload: Record<string, unknown>;
-					try {
-						const parsed = parseJson(decoder.decode(msg.data));
-						if (!isRecord(parsed)) throw new TypeError("payload is not a JSON object");
-						payload = parsed;
-					} catch {
-						logger.info("Skipping invalid JSON message");
-						msg.ack();
-						continue;
-					}
-
-					const subjectParts = msg.subject.split(".");
-					if (subjectParts.length < 4) {
-						logger.info(`Unexpected subject format: ${msg.subject}`);
-						msg.ack();
-						continue;
-					}
-
-					const eventType = subjectParts[3];
-					if (!eventType) {
-						logger.info(`Unexpected subject format: ${msg.subject}`);
-						msg.ack();
-						continue;
-					}
-					const normalizedEventType = eventType.toLowerCase();
-					const action =
-						typeof payload.action === "string" && payload.action !== ""
-							? payload.action
-							: undefined;
-
-					if (options.eventFilters.size > 0) {
-						const allowedActions = options.eventFilters.get(normalizedEventType);
-						if (!allowedActions) {
-							skippedByFilter += 1;
-							msg.ack();
-							continue;
-						}
-						if (allowedActions.size > 0) {
-							const normalizedAction = (action ?? "").toLowerCase();
-							if (!allowedActions.has(normalizedAction)) {
-								skippedByFilter += 1;
-								msg.ack();
-								continue;
-							}
-						}
-						matchedCount += 1;
-					}
-
-					const msgTimestamp = getMsgTimestamp(msg);
-					if (options.since && msgTimestamp && msgTimestamp < options.since) {
-						skippedByTime += 1;
-						msg.ack();
-						continue;
-					}
-					if (options.until && msgTimestamp && msgTimestamp > options.until) {
-						skippedByTime += 1;
-						msg.ack();
-						continue;
-					}
-
-					let filename = getExampleFilename(eventType, action);
-					if (options.allowDuplicates) {
-						const baseName = filename.replace(/\.json$/, "");
-						const count = filenameCounts.get(baseName) ?? 0;
-						let candidate = filename;
-						let counter = count;
-						while (existingExamples.has(candidate) || extractedExamples.has(candidate)) {
-							counter += 1;
-							candidate = `${baseName}.${counter}.json`;
-						}
-						filenameCounts.set(baseName, counter);
-						filename = candidate;
-					} else if (existingExamples.has(filename) || extractedExamples.has(filename)) {
-						msg.ack();
-						continue;
-					}
-
-					extractedExamples.set(filename, payload);
-					logger.debug(`Found new example: ${filename}`);
+					collectExample(msg);
 					msg.ack();
 				}
 			} catch (error) {
@@ -372,9 +380,7 @@ function buildProgram() {
 		.option(
 			"--event <event[:action]>",
 			"Filter by event/action",
-			(value, previous) => {
-				return [...previous, value];
-			},
+			(value, previous) => [...previous, value],
 			[] as string[],
 		)
 		.option("--since <iso>", "Only include messages after this timestamp")
@@ -414,12 +420,15 @@ async function main() {
 
 	const logger = createLogger(rawOptions.logLevel);
 
-	if (rawOptions.startWithNew && (rawOptions.since || rawOptions.until)) {
+	const { since: sinceText, until: untilText } = rawOptions;
+	const hasSince = sinceText !== undefined && sinceText !== "";
+	const hasUntil = untilText !== undefined && untilText !== "";
+	if (rawOptions.startWithNew && (hasSince || hasUntil)) {
 		throw new InvalidArgumentError("--start-with-new cannot be combined with --since/--until");
 	}
 
-	const since = rawOptions.since ? parseIsoDate(rawOptions.since) : null;
-	const until = rawOptions.until ? parseIsoDate(rawOptions.until) : null;
+	const since = hasSince ? parseIsoDate(sinceText) : null;
+	const until = hasUntil ? parseIsoDate(untilText) : null;
 	if (since && until && since > until) {
 		throw new InvalidArgumentError("--since must be earlier than --until");
 	}
@@ -469,8 +478,9 @@ async function main() {
 	await extractWebhookExamples(options, logger);
 }
 
-main().catch((error) => {
-	const message = error instanceof Error ? error.message : String(error);
-	console.error(`Webhook extraction failed: ${message}`);
+try {
+	await main();
+} catch (error) {
+	console.error(`Webhook extraction failed: ${messageOf(error)}`);
 	process.exit(1);
-});
+}

@@ -48,13 +48,15 @@ function fixture() {
 	};
 }
 async function resolve(data = fixture()) {
-	return resolveServerBuild(repository, commit, "main", (path) => {
-		if (path.includes("/workflows/")) return Promise.resolve({ workflow_runs: [data.run] });
-		if (path.includes("/jobs?")) {
-			assert.match(path, /filter=latest/);
-			return Promise.resolve([{ jobs: data.jobs.slice(0, 4) }, { jobs: data.jobs.slice(4) }]);
+	return resolveServerBuild(repository, commit, "main", async (path) => {
+		if (path.includes("/workflows/")) {
+			return { workflow_runs: [data.run] };
 		}
-		return Promise.resolve([{ artifacts: [] }, { artifacts: [data.artifact] }]);
+		if (path.includes("/jobs?")) {
+			assert.match(path, /filter=latest/u);
+			return [{ jobs: data.jobs.slice(0, 4) }, { jobs: data.jobs.slice(4) }];
+		}
+		return [{ artifacts: [] }, { artifacts: [data.artifact] }];
 	});
 }
 
@@ -120,24 +122,22 @@ await test("rejects expired, unhashed and foreign artifacts even when the run pa
 
 await test("absence falls back and malformed metadata or an unavailable API cannot approve reuse", async () => {
 	assert.equal(
-		await resolveServerBuild(repository, commit, "main", () =>
-			Promise.resolve({ workflow_runs: [] }),
-		),
+		await resolveServerBuild(repository, commit, "main", async () => ({ workflow_runs: [] })),
 		undefined,
 	);
 	assert.equal(
-		await resolveServerBuild(repository, commit, "main", () =>
-			Promise.resolve({ workflow_runs: [{}] }),
-		),
+		await resolveServerBuild(repository, commit, "main", async () => ({ workflow_runs: [{}] })),
 		undefined,
 	);
 	await assert.rejects(
-		resolveServerBuild(repository, commit, "main", () => Promise.reject(new Error("unavailable"))),
-		/unavailable/,
+		resolveServerBuild(repository, commit, "main", async () => {
+			throw new Error("unavailable");
+		}),
+		/unavailable/u,
 	);
 	const data = fixture();
 	data.artifact.id = 0;
-	await assert.rejects(resolve(data), /invalid identifier/);
+	await assert.rejects(resolve(data), /invalid identifier/u);
 });
 
 await test("main reuses immutable verified artifacts without bypassing validation or the packaging fallback", async () => {
@@ -157,7 +157,7 @@ await test("main reuses immutable verified artifacts without bypassing validatio
 	);
 	assert.equal(lookup.get("continue-on-error"), true);
 	const download = step("Download the validated server build");
-	assert.match(String(download.get("uses")), /^actions\/download-artifact@/);
+	assert.match(String(download.get("uses")), /^actions\/download-artifact@/u);
 	assert.equal(download.get("if"), "steps.reuse.outputs.artifact-id != ''");
 	assert.notEqual(download.get("continue-on-error"), true);
 	assert.equal(download.getIn(["with", "artifact-ids"]), `\${{ steps.reuse.outputs.artifact-id }}`);
@@ -176,6 +176,6 @@ await test("main reuses immutable verified artifacts without bypassing validatio
 	}
 	assert.ok(steps.items.indexOf(validate) > steps.items.indexOf(download));
 	assert.ok(steps.items.indexOf(upload) > steps.items.indexOf(validate));
-	assert.match(String(upload.get("uses")), /^actions\/upload-artifact@/);
+	assert.match(String(upload.get("uses")), /^actions\/upload-artifact@/u);
 	assert.equal(upload.getIn(["with", "name"]), `\${{ env.SERVER_BUILD_ARTIFACT }}`);
 });

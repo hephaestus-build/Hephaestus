@@ -40,6 +40,10 @@ const payload = JSON.stringify({
 	padding: "x".repeat(integer("WEBHOOK_PADDING_BYTES", 4096)),
 });
 
+/**
+ * @param {Pick<import("k6/http").Response, "status" | "json">} response - the webhook endpoint's reply
+ * @returns {boolean} whether the delivery was accepted and published
+ */
 export function webhookAccepted(response) {
 	return response.status === 202 && jsonField(response, "status") === "ok";
 }

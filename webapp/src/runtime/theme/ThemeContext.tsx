@@ -26,7 +26,9 @@ interface ThemeProviderState {
  */
 const NO_PROVIDER: ThemeProviderState = {
 	theme: "system",
-	setTheme: () => {},
+	setTheme: () => {
+		/* nothing above to update; the theme stays "system" */
+	},
 };
 
 const ThemeProviderContext = createContext<ThemeProviderState>(NO_PROVIDER);

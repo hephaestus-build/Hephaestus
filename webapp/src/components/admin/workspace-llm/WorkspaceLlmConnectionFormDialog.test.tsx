@@ -25,10 +25,10 @@ function renderDialog(onUpdate = vi.fn<WorkspaceLlmConnectionFormDialogProps["on
 	render(
 		<WorkspaceLlmConnectionFormDialog
 			open
-			onOpenChange={vi.fn()}
+			onOpenChange={vi.fn<() => void>()}
 			editing={connection}
 			isSubmitting={false}
-			onCreate={vi.fn()}
+			onCreate={vi.fn<() => void>()}
 			onUpdate={onUpdate}
 		/>,
 	);
@@ -40,11 +40,11 @@ describe("WorkspaceLlmConnectionFormDialog", () => {
 		render(
 			<WorkspaceLlmConnectionFormDialog
 				open
-				onOpenChange={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
 				editing={null}
 				isSubmitting={false}
-				onCreate={vi.fn()}
-				onUpdate={vi.fn()}
+				onCreate={vi.fn<() => void>()}
+				onUpdate={vi.fn<() => void>()}
 			/>,
 		);
 		expect(screen.getByRole("switch", { name: "Active" }).getAttribute("aria-checked")).toBe(

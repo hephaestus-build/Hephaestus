@@ -58,28 +58,30 @@ export function AdminSurveyResultsLevel({
 		onError: () => toast.error("Couldn't export the responses. Please try again."),
 	});
 
-	const state: AdminSurveyResultsState =
-		surveyQuery.isPending || summaryQuery.isPending || responsesQuery.isPending
-			? { status: "loading" }
-			: surveyQuery.isError || summaryQuery.isError || responsesQuery.isError
-				? {
-						status: "error",
-						error: surveyQuery.error ?? summaryQuery.error ?? responsesQuery.error,
-						onRetry: () => {
-							void surveyQuery.refetch();
-							void summaryQuery.refetch();
-							void responsesQuery.refetch();
-						},
-					}
-				: {
-						status: "ready",
-						survey: surveyQuery.data,
-						summary: summaryQuery.data,
-						responses: responsesQuery.data.content ?? [],
-						page,
-						totalPages: responsesQuery.data.page?.totalPages ?? 0,
-						onPageChange: setPage,
-					};
+	let state: AdminSurveyResultsState;
+	if (surveyQuery.isPending || summaryQuery.isPending || responsesQuery.isPending) {
+		state = { status: "loading" };
+	} else if (surveyQuery.isError || summaryQuery.isError || responsesQuery.isError) {
+		state = {
+			status: "error",
+			error: surveyQuery.error ?? summaryQuery.error ?? responsesQuery.error,
+			onRetry: () => {
+				void surveyQuery.refetch();
+				void summaryQuery.refetch();
+				void responsesQuery.refetch();
+			},
+		};
+	} else {
+		state = {
+			status: "ready",
+			survey: surveyQuery.data,
+			summary: summaryQuery.data,
+			responses: responsesQuery.data.content ?? [],
+			page,
+			totalPages: responsesQuery.data.page?.totalPages ?? 0,
+			onPageChange: setPage,
+		};
+	}
 
 	return (
 		<AdminSurveyResults

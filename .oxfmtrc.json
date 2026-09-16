@@ -15,7 +15,7 @@
 		"newlinesBetween": false,
 		"partitionByNewline": true
 	},
-	"sortPackageJson": false,
+	"sortPackageJson": true,
 	"sortTailwindcss": {
 		"stylesheet": "./webapp/src/styles.css",
 		"functions": ["cn", "cva"]

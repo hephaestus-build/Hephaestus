@@ -27,8 +27,8 @@ const ANSI = /\u001B\[[0-9;]*m/gu;
  */
 export function unpassedTasks(report: string): string[] {
 	const plain = report.replaceAll(ANSI, "");
-	const names = [...plain.matchAll(/^\s*\[\d+\] [^#\n]+#(\S+): \$ [^\n]*✗/gmu)].flatMap(
-		([, task]) => (task === undefined ? [] : [task]),
+	const names = [...plain.matchAll(/^\s*\[\d+\] [^#\n]+#(?<task>\S+): \$ [^\n]*✗/gmu)].flatMap(
+		({ groups }) => (groups?.task === undefined ? [] : [groups.task]),
 	);
 	return [...new Set(names)];
 }
@@ -36,9 +36,12 @@ export function unpassedTasks(report: string): string[] {
 if (import.meta.main) {
 	const report = await text(process.stdin);
 	const unpassed = unpassedTasks(report);
-	for (const task of unpassed)
+	for (const task of unpassed) {
 		console.log(`::error::${task} did not pass. Reproduce with: vp run ${task}`);
+	}
 	const summary = process.env.GITHUB_STEP_SUMMARY;
-	if (summary) appendFileSync(summary, `\n\`\`\`text\n${report.trim()}\n\`\`\`\n`);
+	if (summary !== undefined && summary !== "") {
+		appendFileSync(summary, `\n\`\`\`text\n${report.trim()}\n\`\`\`\n`);
+	}
 	process.exitCode = unpassed.length === 0 ? 0 : 1;
 }

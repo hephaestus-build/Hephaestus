@@ -1,7 +1,7 @@
 import type { AuthEventView } from "@/api/types.gen";
 import { ELEVATION_DESCRIPTION, ElevationBadge } from "@/components/admin/audit/ElevationBadge";
 import { prettyJson } from "@/components/admin/audit/pretty-json";
-import { refLabel } from "@/components/admin/audit/ref-label";
+import { refLabel, workspaceLabel } from "@/components/admin/audit/ref-label";
 import { formatTimestamp } from "@/components/admin/audit/time-format";
 import { DetailRow } from "@/components/common/DetailRow";
 import { Badge } from "@/components/ui/badge";
@@ -101,11 +101,7 @@ export function AuditEventDetailSheet({
 							)}
 						</DetailRow>
 						<DetailRow label="Workspace">
-							{event.workspaceId == null
-								? "—"
-								: hasText(workspaceName)
-									? `${workspaceName} (#${event.workspaceId})`
-									: `#${event.workspaceId}`}
+							{event.workspaceId == null ? "—" : workspaceLabel(event.workspaceId, workspaceName)}
 						</DetailRow>
 						<DetailRow label="IP address">
 							<span className="font-mono text-xs">{event.ipAddress ?? "—"}</span>

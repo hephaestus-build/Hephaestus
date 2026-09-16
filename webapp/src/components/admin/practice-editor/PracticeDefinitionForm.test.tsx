@@ -3,6 +3,7 @@ import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { mockPracticeDefinitionOptions } from "@/mocks/fixtures/practice";
+import { deferred } from "@/test/async";
 import { renderWithRouter } from "@/test/router-harness";
 
 import { PracticeDefinitionForm, type PracticeDefinitionValue } from "./PracticeDefinitionForm";
@@ -11,7 +12,9 @@ vi.mock("@/components/common/CodeEditor", () => ({
 	CodeEditor: () => <div />,
 }));
 
-function renderCreateForm(onSubmit: (value: PracticeDefinitionValue) => void | Promise<void>) {
+async function renderCreateForm(
+	onSubmit: (value: PracticeDefinitionValue) => void | Promise<void>,
+) {
 	return renderWithRouter(
 		<PracticeDefinitionForm
 			mode="create"
@@ -78,16 +81,13 @@ describe("the identifier a practice is created under", () => {
  */
 describe("the unsaved-changes guard around a save", () => {
 	it("stays out of the way of a caller navigating after a successful save", async () => {
-		let settle: (() => void) | undefined;
-		const saved = new Promise<void>((resolve) => {
-			settle = resolve;
-		});
-		const { router } = await renderCreateForm(() => saved);
+		const saved = deferred<undefined>();
+		const { router } = await renderCreateForm(async () => saved.promise);
 		fillValidDraft();
 
 		fireEvent.click(screen.getByRole("button", { name: "Create practice" }));
-		settle?.();
-		await saved;
+		saved.resolve(undefined);
+		await saved.promise;
 		fireEvent.click(screen.getByRole("link", { name: "Cancel" }));
 
 		// The navigation went through rather than merely not having been interrupted yet.
@@ -96,19 +96,16 @@ describe("the unsaved-changes guard around a save", () => {
 	});
 
 	it("comes back down when the save is refused", async () => {
-		let refuse: (() => void) | undefined;
-		const failed = new Promise<void>((_resolve, reject) => {
-			refuse = () => reject(new Error("Conflict"));
-		});
-		await renderCreateForm(() => failed);
+		const failed = deferred<undefined>();
+		await renderCreateForm(async () => failed.promise);
 		fillValidDraft();
 
 		fireEvent.click(screen.getByRole("button", { name: "Create practice" }));
 		// The guard re-arms from `track`'s rejection handler, so the click below has to wait for
 		// React to have processed it.
 		await act(async () => {
-			refuse?.();
-			await failed.catch(() => {});
+			failed.reject(new Error("Conflict"));
+			await expect(failed.promise).rejects.toThrow("Conflict");
 		});
 		fireEvent.click(screen.getByRole("link", { name: "Cancel" }));
 

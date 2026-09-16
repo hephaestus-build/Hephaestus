@@ -132,7 +132,11 @@ export function ProfileTimeframePicker({
 		<div className="flex flex-wrap items-center gap-2">
 			<Select
 				value={selectedPreset}
-				onValueChange={(value) => value && handlePresetChange(value)}
+				onValueChange={(value) => {
+					if (value) {
+						handlePresetChange(value);
+					}
+				}}
 				items={items}
 			>
 				<SelectTrigger className="w-65" aria-label="Timeframe">

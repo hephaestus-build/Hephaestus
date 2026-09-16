@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Settings2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 
 import {
@@ -46,6 +47,48 @@ function WorkspaceSettingsPage() {
 		},
 	});
 
+	let settings: ReactNode;
+	if (settingsQuery.data) {
+		settings = (
+			<div className="space-y-4">
+				{settingsQuery.isError ? (
+					<QueryErrorAlert
+						error={settingsQuery.error}
+						title="Couldn't verify the current instance settings"
+						onRetry={() => {
+							void settingsQuery.refetch();
+						}}
+					/>
+				) : null}
+				<SilentModeCard
+					key={settingsQuery.data.etag}
+					settings={settingsQuery.data}
+					isPending={silentModeMutation.isPending}
+					releaseDisabled={settingsQuery.isError}
+					onEngage={(reason) => silentModeMutation.mutate({ body: { engaged: true, reason } })}
+					onRelease={() =>
+						silentModeMutation.mutate({
+							headers: { "If-Match": settingsQuery.data.etag },
+							body: { engaged: false },
+						})
+					}
+				/>
+			</div>
+		);
+	} else if (settingsQuery.isError) {
+		settings = (
+			<QueryErrorAlert
+				error={settingsQuery.error}
+				title="Couldn't load instance settings"
+				onRetry={() => {
+					void settingsQuery.refetch();
+				}}
+			/>
+		);
+	} else {
+		settings = <Skeleton className="h-52 w-full rounded-xl" />;
+	}
+
 	return (
 		<PageLayout>
 			<PageHeader
@@ -54,38 +97,7 @@ function WorkspaceSettingsPage() {
 				description="Instance-wide operator controls. These apply across every workspace and override workspace settings while active."
 			/>
 
-			{settingsQuery.data ? (
-				<div className="space-y-4">
-					{settingsQuery.isError ? (
-						<QueryErrorAlert
-							error={settingsQuery.error}
-							title="Couldn't verify the current instance settings"
-							onRetry={() => void settingsQuery.refetch()}
-						/>
-					) : null}
-					<SilentModeCard
-						key={settingsQuery.data.etag}
-						settings={settingsQuery.data}
-						isPending={silentModeMutation.isPending}
-						releaseDisabled={settingsQuery.isError}
-						onEngage={(reason) => silentModeMutation.mutate({ body: { engaged: true, reason } })}
-						onRelease={() =>
-							silentModeMutation.mutate({
-								headers: { "If-Match": settingsQuery.data.etag },
-								body: { engaged: false },
-							})
-						}
-					/>
-				</div>
-			) : settingsQuery.isError ? (
-				<QueryErrorAlert
-					error={settingsQuery.error}
-					title="Couldn't load instance settings"
-					onRetry={() => void settingsQuery.refetch()}
-				/>
-			) : (
-				<Skeleton className="h-52 w-full rounded-xl" />
-			)}
+			{settings}
 		</PageLayout>
 	);
 }

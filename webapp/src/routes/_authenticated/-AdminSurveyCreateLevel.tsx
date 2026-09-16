@@ -59,7 +59,7 @@ export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreat
 				researchOrganization={consentQuery.data.researchOrganization}
 				isPending={create.isPending}
 				cancel={<LevelCancel />}
-				onSubmit={(body) => create.mutateAsync({ body })}
+				onSubmit={async (body) => create.mutateAsync({ body })}
 			/>
 		);
 	}

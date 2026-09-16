@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 async function advance(ms: number) {
-	await act(() => vi.advanceTimersByTimeAsync(ms));
+	await act(async () => vi.advanceTimersByTimeAsync(ms));
 }
 
 function mountSession(expiresInSec = 61) {
@@ -40,11 +40,11 @@ function mountSession(expiresInSec = 61) {
 	let userCalls = 0;
 	server.use(
 		http.get("*/user", () => {
-			userCalls++;
+			userCalls += 1;
 			return HttpResponse.json(userPayload(refreshCalls < 2 ? expiresInSec : 3600));
 		}),
 		http.post("*/auth/refresh", () => {
-			refreshCalls++;
+			refreshCalls += 1;
 			return new HttpResponse(null, { status: 204 });
 		}),
 	);
@@ -64,21 +64,21 @@ describe("useSessionKeepAlive", () => {
 	it("renews once on mount even when Strict Mode replays the effect", async () => {
 		const session = mountSession();
 		await advance(1000);
-		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
-		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
+		await act(async () => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+		await act(async () => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
 	});
 
 	it("leaves a renewed session idle until activity resumes", async () => {
 		const session = mountSession();
 		await advance(1000);
-		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
+		await act(async () => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
 		await advance(5000);
 		expect(session.refreshCalls()).toBe(1);
 		act(() => {
 			window.dispatchEvent(new Event("pointerdown"));
 		});
-		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
-		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(2)));
+		await act(async () => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+		await act(async () => vi.waitFor(() => expect(session.userCalls()).toBe(2)));
 		await advance(5000);
 		expect(session.refreshCalls()).toBe(2);
 	});
@@ -95,7 +95,7 @@ describe("useSessionKeepAlive", () => {
 		act(() => {
 			window.dispatchEvent(new Event("keydown"));
 		});
-		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
+		await act(async () => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
 		expect(session.refreshCalls()).toBe(1);
 		await advance(5000);
 		expect(session.refreshCalls()).toBe(1);
@@ -104,13 +104,13 @@ describe("useSessionKeepAlive", () => {
 	it("renews a full-day cookie hourly while active but not indefinitely while idle", async () => {
 		const session = mountSession(24 * 60 * 60);
 		await advance(60 * 60_000);
-		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
+		await act(async () => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
 		await advance(2 * 60 * 60_000);
 		expect(session.refreshCalls()).toBe(1);
 		act(() => {
 			window.dispatchEvent(new Event("keydown"));
 		});
-		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+		await act(async () => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
 	});
 
 	it("does not rotate on every activity event when the absolute expiry stays unchanged", async () => {
@@ -118,7 +118,7 @@ describe("useSessionKeepAlive", () => {
 		const fixedIdentity = userPayload(24 * 60 * 60);
 		server.use(http.get("*/user", () => HttpResponse.json(fixedIdentity)));
 		await advance(60 * 60_000);
-		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+		await act(async () => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
 		await advance(11_000);
 		act(() => {
 			window.dispatchEvent(new Event("keydown"));
@@ -129,7 +129,7 @@ describe("useSessionKeepAlive", () => {
 		});
 		expect(session.refreshCalls()).toBe(1);
 		await advance(60 * 60_000);
-		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+		await act(async () => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
 	});
 
 	it("checks the unchanged absolute deadline instead of postponing it for an hour", async () => {
@@ -137,7 +137,7 @@ describe("useSessionKeepAlive", () => {
 		const fixedIdentity = userPayload(61);
 		server.use(http.get("*/user", () => HttpResponse.json(fixedIdentity)));
 		await advance(1000);
-		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+		await act(async () => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
 		await advance(11_000);
 		act(() => {
 			window.dispatchEvent(new Event("keydown"));
@@ -145,14 +145,14 @@ describe("useSessionKeepAlive", () => {
 		await advance(30_000);
 		expect(session.refreshCalls()).toBe(1);
 		await advance(19_000);
-		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+		await act(async () => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
 	});
 
 	it("bounds renewal after a successful rotation even when identity revalidation fails", async () => {
 		const session = mountSession(24 * 60 * 60);
 		server.use(http.get("*/user", () => new HttpResponse(null, { status: 503 })));
 		await advance(60 * 60_000);
-		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+		await act(async () => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
 		await advance(11_000);
 		act(() => {
 			window.dispatchEvent(new Event("keydown"));
@@ -163,7 +163,7 @@ describe("useSessionKeepAlive", () => {
 		});
 		expect(session.refreshCalls()).toBe(1);
 		await advance(60 * 60_000);
-		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
+		await act(async () => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
 	});
 
 	it("does not renew a hidden tab until it becomes visible", async () => {
@@ -175,7 +175,7 @@ describe("useSessionKeepAlive", () => {
 		act(() => {
 			document.dispatchEvent(new Event("visibilitychange"));
 		});
-		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+		await act(async () => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
 	});
 
 	it("removes the timer and activity listeners when unmounted", async () => {

@@ -41,6 +41,24 @@ export function useAuth() {
 	return context;
 }
 
+function login(idpHint?: string, returnTo?: string) {
+	authClient.login(idpHint, returnTo);
+}
+
+function linkAccount(providerAlias: string, returnTo?: string) {
+	const destination =
+		returnTo ?? (typeof window === "undefined" ? undefined : window.location.pathname);
+	authClient.linkAccount(providerAlias, destination);
+}
+
+async function logout() {
+	try {
+		await authClient.logout();
+	} catch {
+		toast.error("Could not confirm sign-out. Please try again.");
+	}
+}
+
 interface AuthProviderProps {
 	children: ReactNode;
 }
@@ -55,24 +73,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 	const userProfile = user ? toUserProfile(user) : undefined;
 
 	const isAppAdmin = computeIsAppAdmin(user);
-
-	const login = (idpHint?: string, returnTo?: string) => {
-		authClient.login(idpHint, returnTo);
-	};
-
-	const linkAccount = (providerAlias: string, returnTo?: string) => {
-		const destination =
-			returnTo ?? (typeof window === "undefined" ? undefined : window.location.pathname);
-		authClient.linkAccount(providerAlias, destination);
-	};
-
-	const logout = async () => {
-		try {
-			await authClient.logout();
-		} catch {
-			toast.error("Could not confirm sign-out. Please try again.");
-		}
-	};
 
 	const hasRole = (role: string) => (user?.roles ?? []).includes(role);
 

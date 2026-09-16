@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AdminWorkspaceLlmUsage, WorkspaceLlmUsageReport } from "@/api/types.gen";
 import { currentMonthUtc, formatMonthLabel } from "@/components/admin/usage/usage-utils";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules.
@@ -119,14 +120,11 @@ describe("instance AI usage route", () => {
 	});
 
 	it("says so out loud when a budget write fails after the dialog was dismissed", async () => {
-		let releaseBudgetPut: (() => void) | undefined;
-		const slowPut = new Promise<void>((resolve) => {
-			releaseBudgetPut = resolve;
-		});
+		const slowPut = deferred<undefined>();
 		mockUsageRoutes({
 			budgetUsd: 50,
 			onPutBudget: async () => {
-				await slowPut;
+				await slowPut.promise;
 				return HttpResponse.json(
 					{ status: 500, title: "Internal Server Error", detail: "The budget service is down." },
 					{ status: 500, headers: { "Content-Type": "application/problem+json" } },
@@ -141,7 +139,7 @@ describe("instance AI usage route", () => {
 		fireEvent.keyDown(await screen.findByRole("dialog"), { key: "Escape" });
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
-		releaseBudgetPut?.();
+		slowPut.resolve(undefined);
 
 		await screen.findByText("Couldn't save the budget");
 		screen.getByText("The budget service is down.");

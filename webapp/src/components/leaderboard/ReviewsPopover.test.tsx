@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { Toaster, toast } from "sonner";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { deferred } from "@/test/async";
+
 import { type ReviewedPullRequest, ReviewsPopover } from "./ReviewsPopover";
 
 const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
@@ -48,11 +50,8 @@ async function openCopyAction() {
 }
 
 it("announces success only after the clipboard write completes, and writes once however often it is pressed meanwhile", async () => {
-	const finishWrite = vi.fn<() => void>();
-	const pending = new Promise<void>((resolve) => {
-		finishWrite.mockImplementation(resolve);
-	});
-	writeText.mockReturnValue(pending);
+	const write = deferred<undefined>();
+	writeText.mockReturnValue(write.promise);
 	const copy = await openCopyAction();
 	fireEvent.click(copy);
 	fireEvent.click(copy);
@@ -60,7 +59,7 @@ it("announces success only after the clipboard write completes, and writes once 
 	expect(copy.disabled).toBe(false);
 	expect(screen.queryByText("Review links copied")).toBeNull();
 	await act(async () => {
-		finishWrite();
+		write.resolve(undefined);
 	});
 	await screen.findByText("Review links copied");
 });

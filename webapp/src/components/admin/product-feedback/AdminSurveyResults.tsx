@@ -172,7 +172,7 @@ export function AdminSurveyResults({
 						<AlertTitle>Research data, not product feedback</AlertTitle>
 						<AlertDescription>
 							These answers belong to the study run by {survey.researchOrganization}, given under
-							the consent members recorded for it. Handle them by that study's protocol.
+							the consent members recorded for it. Handle them by that study’s protocol.
 						</AlertDescription>
 					</Alert>
 				)}

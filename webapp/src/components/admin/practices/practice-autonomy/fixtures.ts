@@ -73,14 +73,15 @@ export function buildAutonomyFixture({
 			// The server writes Off onto a practice it cannot review, rather than letting it inherit.
 			const held = spec.reviewable === false ? "OFF" : spec.override;
 			const effective = held ?? groupEffective;
-			const source = held ? "PRACTICE" : group.override ? "GROUP" : "WORKSPACE";
+			let source: AutonomyAssignment["source"] = group.override ? "GROUP" : "WORKSPACE";
 			if (held) {
+				source = "PRACTICE";
 				overriddenCount += 1;
 			}
 			counts[effective] += 1;
 			workspaceCounts[effective] += 1;
 			practices.push({
-				id: id++,
+				id,
 				slug: `${group.slug ?? "unassigned"}-${slugify(spec.name)}`,
 				name: spec.name,
 				groupSlug: group.slug ?? undefined,
@@ -105,6 +106,7 @@ export function buildAutonomyFixture({
 				createdAt: new Date("2026-01-01"),
 				updatedAt: new Date("2026-01-02"),
 			});
+			id += 1;
 		}
 
 		rollupGroups.push({
@@ -175,6 +177,18 @@ const SCALE_PRACTICE_NAMES = [
 	"keeps the change reviewable in one sitting",
 ];
 
+/** The hand-set groups, by their index in `SCALE_GROUP_NAMES`. */
+const SCALE_GROUP_OVERRIDES: Partial<Record<number, PracticeAutonomy>> = {
+	2: "OFF",
+	7: "AUTOMATIC",
+};
+
+/** The hand-set practices, keyed `group index:practice index`. */
+const SCALE_PRACTICE_OVERRIDES: Partial<Record<`${number}:${number}`, PracticeAutonomy>> = {
+	"0:0": "AUTOMATIC",
+	"4:1": "OFF",
+};
+
 /**
  * Deliberately lopsided: most of it inherits, a handful of groups and practices were changed by hand,
  * and one practice cannot be reviewed at all. A fixture where everything is set says nothing about
@@ -186,15 +200,10 @@ export function scaleFixture(): AutonomyFixture {
 		groups: SCALE_GROUP_NAMES.map((name, index) => ({
 			slug: slugify(name),
 			name,
-			override: index === 2 ? "OFF" : index === 7 ? "AUTOMATIC" : undefined,
+			override: SCALE_GROUP_OVERRIDES[index],
 			practices: SCALE_PRACTICE_NAMES.map((suffix, practiceIndex) => ({
 				name: `${name}: ${suffix}`,
-				override:
-					index === 0 && practiceIndex === 0
-						? "AUTOMATIC"
-						: index === 4 && practiceIndex === 1
-							? "OFF"
-							: undefined,
+				override: SCALE_PRACTICE_OVERRIDES[`${index}:${practiceIndex}`],
 				reviewable: !(index === 9 && practiceIndex === 3),
 			})),
 		})),

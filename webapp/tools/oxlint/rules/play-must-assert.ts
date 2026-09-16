@@ -40,6 +40,11 @@ export const asRegExp = (glob: string) =>
 
 const ASSERT_PATTERNS = ASSERT_FUNCTION_NAMES.map(asRegExp);
 
+/** A `play:` holding a function literal. `play: sharedPlay` is somebody else's body. */
+const playFunction = (node: VisitedProperty) =>
+	propertyName(node) === "play" &&
+	(node.value.type === "ArrowFunctionExpression" || node.value.type === "FunctionExpression");
+
 /**
  * `Open.play?.(context)` runs another story's play and inherits its assertions. A glob would have to
  * spell this `**.play`, which also matches `audio.play()` and `videoRef.current.play()` — a media
@@ -67,11 +72,6 @@ export const playMustAssert = defineRule({
 		// A stack, not a flag: plays nest (a `step` callback holds one), and two stories side by side
 		// must not lend each other an assertion.
 		const plays: { key: ESTree.Node; asserted: boolean }[] = [];
-
-		/** A `play:` holding a function literal. `play: sharedPlay` is somebody else's body. */
-		const playFunction = (node: VisitedProperty) =>
-			propertyName(node) === "play" &&
-			(node.value.type === "ArrowFunctionExpression" || node.value.type === "FunctionExpression");
 
 		return {
 			Property(node) {

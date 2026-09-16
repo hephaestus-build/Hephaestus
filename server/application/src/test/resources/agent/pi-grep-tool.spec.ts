@@ -1,49 +1,55 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import test from "node:test";
 
 import { readGrepParams, searchFiles } from "../../../main/resources/agent/pi-grep-tool.ts";
 
 function workspace(): string {
-	const root = mkdtempSync(join(tmpdir(), "grep-tool-"));
-	mkdirSync(join(root, "inputs", "context"), { recursive: true });
-	mkdirSync(join(root, "inputs", "sources", "scm", "repo", "src"), { recursive: true });
-	mkdirSync(join(root, ".sessions"), { recursive: true });
-	mkdirSync(join(root, "inputs", "sources", "scm", "repo", "work"), { recursive: true });
-	mkdirSync(join(root, "work", "precompute-out"), { recursive: true });
-	mkdirSync(join(root, "work", "composition"), { recursive: true });
-	mkdirSync(join(root, "out"), { recursive: true });
-	mkdirSync(join(root, ".pi"), { recursive: true });
-	mkdirSync(join(root, "inputs", "sources", "scm", "repo", "node_modules", "dep"), {
+	const root = mkdtempSync(path.join(tmpdir(), "grep-tool-"));
+	mkdirSync(path.join(root, "inputs", "context"), { recursive: true });
+	mkdirSync(path.join(root, "inputs", "sources", "scm", "repo", "src"), { recursive: true });
+	mkdirSync(path.join(root, ".sessions"), { recursive: true });
+	mkdirSync(path.join(root, "inputs", "sources", "scm", "repo", "work"), { recursive: true });
+	mkdirSync(path.join(root, "work", "precompute-out"), { recursive: true });
+	mkdirSync(path.join(root, "work", "composition"), { recursive: true });
+	mkdirSync(path.join(root, "out"), { recursive: true });
+	mkdirSync(path.join(root, ".pi"), { recursive: true });
+	mkdirSync(path.join(root, "inputs", "sources", "scm", "repo", "node_modules", "dep"), {
 		recursive: true,
 	});
-	writeFileSync(join(root, "out", "result.json"), '{"API_KEY": 1}\n');
-	writeFileSync(join(root, ".pi", "settings.json"), '{"API_KEY": 1}\n');
+	writeFileSync(path.join(root, "out", "result.json"), '{"API_KEY": 1}\n');
+	writeFileSync(path.join(root, ".pi", "settings.json"), '{"API_KEY": 1}\n');
 	writeFileSync(
-		join(root, "inputs", "sources", "scm", "repo", "node_modules", "dep", "index.js"),
+		path.join(root, "inputs", "sources", "scm", "repo", "node_modules", "dep", "index.js"),
 		"API_KEY\n",
 	);
-	writeFileSync(join(root, "work", "precompute-out", "summary.md"), "API_KEY appears in a hint\n");
-	writeFileSync(join(root, "work", "composition", "observations.json"), '{"summary":"API_KEY"}\n');
 	writeFileSync(
-		join(root, "inputs", "sources", "scm", "repo", "work", "queue.py"),
+		path.join(root, "work", "precompute-out", "summary.md"),
+		"API_KEY appears in a hint\n",
+	);
+	writeFileSync(
+		path.join(root, "work", "composition", "observations.json"),
+		'{"summary":"API_KEY"}\n',
+	);
+	writeFileSync(
+		path.join(root, "inputs", "sources", "scm", "repo", "work", "queue.py"),
 		"API_KEY = load()\n",
 	);
 	writeFileSync(
-		join(root, "inputs", "context", "diff.patch"),
+		path.join(root, "inputs", "context", "diff.patch"),
 		"+API_KEY = 'sk-live'\n context\n+print(API_KEY)\n",
 	);
 	writeFileSync(
-		join(root, "inputs", "sources", "scm", "repo", "src", "app.py"),
+		path.join(root, "inputs", "sources", "scm", "repo", "src", "app.py"),
 		"def main():\n    return API_KEY\n",
 	);
 	writeFileSync(
-		join(root, "inputs", "sources", "scm", "repo", "src", "blob.bin"),
+		path.join(root, "inputs", "sources", "scm", "repo", "src", "blob.bin"),
 		Buffer.from([0, 65, 80, 73, 95, 75, 69, 89]),
 	);
-	writeFileSync(join(root, ".sessions", "s.jsonl"), '{"text":"API_KEY"}\n');
+	writeFileSync(path.join(root, ".sessions", "s.jsonl"), '{"text":"API_KEY"}\n');
 	return root;
 }
 
@@ -95,9 +101,9 @@ void test("a limit truncates with a note, an invalid pattern and a path outside 
 	const root = workspace();
 	const limited = searchFiles(root, { pattern: "API_KEY", limit: 1 });
 	assert.equal(limited.details.truncated, true);
-	assert.match(limited.text, /truncated at 1 matches/);
-	assert.match(searchFiles(root, { pattern: "(" }).text, /^Invalid pattern/);
-	assert.match(searchFiles(root, { pattern: "x", path: "../.." }).text, /outside the workspace/);
+	assert.match(limited.text, /truncated at 1 matches/u);
+	assert.match(searchFiles(root, { pattern: "(" }).text, /^Invalid pattern/u);
+	assert.match(searchFiles(root, { pattern: "x", path: "../.." }).text, /outside the workspace/u);
 	assert.equal(searchFiles(root, { pattern: "nothing-here" }).text, "No matches found");
 });
 
@@ -122,14 +128,14 @@ void test("context is clamped and the output has a size ceiling", () => {
 		context: 500,
 	});
 	assert.equal(wide.text.split("\n").length, 4);
-	mkdirSync(join(root, "inputs", "big"), { recursive: true });
+	mkdirSync(path.join(root, "inputs", "big"), { recursive: true });
 	writeFileSync(
-		join(root, "inputs", "big", "log.txt"),
+		path.join(root, "inputs", "big", "log.txt"),
 		Array.from({ length: 400 }, (_, i) => `match ${i} ${"x".repeat(200)}`).join("\n"),
 	);
 	const capped = searchFiles(root, { pattern: "match", path: "inputs/big", limit: 400 });
 	assert.ok(capped.text.length < 52 * 1024);
-	assert.match(capped.text, /truncated at 51200 characters/);
+	assert.match(capped.text, /truncated at 51200 characters/u);
 	assert.equal(capped.details.truncated, true);
 });
 
@@ -139,14 +145,14 @@ void test("an aborted session stops the walk with a note, and temp workspaces ar
 	controller.abort();
 	const { text, details } = searchFiles(root, { pattern: "API_KEY" }, controller.signal);
 	assert.equal(details.matches, 0);
-	assert.match(text, /Search stopped/);
-	assert.match(searchFiles(root, { pattern: "x", path: "..foo" }).text, /does not exist/);
+	assert.match(text, /Search stopped/u);
+	assert.match(searchFiles(root, { pattern: "x", path: "..foo" }).text, /does not exist/u);
 	rmSync(root, { recursive: true, force: true });
 });
 
 void test("the sandbox's own state is not searchable even when named as the path", () => {
 	const root = workspace();
-	for (const path of [
+	for (const state of [
 		".sessions",
 		".pi",
 		"out",
@@ -154,7 +160,11 @@ void test("the sandbox's own state is not searchable even when named as the path
 		".sessions/s.jsonl",
 		"inputs/sources/scm/repo/node_modules",
 	]) {
-		assert.match(searchFiles(root, { pattern: "API_KEY", path }).text, /not searchable/, path);
+		assert.match(
+			searchFiles(root, { pattern: "API_KEY", path: state }).text,
+			/not searchable/u,
+			state,
+		);
 	}
-	assert.match(searchFiles(root, { pattern: "API_KEY", path: "work" }).text, /precompute-out/);
+	assert.match(searchFiles(root, { pattern: "API_KEY", path: "work" }).text, /precompute-out/u);
 });

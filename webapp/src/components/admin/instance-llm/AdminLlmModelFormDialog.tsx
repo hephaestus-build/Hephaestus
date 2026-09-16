@@ -127,13 +127,15 @@ function AdminLlmModelFormDialogContent({
 			note: price.pricingMode === "NO_CHARGE" ? price.note?.trim() : undefined,
 		};
 
-		const sharingBody: UpdateLlmModelSharingRequest | undefined = isEdit
-			? undefined
-			: accessScope === "ALL"
+		if (isEdit) {
+			onSave({ metadata, price: priceBody });
+			return;
+		}
+		const sharing: UpdateLlmModelSharingRequest =
+			accessScope === "ALL"
 				? { visibility: "PUBLIC" }
 				: { visibility: "GRANTED", workspaceIds: sharedWorkspaceIds };
-
-		onSave({ metadata, price: priceBody, ...(sharingBody ? { sharing: sharingBody } : {}) });
+		onSave({ metadata, price: priceBody, sharing });
 	};
 
 	return (

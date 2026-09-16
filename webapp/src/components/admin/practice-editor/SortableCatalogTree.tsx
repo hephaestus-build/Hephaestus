@@ -501,7 +501,7 @@ export function SortableCatalogTree<
 							showEntryReorderHandles={showEntryReorderHandles}
 							renderLeading={renderGroupLeading}
 							renderMeta={renderGroupMeta}
-							renderActions={(candidate) =>
+							renderActions={(candidate): ReactNode =>
 								renderGroupActions(
 									candidate,
 									groupMoveActions(candidate),
@@ -509,7 +509,7 @@ export function SortableCatalogTree<
 								)
 							}
 							renderEntryContent={renderEntryContent}
-							renderEntryActions={(candidate) =>
+							renderEntryActions={(candidate): ReactNode =>
 								renderEntryActions(
 									candidate,
 									entryMoveActions(candidate),
@@ -539,7 +539,7 @@ export function SortableCatalogTree<
 							dropTarget={dropTarget}
 							showEntryReorderHandles={showEntryReorderHandles}
 							renderContent={renderEntryContent}
-							renderActions={(entry) =>
+							renderActions={(entry): ReactNode =>
 								renderEntryActions(
 									entry,
 									entryMoveActions(entry),

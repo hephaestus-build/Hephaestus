@@ -102,9 +102,9 @@ function Root() {
 const rootElement = document.querySelector("#app");
 if (rootElement && !rootElement.innerHTML) {
 	const root = ReactDOM.createRoot(rootElement, {
-		onUncaughtError: Sentry.reactErrorHandler((error, errorInfo) => {
+		onUncaughtError: Sentry.reactErrorHandler((uncaught, errorInfo) => {
 			// oxlint-disable-next-line no-console -- The custom handler replaces React's console report.
-			console.warn("Uncaught error", error, errorInfo.componentStack);
+			console.warn("Uncaught error", uncaught, errorInfo.componentStack);
 		}),
 		onRecoverableError: Sentry.reactErrorHandler(),
 	});

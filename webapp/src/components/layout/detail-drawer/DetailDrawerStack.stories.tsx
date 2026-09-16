@@ -7,6 +7,7 @@ import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/comp
 import { withPageBehind } from "@/stories/decorators";
 import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
+import { nextFrame } from "@/test/async";
 
 import { DetailDrawerStack } from "./DetailDrawerStack";
 
@@ -101,7 +102,7 @@ export const DismissedLevelSlidesOut: Story = {
 		// makes a dismissal vanish in one frame instead.
 		await expect(popup).toHaveAttribute("data-ending-style");
 		await expect(popup.textContent).toContain("practice · describe-what-and-why");
-		await waitFor(() => expect(popups()).toHaveLength(0));
+		await waitFor(async () => expect(popups()).toHaveLength(0));
 	},
 };
 
@@ -136,7 +137,7 @@ export const PerLevelDataSurvivesDismissal: Story = {
 	play: async ({ args }) => {
 		await expectSettledVisible(await screen.findByText("describe-what-and-why"));
 		await userEvent.click(screen.getByRole("button", { name: "Close" }));
-		await waitFor(() => expect(popups()).toHaveLength(0));
+		await waitFor(async () => expect(popups()).toHaveLength(0));
 		await expect(args.onClose).toHaveBeenCalledWith(0);
 	},
 };
@@ -153,7 +154,7 @@ export const PressingThePageDismisses: Story = {
 		});
 		// Both `waitFor`: the level animates out first and the URL follows, so neither the popup
 		// leaving nor the callback firing happens on the click itself.
-		await waitFor(() => expect(popups()).toHaveLength(0));
+		await waitFor(async () => expect(popups()).toHaveLength(0));
 		await expect(args.onClose).toHaveBeenCalledWith(0);
 	},
 };
@@ -172,7 +173,7 @@ export const GuardedLevelLeavesTheSameWays: Story = {
 			coords: { clientX: 20, clientY: 200 },
 			keys: "[MouseLeft]",
 		});
-		await waitFor(() => expect(args.onClose).toHaveBeenCalledWith(0));
+		await waitFor(async () => expect(args.onClose).toHaveBeenCalledWith(0));
 	},
 };
 
@@ -278,13 +279,11 @@ export const DismissedLevelDoesNotComeBack: Story = {
 		// frame re-opened it while the navigation was still in flight: it popped back in, and this
 		// level snapped to its stepped-back position and animated forward a second time.
 		const nested: string[] = [];
-		for (let frame = 0; frame < 40 && popups().length > 1; frame++) {
-			await new Promise((resolve) => {
-				requestAnimationFrame(resolve);
-			});
+		for (let frame = 0; frame < 40 && popups().length > 1; frame += 1) {
+			await nextFrame();
 			nested.push(getComputedStyle(parent).getPropertyValue("--nested-drawers").trim());
 		}
-		await waitFor(() => expect(popups()).toHaveLength(1));
+		await waitFor(async () => expect(popups()).toHaveLength(1));
 		await expect(nested.indexOf("1")).toBe(-1);
 	},
 };
@@ -366,7 +365,7 @@ export const TwoLevels: Story = {
 		await expect(getComputedStyle(frontmost).getPropertyValue("--nested-drawers").trim()).toBe("0");
 		const back = screen.getByRole("button", { name: "Back" });
 		await userEvent.click(back);
-		await waitFor(() => expect(args.onClose).toHaveBeenCalledWith(1));
+		await waitFor(async () => expect(args.onClose).toHaveBeenCalledWith(1));
 		await expect(await screen.findByText("group · review-ready-work")).toBeVisible();
 	},
 };

@@ -22,7 +22,13 @@ export function RouteError({ error }: ErrorComponentProps) {
 					An unexpected error stopped this page from loading. Trying again usually helps.
 				</p>
 				<div className="flex justify-center gap-2">
-					<Button onClick={() => void router.invalidate()}>Try again</Button>
+					<Button
+						onClick={() => {
+							void router.invalidate();
+						}}
+					>
+						Try again
+					</Button>
 				</div>
 			</section>
 		</div>

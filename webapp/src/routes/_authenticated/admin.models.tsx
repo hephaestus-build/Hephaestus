@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { BrainCircuit, Plus } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -83,10 +83,10 @@ function AdminLlmPage() {
 
 	const modelsQuery = useQuery(adminListLlmModelsOptions());
 	const allModels = modelsQuery.data ?? [];
-	const modelCounts = allModels.reduce<Record<number, number>>((acc, model) => {
-		acc[model.connectionId] = (acc[model.connectionId] ?? 0) + 1;
-		return acc;
-	}, {});
+	const modelCounts: Record<number, number> = {};
+	for (const model of allModels) {
+		modelCounts[model.connectionId] = (modelCounts[model.connectionId] ?? 0) + 1;
+	}
 	const modelsForSelectedConnection = selectedConnection
 		? allModels.filter((m) => m.connectionId === selectedConnection.id)
 		: [];
@@ -100,9 +100,9 @@ function AdminLlmPage() {
 
 	const settingsQuery = useQuery(adminGetLlmSettingsOptions());
 
-	const invalidateConnections = () =>
+	const invalidateConnections = async () =>
 		queryClient.invalidateQueries({ queryKey: adminListLlmConnectionsQueryKey() });
-	const invalidateModels = () =>
+	const invalidateModels = async () =>
 		queryClient.invalidateQueries({ queryKey: adminListLlmModelsQueryKey() });
 
 	const [challenge, setChallenge] = useState<StepUpChallenge | undefined>(undefined);
@@ -214,12 +214,12 @@ function AdminLlmPage() {
 				editing: editingModel,
 				body,
 				operations: {
-					create: (connectionId, metadata) =>
+					create: async (connectionId, metadata) =>
 						createModel.mutateAsync({ path: { connectionId }, body: metadata }),
-					updateMetadata: (id, metadata) =>
+					updateMetadata: async (id, metadata) =>
 						updateModel.mutateAsync({ path: { id }, body: metadata }),
-					updatePrice: (id, price) => updatePrice.mutateAsync({ path: { id }, body: price }),
-					updateSharing: (id, sharing) =>
+					updatePrice: async (id, price) => updatePrice.mutateAsync({ path: { id }, body: price }),
+					updateSharing: async (id, sharing) =>
 						updateSharing.mutateAsync({ path: { id }, body: sharing }),
 				},
 			});
@@ -237,6 +237,53 @@ function AdminLlmPage() {
 			}
 		}
 	};
+
+	let modelsSection: ReactNode = null;
+	if (selectedConnection) {
+		if (modelsQuery.isError) {
+			modelsSection = (
+				<QueryErrorAlert
+					error={modelsQuery.error}
+					title="Could not load models"
+					onRetry={() => {
+						void modelsQuery.refetch();
+					}}
+				/>
+			);
+		} else if (modelsQuery.isLoading) {
+			modelsSection = (
+				<div
+					className="flex h-32 items-center justify-center"
+					role="status"
+					aria-label="Loading models"
+				>
+					<Spinner className="size-6" />
+				</div>
+			);
+		} else {
+			modelsSection = (
+				<AdminLlmModelsSection
+					connectionDisplayName={selectedConnection.displayName}
+					connectionEnabled={selectedConnection.enabled}
+					workspaceOptions={workspaceOptions}
+					models={modelsForSelectedConnection}
+					mutatingIds={mutatingModelIds}
+					onAdd={() => {
+						setEditingModel(null);
+						setModelDialogOpen(true);
+					}}
+					onEdit={(model) => {
+						setEditingModel(model);
+						setModelDialogOpen(true);
+					}}
+					onManageAccess={setAccessModel}
+					onDelete={(model) => {
+						deleteModel.mutate({ path: { id: model.id } });
+					}}
+				/>
+			);
+		}
+	}
 
 	return (
 		<PageLayout>
@@ -266,7 +313,9 @@ function AdminLlmPage() {
 				isLoading={connectionsQuery.isLoading}
 				isError={connectionsQuery.isError}
 				error={connectionsQuery.error}
-				onRetry={() => void connectionsQuery.refetch()}
+				onRetry={() => {
+					void connectionsQuery.refetch();
+				}}
 				mutatingIds={mutatingConnectionIds}
 				selectedId={selectedConnection?.id ?? null}
 				onSelect={(connection) => {
@@ -290,48 +339,15 @@ function AdminLlmPage() {
 				}}
 			/>
 
-			{selectedConnection &&
-				(modelsQuery.isError ? (
-					<QueryErrorAlert
-						error={modelsQuery.error}
-						title="Could not load models"
-						onRetry={() => void modelsQuery.refetch()}
-					/>
-				) : modelsQuery.isLoading ? (
-					<div
-						className="flex h-32 items-center justify-center"
-						role="status"
-						aria-label="Loading models"
-					>
-						<Spinner className="size-6" />
-					</div>
-				) : (
-					<AdminLlmModelsSection
-						connectionDisplayName={selectedConnection.displayName}
-						connectionEnabled={selectedConnection.enabled}
-						workspaceOptions={workspaceOptions}
-						models={modelsForSelectedConnection}
-						mutatingIds={mutatingModelIds}
-						onAdd={() => {
-							setEditingModel(null);
-							setModelDialogOpen(true);
-						}}
-						onEdit={(model) => {
-							setEditingModel(model);
-							setModelDialogOpen(true);
-						}}
-						onManageAccess={setAccessModel}
-						onDelete={(model) => {
-							deleteModel.mutate({ path: { id: model.id } });
-						}}
-					/>
-				))}
+			{modelsSection}
 
 			{settingsQuery.isError ? (
 				<QueryErrorAlert
 					error={settingsQuery.error}
 					title="Could not load AI policy"
-					onRetry={() => void settingsQuery.refetch()}
+					onRetry={() => {
+						void settingsQuery.refetch();
+					}}
 				/>
 			) : (
 				<InstanceLlmSettingsCard
@@ -393,7 +409,9 @@ function AdminLlmPage() {
 						: []
 				}
 				isSubmitting={isModelSaving}
-				onSave={(body) => void handleSaveModel(body)}
+				onSave={(body) => {
+					void handleSaveModel(body);
+				}}
 			/>
 
 			<AdminLlmModelAccessDialog
@@ -407,7 +425,9 @@ function AdminLlmPage() {
 				workspaceOptions={workspaceOptions}
 				isLoadingWorkspaces={workspacesQuery.isLoading}
 				workspacesError={workspacesQuery.error}
-				onRetryWorkspaces={() => void workspacesQuery.refetch()}
+				onRetryWorkspaces={() => {
+					void workspacesQuery.refetch();
+				}}
 				isSubmitting={updateSharing.isPending}
 				onSave={(body) => {
 					if (!accessModel) {
@@ -421,10 +441,11 @@ function AdminLlmPage() {
 								setAccessModel(null);
 								toast.success("Workspace access updated");
 							},
-							onError: (error) =>
+							onError: (error) => {
 								toast.error("Couldn't update workspace access", {
 									description: problemDetailOf(error),
-								}),
+								});
+							},
 						},
 					);
 				}}

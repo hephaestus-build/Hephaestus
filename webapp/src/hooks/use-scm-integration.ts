@@ -24,9 +24,13 @@ function scmProviderOf(workspace: Workspace | undefined): {
 	kind: ScmKind | undefined;
 	label: string;
 } {
-	const kind = workspace ? (workspace.kind === "GITLAB" ? "GITLAB" : "GITHUB") : undefined;
-	const label = kind === "GITLAB" ? "GitLab" : kind === "GITHUB" ? "GitHub" : "Source control";
-	return { kind, label };
+	if (!workspace) {
+		return { kind: undefined, label: "Source control" };
+	}
+	if (workspace.kind === "GITLAB") {
+		return { kind: "GITLAB", label: "GitLab" };
+	}
+	return { kind: "GITHUB", label: "GitHub" };
 }
 
 export function useScmIntegration(workspaceSlug: string) {
@@ -146,7 +150,9 @@ export function useScmIntegration(workspaceSlug: string) {
 			onRemoveRepository: (nameWithOwner: string) => {
 				removeRepository.mutate({ path: { workspaceSlug }, query: { nameWithOwner } });
 			},
-			onRetry: () => void refetchRepositories(),
+			onRetry: () => {
+				void refetchRepositories();
+			},
 		} satisfies ComponentProps<typeof WorkspaceRepositoriesSettings>,
 	};
 }

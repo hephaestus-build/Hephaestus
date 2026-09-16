@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { LlmModel } from "@/api/types.gen";
 
-import { AdminLlmModelsSection } from "./AdminLlmModelsSection";
+import { AdminLlmModelsSection, type AdminLlmModelsSectionProps } from "./AdminLlmModelsSection";
 
 const model: LlmModel = {
 	id: 7,
@@ -21,7 +21,7 @@ const model: LlmModel = {
 
 describe("AdminLlmModelsSection", () => {
 	it("offers a discoverable access-management action", () => {
-		const onManageAccess = vi.fn();
+		const onManageAccess = vi.fn<AdminLlmModelsSectionProps["onManageAccess"]>();
 		render(
 			<AdminLlmModelsSection
 				connectionDisplayName="OpenAI"
@@ -29,10 +29,10 @@ describe("AdminLlmModelsSection", () => {
 				workspaceOptions={[{ id: 10, displayName: "Alpha", workspaceSlug: "alpha" }]}
 				models={[model]}
 				mutatingIds={new Set<number>()}
-				onAdd={vi.fn()}
-				onEdit={vi.fn()}
+				onAdd={vi.fn<() => void>()}
+				onEdit={vi.fn<() => void>()}
 				onManageAccess={onManageAccess}
-				onDelete={vi.fn()}
+				onDelete={vi.fn<() => void>()}
 			/>,
 		);
 

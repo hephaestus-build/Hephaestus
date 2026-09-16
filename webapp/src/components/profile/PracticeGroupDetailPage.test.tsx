@@ -46,7 +46,7 @@ describe("PracticeGroupDetailPage", () => {
 	});
 
 	it("selects a practice to filter review runs", () => {
-		const onSelectPractice = vi.fn();
+		const onSelectPractice = vi.fn<(practiceSlug: string | undefined) => void>();
 		render(
 			<PracticeGroupDetailPage
 				group={group}
@@ -78,7 +78,7 @@ describe("PracticeGroupDetailPage", () => {
 	});
 
 	it("offers a way out when the chosen practice emptied the feed", () => {
-		const onSelectPractice = vi.fn();
+		const onSelectPractice = vi.fn<(practiceSlug: string | undefined) => void>();
 		render(
 			<PracticeGroupDetailPage
 				group={group}
@@ -94,7 +94,7 @@ describe("PracticeGroupDetailPage", () => {
 	});
 
 	it("loads earlier reviews without losing the ones already shown", () => {
-		const onLoadMore = vi.fn();
+		const onLoadMore = vi.fn<() => void>();
 		const { rerender } = render(
 			<PracticeGroupDetailPage
 				group={group}
@@ -132,7 +132,7 @@ describe("PracticeGroupDetailPage", () => {
 	});
 
 	it("offers a retry when the feed itself failed", () => {
-		const onRetry = vi.fn();
+		const onRetry = vi.fn<() => void>();
 		render(
 			<PracticeGroupDetailPage
 				group={group}
@@ -145,7 +145,7 @@ describe("PracticeGroupDetailPage", () => {
 	});
 
 	it("offers navigation when the group is missing", () => {
-		const onBack = vi.fn();
+		const onBack = vi.fn<() => void>();
 		render(<PracticeGroupDetailPage isLoading={false} onBack={onBack} />);
 		fireEvent.click(screen.getByRole("button", { name: "Back to profile" }));
 		expect(onBack).toHaveBeenCalledOnce();

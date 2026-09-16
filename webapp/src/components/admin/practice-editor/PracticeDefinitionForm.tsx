@@ -409,11 +409,12 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		setForm((previous) => {
 			const nowGuidanceOnly = automatedReviewPolicy.automatedReview.mode === "NONE";
 			const wasGuidanceOnly = previous.automatedReviewPolicy.automatedReview.mode === "NONE";
-			const binding = nowGuidanceOnly
-				? withoutEvidence(previous.bindings[0])
-				: wasGuidanceOnly && selectedWorkType
-					? withRecommendedEvidence(previous.bindings[0], selectedWorkType)
-					: previous.bindings[0];
+			let binding = previous.bindings[0];
+			if (nowGuidanceOnly) {
+				binding = withoutEvidence(binding);
+			} else if (wasGuidanceOnly && selectedWorkType) {
+				binding = withRecommendedEvidence(binding, selectedWorkType);
+			}
 			return {
 				...previous,
 				automatedReviewPolicy,

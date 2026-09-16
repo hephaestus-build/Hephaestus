@@ -1,14 +1,19 @@
 import { appendFileSync } from "node:fs";
 
+function observation(frozen: boolean, outcome: string): string {
+	if (frozen) {
+		return "Channel hold recorded; public webapp version was not checked.";
+	}
+	if (outcome === "success") {
+		return "The public webapp reported the requested application version.";
+	}
+	return `Public webapp version verification did not succeed (step outcome: ${outcome}).`;
+}
+
 export function promotionCoverage(frozen: boolean, outcome: string) {
-	const observation = frozen
-		? "Channel hold recorded; public webapp version was not checked."
-		: outcome === "success"
-			? "The public webapp reported the requested application version."
-			: `Public webapp version verification did not succeed (step outcome: ${outcome}).`;
 	return [
 		"## Promotion verification scope",
-		observation,
+		observation(frozen, outcome),
 		"",
 		"**Not verified by this workflow:** server, worker, webhook, database, NATS, and integration runtime health or version convergence.",
 		"The signed channel authorizes hosts to apply the deployment; a matching public webapp version is not a full-stack health verdict.",
@@ -25,5 +30,8 @@ if (import.meta.main) {
 		process.env.WEBAPP_OUTCOME ?? "unknown",
 	);
 	process.stdout.write(summary);
-	if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+	const stepSummary = process.env.GITHUB_STEP_SUMMARY;
+	if (stepSummary !== undefined && stepSummary !== "") {
+		appendFileSync(stepSummary, summary);
+	}
 }

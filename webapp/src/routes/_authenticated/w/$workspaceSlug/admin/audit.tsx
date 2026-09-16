@@ -21,8 +21,9 @@ function WorkspaceAuditPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
 
-	const patchSearch = (patch: Partial<ConfigAuditSearch>) =>
+	const patchSearch = (patch: Partial<ConfigAuditSearch>) => {
 		void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true });
+	};
 
 	return (
 		<PageLayout>

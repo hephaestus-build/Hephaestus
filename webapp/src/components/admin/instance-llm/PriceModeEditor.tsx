@@ -52,12 +52,12 @@ export function PriceModeEditor({
 	) => {
 		const id = `${idPrefix}-${key}`;
 		const errorId = `${id}-error`;
-		const error =
-			key === "per1mInputUsd"
-				? errors?.per1mInputUsd
-				: key === "per1mOutputUsd"
-					? errors?.per1mOutputUsd
-					: undefined;
+		let error: string | undefined;
+		if (key === "per1mInputUsd") {
+			error = errors?.per1mInputUsd;
+		} else if (key === "per1mOutputUsd") {
+			error = errors?.per1mOutputUsd;
+		}
 		return (
 			<Field data-invalid={Boolean(error)} key={key}>
 				<FieldLabel htmlFor={id}>
@@ -99,7 +99,7 @@ export function PriceModeEditor({
 			<FieldLegend variant="label">Price</FieldLegend>
 			<FieldDescription>
 				Enter the rate billed by the provider. OpenAI-compatible usage responses report tokens, not
-				your account's dollar charge.
+				your account’s dollar charge.
 			</FieldDescription>
 			<RadioGroup
 				value={value.pricingMode}

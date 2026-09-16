@@ -17,23 +17,27 @@
  * listed, not failed. Which container may read what is `check-env-roles.ts`.
  */
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import path from "node:path";
 
 /** Resolved from this file, so the gate answers the same whatever the working directory is. */
-const REPO_ROOT = resolve(import.meta.dirname, "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const APPLICATION_YML = "server/application/src/main/resources/application.yml";
 const COMPOSE_FILES = ["docker/compose.app.yaml", "docker/compose.core.yaml"];
 const DELIBERATE_OVERRIDES = ["docker/preview/compose.app.yaml"];
 
 /** `${VAR:default}` — Spring's syntax. Stops at `$` so a nested placeholder is skipped, not misread. */
-const SPRING = /\$\{([A-Z0-9_]+):([^}$]*)\}/g;
+const SPRING = /\$\{(?<name>[A-Z0-9_]+):(?<fallback>[^}$]*)\}/gu;
 /** `${VAR:-default}` — Compose's syntax for the same idea. */
-const COMPOSE = /\$\{([A-Z0-9_]+):-([^}$]*)\}/g;
+const COMPOSE = /\$\{(?<name>[A-Z0-9_]+):-(?<fallback>[^}$]*)\}/gu;
 
 const collect = (text: string, pattern: RegExp): Map<string, string> => {
 	const defaults = new Map<string, string>();
-	for (const [, name, fallback] of text.matchAll(pattern)) {
-		if (name !== undefined && fallback !== undefined) defaults.set(name, fallback);
+	for (const { groups } of text.matchAll(pattern)) {
+		const name = groups?.name;
+		const fallback = groups?.fallback;
+		if (name !== undefined && fallback !== undefined) {
+			defaults.set(name, fallback);
+		}
 	}
 	return defaults;
 };
@@ -41,19 +45,21 @@ const collect = (text: string, pattern: RegExp): Map<string, string> => {
 /** A Compose file absent from this checkout is not a disagreement, so it is skipped rather than failed. */
 const readIfPresent = async (file: string): Promise<string | undefined> => {
 	try {
-		return await readFile(join(REPO_ROOT, file), "utf8");
+		return await readFile(path.join(REPO_ROOT, file), "utf8");
 	} catch {
 		return undefined;
 	}
 };
 
-const application = collect(await readFile(join(REPO_ROOT, APPLICATION_YML), "utf8"), SPRING);
+const application = collect(await readFile(path.join(REPO_ROOT, APPLICATION_YML), "utf8"), SPRING);
 
 let failed = false;
 const forwarded = new Set<string>();
 for (const file of COMPOSE_FILES) {
 	const text = await readIfPresent(file);
-	if (text === undefined) continue;
+	if (text === undefined) {
+		continue;
+	}
 	for (const [name, fallback] of collect(text, COMPOSE)) {
 		forwarded.add(name);
 		const expected = application.get(name);
@@ -75,7 +81,9 @@ if (failed) {
 
 for (const file of DELIBERATE_OVERRIDES) {
 	const text = await readIfPresent(file);
-	if (text === undefined) continue;
+	if (text === undefined) {
+		continue;
+	}
 	for (const [name, fallback] of collect(text, COMPOSE)) {
 		const expected = application.get(name);
 		if (expected !== undefined && expected !== fallback) {

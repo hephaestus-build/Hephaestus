@@ -9,13 +9,14 @@
  * manifest against.
  */
 import { appendFile, writeFile } from "node:fs/promises";
+import { setTimeout as wait } from "node:timers/promises";
 
 import type { Subject } from "./lib/image-scan.ts";
 import { readJsonFile } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 import { planSubjects } from "./scan-main-images.ts";
 
-const DIGEST = /^sha256:[a-f0-9]{64}$/;
+const DIGEST = /^sha256:[a-f0-9]{64}$/u;
 
 /** One first-party image and the multi-architecture index this run published for it. */
 export interface ResolvedImage {
@@ -32,11 +33,6 @@ export interface ResolveOptions {
 	readonly delayMs?: number;
 	readonly sleep?: (milliseconds: number) => Promise<void>;
 }
-
-const wait = (milliseconds: number): Promise<void> =>
-	new Promise((resolve) => {
-		setTimeout(resolve, milliseconds);
-	});
 
 async function inspectIndexDigest(reference: string): Promise<string> {
 	return output("docker", [
@@ -69,12 +65,16 @@ export async function resolveReleaseImages(
 	for (const subject of subjects) {
 		let digest = "";
 		for (let attempt = 1; attempt <= attempts; attempt += 1) {
-			digest = (await inspect(subject.reference).catch(() => "")).trim();
-			if (DIGEST.test(digest)) break;
-			if (attempt === attempts)
+			const inspected = await inspect(subject.reference).catch(() => "");
+			digest = inspected.trim();
+			if (DIGEST.test(digest)) {
+				break;
+			}
+			if (attempt === attempts) {
 				throw new Error(
 					`could not resolve an index digest for ${subject.reference} (got: ${digest || "<empty>"})`,
 				);
+			}
 			await sleep(delayMs);
 		}
 		resolved.push({
@@ -102,9 +102,10 @@ export function parseResolvedImages(content: string): ResolvedImage[] {
 		.split("\n")
 		.filter((line) => line.length > 0)
 		.map((line, index) => {
-			const [image, repository, indexDigest] = line.split("\t");
-			if (!image || !repository || !indexDigest || !DIGEST.test(indexDigest))
+			const [image = "", repository = "", indexDigest = ""] = line.split("\t");
+			if (image === "" || repository === "" || !DIGEST.test(indexDigest)) {
 				throw new Error(`malformed resolved release image on line ${index + 1}: ${line}`);
+			}
 			return { image, indexDigest, repository };
 		});
 }
@@ -115,9 +116,10 @@ export function digestOutputs(images: readonly ResolvedImage[]): string {
 }
 
 if (import.meta.main) {
-	const [sourceTag, outputPath] = process.argv.slice(2);
-	if (!sourceTag || !outputPath)
+	const [sourceTag = "", outputPath = ""] = process.argv.slice(2);
+	if (sourceTag === "" || outputPath === "") {
 		throw new Error("usage: resolve-release-images <source-tag> <output.tsv>");
+	}
 	const namespace = process.env.IMAGE_REGISTRY ?? "ghcr.io/hephaestus-build";
 	const subjects = planSubjects(
 		await readJsonFile("security/release-images.json"),
@@ -128,5 +130,7 @@ if (import.meta.main) {
 	await writeFile(outputPath, formatResolvedImages(images));
 	process.stdout.write(formatResolvedImages(images));
 	const githubOutput = process.env.GITHUB_OUTPUT;
-	if (githubOutput) await appendFile(githubOutput, digestOutputs(images));
+	if (githubOutput !== undefined && githubOutput !== "") {
+		await appendFile(githubOutput, digestOutputs(images));
+	}
 }

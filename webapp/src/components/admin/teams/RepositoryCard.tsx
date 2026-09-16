@@ -1,4 +1,5 @@
 import { Eye, EyeOff, Settings } from "lucide-react";
+import type { ComponentProps } from "react";
 
 import { cn } from "cn";
 import type { LabelInfo, RepositoryInfo, TeamInfo } from "@/api/types.gen";
@@ -43,11 +44,13 @@ export function RepositoryCard({
 		a.name.localeCompare(b.name),
 	);
 
+	let variant: ComponentProps<typeof Card>["variant"] = team.hidden ? "muted" : "default";
+	if (repository.hiddenFromContributions) {
+		variant = "dashed";
+	}
+
 	return (
-		<Card
-			variant={repository.hiddenFromContributions ? "dashed" : team.hidden ? "muted" : "default"}
-			className="flex flex-col"
-		>
+		<Card variant={variant} className="flex flex-col">
 			<CardHeader>
 				<div className="flex items-start justify-between">
 					<div className="min-w-0 flex-1">
@@ -83,7 +86,9 @@ export function RepositoryCard({
 							<Button
 								variant="ghost"
 								size="icon-sm"
-								onClick={() => void onToggleVisibility(!repository.hiddenFromContributions)}
+								onClick={() => {
+									void onToggleVisibility(!repository.hiddenFromContributions);
+								}}
 								title={
 									repository.hiddenFromContributions
 										? "Show repository contributions"

@@ -9,7 +9,7 @@ import {
 	symlink,
 	writeFile,
 } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import { requiredEnv } from "./lib/env.ts";
 import { asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
@@ -48,10 +48,10 @@ const SYSTEMD_UNITS = "/etc/systemd/system";
  * non-zero; a stack trace would say a failure happened here, when what happened is that nothing has
  * been promoted yet.
  */
-export class OperatorActionRequired extends Error {
+export class OperatorActionRequiredError extends Error {
 	constructor(message: string) {
 		super(message);
-		this.name = "OperatorActionRequired";
+		this.name = "OperatorActionRequiredError";
 	}
 }
 
@@ -79,11 +79,11 @@ export type Decision =
 	| { action: "noop"; reason: string }
 	| { action: "refuse"; reason: string };
 
-export const RELEASE_TAG = /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
-const CHANNEL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const COMMIT_SHA = /^[0-9a-f]{40}$/;
-const IMAGE_KEY = /^HEPHAESTUS_IMAGE_[A-Z0-9_]+$/;
-const IMAGE_DIGEST = /^[^\s@]+@sha256:[0-9a-f]{64}$/;
+export const RELEASE_TAG = /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u;
+const CHANNEL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const COMMIT_SHA = /^[0-9a-f]{40}$/u;
+const IMAGE_KEY = /^HEPHAESTUS_IMAGE_[A-Z0-9_]+$/u;
+const IMAGE_DIGEST = /^[^\s@]+@sha256:[0-9a-f]{64}$/u;
 
 export function isCommit(value: string): boolean {
 	return COMMIT_SHA.test(value);
@@ -95,8 +95,12 @@ export function isTarget(value: string): boolean {
 }
 
 function optionalBoolean(value: unknown, label: string): boolean {
-	if (value === undefined) return false;
-	if (typeof value !== "boolean") throw new TypeError(`${label} must be a boolean`);
+	if (value === undefined) {
+		return false;
+	}
+	if (typeof value !== "boolean") {
+		throw new TypeError(`${label} must be a boolean`);
+	}
 	return value;
 }
 
@@ -119,11 +123,13 @@ export function parseChannel(value: unknown): Channel {
 	);
 
 	if (record.commit !== undefined) {
-		if (record.release !== undefined)
+		if (record.release !== undefined) {
 			throw new Error("channel names both a release and a commit; it must name one");
+		}
 		const commit = asString(record.commit, "channel.commit");
-		if (!isCommit(commit))
+		if (!isCommit(commit)) {
 			throw new Error(`channel.commit must be a full 40-character commit, not ${commit}`);
+		}
 		return {
 			release: commit,
 			images: parseImages(record.images),
@@ -134,8 +140,9 @@ export function parseChannel(value: unknown): Channel {
 	}
 
 	const release = asString(record.release, "channel.release");
-	if (!RELEASE_TAG.test(release))
+	if (!RELEASE_TAG.test(release)) {
 		throw new Error(`channel.release must be an immutable vX.Y.Z tag, not ${release}`);
+	}
 	return { release, allowRollback, freeze };
 }
 
@@ -164,25 +171,37 @@ function parseImages(value: unknown): Readonly<Record<string, string>> {
 	const record = asRecord(value, "channel.images");
 	const images: Record<string, string> = {};
 	for (const [key, reference] of Object.entries(record)) {
-		if (!IMAGE_KEY.test(key)) throw new Error(`channel.images has an unusable name ${key}`);
+		if (!IMAGE_KEY.test(key)) {
+			throw new Error(`channel.images has an unusable name ${key}`);
+		}
 		const pinned = asString(reference, `channel.images.${key}`);
-		if (!IMAGE_DIGEST.test(pinned))
+		if (!IMAGE_DIGEST.test(pinned)) {
 			throw new Error(`channel.images.${key} must be pinned by digest, not ${pinned}`);
+		}
 		images[key] = pinned;
 	}
-	if (Object.keys(images).length === 0) throw new Error("channel.images names no image");
+	if (Object.keys(images).length === 0) {
+		throw new Error("channel.images names no image");
+	}
 	return images;
 }
 
+const releaseParts = (release: string): string[] => release.slice(1).split(".");
+
 function compareReleases(left: string, right: string): number {
-	const parts = (release: string) => release.slice(1).split(".");
-	const leftParts = parts(left);
-	const rightParts = parts(right);
+	const leftParts = releaseParts(left);
+	const rightParts = releaseParts(right);
 	for (const [index, leftPart] of leftParts.entries()) {
 		const rightPart = rightParts[index];
-		if (rightPart === undefined) throw new Error(`invalid release ${right}`);
-		if (leftPart.length !== rightPart.length) return leftPart.length - rightPart.length;
-		if (leftPart !== rightPart) return leftPart < rightPart ? -1 : 1;
+		if (rightPart === undefined) {
+			throw new Error(`invalid release ${right}`);
+		}
+		if (leftPart.length !== rightPart.length) {
+			return leftPart.length - rightPart.length;
+		}
+		if (leftPart !== rightPart) {
+			return leftPart < rightPart ? -1 : 1;
+		}
 	}
 	return 0;
 }
@@ -195,37 +214,43 @@ export function decide(
 	/** Whether what the channel asks for is behind what is already running. */
 	targetPrecedesApplied = false,
 ): Decision {
-	if (applied && channelCommit !== applied.channelCommit && !advances)
+	if (applied && channelCommit !== applied.channelCommit && !advances) {
 		return {
 			action: "refuse",
 			reason: `channel commit ${channelCommit.slice(0, 8)} does not descend from the last accepted channel`,
 		};
-	if (channel.freeze) return { action: "noop", reason: "channel is frozen" };
+	}
+	if (channel.freeze === true) {
+		return { action: "noop", reason: "channel is frozen" };
+	}
 	// A new channel commit naming the release already applied is a re-promotion, and re-applying is
 	// how a host that was hand-patched during an incident converges again.
-	if (applied?.release === channel.release && applied.channelCommit === channelCommit)
+	if (applied?.release === channel.release && applied.channelCommit === channelCommit) {
 		return { action: "noop", reason: `already running ${channel.release}` };
+	}
 	// Two builds of the default branch can finish out of order, and the later-finishing older build
 	// writes the newer channel commit — so channel ancestry says nothing about which build a channel
 	// carries. What runs has to be compared with what is asked for, and for commits only the host's
 	// clone can answer that, so the caller resolves it and passes the answer in.
-	if (applied && targetPrecedesApplied && !channel.allowRollback)
+	if (applied && targetPrecedesApplied && channel.allowRollback !== true) {
 		return {
 			action: "refuse",
 			reason: `${channel.release} is behind the running ${applied.release}; set allowRollback to move back deliberately`,
 		};
+	}
 	// Releases are also ordered by version, which catches a rewind without consulting a clone.
 	const ordered = RELEASE_TAG.test(channel.release) && RELEASE_TAG.test(applied?.release ?? "");
 	if (
 		applied &&
 		ordered &&
 		compareReleases(channel.release, applied.release) < 0 &&
-		!channel.allowRollback
-	)
+		channel.allowRollback !== true
+	) {
 		return {
 			action: "refuse",
 			reason: `${channel.release} precedes ${applied.release}; set allowRollback to move back deliberately`,
 		};
+	}
 	return { action: "apply", release: channel.release };
 }
 
@@ -239,9 +264,13 @@ export function commitLockEnvironment(
 	images: Readonly<Record<string, string>>,
 ): string {
 	const lines = [`IMAGE_TAG=${commit}`, `HEPHAESTUS_RELEASE_COMMIT=${commit}`];
-	for (const key of Object.keys(images).toSorted()) lines.push(`${key}=${images[key]}`);
+	for (const key of Object.keys(images).toSorted()) {
+		lines.push(`${key}=${images[key]}`);
+	}
 	return `${lines.join("\n")}\n`;
 }
+
+const epochSeconds = (date: Date): number => Math.floor(date.getTime() / 1000);
 
 export function renderMetrics(state: {
 	channel: string;
@@ -253,7 +282,6 @@ export function renderMetrics(state: {
 	/** The applied record predates the kept commit, so the tooling waits for the next apply. */
 	toolingPending?: boolean;
 }): string {
-	const seconds = (date: Date) => Math.floor(date.getTime() / 1000);
 	const lines = [
 		"# HELP hephaestus_deploy_info The release this host currently runs.",
 		"# TYPE hephaestus_deploy_info gauge",
@@ -263,16 +291,16 @@ export function renderMetrics(state: {
 		`hephaestus_deploy_reconcile_success ${state.success ? 1 : 0}`,
 		"# HELP hephaestus_deploy_reconcile_timestamp_seconds When the last reconcile attempt ran.",
 		"# TYPE hephaestus_deploy_reconcile_timestamp_seconds gauge",
-		`hephaestus_deploy_reconcile_timestamp_seconds ${seconds(state.now)}`,
+		`hephaestus_deploy_reconcile_timestamp_seconds ${epochSeconds(state.now)}`,
 		"# HELP hephaestus_deploy_tooling_pending Whether the host still waits for an apply to record the tooling it should run.",
 		"# TYPE hephaestus_deploy_tooling_pending gauge",
-		`hephaestus_deploy_tooling_pending ${state.toolingPending ? 1 : 0}`,
+		`hephaestus_deploy_tooling_pending ${state.toolingPending === true ? 1 : 0}`,
 	];
 	if (state.lastSuccessAt) {
 		lines.push(
 			"# HELP hephaestus_deploy_last_success_timestamp_seconds When the release this host runs was applied.",
 			"# TYPE hephaestus_deploy_last_success_timestamp_seconds gauge",
-			`hephaestus_deploy_last_success_timestamp_seconds ${seconds(state.lastSuccessAt)}`,
+			`hephaestus_deploy_last_success_timestamp_seconds ${epochSeconds(state.lastSuccessAt)}`,
 		);
 	}
 	return `${lines.join("\n")}\n`;
@@ -301,8 +329,9 @@ function lockValues(lockEnv: string, key: string): string[] {
 
 export function lockedReleaseCommit(lockEnv: string): string {
 	const values = lockValues(lockEnv, "HEPHAESTUS_RELEASE_COMMIT");
-	if (values.length !== 1 || !isCommit(values[0] ?? ""))
+	if (values.length !== 1 || !isCommit(values[0] ?? "")) {
 		throw new Error("release lock must contain one source commit");
+	}
 	return values[0] ?? "";
 }
 
@@ -333,12 +362,18 @@ export function carryPostgresImage(
 	rebuilt: boolean,
 ): Readonly<Record<string, string>> {
 	const pinned = images[POSTGRES_IMAGE];
-	if (rebuilt || appliedLockEnv === undefined || pinned === undefined) return images;
+	if (rebuilt || appliedLockEnv === undefined || pinned === undefined) {
+		return images;
+	}
 	const [kept, ...rest] = lockValues(appliedLockEnv, POSTGRES_IMAGE);
-	if (kept === undefined || rest.length > 0 || !IMAGE_DIGEST.test(kept)) return images;
+	if (kept === undefined || rest.length > 0 || !IMAGE_DIGEST.test(kept)) {
+		return images;
+	}
 	// The digest is kept, never the repository it sits in: a channel naming the image somewhere else
 	// is naming a different image rather than a rebuild of this one.
-	if (kept.slice(0, kept.indexOf("@")) !== pinned.slice(0, pinned.indexOf("@"))) return images;
+	if (kept.slice(0, kept.indexOf("@")) !== pinned.slice(0, pinned.indexOf("@"))) {
+		return images;
+	}
 	return { ...images, [POSTGRES_IMAGE]: kept };
 }
 
@@ -347,10 +382,14 @@ function isStack(name: string): name is Stack {
 }
 
 export function parseStacks(value: string | undefined): Stack[] {
-	const names = (value ?? "").split(/[\s,]+/).filter(Boolean);
-	if (names.length === 0) throw new Error("HEPHAESTUS_STACKS must name at least one stack");
+	const names = (value ?? "").split(/[\s,]+/u).filter(Boolean);
+	if (names.length === 0) {
+		throw new Error("HEPHAESTUS_STACKS must name at least one stack");
+	}
 	const unknown = names.filter((name) => !isStack(name));
-	if (unknown.length > 0) throw new Error(`unknown stack(s): ${unknown.join(", ")}`);
+	if (unknown.length > 0) {
+		throw new Error(`unknown stack(s): ${unknown.join(", ")}`);
+	}
 	return STACK_ORDER.filter((stack) => names.includes(stack));
 }
 
@@ -369,17 +408,19 @@ interface HostConfig {
 
 function hostConfig(environment: NodeJS.ProcessEnv): HostConfig {
 	const channel = requiredEnv(environment, "HEPHAESTUS_CHANNEL");
-	if (!CHANNEL_NAME.test(channel))
+	if (!CHANNEL_NAME.test(channel)) {
 		throw new Error("HEPHAESTUS_CHANNEL must contain lowercase letters, digits, and hyphens");
+	}
 	const stateDirectory = environment.STATE_DIRECTORY ?? "/var/lib/hephaestus";
 	const waitTimeoutSeconds = Number(environment.HEPHAESTUS_WAIT_TIMEOUT ?? 600);
-	if (!Number.isSafeInteger(waitTimeoutSeconds) || waitTimeoutSeconds <= 0)
+	if (!Number.isSafeInteger(waitTimeoutSeconds) || waitTimeoutSeconds <= 0) {
 		throw new Error("HEPHAESTUS_WAIT_TIMEOUT must be a positive integer");
+	}
 	return {
 		channel,
 		stacks: parseStacks(environment.HEPHAESTUS_STACKS),
-		checkout: join(stateDirectory, "checkout"),
-		tooling: join(stateDirectory, "tooling"),
+		checkout: path.join(stateDirectory, "checkout"),
+		tooling: path.join(stateDirectory, "tooling"),
 		stateDirectory,
 		secretsDirectory: environment.HEPHAESTUS_SECRETS ?? "/etc/hephaestus",
 		metricsFile: environment.HEPHAESTUS_METRICS_FILE,
@@ -397,20 +438,26 @@ export async function readApplied(file: string): Promise<AppliedState | undefine
 			appliedAt: asString(record.appliedAt, "applied.appliedAt"),
 			...(record.commit === undefined ? {} : { commit: asString(record.commit, "applied.commit") }),
 		};
-		if (!isTarget(applied.release))
+		if (!isTarget(applied.release)) {
 			throw new Error("applied.release must be a vX.Y.Z tag or a commit");
-		if (!isCommit(applied.channelCommit))
+		}
+		if (!isCommit(applied.channelCommit)) {
 			throw new Error("applied.channelCommit must be a Git commit");
-		if (applied.commit !== undefined && !COMMIT_SHA.test(applied.commit))
+		}
+		if (applied.commit !== undefined && !COMMIT_SHA.test(applied.commit)) {
 			throw new Error("applied.commit must be a Git commit");
+		}
 		if (
 			!Number.isFinite(Date.parse(applied.appliedAt)) ||
 			new Date(applied.appliedAt).toISOString() !== applied.appliedAt
-		)
+		) {
 			throw new Error("applied.appliedAt must be an ISO timestamp");
+		}
 		return applied;
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+			return undefined;
+		}
 		throw error;
 	}
 }
@@ -426,9 +473,18 @@ function fetchOptions(config: HostConfig): { cwd: string; signal: AbortSignal } 
 	return { cwd: config.checkout, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) };
 }
 
+/**
+ * The commit `ref` names in `checkout`. Trimmed because a SHA is compared and interpolated; the
+ * blobs read elsewhere are not, since the channel must reach cosign byte for byte as it was signed.
+ */
+async function revision(checkout: string, ref: string): Promise<string> {
+	const sha = await output("git", ["rev-parse", ref], { cwd: checkout });
+	return sha.trim();
+}
+
 export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	const config = hostConfig(process.env);
-	const appliedFile = join(config.stateDirectory, "applied.json");
+	const appliedFile = path.join(config.stateDirectory, "applied.json");
 	const applied = await readApplied(appliedFile);
 	const startedAt = new Date();
 
@@ -467,13 +523,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		["fetch", "--quiet", "origin", "+refs/heads/deploy-state:refs/remotes/origin/deploy-state"],
 		fetchOptions(config),
 	);
-	// Trimmed because the SHA is compared and interpolated; the blobs below are not, since the
-	// channel must reach cosign byte for byte as it was signed.
-	const channelCommit = (
-		await output("git", ["rev-parse", "refs/remotes/origin/deploy-state"], {
-			cwd: config.checkout,
-		})
-	).trim();
+	const channelCommit = await revision(config.checkout, "refs/remotes/origin/deploy-state");
 	const channelPath = `channels/${config.channel}.json`;
 	// An environment nobody has promoted yet has no channel file. That is the first thing a new
 	// host meets, so say which channel is missing and what publishes it rather than letting git's
@@ -482,11 +532,12 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		!(await succeeds("git", ["cat-file", "-e", `${channelCommit}:${channelPath}`], {
 			cwd: config.checkout,
 		}))
-	)
-		throw new OperatorActionRequired(
+	) {
+		throw new OperatorActionRequiredError(
 			`no ${channelPath} on deploy-state: the "${config.channel}" environment has not been ` +
 				"promoted yet. Run the Promote workflow for it and this host applies it on the next tick.",
 		);
+	}
 	const channelJson = await output("git", ["show", `${channelCommit}:${channelPath}`], {
 		cwd: config.checkout,
 	});
@@ -495,21 +546,21 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	});
 
 	// Verifying before parsing keeps unverified bytes from reaching any decision.
-	const scratch = join(config.stateDirectory, "channel");
+	const scratch = path.join(config.stateDirectory, "channel");
 	await mkdir(scratch, { recursive: true });
-	await writeFile(join(scratch, "channel.json"), channelJson);
-	await writeFile(join(scratch, "channel.sigstore.json"), signature);
+	await writeFile(path.join(scratch, "channel.json"), channelJson);
+	await writeFile(path.join(scratch, "channel.sigstore.json"), signature);
 	await run("cosign", [
 		"verify-blob",
 		"--bundle",
-		join(scratch, "channel.sigstore.json"),
+		path.join(scratch, "channel.sigstore.json"),
 		// Cosign cannot verify the certificate's environment claim, so the gate is expressed as the
 		// identity of the workflow the environment protects: only an approved run can produce it.
 		"--certificate-identity",
 		config.promoteIdentity,
 		"--certificate-oidc-issuer",
 		"https://token.actions.githubusercontent.com",
-		join(scratch, "channel.json"),
+		path.join(scratch, "channel.json"),
 	]);
 
 	const channel = parseChannel(parseJson(channelJson));
@@ -536,13 +587,15 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 			["fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main"],
 			fetchOptions(config),
 		);
-		for (const commit of [channel.release, applied.release])
+		for (const commit of [channel.release, applied.release]) {
 			if (
 				!(await succeeds("git", ["cat-file", "-e", `${commit}^{commit}`], { cwd: config.checkout }))
-			)
+			) {
 				throw new Error(
 					`cannot order ${channel.release} against ${applied.release}: ${commit} is unknown here`,
 				);
+			}
+		}
 		targetPrecedesApplied =
 			channel.release !== applied.release &&
 			(await succeeds("git", ["merge-base", "--is-ancestor", channel.release, applied.release], {
@@ -551,7 +604,9 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	}
 	const decision = decide(channel, applied, channelCommit, advances, targetPrecedesApplied);
 
-	if (decision.action === "refuse") throw new Error(decision.reason);
+	if (decision.action === "refuse") {
+		throw new Error(decision.reason);
+	}
 	if (decision.action === "noop") {
 		console.log(`No change: ${decision.reason}`);
 		if (applied && applied.channelCommit !== channelCommit) {
@@ -560,7 +615,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 				`${JSON.stringify({ ...applied, channelCommit }, null, "\t")}\n`,
 			);
 		}
-		if (config.metricsFile && applied) {
+		if (config.metricsFile !== undefined && config.metricsFile !== "" && applied) {
 			await writeAtomic(
 				config.metricsFile,
 				renderMetrics({
@@ -586,9 +641,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 			: ["fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main"],
 		fetchOptions(config),
 	);
-	const releaseCommit = (
-		await output("git", ["rev-parse", `${decision.release}^{commit}`], { cwd: config.checkout })
-	).trim();
+	const releaseCommit = await revision(config.checkout, `${decision.release}^{commit}`);
 	const { tree: releaseTree } = await ensureReleaseTree(
 		config.checkout,
 		releasesDirectory(config),
@@ -596,9 +649,9 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		releaseCommit,
 	);
 
-	const lockDirectory = join(config.stateDirectory, "release-locks");
+	const lockDirectory = path.join(config.stateDirectory, "release-locks");
 	await mkdir(lockDirectory, { recursive: true });
-	const lockFile = join(lockDirectory, `${decision.release}.env`);
+	const lockFile = path.join(lockDirectory, `${decision.release}.env`);
 	if (channel.images) {
 		// A commit channel carries its own digests, and the channel file they arrived in was
 		// signature-verified before this point, so there is no release to fetch or verify. The
@@ -616,25 +669,26 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		// The verifier is the tooling this tick runs, never the release's own copy of it.
 		await run(
 			process.execPath,
-			[join(import.meta.dirname, "prepare-release-lock.ts"), decision.release, lockFile],
+			[path.join(import.meta.dirname, "prepare-release-lock.ts"), decision.release, lockFile],
 			{ cwd: releaseTree },
 		);
 	}
 
 	const lockEnv = await readFile(lockFile, "utf8");
-	if (!channel.images && lockedReleaseCommit(lockEnv) !== releaseCommit)
+	if (!channel.images && lockedReleaseCommit(lockEnv) !== releaseCommit) {
 		throw new Error(`signed release lock does not cover the ${decision.release} source tree`);
+	}
 
 	const composeFor = (stack: Stack): string[] => [
 		"compose",
 		"--project-name",
 		stack,
 		"--env-file",
-		join(config.secretsDirectory, `${stack}.env`),
+		path.join(config.secretsDirectory, `${stack}.env`),
 		"--env-file",
 		lockFile,
 		"--file",
-		join(releaseTree, `docker/compose.${stack}.yaml`),
+		path.join(releaseTree, `docker/compose.${stack}.yaml`),
 	];
 
 	// Every stack is verified before any container starts, so a release that renders an unlocked image
@@ -654,14 +708,17 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 			asString(asRecord(service, `${stack} service`).image, `${stack} service image`),
 		);
 		const unlocked = unlockedImages(images, lockEnv);
-		if (unlocked.length > 0)
+		if (unlocked.length > 0) {
 			throw new Error(`${stack} renders images outside the release lock: ${unlocked.join(", ")}`);
+		}
 		composeArgsByStack.set(stack, composeArgs);
 	}
 
 	for (const [stack, composeArgs] of composeArgsByStack) {
 		const foundation = FOUNDATION[stack];
-		if (!foundation) continue;
+		if (!foundation) {
+			continue;
+		}
 		await run(
 			"docker",
 			[
@@ -697,7 +754,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		appliedFile,
 		`${JSON.stringify({ release: decision.release, channelCommit, appliedAt: finishedAt.toISOString(), commit: releaseCommit }, null, "\t")}\n`,
 	);
-	if (config.metricsFile)
+	if (config.metricsFile !== undefined && config.metricsFile !== "") {
 		await writeAtomic(
 			config.metricsFile,
 			renderMetrics({
@@ -709,6 +766,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 				lastSuccessAt: finishedAt,
 			}),
 		);
+	}
 	console.log(`Applied ${decision.release} to ${config.stacks.join(", ")}`);
 	// Only now, with the release verified and running, does the host run that release's tooling.
 	await followTooling(config, releaseTree, unitsDirectory);
@@ -725,20 +783,20 @@ const DAY_SECONDS = 24 * 60 * 60;
 async function sameDay(checkout: string, previous: string, target: string): Promise<boolean> {
 	let stamps: number[];
 	try {
-		stamps = (
-			await output("git", ["show", "--no-patch", "--format=%ct", previous, target], {
-				cwd: checkout,
-			})
-		)
-			.trim()
-			.split("\n")
-			.map(Number);
+		const shown = await output("git", ["show", "--no-patch", "--format=%ct", previous, target], {
+			cwd: checkout,
+		});
+		stamps = shown.trim().split("\n").map(Number);
 	} catch {
 		return false;
 	}
 	const [before, after] = stamps;
-	if (stamps.length !== 2 || before === undefined || after === undefined) return false;
-	if (!Number.isSafeInteger(before) || !Number.isSafeInteger(after)) return false;
+	if (stamps.length !== 2 || before === undefined || after === undefined) {
+		return false;
+	}
+	if (!Number.isSafeInteger(before) || !Number.isSafeInteger(after)) {
+		return false;
+	}
 	return Math.floor(before / DAY_SECONDS) === Math.floor(after / DAY_SECONDS);
 }
 
@@ -761,14 +819,20 @@ export async function commitImages(
 	images: Readonly<Record<string, string>>,
 	refresh = false,
 ): Promise<Readonly<Record<string, string>>> {
-	if (applied === undefined || refresh) return images;
+	if (applied === undefined || refresh) {
+		return images;
+	}
 	const previous = appliedCommit(applied);
-	if (previous === undefined) return images;
+	if (previous === undefined) {
+		return images;
+	}
 	let appliedLockEnv: string | undefined;
 	try {
-		appliedLockEnv = await readFile(join(lockDirectory, `${applied.release}.env`), "utf8");
+		appliedLockEnv = await readFile(path.join(lockDirectory, `${applied.release}.env`), "utf8");
 	} catch (error) {
-		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+			throw error;
+		}
 	}
 	// `--quiet` exits 0 only when nothing under the paths differs. A commit the checkout does not have
 	// fails it too, and that reads as changed: when the host cannot tell, it runs what the channel
@@ -799,7 +863,9 @@ async function followTooling(
 	}
 	const moved = await adoptTooling(config.tooling, tree);
 	const changed = await syncUnits(tree, unitsDirectory);
-	if (changed.length > 0) console.log(`Updated ${changed.join(", ")}`);
+	if (changed.length > 0) {
+		console.log(`Updated ${changed.join(", ")}`);
+	}
 	// systemd itself knows whether the units it loaded match the files, so a tick that stopped
 	// between writing a unit and reloading is finished by the next one.
 	const stale = await output("systemctl", [
@@ -808,12 +874,14 @@ async function followTooling(
 		"--value",
 		...UNIT_FILES,
 	]);
-	if (stale.split("\n").includes("yes")) await run("systemctl", ["daemon-reload"]);
+	if (stale.split("\n").includes("yes")) {
+		await run("systemctl", ["daemon-reload"]);
+	}
 	return moved;
 }
 
 function releasesDirectory(config: HostConfig): string {
-	return join(config.stateDirectory, "releases");
+	return path.join(config.stateDirectory, "releases");
 }
 
 /** The accepted source commit a record names: kept since it was recorded, or the release itself. */
@@ -833,11 +901,12 @@ export async function ensureReleaseTree(
 	release: string,
 	commit: string,
 ): Promise<{ tree: string; commit: string }> {
-	const tree = join(releases, release);
+	const tree = path.join(releases, release);
 	if (await isDirectory(tree)) {
-		const head = (await output("git", ["rev-parse", "HEAD"], { cwd: tree })).trim();
-		if (head !== commit)
+		const head = await revision(tree, "HEAD");
+		if (head !== commit) {
 			throw new Error(`${tree} is at ${head}, not the ${commit} accepted for ${release}`);
+		}
 	} else {
 		await run(
 			"git",
@@ -854,16 +923,21 @@ export async function ensureReleaseTree(
 	const changes = await output("git", ["status", "--porcelain=v1", "--untracked-files=no"], {
 		cwd: tree,
 	});
-	if (changes) throw new Error(`${tree} differs from ${release}`);
+	if (changes) {
+		throw new Error(`${tree} differs from ${release}`);
+	}
 	return { tree, commit };
 }
 
 /** Unlike `existsSync`, this reports a lookup that failed for any reason other than absence. */
-async function isDirectory(path: string): Promise<boolean> {
+async function isDirectory(candidate: string): Promise<boolean> {
 	try {
-		return (await stat(path)).isDirectory();
+		const stats = await stat(candidate);
+		return stats.isDirectory();
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+			return false;
+		}
 		throw error;
 	}
 }
@@ -872,12 +946,14 @@ async function isDirectory(path: string): Promise<boolean> {
 export async function carriesToolingLink(tree: string): Promise<boolean> {
 	let unit: string;
 	try {
-		unit = await readFile(join(tree, "docker/self-host/systemd", UNIT_FILES[0]), "utf8");
+		unit = await readFile(path.join(tree, "docker/self-host/systemd", UNIT_FILES[0]), "utf8");
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+			return false;
+		}
 		throw error;
 	}
-	return /^ExecStart=.*\/var\/lib\/hephaestus\/tooling\//m.test(unit);
+	return /^ExecStart=.*\/var\/lib\/hephaestus\/tooling\//mu.test(unit);
 }
 
 /**
@@ -885,7 +961,9 @@ export async function carriesToolingLink(tree: string): Promise<boolean> {
  * and reports whether it moved.
  */
 export async function adoptTooling(link: string, tree: string): Promise<boolean> {
-	if ((await readlink(link).catch(() => undefined)) === tree) return false;
+	if ((await readlink(link).catch(() => undefined)) === tree) {
+		return false;
+	}
 	const staged = `${link}.next`;
 	await rm(staged, { force: true });
 	await symlink(tree, staged);
@@ -901,11 +979,12 @@ export async function adoptTooling(link: string, tree: string): Promise<boolean>
 export async function syncUnits(tree: string, unitsDirectory: string): Promise<string[]> {
 	const changed: string[] = [];
 	for (const name of UNIT_FILES) {
-		const wanted = await readFile(join(tree, "docker/self-host/systemd", name), "utf8");
-		const unit = join(unitsDirectory, name);
+		const wanted = await readFile(path.join(tree, "docker/self-host/systemd", name), "utf8");
+		const unit = path.join(unitsDirectory, name);
 		const installed = await lstat(unit).catch(() => undefined);
-		if (installed && !installed.isSymbolicLink() && (await readFile(unit, "utf8")) === wanted)
+		if (installed && !installed.isSymbolicLink() && (await readFile(unit, "utf8")) === wanted) {
 			continue;
+		}
 		await writeAtomic(unit, wanted);
 		changed.push(name);
 	}
@@ -916,9 +995,11 @@ export async function syncUnits(tree: string, unitsDirectory: string): Promise<s
 async function reportFailure(): Promise<void> {
 	const metricsFile = process.env.HEPHAESTUS_METRICS_FILE;
 	const channel = process.env.HEPHAESTUS_CHANNEL;
-	if (!metricsFile || !channel) return;
+	if (metricsFile === undefined || metricsFile === "" || channel === undefined || channel === "") {
+		return;
+	}
 	const applied = await readApplied(
-		join(process.env.STATE_DIRECTORY ?? "/var/lib/hephaestus", "applied.json"),
+		path.join(process.env.STATE_DIRECTORY ?? "/var/lib/hephaestus", "applied.json"),
 	);
 	await writeAtomic(
 		metricsFile,
@@ -942,11 +1023,11 @@ if (import.meta.main) {
 		await main();
 	} catch (error) {
 		// An unwritable metric must not replace the error that caused the failure.
-		await reportFailure().catch(() => {});
+		await reportFailure().catch(() => undefined);
 		// A host waiting to be promoted is a state an operator resolves, not a defect: the journal
 		// gets the sentence that says what to do. Everything else keeps its stack, because a stack is
 		// what a defect is diagnosed from.
-		if (error instanceof OperatorActionRequired) {
+		if (error instanceof OperatorActionRequiredError) {
 			console.error(error.message);
 			process.exitCode = 1;
 		} else {

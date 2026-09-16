@@ -16,16 +16,18 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 
 import { parse } from "jsonc-parser";
 
+import { loadLintConfig } from "../webapp/tools/oxlint/load-config.ts";
 import { asRecord, isRecord } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
-const REPO_ROOT = resolve(import.meta.dirname, "..");
-const WEBAPP = join(REPO_ROOT, "webapp");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+const WEBAPP = path.join(REPO_ROOT, "webapp");
 
 interface Fixture {
 	path: string;
@@ -272,7 +274,7 @@ const fixtures: Fixture[] = [
 ];
 
 function effectiveLintOptions(scope: string) {
-	const result = spawnSync("vp", ["-C", join(REPO_ROOT, scope), "lint", "--print-config"], {
+	const result = spawnSync("vp", ["-C", path.join(REPO_ROOT, scope), "lint", "--print-config"], {
 		encoding: "utf8",
 		maxBuffer: CAPTURE_LIMIT_BYTES,
 	});
@@ -281,74 +283,74 @@ function effectiveLintOptions(scope: string) {
 }
 
 function writeScratchProject(project: string) {
-	const lint = asRecord(
-		parse(readFileSync(join(WEBAPP, ".oxlintrc.json"), "utf8")),
-		"webapp/.oxlintrc.json",
-	);
-	// Test the options Vite+ actually uses, not a reconstruction of the root policy.
-	lint.options = effectiveLintOptions("webapp");
+	// Inlined the way the webapp's own Vite config inlines it, so the scratch project exercises the
+	// same object Vite+ hands oxlint, under the options Vite+ actually resolves for that tree.
+	const lint: Record<string, unknown> = {
+		...loadLintConfig(pathToFileURL(path.join(WEBAPP, ".oxlintrc.json"))),
+		options: effectiveLintOptions("webapp"),
+	};
 	// Resolved from the webapp, since the scratch project cannot reach `./tools` or the webapp's
 	// dependencies by name; the list stays the config's so a plugin added there is exercised here.
 	assert.ok(Array.isArray(lint.jsPlugins), "jsPlugins must list the webapp plugins");
-	const require = createRequire(join(WEBAPP, "package.json"));
+	const require = createRequire(path.join(WEBAPP, "package.json"));
 	lint.jsPlugins = lint.jsPlugins.map((plugin: unknown) => {
 		assert.equal(typeof plugin, "string");
 		return require.resolve(String(plugin));
 	});
 	const components = asRecord(
-		JSON.parse(readFileSync(join(WEBAPP, "components.json"), "utf8")),
+		JSON.parse(readFileSync(path.join(WEBAPP, "components.json"), "utf8")),
 		"components.json",
 	);
 	const tailwind = asRecord(components.tailwind, "components.tailwind");
-	components.tailwind = { ...tailwind, css: join(WEBAPP, String(tailwind.css)) };
-	writeFileSync(join(project, "components.json"), JSON.stringify(components));
+	components.tailwind = { ...tailwind, css: path.join(WEBAPP, String(tailwind.css)) };
+	writeFileSync(path.join(project, "components.json"), JSON.stringify(components));
 	writeFileSync(
-		join(project, "package.json"),
+		path.join(project, "package.json"),
 		`${JSON.stringify({ name: "lint-contract", private: true, type: "module" }, null, "\t")}\n`,
 	);
-	writeFileSync(join(project, "pnpm-workspace.yaml"), "packages:\n  - .\n");
+	writeFileSync(path.join(project, "pnpm-workspace.yaml"), "packages:\n  - .\n");
 	// The type-aware rules see the webapp's own compiler options.
-	const compilerOptions = asRecord(
-		parse(readFileSync(join(WEBAPP, "tsconfig.json"), "utf8")),
+	const { compilerOptions } = asRecord(
+		parse(readFileSync(path.join(WEBAPP, "tsconfig.json"), "utf8")),
 		"webapp/tsconfig.json",
-	).compilerOptions;
+	);
 	writeFileSync(
-		join(project, "tsconfig.json"),
+		path.join(project, "tsconfig.json"),
 		`${JSON.stringify({ compilerOptions: { ...asRecord(compilerOptions, "compilerOptions"), types: [] } }, null, "\t")}\n`,
 	);
 	writeFileSync(
-		join(project, "vite.config.ts"),
+		path.join(project, "vite.config.ts"),
 		`import { defineConfig } from "vite-plus";\nexport default defineConfig({ lint: ${JSON.stringify(lint)} });\n`,
 	);
 	// oxlint resolves its own package through the link, so the link is to the whole tree.
 	symlinkSync(
-		join(REPO_ROOT, "node_modules"),
-		join(project, "node_modules"),
+		path.join(REPO_ROOT, "node_modules"),
+		path.join(project, "node_modules"),
 		process.platform === "win32" ? "junction" : "dir",
 	);
 	// Fixture imports resolve as app source, while the config still resolves root-owned Vite+.
-	mkdirSync(join(project, "src"), { recursive: true });
+	mkdirSync(path.join(project, "src"), { recursive: true });
 	symlinkSync(
-		join(WEBAPP, "node_modules"),
-		join(project, "src", "node_modules"),
+		path.join(WEBAPP, "node_modules"),
+		path.join(project, "src", "node_modules"),
 		process.platform === "win32" ? "junction" : "dir",
 	);
 	// The rules read a component's variants from its source, so the fixtures see the real files.
-	mkdirSync(join(project, "src/components/ui"), { recursive: true });
+	mkdirSync(path.join(project, "src/components/ui"), { recursive: true });
 	for (const primitive of ["button.tsx", "card.tsx"]) {
 		writeFileSync(
-			join(project, "src/components/ui", primitive),
-			readFileSync(join(WEBAPP, "src/components/ui", primitive)),
+			path.join(project, "src/components/ui", primitive),
+			readFileSync(path.join(WEBAPP, "src/components/ui", primitive)),
 		);
 	}
 	for (const fixture of fixtures) {
-		mkdirSync(join(project, dirname(fixture.path)), { recursive: true });
-		writeFileSync(join(project, fixture.path), `${fixture.source}\n`);
+		mkdirSync(path.join(project, path.dirname(fixture.path)), { recursive: true });
+		writeFileSync(path.join(project, fixture.path), `${fixture.source}\n`);
 	}
 }
 
 void test("vp lint preserves house rules, design-system checks and type-aware diagnostics", () => {
-	const project = mkdtempSync(join(tmpdir(), "lint-contract-"));
+	const project = mkdtempSync(path.join(tmpdir(), "lint-contract-"));
 	try {
 		writeScratchProject(project);
 		const result = spawnSync(
@@ -358,7 +360,7 @@ void test("vp lint preserves house rules, design-system checks and type-aware di
 		);
 		assert.equal(result.error, undefined, `vp could not be spawned: ${String(result.error)}`);
 		const output = `${result.stdout}${result.stderr}`;
-		assert.doesNotMatch(result.stderr, /\[@shadcn\/lint\]/i, output);
+		assert.doesNotMatch(result.stderr, /\[@shadcn\/lint\]/iu, output);
 		assert.equal(result.status, 1, output);
 		const report = asRecord(JSON.parse(result.stdout), "vp lint --format json");
 		assert.ok(Array.isArray(report.diagnostics), output);
@@ -399,37 +401,43 @@ void test("webapp and docs use the same global lint policy", () => {
  */
 void test("every no-restyle contract names a component the registry exports", () => {
 	const config = asRecord(
-		parse(readFileSync(join(WEBAPP, ".oxlintrc.json"), "utf8")),
+		parse(readFileSync(path.join(WEBAPP, ".oxlintrc.json"), "utf8")),
 		"webapp lint",
 	);
 	const rule = asRecord(config.rules, "webapp lint rules")["shadcn/no-restyle"];
 	assert.ok(Array.isArray(rule), "no-restyle is configured with options");
-	const contracts = asRecord(rule[1], "no-restyle options").contracts;
+	const { contracts } = asRecord(rule[1], "no-restyle options");
 	assert.ok(Array.isArray(contracts) && contracts.length > 0, "no-restyle declares contracts");
 
-	const ui = join(WEBAPP, "src/components/ui");
+	const ui = path.join(WEBAPP, "src/components/ui");
 	const exported = new Set<string>();
 	for (const file of readdirSync(ui)) {
-		if (!file.endsWith(".tsx") || file.includes(".stories.")) continue;
-		const source = readFileSync(join(ui, file), "utf8");
-		for (const [, names] of source.matchAll(/export \{([^}]*)\}/g)) {
-			for (const entry of (names ?? "").split(",")) {
+		if (!file.endsWith(".tsx") || file.includes(".stories.")) {
+			continue;
+		}
+		const source = readFileSync(path.join(ui, file), "utf8");
+		for (const { groups } of source.matchAll(/export \{(?<names>[^}]*)\}/gu)) {
+			for (const entry of (groups?.names ?? "").split(",")) {
 				const exportedName = entry
 					.trim()
-					.split(/\s+as\s+/)
+					.split(/\s+as\s+/u)
 					.at(-1);
-				if (exportedName) exported.add(exportedName);
+				if (exportedName !== undefined && exportedName !== "") {
+					exported.add(exportedName);
+				}
 			}
 		}
-		for (const [, name] of source.matchAll(/export (?:function|const) (\w+)/g)) {
-			if (name) exported.add(name);
+		for (const { groups } of source.matchAll(/export (?:function|const) (?<name>\w+)/gu)) {
+			if (groups?.name !== undefined && groups.name !== "") {
+				exported.add(groups.name);
+			}
 		}
 	}
 
 	for (const contract of contracts) {
 		const pattern = String(asRecord(contract, "no-restyle contract").pattern);
-		for (const name of pattern.replace(/^\^\(?|\)?\$$/g, "").split("|")) {
-			assert.ok(/^[A-Z]\w*$/.test(name), `contract pattern is a plain name list: ${pattern}`);
+		for (const name of pattern.replaceAll(/^\^\(?|\)?\$$/gu, "").split("|")) {
+			assert.ok(/^[A-Z]\w*$/u.test(name), `contract pattern is a plain name list: ${pattern}`);
 			assert.ok(
 				exported.has(name),
 				`no-restyle contract names ${name}, which no registry file exports`,

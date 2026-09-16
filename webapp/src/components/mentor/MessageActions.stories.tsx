@@ -88,7 +88,7 @@ export const AssistantMessage: Story = {
 		const copy = canvas.getByRole("button", { name: "Copy message" });
 		await userEvent.tab();
 		await expect(copy).toHaveFocus();
-		await waitFor(() => expect(copy).toBeVisible());
+		await waitFor(async () => expect(copy).toBeVisible());
 		await expect(canvas.getByRole("button", { name: "Good response" })).toHaveAttribute(
 			"aria-pressed",
 			"false",
@@ -106,7 +106,8 @@ export const AssistantMessage: Story = {
 export const UserMessage: Story = {
 	args: {
 		messageRole: "user",
-		onVote: undefined, // User messages don't have vote functionality
+		// User messages don't have vote functionality
+		onVote: undefined,
 	},
 };
 

@@ -5,7 +5,7 @@ import type { WorkspaceLlmUsageReport } from "@/api/types.gen";
 import { renderWithRouter } from "@/test/router-harness";
 
 import { eurRate, usageReport, withOwnProvider } from "./fixtures";
-import { WorkspaceLlmUsagePage } from "./WorkspaceLlmUsagePage";
+import { WorkspaceLlmUsagePage, type WorkspaceLlmUsagePageProps } from "./WorkspaceLlmUsagePage";
 
 const pricedReport = withOwnProvider(usageReport("2026-07"));
 
@@ -32,7 +32,7 @@ async function renderPage(
 			canGoNext={false}
 			workspaceSlug="acme"
 			view={{ status: "ready", report }}
-			onEditOwnProviderCap={() => {}}
+			onEditOwnProviderCap={vi.fn<() => void>()}
 			now={new Date("2026-07-10T12:00:00.000Z")}
 			{...props}
 		/>,
@@ -150,7 +150,7 @@ describe("WorkspaceLlmUsagePage", () => {
 		);
 
 		it("puts the cap editor in the banner as a button, not a link away to another owner", async () => {
-			const onEditOwnProviderCap = vi.fn();
+			const onEditOwnProviderCap = vi.fn<WorkspaceLlmUsagePageProps["onEditOwnProviderCap"]>();
 			await renderPage(
 				{
 					...baseReport,
@@ -222,7 +222,7 @@ describe("WorkspaceLlmUsagePage", () => {
 			],
 			["there is uncapped spend", {}, "No provider cap set · billed to you by your provider"],
 		])("offers a cap when %s", async (_name, patch, copy) => {
-			const onEditOwnProviderCap = vi.fn();
+			const onEditOwnProviderCap = vi.fn<WorkspaceLlmUsagePageProps["onEditOwnProviderCap"]>();
 			await renderPage(
 				{ ...baseReport, ownProviderMonthlyBudgetUsd: undefined, ...patch },
 				{ onEditOwnProviderCap },

@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRightIcon, PlugZapIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type { ConnectionSyncStatus, IntegrationCatalogEntry } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -87,6 +88,86 @@ export function IntegrationOverviewCard({
 	const isConnectionActive = entry.connectionState === "ACTIVE";
 	const isScm = entry.kind === "GITHUB" || entry.kind === "GITLAB";
 
+	let body: ReactNode = null;
+	if (!entry.connected) {
+		body = (
+			<div className="space-y-3">
+				<p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+					<PlugZapIcon className="size-4" />
+					Not connected
+				</p>
+				{isScm ? (
+					<p className="text-sm text-muted-foreground">
+						Source control is selected when the workspace is created.
+					</p>
+				) : (
+					<Link to={detailTo} params={{ workspaceSlug }} className={buttonVariants({ size: "sm" })}>
+						Connect
+						<ArrowRightIcon className="size-3.5" />
+					</Link>
+				)}
+			</div>
+		);
+	} else if (!isConnectionActive || entry.credentialsUnreadableSince) {
+		body = (
+			<ConnectionStateNotice
+				connectionState={entry.connectionState}
+				credentialsUnreadableSince={entry.credentialsUnreadableSince}
+				displayName={entry.displayName}
+			/>
+		);
+	} else if (isStatusLoading) {
+		// Two text lines, matching the status strip this resolves into, so the card holds its
+		// height across the load.
+		body = (
+			<div className="space-y-2">
+				<Skeleton className="h-4 w-56" />
+				<Skeleton className="h-4 w-32" />
+			</div>
+		);
+	} else if (isStatusError) {
+		body = (
+			<QueryErrorAlert
+				error={statusError}
+				title="We couldn't load sync status"
+				onRetry={onRetryStatus}
+			/>
+		);
+	} else if (status) {
+		body = (
+			<div className="space-y-2 text-sm">
+				<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
+					{/* Tinted against this connection's own cadence, so a card is picked out of the
+					    triage grid by colour rather than by reading four dates. */}
+					<span>
+						{status.lastSuccessfulSyncAt ? (
+							<>
+								Last synced{" "}
+								<RelativeTime
+									value={status.lastSuccessfulSyncAt}
+									tone={freshnessTone(status.lastSuccessfulSyncAt, status.syncIntervalSeconds, now)}
+								/>
+							</>
+						) : (
+							"Never synced"
+						)}
+					</span>
+					<span>
+						{status.lastEventProcessedAt ? (
+							<>
+								Last event <RelativeTime value={status.lastEventProcessedAt} />
+							</>
+						) : (
+							"No events received yet"
+						)}
+					</span>
+				</div>
+				<ResourceHealthLine counts={status.resourceCounts} />
+				<ActiveJobProgress job={status.activeJob} />
+			</div>
+		);
+	}
+
 	return (
 		// `h-full` so a grid of these stretches to one row height and the footer controls line up
 		// across the row instead of tracking each card's own content height.
@@ -103,88 +184,7 @@ export function IntegrationOverviewCard({
 					</CardAction>
 				)}
 			</CardHeader>
-			<CardContent className="space-y-3">
-				{entry.connected ? (
-					!isConnectionActive || entry.credentialsUnreadableSince ? (
-						<ConnectionStateNotice
-							connectionState={entry.connectionState}
-							credentialsUnreadableSince={entry.credentialsUnreadableSince}
-							displayName={entry.displayName}
-						/>
-					) : isStatusLoading ? (
-						/* Two text lines, matching the status strip this resolves into, so the card holds its
-					   height across the load. */
-						<div className="space-y-2">
-							<Skeleton className="h-4 w-56" />
-							<Skeleton className="h-4 w-32" />
-						</div>
-					) : isStatusError ? (
-						<QueryErrorAlert
-							error={statusError}
-							title="We couldn't load sync status"
-							onRetry={onRetryStatus}
-						/>
-					) : (
-						status && (
-							<div className="space-y-2 text-sm">
-								<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
-									{/* Tinted against this connection's own cadence, so a card is picked out of the
-								    triage grid by colour rather than by reading four dates. */}
-									<span>
-										{status.lastSuccessfulSyncAt ? (
-											<>
-												Last synced{" "}
-												<RelativeTime
-													value={status.lastSuccessfulSyncAt}
-													tone={freshnessTone(
-														status.lastSuccessfulSyncAt,
-														status.syncIntervalSeconds,
-														now,
-													)}
-												/>
-											</>
-										) : (
-											"Never synced"
-										)}
-									</span>
-									<span>
-										{status.lastEventProcessedAt ? (
-											<>
-												Last event <RelativeTime value={status.lastEventProcessedAt} />
-											</>
-										) : (
-											"No events received yet"
-										)}
-									</span>
-								</div>
-								<ResourceHealthLine counts={status.resourceCounts} />
-								<ActiveJobProgress job={status.activeJob} />
-							</div>
-						)
-					)
-				) : (
-					<div className="space-y-3">
-						<p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-							<PlugZapIcon className="size-4" />
-							Not connected
-						</p>
-						{isScm ? (
-							<p className="text-sm text-muted-foreground">
-								Source control is selected when the workspace is created.
-							</p>
-						) : (
-							<Link
-								to={detailTo}
-								params={{ workspaceSlug }}
-								className={buttonVariants({ size: "sm" })}
-							>
-								Connect
-								<ArrowRightIcon className="size-3.5" />
-							</Link>
-						)}
-					</div>
-				)}
-			</CardContent>
+			<CardContent className="space-y-3">{body}</CardContent>
 			{isConnectionActive && (
 				<CardFooter
 					className={

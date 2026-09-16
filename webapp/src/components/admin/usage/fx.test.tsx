@@ -137,18 +137,21 @@ describe("X of Y lines", () => {
 	});
 });
 
+function day(costUsd: number, iso: string): LlmUsageByDay {
+	return {
+		day: new Date(iso),
+		instanceTotalCostUsd: costUsd,
+		ownProviderTotalCostUsd: 0,
+		unpricedEventCount: 0,
+		events: 1,
+	};
+}
+
 describe("totals convert the USD sum", () => {
 	/** Each row rounds up on its own, so `Σ convert(row)` is €2.04 while `convert(Σ USD)` is €2.02. */
 	const rows = [0.575, 0.575, 0.575, 0.575];
 
 	it("renders the breakdown footer from the USD total", () => {
-		const day = (costUsd: number, iso: string): LlmUsageByDay => ({
-			day: new Date(iso),
-			instanceTotalCostUsd: costUsd,
-			ownProviderTotalCostUsd: 0,
-			unpricedEventCount: 0,
-			events: 1,
-		});
 		const byDay = rows.map((value, index) => day(value, `2026-07-0${index + 1}T00:00:00.000Z`));
 		render(<LlmUsageByDayTable report={dayReport(byDay, 2.3)} fx={eur} />);
 
@@ -159,12 +162,12 @@ describe("totals convert the USD sum", () => {
 	});
 });
 
-describe("page disclosure", () => {
-	function disclosureText(fx: Fx, isCurrentMonth: boolean): string | null {
-		const { container } = render(<FxDisclosure fx={fx} isCurrentMonth={isCurrentMonth} />);
-		return container.textContent === "" ? null : container.textContent;
-	}
+function disclosureText(fx: Fx, isCurrentMonth: boolean): string | null {
+	const { container } = render(<FxDisclosure fx={fx} isCurrentMonth={isCurrentMonth} />);
+	return container.textContent === "" ? null : container.textContent;
+}
 
+describe("page disclosure", () => {
 	it("quotes the live rate for the current month, and names who published it", () => {
 		expect(disclosureText(eur, true)).toBe(
 			"EUR amounts are estimates at the European Central Bank reference rate published on Jul 24, 2026 (1 USD ≈ €0.879). Spend is metered and enforced in USD.",

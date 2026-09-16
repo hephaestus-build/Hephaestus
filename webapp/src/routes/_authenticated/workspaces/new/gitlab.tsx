@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon, OctagonXIcon } from "lucide-react";
-import { useEffect, useReducer, useRef } from "react";
+import { type ReactNode, useEffect, useReducer, useRef } from "react";
 import { toast } from "sonner";
 
 import {
@@ -70,9 +70,9 @@ function NoGitLabProviderNotice({ isAppAdmin }: { isAppAdmin: boolean }) {
 		<div className="mx-auto w-full max-w-2xl">
 			<BackToProviders />
 			<div className="space-y-4">
-				<h1 className="text-2xl font-semibold tracking-tight">GitLab sign-in isn't configured</h1>
+				<h1 className="text-2xl font-semibold tracking-tight">GitLab sign-in isn’t configured</h1>
 				<p className="text-muted-foreground">
-					This instance has no GitLab login provider, so a GitLab account can't be linked yet.
+					This instance has no GitLab login provider, so a GitLab account can’t be linked yet.
 					{isAppAdmin
 						? " Add one to enable GitLab sign-in."
 						: " Ask an instance admin to add one (Instance admin → Login providers)."}
@@ -92,6 +92,13 @@ function NoGitLabProviderNotice({ isAppAdmin }: { isAppAdmin: boolean }) {
  * identity provider that attaches the identity to the current account. When more than one GitLab
  * instance is configured, the user picks which instance to link (no arbitrary default).
  */
+function linkLabel(displayName: string, linked: boolean, multiple: boolean) {
+	if (linked) {
+		return `${displayName} — already linked`;
+	}
+	return multiple ? `Link ${displayName}` : "Link GitLab account";
+}
+
 function GitLabLinkPrompt({
 	providers,
 	linkedServerUrls,
@@ -124,17 +131,31 @@ function GitLabLinkPrompt({
 								disabled={linked}
 								onClick={() => linkAccount(provider.registrationId)}
 							>
-								{linked
-									? `${provider.displayName} — already linked`
-									: multiple
-										? `Link ${provider.displayName}`
-										: "Link GitLab account"}
+								{linkLabel(provider.displayName, linked, multiple)}
 							</Button>
 						);
 					})}
 				</div>
 			</div>
 		</div>
+	);
+}
+
+/** Keyed on the step, so each step's heading mounts fresh and takes focus for a screen reader to announce. */
+function StepHeading({ children }: { children: ReactNode }) {
+	const headingRef = useRef<HTMLHeadingElement>(null);
+	useEffect(() => {
+		headingRef.current?.focus();
+	}, []);
+	return (
+		<h1
+			id="wizard-heading"
+			ref={headingRef}
+			tabIndex={-1}
+			className="text-2xl font-semibold tracking-tight outline-none"
+		>
+			{children}
+		</h1>
 	);
 }
 
@@ -182,8 +203,6 @@ function GitLabWizardPage() {
 	);
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
-	const headingRef = useRef<HTMLHeadingElement>(null);
-
 	const stepAnnouncement = `Step ${state.step} of 3: ${STEP_META[state.step].title}`;
 
 	// No `onError`: the alert is rendered off `listGroups.isError` beside step 1's server URL and
@@ -223,11 +242,6 @@ function GitLabWizardPage() {
 			displayName: state.displayName,
 			workspaceSlug: state.workspaceSlug,
 		}).success;
-
-	// Focus moves to the new step's heading so a screen reader announces where the wizard now is.
-	useEffect(() => {
-		headingRef.current?.focus();
-	}, [state.step]);
 
 	const handleNext = () => {
 		if (state.step === 1 && canAdvanceFromStep1) {
@@ -336,14 +350,7 @@ function GitLabWizardPage() {
 			</Link>
 
 			<div className="mb-6 space-y-1.5">
-				<h1
-					id="wizard-heading"
-					ref={headingRef}
-					tabIndex={-1}
-					className="text-2xl font-semibold tracking-tight outline-none"
-				>
-					{meta.title}
-				</h1>
+				<StepHeading key={state.step}>{meta.title}</StepHeading>
 				<p className="text-muted-foreground">{meta.description}</p>
 			</div>
 

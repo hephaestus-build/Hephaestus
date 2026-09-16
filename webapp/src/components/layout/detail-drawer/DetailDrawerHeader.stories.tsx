@@ -57,7 +57,7 @@ export const TopLevel: Story = {
 		await userEvent.click(close);
 		// The panel leaving is the claim; the page behind it belongs to the decorator, not to this
 		// component.
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(document.querySelectorAll('[data-slot="drawer-popup"]')).toHaveLength(0),
 		);
 	},

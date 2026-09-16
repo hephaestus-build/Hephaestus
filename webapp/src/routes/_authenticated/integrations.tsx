@@ -12,6 +12,21 @@ interface Search {
 	reason?: string;
 }
 
+/** What the page shows for each outcome the provider sent back — or for a visit with none. */
+const OUTCOMES = {
+	success: {
+		Icon: CheckCircleIcon,
+		iconClass: "size-12 text-success",
+		title: "Integration connected",
+	},
+	error: { Icon: XCircleIcon, iconClass: "size-12 text-destructive", title: "Connection failed" },
+	none: {
+		Icon: InfoIcon,
+		iconClass: "size-12 text-muted-foreground",
+		title: "Nothing to show here",
+	},
+};
+
 export const Route = createFileRoute("/_authenticated/integrations")({
 	component: IntegrationsCallback,
 	validateSearch: (search): Search => ({
@@ -56,19 +71,7 @@ function IntegrationsCallback() {
 		}
 	}, [status, reason]);
 
-	const failed = status === "error";
-	const succeeded = status === "success";
-	const Icon = failed ? XCircleIcon : succeeded ? CheckCircleIcon : InfoIcon;
-	const iconClass = failed
-		? "size-12 text-destructive"
-		: succeeded
-			? "size-12 text-success"
-			: "size-12 text-muted-foreground";
-	const title = failed
-		? "Connection failed"
-		: succeeded
-			? "Integration connected"
-			: "Nothing to show here";
+	const { Icon, iconClass, title } = OUTCOMES[status ?? "none"];
 	return (
 		<div className="mx-auto w-full max-w-md">
 			<Card>
@@ -76,7 +79,7 @@ function IntegrationsCallback() {
 					<Icon className={iconClass} />
 					<div className="text-center">
 						<h1 className="text-xl font-semibold">{title}</h1>
-						{failed && hasText(reason) && (
+						{status === "error" && hasText(reason) && (
 							<p className="mt-2 text-sm wrap-anywhere text-muted-foreground">{reason}</p>
 						)}
 					</div>

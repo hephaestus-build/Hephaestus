@@ -10,7 +10,7 @@ describe("PriceModeEditor", () => {
 				audience="instance"
 				idPrefix="test-price"
 				value={{ pricingMode: "PRICED" }}
-				onChange={vi.fn()}
+				onChange={vi.fn<() => void>()}
 			/>,
 		);
 		screen.getByLabelText(/Input \(USD\)/u);
@@ -25,7 +25,7 @@ describe("PriceModeEditor", () => {
 				audience="instance"
 				idPrefix="test-price"
 				value={{ pricingMode: "NO_CHARGE" }}
-				onChange={vi.fn()}
+				onChange={vi.fn<() => void>()}
 			/>,
 		);
 		screen.getByText("No metered API cost");

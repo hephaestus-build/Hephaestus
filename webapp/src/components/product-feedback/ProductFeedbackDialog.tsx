@@ -151,7 +151,7 @@ export function ProductFeedbackDialog({
 									onChange={(event) => setMessage(event.target.value)}
 								/>
 								<FieldDescription id={`${id}-hint`} className="flex justify-between gap-3">
-									<span>Leave out secrets and other people's personal data.</span>
+									<span>Leave out secrets and other people’s personal data.</span>
 									<span aria-live="polite" className="shrink-0 tabular-nums">
 										{remaining <= COUNTER_THRESHOLD &&
 											`${remaining.toLocaleString()} characters left`}
@@ -167,7 +167,7 @@ export function ProductFeedbackDialog({
 									/>
 									<FieldContent>
 										<FieldLabel htmlFor={`${id}-context`}>
-											Attach the page and browser you're on
+											Attach the page and browser you’re on
 										</FieldLabel>
 										<FieldDescription className="break-all">
 											<code className="text-xs">{context.pagePath}</code>

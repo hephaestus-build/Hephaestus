@@ -33,8 +33,10 @@ export function bundledVersions(): Record<string, string> {
 	return Object.fromEntries(
 		Object.entries(BUNDLED_PINS).map(([name, source]) => {
 			const pin = dependencies[source];
-			if (typeof pin !== "string") throw new Error(`vite-plus does not bundle ${source}`);
-			return [name, pin.replace(/^=/, "")];
+			if (typeof pin !== "string") {
+				throw new TypeError(`vite-plus does not bundle ${source}`);
+			}
+			return [name, pin.replace(/^=/u, "")];
 		}),
 	);
 }

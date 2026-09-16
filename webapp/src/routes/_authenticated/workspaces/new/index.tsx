@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon, type LucideIcon, OctagonXIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { getProvidersOptions } from "@/api/@tanstack/react-query.gen";
 import { type BrandIcon, GithubIcon, GitlabIcon } from "@/components/icons/brand";
@@ -65,6 +66,54 @@ function ProviderSelectionPage() {
 		});
 	}
 
+	let providerChoice: ReactNode;
+	if (isLoading) {
+		providerChoice = (
+			<div className="flex justify-center py-12">
+				<Spinner />
+			</div>
+		);
+	} else if (blockedForNonAdmin) {
+		providerChoice = (
+			<Alert className="mb-4">
+				<OctagonXIcon aria-hidden="true" />
+				<AlertTitle>Workspace creation is admin-only</AlertTitle>
+				<AlertDescription>
+					An instance admin must create workspaces on this deployment. Ask an admin to set one up
+					for you.
+				</AlertDescription>
+			</Alert>
+		);
+	} else if (providers.length === 0 && !isError) {
+		providerChoice = (
+			<p className="py-12 text-center text-muted-foreground">
+				No providers are currently available. Contact your administrator.
+			</p>
+		);
+	} else {
+		providerChoice = (
+			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+				{providers.map((provider) => (
+					<Link
+						key={provider.id}
+						to={provider.to}
+						aria-label={`Set up workspace with ${provider.name}`}
+					>
+						<Card variant="interactive" className="h-full cursor-pointer">
+							<CardHeader>
+								<div className="mb-1 flex items-center gap-3">
+									<provider.icon className="size-6" />
+									<CardTitle className="text-lg">{provider.name}</CardTitle>
+								</div>
+								<CardDescription>{provider.description}</CardDescription>
+							</CardHeader>
+						</Card>
+					</Link>
+				))}
+			</div>
+		);
+	}
+
 	return (
 		<div className="mx-auto w-full max-w-2xl">
 			<Link
@@ -88,44 +137,7 @@ function ProviderSelectionPage() {
 					</AlertDescription>
 				</Alert>
 			)}
-			{isLoading ? (
-				<div className="flex justify-center py-12">
-					<Spinner />
-				</div>
-			) : blockedForNonAdmin ? (
-				<Alert className="mb-4">
-					<OctagonXIcon aria-hidden="true" />
-					<AlertTitle>Workspace creation is admin-only</AlertTitle>
-					<AlertDescription>
-						An instance admin must create workspaces on this deployment. Ask an admin to set one up
-						for you.
-					</AlertDescription>
-				</Alert>
-			) : providers.length === 0 && !isError ? (
-				<p className="py-12 text-center text-muted-foreground">
-					No providers are currently available. Contact your administrator.
-				</p>
-			) : (
-				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-					{providers.map((provider) => (
-						<Link
-							key={provider.id}
-							to={provider.to}
-							aria-label={`Set up workspace with ${provider.name}`}
-						>
-							<Card variant="interactive" className="h-full cursor-pointer">
-								<CardHeader>
-									<div className="mb-1 flex items-center gap-3">
-										<provider.icon className="size-6" />
-										<CardTitle className="text-lg">{provider.name}</CardTitle>
-									</div>
-									<CardDescription>{provider.description}</CardDescription>
-								</CardHeader>
-							</Card>
-						</Link>
-					))}
-				</div>
-			)}
+			{providerChoice}
 		</div>
 	);
 }

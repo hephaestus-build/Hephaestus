@@ -1,5 +1,5 @@
 import { Users } from "lucide-react";
-import { useLayoutEffect } from "react";
+import { type ReactNode, useLayoutEffect } from "react";
 
 import type { TeamInfo } from "@/api/types.gen";
 import { type Contributor, ContributorGrid } from "@/components/common/ContributorGrid";
@@ -96,11 +96,12 @@ function collectDescendantMemberIds(
 	return memo;
 }
 
+function sortMembers(team: TeamInfo) {
+	return [...team.members].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function TeamsPage({ teams, isLoading }: TeamsPageProps) {
 	const visibleTeams = teams.filter((t) => !t.hidden);
-
-	const sortMembers = (team: TeamInfo) =>
-		[...team.members].sort((a, b) => a.name.localeCompare(b.name));
 
 	const allTeamsById = new Map(teams.map((t) => [t.id, t]));
 	const { roots, childrenMap } = buildVisibleTree(visibleTeams, allTeamsById);
@@ -233,6 +234,34 @@ export function TeamsPage({ teams, isLoading }: TeamsPageProps) {
 		};
 	}, []);
 
+	let body: ReactNode;
+	if (isLoading) {
+		body = (
+			<div className="space-y-4">
+				{["a", "b", "c"].map((id) => (
+					<Card key={id}>
+						<CardHeader>
+							<Skeleton className="h-6 w-1/4" />
+						</CardHeader>
+						<CardContent>
+							<ContributorGrid
+								contributors={[]}
+								isLoading
+								size="sm"
+								layout="compact"
+								loadingSkeletonCount={4}
+							/>
+						</CardContent>
+					</Card>
+				))}
+			</div>
+		);
+	} else if (roots.length > 0) {
+		body = <div className="space-y-4">{roots.map((team) => renderTeamNode(team))}</div>;
+	} else {
+		body = <p className="py-8 text-center text-muted-foreground">No teams found</p>;
+	}
+
 	return (
 		<PageLayout>
 			<PageHeader
@@ -241,30 +270,7 @@ export function TeamsPage({ teams, isLoading }: TeamsPageProps) {
 				description="See contributors grouped by team and explore their activity."
 			/>
 
-			{isLoading ? (
-				<div className="space-y-4">
-					{["a", "b", "c"].map((id) => (
-						<Card key={id}>
-							<CardHeader>
-								<Skeleton className="h-6 w-1/4" />
-							</CardHeader>
-							<CardContent>
-								<ContributorGrid
-									contributors={[]}
-									isLoading
-									size="sm"
-									layout="compact"
-									loadingSkeletonCount={4}
-								/>
-							</CardContent>
-						</Card>
-					))}
-				</div>
-			) : roots.length > 0 ? (
-				<div className="space-y-4">{roots.map((team) => renderTeamNode(team))}</div>
-			) : (
-				<p className="py-8 text-center text-muted-foreground">No teams found</p>
-			)}
+			{body}
 		</PageLayout>
 	);
 }

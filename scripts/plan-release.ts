@@ -30,7 +30,7 @@ import { asRecord, asString, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 
 /** Only a stable version counts; `0.9.0-rc.4` and friends are not part of the released line. */
-const RELEASE_VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
+const RELEASE_VERSION = /^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$/u;
 
 const MIGRATION_PATH = "server/application/src/main/resources/db/changelog/";
 
@@ -67,9 +67,11 @@ interface Version {
 }
 
 const parseVersion = (value: string): Version | undefined => {
-	const match = RELEASE_VERSION.exec(value);
-	if (!match) return undefined;
-	return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) };
+	const groups = RELEASE_VERSION.exec(value)?.groups;
+	if (groups === undefined) {
+		return undefined;
+	}
+	return { major: Number(groups.major), minor: Number(groups.minor), patch: Number(groups.patch) };
 };
 
 const compareVersions = (left: Version, right: Version): number =>
@@ -82,9 +84,13 @@ const formatVersion = (version: Version): string =>
 const latestPublished = (releases: readonly ReleaseRef[]): Version | undefined => {
 	let latest: Version | undefined;
 	for (const release of releases) {
-		if (release.isDraft || release.isPrerelease || !release.tag.startsWith("v")) continue;
+		if (release.isDraft || release.isPrerelease || !release.tag.startsWith("v")) {
+			continue;
+		}
 		const version = parseVersion(release.tag.slice(1));
-		if (version && (!latest || compareVersions(version, latest) > 0)) latest = version;
+		if (version && (!latest || compareVersions(version, latest) > 0)) {
+			latest = version;
+		}
 	}
 	return latest;
 };
@@ -103,7 +109,9 @@ export function planRelease(
 
 	// The ordinary case and the only no-op: a feature merge carries a version published long ago, as
 	// does a re-run of a workflow that already finished.
-	if (existing && !existing.isDraft) return { kind: "skip", reason: `${tag} is already published` };
+	if (existing && !existing.isDraft) {
+		return { kind: "skip", reason: `${tag} is already published` };
+	}
 
 	// A draft exists only where an earlier attempt cleared the evidence gate and failed after it.
 	if (existing && existing.targetCommitish !== sha) {
@@ -114,7 +122,9 @@ export function planRelease(
 	}
 
 	const previous = latestPublished(releases);
-	if (!previous) return { kind: "refuse", reason: `${tag} has no published release to follow` };
+	if (!previous) {
+		return { kind: "refuse", reason: `${tag} has no published release to follow` };
+	}
 	if (compareVersions(parsed, previous) <= 0) {
 		return {
 			kind: "refuse",
@@ -139,7 +149,9 @@ export function planRelease(
  * which is what every downstream job is gated on.
  */
 export function releaseOutputs(plan: ReleasePlan, migrations = false): Record<string, string> {
-	if (plan.kind !== "cut") return { released: "false" };
+	if (plan.kind !== "cut") {
+		return { released: "false" };
+	}
 	return {
 		major: String(plan.major),
 		migrations: String(migrations),
@@ -197,7 +209,7 @@ export async function hasSchemaMigrations(
 if (import.meta.main) {
 	const [sha] = process.argv.slice(2);
 	const repository = process.env.GITHUB_REPOSITORY;
-	if (!sha || !repository) {
+	if (sha === undefined || sha === "" || repository === undefined || repository === "") {
 		console.log("::error::usage: GITHUB_REPOSITORY=<owner/repo> plan-release.ts <sha>");
 		process.exitCode = 1;
 	} else {
@@ -229,7 +241,10 @@ if (import.meta.main) {
 			const outputs = Object.entries(releaseOutputs(plan, migrations))
 				.map(([name, value]) => `${name}=${value}\n`)
 				.join("");
-			if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, outputs);
+			const outputFile = process.env.GITHUB_OUTPUT;
+			if (outputFile !== undefined && outputFile !== "") {
+				await appendFile(outputFile, outputs);
+			}
 		}
 	}
 }

@@ -174,9 +174,9 @@ export const ScrollToLatest: Story = {
 		await expect(canvas.queryByRole("button", { name: "Scroll to latest message" })).toBeNull();
 		await userEvent.click(canvas.getByRole("button", { name: "Read earlier messages" }));
 		const latest = await canvas.findByRole("button", { name: "Scroll to latest message" });
-		await waitFor(() => expect(latest).toBeVisible());
+		await waitFor(async () => expect(latest).toBeVisible());
 		await userEvent.click(latest);
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(canvas.queryByRole("button", { name: "Scroll to latest message" })).toBeNull(),
 		);
 	},

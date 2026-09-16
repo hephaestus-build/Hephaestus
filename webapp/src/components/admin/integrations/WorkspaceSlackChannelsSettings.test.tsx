@@ -5,7 +5,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SlackMonitoredChannel } from "@/api/types.gen";
 
-import { WorkspaceSlackChannelsSettings } from "./WorkspaceSlackChannelsSettings";
+import { sleep } from "@/test/async";
+
+import {
+	WorkspaceSlackChannelsSettings,
+	type WorkspaceSlackChannelsSettingsProps,
+} from "./WorkspaceSlackChannelsSettings";
 
 function renderWithClient(node: ReactNode) {
 	const queryClient = new QueryClient({
@@ -47,16 +52,16 @@ const revoked: SlackMonitoredChannel = {
 	optedOutMemberCount: 0,
 };
 
-function setup(overrides: Partial<Parameters<typeof WorkspaceSlackChannelsSettings>[0]> = {}) {
+function setup(overrides: Partial<WorkspaceSlackChannelsSettingsProps> = {}) {
 	const props = {
 		workspaceSlug: "demo",
 		hasSlackConnection: true,
 		isLoading: false,
 		channels: [pending, active],
 		channelCandidates: [],
-		onRegisterChannel: vi.fn(),
-		onUpdateConsent: vi.fn(),
-		onRemoveChannel: vi.fn(),
+		onRegisterChannel: vi.fn<WorkspaceSlackChannelsSettingsProps["onRegisterChannel"]>(),
+		onUpdateConsent: vi.fn<WorkspaceSlackChannelsSettingsProps["onUpdateConsent"]>(),
+		onRemoveChannel: vi.fn<WorkspaceSlackChannelsSettingsProps["onRemoveChannel"]>(),
 		...overrides,
 	};
 	renderWithClient(<WorkspaceSlackChannelsSettings {...props} />);
@@ -69,10 +74,12 @@ function openRowMenu(label: string) {
 
 describe("WorkspaceSlackChannelsSettings — reversible row actions swallow rejections", () => {
 	it("does not leak an unhandled rejection when Pause's consent update fails", async () => {
-		const onRejection = vi.fn();
+		const onRejection = vi.fn<NodeJS.UnhandledRejectionListener>();
 		process.on("unhandledRejection", onRejection);
 		try {
-			const onUpdateConsent = vi.fn().mockRejectedValue(new Error("boom"));
+			const onUpdateConsent = vi
+				.fn<WorkspaceSlackChannelsSettingsProps["onUpdateConsent"]>()
+				.mockRejectedValue(new Error("boom"));
 			setup({ channels: [active], onUpdateConsent });
 			openRowMenu("team-standup");
 			fireEvent.click(await screen.findByRole("menuitem", { name: /^pause$/iu }));
@@ -80,9 +87,7 @@ describe("WorkspaceSlackChannelsSettings — reversible row actions swallow reje
 			await waitFor(() => expect(onUpdateConsent).toHaveBeenCalledOnce());
 			// Let unhandled rejections surface on the next event-loop turn while React finishes closing the menu.
 			await act(async () => {
-				await new Promise((resolve) => {
-					setTimeout(resolve, 0);
-				});
+				await sleep(0);
 			});
 			expect(onRejection).not.toHaveBeenCalled();
 		} finally {
@@ -91,19 +96,19 @@ describe("WorkspaceSlackChannelsSettings — reversible row actions swallow reje
 	});
 
 	it("does not leak an unhandled rejection when Set up again's re-register fails", async () => {
-		const onRejection = vi.fn();
+		const onRejection = vi.fn<NodeJS.UnhandledRejectionListener>();
 		process.on("unhandledRejection", onRejection);
 		try {
-			const onRegisterChannel = vi.fn().mockRejectedValue(new Error("boom"));
+			const onRegisterChannel = vi
+				.fn<WorkspaceSlackChannelsSettingsProps["onRegisterChannel"]>()
+				.mockRejectedValue(new Error("boom"));
 			setup({ channels: [revoked], onRegisterChannel });
 			openRowMenu("team-legacy");
 			fireEvent.click(await screen.findByRole("menuitem", { name: /set up again/iu }));
 
 			await waitFor(() => expect(onRegisterChannel).toHaveBeenCalledOnce());
 			await act(async () => {
-				await new Promise((resolve) => {
-					setTimeout(resolve, 0);
-				});
+				await sleep(0);
 			});
 			expect(onRejection).not.toHaveBeenCalled();
 		} finally {

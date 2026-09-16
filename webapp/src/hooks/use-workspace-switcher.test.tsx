@@ -23,17 +23,17 @@ function SwitchWorkspace() {
 		<>
 			<button
 				type="button"
-				onClick={() =>
-					void switchWorkspace({ displayName: "Beta workspace", workspaceSlug: "beta" })
-				}
+				onClick={() => {
+					void switchWorkspace({ displayName: "Beta workspace", workspaceSlug: "beta" });
+				}}
 			>
 				Switch workspace
 			</button>
 			<button
 				type="button"
-				onClick={() =>
-					void switchWorkspace({ displayName: "Alpha workspace", workspaceSlug: "alpha" })
-				}
+				onClick={() => {
+					void switchWorkspace({ displayName: "Alpha workspace", workspaceSlug: "alpha" });
+				}}
 			>
 				Keep workspace
 			</button>

@@ -1,4 +1,4 @@
-import type { FxRateInfo, WorkspaceLlmUsageReport } from "@/api/types.gen";
+import type { FxRateInfo, LlmUsageByJobType, WorkspaceLlmUsageReport } from "@/api/types.gen";
 
 import { daysBefore, STORY_NOW } from "@/stories/story-clock";
 
@@ -98,26 +98,26 @@ export function usageReport(month: string = STORY_MONTH): WorkspaceLlmUsageRepor
 	};
 }
 
+const OWN_PROVIDER_COST_BY_JOB_TYPE: Partial<Record<LlmUsageByJobType["jobType"], number>> = {
+	MENTOR_TURN: 1.92,
+	ISSUE_REVIEW: 0.48,
+};
+const OWN_PROVIDER_COST_BY_DAY_INDEX: Partial<Record<number, number>> = { 1: 0.48, 3: 1.92 };
+
 /** The same workspace with a $10 cap on a provider of its own, which Heph and issue reviews ran on. */
 export function withOwnProvider(report: WorkspaceLlmUsageReport): WorkspaceLlmUsageReport {
 	return {
 		...report,
 		ownProviderMonthlyBudgetUsd: 10,
 		ownProviderTotalCostUsd: 2.4,
-		byJobType: report.byJobType.map((row) =>
-			row.jobType === "MENTOR_TURN"
-				? { ...row, ownProviderTotalCostUsd: 1.92 }
-				: row.jobType === "ISSUE_REVIEW"
-					? { ...row, ownProviderTotalCostUsd: 0.48 }
-					: row,
-		),
-		byDay: report.byDay.map((row, index) =>
-			index === 1
-				? { ...row, ownProviderTotalCostUsd: 0.48 }
-				: index === 3
-					? { ...row, ownProviderTotalCostUsd: 1.92 }
-					: row,
-		),
+		byJobType: report.byJobType.map((row) => {
+			const ownProviderTotalCostUsd = OWN_PROVIDER_COST_BY_JOB_TYPE[row.jobType];
+			return ownProviderTotalCostUsd === undefined ? row : { ...row, ownProviderTotalCostUsd };
+		}),
+		byDay: report.byDay.map((row, index) => {
+			const ownProviderTotalCostUsd = OWN_PROVIDER_COST_BY_DAY_INDEX[index];
+			return ownProviderTotalCostUsd === undefined ? row : { ...row, ownProviderTotalCostUsd };
+		}),
 	};
 }
 

@@ -56,6 +56,19 @@ export function SlackChannelCombobox({
 	const selected = candidates.find((candidate) => candidate.slackChannelId === selectedChannelId);
 	const selectedLabel = selected?.channelName ?? selectedChannelName;
 
+	let triggerLabel: ReactNode;
+	if (hasText(selectedLabel)) {
+		triggerLabel = <span className="truncate">#{selectedLabel}</span>;
+	} else if (hasText(selectedChannelId)) {
+		triggerLabel = (
+			<span className="truncate text-muted-foreground">
+				Channel <span className="font-mono">{selectedChannelId}</span>
+			</span>
+		);
+	} else {
+		triggerLabel = <span className="truncate text-muted-foreground">{placeholder}</span>;
+	}
+
 	return (
 		<Combobox
 			items={candidates}
@@ -75,15 +88,7 @@ export function SlackChannelCombobox({
 				aria-invalid={invalid}
 				className={cn("w-full justify-between font-normal", className)}
 			>
-				{hasText(selectedLabel) ? (
-					<span className="truncate">#{selectedLabel}</span>
-				) : hasText(selectedChannelId) ? (
-					<span className="truncate text-muted-foreground">
-						Channel <span className="font-mono">{selectedChannelId}</span>
-					</span>
-				) : (
-					<span className="truncate text-muted-foreground">{placeholder}</span>
-				)}
+				{triggerLabel}
 				<ComboboxIcon render={<ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" />} />
 			</ComboboxTrigger>
 

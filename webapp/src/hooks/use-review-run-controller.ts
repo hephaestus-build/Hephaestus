@@ -62,7 +62,13 @@ function toSectionState<T>(query: PagedQuery<T>, stillRunning: boolean): ReviewS
 		return { status: "loading" };
 	}
 	if (query.isError) {
-		return { status: "error", error: query.error, onRetry: () => void query.refetch() };
+		return {
+			status: "error",
+			error: query.error,
+			onRetry: () => {
+				void query.refetch();
+			},
+		};
 	}
 	const items = query.data?.content ?? [];
 	if (stillRunning && items.length === 0) {
@@ -159,7 +165,9 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 		job: jobQuery.data,
 		isLoading: jobQuery.isLoading,
 		error: jobQuery.error,
-		onRetry: () => void jobQuery.refetch(),
+		onRetry: () => {
+			void jobQuery.refetch();
+		},
 		observations: toSectionState<ReviewObservation>(observationsQuery, runIsActive),
 		feedback: toSectionState<ReviewFeedback>(
 			feedbackQuery,

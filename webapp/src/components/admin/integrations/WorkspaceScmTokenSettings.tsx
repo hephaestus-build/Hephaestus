@@ -38,7 +38,7 @@ export function WorkspaceScmTokenSettings({
 			<CardHeader>
 				<IntegrationCardHeading>Personal access token</IntegrationCardHeading>
 				<CardDescription>
-					Replace the token used for this workspace's {providerLabel} connection. Existing
+					Replace the token used for this workspace’s {providerLabel} connection. Existing
 					repositories and synced work are kept.
 				</CardDescription>
 			</CardHeader>

@@ -76,7 +76,9 @@ export function ProductSurveyDialog({
 					questions={survey.questions}
 					draft={draft}
 					onDraftChange={onDraftChange}
-					onSubmit={(answers) => void onSubmit(answers)}
+					onSubmit={(answers) => {
+						void onSubmit(answers);
+					}}
 					disabled={isSubmitting}
 				>
 					<DialogHeader>
@@ -94,7 +96,7 @@ export function ProductSurveyDialog({
 								<>
 									Part of {studyOf(survey)}, which you agreed to join. Your answers go to that
 									study, linked to your account, and are kept apart from product feedback. Skip
-									anything you'd rather not answer. You can leave the study in{" "}
+									anything you’d rather not answer. You can leave the study in{" "}
 									<Link
 										to="/settings"
 										className="underline underline-offset-2"
@@ -121,7 +123,9 @@ export function ProductSurveyDialog({
 							type="button"
 							variant="quiet"
 							disabled={isSubmitting}
-							onClick={() => void onDecline()}
+							onClick={() => {
+								void onDecline();
+							}}
 						>
 							Decline survey
 						</Button>

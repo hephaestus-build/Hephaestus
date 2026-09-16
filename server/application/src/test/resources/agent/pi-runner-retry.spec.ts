@@ -7,14 +7,16 @@ import {
 	retrying,
 } from "../../../main/resources/agent/pi-runner-retry.ts";
 
-const noSleep = () => Promise.resolve();
+const noSleep = async () => {
+	// The waits are asserted on, never waited for.
+};
 
 void test("a call that arrives is not repeated", async () => {
 	let calls = 0;
 	const result = await retrying(
-		() => {
+		async () => {
 			calls += 1;
-			return Promise.resolve("admitted");
+			return "admitted";
 		},
 		() => true,
 		{ attempts: 5, sleep: noSleep },
@@ -26,7 +28,7 @@ void test("a call that arrives is not repeated", async () => {
 void test("a call that did not arrive is repeated until it does", async () => {
 	let calls = 0;
 	const result = await retrying(
-		() => {
+		async () => {
 			calls += 1;
 			return calls < 3 ? Promise.reject(new Error("did not arrive")) : Promise.resolve("admitted");
 		},
@@ -41,14 +43,14 @@ void test("a decision the server already took is not repeated", async () => {
 	let calls = 0;
 	await assert.rejects(
 		retrying(
-			() => {
+			async () => {
 				calls += 1;
-				return Promise.reject(new Error("refused"));
+				throw new Error("refused");
 			},
 			() => false,
 			{ attempts: 5, sleep: noSleep },
 		),
-		/refused/,
+		/refused/u,
 	);
 	assert.equal(calls, 1);
 });
@@ -57,14 +59,14 @@ void test("the last failure is what the caller sees when the attempts are spent"
 	let calls = 0;
 	await assert.rejects(
 		retrying(
-			() => {
+			async () => {
 				calls += 1;
-				return Promise.reject(new Error(`attempt ${calls}`));
+				throw new Error(`attempt ${calls}`);
 			},
 			() => true,
 			{ attempts: 3, sleep: noSleep },
 		),
-		/attempt 3/,
+		/attempt 3/u,
 	);
 	assert.equal(calls, 3);
 });
@@ -73,37 +75,41 @@ void test("each wait is reported and doubles", async () => {
 	const waits: number[] = [];
 	await assert.rejects(
 		retrying(
-			() => Promise.reject(new Error("did not arrive")),
+			async () => {
+				throw new Error("did not arrive");
+			},
 			() => true,
 			{ attempts: 4, sleep: noSleep },
-			(_attempt, _error, delayMs) => waits.push(delayMs),
+			(_attempt, _error, delayMs) => {
+				waits.push(delayMs);
+			},
 		),
-		/did not arrive/,
+		/did not arrive/u,
 	);
-	assert.deepEqual(waits, [1_000, 2_000, 4_000]);
+	assert.deepEqual(waits, [1000, 2000, 4000]);
 });
 
 void test("a wait has to be a real attempt on a real base", () => {
 	assert.equal(retryDelayMs(1, 250), 250);
-	assert.equal(retryDelayMs(3, 250), 1_000);
+	assert.equal(retryDelayMs(3, 250), 1000);
 	for (const invalid of [0, -1, 1.5, Number.NaN]) {
-		assert.throws(() => retryDelayMs(invalid), /positive integer/);
+		assert.throws(() => retryDelayMs(invalid), /positive integer/u);
 	}
-	assert.throws(() => retryDelayMs(1, 0), /positive number/);
+	assert.throws(() => retryDelayMs(1, 0), /positive number/u);
 });
 
 void test("attempts that cannot be spent are refused before the call is made", async () => {
 	let calls = 0;
 	await assert.rejects(
 		retrying(
-			() => {
+			async () => {
 				calls += 1;
-				return Promise.resolve("x");
+				return "x";
 			},
 			() => true,
 			{ attempts: 0 },
 		),
-		/positive integer/,
+		/positive integer/u,
 	);
 	assert.equal(calls, 0);
 });

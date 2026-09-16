@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 
 import { currentUserQueryOptions, isAppAdmin, resolveCurrentUser, safeReturnTo } from "./guard";
 
@@ -90,28 +91,37 @@ describe("isAppAdmin", () => {
 	});
 });
 
+function client() {
+	return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+}
+
+function serve(answer: () => Response) {
+	const asked = { times: 0 };
+	server.use(
+		http.get("*/user", () => {
+			asked.times += 1;
+			return answer();
+		}),
+	);
+	return asked;
+}
+
+const asAppRole = (appRole: "APP_ADMIN" | "APP_USER") => () =>
+	HttpResponse.json({ ...currentUser, appRole });
+
+const goStale = async (queryClient: QueryClient) =>
+	queryClient.invalidateQueries({ refetchType: "none" });
+
+/** How a resolution ended, so a test can await either outcome without a rejection escaping. */
+async function outcome(resolution: ReturnType<typeof resolveCurrentUser>) {
+	try {
+		return { user: await resolution };
+	} catch (error) {
+		return { error };
+	}
+}
+
 describe("resolveCurrentUser", () => {
-	function client() {
-		return new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	}
-
-	function serve(answer: () => Response) {
-		const asked = { times: 0 };
-		server.use(
-			http.get("*/user", () => {
-				asked.times += 1;
-				return answer();
-			}),
-		);
-		return asked;
-	}
-
-	const asAppRole = (appRole: "APP_ADMIN" | "APP_USER") => () =>
-		HttpResponse.json({ ...currentUser, appRole });
-
-	const goStale = (queryClient: QueryClient) =>
-		queryClient.invalidateQueries({ refetchType: "none" });
-
 	it("fetches when nothing is cached", async () => {
 		serve(asAppRole("APP_ADMIN"));
 
@@ -120,40 +130,28 @@ describe("resolveCurrentUser", () => {
 
 	it("finishes route identity resolution when the last UI observer unmounts", async () => {
 		const queryClient = client();
-		let respond = (_response: Response) => {};
-		const response = new Promise<Response>((resolve) => {
-			respond = resolve;
-		});
-		const requested = vi.fn(() => response);
+		const response = deferred<Response>();
+		const requested = vi.fn(async () => response.promise);
 		server.use(http.get("*/user", requested));
 		const observer = new QueryObserver(queryClient, currentUserQueryOptions());
-		const unsubscribe = observer.subscribe(vi.fn());
-		const resolved = resolveCurrentUser(queryClient).then(
-			(user) => ({ user }),
-			(error: unknown) => ({ error }),
-		);
+		const unsubscribe = observer.subscribe(vi.fn<() => void>());
+		const resolved = outcome(resolveCurrentUser(queryClient));
 		await vi.waitFor(() => expect(requested).toHaveBeenCalledOnce());
 		unsubscribe();
-		respond(HttpResponse.json(currentUser));
+		response.resolve(HttpResponse.json(currentUser));
 		await expect(resolved).resolves.toStrictEqual({ user: currentUser });
 		queryClient.clear();
 	});
 
 	it("does not restore identity after an explicit session cancellation", async () => {
 		const queryClient = client();
-		let respond = (_response: Response) => {};
-		const response = new Promise<Response>((resolve) => {
-			respond = resolve;
-		});
-		const requested = vi.fn(() => response);
+		const response = deferred<Response>();
+		const requested = vi.fn(async () => response.promise);
 		server.use(http.get("*/user", requested));
-		const resolved = resolveCurrentUser(queryClient).then(
-			(user) => ({ user }),
-			(error: unknown) => ({ error }),
-		);
+		const resolved = outcome(resolveCurrentUser(queryClient));
 		await vi.waitFor(() => expect(requested).toHaveBeenCalledOnce());
 		await queryClient.cancelQueries({ queryKey: currentUserQueryOptions().queryKey });
-		respond(HttpResponse.json(currentUser));
+		response.resolve(HttpResponse.json(currentUser));
 		await expect(resolved).resolves.toHaveProperty("error");
 		expect(queryClient.getQueryData(currentUserQueryOptions().queryKey)).toBeUndefined();
 		queryClient.clear();
@@ -189,7 +187,7 @@ describe("resolveCurrentUser", () => {
 		await expect(resolveCurrentUser(queryClient)).resolves.toMatchObject({ appRole: "APP_ADMIN" });
 		// …and the revocation fetched behind it lands for the next one.
 		await vi.waitFor(() => expect(revoked.times).toBe(1));
-		await vi.waitFor(() =>
+		await vi.waitFor(async () =>
 			expect(resolveCurrentUser(queryClient)).resolves.toMatchObject({ appRole: "APP_USER" }),
 		);
 	});

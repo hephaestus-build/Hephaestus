@@ -10,7 +10,7 @@ import {
 	hasObservationFilter,
 	ObservationFilters,
 } from "./ObservationFilters";
-import { ObservationResults } from "./ObservationResults";
+import { ObservationResults, type ObservationResultsState } from "./ObservationResults";
 import type { ObservationsSearch } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
 
@@ -55,6 +55,14 @@ export function ObservationsListPage({
 	const hasFilter = hasObservationFilter(search);
 	const reset = () => onSearchChange(clearedObservationFilters());
 	const patchFilter = (patch: Partial<ObservationsSearch>) => onSearchChange({ ...patch, page: 0 });
+	let resultsState: ObservationResultsState = { status: "ready", observations: rows };
+	if (isLoading) {
+		resultsState = { status: "loading" };
+	} else if (rows.length === 0) {
+		resultsState = hasFilter
+			? { status: "empty", filtered: true, onClearFilters: reset }
+			: { status: "empty", filtered: false };
+	}
 
 	return (
 		<section aria-label="Practice review observations" className="space-y-4">
@@ -73,15 +81,7 @@ export function ObservationsListPage({
 				<ObservationResults
 					workspaceSlug={workspaceSlug}
 					practices={practiceRecords}
-					state={
-						isLoading
-							? { status: "loading" }
-							: rows.length === 0
-								? hasFilter
-									? { status: "empty", filtered: true, onClearFilters: reset }
-									: { status: "empty", filtered: false }
-								: { status: "ready", observations: rows }
-					}
+					state={resultsState}
 				/>
 			) : (
 				<QueryErrorAlert error={error} title="Couldn't load observations" onRetry={onRetry} />

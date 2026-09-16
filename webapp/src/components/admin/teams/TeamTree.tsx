@@ -44,7 +44,9 @@ export function TeamTree({
 			team={team}
 			memberCount={team.members.length}
 			headingLevel={headingLevel}
-			onToggleVisibility={(hidden) => void onToggleVisibility(team.id, hidden)}
+			onToggleVisibility={(hidden) => {
+				void onToggleVisibility(team.id, hidden);
+			}}
 			getCatalogLabels={getCatalogLabels}
 		>
 			{team.repositories.length > 0 ? (
@@ -59,7 +61,7 @@ export function TeamTree({
 								catalogLabels={getCatalogLabels(repo.id)}
 								onAddLabel={onAddLabel}
 								onRemoveLabel={onRemoveLabel}
-								onToggleVisibility={(hidden: boolean) =>
+								onToggleVisibility={async (hidden: boolean) =>
 									onToggleRepositoryVisibility(team.id, repo.id, hidden)
 								}
 							/>

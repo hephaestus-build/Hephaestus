@@ -63,7 +63,7 @@ export const SuspendedOutline: Story = {
 export const CredentialUnreadable: Story = {
 	args: { connectionState: "ACTIVE", credentialsUnreadableSince: new Date("2026-09-05T08:00:00Z") },
 	play: async ({ canvas }) => {
-		canvas.getByText(/the stored token can't be read/iu);
+		canvas.getByText(/the stored token can’t be read/iu);
 		await expect(canvas.getByText(/the connection's page says how to replace it/iu)).toBeVisible();
 	},
 };
@@ -75,7 +75,7 @@ export const CredentialUnreadableWhileSuspended: Story = {
 		credentialsUnreadableSince: new Date("2026-09-05T08:00:00Z"),
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/the stored token can't be read/iu);
+		canvas.getByText(/the stored token can’t be read/iu);
 		await expect(canvas.getByText(/syncing is paused/iu)).toBeVisible();
 	},
 };

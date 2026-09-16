@@ -231,7 +231,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						id="landing-hero-heading"
 						className="relative z-10 mt-5 max-w-3xl text-4xl font-bold tracking-display text-balance sm:text-5xl md:text-6xl"
 					>
-						Learn from the work you're{" "}
+						Learn from the work you’re{" "}
 						<span className="relative inline-block whitespace-nowrap">
 							already doing
 							<span

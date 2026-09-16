@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { MessageSquareTextIcon, ScanSearchIcon } from "lucide-react";
-import { useId } from "react";
+import { type ReactNode, useId } from "react";
 
 import type { AgentJob, Practice, ReviewFeedback, ReviewObservation } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -109,6 +109,44 @@ function FeedbackSection({
 }) {
 	const items = state.status === "ready" ? state.items : [];
 	const headingId = useId();
+	let body: ReactNode;
+	if (state.status === "loading") {
+		body = <ReviewResultsSkeleton label="Loading feedback" rows={REVIEW_PREVIEW_SIZE} />;
+	} else if (state.status === "error") {
+		body = (
+			<QueryErrorAlert error={state.error} title="Couldn't load feedback" onRetry={state.onRetry} />
+		);
+	} else if (state.status === "pending") {
+		body = (
+			<p className="text-sm text-muted-foreground">
+				Feedback will appear when the review finishes.
+			</p>
+		);
+	} else if (items.length === 0) {
+		body = (
+			<Empty variant="outlined">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<MessageSquareTextIcon />
+					</EmptyMedia>
+					<EmptyTitle>
+						{outcome === "INSUFFICIENT_EVIDENCE" ? "Nothing was assessed" : "No feedback"}
+					</EmptyTitle>
+					{outcome === "INSUFFICIENT_EVIDENCE" && (
+						<EmptyDescription>{INSUFFICIENT_EVIDENCE_EXPLANATION}</EmptyDescription>
+					)}
+				</EmptyHeader>
+			</Empty>
+		);
+	} else {
+		body = (
+			<ReviewRowList label="Feedback">
+				{items.map((item) => (
+					<FeedbackRow key={item.id} workspaceSlug={workspaceSlug} feedback={item} scope={scope} />
+				))}
+			</ReviewRowList>
+		);
+	}
 	return (
 		<section aria-labelledby={headingId} className="space-y-3">
 			<SectionHeader
@@ -120,44 +158,7 @@ function FeedbackSection({
 				total={state.status === "ready" ? state.total : 0}
 				shown={items.length}
 			/>
-			{state.status === "loading" ? (
-				<ReviewResultsSkeleton label="Loading feedback" rows={REVIEW_PREVIEW_SIZE} />
-			) : state.status === "error" ? (
-				<QueryErrorAlert
-					error={state.error}
-					title="Couldn't load feedback"
-					onRetry={state.onRetry}
-				/>
-			) : state.status === "pending" ? (
-				<p className="text-sm text-muted-foreground">
-					Feedback will appear when the review finishes.
-				</p>
-			) : items.length === 0 ? (
-				<Empty variant="outlined">
-					<EmptyHeader>
-						<EmptyMedia variant="icon">
-							<MessageSquareTextIcon />
-						</EmptyMedia>
-						<EmptyTitle>
-							{outcome === "INSUFFICIENT_EVIDENCE" ? "Nothing was assessed" : "No feedback"}
-						</EmptyTitle>
-						{outcome === "INSUFFICIENT_EVIDENCE" && (
-							<EmptyDescription>{INSUFFICIENT_EVIDENCE_EXPLANATION}</EmptyDescription>
-						)}
-					</EmptyHeader>
-				</Empty>
-			) : (
-				<ReviewRowList label="Feedback">
-					{items.map((item) => (
-						<FeedbackRow
-							key={item.id}
-							workspaceSlug={workspaceSlug}
-							feedback={item}
-							scope={scope}
-						/>
-					))}
-				</ReviewRowList>
-			)}
+			{body}
 		</section>
 	);
 }
@@ -177,6 +178,56 @@ function ObservationsSection({
 }) {
 	const items = state.status === "ready" ? state.items : [];
 	const headingId = useId();
+	let body: ReactNode;
+	if (state.status === "loading") {
+		body = <ReviewResultsSkeleton label="Loading observations" rows={REVIEW_PREVIEW_SIZE} />;
+	} else if (state.status === "error") {
+		body = (
+			<QueryErrorAlert
+				error={state.error}
+				title="Couldn't load observations"
+				onRetry={state.onRetry}
+			/>
+		);
+	} else if (state.status === "pending") {
+		body = (
+			<p className="text-sm text-muted-foreground">
+				Observations will appear when the review finishes.
+			</p>
+		);
+	} else if (items.length === 0) {
+		body = (
+			<Empty variant="outlined">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<ScanSearchIcon />
+					</EmptyMedia>
+					<EmptyTitle>
+						{outcome === "INSUFFICIENT_EVIDENCE"
+							? "Nothing was assessed"
+							: "No observations were recorded"}
+					</EmptyTitle>
+					{outcome === "INSUFFICIENT_EVIDENCE" && (
+						<EmptyDescription>{INSUFFICIENT_EVIDENCE_EXPLANATION}</EmptyDescription>
+					)}
+				</EmptyHeader>
+			</Empty>
+		);
+	} else {
+		body = (
+			<ReviewRowList label="Observations">
+				{items.map((observation) => (
+					<ObservationRow
+						key={observation.id}
+						workspaceSlug={workspaceSlug}
+						observation={observation}
+						practice={practices?.find((practice) => practice.slug === observation.practiceSlug)}
+						scope={scope}
+					/>
+				))}
+			</ReviewRowList>
+		);
+	}
 	return (
 		<section aria-labelledby={headingId} className="space-y-3">
 			<SectionHeader
@@ -188,47 +239,7 @@ function ObservationsSection({
 				total={state.status === "ready" ? state.total : 0}
 				shown={items.length}
 			/>
-			{state.status === "loading" ? (
-				<ReviewResultsSkeleton label="Loading observations" rows={REVIEW_PREVIEW_SIZE} />
-			) : state.status === "error" ? (
-				<QueryErrorAlert
-					error={state.error}
-					title="Couldn't load observations"
-					onRetry={state.onRetry}
-				/>
-			) : state.status === "pending" ? (
-				<p className="text-sm text-muted-foreground">
-					Observations will appear when the review finishes.
-				</p>
-			) : items.length === 0 ? (
-				<Empty variant="outlined">
-					<EmptyHeader>
-						<EmptyMedia variant="icon">
-							<ScanSearchIcon />
-						</EmptyMedia>
-						<EmptyTitle>
-							{outcome === "INSUFFICIENT_EVIDENCE"
-								? "Nothing was assessed"
-								: "No observations were recorded"}
-						</EmptyTitle>
-						{outcome === "INSUFFICIENT_EVIDENCE" && (
-							<EmptyDescription>{INSUFFICIENT_EVIDENCE_EXPLANATION}</EmptyDescription>
-						)}
-					</EmptyHeader>
-				</Empty>
-			) : (
-				<ReviewRowList label="Observations">
-					{items.map((observation) => (
-						<ObservationRow
-							key={observation.id}
-							workspaceSlug={workspaceSlug}
-							observation={observation}
-							practice={practices?.find((practice) => practice.slug === observation.practiceSlug)}
-							scope={scope}
-						/>
-					))}
-				</ReviewRowList>
-			)}
+			{body}
 		</section>
 	);
 }

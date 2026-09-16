@@ -156,7 +156,11 @@ export function TimeframeFilter({
 			</Label>
 			<Select
 				value={selectedPreset}
-				onValueChange={(value) => value && handlePresetChange(value)}
+				onValueChange={(value) => {
+					if (value) {
+						handlePresetChange(value);
+					}
+				}}
 				items={items}
 			>
 				<SelectTrigger id="timeframe" className="w-full">

@@ -55,7 +55,7 @@ const REFRESH_RECOVERY_COOLDOWN_MS = 10_000;
 let recovery: Promise<void> | null = null;
 let lastRefreshRecoveryAt = 0;
 
-function recoverOrLogout(queryClient: QueryClient, currentPath: string): Promise<void> {
+async function recoverOrLogout(queryClient: QueryClient, currentPath: string): Promise<void> {
 	recovery ??= doRecoverOrLogout(queryClient, currentPath).finally(() => {
 		recovery = null;
 	});

@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { sessions } from "@/mocks/fixtures/auth";
 import { noSessions, sessionsError } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 
 import { SessionsSection } from "./SessionsSection";
 
@@ -68,13 +69,10 @@ describe("SessionsSection", () => {
 	it("only the clicked row shows a pending spinner (guards the per-row pending scope)", async () => {
 		// Hold the DELETE open so the pending state is observable; we assert that the OTHER
 		// non-current row's Revoke button is NOT disabled during the in-flight revoke.
-		let releaseDelete: () => void = () => {};
-		const deletePromise = new Promise<void>((resolve) => {
-			releaseDelete = resolve;
-		});
+		const deletion = deferred<undefined>();
 		server.use(
 			http.delete("*/user/sessions/:jti", async () => {
-				await deletePromise;
+				await deletion.promise;
 				return new HttpResponse(null, { status: 204 });
 			}),
 		);
@@ -97,7 +95,7 @@ describe("SessionsSection", () => {
 		// Per-row scoping: the unrelated row must remain actionable.
 		expect(otherBtn.disabled).toBe(false);
 
-		releaseDelete();
+		deletion.resolve(undefined);
 	});
 
 	it("renders an alert on a sessions load error", async () => {

@@ -1,6 +1,8 @@
 import type { APIRequestContext, APIResponse, BrowserContext, Page } from "@playwright/test";
 import { z } from "zod";
 
+import { deferred } from "@/test/async";
+
 import { expect, loginAsDevAdmin, test } from "./fixtures";
 
 const serverUrl = process.env.E2E_SERVER_URL ?? "http://localhost:8080";
@@ -26,7 +28,7 @@ async function accessCookie(context: BrowserContext, name = "HEPHAESTUS_AT") {
 	return cookie;
 }
 
-function waitForRefresh(page: Page, status: number) {
+async function waitForRefresh(page: Page, status: number) {
 	return page.waitForResponse(
 		(response) => response.url().endsWith("/auth/refresh") && response.status() === status,
 	);
@@ -52,27 +54,26 @@ async function scheduleRenewal(page: Page) {
 }
 
 async function holdRenewal(page: Page, request: APIRequestContext) {
-	let markProcessed: (() => void) | undefined;
-	let releaseResponse: (() => void) | undefined;
-	const processed = new Promise<void>((resolve) => {
-		markProcessed = resolve;
-	});
-	const release = new Promise<void>((resolve) => {
-		releaseResponse = resolve;
-	});
+	const processed = deferred<undefined>();
+	const release = deferred<undefined>();
 	await page.route(
 		"**/auth/refresh",
 		async (route) => {
 			// The isolated API context holds Set-Cookie back from the browser until fulfillment.
 			const response = await request.fetch(route.request());
 			expect(response.status()).toBe(204);
-			markProcessed?.();
-			await release;
+			processed.resolve(undefined);
+			await release.promise;
 			await route.fulfill({ response });
 		},
 		{ times: 1 },
 	);
-	return { processed, release: () => releaseResponse?.() };
+	return {
+		processed: processed.promise,
+		release: () => {
+			release.resolve(undefined);
+		},
+	};
 }
 
 test("a session persists across browser contexts with a full-day cookie lifetime", async ({
@@ -124,7 +125,9 @@ test("a temporary renewal outage preserves the page and later activity recovers"
 	context,
 }) => {
 	await loginAsDevAdmin(page, "session-outage");
-	await page.route("**/auth/refresh", (route) => route.fulfill({ status: 503 }), { times: 1 });
+	await page.route("**/auth/refresh", async (route) => route.fulfill({ status: 503 }), {
+		times: 1,
+	});
 	await scheduleRenewal(page);
 	const failed = waitForRefresh(page, 503);
 	await page.clock.fastForward(61_000);
@@ -206,7 +209,7 @@ test("failed sign-out reports the failure and allows a successful retry", async 
 }) => {
 	await loginAsDevAdmin(page, "session-logout-retry");
 	await page.goto("/settings");
-	await page.route("**/auth/logout", (route) => route.fulfill({ status: 503 }), { times: 1 });
+	await page.route("**/auth/logout", async (route) => route.fulfill({ status: 503 }), { times: 1 });
 	await page.getByRole("button", { name: "Account", exact: true }).click();
 	await page.getByRole("menuitem", { name: "Sign Out", exact: true }).click();
 	await expect(page.getByText("Could not confirm sign-out. Please try again.")).toBeVisible();
@@ -222,7 +225,7 @@ test("a cold identity outage shows the existing retry screen instead of signing 
 	page,
 }) => {
 	await loginAsDevAdmin(page, "session-cold-outage");
-	await page.route("**/user", (route) => route.fulfill({ status: 503 }));
+	await page.route("**/user", async (route) => route.fulfill({ status: 503 }));
 	await page.goto("/settings");
 	await expect(
 		page.getByRole("heading", { name: "Something went wrong", exact: true }),

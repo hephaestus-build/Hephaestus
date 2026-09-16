@@ -8,7 +8,10 @@ import {
 	listPracticeReviewFeedbackQueryKey,
 	listPracticesOptions,
 } from "@/api/@tanstack/react-query.gen";
-import { FeedbackDetailPage } from "@/components/admin/practice-reviews/FeedbackDetailPage";
+import {
+	FeedbackDetailPage,
+	type FeedbackDetailPageProps,
+} from "@/components/admin/practice-reviews/FeedbackDetailPage";
 import {
 	type ProposalRejectionReason,
 	ProposalReviewPage,
@@ -84,21 +87,26 @@ function FeedbackDetailRoute() {
 		);
 	}
 
+	let state: FeedbackDetailPageProps["state"];
+	if (feedbackQueryResult.isPending) {
+		state = { status: "loading" };
+	} else if (feedbackQueryResult.isError || !feedback) {
+		state = {
+			status: "error",
+			error: feedbackQueryResult.error,
+			onRetry: () => {
+				void feedbackQueryResult.refetch();
+			},
+		};
+	} else {
+		state = { status: "ready", feedback };
+	}
+
 	return (
 		<FeedbackDetailPage
 			workspaceSlug={workspaceSlug}
 			search={search}
-			state={
-				feedbackQueryResult.isPending
-					? { status: "loading" }
-					: feedbackQueryResult.isError || !feedback
-						? {
-								status: "error",
-								error: feedbackQueryResult.error,
-								onRetry: () => void feedbackQueryResult.refetch(),
-							}
-						: { status: "ready", feedback }
-			}
+			state={state}
 			practices={practicesQuery.data}
 		/>
 	);

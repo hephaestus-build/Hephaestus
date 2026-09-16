@@ -1,8 +1,11 @@
 import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
+import { type CustomPromisifyLegacy, promisify } from "node:util";
 
-const execFileAsync = promisify(execFile);
+// `execFile` promisifies through its own `__promisify__` signature, which is what resolves to
+// `{ stdout, stderr }` rather than to the callback's single result.
+const promisifiableExecFile: CustomPromisifyLegacy<typeof execFile.__promisify__> = execFile;
+const execFileAsync = promisify(promisifiableExecFile);
 
 /**
  * Node caps a captured subprocess at 1 MiB and throws `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` past it.
@@ -33,14 +36,16 @@ export async function run(
 		stdio: [options.stdin ?? "inherit", options.stdout ?? "inherit", options.stderr ?? "inherit"],
 		signal: options.signal,
 	});
-	await new Promise<void>((resolve, reject) => {
-		child.once("error", reject);
-		child.once("exit", (code, signal) =>
-			code === 0
-				? resolve()
-				: reject(new Error(`${command} exited with ${signal ?? `code ${code}`}`)),
-		);
+	const exited = Promise.withResolvers<undefined>();
+	child.once("error", exited.reject);
+	child.once("exit", (code, signal) => {
+		if (code === 0) {
+			exited.resolve(undefined);
+		} else {
+			exited.reject(new Error(`${command} exited with ${signal ?? `code ${code}`}`));
+		}
 	});
+	await exited.promise;
 }
 
 export async function succeeds(

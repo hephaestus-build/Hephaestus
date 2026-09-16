@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { refresh } from "@/api/sdk.gen";
+import { deferred } from "@/test/async";
 
 import { refreshAccessToken } from "./session-refresh";
 
@@ -21,19 +22,15 @@ describe("refreshAccessToken", () => {
 	});
 
 	it("collapses callers that overlap a rotation onto one POST /auth/refresh", async () => {
-		let settle: (() => void) | undefined;
-		refreshMock.mockReturnValue(
-			new Promise<typeof rotated>((resolve) => {
-				settle = () => resolve(rotated);
-			}),
-		);
+		const rotation = deferred<typeof rotated>();
+		refreshMock.mockReturnValue(rotation.promise);
 
 		const overlapping = Promise.all([
 			refreshAccessToken(),
 			refreshAccessToken(),
 			refreshAccessToken(),
 		]);
-		settle?.();
+		rotation.resolve(rotated);
 
 		await expect(overlapping).resolves.toStrictEqual(["refreshed", "refreshed", "refreshed"]);
 		expect(refreshMock).toHaveBeenCalledOnce();

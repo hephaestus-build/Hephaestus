@@ -140,7 +140,7 @@ export const SubmitFailed: Story = {
 		await acceptTerms();
 		await answer(/don't take part/u);
 		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
-		await expect(screen.getByRole("alert")).toHaveTextContent(/weren't saved/iu);
+		await expect(screen.getByRole("alert")).toHaveTextContent(/weren’t saved/iu);
 		await expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
 	},
 };

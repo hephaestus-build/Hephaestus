@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -33,7 +33,7 @@ void test("distinguishes tested-build evidence, inherited and absent coverage", 
 	assert.equal(visualVerdict(tested, terminalReport()).state, "tested-build");
 	assert.match(
 		coverageSummary(tested, terminalReport()),
-		/do not prove new captures in this CI run/,
+		/do not prove new captures in this CI run/u,
 	);
 	assert.equal(
 		visualVerdict(
@@ -49,26 +49,42 @@ void test("distinguishes tested-build evidence, inherited and absent coverage", 
 });
 
 void test("classifies account limits independently from service errors", () => {
-	for (const code of ["5", "11", "12"])
+	for (const code of ["5", "11", "12"]) {
 		assert.equal(visualVerdict({ ...tested, CHROMATIC_CODE: code }).state, "quota-skipped");
-	for (const code of ["3", "6", "201", "202", "220", "255", "999", ""])
+	}
+	for (const code of ["3", "6", "201", "202", "220", "255", "999", ""]) {
 		assert.equal(visualVerdict({ ...tested, CHROMATIC_CODE: code }).state, "unavailable");
+	}
 	assert.equal(
 		visualVerdict({ ...tested, CHROMATIC_CODE: "201", CHROMATIC_ERRORS: "1" }).state,
 		"unavailable",
 	);
-	for (const code of ["1", "2"])
+	for (const code of ["1", "2"]) {
 		assert.equal(visualVerdict({ ...tested, CHROMATIC_CODE: code }).state, "failed");
+	}
 });
 
 void test("missing/malformed evidence and action failures never approve coverage", () => {
-	for (const key of Object.keys(tested).filter((name) => name !== "CHROMATIC_OUTCOME"))
-		for (const value of [undefined, "", "undefined", "NaN", "-1", "1.5", "1e3", "9007199254740992"])
+	for (const key of Object.keys(tested).filter((name) => name !== "CHROMATIC_OUTCOME")) {
+		for (const value of [
+			undefined,
+			"",
+			"undefined",
+			"NaN",
+			"-1",
+			"1.5",
+			"1e3",
+			"9007199254740992",
+		]) {
 			assert.equal(visualVerdict({ ...tested, [key]: value }).pass, false, `${key}: ${value}`);
-	for (const outcome of ["failure", "cancelled", "skipped", ""])
+		}
+	}
+	for (const outcome of ["failure", "cancelled", "skipped", ""]) {
 		assert.equal(visualVerdict({ ...tested, CHROMATIC_OUTCOME: outcome }).pass, false);
-	for (const key of ["CHROMATIC_ERRORS", "CHROMATIC_INTERACTIONS"])
+	}
+	for (const key of ["CHROMATIC_ERRORS", "CHROMATIC_INTERACTIONS"]) {
 		assert.equal(visualVerdict({ ...tested, [key]: "1" }).pass, false);
+	}
 	assert.equal(visualVerdict({ ...tested, CHROMATIC_TESTS: "0" }).pass, false);
 });
 
@@ -89,7 +105,7 @@ void test("summary links only to a safe Chromatic build URL", () => {
 			...tested,
 			CHROMATIC_BUILD_URL: "https://www.chromatic.com/build?appId=abc&number=123",
 		}),
-		/Open Chromatic build/,
+		/Open Chromatic build/u,
 	);
 	for (const url of [
 		// eslint-disable-next-line no-script-url -- Adversarial input must never become a summary link.
@@ -98,15 +114,16 @@ void test("summary links only to a safe Chromatic build URL", () => {
 		"https://www.chromatic.com.evil.example/build",
 		"https://user:secret@www.chromatic.com/build",
 		"undefined",
-	])
+	]) {
 		assert.doesNotMatch(
 			coverageSummary({ ...tested, CHROMATIC_BUILD_URL: url }),
-			/Open Chromatic build/,
+			/Open Chromatic build/u,
 		);
+	}
 });
 
 void test("CLI writes its summary and fails closed even with no outputs", () => {
-	const dir = mkdtempSync(join(tmpdir(), "chromatic-report-"));
+	const dir = mkdtempSync(path.join(tmpdir(), "chromatic-report-"));
 	try {
 		for (const [index, [env, status, state]] of (
 			[
@@ -117,16 +134,16 @@ void test("CLI writes its summary and fails closed even with no outputs", () => 
 				[{ CHROMATIC_OUTCOME: "skipped", CHROMATIC_POLICY_SKIP: "true" }, 0, "policy-skipped"],
 			] as const
 		).entries()) {
-			const summary = join(dir, `${index}.md`);
-			mkdirSync(join(dir, "webapp"), { recursive: true });
-			writeFileSync(join(dir, "webapp/chromatic-report.xml"), terminalReport());
-			const run = spawnSync(process.execPath, [resolve("scripts/report-chromatic.ts")], {
+			const summary = path.join(dir, `${index}.md`);
+			mkdirSync(path.join(dir, "webapp"), { recursive: true });
+			writeFileSync(path.join(dir, "webapp/chromatic-report.xml"), terminalReport());
+			const run = spawnSync(process.execPath, [path.resolve("scripts/report-chromatic.ts")], {
 				cwd: dir,
 				env: { ...env, GITHUB_STEP_SUMMARY: summary },
 				encoding: "utf8",
 			});
 			assert.equal(run.status, status, run.stderr);
-			assert.match(readFileSync(summary, "utf8"), new RegExp(`coverage: ${state}`));
+			assert.match(readFileSync(summary, "utf8"), new RegExp(`coverage: ${state}`, "u"));
 			assert.equal(run.stdout.includes("::error::"), status !== 0);
 			assert.equal(run.stdout.includes("::warning::"), state === "policy-skipped");
 		}
@@ -161,8 +178,8 @@ void test("publish-only builds cannot pass from positive counters and exit zero"
 		CHROMATIC_BUILD_URL: "https://www.chromatic.com/build?appId=abc&number=5185",
 	};
 	assert.equal(visualVerdict(env, xml).pass, false);
-	assert.match(coverageSummary(env, xml), /IN_PROGRESS/);
-	assert.doesNotMatch(coverageSummary(env, xml), /passed without errors/);
+	assert.match(coverageSummary(env, xml), /IN_PROGRESS/u);
+	assert.doesNotMatch(coverageSummary(env, xml), /passed without errors/u);
 });
 
 void test("terminal report and child outcomes are required, independently of counts", () => {
@@ -186,23 +203,24 @@ void test("terminal report and child outcomes are required, independently of cou
 		terminalReport().replace('tests="1"', 'tests="2"'),
 		terminalReport().replace('errors="0"', 'errors="1"'),
 		terminalReport().replace("</testcase>", "<error/></testcase>"),
-	])
+	]) {
 		assert.equal(visualVerdict(tested, xml).pass, false);
+	}
 	assert.match(
 		verifyTerminalReport(
 			terminalReport(),
 			"https://www.chromatic.com/build?appId=other&number=123",
 		) ?? "",
-		/does not identify/,
+		/does not identify/u,
 	);
 });
 
 void test("clear step prevents an old successful report approving a skipped upload", () => {
-	const dir = mkdtempSync(join(tmpdir(), "chromatic-stale-"));
+	const dir = mkdtempSync(path.join(tmpdir(), "chromatic-stale-"));
 	try {
-		mkdirSync(join(dir, "webapp"));
-		writeFileSync(join(dir, "webapp/chromatic-report.xml"), terminalReport());
-		const script = resolve("scripts/report-chromatic.ts");
+		mkdirSync(path.join(dir, "webapp"));
+		writeFileSync(path.join(dir, "webapp/chromatic-report.xml"), terminalReport());
+		const script = path.resolve("scripts/report-chromatic.ts");
 		assert.equal(spawnSync(process.execPath, [script, "--clear"], { cwd: dir }).status, 0);
 		const result = spawnSync(process.execPath, [script], {
 			cwd: dir,
@@ -210,7 +228,7 @@ void test("clear step prevents an old successful report approving a skipped uplo
 			encoding: "utf8",
 		});
 		assert.equal(result.status, 1);
-		assert.match(result.stdout, /Missing structured Chromatic report evidence/);
+		assert.match(result.stdout, /Missing structured Chromatic report evidence/u);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
@@ -224,7 +242,7 @@ void test("budget pause expires at midnight UTC and cannot excuse actual failure
 	const paused = visualVerdict(env, undefined, before);
 	assert.equal(paused.state, "budget-paused");
 	assert.equal(paused.pass, true);
-	assert.match(paused.message, /not visual approval/);
+	assert.match(paused.message, /not visual approval/u);
 	for (const now of [deadline, deadline + 1]) {
 		assert.equal(visualTestingPaused(env, now), false);
 		assert.equal(visualVerdict(env, undefined, now).pass, false);
@@ -253,17 +271,21 @@ void test("budget pause expires at midnight UTC and cannot excuse actual failure
 });
 
 void test("policy preparation clears stale evidence and exports the skip decision", () => {
-	const dir = mkdtempSync(join(tmpdir(), "chromatic-pause-"));
+	const dir = mkdtempSync(path.join(tmpdir(), "chromatic-pause-"));
 	try {
-		mkdirSync(join(dir, "webapp"));
-		const report = join(dir, "webapp/chromatic-report.xml");
+		mkdirSync(path.join(dir, "webapp"));
+		const report = path.join(dir, "webapp/chromatic-report.xml");
 		writeFileSync(report, terminalReport());
-		const output = join(dir, "outputs");
-		const run = spawnSync(process.execPath, [resolve("scripts/report-chromatic.ts"), "--clear"], {
-			cwd: dir,
-			env: { GITHUB_OUTPUT: output, CHROMATIC_PAUSED_UNTIL: "2999-01-01" },
-			encoding: "utf8",
-		});
+		const output = path.join(dir, "outputs");
+		const run = spawnSync(
+			process.execPath,
+			[path.resolve("scripts/report-chromatic.ts"), "--clear"],
+			{
+				cwd: dir,
+				env: { GITHUB_OUTPUT: output, CHROMATIC_PAUSED_UNTIL: "2999-01-01" },
+				encoding: "utf8",
+			},
+		);
 		assert.equal(run.status, 0, run.stderr);
 		assert.equal(readFileSync(output, "utf8"), "paused=true\n");
 		assert.throws(() => readFileSync(report), { code: "ENOENT" });

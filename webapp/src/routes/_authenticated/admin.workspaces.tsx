@@ -68,12 +68,12 @@ function AdminWorkspacesPage() {
 					type="search"
 					placeholder="Search by name, slug, owner, provider, or status…"
 					value={search}
-					onChange={(event) =>
+					onChange={(event) => {
 						void navigate({
 							search: { q: event.target.value || undefined },
 							replace: true,
-						})
-					}
+						});
+					}}
 				/>
 			</InputGroup>
 

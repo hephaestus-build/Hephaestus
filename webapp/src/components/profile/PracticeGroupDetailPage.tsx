@@ -1,7 +1,7 @@
 import { PulseIcon } from "@primer/octicons-react";
 import { cn } from "cn";
 import { ArrowLeftIcon, ChevronDownIcon, CircleDashedIcon, InfoIcon } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type {
 	PracticeGroup,
 	PracticeGroupReviewObservation,
@@ -55,7 +55,9 @@ const EMPTY_FEED: ReviewRunFeedState = {
 	runs: [],
 	hasMore: false,
 	isLoadingMore: false,
-	onLoadMore: () => {},
+	onLoadMore: () => {
+		// An empty feed has nothing more to load, and `hasMore: false` keeps the button off screen.
+	},
 };
 export interface ContributingPractice {
 	slug: string;
@@ -101,6 +103,23 @@ function DetailSectionIntro({ id, title, description }: DetailSectionIntroProps)
 			<p className="text-sm leading-5 text-muted-foreground">{description}</p>
 		</div>
 	);
+}
+
+function nextStepFor(practice: ContributingPractice, practiceStanding: PracticeStandingKey) {
+	const deliveredStep = practice.nextStep?.trim();
+	if (hasText(deliveredStep)) {
+		return deliveredStep;
+	}
+	if (practiceStanding === "STRENGTH" && hasText(practice.whatGoodLooksLike)) {
+		return `Keep doing this: ${practice.whatGoodLooksLike}`;
+	}
+	if (practiceStanding === "NO_OPPORTUNITY") {
+		return "Nothing to act on yet — the reviews ran and your work offered no occasion for this practice.";
+	}
+	if (practiceStanding === "NOT_OBSERVED" || practiceStanding === "UNMEASURED") {
+		return "No focused next step yet. It will appear after this practice is observed in reviewed work.";
+	}
+	return practice.whatGoodLooksLike;
 }
 
 export function PracticeGroupDetailPage({
@@ -171,22 +190,78 @@ export function PracticeGroupDetailPage({
 	const selectedPractice = practices?.find((practice) => practice.slug === selectedPracticeSlug);
 	const hasAnyFeedNarrowing = selectedPractice !== undefined;
 
-	const nextStepFor = (practice: ContributingPractice, practiceStanding: PracticeStandingKey) => {
-		const deliveredStep = practice.nextStep?.trim();
-		if (hasText(deliveredStep)) {
-			return deliveredStep;
-		}
-		if (practiceStanding === "STRENGTH" && hasText(practice.whatGoodLooksLike)) {
-			return `Keep doing this: ${practice.whatGoodLooksLike}`;
-		}
-		if (practiceStanding === "NO_OPPORTUNITY") {
-			return "Nothing to act on yet — the reviews ran and your work offered no occasion for this practice.";
-		}
-		if (practiceStanding === "NOT_OBSERVED" || practiceStanding === "UNMEASURED") {
-			return "No focused next step yet. It will appear after this practice is observed in reviewed work.";
-		}
-		return practice.whatGoodLooksLike;
-	};
+	let feedContent: ReactNode;
+	if (feed.status === "error") {
+		feedContent = (
+			<QueryErrorAlert
+				error={feed.error}
+				title="Could not load review runs"
+				onRetry={feed.onRetry}
+			/>
+		);
+	} else if (feed.status === "loading") {
+		feedContent = (
+			<div className="flex flex-col gap-3" role="status">
+				<span className="sr-only">Loading review runs</span>
+				{Array.from({ length: skeletonRows }, (_, i) => (
+					<Skeleton key={i} className="h-16 w-full" />
+				))}
+			</div>
+		);
+	} else if (feed.runs.length > 0) {
+		feedContent = (
+			<>
+				<ReviewRunTimeline
+					runs={feed.runs}
+					openObservationId={openObservationId}
+					observationDetail={observationDetail}
+					onToggleObservation={onToggleObservation}
+					onRespond={onRespond}
+					pendingFeedbackId={pendingFeedbackId}
+				/>
+				{feed.hasMore && (
+					<Button
+						type="button"
+						variant="link"
+						size="inline"
+						className="w-fit text-sm"
+						onClick={feed.onLoadMore}
+						disabled={feed.isLoadingMore}
+					>
+						{feed.isLoadingMore ? "Loading…" : "View earlier reviews"}
+					</Button>
+				)}
+			</>
+		);
+	} else {
+		feedContent = (
+			<Empty>
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<PulseIcon />
+					</EmptyMedia>
+					<EmptyTitle>No review runs</EmptyTitle>
+					<EmptyDescription>
+						{hasAnyFeedNarrowing
+							? `No review runs mention ${selectedPractice.name}.`
+							: "Review runs appear here once your work has been reviewed."}
+					</EmptyDescription>
+				</EmptyHeader>
+				{hasAnyFeedNarrowing && onSelectPractice && (
+					<EmptyContent>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => onSelectPractice(undefined)}
+						>
+							Show every review in this group
+						</Button>
+					</EmptyContent>
+				)}
+			</Empty>
+		);
+	}
 
 	return (
 		<div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[minmax(20rem,2fr)_minmax(0,3fr)] lg:grid-rows-[auto_auto_1fr] lg:items-stretch">
@@ -396,69 +471,7 @@ export function PracticeGroupDetailPage({
 					title="Review runs"
 					description="Complete reviews of your work in this group, newest first."
 				/>
-				{feed.status === "error" ? (
-					<QueryErrorAlert
-						error={feed.error}
-						title="Could not load review runs"
-						onRetry={feed.onRetry}
-					/>
-				) : feed.status === "loading" ? (
-					<div className="flex flex-col gap-3" role="status">
-						<span className="sr-only">Loading review runs</span>
-						{Array.from({ length: skeletonRows }, (_, i) => (
-							<Skeleton key={i} className="h-16 w-full" />
-						))}
-					</div>
-				) : feed.runs.length > 0 ? (
-					<>
-						<ReviewRunTimeline
-							runs={feed.runs}
-							openObservationId={openObservationId}
-							observationDetail={observationDetail}
-							onToggleObservation={onToggleObservation}
-							onRespond={onRespond}
-							pendingFeedbackId={pendingFeedbackId}
-						/>
-						{feed.hasMore && (
-							<Button
-								type="button"
-								variant="link"
-								size="inline"
-								className="w-fit text-sm"
-								onClick={feed.onLoadMore}
-								disabled={feed.isLoadingMore}
-							>
-								{feed.isLoadingMore ? "Loading…" : "View earlier reviews"}
-							</Button>
-						)}
-					</>
-				) : (
-					<Empty>
-						<EmptyHeader>
-							<EmptyMedia variant="icon">
-								<PulseIcon />
-							</EmptyMedia>
-							<EmptyTitle>No review runs</EmptyTitle>
-							<EmptyDescription>
-								{hasAnyFeedNarrowing
-									? `No review runs mention ${selectedPractice.name}.`
-									: "Review runs appear here once your work has been reviewed."}
-							</EmptyDescription>
-						</EmptyHeader>
-						{hasAnyFeedNarrowing && onSelectPractice && (
-							<EmptyContent>
-								<Button
-									type="button"
-									variant="outline"
-									size="sm"
-									onClick={() => onSelectPractice(undefined)}
-								>
-									Show every review in this group
-								</Button>
-							</EmptyContent>
-						)}
-					</Empty>
-				)}
+				{feedContent}
 			</section>
 		</div>
 	);

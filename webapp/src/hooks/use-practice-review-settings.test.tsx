@@ -7,6 +7,7 @@ import { getPracticeReviewSettingsQueryKey } from "@/api/@tanstack/react-query.g
 import type { PracticeReviewSettings } from "@/api/types.gen";
 import { mockReviewSettings } from "@/components/admin/practices/fixtures";
 import { server } from "@/mocks/server";
+import { deferred, pending } from "@/test/async";
 import { usePracticeReviewSettingsMutation } from "./use-practice-review-settings";
 
 const workspaceSlug = "acme";
@@ -53,7 +54,7 @@ describe("usePracticeReviewSettingsMutation", () => {
 		server.use(
 			http.patch("*/workspaces/:workspaceSlug/practices/review-settings", async ({ request }) => {
 				ifMatch = request.headers.get("If-Match");
-				return new Promise<never>(() => {});
+				return pending();
 			}),
 		);
 		const { result } = renderMutation(client);
@@ -102,15 +103,13 @@ describe("usePracticeReviewSettingsMutation", () => {
 		const client = createClient();
 		client.setQueryData(queryKey, settings);
 		let requests = 0;
-		let resolveFirst: () => void = () => {};
+		const first = deferred<undefined>();
 		server.use(
 			http.patch(
 				"*/workspaces/:workspaceSlug/practices/review-settings",
 				async () => {
 					requests += 1;
-					await new Promise<void>((resolve) => {
-						resolveFirst = resolve;
-					});
+					await first.promise;
 					return HttpResponse.json({ ...settings, etag: '"v2"', deliveryStatus: "PAUSED" });
 				},
 				{ once: true },
@@ -130,7 +129,7 @@ describe("usePracticeReviewSettingsMutation", () => {
 			});
 		});
 		await waitFor(() => expect(requests).toBe(1));
-		resolveFirst();
+		first.resolve(undefined);
 		await waitFor(() => expect(requests).toBe(2));
 	});
 });

@@ -166,7 +166,7 @@ export const Loading: Story = {
 export const LoadFailed: Story = {
 	args: { isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/backfills couldn't be loaded/iu);
+		canvas.getByText(/backfills couldn’t be loaded/iu);
 		canvas.getByText(/already running is unaffected/iu);
 	},
 };

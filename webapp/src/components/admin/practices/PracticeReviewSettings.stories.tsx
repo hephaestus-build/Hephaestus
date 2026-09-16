@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 import type { AgentBinding, PracticeReviewCoveragePreview } from "@/api/types.gen";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { pending } from "@/test/async";
 import { expectGenuinelyDisabled, expectUnavailable } from "@/test/controls";
 import { mockReviewSettings } from "./fixtures";
 import { PracticeReviewSettings } from "./PracticeReviewSettings";
@@ -274,7 +275,7 @@ export const CoveragePreviewPending: Story = {
 		policy: { ...policy, settings: selectedSettings },
 		coverage: {
 			...coverage,
-			preview: fn(() => new Promise<PracticeReviewCoveragePreview>(() => {})),
+			preview: fn(pending<PracticeReviewCoveragePreview>),
 		},
 	},
 	play: async ({ canvas }) => {
@@ -310,7 +311,7 @@ export const CoverageSavePending: Story = {
 	args: {
 		policy: {
 			...policy,
-			onUpdate: fn(() => new Promise<void>(() => {})),
+			onUpdate: fn(pending),
 		},
 		coverage: {
 			...coverage,

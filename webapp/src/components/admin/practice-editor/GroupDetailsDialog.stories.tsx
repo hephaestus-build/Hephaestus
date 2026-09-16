@@ -99,7 +99,7 @@ export const ChoosingAnIcon: Story = {
 		);
 		await userEvent.click(await screen.findByRole("button", { name: "Shield alert" }));
 		await userEvent.keyboard("{Escape}");
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(screen.queryByRole("textbox", { name: "Search icons" })).not.toBeInTheDocument(),
 		);
 		await userEvent.click(screen.getByRole("button", { name: "Create" }));

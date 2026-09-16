@@ -26,7 +26,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 
 /** `git revert` writes exactly this line; a revert of a merge adds `, reversing changes …`. */
-const REVERT_TRAILER = /^This reverts commit ([0-9a-f]{7,40})\.$/gm;
+const REVERT_TRAILER = /^This reverts commit (?<sha>[0-9a-f]{7,40})\.$/gmu;
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 
@@ -92,27 +92,33 @@ export function verifyRevert(baseSha: string, head = "HEAD", cwd?: string): Reve
 	};
 
 	const base = commit(baseSha);
-	if (!base) return { verified: false, reason: `base ${baseSha} is not a commit in this clone` };
+	if (base === undefined || base === "") {
+		return { verified: false, reason: `base ${baseSha} is not a commit in this clone` };
+	}
 	const tip = commit(head);
-	if (!tip) return { verified: false, reason: `head ${head} is not a commit in this clone` };
+	if (tip === undefined || tip === "") {
+		return { verified: false, reason: `head ${head} is not a commit in this clone` };
+	}
 
 	// Merge commits carry no patch of their own; a branch that merged the base back in adds one.
 	const added = git("rev-list", "--no-merges", `${base}..${tip}`).split("\n").filter(Boolean);
-	if (added.length === 0) return { verified: false, reason: "adds no commit over the base" };
+	if (added.length === 0) {
+		return { verified: false, reason: "adds no commit over the base" };
+	}
 
 	const commits: RevertedCommit[] = [];
 	for (const candidate of added) {
 		const message = git("log", "-1", "--format=%B", candidate);
 		const trailers = [...message.matchAll(REVERT_TRAILER)];
-		const trailer = trailers[0]?.[1];
-		if (trailers.length !== 1 || !trailer) {
+		const trailer = trailers[0]?.groups?.sha;
+		if (trailers.length !== 1 || trailer === undefined) {
 			return {
 				verified: false,
 				reason: `${short(candidate)} does not record exactly one "This reverts commit <sha>." line`,
 			};
 		}
 		const reverted = commit(trailer);
-		if (!reverted) {
+		if (reverted === undefined || reverted === "") {
 			return { verified: false, reason: `${short(candidate)} reverts unknown commit ${trailer}` };
 		}
 		if (!succeeds("merge-base", "--is-ancestor", reverted, base)) {
@@ -143,10 +149,7 @@ export function verifyRevert(baseSha: string, head = "HEAD", cwd?: string): Reve
 
 if (import.meta.main) {
 	const [baseSha, head] = process.argv.slice(2);
-	if (!baseSha) {
-		console.error("::error::usage: verify-revert.ts <base-sha> [head]");
-		process.exitCode = 1;
-	} else {
+	if (baseSha !== undefined && baseSha !== "") {
 		const verdict = verifyRevert(baseSha, head);
 		if (verdict.verified) {
 			const reverted = verdict.commits.map((entry) => short(entry.reverted)).join(", ");
@@ -156,8 +159,12 @@ if (import.meta.main) {
 		} else {
 			console.log(`Not a verified revert (${verdict.reason}); the changeset rules apply in full.`);
 		}
-		if (process.env.GITHUB_OUTPUT) {
-			appendFileSync(process.env.GITHUB_OUTPUT, `verified-revert=${verdict.verified}\n`);
+		const githubOutput = process.env.GITHUB_OUTPUT;
+		if (githubOutput !== undefined && githubOutput !== "") {
+			appendFileSync(githubOutput, `verified-revert=${verdict.verified}\n`);
 		}
+	} else {
+		console.error("::error::usage: verify-revert.ts <base-sha> [head]");
+		process.exitCode = 1;
 	}
 }

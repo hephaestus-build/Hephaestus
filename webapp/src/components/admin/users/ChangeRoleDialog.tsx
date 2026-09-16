@@ -84,7 +84,11 @@ export function ChangeRoleDialog({
 					<AlertDialogAction
 						variant={granting ? "destructive" : "default"}
 						disabled={isPending}
-						onClick={() => user && onConfirm(user, nextRole)}
+						onClick={() => {
+							if (user !== null) {
+								onConfirm(user, nextRole);
+							}
+						}}
 					>
 						{isPending ? <Spinner className="size-4" /> : null}
 						{granting ? "Grant admin" : "Revoke admin"}

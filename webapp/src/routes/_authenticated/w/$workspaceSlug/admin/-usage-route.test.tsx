@@ -30,18 +30,18 @@ const rejected = () =>
 		{ status: 400, headers: { "Content-Type": "application/problem+json" } },
 	);
 
-function mockUsageRoute(onPutBudget: () => Promise<Response> | Response = rejected) {
+function mockUsageRoute() {
 	server.use(
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json({ role: "ADMIN", userId: 1, userLogin: "ada", userName: "Ada" }),
 		),
 		http.get("*/workspaces/:workspaceSlug/llm/usage", () => HttpResponse.json(REPORT)),
-		http.put("*/workspaces/:workspaceSlug/llm/budget", () => onPutBudget()),
+		http.put("*/workspaces/:workspaceSlug/llm/budget", rejected),
 	);
 }
 
-async function renderUsageRoute(onPutBudget?: () => Promise<Response> | Response) {
-	mockUsageRoute(onPutBudget);
+async function renderUsageRoute() {
+	mockUsageRoute();
 	renderRouteAt("/w/acme/admin/usage");
 	await screen.findByRole("heading", { name: "AI usage" }, ROUTE_RENDER_WAIT);
 	return screen.findByRole("button", { name: "Change cap" }, ROUTE_RENDER_WAIT);

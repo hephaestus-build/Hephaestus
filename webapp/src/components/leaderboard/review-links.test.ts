@@ -18,7 +18,12 @@ beforeEach(() => {
 	vi.stubGlobal(
 		"ClipboardItem",
 		class {
-			constructor(private readonly data: Record<string, Blob>) {}
+			private readonly data: Record<string, Blob>;
+
+			constructor(data: Record<string, Blob>) {
+				this.data = data;
+			}
+
 			async getType(type: string) {
 				const blob = this.data[type];
 				if (!blob) {

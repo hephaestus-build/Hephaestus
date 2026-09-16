@@ -3,19 +3,22 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { WorkspaceLlmModel } from "@/api/types.gen";
 
-import { WorkspaceLlmModelFormDialog } from "./WorkspaceLlmModelFormDialog";
+import {
+	WorkspaceLlmModelFormDialog,
+	type WorkspaceLlmModelFormDialogProps,
+} from "./WorkspaceLlmModelFormDialog";
 
 describe("WorkspaceLlmModelFormDialog", () => {
 	it("keeps a new model inactive unless the workspace admin explicitly activates it", () => {
-		const onCreate = vi.fn();
+		const onCreate = vi.fn<WorkspaceLlmModelFormDialogProps["onCreate"]>();
 		render(
 			<WorkspaceLlmModelFormDialog
 				open
-				onOpenChange={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
 				editing={null}
 				isSubmitting={false}
 				onCreate={onCreate}
-				onUpdate={vi.fn()}
+				onUpdate={vi.fn<() => void>()}
 			/>,
 		);
 		expect(screen.getByRole("switch", { name: "Active" }).getAttribute("aria-checked")).toBe(
@@ -31,7 +34,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 	});
 
 	it("keeps the upstream model identity immutable", () => {
-		const onUpdate = vi.fn();
+		const onUpdate = vi.fn<WorkspaceLlmModelFormDialogProps["onUpdate"]>();
 		const editing: WorkspaceLlmModel = {
 			id: 1,
 			slug: "gpt-5",
@@ -48,10 +51,10 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		render(
 			<WorkspaceLlmModelFormDialog
 				open
-				onOpenChange={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
 				editing={editing}
 				isSubmitting={false}
-				onCreate={vi.fn()}
+				onCreate={vi.fn<() => void>()}
 				onUpdate={onUpdate}
 			/>,
 		);
@@ -61,7 +64,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 	});
 
 	it("turns an active model off when its price becomes unknown", () => {
-		const onUpdate = vi.fn();
+		const onUpdate = vi.fn<WorkspaceLlmModelFormDialogProps["onUpdate"]>();
 		const editing: WorkspaceLlmModel = {
 			id: 2,
 			slug: "gpt-5-active",
@@ -80,10 +83,10 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		render(
 			<WorkspaceLlmModelFormDialog
 				open
-				onOpenChange={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
 				editing={editing}
 				isSubmitting={false}
-				onCreate={vi.fn()}
+				onCreate={vi.fn<() => void>()}
 				onUpdate={onUpdate}
 			/>,
 		);

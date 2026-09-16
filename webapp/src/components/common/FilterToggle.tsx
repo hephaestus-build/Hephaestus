@@ -49,7 +49,11 @@ export function FilterToggle<TValue extends string>({
 					label: optionLabel,
 				}))}
 				value={value}
-				onValueChange={(next) => hasText(next) && onChange(next)}
+				onValueChange={(next) => {
+					if (hasText(next)) {
+						onChange(next);
+					}
+				}}
 			>
 				<SelectTrigger className="w-full sm:hidden" aria-label={label}>
 					<SelectValue />

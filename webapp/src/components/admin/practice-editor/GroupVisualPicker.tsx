@@ -53,7 +53,11 @@ export function GroupVisualPicker({
 	return (
 		<Popover
 			open={disabled !== true && open}
-			onOpenChange={(nextOpen) => disabled !== true && setOpen(nextOpen)}
+			onOpenChange={(nextOpen) => {
+				if (disabled !== true) {
+					setOpen(nextOpen);
+				}
+			}}
 		>
 			<PopoverTrigger
 				render={
@@ -83,7 +87,11 @@ export function GroupVisualPicker({
 							variant="chip"
 							disabled={disabled}
 							value={[activeColor]}
-							onValueChange={(value) => hasText(value[0]) && onChange({ color: value[0] })}
+							onValueChange={(value) => {
+								if (hasText(value[0])) {
+									onChange({ color: value[0] });
+								}
+							}}
 							spacing={1}
 							role="toolbar"
 							aria-labelledby={colorLabelId}
@@ -129,7 +137,11 @@ export function GroupVisualPicker({
 								variant="filled"
 								disabled={disabled}
 								value={[activeIcon]}
-								onValueChange={(value) => hasText(value[0]) && onChange({ icon: value[0] })}
+								onValueChange={(value) => {
+									if (hasText(value[0])) {
+										onChange({ icon: value[0] });
+									}
+								}}
 								spacing={1}
 								role="toolbar"
 								aria-labelledby={iconLabelId}

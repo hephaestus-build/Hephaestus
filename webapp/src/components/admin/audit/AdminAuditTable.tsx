@@ -1,5 +1,5 @@
 import { ScrollText } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type { AuthEventView } from "@/api/types.gen";
 import { ElevationBadge } from "@/components/admin/audit/ElevationBadge";
@@ -140,6 +140,19 @@ export function AdminAuditTable({
 							const { accountId, actingAccountId } = e;
 							const account = refLabel(e.account, accountId);
 							const actor = refLabel(e.actor, actingAccountId);
+							let accountCell: ReactNode = "—";
+							if (hasText(account)) {
+								accountCell =
+									onFilterAccount && accountId != null ? (
+										<FilterLink
+											label={account}
+											title={e.account?.email ?? `Filter by ${account}`}
+											onSelect={() => onFilterAccount(accountId)}
+										/>
+									) : (
+										<span title={e.account?.email ?? undefined}>{account}</span>
+									);
+							}
 							return (
 								<TableRow key={e.id}>
 									<TableCell className="text-sm whitespace-nowrap text-muted-foreground">
@@ -164,21 +177,7 @@ export function AdminAuditTable({
 										</Badge>
 									</TableCell>
 									<TableCell className="max-w-[12rem]">
-										<span className="block truncate">
-											{hasText(account) ? (
-												onFilterAccount && accountId != null ? (
-													<FilterLink
-														label={account}
-														title={e.account?.email ?? `Filter by ${account}`}
-														onSelect={() => onFilterAccount(accountId)}
-													/>
-												) : (
-													<span title={e.account?.email ?? undefined}>{account}</span>
-												)
-											) : (
-												"—"
-											)}
-										</span>
+										<span className="block truncate">{accountCell}</span>
 										{hasText(actor) && (
 											<span className="block truncate text-xs text-muted-foreground">
 												impersonated by{" "}

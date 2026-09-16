@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SlackUserWorkspacePreferences } from "@/api/types.gen";
 
-import { SlackPreferencesSection } from "./SlackPreferencesSection";
+import {
+	SlackPreferencesSection,
+	type SlackPreferencesSectionProps,
+} from "./SlackPreferencesSection";
 
 const workspace: SlackUserWorkspacePreferences = {
 	workspaceSlug: "hephaestustest",
@@ -23,13 +26,14 @@ describe("SlackPreferencesSection", () => {
 	// (workspaceSlug, false). A regression that dropped the confirm gate, or passed the wrong args,
 	// would fail these assertions.
 	it("confirms before turning message use OFF — the switch alone would silently delete collected data", () => {
-		const onToggleChannelMessages = vi.fn();
+		const onToggleChannelMessages =
+			vi.fn<SlackPreferencesSectionProps["onToggleChannelMessages"]>();
 		render(
 			<SlackPreferencesSection
 				workspaces={[workspace]}
 				isSlackLinked
 				canConnectSlack
-				onConnectSlack={vi.fn()}
+				onConnectSlack={vi.fn<() => void>()}
 				onToggleChannelMessages={onToggleChannelMessages}
 			/>,
 		);
@@ -48,13 +52,14 @@ describe("SlackPreferencesSection", () => {
 	});
 
 	it("cancelling the confirmation leaves message use ON", () => {
-		const onToggleChannelMessages = vi.fn();
+		const onToggleChannelMessages =
+			vi.fn<SlackPreferencesSectionProps["onToggleChannelMessages"]>();
 		render(
 			<SlackPreferencesSection
 				workspaces={[workspace]}
 				isSlackLinked
 				canConnectSlack
-				onConnectSlack={vi.fn()}
+				onConnectSlack={vi.fn<() => void>()}
 				onToggleChannelMessages={onToggleChannelMessages}
 			/>,
 		);
@@ -72,8 +77,8 @@ describe("SlackPreferencesSection", () => {
 				workspaces={[]}
 				isSlackLinked
 				canConnectSlack
-				onConnectSlack={vi.fn()}
-				onToggleChannelMessages={vi.fn()}
+				onConnectSlack={vi.fn<() => void>()}
+				onToggleChannelMessages={vi.fn<SlackPreferencesSectionProps["onToggleChannelMessages"]>()}
 			/>,
 		);
 

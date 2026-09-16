@@ -209,7 +209,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 				</Select>
 				{isSlack && (
 					<FieldDescription>
-						Use the same Slack app client ID and secret. Add this provider's redirect URI to the
+						Use the same Slack app client ID and secret. Add this provider’s redirect URI to the
 						Slack app redirect URLs.
 					</FieldDescription>
 				)}

@@ -42,7 +42,7 @@ function AdminLoginProvidersPage() {
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [editing, setEditing] = useState<LoginProviderView | null>(null);
 
-	const invalidate = () =>
+	const invalidate = async () =>
 		queryClient.invalidateQueries({ queryKey: adminListLoginProvidersQueryKey() });
 
 	const [challenge, setChallenge] = useState<StepUpChallenge | undefined>(undefined);
@@ -135,7 +135,9 @@ function AdminLoginProvidersPage() {
 				isLoading={listQuery.isLoading}
 				isError={listQuery.isError}
 				error={listQuery.error}
-				onRetry={() => void listQuery.refetch()}
+				onRetry={() => {
+					void listQuery.refetch();
+				}}
 				mutatingIds={mutatingIds}
 				onEdit={openEdit}
 				onToggleEnabled={handleToggleEnabled}

@@ -78,7 +78,8 @@ describe("wizardReducer", () => {
 		it("rejects advancement from step 2 (guard)", () => {
 			const state = stateAt(2);
 			const result = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: [] });
-			expect(result).toBe(state); // unchanged reference
+			// unchanged reference
+			expect(result).toBe(state);
 		});
 
 		it("rejects advancement from step 3 (guard)", () => {

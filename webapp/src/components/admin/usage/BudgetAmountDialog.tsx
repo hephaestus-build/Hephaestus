@@ -94,11 +94,12 @@ function BudgetAmountDialogContent({
 	const canRemove = currentValueUsd != null;
 	// Names the remove button only when it is on screen; a subject with no cap yet has none.
 	const emptyError = canRemove ? `Enter an amount, or use ${removeLabel}.` : "Enter an amount.";
-	const localError = isEmpty
-		? emptyError
-		: !Number.isFinite(parsed) || parsed < 0
-			? "Enter an amount of $0 or more."
-			: "Use at most two decimal places.";
+	let localError = "Use at most two decimal places.";
+	if (isEmpty) {
+		localError = emptyError;
+	} else if (!Number.isFinite(parsed) || parsed < 0) {
+		localError = "Enter an amount of $0 or more.";
+	}
 	const liveServerError =
 		serverError != null && serverError !== dismissedServerError ? serverError : null;
 	const errorMessage = showError && !isValid ? localError : liveServerError;

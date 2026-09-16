@@ -16,6 +16,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useScmIntegration } from "@/hooks/use-scm-integration";
 import { workspaceAdminHead } from "@/lib/page-title";
 
+const SCM_ICONS = { GITHUB: GithubIcon, GITLAB: GitlabIcon };
+
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/scm")({
 	head: workspaceAdminHead("Source control"),
 	remountDeps: ({ params }) => params.workspaceSlug,
@@ -26,19 +28,19 @@ function ScmIntegrationPage() {
 	const { workspaceSlug: slug } = Route.useParams();
 	const scm = useScmIntegration(slug);
 	const { kind, label, hasConnection, isConnectionActive, isAppInstallationWorkspace } = scm;
+	const ProviderIcon = kind === undefined ? WebhookIcon : SCM_ICONS[kind];
+
+	let credentialRecovery = "Reconnect this source-control integration before replacing its token";
+	if (isAppInstallationWorkspace) {
+		credentialRecovery = "Reconnect through the GitHub App installation";
+	} else if (isConnectionActive) {
+		credentialRecovery = "Replace it using the personal access token form below";
+	}
 
 	return (
 		<PageLayout>
 			<PageHeader
-				icon={
-					kind === "GITLAB" ? (
-						<GitlabIcon className="size-6" />
-					) : kind === "GITHUB" ? (
-						<GithubIcon className="size-6" />
-					) : (
-						<WebhookIcon className="size-6" />
-					)
-				}
+				icon={<ProviderIcon className="size-6" />}
 				title={label}
 				description={`Connection health, repositories and sync activity for this workspace's ${label} connection.`}
 			/>
@@ -47,13 +49,7 @@ function ScmIntegrationPage() {
 				<ConnectionStateNotice
 					connectionState={scm.connectionState}
 					credentialsUnreadableSince={scm.credentialsUnreadableSince}
-					credentialRecovery={
-						isAppInstallationWorkspace
-							? "Reconnect through the GitHub App installation"
-							: isConnectionActive
-								? "Replace it using the personal access token form below"
-								: "Reconnect this source-control integration before replacing its token"
-					}
+					credentialRecovery={credentialRecovery}
 					displayName={label}
 				/>
 			)}

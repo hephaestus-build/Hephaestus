@@ -16,7 +16,7 @@ function renderDialog(overrides: Partial<React.ComponentProps<typeof ProductFeed
 		onKindChange: vi.fn(),
 		context,
 		isSubmitting: false,
-		onSubmit: vi.fn(() => Promise.resolve(true)),
+		onSubmit: vi.fn(async () => true),
 		...overrides,
 	};
 	const view = render(<ProductFeedbackDialog {...props} />);
@@ -26,7 +26,7 @@ function renderDialog(overrides: Partial<React.ComponentProps<typeof ProductFeed
 describe("product feedback dialog", () => {
 	it("keeps a refused draft across close and reopen, and attaches details only once chosen", async () => {
 		const user = userEvent.setup();
-		const { props, rerender } = renderDialog({ onSubmit: vi.fn(() => Promise.resolve(false)) });
+		const { props, rerender } = renderDialog({ onSubmit: vi.fn(async () => false) });
 		await user.type(screen.getByRole("textbox", { name: "Your feedback" }), "  An idea  ");
 		await user.click(screen.getByRole("button", { name: "Send" }));
 		expect(props.onOpenChange).not.toHaveBeenCalledWith(false);
@@ -38,7 +38,7 @@ describe("product feedback dialog", () => {
 			"  An idea  ",
 		);
 		await user.click(
-			screen.getByRole("checkbox", { name: "Attach the page and browser you're on" }),
+			screen.getByRole("checkbox", { name: "Attach the page and browser you’re on" }),
 		);
 		await user.click(screen.getByRole("button", { name: "Send" }));
 		expect(props.onSubmit).toHaveBeenLastCalledWith({
@@ -64,7 +64,7 @@ describe("product feedback dialog", () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog();
 		const checkbox = screen.getByRole("checkbox", {
-			name: "Attach the page and browser you're on",
+			name: "Attach the page and browser you’re on",
 		});
 		await user.click(checkbox);
 		rerender(<ProductFeedbackDialog {...props} isSubmitting />);

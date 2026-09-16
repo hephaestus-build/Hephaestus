@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import type { ReactNode } from "react";
 
 import { cn } from "cn";
 import type { ProfileXpRecord, RepositoryInfo, UserInfo } from "@/api/types.gen";
@@ -51,6 +52,32 @@ export function ProfileHeader({
 	const rawTier = getLeagueTier(leaguePoints);
 	const leagueTier = rawTier === "none" ? "bronze" : rawTier;
 
+	let identity: ReactNode = null;
+	if (isLoading) {
+		identity = (
+			<div className="flex min-w-0 flex-col gap-1.5">
+				<Skeleton className="h-7 w-40" />
+				<Skeleton className="h-5 w-48" />
+			</div>
+		);
+	} else if (user) {
+		identity = (
+			<div className="flex min-w-0 flex-col gap-0.5">
+				<h1 className="text-xl leading-tight font-bold break-words md:text-2xl">{user.name}</h1>
+				<div className="flex min-w-0 flex-wrap items-center gap-2">
+					<a
+						className="min-w-0 text-sm break-all text-muted-foreground transition-colors hover:text-primary md:text-base"
+						href={user.htmlUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						{user.htmlUrl ? new URL(user.htmlUrl).host : ""}/{user.login}
+					</a>
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className="flex min-w-0 flex-row items-start justify-between gap-4 sm:gap-6">
 			<div className="flex w-full max-w-xl min-w-0 flex-col gap-4">
@@ -91,28 +118,7 @@ export function ProfileHeader({
 						)}
 					</div>
 
-					{isLoading ? (
-						<div className="flex min-w-0 flex-col gap-1.5">
-							<Skeleton className="h-7 w-40" />
-							<Skeleton className="h-5 w-48" />
-						</div>
-					) : user ? (
-						<div className="flex min-w-0 flex-col gap-0.5">
-							<h1 className="text-xl leading-tight font-bold break-words md:text-2xl">
-								{user.name}
-							</h1>
-							<div className="flex min-w-0 flex-wrap items-center gap-2">
-								<a
-									className="min-w-0 text-sm break-all text-muted-foreground transition-colors hover:text-primary md:text-base"
-									href={user.htmlUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-								>
-									{user.htmlUrl ? new URL(user.htmlUrl).host : ""}/{user.login}
-								</a>
-							</div>
-						</div>
-					) : null}
+					{identity}
 				</div>
 
 				{progressionEnabled &&

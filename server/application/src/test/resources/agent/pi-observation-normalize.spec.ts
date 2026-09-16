@@ -64,7 +64,9 @@ const normalizeObservation = normalizeFinalObservation;
 
 function onlyCitation<T extends object>(citations: readonly T[]): T {
 	const [citation] = citations;
-	if (!citation) throw new Error("expected the observation to carry exactly one citation");
+	if (!citation) {
+		throw new Error("expected the observation to carry exactly one citation");
+	}
 	return citation;
 }
 
@@ -96,7 +98,7 @@ void test("an observation carries no confidence, and one offered is rejected", (
 	for (const confidence of [-1, 4200, "very", null]) {
 		assert.throws(
 			() => normalizeObservation(baseObservation({ confidence })),
-			/unknown observation field.*confidence/,
+			/unknown observation field.*confidence/u,
 		);
 	}
 });
@@ -120,10 +122,10 @@ void test("dedupe key uses the normalized hyphenated slug", () => {
 });
 
 void test("a one-word summary is refused, because it names nothing on the practice page", () => {
-	assert.throws(() => normalizeObservation(baseObservation({ summary: "Test" })), /short phrase/);
+	assert.throws(() => normalizeObservation(baseObservation({ summary: "Test" })), /short phrase/u);
 	assert.throws(
 		() => normalizeObservation(baseObservation({ summary: "  Duplication  " })),
-		/short phrase/,
+		/short phrase/u,
 	);
 	assert.equal(normalizeObservation(baseObservation({ summary: "No tests" })).summary, "No tests");
 });
@@ -131,34 +133,34 @@ void test("a one-word summary is refused, because it names nothing on the practi
 void test("genuinely invalid enum still rejected after normalization", () => {
 	const invalid = baseObservation();
 	invalid.presence = "MAYBE";
-	assert.throws(() => normalizeObservation(invalid), /invalid presence/);
+	assert.throws(() => normalizeObservation(invalid), /invalid presence/u);
 });
 
 void test("missing evidence-source attribution is rejected", () => {
 	assert.throws(
 		() => normalizeObservation(baseObservation({ evidence: { citations: [] } })),
-		/citations are required/,
+		/citations are required/u,
 	);
 });
 
 void test("citation requires an exact artifact path and quote", () => {
 	const missingPath = baseObservation();
 	delete onlyCitation(missingPath.evidence.citations).artifactPath;
-	assert.throws(() => normalizeObservation(missingPath), /artifactPath is required/);
+	assert.throws(() => normalizeObservation(missingPath), /artifactPath is required/u);
 
 	const missingQuote = baseObservation();
 	delete onlyCitation(missingQuote.evidence.citations).quote;
-	assert.throws(() => normalizeObservation(missingQuote), /quote is required/);
+	assert.throws(() => normalizeObservation(missingQuote), /quote is required/u);
 });
 
 void test("citation side is present exactly for pull-request diffs", () => {
 	const missingDiffSide = baseObservation();
 	delete onlyCitation(missingDiffSide.evidence.citations).side;
-	assert.throws(() => normalizeObservation(missingDiffSide), /side must be OLD or NEW/);
+	assert.throws(() => normalizeObservation(missingDiffSide), /side must be OLD or NEW/u);
 
 	const nonDiffSide = baseObservation();
 	onlyCitation(nonDiffSide.evidence.citations).sourceKind = "scm.pull-request.core";
-	assert.throws(() => normalizeObservation(nonDiffSide), /must not specify side/);
+	assert.throws(() => normalizeObservation(nonDiffSide), /must not specify side/u);
 });
 
 void test("a citation must name a source this run staged, and the artifact that source produced", () => {
@@ -184,7 +186,7 @@ void test("a citation must name a source this run staged, and the artifact that 
 				new Set(["scm.pull-request.core", "scm.review-threads"]),
 				new Map(),
 			),
-		/was not available.*scm\.pull-request\.core, scm\.review-threads/,
+		/was not available.*scm\.pull-request\.core, scm\.review-threads/u,
 	);
 	assert.throws(
 		() =>
@@ -193,11 +195,11 @@ void test("a citation must name a source this run staged, and the artifact that 
 				new Set(["scm.pull-request.diff"]),
 				new Map([["inputs/context/diff.patch", "scm.pull-request.core"]]),
 			),
-		/belongs to evidence source 'scm\.pull-request\.core', not 'scm\.pull-request\.diff'/,
+		/belongs to evidence source 'scm\.pull-request\.core', not 'scm\.pull-request\.diff'/u,
 	);
 	assert.throws(
 		() => validateEvidenceSources(observation, new Set(["scm.pull-request.diff"]), new Map()),
-		/was not staged.*task-declared manifest/,
+		/was not staged.*task-declared manifest/u,
 	);
 });
 
@@ -223,7 +225,7 @@ void test("a diff quote may omit its marker but must preserve source indentation
 	// Different text at that coordinate is still refused, trimmed or not.
 	assert.match(
 		describeCitationMismatch({ ...citation, quote: "secure();" }, diff) ?? "",
-		/\[L10] reads/,
+		/\[L10\] reads/u,
 	);
 
 	// Code that begins with the same character the diff uses as a marker keeps it.
@@ -251,7 +253,7 @@ void test("a quote from the other side of the change is refused, however it is w
 		"--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -47 +47 @@\n" +
 		'[L47] -@RequestMapping({ "api/legacy/" })\n[L47] +@RequestMapping("api/passkeys/")\n';
 
-	assert.match(describeCitationMismatch(citation, diff) ?? "", /\[L47] reads/);
+	assert.match(describeCitationMismatch(citation, diff) ?? "", /\[L47\] reads/u);
 });
 
 void test("a quote cannot carry display coordinates absent from the source line", () => {
@@ -268,7 +270,7 @@ void test("a quote cannot carry display coordinates absent from the source line"
 	// not read — even when that line's text is in the diff somewhere else.
 	assert.match(
 		describeCitationMismatch({ ...citation, quote: "[L11] + insecure();" }, diff) ?? "",
-		/\[L10] reads/,
+		/\[L10\] reads/u,
 	);
 });
 
@@ -281,17 +283,17 @@ void test("a refused citation says which of the coordinate, the side and the tex
 	// The coordinate is not in the diff at all.
 	assert.match(
 		describeCitationMismatch({ ...citation, startLine: 11, endLine: 11 }, diff) ?? "",
-		/no \[L11] on the NEW side of src\/Auth\.java/,
+		/no \[L11\] on the NEW side of src\/Auth\.java/u,
 	);
 	// The coordinate is there and says something else, so the refusal shows both.
 	assert.match(
 		describeCitationMismatch({ ...citation, quote: "+ secure();" }, diff) ?? "",
-		/\[L10] reads "\+ insecure\(\);", not "\+ secure\(\);"/,
+		/\[L10\] reads "\+ insecure\(\);", not "\+ secure\(\);"/u,
 	);
 	// The quote and the line span disagree.
 	assert.match(
 		describeCitationMismatch({ ...citation, endLine: 12 }, diff) ?? "",
-		/quote is 1 line\(s\) and the citation covers 3/,
+		/quote is 1 line\(s\) and the citation covers 3/u,
 	);
 });
 
@@ -327,20 +329,20 @@ void test("contradictory axes are rejected, not silently corrected", () => {
 	for (const assessmentStatus of ["NOT_APPLICABLE", "UNDETERMINED"]) {
 		assert.throws(
 			() => normalizeObservation(baseObservation({ assessmentStatus })),
-			/explicit null/,
+			/explicit null/u,
 		);
 	}
 	assert.throws(
 		() => normalizeObservation(baseObservation({ assessment: "GOOD" })),
-		/null severity/,
+		/null severity/u,
 	);
 	assert.throws(
 		() => normalizeObservation(baseObservation({ severity: null })),
-		/invalid severity/,
+		/invalid severity/u,
 	);
 	assert.throws(
 		() => normalizeObservation(baseObservation({ presence: null })),
-		/invalid presence/,
+		/invalid presence/u,
 	);
 });
 
@@ -364,18 +366,18 @@ const goodSearch = {
 };
 
 void test("an ABSENT observation must record where it searched", () => {
-	assert.throws(() => normalizeObservation(absentObservation(undefined)), /exactly search/);
+	assert.throws(() => normalizeObservation(absentObservation(undefined)), /exactly search/u);
 	assert.throws(
 		() => normalizeObservation(absentObservation({ ...goodSearch, consulted: [] })),
-		/at least one source/,
+		/at least one source/u,
 	);
 	assert.throws(
 		() => normalizeObservation(absentObservation({ ...goodSearch, lookedFor: " " })),
-		/lookedFor is required/,
+		/lookedFor is required/u,
 	);
 	assert.throws(
 		() => normalizeObservation(absentObservation({ ...goodSearch, boundary: "" })),
-		/boundary is required/,
+		/boundary is required/u,
 	);
 
 	const out = normalizeObservation(absentObservation(goodSearch));
@@ -391,7 +393,7 @@ void test("a non-ABSENT observation rejects an exhaustive-search branch", () => 
 				...baseObservation(),
 				evidence: { ...baseObservation().evidence, search: goodSearch },
 			}),
-		/exactly citations/,
+		/exactly citations/u,
 	);
 });
 
@@ -409,11 +411,11 @@ void test("ABSENT is refused unless the search covered every source the practice
 				new Set(["scm.review-threads", "scm.linked-work-items"]),
 				available,
 			),
-		/without searching scm.linked-work-items/,
+		/without searching scm.linked-work-items/u,
 	);
 	assert.throws(
 		() => validateSearchScope(observation, new Set(), new Set(["scm.pull-request.diff"])),
-		/was not available.*scm\.pull-request\.diff/,
+		/was not available.*scm\.pull-request\.diff/u,
 	);
 });
 
@@ -427,8 +429,8 @@ void test("Positive absence needs a bounded corpus; missing desirable behaviour 
 	assert.doesNotThrow(() =>
 		validateSearchScope(strength, new Set(["scm.review-threads"]), available),
 	);
-	assert.throws(() => validateSearchScope(strength, new Set(), available), /ABSENT \+ BAD/);
-	assert.throws(() => validateSearchScope(strength, new Set(), available), /UNDETERMINED/);
+	assert.throws(() => validateSearchScope(strength, new Set(), available), /ABSENT \+ BAD/u);
+	assert.throws(() => validateSearchScope(strength, new Set(), available), /UNDETERMINED/u);
 	assert.doesNotThrow(() => validateSearchScope(gap, new Set(), available));
 });
 
@@ -444,7 +446,7 @@ void test("a bounded corpus does not excuse a partial search, in either directio
 				new Set(["scm.review-threads", "scm.linked-work-items"]),
 				available,
 			),
-		/without searching scm.linked-work-items/,
+		/without searching scm.linked-work-items/u,
 	);
 });
 
@@ -532,20 +534,20 @@ const goodInapplicability = {
 void test("a NOT_APPLICABLE observation must say what rules the practice out", () => {
 	assert.throws(
 		() => normalizeObservation(notApplicableObservation(undefined)),
-		/exactly inapplicability/,
+		/exactly inapplicability/u,
 	);
 	assert.throws(
 		() => normalizeObservation(notApplicableObservation({ ...goodInapplicability, consulted: [] })),
-		/at least one source/,
+		/at least one source/u,
 	);
 	assert.throws(
 		() => normalizeObservation(notApplicableObservation({ ...goodInapplicability, subject: " " })),
-		/subject is required/,
+		/subject is required/u,
 	);
 	assert.throws(
 		() =>
 			normalizeObservation(notApplicableObservation({ ...goodInapplicability, ruledOutBy: "" })),
-		/ruledOutBy is required/,
+		/ruledOutBy is required/u,
 	);
 
 	const out = normalizeObservation(notApplicableObservation(goodInapplicability));
@@ -556,11 +558,14 @@ void test("a NOT_APPLICABLE observation must say what rules the practice out", (
 });
 
 void test("the refusal points at UNDETERMINED, because that is the answer it is asking for", () => {
-	assert.throws(() => normalizeObservation(notApplicableObservation(undefined)), /inapplicability/);
+	assert.throws(
+		() => normalizeObservation(notApplicableObservation(undefined)),
+		/inapplicability/u,
+	);
 	assert.throws(
 		() =>
 			normalizeObservation(notApplicableObservation({ ...goodInapplicability, ruledOutBy: "" })),
-		/ruledOutBy/,
+		/ruledOutBy/u,
 	);
 });
 
@@ -583,7 +588,7 @@ void test("a NOT_APPLICABLE claim may only rest on sources this run staged", () 
 	);
 	assert.throws(
 		() => validateInapplicabilityScope(observation, new Set(["scm.review-threads"])),
-		/was not available.*scm\.review-threads/,
+		/was not available.*scm\.review-threads/u,
 	);
 
 	const present = normalizeObservation(baseObservation());
@@ -593,18 +598,18 @@ void test("a NOT_APPLICABLE claim may only rest on sources this run staged", () 
 void test("removed measurement fields are rejected rather than silently accepted", () => {
 	assert.throws(
 		() => normalizeObservation(baseObservation({ guidance: "Split into two PRs." })),
-		/unknown observation field.*guidance/,
+		/unknown observation field.*guidance/u,
 	);
 	assert.throws(
 		() => normalizeObservation(baseObservation({ suggestedDiffNotes: [] })),
-		/unknown observation field.*suggestedDiffNotes/,
+		/unknown observation field.*suggestedDiffNotes/u,
 	);
 });
 
 void test("all assessed combinations preserve the specified behavior and judgment", () => {
 	for (const presence of PRESENCE_VALUES) {
 		for (const assessment of ASSESSMENT_VALUES) {
-			const severity = (presence === "PRESENT") !== (assessment === "GOOD") ? "MAJOR" : null;
+			const severity = (presence === "PRESENT") === (assessment === "GOOD") ? null : "MAJOR";
 			const observation = baseObservation({ presence, assessment, severity });
 			const evidence = {
 				...observation.evidence,
@@ -623,11 +628,11 @@ void test("legacy combined outcomes and omitted status are rejected", () => {
 	assert.throws(
 		() =>
 			normalizeFinalObservation({ ...baseObservation(), outcome: "BEHAVIOR_PRESENT_BAD_MAJOR" }),
-		/unknown observation field/,
+		/unknown observation field/u,
 	);
 	assert.throws(
 		() => normalizeFinalObservation({ ...baseObservation(), assessmentStatus: undefined }),
-		/invalid assessmentStatus/,
+		/invalid assessmentStatus/u,
 	);
 });
 
@@ -650,48 +655,47 @@ void test("describeVocabulary refuses a value it cannot describe", () => {
 	const unpromising: Record<string, string> = { ...PRESENCE_DESCRIPTIONS };
 	assert.throws(
 		() => describeVocabulary([...PRESENCE_VALUES, "UNDECIDED"], unpromising),
-		/'UNDECIDED' has no description/,
+		/'UNDECIDED' has no description/u,
 	);
 });
 
-void test("non-diff citations preserve exact punctuation", () => {
-	const content = 'Resolve "Connect data between screens" — see the plan';
-	const cite = (quote: string): NormalizedCitation => ({
+/** A citation of the pull request title, whose only variable part is the quoted text. */
+function titleCitation(quote: string): NormalizedCitation {
+	return {
 		sourceKind: "scm.pull-request.core",
 		artifactPath: "inputs/context/core.md",
 		path: "title",
 		startLine: 1,
 		endLine: 1,
 		quote,
-	});
+	};
+}
+
+void test("non-diff citations preserve exact punctuation", () => {
+	const content = 'Resolve "Connect data between screens" — see the plan';
 
 	assert.equal(
-		citationMatchesArtifact(cite('Resolve "Connect data between screens"'), content),
+		citationMatchesArtifact(titleCitation('Resolve "Connect data between screens"'), content),
 		true,
 	);
 	assert.equal(
-		citationMatchesArtifact(cite("Resolve “Connect data between screens”"), content),
+		citationMatchesArtifact(titleCitation("Resolve “Connect data between screens”"), content),
 		false,
 	);
-	assert.equal(citationMatchesArtifact(cite("see the plan"), content), true);
+	assert.equal(citationMatchesArtifact(titleCitation("see the plan"), content), true);
 });
 
 void test("non-diff citations reject text absent from the artifact", () => {
 	const content = 'Resolve "Connect data between screens"';
-	const cite = (quote: string): NormalizedCitation => ({
-		sourceKind: "scm.pull-request.core",
-		artifactPath: "inputs/context/core.md",
-		path: "title",
-		startLine: 1,
-		endLine: 1,
-		quote,
-	});
 
 	assert.equal(
-		citationMatchesArtifact(cite("Resolve “Disconnect data between screens”"), content),
+		citationMatchesArtifact(titleCitation("Resolve “Disconnect data between screens”"), content),
 		false,
 	);
-	assert.equal(citationMatchesArtifact(cite("a rationale the author never wrote"), content), false);
+	assert.equal(
+		citationMatchesArtifact(titleCitation("a rationale the author never wrote"), content),
+		false,
+	);
 });
 
 void test("an UNDETERMINED observation must say what it could not settle", () => {
@@ -708,14 +712,14 @@ void test("an UNDETERMINED observation must say what it could not settle", () =>
 		evidence: { citations: baseObservation().evidence.citations },
 	};
 
-	assert.throws(() => normalizeObservation(base), /undecidability/);
+	assert.throws(() => normalizeObservation(base), /undecidability/u);
 	assert.throws(
 		() =>
 			normalizeObservation({
 				...base,
 				evidence: { ...base.evidence, undecidability: { openQuestion: "x" } },
 			}),
-		/wouldSettleIt/,
+		/wouldSettleIt/u,
 	);
 
 	const ok = normalizeObservation({
@@ -754,21 +758,21 @@ void test("normalization preserves raw quote bytes and local preflight matches s
 	assert.equal(citation.quote, "  Trivio:  # TODO: Adjust Name\r\n\r\n");
 	assert.equal(describeCitationMismatch(citation, diff), null);
 	onlyCitation(raw.evidence.citations).quote = " \t\n";
-	assert.throws(() => normalizeObservation(raw), /quote is required/);
+	assert.throws(() => normalizeObservation(raw), /quote is required/u);
 });
 
 void test("citation coordinates are bounded and control-only quotes are blank", () => {
-	for (const line of [2147483648, 4294967306, Number.MAX_SAFE_INTEGER + 1]) {
+	for (const line of [2_147_483_648, 4_294_967_306, Number.MAX_SAFE_INTEGER + 1]) {
 		const raw = baseObservation();
 		onlyCitation(raw.evidence.citations).startLine = line;
-		assert.throws(() => normalizeObservation(raw), /startLine/);
+		assert.throws(() => normalizeObservation(raw), /startLine/u);
 		onlyCitation(raw.evidence.citations).startLine = 10;
 		onlyCitation(raw.evidence.citations).endLine = line;
-		assert.throws(() => normalizeObservation(raw), /endLine/);
+		assert.throws(() => normalizeObservation(raw), /endLine/u);
 	}
 	const raw = baseObservation();
-	onlyCitation(raw.evidence.citations).quote = "\u001c\u001d\u001e\u001f";
-	assert.throws(() => normalizeObservation(raw), /quote is required/);
+	onlyCitation(raw.evidence.citations).quote = "\u001C\u001D\u001E\u001F";
+	assert.throws(() => normalizeObservation(raw), /quote is required/u);
 });
 
 void test("annotated source text is not parsed as a header and Unicode separators remain source text", () => {
@@ -807,6 +811,6 @@ void test("normalization preserves nonblank citation path identifiers", () => {
 	for (const field of ["path", "artifactPath"]) {
 		const blank = baseObservation();
 		onlyCitation(blank.evidence.citations)[field] = " \t\n";
-		assert.throws(() => normalizeObservation(blank), new RegExp(`${field} is required`));
+		assert.throws(() => normalizeObservation(blank), new RegExp(`${field} is required`, "u"));
 	}
 });

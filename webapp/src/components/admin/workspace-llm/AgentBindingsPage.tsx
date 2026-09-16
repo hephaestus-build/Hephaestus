@@ -1,6 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import { BrainCircuit, ChevronDown } from "lucide-react";
-import { type ReactElement, type SubmitEvent, useEffect, useId, useRef, useState } from "react";
+import {
+	type ReactElement,
+	type ReactNode,
+	type SubmitEvent,
+	useEffect,
+	useId,
+	useRef,
+	useState,
+} from "react";
 
 import type {
 	AgentBinding,
@@ -144,6 +152,39 @@ export function AgentBindingsPage({
 	const bindingFor = (purpose: Purpose) => bindings.find((b) => b.purpose === purpose);
 	const featureEnabled = (purpose: Purpose): boolean =>
 		purpose === "MENTOR" ? mentorEnabled : practicesEnabled;
+	let body: ReactNode;
+	if (isError) {
+		body = <QueryErrorAlert error={loadError} title="Couldn't load AI models" onRetry={onRetry} />;
+	} else if (isLoading) {
+		body = (
+			<div className="flex h-40 items-center justify-center">
+				<Spinner className="size-6" />
+			</div>
+		);
+	} else {
+		body = (
+			<div className="space-y-6">
+				<section className="space-y-4">
+					<h2 className="text-lg font-semibold">Model assignments</h2>
+					{PURPOSES.map((meta) => (
+						<AgentPurposeCard
+							key={`${meta.purpose}:${saveRevisions?.[meta.purpose] ?? 0}`}
+							meta={meta}
+							workspaceSlug={workspaceSlug}
+							binding={bindingFor(meta.purpose)}
+							availableModels={availableModels}
+							featureEnabled={featureEnabled(meta.purpose)}
+							pending={pendingPurposes.has(meta.purpose)}
+							onSave={onSave}
+							onTurnOff={onTurnOff}
+						/>
+					))}
+				</section>
+
+				{providerPanel !== undefined && <section className="space-y-4">{providerPanel}</section>}
+			</div>
+		);
+	}
 
 	return (
 		<PageLayout>
@@ -177,36 +218,7 @@ export function AgentBindingsPage({
 					</div>
 				)}
 
-				{isError ? (
-					<QueryErrorAlert error={loadError} title="Couldn't load AI models" onRetry={onRetry} />
-				) : isLoading ? (
-					<div className="flex h-40 items-center justify-center">
-						<Spinner className="size-6" />
-					</div>
-				) : (
-					<div className="space-y-6">
-						<section className="space-y-4">
-							<h2 className="text-lg font-semibold">Model assignments</h2>
-							{PURPOSES.map((meta) => (
-								<AgentPurposeCard
-									key={`${meta.purpose}:${saveRevisions?.[meta.purpose] ?? 0}`}
-									meta={meta}
-									workspaceSlug={workspaceSlug}
-									binding={bindingFor(meta.purpose)}
-									availableModels={availableModels}
-									featureEnabled={featureEnabled(meta.purpose)}
-									pending={pendingPurposes.has(meta.purpose)}
-									onSave={onSave}
-									onTurnOff={onTurnOff}
-								/>
-							))}
-						</section>
-
-						{providerPanel !== undefined && (
-							<section className="space-y-4">{providerPanel}</section>
-						)}
-					</div>
-				)}
+				{body}
 			</div>
 		</PageLayout>
 	);

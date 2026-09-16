@@ -172,7 +172,7 @@ export const CredentialUnreadable: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/the stored token can't be read/iu)).toBeVisible();
+		await expect(canvas.getByText(/the stored token can’t be read/iu)).toBeVisible();
 		// The overview does not know the provider's door, so it points at the page that does.
 		await expect(canvas.getByText(/the connection's page says how to replace it/iu)).toBeVisible();
 		// Neither a health verdict nor a sync trigger beside a token nothing can use.

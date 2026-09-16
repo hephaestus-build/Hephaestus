@@ -1,5 +1,5 @@
 import { PlugZapIcon, PlusIcon, RadioIcon } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type {
 	SlackChannelCandidate as ApiSlackChannelCandidate,
@@ -104,6 +104,101 @@ export function WorkspaceSlackChannelsSettings({
 
 	const hasChannels = channels.length > 0;
 
+	let content: ReactNode;
+	if (!hasSlackConnection) {
+		content = (
+			<Empty>
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<PlugZapIcon />
+					</EmptyMedia>
+					<EmptyTitle>Connect Slack to monitor channels</EmptyTitle>
+					<EmptyDescription>
+						Channel monitoring needs an installed Slack app. Connect a Slack workspace in the Slack
+						integration card above, then allow-list the channels you want feedback from.
+					</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		);
+	} else if (isLoading) {
+		content = (
+			<Table>
+				<ChannelsTableHeader />
+				<TableRowsSkeleton columns={["w-32", "w-16", "w-12", "w-20", null]} rows={3} />
+			</Table>
+		);
+	} else if (isError) {
+		content = (
+			<QueryErrorAlert
+				error={error}
+				title="We couldn't load the monitored channels"
+				onRetry={onRetry}
+			/>
+		);
+	} else if (hasChannels) {
+		content = (
+			<Table>
+				<ChannelsTableHeader />
+				<TableBody>
+					{channels.map((channel) => (
+						<SlackChannelRow
+							key={channel.slackChannelId}
+							channel={channel}
+							onActivate={setActivateChannel}
+							onPause={(c) =>
+								swallow(
+									onUpdateConsent({
+										slackChannelId: c.slackChannelId,
+										consentState: "PAUSED",
+									}),
+								)
+							}
+							onResume={(c) =>
+								swallow(
+									onUpdateConsent({
+										slackChannelId: c.slackChannelId,
+										consentState: "ACTIVE",
+									}),
+								)
+							}
+							onRemove={setRemoveChannel}
+							onSetUpAgain={(c) =>
+								swallow(
+									onRegisterChannel({
+										slackChannelId: c.slackChannelId,
+										channelName: c.channelName,
+									}),
+								)
+							}
+							onViewHistory={setHistoryChannel}
+						/>
+					))}
+				</TableBody>
+			</Table>
+		);
+	} else {
+		content = (
+			<Empty>
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<RadioIcon />
+					</EmptyMedia>
+					<EmptyTitle>No channels monitored yet</EmptyTitle>
+					<EmptyDescription>
+						Allow-list a Slack channel to start generating AI practice feedback from its
+						conversations. You choose exactly when monitoring begins.
+					</EmptyDescription>
+				</EmptyHeader>
+				<EmptyContent>
+					<Button size="sm" onClick={() => setAddOpen(true)}>
+						<PlusIcon className="size-4" />
+						Add channel
+					</Button>
+				</EmptyContent>
+			</Empty>
+		);
+	}
+
 	return (
 		<>
 			<Card>
@@ -113,7 +208,7 @@ export function WorkspaceSlackChannelsSettings({
 						Monitored channels have their <strong>new</strong> messages read to generate AI practice
 						feedback. Reading is <strong>forward-only</strong> (never past history), each monitored
 						channel gets a <strong>visible in-channel announcement</strong>, and any member can{" "}
-						<strong>opt out</strong> from the app's Home tab. Removing a channel{" "}
+						<strong>opt out</strong> from the app’s Home tab. Removing a channel{" "}
 						<strong>permanently erases</strong> everything collected from it.
 					</CardDescription>
 					{hasSlackConnection && (
@@ -135,91 +230,7 @@ export function WorkspaceSlackChannelsSettings({
 						</p>
 					)}
 
-					{hasSlackConnection ? (
-						isLoading ? (
-							<Table>
-								<ChannelsTableHeader />
-								<TableRowsSkeleton columns={["w-32", "w-16", "w-12", "w-20", null]} rows={3} />
-							</Table>
-						) : isError ? (
-							<QueryErrorAlert
-								error={error}
-								title="We couldn't load the monitored channels"
-								onRetry={onRetry}
-							/>
-						) : hasChannels ? (
-							<Table>
-								<ChannelsTableHeader />
-								<TableBody>
-									{channels.map((channel) => (
-										<SlackChannelRow
-											key={channel.slackChannelId}
-											channel={channel}
-											onActivate={setActivateChannel}
-											onPause={(c) =>
-												swallow(
-													onUpdateConsent({
-														slackChannelId: c.slackChannelId,
-														consentState: "PAUSED",
-													}),
-												)
-											}
-											onResume={(c) =>
-												swallow(
-													onUpdateConsent({
-														slackChannelId: c.slackChannelId,
-														consentState: "ACTIVE",
-													}),
-												)
-											}
-											onRemove={setRemoveChannel}
-											onSetUpAgain={(c) =>
-												swallow(
-													onRegisterChannel({
-														slackChannelId: c.slackChannelId,
-														channelName: c.channelName,
-													}),
-												)
-											}
-											onViewHistory={setHistoryChannel}
-										/>
-									))}
-								</TableBody>
-							</Table>
-						) : (
-							<Empty>
-								<EmptyHeader>
-									<EmptyMedia variant="icon">
-										<RadioIcon />
-									</EmptyMedia>
-									<EmptyTitle>No channels monitored yet</EmptyTitle>
-									<EmptyDescription>
-										Allow-list a Slack channel to start generating AI practice feedback from its
-										conversations. You choose exactly when monitoring begins.
-									</EmptyDescription>
-								</EmptyHeader>
-								<EmptyContent>
-									<Button size="sm" onClick={() => setAddOpen(true)}>
-										<PlusIcon className="size-4" />
-										Add channel
-									</Button>
-								</EmptyContent>
-							</Empty>
-						)
-					) : (
-						<Empty>
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<PlugZapIcon />
-								</EmptyMedia>
-								<EmptyTitle>Connect Slack to monitor channels</EmptyTitle>
-								<EmptyDescription>
-									Channel monitoring needs an installed Slack app. Connect a Slack workspace in the
-									Slack integration card above, then allow-list the channels you want feedback from.
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
-					)}
+					{content}
 				</CardContent>
 			</Card>
 
@@ -237,7 +248,7 @@ export function WorkspaceSlackChannelsSettings({
 						setActivateChannel(null);
 					}
 				}}
-				onConfirm={(c) =>
+				onConfirm={async (c) =>
 					onUpdateConsent({ slackChannelId: c.slackChannelId, consentState: "ACTIVE" })
 				}
 			/>

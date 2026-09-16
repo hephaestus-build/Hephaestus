@@ -101,8 +101,9 @@ function PracticeGroupDetail() {
 	const navigate = useNavigate({ from: Route.fullPath });
 	const queryClient = useQueryClient();
 	const setSearch = useSearchState();
-	const updateSelection = (search: { practice?: string; observation?: string }) =>
+	const updateSelection = (search: { practice?: string; observation?: string }) => {
 		void setSearch((previous) => ({ ...previous, ...search }));
+	};
 
 	const groupsQuery = useQuery({
 		...listGroupsOptions({
@@ -135,7 +136,7 @@ function PracticeGroupDetail() {
 		getNextPageParam: (lastPage) =>
 			lastPage.hasNext === true ? (lastPage.page ?? 0) + 1 : undefined,
 	});
-	const invalidateReviewRuns = () =>
+	const invalidateReviewRuns = async () =>
 		queryClient.invalidateQueries({
 			queryKey: listPracticeGroupReviewRunsInfiniteQueryKey({ path: { workspaceSlug, groupSlug } }),
 		});
@@ -180,21 +181,28 @@ function PracticeGroupDetail() {
 			};
 		});
 	const activityFailed = activityQuery.error != null;
-	const reviewRunFeed: ReviewRunFeedState = activityQuery.isPending
-		? { status: "loading" }
-		: activityFailed
-			? {
-					status: "error",
-					error: activityQuery.error,
-					onRetry: () => void activityQuery.refetch(),
-				}
-			: {
-					status: "ready",
-					runs: loadedPages(activityQuery.data).flatMap((page) => page.content),
-					hasMore: activityQuery.hasNextPage,
-					isLoadingMore: activityQuery.isFetchingNextPage,
-					onLoadMore: () => void activityQuery.fetchNextPage(),
-				};
+	let reviewRunFeed: ReviewRunFeedState;
+	if (activityQuery.isPending) {
+		reviewRunFeed = { status: "loading" };
+	} else if (activityFailed) {
+		reviewRunFeed = {
+			status: "error",
+			error: activityQuery.error,
+			onRetry: () => {
+				void activityQuery.refetch();
+			},
+		};
+	} else {
+		reviewRunFeed = {
+			status: "ready",
+			runs: loadedPages(activityQuery.data).flatMap((page) => page.content),
+			hasMore: activityQuery.hasNextPage,
+			isLoadingMore: activityQuery.isFetchingNextPage,
+			onLoadMore: () => {
+				void activityQuery.fetchNextPage();
+			},
+		};
+	}
 
 	const observationDetail: ObservationDetailState | undefined = hasText(openObservationId)
 		? {
@@ -238,11 +246,8 @@ function PracticeGroupDetail() {
 				});
 			}}
 			pendingFeedbackId={
-				replaceResponseMutation.isPending
-					? replaceResponseMutation.variables.path.feedbackId
-					: deleteResponseMutation.isPending
-						? deleteResponseMutation.variables.path.feedbackId
-						: undefined
+				[replaceResponseMutation, deleteResponseMutation].find((mutation) => mutation.isPending)
+					?.variables.path.feedbackId
 			}
 			isLoading={
 				groupsQuery.isPending ||
@@ -276,13 +281,13 @@ function PracticeGroupDetail() {
 					void trendQuery.refetch();
 				}
 			}}
-			onBack={() =>
+			onBack={() => {
 				void navigate({
 					to: "/w/$workspaceSlug/user/$username",
 					params: { workspaceSlug, username },
 					search: {},
-				})
-			}
+				});
+			}}
 		/>
 	);
 }

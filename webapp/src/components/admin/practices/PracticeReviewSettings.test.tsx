@@ -28,7 +28,9 @@ const people = {
 	],
 };
 
-function renderSettings(props: Partial<React.ComponentProps<typeof PracticeReviewSettings>> = {}) {
+async function renderSettings(
+	props: Partial<React.ComponentProps<typeof PracticeReviewSettings>> = {},
+) {
 	return renderWithRouter(
 		<PracticeReviewSettings
 			workspaceSlug="acme"
@@ -41,9 +43,9 @@ function renderSettings(props: Partial<React.ComponentProps<typeof PracticeRevie
 				autoTriggerEnabled: true,
 				manualTriggerEnabled: true,
 				isSaving: false,
-				onUpdate: vi.fn(),
+				onUpdate: vi.fn<() => void>(),
 			}}
-			policy={{ settings, isSaving: false, onUpdate: vi.fn(), onReset: vi.fn() }}
+			policy={{ settings, isSaving: false, onUpdate: vi.fn(), onReset: vi.fn<() => void>() }}
 			coverage={{
 				preview: vi.fn(async () => ({
 					current: settings.coverageSummary,
@@ -81,7 +83,7 @@ describe("PracticeReviewSettings", () => {
 		const onUpdate = vi.fn();
 		const persisted = selectedSettings();
 		await renderSettings({
-			policy: { settings: persisted, isSaving: false, onUpdate, onReset: vi.fn() },
+			policy: { settings: persisted, isSaving: false, onUpdate, onReset: vi.fn<() => void>() },
 			coverage: { preview, repositories, people },
 		});
 
@@ -117,7 +119,7 @@ describe("PracticeReviewSettings", () => {
 		}));
 		const onUpdate = vi.fn();
 		await renderSettings({
-			policy: { settings, isSaving: false, onUpdate, onReset: vi.fn() },
+			policy: { settings, isSaving: false, onUpdate, onReset: vi.fn<() => void>() },
 			coverage: { preview, repositories, people },
 		});
 
@@ -125,7 +127,9 @@ describe("PracticeReviewSettings", () => {
 		fireEvent.click(screen.getByRole("radio", { name: "Selected people" }));
 		fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
 
-		await act(() => Promise.resolve());
+		await act(async () => {
+			await Promise.resolve();
+		});
 		expect(preview).toHaveBeenCalledOnce();
 		expect(onUpdate).toHaveBeenCalledOnce();
 		expect(screen.queryByRole("alertdialog")).toBeNull();
@@ -133,7 +137,12 @@ describe("PracticeReviewSettings", () => {
 
 	it("preserves an unsaved coverage draft when an unrelated etag changes", async () => {
 		const persisted = selectedSettings();
-		const policy = { settings: persisted, isSaving: false, onUpdate: vi.fn(), onReset: vi.fn() };
+		const policy = {
+			settings: persisted,
+			isSaving: false,
+			onUpdate: vi.fn(),
+			onReset: vi.fn<() => void>(),
+		};
 		function EtagHarness() {
 			const [current, setCurrent] = useState(persisted);
 			return (
@@ -152,7 +161,7 @@ describe("PracticeReviewSettings", () => {
 							autoTriggerEnabled: true,
 							manualTriggerEnabled: true,
 							isSaving: false,
-							onUpdate: vi.fn(),
+							onUpdate: vi.fn<() => void>(),
 						}}
 						policy={{ ...policy, settings: current }}
 						coverage={{ preview: vi.fn(), repositories, people }}
@@ -189,9 +198,9 @@ describe("PracticeReviewSettings", () => {
 							autoTriggerEnabled: true,
 							manualTriggerEnabled: true,
 							isSaving: false,
-							onUpdate: vi.fn(),
+							onUpdate: vi.fn<() => void>(),
 						}}
-						policy={{ settings: current, isSaving: false, onUpdate, onReset: vi.fn() }}
+						policy={{ settings: current, isSaving: false, onUpdate, onReset: vi.fn<() => void>() }}
 						coverage={{ preview: vi.fn(), repositories, people }}
 					/>
 				</>
@@ -222,12 +231,12 @@ describe("PracticeReviewSettings", () => {
 						autoTriggerEnabled: true,
 						manualTriggerEnabled: true,
 						isSaving: false,
-						onUpdate: vi.fn(),
+						onUpdate: vi.fn<() => void>(),
 					}}
 					policy={{
 						settings: current,
 						isSaving: false,
-						onReset: vi.fn(),
+						onReset: vi.fn<() => void>(),
 						onUpdate: async (request) => {
 							assert(request.reviewScope);
 							setCurrent({ ...settings, reviewScope: request.reviewScope });
@@ -286,12 +295,12 @@ describe("PracticeReviewSettings", () => {
 							autoTriggerEnabled: true,
 							manualTriggerEnabled: true,
 							isSaving: false,
-							onUpdate: vi.fn(),
+							onUpdate: vi.fn<() => void>(),
 						}}
 						policy={{
 							settings: current,
 							isSaving: false,
-							onReset: vi.fn(),
+							onReset: vi.fn<() => void>(),
 							onUpdate: async (request) => {
 								assert(request.reviewScope);
 								setCurrent({ ...current, reviewScope: request.reviewScope, etag: '"saved"' });
@@ -336,7 +345,7 @@ describe("PracticeReviewSettings", () => {
 				}),
 				isSaving: false,
 				onUpdate: vi.fn(),
-				onReset: vi.fn(),
+				onReset: vi.fn<() => void>(),
 			},
 			coverage: {
 				preview: vi.fn(),
@@ -363,7 +372,7 @@ describe("PracticeReviewSettings", () => {
 				}),
 				isSaving: false,
 				onUpdate: vi.fn(),
-				onReset: vi.fn(),
+				onReset: vi.fn<() => void>(),
 			},
 		});
 
@@ -373,7 +382,7 @@ describe("PracticeReviewSettings", () => {
 
 	it("keeps the coverage draft available while an unrelated policy field saves", async () => {
 		await renderSettings({
-			policy: { settings, isSaving: true, onUpdate: vi.fn(), onReset: vi.fn() },
+			policy: { settings, isSaving: true, onUpdate: vi.fn(), onReset: vi.fn<() => void>() },
 		});
 
 		expect(
@@ -392,7 +401,7 @@ describe("PracticeReviewSettings", () => {
 				settings: { ...settings, deliveryStatus: "PAUSED" },
 				isSaving: false,
 				onUpdate: vi.fn(),
-				onReset: vi.fn(),
+				onReset: vi.fn<() => void>(),
 			},
 		});
 

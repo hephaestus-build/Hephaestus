@@ -114,12 +114,30 @@ export function PracticeReviewBackfill({
 	const active = runs.find((run) => run.status === "RUNNING" || run.status === "PAUSED");
 	const history = runs.filter((run) => run.status === "COMPLETED" || run.status === "CANCELLED");
 
+	let currentRun;
+	if (active) {
+		currentRun = <ActiveRunSection run={active} isUpdating={isUpdating} onCancel={onCancel} />;
+	} else if (pending) {
+		currentRun = (
+			<ConfirmationSection
+				run={pending}
+				isUpdating={isUpdating}
+				onConfirm={onConfirm}
+				onCancel={onCancel}
+			/>
+		);
+	} else {
+		currentRun = (
+			<EstimateSection isLoading={isLoading} isEstimating={isEstimating} onEstimate={onEstimate} />
+		);
+	}
+
 	return (
 		<div className="space-y-8">
 			{isError ? (
 				<Alert variant="destructive">
 					<AlertCircle />
-					<AlertTitle>Backfills couldn't be loaded</AlertTitle>
+					<AlertTitle>Backfills couldn’t be loaded</AlertTitle>
 					<AlertDescription>
 						<p>Any backfill already running is unaffected — this is only about showing it here.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
@@ -129,22 +147,7 @@ export function PracticeReviewBackfill({
 				</Alert>
 			) : null}
 
-			{active ? (
-				<ActiveRunSection run={active} isUpdating={isUpdating} onCancel={onCancel} />
-			) : pending ? (
-				<ConfirmationSection
-					run={pending}
-					isUpdating={isUpdating}
-					onConfirm={onConfirm}
-					onCancel={onCancel}
-				/>
-			) : (
-				<EstimateSection
-					isLoading={isLoading}
-					isEstimating={isEstimating}
-					onEstimate={onEstimate}
-				/>
-			)}
+			{currentRun}
 
 			<HistorySection runs={history} isLoading={isLoading} />
 		</div>
@@ -379,6 +382,57 @@ function ActiveRunSection({
 }
 
 function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoading: boolean }) {
+	let history;
+	if (isLoading) {
+		history = (
+			<div className="flex justify-center py-6">
+				<Spinner />
+			</div>
+		);
+	} else if (runs.length === 0) {
+		history = (
+			<Empty>
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<History />
+					</EmptyMedia>
+					<EmptyTitle>No backfills yet</EmptyTitle>
+					<EmptyDescription>Past work has never been measured in this workspace.</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		);
+	} else {
+		history = (
+			<div className="space-y-2">
+				{runs.map((run) => (
+					<Item key={run.id} variant="outline">
+						<ItemContent>
+							<ItemTitle>
+								{artifactKindPluralLabel(run.artifactKind)}
+								{": "}
+								{formatWindow(run)}
+							</ItemTitle>
+							<ItemDescription>
+								{run.status === "CANCELLED"
+									? `Stopped after reviewing ${countOf(run.submittedCount, run.artifactKind)}.`
+									: `Reviewed ${countOf(run.submittedCount, run.artifactKind)}; ${run.passedCount} needed no new measurement.${
+											run.failedCount > 0
+												? ` ${run.failedCount} could not be read, and stay unmeasured.`
+												: ""
+										}`}
+							</ItemDescription>
+						</ItemContent>
+						<ItemActions>
+							<Badge variant={run.status === "CANCELLED" ? "outline" : "secondary"}>
+								{run.status === "CANCELLED" ? "Stopped" : "Finished"}
+							</Badge>
+						</ItemActions>
+					</Item>
+				))}
+			</div>
+		);
+	}
+
 	return (
 		<section className="space-y-4" aria-labelledby="backfill-history-heading">
 			<div className="space-y-1">
@@ -389,51 +443,7 @@ function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoad
 					What has already been measured, and by whose decision.
 				</p>
 			</div>
-			{isLoading ? (
-				<div className="flex justify-center py-6">
-					<Spinner />
-				</div>
-			) : runs.length === 0 ? (
-				<Empty>
-					<EmptyHeader>
-						<EmptyMedia variant="icon">
-							<History />
-						</EmptyMedia>
-						<EmptyTitle>No backfills yet</EmptyTitle>
-						<EmptyDescription>
-							Past work has never been measured in this workspace.
-						</EmptyDescription>
-					</EmptyHeader>
-				</Empty>
-			) : (
-				<div className="space-y-2">
-					{runs.map((run) => (
-						<Item key={run.id} variant="outline">
-							<ItemContent>
-								<ItemTitle>
-									{artifactKindPluralLabel(run.artifactKind)}
-									{": "}
-									{formatWindow(run)}
-								</ItemTitle>
-								<ItemDescription>
-									{run.status === "CANCELLED"
-										? `Stopped after reviewing ${countOf(run.submittedCount, run.artifactKind)}.`
-										: `Reviewed ${countOf(run.submittedCount, run.artifactKind)}; ${run.passedCount} needed no new measurement.${
-												run.failedCount > 0
-													? ` ${run.failedCount} could not be read, and stay unmeasured.`
-													: ""
-											}`}
-								</ItemDescription>
-							</ItemContent>
-							<ItemActions>
-								<Badge variant={run.status === "CANCELLED" ? "outline" : "secondary"}>
-									{run.status === "CANCELLED" ? "Stopped" : "Finished"}
-								</Badge>
-							</ItemActions>
-						</Item>
-					))}
-				</div>
-			)}
+			{history}
 		</section>
 	);
 }

@@ -10,7 +10,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
 import { setTimeout } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -58,10 +58,10 @@ void test("production precompute limits", { skip: process.platform !== "linux" }
 			// Resolved for the same reason as in `pi-precompute.spec.ts`: the runner is loaded as a
 			// module under a path granted to `--allow-fs-read`, and a `TMPDIR` reached through a symlink
 			// satisfies no such grant.
-			const root = realpathSync(mkdtempSync(join(tmpdir(), "precompute-limits-")));
+			const root = realpathSync(mkdtempSync(path.join(tmpdir(), "precompute-limits-")));
 			try {
 				writeFileSync(
-					join(root, "pi-precompute.ts"),
+					path.join(root, "pi-precompute.ts"),
 					`import { writeFileSync } from "node:fs";\nconst root = process.argv[2]; const output = root + "/work/precompute-out";\n${scenario.code}\n`,
 				);
 				const result = spawnSync(
@@ -88,20 +88,23 @@ void test("production precompute limits", { skip: process.platform !== "linux" }
 					scenario.failure,
 					result.stderr,
 				);
-				assert.ok(statSync(join(root, "work/precompute-runner.log")).size <= fileLimit);
+				assert.ok(statSync(path.join(root, "work/precompute-runner.log")).size <= fileLimit);
 				if (scenario.failure) {
-					assert.ok(statSync(join(root, "work/precompute-out/precompute-runner.log")).size <= 8192);
-					assert.equal(existsSync(join(root, "work/precompute-out/.complete")), false);
-					assert.equal(existsSync(join(root, "work/precompute-out/large.json")), false);
+					assert.ok(
+						statSync(path.join(root, "work/precompute-out/precompute-runner.log")).size <= 8192,
+					);
+					assert.equal(existsSync(path.join(root, "work/precompute-out/.complete")), false);
+					assert.equal(existsSync(path.join(root, "work/precompute-out/large.json")), false);
 				}
-				if (scenario.name === "valid output and clean environment")
-					assert.equal(readFileSync(join(root, "work/precompute-out/ok"), "utf8"), "ok");
+				if (scenario.name === "valid output and clean environment") {
+					assert.equal(readFileSync(path.join(root, "work/precompute-out/ok"), "utf8"), "ok");
+				}
 				if (scenario.name === "background child after success") {
 					await setTimeout(750);
-					assert.equal(existsSync(join(root, "work/precompute-out/leaked")), false);
+					assert.equal(existsSync(path.join(root, "work/precompute-out/leaked")), false);
 				}
 				// The precompute subshell must not impose its file limit on the review that follows.
-				assert.equal(statSync(join(root, "review-output")).size, fileLimit + 1);
+				assert.equal(statSync(path.join(root, "review-output")).size, fileLimit + 1);
 			} finally {
 				rmSync(root, { recursive: true, force: true });
 			}

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import type { WorkspaceLlmConnection, WorkspaceLlmModel } from "@/api/types.gen";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 
 import { WorkspaceLlmProviderPanel } from "./WorkspaceLlmProviderPanel";
 
@@ -51,18 +52,24 @@ function model(id: number, connectionId: number, displayName: string): Workspace
 	};
 }
 
-describe("WorkspaceLlmProviderPanel", () => {
-	function renderPanel(ownProviderAllowed = true) {
-		const queryClient = new QueryClient({
-			defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-		});
-		return render(
-			<QueryClientProvider client={queryClient}>
-				<WorkspaceLlmProviderPanel workspaceSlug="demo" ownProviderAllowed={ownProviderAllowed} />
-			</QueryClientProvider>,
-		);
-	}
+function renderPanel(ownProviderAllowed = true) {
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+	});
+	return render(
+		<QueryClientProvider client={queryClient}>
+			<WorkspaceLlmProviderPanel workspaceSlug="demo" ownProviderAllowed={ownProviderAllowed} />
+		</QueryClientProvider>,
+	);
+}
 
+async function confirmDelete(name: string) {
+	fireEvent.click(await screen.findByRole("button", { name: `Delete ${name}` }));
+	const dialog = await screen.findByRole("alertdialog");
+	fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+}
+
+describe("WorkspaceLlmProviderPanel", () => {
 	it("renders every workspace connection and groups each model under its owner", async () => {
 		server.use(
 			http.get("*/workspaces/demo/llm/connections", () => HttpResponse.json(connections)),
@@ -81,15 +88,12 @@ describe("WorkspaceLlmProviderPanel", () => {
 	it("keeps each provider's probe pending independently when two run at once", async () => {
 		// A single "which row is probing" flag would be cleared by the fast one and put the slow row
 		// back to idle mid-flight.
-		let releaseSlowProbe: (() => void) | undefined;
-		const slowProbe = new Promise<void>((resolve) => {
-			releaseSlowProbe = resolve;
-		});
+		const slowProbe = deferred<undefined>();
 		server.use(
 			http.get("*/workspaces/demo/llm/connections", () => HttpResponse.json(connections)),
 			http.get("*/workspaces/demo/llm/models", () => HttpResponse.json([])),
 			http.post("*/workspaces/demo/llm/connections/1/probe", async () => {
-				await slowProbe;
+				await slowProbe.promise;
 				return HttpResponse.json({ reachable: true, modelCount: 3 });
 			}),
 			http.post("*/workspaces/demo/llm/connections/2/probe", () =>
@@ -113,17 +117,14 @@ describe("WorkspaceLlmProviderPanel", () => {
 		});
 		expect(slowButton.disabled).toBe(true);
 
-		releaseSlowProbe?.();
+		slowProbe.resolve(undefined);
 		await within(openAiCard).findByText(/3 models available/u);
 	});
 
 	it("keeps each model's delete pending independently when two run at once", async () => {
 		// A single "which model is mutating" id would be cleared by the fast one, re-enabling the slow
 		// row's Delete mid-flight: a second DELETE, and a failure toast for a model that was deleted.
-		let releaseSlowDelete: (() => void) | undefined;
-		const slowDelete = new Promise<void>((resolve) => {
-			releaseSlowDelete = resolve;
-		});
+		const slowDelete = deferred<undefined>();
 		let slowDeleteCalls = 0;
 		server.use(
 			http.get("*/workspaces/demo/llm/connections", () => HttpResponse.json([connections[0]])),
@@ -132,18 +133,12 @@ describe("WorkspaceLlmProviderPanel", () => {
 			),
 			http.delete("*/workspaces/demo/llm/models/10", async () => {
 				slowDeleteCalls += 1;
-				await slowDelete;
+				await slowDelete.promise;
 				return new HttpResponse(null, { status: 204 });
 			}),
 			http.delete("*/workspaces/demo/llm/models/20", () => new HttpResponse(null, { status: 204 })),
 		);
 		renderPanel();
-
-		const confirmDelete = async (name: string) => {
-			fireEvent.click(await screen.findByRole("button", { name: `Delete ${name}` }));
-			const dialog = await screen.findByRole("alertdialog");
-			fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
-		};
 
 		await confirmDelete("Slow model");
 		await waitFor(() => expect(slowDeleteCalls).toBe(1));
@@ -155,7 +150,7 @@ describe("WorkspaceLlmProviderPanel", () => {
 		});
 		expect(slowRowDelete.disabled).toBe(true);
 
-		releaseSlowDelete?.();
+		slowDelete.resolve(undefined);
 		await waitFor(() => expect(slowDeleteCalls).toBe(1));
 	});
 

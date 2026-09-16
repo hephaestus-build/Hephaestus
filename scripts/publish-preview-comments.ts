@@ -39,17 +39,22 @@ export async function publishPreviewComments({
 }): Promise<void> {
 	const title = kind === "docs" ? "📚 Documentation preview" : "🧩 Storybook preview";
 	const removed = [`## ${title}\n\n~~Preview has been removed~~ (PR closed)\n`];
-	let bodies = path ? asStringArray(await readJsonFile(path), "Preview comments") : removed;
+	let bodies =
+		path !== undefined && path !== ""
+			? asStringArray(await readJsonFile(path), "Preview comments")
+			: removed;
 	if (
-		!bodies.length ||
+		bodies.length === 0 ||
 		bodies.some((body) => !body.trim() || body.length > PREVIEW_COMMENT_LIMIT)
 	) {
 		throw new Error("Preview comments must be nonempty and fit GitHub's comment limit.");
 	}
 	const { repo, issue } = context;
-	if (path) {
+	if (path !== undefined && path !== "") {
 		const pull = await github.rest.pulls.get({ ...repo, pull_number: issue.number });
-		if (pull.data.state === "closed") bodies = removed;
+		if (pull.data.state === "closed") {
+			bodies = removed;
+		}
 	}
 	const comments = await github.paginate(github.rest.issues.listComments, {
 		...repo,
@@ -63,13 +68,16 @@ export async function publishPreviewComments({
 			comment.user?.login === "github-actions[bot]" &&
 			new RegExp(
 				`<!-- Sticky Pull Request Comment${kind}-preview(?:-part-(?:[2-9]|[1-9]\\d+))? -->$`,
+				"u",
 			).test(comment.body?.trimEnd() ?? ""),
 	);
 	const retained = new Set<number>();
 	// Create in reading order and update in place; retries converge after a partial API failure.
 	for (const [index, content] of bodies.entries()) {
 		const body = `${content}\n${marker(index)}`;
-		const previous = owned.find((comment) => comment.body?.trimEnd().endsWith(marker(index)));
+		const previous = owned.find(
+			(comment) => comment.body?.trimEnd().endsWith(marker(index)) === true,
+		);
 		if (previous) {
 			retained.add(previous.id);
 			if (previous.body !== body) {

@@ -47,6 +47,12 @@ export function GroupAdoptionPanel({
 	const changes =
 		preview?.actions.filter(({ action }) => CATALOG_GROUP_CHANGE_ACTIONS.includes(action)) ?? [];
 	const restoring = changes.length > 0 && changes.every(({ action }) => action === "MOVE_TO_GROUP");
+	let confirmLabel = `Add ${changes.length} ${changes.length === 1 ? "practice" : "practices"}`;
+	if (state.status === "ready" && state.action === "adding") {
+		confirmLabel = "Adding…";
+	} else if (restoring) {
+		confirmLabel = "Restore group";
+	}
 
 	return (
 		<>
@@ -139,11 +145,7 @@ export function GroupAdoptionPanel({
 			{state.status === "ready" && (
 				<DrawerFooter>
 					<Button onClick={onConfirm} disabled={changes.length === 0 || state.action === "adding"}>
-						{state.action === "adding"
-							? "Adding…"
-							: restoring
-								? "Restore group"
-								: `Add ${changes.length} ${changes.length === 1 ? "practice" : "practices"}`}
+						{confirmLabel}
 					</Button>
 				</DrawerFooter>
 			)}

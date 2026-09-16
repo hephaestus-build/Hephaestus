@@ -12,13 +12,10 @@ import {
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { server } from "@/mocks/server";
+import { precedes } from "@/test/dom";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 20_000 });
-
-function precedes(earlier: Node, later: Node) {
-	return Boolean(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING);
-}
 
 const status = (overrides: Record<string, unknown> = {}) => ({
 	etag: "tag-1",
@@ -641,7 +638,14 @@ describe("instance catalog routes", () => {
 	});
 
 	it.each([
-		["unchanged", async () => {}, mockPullRequestPolicy, mockPullRequestBinding.signals],
+		[
+			"unchanged",
+			async () => {
+				/* keep the pull request the route loaded */
+			},
+			mockPullRequestPolicy,
+			mockPullRequestBinding.signals,
+		],
 		[
 			"changed",
 			async () => {

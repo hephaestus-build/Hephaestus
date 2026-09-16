@@ -337,6 +337,6 @@ export const MutationError: Story = {
 		);
 		await userEvent.click(within(dialog).getByRole("button", { name: /^add channel$/iu }));
 		// Rejected mutation ⇒ the dialog stays open for a retry.
-		await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
+		await waitFor(async () => expect(screen.getByRole("dialog")).toBeVisible());
 	},
 };

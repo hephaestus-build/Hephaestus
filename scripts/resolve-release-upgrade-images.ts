@@ -16,8 +16,9 @@ const postgresRepository = `${currentNamespace}/postgres`;
 
 function command(executable: string, args: string[]): string {
 	const result = spawnSync(executable, args, { encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES });
-	if (result.status !== 0)
+	if (result.status !== 0) {
 		throw new Error(`${executable} ${args.join(" ")} failed:\n${result.stdout}${result.stderr}`);
+	}
 	return result.stdout.trim();
 }
 
@@ -26,8 +27,9 @@ function nonEmpty(value: string | undefined): string | undefined {
 }
 
 function immutable(reference: string, repository: string): string {
-	if (!reference.startsWith(`${repository}:`) && !reference.startsWith(`${repository}@sha256:`))
+	if (!reference.startsWith(`${repository}:`) && !reference.startsWith(`${repository}@sha256:`)) {
 		throw new Error(`Unexpected image repository: ${reference}`);
+	}
 	const manifest = command("docker", [
 		"buildx",
 		"imagetools",
@@ -42,9 +44,10 @@ function immutable(reference: string, repository: string): string {
 		parsed === null ||
 		!("digest" in parsed) ||
 		typeof parsed.digest !== "string" ||
-		!/^sha256:[a-f0-9]{64}$/.test(parsed.digest)
-	)
+		!/^sha256:[a-f0-9]{64}$/u.test(parsed.digest)
+	) {
 		throw new Error(`Registry returned an invalid digest for ${reference}`);
+	}
 	return `${repository}@${parsed.digest}`;
 }
 
@@ -61,21 +64,30 @@ const supplied = [
 	process.env.INPUT_CANDIDATE_APP,
 	process.env.INPUT_POSTGRES,
 ];
-if (supplied.some(Boolean) && !supplied.every(Boolean))
+if (supplied.some(Boolean) && !supplied.every(Boolean)) {
 	throw new Error(
 		"Reusable workflow callers must provide the previous version and both image references",
 	);
+}
 
 let previousApplication: { reference: string; repository: string };
-const suppliedPreviousVersion = supplied[0];
-let [, candidateApplication, postgres] = supplied;
-if (suppliedPreviousVersion && candidateApplication && postgres) {
-	if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(suppliedPreviousVersion))
+const suppliedPreviousVersion = nonEmpty(supplied[0]);
+let candidateApplication = nonEmpty(supplied[1]);
+let postgres = nonEmpty(supplied[2]);
+if (
+	suppliedPreviousVersion !== undefined &&
+	candidateApplication !== undefined &&
+	postgres !== undefined
+) {
+	if (!/^[0-9]+\.[0-9]+\.[0-9]+$/u.test(suppliedPreviousVersion)) {
 		throw new Error("Previous version must be a stable X.Y.Z version");
+	}
 	previousApplication = previousApplicationReference(suppliedPreviousVersion);
 } else {
-	const repository = process.env.GITHUB_REPOSITORY;
-	if (!repository) throw new Error("GITHUB_REPOSITORY is required");
+	const repository = nonEmpty(process.env.GITHUB_REPOSITORY);
+	if (repository === undefined) {
+		throw new Error("GITHUB_REPOSITORY is required");
+	}
 	const requestedPrevious = nonEmpty(process.env.REQUESTED_PREVIOUS);
 	const previous =
 		requestedPrevious ??
@@ -89,18 +101,22 @@ if (suppliedPreviousVersion && candidateApplication && postgres) {
 			"--jq",
 			".tagName",
 		]);
-	if (!/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(previous))
+	if (!/^v[0-9]+\.[0-9]+\.[0-9]+$/u.test(previous)) {
 		throw new Error("Previous release must be a stable vX.Y.Z tag");
-	const candidate = nonEmpty(process.env.REQUESTED_CANDIDATE) ?? process.env.GITHUB_SHA;
-	if (!candidate || !/^[a-f0-9]{40}$/.test(candidate))
+	}
+	const candidate = nonEmpty(process.env.REQUESTED_CANDIDATE) ?? nonEmpty(process.env.GITHUB_SHA);
+	if (candidate === undefined || !/^[a-f0-9]{40}$/u.test(candidate)) {
 		throw new Error("Candidate must be a full commit SHA");
+	}
 	previousApplication = previousApplicationReference(previous.slice(1));
 	candidateApplication = `${applicationRepository}:${candidate}`;
 	postgres = `${postgresRepository}:${candidate}`;
 }
 
-const output = process.env.GITHUB_OUTPUT;
-if (!output) throw new Error("GITHUB_OUTPUT is required");
+const output = nonEmpty(process.env.GITHUB_OUTPUT);
+if (output === undefined) {
+	throw new Error("GITHUB_OUTPUT is required");
+}
 appendFileSync(
 	output,
 	[

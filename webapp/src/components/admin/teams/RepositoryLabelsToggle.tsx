@@ -42,7 +42,7 @@ export function RepositoryLabelsToggle({
 		<div className="space-y-1.5">
 			<p className="text-sm font-medium">Labels</p>
 			<p className="text-xs text-muted-foreground">
-				Selecting labels limits this team's contribution metrics to items tagged with any of the
+				Selecting labels limits this team’s contribution metrics to items tagged with any of the
 				selected labels for this repository.
 			</p>
 			{shown.length > 0 ? (
@@ -53,7 +53,9 @@ export function RepositoryLabelsToggle({
 							<Toggle
 								key={`${label.id}-${label.name}`}
 								pressed={isActive}
-								onPressedChange={() => void handleToggle(label)}
+								onPressedChange={() => {
+									void handleToggle(label);
+								}}
 								aria-label={`${isActive ? "Remove" : "Add"} ${label.name} label`}
 								variant="chip"
 								className="h-auto min-w-0"

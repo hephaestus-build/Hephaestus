@@ -10,6 +10,7 @@ import { getThreadQueryKey, listThreadsQueryKey } from "@/api/@tanstack/react-qu
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import type { ChatMessage } from "@/lib/types";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 
 import { useMentorChat } from "./use-mentor-chat";
 
@@ -82,18 +83,19 @@ interface FakeChat {
 	finishTurn: () => void;
 }
 
+function notRenderedYet(): never {
+	throw new Error("useChat has not rendered yet");
+}
+
 /** Stateful, because the hook does not own its transcript: a frozen `messages: []` proves nothing. */
 function installFakeChat(initialStatus: ChatStatus = "ready"): FakeChat {
 	let lastOptions: ChatInit<ChatMessage> | undefined;
 	const fake: FakeChat = {
 		get lastOptions() {
-			if (!lastOptions) {
-				throw new Error("useChat has not rendered yet");
-			}
-			return lastOptions;
+			return lastOptions ?? notRenderedYet();
 		},
-		raiseError: () => {},
-		finishTurn: () => {},
+		raiseError: notRenderedYet,
+		finishTurn: notRenderedYet,
 	};
 
 	mockUseChat.mockImplementation((options) => {
@@ -138,9 +140,9 @@ function installFakeChat(initialStatus: ChatStatus = "ready"): FakeChat {
 				setStatus("submitted");
 			},
 			setMessages,
-			stop: vi.fn(),
+			stop: vi.fn<() => Promise<void>>(),
 			regenerate: vi.fn(),
-			clearError: vi.fn(),
+			clearError: vi.fn<() => void>(),
 			resumeStream: vi.fn(),
 			addToolOutput,
 			// Still a required member of `UseChatHelpers`, aliasing `addToolOutput`, so one spy backs both.
@@ -301,7 +303,7 @@ describe("useMentorChat", () => {
 
 	describe("error handling", () => {
 		it("surfaces a failed stream as state and tells the caller about it once", async () => {
-			const onError = vi.fn();
+			const onError = vi.fn<(error: Error) => void>();
 			const streamingError = new Error("Streaming error");
 			const { result } = renderHook(() => useMentorChat({ onError }), {
 				wrapper: createWrapper(queryClient),
@@ -377,14 +379,11 @@ describe("useMentorChat", () => {
 		});
 
 		it("rolls back an optimistic vote when the server rejects it", async () => {
-			let respond = (_response: Response) => {};
-			const response = new Promise<Response>((resolve) => {
-				respond = resolve;
-			});
+			const response = deferred<Response>();
 			server.use(
 				http.post(
 					"*/workspaces/:workspaceSlug/mentor/threads/:threadId/messages/:messageId/vote",
-					() => response,
+					async () => response.promise,
 				),
 			);
 			const { result } = renderHook(() => useMentorChat({}), {
@@ -394,7 +393,9 @@ describe("useMentorChat", () => {
 			expect(result.current.votes).toContainEqual(
 				expect.objectContaining({ messageId: "msg-rejected", isUpvoted: true }),
 			);
-			await act(async () => respond(new HttpResponse(null, { status: 500 })));
+			await act(async () => {
+				response.resolve(new HttpResponse(null, { status: 500 }));
+			});
 			await waitFor(() => expect(result.current.votes).toHaveLength(0));
 		});
 

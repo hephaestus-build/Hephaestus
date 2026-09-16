@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { LoginProviderView } from "@/api/types.gen";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules.
@@ -29,17 +30,14 @@ function renderLoginProvidersRoute() {
 
 describe("instance login providers route", () => {
 	it("keeps each provider's toggle pending independently when two run at once", async () => {
-		let releaseSlowToggle: (() => void) | undefined;
-		const slowToggle = new Promise<void>((resolve) => {
-			releaseSlowToggle = resolve;
-		});
+		const slowToggle = deferred<undefined>();
 		let slowToggleCalls = 0;
 		const providers = [provider("github", "GitHub"), provider("gitlab", "GitLab")];
 		server.use(
 			http.get("*/admin/login-providers", () => HttpResponse.json(providers)),
 			http.patch("*/admin/login-providers/github", async () => {
 				slowToggleCalls += 1;
-				await slowToggle;
+				await slowToggle.promise;
 				return HttpResponse.json({ ...providers[0], enabled: false });
 			}),
 			http.patch("*/admin/login-providers/gitlab", () =>
@@ -70,7 +68,7 @@ describe("instance login providers route", () => {
 			false,
 		);
 
-		releaseSlowToggle?.();
+		slowToggle.resolve(undefined);
 		await waitFor(() => expect(slowToggleCalls).toBe(1));
 	});
 

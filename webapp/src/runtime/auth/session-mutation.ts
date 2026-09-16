@@ -8,6 +8,8 @@ export function withSessionMutationLock<TData, TError, TVariables>(
 	const { mutationFn } = options;
 	return {
 		...options,
-		mutationFn: mutationFn ? (...args) => withSessionLock(() => mutationFn(...args)) : undefined,
+		mutationFn: mutationFn
+			? async (...args) => withSessionLock(async () => mutationFn(...args))
+			: undefined,
 	};
 }

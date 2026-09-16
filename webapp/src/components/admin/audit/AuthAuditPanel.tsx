@@ -159,8 +159,12 @@ export function AuthAuditPanel({
 				onResetFilters={reset}
 				hasNextPage={listQuery.hasNextPage}
 				isFetchingNextPage={listQuery.isFetchingNextPage}
-				onLoadMore={() => void listQuery.fetchNextPage()}
-				onRetry={() => void listQuery.refetch()}
+				onLoadMore={() => {
+					void listQuery.fetchNextPage();
+				}}
+				onRetry={() => {
+					void listQuery.refetch();
+				}}
 				onFilterAccount={(accountId) => onSearchChange({ accountId })}
 				onFilterActor={(actorId) => onSearchChange({ actorId })}
 				resolveWorkspaceName={resolveWorkspaceName}

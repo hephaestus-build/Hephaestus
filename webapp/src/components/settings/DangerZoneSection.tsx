@@ -173,7 +173,13 @@ function DataExportRow() {
 			</div>
 			<div className="mt-1 flex shrink-0 gap-2">
 				{isReady ? (
-					<Button variant="outline" onClick={() => void handleDownload()} disabled={isDownloading}>
+					<Button
+						variant="outline"
+						onClick={() => {
+							void handleDownload();
+						}}
+						disabled={isDownloading}
+					>
 						{isDownloading ? <Spinner className="mr-1.5" /> : null}
 						Download
 					</Button>
@@ -229,12 +235,18 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 			<div className="flex-1 space-y-1">
 				<h3 className="text-base font-medium">Delete account</h3>
 				<p className="text-sm leading-relaxed text-muted-foreground">
-					Permanently delete your account and erase your personal data (GDPR Art. 17). You'll be
+					Permanently delete your account and erase your personal data (GDPR Art. 17). You’ll be
 					signed out on all devices immediately, and the account is scheduled for permanent deletion
-					after a ~48-hour cooldown. It can't be recovered from here.
+					after a ~48-hour cooldown. It can’t be recovered from here.
 				</p>
 			</div>
-			<AlertDialog onOpenChange={(open) => !open && setConfirmText("")}>
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setConfirmText("");
+					}
+				}}
+			>
 				<AlertDialogTrigger
 					render={
 						<Button
@@ -251,7 +263,7 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 						<AlertDialogTitle>Delete your account?</AlertDialogTitle>
 						<AlertDialogDescription>
 							This signs you out on all devices immediately and disables your account, then
-							permanently deletes it and your data after a ~48-hour cooldown. It can't be undone
+							permanently deletes it and your data after a ~48-hour cooldown. It can’t be undone
 							from here. To confirm, type{" "}
 							<span className="font-medium text-foreground">{DELETE_CONFIRM_PHRASE}</span> below.
 						</AlertDialogDescription>

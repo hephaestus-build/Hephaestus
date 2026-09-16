@@ -110,6 +110,10 @@ export function selectPracticePatch(
 
 export type PracticePlacement = Pick<Practice, "groupSlug" | "displayOrder" | "slug">;
 
+function byOrder(a: Practice, b: Practice) {
+	return a.displayOrder - b.displayOrder || a.name.localeCompare(b.name);
+}
+
 export function placePractice(
 	practices: Practice[],
 	slug: string,
@@ -124,8 +128,6 @@ export function placePractice(
 	const sourceGroupSlug = moving.groupSlug ?? null;
 	const inGroup = (candidate: Practice, candidateGroupSlug: string | null) =>
 		candidate.slug !== slug && (candidate.groupSlug ?? null) === candidateGroupSlug;
-	const byOrder = (a: Practice, b: Practice) =>
-		a.displayOrder - b.displayOrder || a.name.localeCompare(b.name);
 	const source = practices.filter((practice) => inGroup(practice, sourceGroupSlug)).sort(byOrder);
 	const destination =
 		sourceGroupSlug === groupSlug
@@ -198,13 +200,12 @@ export function unassignPractices(practices: Practice[], groupSlug: string): Pra
 				.map((practice) => practice.displayOrder),
 		) + 1;
 	let offset = 0;
-	return practices.map((practice) =>
-		practice.groupSlug === groupSlug
-			? {
-					...practice,
-					groupSlug: undefined,
-					displayOrder: firstDisplayOrder + offset++,
-				}
-			: practice,
-	);
+	return practices.map((practice) => {
+		if (practice.groupSlug !== groupSlug) {
+			return practice;
+		}
+		const displayOrder = firstDisplayOrder + offset;
+		offset += 1;
+		return { ...practice, groupSlug: undefined, displayOrder };
+	});
 }

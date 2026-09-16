@@ -5,6 +5,7 @@ import { __resetSessionRecoveryForTests, handlePossibleSessionExpiry } from "./s
 import { refreshAccessToken } from "./session-refresh";
 
 import { hasText } from "@/lib/text";
+import { sleep } from "@/test/async";
 
 vi.mock("./session-refresh", () => ({ refreshAccessToken: vi.fn() }));
 const refreshMock = vi.mocked(refreshAccessToken);
@@ -40,10 +41,7 @@ function res(status: number, url: string): Response {
 	Object.defineProperty(r, "url", { value: url, configurable: true });
 	return r;
 }
-const flush = () =>
-	new Promise((resolve) => {
-		setTimeout(resolve, 0);
-	});
+const flush = async () => sleep(0);
 
 describe("handlePossibleSessionExpiry", () => {
 	it("recovers a mid-session 401 via a silent refresh — no redirect", async () => {

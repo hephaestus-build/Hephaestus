@@ -44,7 +44,7 @@ export const withPageBehind: Decorator = (Story) => (
 					<div className="space-y-1">
 						<h1 className="text-2xl font-semibold tracking-tight">Practice setup</h1>
 						<p className="max-w-2xl text-sm text-muted-foreground">
-							Organize this workspace's practices and add suggestions from the instance catalog.
+							Organize this workspace’s practices and add suggestions from the instance catalog.
 						</p>
 					</div>
 				</header>

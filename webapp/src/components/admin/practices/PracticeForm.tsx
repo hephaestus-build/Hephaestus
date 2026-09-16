@@ -73,7 +73,9 @@ function asDefinitionValue(practice: Practice): PracticeDefinitionValue {
 
 export function PracticeForm(props: PracticeFormProps) {
 	const { mode, workspaceSlug, groups, isPending, initialData, definitionOptions, cancel } = props;
-	const submit = (value: PracticeDefinitionValue) => {
+	// Passes the host's return through untouched: a `void` from `onSubmit` must stay `void`, because
+	// the unsaved-changes guard reads only a promise as a save it can wait for.
+	const submit = (value: PracticeDefinitionValue): void | Promise<void> => {
 		const { groupSlug, ...definition } = value;
 		if (props.mode === "create") {
 			return props.onSubmit(definition, groupSlug ?? null);
@@ -112,7 +114,7 @@ export function PracticeForm(props: PracticeFormProps) {
 					<div>
 						<h2 className="text-lg font-semibold">What the author declared</h2>
 						<p className="text-sm text-muted-foreground">
-							The requirements above are the author's own claim about this practice. Nobody has
+							The requirements above are the author’s own claim about this practice. Nobody has
 							checked them independently, and nothing here says the observations recorded under it
 							are correct. The digests record the exact rules that were declared, so a later change
 							to them is visible rather than silent.

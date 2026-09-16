@@ -199,7 +199,7 @@ export function WorkspaceTeamsTable({
 								team={team}
 								childrenMap={childrenMap}
 								displaySet={displaySet}
-								onToggleVisibility={(teamId, hidden) => onHideTeam(teamId, hidden)}
+								onToggleVisibility={async (teamId, hidden) => onHideTeam(teamId, hidden)}
 								onToggleRepositoryVisibility={onToggleRepositoryVisibility}
 								onAddLabel={onAddLabelToTeam}
 								onRemoveLabel={onRemoveLabelFromTeam}

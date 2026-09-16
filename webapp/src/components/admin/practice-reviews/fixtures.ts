@@ -1079,6 +1079,27 @@ export function observationDetail(observationId: string): ReviewObservationDetai
 	};
 }
 
+function feedbackPlacements(item: FeedbackSpec): ReviewFeedbackDetail["placements"] {
+	if (item.outcome !== "DELIVERED" || item.channel !== "IN_CONTEXT") {
+		return [];
+	}
+	if (item.anchoredAt) {
+		return [
+			{
+				id: `${item.id}-inline`,
+				placementType: "INLINE",
+				anchorKind: "RANGE",
+				anchorSide: "NEW",
+				anchorPath: item.anchoredAt.path,
+				anchorStartLine: item.anchoredAt.startLine,
+				anchorEndLine: item.anchoredAt.endLine,
+				postedCommentRef: "2481944",
+			},
+		];
+	}
+	return [{ id: `${item.id}-summary`, placementType: "SUMMARY", postedCommentRef: "2481933" }];
+}
+
 export function feedbackDetail(feedbackId: string): ReviewFeedbackDetail {
 	const found = allFeedbackSpecs.find(({ item }) => item.id === feedbackId);
 	if (!found) {
@@ -1112,23 +1133,7 @@ export function feedbackDetail(feedbackId: string): ReviewFeedbackDetail {
 				summary: source.summary,
 			};
 		}),
-		placements:
-			item.outcome !== "DELIVERED" || item.channel !== "IN_CONTEXT"
-				? []
-				: item.anchoredAt
-					? [
-							{
-								id: `${item.id}-inline`,
-								placementType: "INLINE",
-								anchorKind: "RANGE",
-								anchorSide: "NEW",
-								anchorPath: item.anchoredAt.path,
-								anchorStartLine: item.anchoredAt.startLine,
-								anchorEndLine: item.anchoredAt.endLine,
-								postedCommentRef: "2481944",
-							},
-						]
-					: [{ id: `${item.id}-summary`, placementType: "SUMMARY", postedCommentRef: "2481933" }],
+		placements: feedbackPlacements(item),
 		proposedPlacements:
 			item.outcome === "AWAITING_APPROVAL" && item.channel === "IN_CONTEXT"
 				? [

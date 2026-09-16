@@ -10,7 +10,10 @@ import {
 	adminListAuthEventsOptions,
 	adminListWorkspacesOptions,
 } from "@/api/@tanstack/react-query.gen";
-import { InstanceReleaseCard } from "@/components/admin/instance/InstanceReleaseCard";
+import {
+	InstanceReleaseCard,
+	type InstanceReleaseCardState,
+} from "@/components/admin/instance/InstanceReleaseCard";
 import { OverviewStatCard } from "@/components/admin/instance/OverviewStatCard";
 import { RecentAuthActivityCard } from "@/components/admin/instance/RecentAuthActivityCard";
 import { SilentModeStatusCard } from "@/components/admin/instance/SilentModeStatusCard";
@@ -38,6 +41,28 @@ function AdminOverviewPage() {
 	const activeWorkspaces = workspaces.filter((ws) => ws.status === "ACTIVE").length;
 	const memberships = workspaces.reduce((sum, ws) => sum + ws.memberCount, 0);
 
+	let releaseState: InstanceReleaseCardState;
+	if (releaseQuery.data) {
+		releaseState = {
+			status: "ready",
+			release: releaseQuery.data,
+			check: releaseCheck.isError
+				? { status: "error", error: releaseCheck.error }
+				: { status: releaseCheck.status },
+			onCheck: () => releaseCheck.mutate({}),
+		};
+	} else if (releaseQuery.isPending) {
+		releaseState = { status: "loading" };
+	} else {
+		releaseState = {
+			status: "error",
+			error: releaseQuery.error,
+			onRetry: () => {
+				void releaseQuery.refetch();
+			},
+		};
+	}
+
 	return (
 		<PageLayout>
 			<PageHeader
@@ -52,26 +77,7 @@ function AdminOverviewPage() {
 				isError={settingsQuery.isError}
 			/>
 
-			<InstanceReleaseCard
-				state={
-					releaseQuery.data
-						? {
-								status: "ready",
-								release: releaseQuery.data,
-								check: releaseCheck.isError
-									? { status: "error", error: releaseCheck.error }
-									: { status: releaseCheck.status },
-								onCheck: () => releaseCheck.mutate({}),
-							}
-						: releaseQuery.isPending
-							? { status: "loading" }
-							: {
-									status: "error",
-									error: releaseQuery.error,
-									onRetry: () => void releaseQuery.refetch(),
-								}
-				}
-			/>
+			<InstanceReleaseCard state={releaseState} />
 
 			<div className="grid gap-4 sm:grid-cols-2">
 				<OverviewStatCard
@@ -98,7 +104,9 @@ function AdminOverviewPage() {
 				events={eventsQuery.data?.content ?? []}
 				isLoading={eventsQuery.isLoading}
 				error={eventsQuery.isError ? eventsQuery.error : undefined}
-				onRetry={() => void eventsQuery.refetch()}
+				onRetry={() => {
+					void eventsQuery.refetch();
+				}}
 			/>
 		</PageLayout>
 	);

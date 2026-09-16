@@ -147,7 +147,7 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 		let disposed = false;
 		const hintTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-		const invalidate = (queryKey: readonly unknown[]) =>
+		const invalidate = async (queryKey: readonly unknown[]) =>
 			queryClient.invalidateQueries({ queryKey });
 
 		/**

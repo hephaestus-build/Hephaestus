@@ -21,8 +21,9 @@ export interface ChatProps {
 	attachments: Attachment[];
 	onMessageSubmit: (data: { text: string; attachments: Attachment[] }) => void;
 	onStop: () => void;
-	onFileUpload: (files: File[]) => Promise<Attachment[]>;
-	onAttachmentsChange: (attachments: Attachment[]) => void;
+	// Both are absent on a surface that disables attachments.
+	onFileUpload?: (files: File[]) => Promise<Attachment[]>;
+	onAttachmentsChange?: (attachments: Attachment[]) => void;
 	onMessageEdit?: (messageId: string, content: string) => void;
 	onCopy?: (content: string) => void;
 	onVote?: (messageId: string, isUpvote: boolean) => void;
@@ -96,13 +97,7 @@ export function Chat({
 					{!readonly && (
 						<div className="w-full max-w-3xl">
 							<MultimodalInput
-								status={
-									status === "submitted" || status === "streaming"
-										? "submitted"
-										: status === "error"
-											? "error"
-											: "ready"
-								}
+								status={status === "streaming" ? "submitted" : status}
 								onStop={onStop}
 								attachments={attachments}
 								onAttachmentsChange={onAttachmentsChange}

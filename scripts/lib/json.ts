@@ -14,8 +14,12 @@ export const readJsonFile = async (file: string): Promise<unknown> =>
 	parseJson(await readFile(file, "utf8"));
 
 const describe = (value: unknown): string => {
-	if (value === null) return "null";
-	if (Array.isArray(value)) return "an array";
+	if (value === null) {
+		return "null";
+	}
+	if (Array.isArray(value)) {
+		return "an array";
+	}
 	return `a ${typeof value}`;
 };
 
@@ -25,13 +29,16 @@ export const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isArray = (value: unknown): value is readonly unknown[] => Array.isArray(value);
 
 export const asRecord = (value: unknown, label: string): Record<string, unknown> => {
-	if (!isRecord(value))
+	if (!isRecord(value)) {
 		throw new TypeError(`${label} must be a JSON object, but is ${describe(value)}`);
+	}
 	return value;
 };
 
 export const asArray = (value: unknown, label: string): readonly unknown[] => {
-	if (!isArray(value)) throw new TypeError(`${label} must be an array, but is ${describe(value)}`);
+	if (!isArray(value)) {
+		throw new TypeError(`${label} must be an array, but is ${describe(value)}`);
+	}
 	return value;
 };
 

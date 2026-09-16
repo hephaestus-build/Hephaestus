@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { LoginProviderView } from "@/api/types.gen";
@@ -33,14 +34,14 @@ const outlineProvider: LoginProviderView = {
 
 describe("LoginProviderFormDialog", () => {
 	it("edits Slack identity providers without requiring a base URL", () => {
-		const onUpdate = vi.fn();
+		const onUpdate = vi.fn<ComponentProps<typeof LoginProviderFormDialog>["onUpdate"]>();
 		render(
 			<LoginProviderFormDialog
 				open
-				onOpenChange={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
 				editing={slackProvider}
 				isSubmitting={false}
-				onCreate={vi.fn()}
+				onCreate={vi.fn<() => void>()}
 				onUpdate={onUpdate}
 			/>,
 		);
@@ -66,11 +67,11 @@ describe("LoginProviderFormDialog", () => {
 		render(
 			<LoginProviderFormDialog
 				open
-				onOpenChange={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
 				editing={null}
 				isSubmitting={false}
-				onCreate={vi.fn()}
-				onUpdate={vi.fn()}
+				onCreate={vi.fn<() => void>()}
+				onUpdate={vi.fn<() => void>()}
 			/>,
 		);
 
@@ -80,14 +81,14 @@ describe("LoginProviderFormDialog", () => {
 	});
 
 	it("treats Outline like GitLab: it carries an instance base URL, and submits it", () => {
-		const onUpdate = vi.fn();
+		const onUpdate = vi.fn<ComponentProps<typeof LoginProviderFormDialog>["onUpdate"]>();
 		render(
 			<LoginProviderFormDialog
 				open
-				onOpenChange={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
 				editing={outlineProvider}
 				isSubmitting={false}
-				onCreate={vi.fn()}
+				onCreate={vi.fn<() => void>()}
 				onUpdate={onUpdate}
 			/>,
 		);
@@ -115,11 +116,11 @@ describe("LoginProviderFormDialog", () => {
 		render(
 			<LoginProviderFormDialog
 				open
-				onOpenChange={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
 				editing={outlineProvider}
 				isSubmitting={false}
-				onCreate={vi.fn()}
-				onUpdate={vi.fn()}
+				onCreate={vi.fn<() => void>()}
+				onUpdate={vi.fn<() => void>()}
 			/>,
 		);
 

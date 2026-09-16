@@ -1,17 +1,18 @@
 import { access, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import path from "node:path";
 import process from "node:process";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { positivePort, readEnvFile } from "./lib/env.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 
-const root = join(import.meta.dirname, "..");
-const server = join(root, "server");
-const dataDirectory = join(server, "postgres-data");
-const changelogDirectory = join(server, "application/src/main/resources/db/changelog");
-const master = join(server, "application/src/main/resources/db/master.xml");
+const root = path.join(import.meta.dirname, "..");
+const server = path.join(root, "server");
+const dataDirectory = path.join(server, "postgres-data");
+const changelogDirectory = path.join(server, "application/src/main/resources/db/changelog");
+const master = path.join(server, "application/src/main/resources/db/master.xml");
 // liquibaseDiff produces no file when the schema matches.
-const draft = join(server, "application/build/changelog_new.xml");
+const draft = path.join(server, "application/build/changelog_new.xml");
 
 interface Config {
 	env: Record<string, string | undefined>;
@@ -23,7 +24,7 @@ interface Config {
 const log = (message: string): void => console.log(`ℹ️  ${message}`);
 
 async function config(): Promise<Config> {
-	const fileEnv = await readEnvFile(join(server, ".env"));
+	const fileEnv = await readEnvFile(path.join(server, ".env"));
 	const env = { ...fileEnv, ...process.env };
 	return {
 		env,
@@ -34,30 +35,34 @@ async function config(): Promise<Config> {
 }
 
 async function checkEnvironment(value: Config): Promise<void> {
-	await access(join(server, "build.gradle.kts"));
-	await access(join(import.meta.dirname, "generate-mermaid-erd.ts"));
+	await access(path.join(server, "build.gradle.kts"));
+	await access(path.join(import.meta.dirname, "generate-mermaid-erd.ts"));
 	if (!value.ci) {
-		if (!(await succeeds("docker", ["info"])))
+		if (!(await succeeds("docker", ["info"]))) {
 			throw new Error("Docker is installed but unavailable. Start the Docker daemon, then retry.");
-		if (!(await succeeds("docker", ["compose", "version"])))
+		}
+		if (!(await succeeds("docker", ["compose", "version"]))) {
 			throw new Error("Docker Compose is required for local database utilities.");
+		}
 	} else if (!(await succeeds("pg_isready", ["--version"]))) {
 		throw new Error("CI database utilities require 'pg_isready'.");
 	}
 }
 
 async function waitForPostgres(value: Config): Promise<void> {
-	for (let attempt = 0; attempt < 30; attempt++) {
-		if (await succeeds("pg_isready", ["-h", value.host, "-p", String(value.port)])) return;
-		await new Promise((resolve) => {
-			setTimeout(resolve, 1000);
-		});
+	for (let attempt = 0; attempt < 30; attempt += 1) {
+		if (await succeeds("pg_isready", ["-h", value.host, "-p", String(value.port)])) {
+			return;
+		}
+		await sleep(1000);
 	}
 	throw new Error("PostgreSQL failed to become ready after 30 seconds");
 }
 
 async function startPostgres(value: Config): Promise<void> {
-	if (value.ci) return waitForPostgres(value);
+	if (value.ci) {
+		return waitForPostgres(value);
+	}
 	await run("docker", ["compose", "up", "-d", "--wait", "postgres"], { cwd: server });
 }
 
@@ -72,7 +77,7 @@ async function migrate(value: Config, diff = false, signal?: AbortSignal): Promi
 	await run(
 		process.execPath,
 		[
-			join(import.meta.dirname, "run-gradlew.ts"),
+			path.join(import.meta.dirname, "run-gradlew.ts"),
 			":application:liquibaseUpdate",
 			...(diff ? [":application:liquibaseDiff"] : []),
 			`-PpostgresPort=${value.port}`,
@@ -108,7 +113,7 @@ async function diffSchema(value: Config, signal?: AbortSignal): Promise<string |
 	return readFile(draft, "utf8").catch(() => undefined);
 }
 
-const changeSetPattern = /<changeSet\b[^>]*>[\s\S]*?<\/changeSet>/g;
+const changeSetPattern = /<changeSet\b[^>]*>[\s\S]*?<\/changeSet>/gu;
 const closingTag = "</databaseChangeLog>";
 
 /**
@@ -118,19 +123,23 @@ const closingTag = "</databaseChangeLog>";
  */
 export function promoteDraft(draftXml: string, timestamp: number, existing?: string): string {
 	const sets = draftXml.match(changeSetPattern) ?? [];
-	if (sets.length === 0) throw new Error("The draft contains no change sets");
-	const numbers = [...(existing ?? "").matchAll(/<changeSet id="\d+-(\d+)"/g)].map((match) =>
-		Number(match[1]),
+	if (sets.length === 0) {
+		throw new Error("The draft contains no change sets");
+	}
+	const numbers = [...(existing ?? "").matchAll(/<changeSet id="\d+-(?<sequence>\d+)"/gu)].map(
+		(match) => Number(match.groups?.sequence),
 	);
 	let next = Math.max(0, ...numbers);
 	const renumbered = sets.map((set) =>
-		set.replace(
-			/<changeSet\b[^>]*>/,
-			() => `<changeSet id="${timestamp}-${++next}" author="hephaestus">`,
-		),
+		set.replace(/<changeSet\b[^>]*>/u, () => {
+			next += 1;
+			return `<changeSet id="${timestamp}-${next}" author="hephaestus">`;
+		}),
 	);
 	const body = renumbered.map((set) => `    ${set}\n`).join("");
-	if (existing) return existing.replace(closingTag, `${body}${closingTag}`);
+	if (existing !== undefined && existing !== "") {
+		return existing.replace(closingTag, `${body}${closingTag}`);
+	}
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 ${body}${closingTag}
@@ -140,18 +149,19 @@ ${body}${closingTag}
 /** Appends the include for `fileName` unless master.xml already lists it; the list is append-only. */
 export function appendInclude(masterXml: string, fileName: string): string {
 	const include = `    <include file="./changelog/${fileName}" relativeToChangelogFile="true"/>\n`;
-	if (masterXml.includes(include)) return masterXml;
+	if (masterXml.includes(include)) {
+		return masterXml;
+	}
 	return masterXml.replace(closingTag, `${include}${closingTag}`);
 }
 
 /** The changelog this branch added and main does not have, if there is exactly one. */
 async function branchChangelog(): Promise<string | undefined> {
-	const directory = relative(root, changelogDirectory);
-	const base = (
-		await output("git", ["merge-base", "HEAD", "origin/main"], { cwd: root }).catch(() =>
-			output("git", ["merge-base", "HEAD", "main"], { cwd: root }),
-		)
-	).trim();
+	const directory = path.relative(root, changelogDirectory);
+	const mergeBase = await output("git", ["merge-base", "HEAD", "origin/main"], { cwd: root }).catch(
+		async () => output("git", ["merge-base", "HEAD", "main"], { cwd: root }),
+	);
+	const base = mergeBase.trim();
 	const added = await output(
 		"git",
 		["diff", "--name-only", "--diff-filter=A", base, "HEAD", "--", directory],
@@ -169,27 +179,28 @@ async function branchChangelog(): Promise<string | undefined> {
 		.map((line) => line.trim())
 		.filter((line) => line.endsWith("_changelog.xml"));
 	const unique = [...new Set(files)];
-	if (unique.length > 1)
+	if (unique.length > 1) {
 		throw new Error(`This branch adds several changelogs: ${unique.join(", ")}`);
-	return unique[0] === undefined ? undefined : join(root, unique[0]);
+	}
+	return unique[0] === undefined ? undefined : path.join(root, unique[0]);
 }
 
 /** Writes the drift into this branch's changelog and wires it; returns the file it wrote. */
 async function promote(draftXml: string): Promise<string> {
 	const existing = await branchChangelog().catch(() => undefined);
-	if (existing) {
+	if (existing !== undefined) {
 		await writeFile(
 			existing,
 			promoteDraft(
 				draftXml,
-				Number(existing.match(/(\d+)_changelog\.xml$/)?.[1]),
+				Number(/(?<timestamp>\d+)_changelog\.xml$/u.exec(existing)?.groups?.timestamp),
 				await readFile(existing, "utf8"),
 			),
 		);
 		return existing;
 	}
 	const fileName = `${Date.now()}_changelog.xml`;
-	const target = join(changelogDirectory, fileName);
+	const target = path.join(changelogDirectory, fileName);
 	await writeFile(target, promoteDraft(draftXml, Number(fileName.split("_")[0])));
 	await writeFile(master, appendInclude(await readFile(master, "utf8"), fileName));
 	return target;
@@ -219,7 +230,7 @@ async function withDatabase(
 		await withDisposableDatabase(
 			dataDirectory,
 			backup,
-			() => stopPostgres(value),
+			async () => stopPostgres(value),
 			async () => {
 				controller.signal.throwIfAborted();
 				await startPostgres(value);
@@ -229,7 +240,9 @@ async function withDatabase(
 			},
 		);
 	} finally {
-		if (interrupted) process.kill(process.pid, interrupted);
+		if (interrupted) {
+			process.kill(process.pid, interrupted);
+		}
 	}
 }
 
@@ -243,7 +256,9 @@ export async function withDisposableDatabase(
 	const backedUp = await access(data)
 		.then(() => true)
 		.catch(() => false);
-	if (backedUp) await rename(data, backup);
+	if (backedUp) {
+		await rename(data, backup);
+	}
 	let operationError: unknown;
 	try {
 		await operation();
@@ -255,7 +270,7 @@ export async function withDisposableDatabase(
 	} catch (cleanupError) {
 		const cleanup =
 			cleanupError instanceof Error ? cleanupError : new Error("Database shutdown failed");
-		if (operationError) {
+		if (operationError !== undefined) {
 			const primary =
 				operationError instanceof Error ? operationError : new Error("Database operation failed");
 			throw new AggregateError([primary, cleanup], "Database operation and shutdown failed", {
@@ -265,9 +280,12 @@ export async function withDisposableDatabase(
 		throw cleanup;
 	}
 	await rm(data, { recursive: true, force: true });
-	if (backedUp) await rename(backup, data);
-	if (operationError)
+	if (backedUp) {
+		await rename(backup, data);
+	}
+	if (operationError !== undefined) {
 		throw operationError instanceof Error ? operationError : new Error("Database operation failed");
+	}
 }
 
 const commands = {
@@ -311,7 +329,7 @@ async function main(): Promise<void> {
 		await withDatabase(value, async (signal) => {
 			drift = await diffSchema(value, signal);
 		});
-		if (drift) {
+		if (drift !== undefined && drift !== "") {
 			console.error(`❌ The schema drifts from the JPA model:\n${drift}`);
 			console.error("Run: vp run db:draft-changelog");
 			process.exitCode = 1;
@@ -324,19 +342,23 @@ async function main(): Promise<void> {
 	let written: string | undefined;
 	await withDatabase(value, async (signal) => {
 		const drift = await diffSchema(value, signal);
-		if (!drift) return;
+		if (drift === undefined || drift === "") {
+			return;
+		}
 		written = await promote(drift);
 		await migrate(value, false, signal);
 		await generateErd(value);
 	});
-	if (!written) {
+	if (written === undefined) {
 		console.log("✅ The schema matches the JPA model; no changelog needed.");
 		return;
 	}
-	console.log(`✅ Wrote ${relative(root, written)} and refreshed the ERD.`);
+	console.log(`✅ Wrote ${path.relative(root, written)} and refreshed the ERD.`);
 	console.log(
 		"Review for data loss and upgrade safety: docs/contributor/database-migration.mdx. Refresh the ERD if you edit the changelog.",
 	);
 }
 
-if (import.meta.main) await main();
+if (import.meta.main) {
+	await main();
+}

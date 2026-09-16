@@ -67,7 +67,9 @@ export function toFacetOptions<TValue extends string>(
 ): FacetOption<TValue>[] {
 	const options: FacetOption<TValue>[] = [];
 	for (const value in labels) {
-		options.push({ value, label: labels[value] });
+		if (Object.hasOwn(labels, value)) {
+			options.push({ value, label: labels[value] });
+		}
 	}
 	return options;
 }

@@ -5,17 +5,19 @@ export async function readEnvFile(path: string): Promise<Record<string, string>>
 	try {
 		contents = await readFile(path, "utf8");
 	} catch (error) {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") return {};
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+			return {};
+		}
 		throw error;
 	}
 	const values: Record<string, string> = {};
-	for (const line of contents.split(/\r?\n/)) {
-		const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
-		if (!match) continue;
-		const [, key, rawValue] = match;
-		if (!key || rawValue === undefined) continue;
-		const value = rawValue.trim();
-		values[key] =
+	for (const line of contents.split(/\r?\n/u)) {
+		const assignment = /^\s*(?<key>[A-Za-z_][A-Za-z0-9_]*)=(?<rawValue>.*)$/u.exec(line)?.groups;
+		if (assignment?.key === undefined || assignment.rawValue === undefined) {
+			continue;
+		}
+		const value = assignment.rawValue.trim();
+		values[assignment.key] =
 			(value.startsWith('"') && value.endsWith('"')) ||
 			(value.startsWith("'") && value.endsWith("'"))
 				? value.slice(1, -1)
@@ -25,15 +27,21 @@ export async function readEnvFile(path: string): Promise<Record<string, string>>
 }
 
 export function positivePort(value: string, name: string): number {
-	if (!/^\d+$/.test(value)) throw new Error(`${name} must be an integer from 1 to 65535`);
+	if (!/^\d+$/u.test(value)) {
+		throw new Error(`${name} must be an integer from 1 to 65535`);
+	}
 	const port = Number(value);
-	if (port < 1 || port > 65_535) throw new Error(`${name} must be an integer from 1 to 65535`);
+	if (port < 1 || port > 65_535) {
+		throw new Error(`${name} must be an integer from 1 to 65535`);
+	}
 	return port;
 }
 
 export function requiredEnv(environment: NodeJS.ProcessEnv, name: string): string {
 	const value = environment[name];
-	if (!value) throw new Error(`${name} is not configured.`);
+	if (value === undefined || value === "") {
+		throw new Error(`${name} is not configured.`);
+	}
 	return value;
 }
 
@@ -52,6 +60,8 @@ export function requiredPositiveInteger(environment: NodeJS.ProcessEnv, name: st
 export function isHostname(value: string): boolean {
 	return (
 		value.length <= 253 &&
-		value.split(".").every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(label))
+		value
+			.split(".")
+			.every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/u.test(label))
 	);
 }

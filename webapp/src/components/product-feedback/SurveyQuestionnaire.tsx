@@ -121,6 +121,13 @@ const ANSWER_VERB: Record<Question["type"], string> = {
 	NPS: "Pick a number",
 };
 
+function chosenOf(value: SurveyResponseDraft["answers"][string]): string[] {
+	if (Array.isArray(value)) {
+		return value;
+	}
+	return typeof value === "string" ? [value] : [];
+}
+
 function choiceValues(question: Question): readonly string[] {
 	if (question.type === "RATING") {
 		return RATING_SCALE.map(String);
@@ -152,7 +159,7 @@ function Items({ className, ...props }: ComponentProps<"div">) {
 							}
 						: undefined;
 				const multiple = question.type === "MULTIPLE_CHOICE";
-				const chosen = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+				const chosen = chosenOf(value);
 				const other = otherAnswerOf(question, chosen);
 				const Choice = scale ? ScaleChoice : QuestionnaireChoice;
 				return (

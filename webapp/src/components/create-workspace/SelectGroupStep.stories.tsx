@@ -71,6 +71,8 @@ export const SingleGroup: Story = {
 	decorators: [withWizardState({ step: 2, groups: [hephaestusGroup] })],
 };
 
+const VISIBILITIES = ["public", "internal", "private"];
+
 /**
  * Many groups to demonstrate scroll behavior.
  */
@@ -80,7 +82,7 @@ export const ManyGroups: Story = {
 			step: 2,
 			groups: Array.from({ length: 20 }, (_, i) =>
 				makeGroup(i + 100, `Group ${i + 1}`, `org/group-${i + 1}`, {
-					visibility: i % 3 === 0 ? "public" : i % 3 === 1 ? "internal" : "private",
+					visibility: VISIBILITIES[i % 3],
 				}),
 			),
 		}),

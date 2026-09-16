@@ -128,12 +128,16 @@ function AdminInstanceUsagePage() {
 				isCurrentMonth={isCurrentMonth}
 				isLoading={listQuery.isLoading}
 				error={listQuery.error}
-				onRetry={() => void listQuery.refetch()}
+				onRetry={() => {
+					void listQuery.refetch();
+				}}
 				expandedWorkspaceSlug={expanded?.workspaceSlug ?? null}
 				detailReport={detailQuery.data}
 				isDetailLoading={detailQuery.isLoading}
 				detailError={detailQuery.error}
-				onRetryDetail={() => void detailQuery.refetch()}
+				onRetryDetail={() => {
+					void detailQuery.refetch();
+				}}
 				onToggleDetails={(workspace) =>
 					setExpanded((current) =>
 						current?.workspaceSlug === workspace.workspaceSlug ? null : workspace,

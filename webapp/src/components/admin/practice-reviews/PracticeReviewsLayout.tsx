@@ -68,21 +68,16 @@ export function PracticeReviewsLayout({ workspaceSlug, children }: PracticeRevie
 	const matchRoute = useMatchRoute();
 	const params = useParams({ strict: false });
 	const search = useSearch({ strict: false });
-	const artifactId =
-		"artifactId" in params
-			? Number(params.artifactId)
-			: "artifactId" in search
-				? search.artifactId
-				: undefined;
+	const searchArtifactId = "artifactId" in search ? search.artifactId : undefined;
+	const artifactId = "artifactId" in params ? Number(params.artifactId) : searchArtifactId;
+	const searchAgentJobId = "agentJobId" in search ? search.agentJobId : undefined;
+	const searchArtifactKind = "artifactKind" in search ? search.artifactKind : undefined;
 	const scope = {
-		agentJobId:
-			"jobId" in params ? params.jobId : "agentJobId" in search ? search.agentJobId : undefined,
+		agentJobId: "jobId" in params ? params.jobId : searchAgentJobId,
 		artifactKind:
 			"artifactKind" in params && typeof params.artifactKind === "string"
 				? reviewArtifactTypeFromSlug(params.artifactKind)
-				: "artifactKind" in search
-					? search.artifactKind
-					: undefined,
+				: searchArtifactKind,
 		artifactId: Number.isSafeInteger(artifactId) ? artifactId : undefined,
 		from: "from" in search ? search.from : undefined,
 		to: "to" in search ? search.to : undefined,
@@ -105,13 +100,14 @@ export function PracticeReviewsLayout({ workspaceSlug, children }: PracticeRevie
 			fuzzy: true,
 		}),
 	);
-	const activeId = targetActive
-		? undefined
-		: deliveryActive
-			? "delivery"
-			: observationsActive
-				? "observations"
-				: "reviews";
+	let activeId: PracticeReviewSection | undefined = "reviews";
+	if (targetActive) {
+		activeId = undefined;
+	} else if (deliveryActive) {
+		activeId = "delivery";
+	} else if (observationsActive) {
+		activeId = "observations";
+	}
 
 	return (
 		<PageLayout>

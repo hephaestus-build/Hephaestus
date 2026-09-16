@@ -21,9 +21,12 @@ describe("instance settings route", () => {
 		let writes = 0;
 		let ifMatch: string | null = null;
 		server.use(
-			http.get("*/admin/settings", () => HttpResponse.json(settings(++reads))),
+			http.get("*/admin/settings", () => {
+				reads += 1;
+				return HttpResponse.json(settings(reads));
+			}),
 			http.patch("*/admin/settings/silent-mode", ({ request }) => {
-				writes++;
+				writes += 1;
 				ifMatch = request.headers.get("If-Match");
 				return HttpResponse.json(
 					{ status: 412, title: "Instance settings changed" },

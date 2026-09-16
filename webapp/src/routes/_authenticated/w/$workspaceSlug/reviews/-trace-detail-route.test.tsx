@@ -7,6 +7,7 @@ import { getArtifactTraceQueryKey } from "@/api/@tanstack/react-query.gen";
 import { artifactTrace } from "@/components/practice-trace/fixtures";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole app shell and its lazy modules.
@@ -154,7 +155,7 @@ describe("review requests belong to the reviewed work", () => {
 		const { router } = renderRouteAtWithRouter("/w/acme/reviews/scm.pull_request/1423");
 		await clickAsk();
 		await screen.findByText(COOLDOWN_SENTENCE);
-		await act(() =>
+		await act(async () =>
 			router.navigate({
 				to: "/w/$workspaceSlug/reviews/$artifactKind/$artifactId",
 				params: { workspaceSlug: "acme", artifactKind: "scm.issue", artifactId: "1430" },
@@ -165,16 +166,13 @@ describe("review requests belong to the reviewed work", () => {
 	});
 
 	it("finishes an outstanding request against its original artifact after navigation", async () => {
-		let respond = (_response: Response) => {};
-		const response = new Promise<Response>((resolve) => {
-			respond = resolve;
-		});
-		server.use(http.post(REQUEST_PATH, () => response));
+		const response = deferred<Response>();
+		server.use(http.post(REQUEST_PATH, async () => response.promise));
 		const { router, queryClient } = renderRouteAtWithRouter(
 			"/w/acme/reviews/scm.pull_request/1423",
 		);
 		await clickAsk();
-		await act(() =>
+		await act(async () =>
 			router.navigate({
 				to: "/w/$workspaceSlug/reviews/$artifactKind/$artifactId",
 				params: { workspaceSlug: "acme", artifactKind: "scm.issue", artifactId: "1430" },
@@ -183,11 +181,11 @@ describe("review requests belong to the reviewed work", () => {
 		const ask = await screen.findByRole("button", { name: "Review this now" }, ROUTE_RENDER_WAIT);
 		expect(ask.hasAttribute("disabled")).toBe(false);
 		const otherReads = traceReads;
-		await act(async () =>
-			respond(
+		await act(async () => {
+			response.resolve(
 				HttpResponse.json({ status: "SUBMITTED", jobId: "0f2b7c1e-9a3d-4c5b-8e1f-2d6a7b8c9d01" }),
-			),
-		);
+			);
+		});
 		await screen.findByText("Review started");
 		expect(
 			queryClient.getQueryState(

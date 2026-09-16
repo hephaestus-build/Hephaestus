@@ -303,7 +303,7 @@ export function AdminSurveyComposer({
 										onChange={(event) => patch({ description: event.target.value })}
 									/>
 									<FieldDescription id={fieldId("description-help")}>
-										Members read this before the first question. Say why you're asking and what the
+										Members read this before the first question. Say why you’re asking and what the
 										answers will change.
 									</FieldDescription>
 									{hasText(errors.description) && (
@@ -363,7 +363,11 @@ export function AdminSurveyComposer({
 										items={audiences}
 										value={draft.audience}
 										disabled={isPending}
-										onValueChange={(value) => hasText(value) && patch({ audience: value })}
+										onValueChange={(value) => {
+											if (hasText(value)) {
+												patch({ audience: value });
+											}
+										}}
 									>
 										<SelectTrigger id={fieldId("audience")} className="w-full @md/field-group:w-56">
 											<SelectValue />
@@ -381,7 +385,7 @@ export function AdminSurveyComposer({
 								<FieldSet>
 									<FieldLegend variant="label">Schedule</FieldLegend>
 									<FieldDescription id={fieldId("schedule-help")}>
-										Times are in your device's timezone.
+										Times are in your device’s timezone.
 									</FieldDescription>
 									<div className="grid gap-5 sm:grid-cols-2">
 										<Field>
@@ -548,7 +552,11 @@ function QuestionCard({
 						items={QUESTION_TYPES}
 						value={question.type}
 						disabled={disabled}
-						onValueChange={(value) => value && onChange({ type: value })}
+						onValueChange={(value) => {
+							if (value) {
+								onChange({ type: value });
+							}
+						}}
 					>
 						<SelectTrigger id={fieldId("type")} className="w-full @md/field-group:w-56">
 							<SelectValue />

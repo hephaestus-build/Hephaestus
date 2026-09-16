@@ -89,7 +89,7 @@ export const EscapeLeavesACleanEditor: Story = {
 		// panel. An editor that swallowed the gesture instead would be indistinguishable from a
 		// broken drawer. `-adoption-route.test.tsx` owns the half where a draft exists.
 		await userEvent.keyboard("{Escape}");
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(document.querySelectorAll('[data-slot="drawer-popup"]')).toHaveLength(0),
 		);
 	},

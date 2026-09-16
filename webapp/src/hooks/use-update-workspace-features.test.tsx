@@ -6,6 +6,7 @@ import { assert, expect, it, vi } from "vitest";
 import type * as ReactQueryGen from "@/api/@tanstack/react-query.gen";
 import { listWorkspacesQueryKey, updateFeaturesMutation } from "@/api/@tanstack/react-query.gen";
 import type { Workspace, WorkspaceListItem } from "@/api/types.gen";
+import { deferred } from "@/test/async";
 
 import { useUpdateWorkspaceFeatures } from "./use-update-workspace-features";
 
@@ -43,12 +44,9 @@ it("updates workspace features immediately and rolls them back on failure", asyn
 	});
 	const queryKey = listWorkspacesQueryKey();
 	queryClient.setQueryData(queryKey, [workspace]);
-	let rejectRequest: (reason: Error) => void = () => {};
+	const request = deferred<Workspace>();
 	vi.mocked(updateFeaturesMutation).mockReturnValue({
-		mutationFn: () =>
-			new Promise<Workspace>((_resolve, reject) => {
-				rejectRequest = reject;
-			}),
+		mutationFn: async () => request.promise,
 	});
 	const { result } = renderHook(
 		() =>
@@ -75,7 +73,7 @@ it("updates workspace features immediately and rolls them back on failure", asyn
 		expect(optimistic).not.toHaveProperty("practiceReviewAutoTriggerEnabled");
 	});
 
-	rejectRequest(new Error("rejected"));
+	request.reject(new Error("rejected"));
 
 	await waitFor(() => expect(result.current.isError).toBe(true));
 	const cached = queryClient.getQueryData<WorkspaceListItem[]>(queryKey);

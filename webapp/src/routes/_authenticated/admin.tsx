@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Outlet, redirect, useMatchRoute } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 
 import { adminGetInstanceSettingsOptions } from "@/api/@tanstack/react-query.gen";
 import { SilentModeBanner } from "@/components/admin/instance/SilentModeBanner";
@@ -27,17 +28,21 @@ function AdminLayout() {
 	const settingsQuery = useQuery(adminGetInstanceSettingsOptions());
 	// The settings page owns this query's error; a second alert here would just stack on it.
 	const onSettingsPage = useMatchRoute()({ to: "/admin/settings" }) !== false;
-	const topStrip =
-		settingsQuery.data?.silentModeEngaged === true ? (
-			<SilentModeBanner settings={settingsQuery.data} />
-		) : settingsQuery.isError && !onSettingsPage ? (
-			// Unknown delivery state is not "delivering": say so rather than silently showing nothing.
+	let topStrip: ReactNode = null;
+	if (settingsQuery.data?.silentModeEngaged === true) {
+		topStrip = <SilentModeBanner settings={settingsQuery.data} />;
+	} else if (settingsQuery.isError && !onSettingsPage) {
+		// Unknown delivery state is not "delivering": say so rather than silently showing nothing.
+		topStrip = (
 			<QueryErrorAlert
 				error={settingsQuery.error}
 				title="Couldn't load the instance delivery state"
-				onRetry={() => void settingsQuery.refetch()}
+				onRetry={() => {
+					void settingsQuery.refetch();
+				}}
 			/>
-		) : null;
+		);
+	}
 	return (
 		<>
 			{topStrip ? <div className="mx-auto mb-6 w-full max-w-6xl">{topStrip}</div> : null}

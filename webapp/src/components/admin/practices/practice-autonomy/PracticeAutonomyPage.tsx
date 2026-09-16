@@ -150,7 +150,11 @@ export function PracticeAutonomyPage({
 		<div className="space-y-6">
 			<AlertDialog
 				open={automaticPromotion !== null}
-				onOpenChange={(open) => !open && setAutomaticPromotion(null)}
+				onOpenChange={(open) => {
+					if (!open) {
+						setAutomaticPromotion(null);
+					}
+				}}
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
@@ -673,7 +677,7 @@ function PracticeAutonomyRow({
 					/>
 				) : (
 					<p className="text-xs text-muted-foreground">
-						This practice can't be reviewed automatically, so it stays off.
+						This practice can’t be reviewed automatically, so it stays off.
 					</p>
 				)}
 			</ItemActions>

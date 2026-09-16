@@ -72,7 +72,7 @@ const meta = {
 		hasFilter: false,
 		hasNextPage: false,
 		isFetchingNextPage: false,
-		onLoadMore: () => {},
+		onLoadMore: fn(),
 		onFilterAccount: fn(),
 		onFilterActor: fn(),
 	},

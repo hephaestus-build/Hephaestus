@@ -80,6 +80,11 @@ function GroupDetailsForm({
 		}
 	};
 
+	let submitLabel = editing ? "Save" : "Create";
+	if (pending) {
+		submitLabel = editing ? "Saving…" : "Creating…";
+	}
+
 	return (
 		<DialogForm
 			onSubmit={(event) => {
@@ -121,7 +126,7 @@ function GroupDetailsForm({
 							/>
 						</div>
 						<FieldDescription id={helpId}>
-							The icon and color appear on this group's chip. Groups use a neutral appearance until
+							The icon and color appear on this group’s chip. Groups use a neutral appearance until
 							you choose one.
 						</FieldDescription>
 					</Field>
@@ -133,7 +138,7 @@ function GroupDetailsForm({
 				</DialogClose>
 				<Button type="submit" className="min-w-20" disabled={pending || trimmed.length === 0}>
 					{pending && <Spinner className="size-4" aria-hidden />}
-					{pending ? (editing ? "Saving…" : "Creating…") : editing ? "Save" : "Create"}
+					{submitLabel}
 				</Button>
 			</DialogFooter>
 		</DialogForm>

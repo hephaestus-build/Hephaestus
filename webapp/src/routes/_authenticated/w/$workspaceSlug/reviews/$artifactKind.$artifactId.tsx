@@ -65,7 +65,9 @@ function ReviewActivityDetailRoute() {
 			trace={trace.data}
 			isLoading={trace.isLoading}
 			error={trace.isError ? trace.error : undefined}
-			onRetry={() => void trace.refetch()}
+			onRetry={() => {
+				void trace.refetch();
+			}}
 			onRequestReview={() =>
 				requestReview.mutate({ path: { workspaceSlug }, body: { artifactKind, artifactId } })
 			}

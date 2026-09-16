@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -85,7 +85,7 @@ function configuredAssertFunctionNames(): readonly string[] {
 	// Resolved as a path rather than through `new URL(…, import.meta.url)`: these tests run in jsdom,
 	// whose `URL` resolves a relative reference against the document's origin, not the module's.
 	const here = import.meta.dirname;
-	const source = readFileSync(join(here, "../../../.oxlintrc.json"), "utf8");
+	const source = readFileSync(path.join(here, "../../../.oxlintrc.json"), "utf8");
 	const json = source
 		.split("\n")
 		.filter((line) => !line.trimStart().startsWith("//"))

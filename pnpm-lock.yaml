@@ -173,6 +173,9 @@ importers:
       '@openapitools/openapi-generator-cli':
         specifier: 2.41.0
         version: 2.41.0(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)
+      '@types/k6':
+        specifier: 2.2.0
+        version: 2.2.0
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
@@ -5333,6 +5336,9 @@ packages:
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
+
+  '@types/k6@2.2.0':
+    resolution: {integrity: sha512-wuHM+JLcpV0VL2G8ltu0N3ZDbbq1GHkP5ypeMzTZcFFqpN8ioV0DojxQFKvlbnVzuhgnY7Yy+Hhl8LzstdplhQ==}
 
   '@types/katex@0.16.8':
     resolution: {integrity: sha512-trgaNyfU+Xh2Tc+ABIb44a5AYUpicB3uwirOioeOkNPPbmgRNtcWyDeeFRzjPZENO9Vq8gvVqfhaaXWLlevVwg==}
@@ -17298,6 +17304,8 @@ snapshots:
       '@types/istanbul-lib-report': 3.0.3
 
   '@types/json-schema@7.0.15': {}
+
+  '@types/k6@2.2.0': {}
 
   '@types/katex@0.16.8': {}
 

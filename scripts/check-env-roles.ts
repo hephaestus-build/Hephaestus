@@ -38,14 +38,14 @@
  * fails rather than passes.
  */
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import path from "node:path";
 
 import { parse, parseAllDocuments } from "yaml";
 
 import { isRecord } from "./lib/json.ts";
 
 /** Resolved from this file, so the gate answers the same whatever the working directory is. */
-const REPO_ROOT = resolve(import.meta.dirname, "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const APPLICATION_YML = "server/application/src/main/resources/application.yml";
 /** The production topology. Both files together are one deployment, split by role. */
 const COMPOSE_FILES = ["docker/compose.app.yaml", "docker/compose.core.yaml"];
@@ -194,27 +194,31 @@ export async function readProfileRoles(root = REPO_ROOT): Promise<ProfileRoles> 
 		try {
 			profileRoles.set(
 				profile,
-				readDisabledRoles(await readFile(join(root, PROFILE_YML(profile)), "utf8")),
+				readDisabledRoles(await readFile(path.join(root, PROFILE_YML(profile)), "utf8")),
 			);
 		} catch (error) {
-			if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+			if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+				throw error;
+			}
 		}
 	}
 	return profileRoles;
 }
 
 /** `${VAR:default}` — Spring's syntax. Stops at `$` so a nested placeholder is skipped, not misread. */
-const SPRING_PLACEHOLDER = /\$\{([A-Z0-9_]+):[^}$]*\}/;
+const SPRING_PLACEHOLDER = /\$\{(?<variable>[A-Z0-9_]+):[^}$]*\}/u;
 
 function yamlDocuments(text: string): unknown[] {
 	return parseAllDocuments(text, { merge: true }).map((document) => {
 		const error = document.errors[0];
-		if (error) throw error;
+		if (error) {
+			throw error;
+		}
 		return document.toJS() as unknown;
 	});
 }
 
-const unquote = (raw: string): string => raw.trim().replace(/^["']|["']$/g, "");
+const unquote = (raw: string): string => raw.trim().replaceAll(/^["']|["']$/gu, "");
 
 /**
  * `${VAR:-d}` and `${VAR-d}` fall back to `d`; a bare `${VAR}` resolves to the empty string, exactly
@@ -222,9 +226,11 @@ const unquote = (raw: string): string => raw.trim().replace(/^["']|["']$/g, "");
  */
 export function composeDefault(raw: string): string {
 	const value = unquote(raw);
-	const placeholder = /^\$\{[A-Z0-9_]+(?<dash>:?-)?(?<fallback>[^}]*)\}$/.exec(value);
-	if (!placeholder) return value;
-	const groups = placeholder.groups;
+	const placeholder = /^\$\{[A-Z0-9_]+(?<dash>:?-)?(?<fallback>[^}]*)\}$/u.exec(value);
+	if (!placeholder) {
+		return value;
+	}
+	const { groups } = placeholder;
 	return groups?.dash === undefined ? "" : (groups.fallback ?? "");
 }
 
@@ -239,16 +245,20 @@ export function readApplicationConfig(text: string): ApplicationConfig {
 	const paths = new Set<string>();
 	const placeholders = new Map<string, string>();
 	const visit = (value: unknown, parent: readonly string[]): void => {
-		if (!isRecord(value)) return;
+		if (!isRecord(value)) {
+			return;
+		}
 		for (const [key, child] of Object.entries(value)) {
-			const path = [...parent, key];
-			const dotted = path.join(".");
+			const keyPath = [...parent, key];
+			const dotted = keyPath.join(".");
 			paths.add(dotted);
 			if (typeof child === "string") {
-				const variable = SPRING_PLACEHOLDER.exec(child)?.[1];
-				if (variable) placeholders.set(variable, dotted);
+				const variable = SPRING_PLACEHOLDER.exec(child)?.groups?.variable;
+				if (variable !== undefined) {
+					placeholders.set(variable, dotted);
+				}
 			}
-			visit(child, path);
+			visit(child, keyPath);
 		}
 	};
 	for (const document of yamlDocuments(text)) {
@@ -275,19 +285,30 @@ export interface ComposeService {
  * the same environment; reading only the mapping would let the sequence form empty a service's
  * environment and pass. A sequence entry with no `=` inherits from the caller's shell, which this
  * gate deliberately does not read, so it delivers nothing here.
+ * @yields each delivered `[key, value]` pair, in file order.
  */
 function* environmentEntries(environment: unknown): Generator<readonly [string, string]> {
 	if (isRecord(environment)) {
 		for (const [key, value] of Object.entries(environment)) {
-			if (value === null) yield [key, ""];
-			else if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+			if (value === null) {
+				yield [key, ""];
+			} else if (
+				typeof value === "string" ||
+				typeof value === "number" ||
+				typeof value === "boolean"
+			) {
 				yield [key, `${value}`];
+			}
 		}
 		return;
 	}
-	if (!Array.isArray(environment)) return;
+	if (!Array.isArray(environment)) {
+		return;
+	}
 	for (const entry of environment) {
-		if (typeof entry !== "string") continue;
+		if (typeof entry !== "string") {
+			continue;
+		}
 		const separator = entry.indexOf("=");
 		yield separator === -1 ? [entry, ""] : [entry.slice(0, separator), entry.slice(separator + 1)];
 	}
@@ -300,10 +321,14 @@ function* environmentEntries(environment: unknown): Generator<readonly [string, 
 export function readComposeServices(text: string): Map<string, ComposeService> {
 	const services = new Map<string, ComposeService>();
 	const compose = parse(text, { merge: true }) as unknown;
-	if (!isRecord(compose) || !isRecord(compose.services)) return services;
+	if (!isRecord(compose) || !isRecord(compose.services)) {
+		return services;
+	}
 
 	for (const [name, value] of Object.entries(compose.services)) {
-		if (!isRecord(value)) continue;
+		if (!isRecord(value)) {
+			continue;
+		}
 		const service: ComposeService = {
 			name,
 			env: new Set(),
@@ -326,22 +351,30 @@ export function readComposeServices(text: string): Map<string, ComposeService> {
  * activates. The application defaults every role on, so silence means yes.
  */
 const runsRole = (service: ComposeService, role: Role, profileRoles: ProfileRoles): boolean => {
-	if (service.flags.get(ROLE_FLAGS[role]) === "false") return false;
+	if (service.flags.get(ROLE_FLAGS[role]) === "false") {
+		return false;
+	}
 	const profiles = (service.flags.get("SPRING_PROFILES_ACTIVE") ?? "")
 		.split(",")
 		.map((p) => p.trim());
-	return !profiles.some((profile) => profileRoles.get(profile)?.has(role));
+	return !profiles.some((profile) => profileRoles.get(profile)?.has(role) === true);
 };
 
 /** Roles an `application-<profile>.yml` overlay switches off. */
 export function readDisabledRoles(text: string): Set<string> {
 	const disabled = new Set<string>();
 	for (const document of yamlDocuments(text)) {
-		if (!isRecord(document) || !isRecord(document.hephaestus)) continue;
-		const runtime = document.hephaestus.runtime;
-		if (!isRecord(runtime)) continue;
+		if (!isRecord(document) || !isRecord(document.hephaestus)) {
+			continue;
+		}
+		const { runtime } = document.hephaestus;
+		if (!isRecord(runtime)) {
+			continue;
+		}
 		for (const [role, configuration] of Object.entries(runtime)) {
-			if (isRecord(configuration) && configuration.enabled === false) disabled.add(role);
+			if (isRecord(configuration) && configuration.enabled === false) {
+				disabled.add(role);
+			}
 		}
 	}
 	return disabled;
@@ -381,9 +414,11 @@ export function analyse(
 	// Longest path first so a nested scope wins over its parent.
 	const scopeOrder = [...ROLE_SCOPES].toSorted((a, b) => b.path.length - a.path.length);
 	const ownership = new Map<string, RoleScope>();
-	for (const [variable, path] of placeholders) {
-		const scope = scopeOrder.find((s) => path === s.path || path.startsWith(`${s.path}.`));
-		if (scope) ownership.set(variable, scope);
+	for (const [variable, keyPath] of placeholders) {
+		const scope = scopeOrder.find((s) => keyPath === s.path || keyPath.startsWith(`${s.path}.`));
+		if (scope) {
+			ownership.set(variable, scope);
+		}
 	}
 
 	const failures: string[] = [];
@@ -418,10 +453,14 @@ export function analyse(
 		}
 		for (const [name, service] of services) {
 			const id = `${label}:${name}`;
-			if (service.image.includes(APPLICATION_IMAGE)) applicationContainers.push({ id, service });
+			if (service.image.includes(APPLICATION_IMAGE)) {
+				applicationContainers.push({ id, service });
+			}
 			for (const variable of service.env) {
 				const scope = ownership.get(variable);
-				if (!scope) continue;
+				if (!scope) {
+					continue;
+				}
 				const record = delivered.get(variable) ?? { scope, deliveries: [] };
 				delivered.set(variable, record);
 				record.deliveries.push({ id, service });
@@ -438,7 +477,9 @@ export function analyse(
 	}
 
 	for (const [variable, { scope, deliveries }] of delivered) {
-		if (deliveries.some(({ service }) => runsRole(service, scope.role, profileRoles))) continue;
+		if (deliveries.some(({ service }) => runsRole(service, scope.role, profileRoles))) {
+			continue;
+		}
 		failures.push(
 			`${variable} is forwarded by ${deliveries.map((d) => d.id).join(", ")}, but no service running the ${scope.role} role receives it.\n` +
 				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
@@ -447,7 +488,9 @@ export function analyse(
 	}
 
 	for (const [variable, scope] of ownership) {
-		if (delivered.has(variable)) continue;
+		if (delivered.has(variable)) {
+			continue;
+		}
 		failures.push(
 			`${variable} is offered by ${APPLICATION_YML} but no service in the deployment forwards it.\n` +
 				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
@@ -461,14 +504,18 @@ export function analyse(
 	const spellings = new Map<string, Map<string, string[]>>();
 	for (const { id, service } of applicationContainers) {
 		for (const [variable, value] of service.raw) {
-			if (PER_CONTAINER.has(variable)) continue;
+			if (PER_CONTAINER.has(variable)) {
+				continue;
+			}
 			const byValue = spellings.get(variable) ?? new Map<string, string[]>();
 			spellings.set(variable, byValue);
 			byValue.set(value, [...(byValue.get(value) ?? []), id]);
 		}
 	}
 	for (const [variable, byValue] of spellings) {
-		if (byValue.size < 2) continue;
+		if (byValue.size < 2) {
+			continue;
+		}
 		const written = [...byValue]
 			.map(([value, ids]) => `    ${value === "" ? "<nothing>" : value}\n      ${ids.join(", ")}`)
 			.join("\n");
@@ -482,23 +529,25 @@ export function analyse(
 
 	// omitted. The loop above sees only containers that mention the key, so an absence has to be
 	// checked separately: the container that omits it reads the application default instead.
-	for (const { variable, path, why } of DEPLOYMENT_WIDE) {
-		if (!paths.has(path)) {
+	for (const { variable, path: keyPath, why } of DEPLOYMENT_WIDE) {
+		if (!paths.has(keyPath)) {
 			failures.push(
-				`DEPLOYMENT_WIDE declares "${path}" (${variable}), which ${APPLICATION_YML} does not have.\n` +
+				`DEPLOYMENT_WIDE declares "${keyPath}" (${variable}), which ${APPLICATION_YML} does not have.\n` +
 					"  Point it at wherever the setting moved, or drop the entry — as written it checks nothing.",
 			);
 			continue;
 		}
 		const missing = applicationContainers.filter(({ service }) => !service.env.has(variable));
-		if (missing.length === 0) continue;
+		if (missing.length === 0) {
+			continue;
+		}
 		const listed = missing.map(({ id }) => `    ${id}`).join("\n");
 		failures.push(
 			missing.length === applicationContainers.length
-				? `${variable} binds ${path}, and no container running the application image is given it.\n` +
+				? `${variable} binds ${keyPath}, and no container running the application image is given it.\n` +
 						`  ${why}.\n` +
 						"  Every one of them reads it, so the deployment has nowhere to get the value from."
-				: `${variable} binds ${path}, and these containers run the application image without it:\n${listed}\n` +
+				: `${variable} binds ${keyPath}, and these containers run the application image without it:\n${listed}\n` +
 						`  ${why}.\n` +
 						"  The setting is not gated on a runtime role, so leaving it off one container does not\n" +
 						"  scope it — that container falls back to the application default and reads a different\n" +
@@ -512,16 +561,18 @@ export function analyse(
 if (process.argv[1] === import.meta.filename) {
 	const compose: ComposeFile[] = [];
 	for (const file of COMPOSE_FILES) {
-		compose.push([file, await readFile(join(REPO_ROOT, file), "utf8")]);
+		compose.push([file, await readFile(path.join(REPO_ROOT, file), "utf8")]);
 	}
 	const profileRoles = await readProfileRoles();
 	const { failures, delivered, applicationContainers } = analyse(
-		await readFile(join(REPO_ROOT, APPLICATION_YML), "utf8"),
+		await readFile(path.join(REPO_ROOT, APPLICATION_YML), "utf8"),
 		compose,
 		profileRoles,
 	);
 	if (failures.length > 0) {
-		for (const failure of failures) console.error(`${failure}\n`);
+		for (const failure of failures) {
+			console.error(`${failure}\n`);
+		}
 		process.exit(1);
 	}
 	console.log(

@@ -49,8 +49,24 @@ const deploymentConfig: DeploymentConfig = {
 	readToken: "read-token",
 };
 
+/** A `sleep` for tests, which have no clock to wait on. */
+const noSleep: Dependencies["sleep"] = async () => {
+	/* nothing waits in a test */
+};
+
 function dependencies(fetchImplementation: Dependencies["fetch"]): Dependencies {
-	return { fetch: fetchImplementation, now: Date.now, sleep: () => Promise.resolve() };
+	return { fetch: fetchImplementation, now: Date.now, sleep: noSleep };
+}
+
+/** The URL a `fetch` was given, whichever of its three input shapes carried it. */
+function requestUrl(input: Parameters<Dependencies["fetch"]>[0]): string {
+	if (input instanceof Request) {
+		return input.url;
+	}
+	if (input instanceof URL) {
+		return input.href;
+	}
+	return input;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -76,26 +92,28 @@ void describe("Coolify preview webhook", () => {
 		assert.throws(
 			() =>
 				assertWebhookAccepted([{ message: "Unauthorized to deploy.\nDetails", status: "failed" }]),
-			/Unauthorized to deploy\. Details/,
+			/Unauthorized to deploy\. Details/u,
 		);
 		assert.throws(
 			() => assertWebhookAccepted([{ status: "queued" }, { status: "queued" }]),
-			/No application/,
+			/No application/u,
 		);
 		assert.throws(
 			() => assertWebhookAccepted([{ status: "queued" }, { message: "drift", status: "failed" }]),
-			/drift/,
+			/drift/u,
 		);
 	});
 
 	void test("signs the snapshot and resolves only the exact PR commit", async () => {
 		let calls = 0;
-		const fakeFetch: Dependencies["fetch"] = (input, init) => {
+		const fakeFetch: Dependencies["fetch"] = async (input, init) => {
 			calls += 1;
-			const url = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+			const url = requestUrl(input);
 			if (url.includes("/webhooks/")) {
-				if (typeof init?.body !== "string") throw new Error("expected a string webhook body");
-				const body = init.body;
+				if (typeof init?.body !== "string") {
+					throw new TypeError("expected a string webhook body");
+				}
+				const { body } = init;
 				const headers = new Headers(init.headers);
 				const expected = createHmac("sha256", pullRequest.webhookSecret).update(body).digest("hex");
 				assert.equal(headers.get("X-Hub-Signature-256"), `sha256=${expected}`);
@@ -104,30 +122,30 @@ void describe("Coolify preview webhook", () => {
 					isRecord(parsed) && isRecord(parsed.pull_request) && isRecord(parsed.pull_request.head),
 				);
 				assert.equal(parsed.pull_request.head.sha, SHA);
-				return Promise.resolve(Response.json([{ status: "queued" }]));
+				return Response.json([{ status: "queued" }]);
 			}
-			if (calls === 1) return Promise.resolve(Response.json({ count: 0, deployments: [] }));
-			return Promise.resolve(
-				Response.json({
-					count: 2,
-					deployments: [
-						{
-							commit: OTHER_SHA,
-							created_at: "2026-08-28T12:01:00Z",
-							deployment_uuid: "wrong",
-							pull_request_id: 7,
-							status: "queued",
-						},
-						{
-							commit: SHA,
-							created_at: "2026-08-28T12:00:00Z",
-							deployment_uuid: "exact",
-							pull_request_id: 7,
-							status: "queued",
-						},
-					],
-				}),
-			);
+			if (calls === 1) {
+				return Response.json({ count: 0, deployments: [] });
+			}
+			return Response.json({
+				count: 2,
+				deployments: [
+					{
+						commit: OTHER_SHA,
+						created_at: "2026-08-28T12:01:00Z",
+						deployment_uuid: "wrong",
+						pull_request_id: 7,
+						status: "queued",
+					},
+					{
+						commit: SHA,
+						created_at: "2026-08-28T12:00:00Z",
+						deployment_uuid: "exact",
+						pull_request_id: 7,
+						status: "queued",
+					},
+				],
+			});
 		};
 
 		assert.equal(await queuePreview(queueConfig, dependencies(fakeFetch)), "exact");
@@ -143,29 +161,27 @@ void describe("Coolify preview webhook", () => {
 			pull_request_id: 7,
 			status: "finished",
 		};
-		const fakeFetch: Dependencies["fetch"] = (input) => {
-			const url = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+		const fakeFetch: Dependencies["fetch"] = async (input) => {
+			const url = requestUrl(input);
 			if (url.includes("/webhooks/")) {
-				return Promise.resolve(Response.json([{ status: "queued" }]));
+				return Response.json([{ status: "queued" }]);
 			}
 			inventoryReads += 1;
-			return Promise.resolve(
-				Response.json({
-					count: inventoryReads === 1 ? 1 : 2,
-					deployments:
-						inventoryReads === 1
-							? [oldRecord]
-							: [
-									oldRecord,
-									{
-										...oldRecord,
-										created_at: "2026-08-28T12:01:00Z",
-										deployment_uuid: "new-deployment",
-										status: "queued",
-									},
-								],
-				}),
-			);
+			return Response.json({
+				count: inventoryReads === 1 ? 1 : 2,
+				deployments:
+					inventoryReads === 1
+						? [oldRecord]
+						: [
+								oldRecord,
+								{
+									...oldRecord,
+									created_at: "2026-08-28T12:01:00Z",
+									deployment_uuid: "new-deployment",
+									status: "queued",
+								},
+							],
+			});
 		};
 
 		assert.equal(await queuePreview(queueConfig, dependencies(fakeFetch)), "new-deployment");
@@ -173,22 +189,20 @@ void describe("Coolify preview webhook", () => {
 
 	void test("adopts an exact active deployment after a lost webhook response", async () => {
 		let calls = 0;
-		const fakeFetch: Dependencies["fetch"] = () => {
+		const fakeFetch: Dependencies["fetch"] = async () => {
 			calls += 1;
-			return Promise.resolve(
-				Response.json({
-					count: 1,
-					deployments: [
-						{
-							commit: SHA,
-							created_at: "2026-08-28T12:00:00Z",
-							deployment_uuid: "already-queued",
-							pull_request_id: 7,
-							status: "in_progress",
-						},
-					],
-				}),
-			);
+			return Response.json({
+				count: 1,
+				deployments: [
+					{
+						commit: SHA,
+						created_at: "2026-08-28T12:00:00Z",
+						deployment_uuid: "already-queued",
+						pull_request_id: 7,
+						status: "in_progress",
+					},
+				],
+			});
 		};
 
 		assert.equal(await queuePreview(queueConfig, dependencies(fakeFetch)), "already-queued");
@@ -224,7 +238,7 @@ void describe("Coolify deployment provenance", () => {
 		assert.equal(selected?.deploymentUuid, "newer");
 		assert.throws(
 			() => selectExactDeployment({ count: 1, deployments: [{}] }, 7, SHA),
-			/malformed/,
+			/malformed/u,
 		);
 		assert.equal(
 			selectExactDeployment(
@@ -262,7 +276,7 @@ void describe("Coolify deployment provenance", () => {
 					SHA,
 					"deployment-7",
 				),
-			/provenance/,
+			/provenance/u,
 		);
 		assert.throws(
 			() =>
@@ -278,9 +292,9 @@ void describe("Coolify deployment provenance", () => {
 					SHA,
 					"deployment-7",
 				),
-			/provenance/,
+			/provenance/u,
 		);
-		assert.throws(() => validateDeploymentProvenance({}, 7, SHA, "deployment-7"), /malformed/);
+		assert.throws(() => validateDeploymentProvenance({}, 7, SHA, "deployment-7"), /malformed/u);
 		assert.throws(
 			() =>
 				validateDeploymentProvenance(
@@ -295,7 +309,7 @@ void describe("Coolify deployment provenance", () => {
 					SHA,
 					"deployment-7",
 				),
-			/malformed/,
+			/malformed/u,
 		);
 		assert.throws(
 			() =>
@@ -311,27 +325,25 @@ void describe("Coolify deployment provenance", () => {
 					SHA,
 					"deployment-7",
 				),
-			/provenance/,
+			/provenance/u,
 		);
 	});
 
 	void test("marks success only after exact provenance and an HTTP 2xx health response", async () => {
 		let calls = 0;
-		const fakeFetch: Dependencies["fetch"] = () => {
+		const fakeFetch: Dependencies["fetch"] = async () => {
 			calls += 1;
 			if (calls === 1) {
-				return Promise.resolve(
-					Response.json({
-						commit: SHA,
-						created_at: "now",
-						deployment_url: "/project/app/deployment/deployment-7",
-						deployment_uuid: "deployment-7",
-						pull_request_id: 7,
-						status: "finished",
-					}),
-				);
+				return Response.json({
+					commit: SHA,
+					created_at: "now",
+					deployment_url: "/project/app/deployment/deployment-7",
+					deployment_uuid: "deployment-7",
+					pull_request_id: 7,
+					status: "finished",
+				});
 			}
-			return Promise.resolve(new Response("ok", { status: 200 }));
+			return new Response("ok", { status: 200 });
 		};
 		const result = await waitForDeployment(deploymentConfig, dependencies(fakeFetch));
 
@@ -341,63 +353,62 @@ void describe("Coolify deployment provenance", () => {
 
 	void test("never probes health after a provenance mismatch", async () => {
 		let calls = 0;
-		const fakeFetch: Dependencies["fetch"] = () => {
+		const fakeFetch: Dependencies["fetch"] = async () => {
 			calls += 1;
-			return Promise.resolve(
-				Response.json({
-					commit: OTHER_SHA,
-					created_at: "now",
-					deployment_uuid: "deployment-7",
-					pull_request_id: 7,
-					status: "finished",
-				}),
-			);
+			return Response.json({
+				commit: OTHER_SHA,
+				created_at: "now",
+				deployment_uuid: "deployment-7",
+				pull_request_id: 7,
+				status: "finished",
+			});
 		};
 		const result = await waitForDeployment(deploymentConfig, dependencies(fakeFetch));
 
 		assert.equal(result.state, "failure");
-		assert.match(result.description, /provenance/);
+		assert.match(result.description, /provenance/u);
 		assert.equal(calls, 1);
 	});
 
 	void test("retries transient status and health failures without accepting redirects", async () => {
 		let calls = 0;
 		let now = 0;
-		const fakeFetch: Dependencies["fetch"] = (_input, init) => {
+		const fakeFetch: Dependencies["fetch"] = async (_input, init) => {
 			calls += 1;
-			if (calls === 1 || calls === 3) return Promise.reject(new Error("temporary network failure"));
+			if (calls === 1 || calls === 3) {
+				throw new Error("temporary network failure");
+			}
 			if (calls === 2) {
-				return Promise.resolve(
-					Response.json({
-						commit: SHA,
-						created_at: "now",
-						deployment_uuid: "deployment-7",
-						pull_request_id: 7,
-						status: "in_progress",
-					}),
-				);
+				return Response.json({
+					commit: SHA,
+					created_at: "now",
+					deployment_uuid: "deployment-7",
+					pull_request_id: 7,
+					status: "in_progress",
+				});
 			}
 			if (calls === 4) {
-				return Promise.resolve(
-					Response.json({
-						commit: SHA,
-						created_at: "now",
-						deployment_uuid: "deployment-7",
-						pull_request_id: 7,
-						status: "finished",
-					}),
-				);
+				return Response.json({
+					commit: SHA,
+					created_at: "now",
+					deployment_uuid: "deployment-7",
+					pull_request_id: 7,
+					status: "finished",
+				});
 			}
-			if (calls >= 5) assert.equal(init?.redirect, "manual");
-			if (calls === 5) return Promise.resolve(new Response(null, { status: 302 }));
-			return Promise.resolve(new Response("ok", { status: 200 }));
+			if (calls >= 5) {
+				assert.equal(init?.redirect, "manual");
+			}
+			if (calls === 5) {
+				return new Response(null, { status: 302 });
+			}
+			return new Response("ok", { status: 200 });
 		};
 		const result = await waitForDeployment(deploymentConfig, {
 			fetch: fakeFetch,
 			now: () => now,
-			sleep: (milliseconds) => {
+			sleep: async (milliseconds) => {
 				now += milliseconds;
-				return Promise.resolve();
 			},
 		});
 
@@ -450,22 +461,28 @@ void describe("published image provenance", () => {
 	void test("reports an unpublished tag as pending, so the caller can wait for CI", () => {
 		const runner: CommandRunner = {
 			run: (command, arguments_) => {
-				if (arguments_[0] === "login") return { status: 0, stderr: "", stdout: "" };
-				if (command === "docker") return { status: 1, stderr: "manifest unknown", stdout: "" };
+				if (arguments_[0] === "login") {
+					return { status: 0, stderr: "", stdout: "" };
+				}
+				if (command === "docker") {
+					return { status: 1, stderr: "manifest unknown", stdout: "" };
+				}
 				throw new Error("attestation must not run for a missing image");
 			},
 		};
 
 		assert.throws(
 			() => checkImages(imageEnvironment, runner, () => undefined),
-			new RegExp(IMAGE_PENDING),
+			new RegExp(IMAGE_PENDING, "u"),
 		);
 	});
 
 	void test("rejects a digest no trusted workflow attested", () => {
 		const runner: CommandRunner = {
 			run: (command, arguments_) => {
-				if (arguments_[0] === "login") return { status: 0, stderr: "", stdout: "" };
+				if (arguments_[0] === "login") {
+					return { status: 0, stderr: "", stdout: "" };
+				}
 				if (command === "docker") {
 					return { status: 0, stderr: "", stdout: `sha256:${"c".repeat(64)}\n` };
 				}
@@ -473,33 +490,37 @@ void describe("published image provenance", () => {
 			},
 		};
 
-		assert.throws(() => checkImages(imageEnvironment, runner, () => undefined), /provenance/);
+		assert.throws(() => checkImages(imageEnvironment, runner, () => undefined), /provenance/u);
 	});
 });
 
-void describe("waiting for CI to publish", () => {
-	const runnerFor = (results: readonly ("pending" | "unsigned" | "ok")[]): CommandRunner => {
-		let call = 0;
-		return {
-			run: (command, arguments_) => {
-				if (arguments_[0] === "login") return { status: 0, stderr: "", stdout: "" };
-				if (command === "docker") {
-					const outcome = results[Math.min(call, results.length - 1)];
-					if (outcome === "pending") return { status: 1, stderr: "manifest unknown", stdout: "" };
-					return { status: 0, stderr: "", stdout: `sha256:${"c".repeat(64)}\n` };
-				}
+const runnerFor = (results: readonly ("pending" | "unsigned" | "ok")[]): CommandRunner => {
+	let call = 0;
+	return {
+		run: (command, arguments_) => {
+			if (arguments_[0] === "login") {
+				return { status: 0, stderr: "", stdout: "" };
+			}
+			if (command === "docker") {
 				const outcome = results[Math.min(call, results.length - 1)];
-				call += 1;
-				return outcome === "unsigned"
-					? { status: 1, stderr: "no attestations", stdout: "" }
-					: { status: 0, stderr: "", stdout: "" };
-			},
-		};
+				if (outcome === "pending") {
+					return { status: 1, stderr: "manifest unknown", stdout: "" };
+				}
+				return { status: 0, stderr: "", stdout: `sha256:${"c".repeat(64)}\n` };
+			}
+			const outcome = results[Math.min(call, results.length - 1)];
+			call += 1;
+			return outcome === "unsigned"
+				? { status: 1, stderr: "no attestations", stdout: "" }
+				: { status: 0, stderr: "", stdout: "" };
+		},
 	};
-	const noWait = {
-		...dependencies(() => Promise.reject(new Error("unused"))),
-		sleep: () => Promise.resolve(),
-	};
+};
+
+void describe("waiting for CI to publish", () => {
+	const noWait = dependencies(async () => {
+		throw new Error("unused");
+	});
 
 	void test("returns once the images appear", async () => {
 		await awaitImages(imageEnvironment, runnerFor(["ok"]), () => undefined, noWait);
@@ -510,25 +531,24 @@ void describe("waiting for CI to publish", () => {
 		// then report the wrong reason.
 		let sleeps = 0;
 		await assert.rejects(
-			() =>
+			async () =>
 				awaitImages(imageEnvironment, runnerFor(["unsigned"]), () => undefined, {
 					...noWait,
-					sleep: () => {
+					sleep: async () => {
 						sleeps += 1;
-						return Promise.resolve();
 					},
 				}),
-			/provenance/,
+			/provenance/u,
 		);
 		assert.equal(sleeps, 0);
 	});
 
 	void test("gives up with the pending image as the cause", async () => {
 		await assert.rejects(
-			() => awaitImages(imageEnvironment, runnerFor(["pending"]), () => undefined, noWait),
+			async () => awaitImages(imageEnvironment, runnerFor(["pending"]), () => undefined, noWait),
 			(error: unknown) =>
 				error instanceof Error &&
-				/never published/.test(error.message) &&
+				error.message.includes("never published") &&
 				error.cause instanceof Error &&
 				error.cause.message.startsWith(IMAGE_PENDING),
 		);

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { listWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { renderWithRouter } from "@/test/router-harness";
 
 import { WorkspaceDangerZoneSettings } from "./WorkspaceDangerZoneSettings";
@@ -40,7 +41,7 @@ function deleteButton() {
 }
 
 /** Waits out the permission check that gates the owner-only control. */
-function findDeleteButton() {
+async function findDeleteButton() {
 	return screen.findByRole("button", { name: /^delete workspace$/iu }, WAIT);
 }
 
@@ -125,13 +126,10 @@ describe("WorkspaceDangerZoneSettings", () => {
 	});
 
 	it("does not guess the role while permissions load", async () => {
-		let resolveRole = () => {};
-		const roleReady = new Promise<void>((resolve) => {
-			resolveRole = resolve;
-		});
+		const roleReady = deferred<undefined>();
 		server.use(
 			http.get("*/workspaces/demo/members/me", async () => {
-				await roleReady;
+				await roleReady.promise;
 				return HttpResponse.json({ role: "OWNER", userLogin: "ada" });
 			}),
 		);
@@ -140,7 +138,7 @@ describe("WorkspaceDangerZoneSettings", () => {
 		expect(screen.queryByText(/only the workspace owner/iu)).toBeNull();
 		screen.getByText(/checking your permissions/iu);
 
-		resolveRole();
+		roleReady.resolve(undefined);
 		await findDeleteButton();
 	});
 

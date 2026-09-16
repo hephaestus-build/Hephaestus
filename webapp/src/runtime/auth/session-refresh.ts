@@ -18,7 +18,7 @@ async function rotate(): Promise<SessionRefreshResult> {
 }
 
 /** Share overlapping renewals within this tab; the session lock coordinates other tabs. */
-export function refreshAccessToken(): Promise<SessionRefreshResult> {
+export async function refreshAccessToken(): Promise<SessionRefreshResult> {
 	inFlight ??= withSessionLock(rotate)
 		.catch((): SessionRefreshResult => "unavailable")
 		.finally(() => {

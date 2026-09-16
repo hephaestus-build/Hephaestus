@@ -36,7 +36,9 @@ export async function resolveCurrentUser(
 	const options = currentUserQueryOptions();
 	try {
 		const user = await queryClient.query({ ...options, staleTime: "static" });
-		void queryClient.query(options).catch(() => {});
+		void queryClient.query(options).catch(() => {
+			/* the background revalidation may fail; the cached identity stands */
+		});
 		return user;
 	} catch (error) {
 		if (error instanceof Error && error.cause instanceof Response && error.cause.status === 401) {
@@ -84,7 +86,7 @@ export async function resolveWorkspaceMembership(
 // Decode nested escapes before validation, with bounded work for untrusted input.
 function fullyDecode(value: string): string {
 	let current = value;
-	for (let i = 0; i < 5; i++) {
+	for (let i = 0; i < 5; i += 1) {
 		let decoded: string;
 		try {
 			decoded = decodeURIComponent(current);

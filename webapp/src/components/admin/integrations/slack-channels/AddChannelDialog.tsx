@@ -27,6 +27,16 @@ export interface AddChannelDialogProps {
 	onSubmit: (input: { slackChannelId: string; channelName?: string }) => Promise<void> | void;
 }
 
+function candidateDisabledReason(candidate: SlackChannelCandidate): string | undefined {
+	if (candidate.archived === true) {
+		return "Archived";
+	}
+	if (candidate.consentState === "ACTIVE") {
+		return "Already listed";
+	}
+	return undefined;
+}
+
 export function AddChannelDialog({
 	open,
 	onOpenChange,
@@ -44,18 +54,18 @@ export function AddChannelDialog({
 	const parsedReference = parseSlackChannelReference(channelReference);
 	const referenceInvalid = channelReference.trim().length > 0 && parsedReference == null;
 
-	const resolved = selectedCandidate
-		? {
-				slackChannelId: selectedCandidate.slackChannelId,
-				channelName: selectedCandidate.channelName,
-			}
-		: parsedReference
-			? {
-					slackChannelId: parsedReference.channelId,
-					channelName:
-						channelName.trim().length > 0 ? channelName.trim() : parsedReference.channelName,
-				}
-			: null;
+	let resolved: { slackChannelId: string; channelName?: string } | null = null;
+	if (selectedCandidate) {
+		resolved = {
+			slackChannelId: selectedCandidate.slackChannelId,
+			channelName: selectedCandidate.channelName,
+		};
+	} else if (parsedReference) {
+		resolved = {
+			slackChannelId: parsedReference.channelId,
+			channelName: channelName.trim().length > 0 ? channelName.trim() : parsedReference.channelName,
+		};
+	}
 
 	function handleOpenChange(next: boolean) {
 		if (!next) {
@@ -127,13 +137,7 @@ export function AddChannelDialog({
 									selectedChannelName={
 										parsedReference ? channelName.trim() || undefined : undefined
 									}
-									getDisabledReason={(candidate) =>
-										candidate.archived === true
-											? "Archived"
-											: candidate.consentState === "ACTIVE"
-												? "Already listed"
-												: undefined
-									}
+									getDisabledReason={candidateDisabledReason}
 									renderBadges={(candidate) =>
 										candidate.consentState === "REVOKED" ? (
 											<Badge variant="outline">Revoked</Badge>
@@ -191,7 +195,7 @@ export function AddChannelDialog({
 									autoComplete="off"
 								/>
 								<FieldDescription>
-									Shown in the table. Slack's own name is used when you leave this blank.
+									Shown in the table. Slack’s own name is used when you leave this blank.
 								</FieldDescription>
 							</Field>
 						)}

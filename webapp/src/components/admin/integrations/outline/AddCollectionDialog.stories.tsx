@@ -4,6 +4,7 @@ import { delay, HttpResponse, http } from "msw";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { expectSettledVisible } from "@/stories/overlay";
+import { sleep } from "@/test/async";
 
 import { AddCollectionDialog } from "./AddCollectionDialog";
 
@@ -163,18 +164,22 @@ export const KeyboardNavigation: Story = {
 		const dialog = await screen.findByRole("dialog");
 		const search = await within(dialog).findByRole("combobox");
 		await userEvent.click(search);
-		await waitFor(() => expect(search).toHaveFocus());
+		await waitFor(async () => expect(search).toHaveFocus());
 
 		await userEvent.keyboard("{ArrowDown}");
 		const engineering = within(dialog).getByRole("option", { name: /engineering/iu });
-		await waitFor(() => expect(search).toHaveAttribute("aria-activedescendant", engineering.id));
+		await waitFor(async () =>
+			expect(search).toHaveAttribute("aria-activedescendant", engineering.id),
+		);
 
 		const product = within(dialog).getByRole("option", { name: /product/iu });
 		await userEvent.keyboard("{ArrowDown}");
-		await waitFor(() => expect(search).toHaveAttribute("aria-activedescendant", product.id));
+		await waitFor(async () => expect(search).toHaveAttribute("aria-activedescendant", product.id));
 
 		await userEvent.keyboard("{ArrowUp}");
-		await waitFor(() => expect(search).toHaveAttribute("aria-activedescendant", engineering.id));
+		await waitFor(async () =>
+			expect(search).toHaveAttribute("aria-activedescendant", engineering.id),
+		);
 
 		await userEvent.keyboard("{Enter}");
 		await expect(
@@ -182,11 +187,11 @@ export const KeyboardNavigation: Story = {
 		).toBeDisabled();
 
 		await userEvent.keyboard("{ArrowDown}{Enter}");
-		await waitFor(() => expect(product).toHaveAttribute("aria-selected", "true"));
+		await waitFor(async () => expect(product).toHaveAttribute("aria-selected", "true"));
 		await expect(args.onRegister).not.toHaveBeenCalled();
 
 		await userEvent.keyboard("{Enter}");
-		await waitFor(() => expect(product).toHaveAttribute("aria-selected", "false"));
+		await waitFor(async () => expect(product).toHaveAttribute("aria-selected", "false"));
 	},
 };
 
@@ -219,9 +224,7 @@ export const RegisteringSequentially: Story = {
 	parameters: { msw: { handlers: [candidatesHandler(candidates)] } },
 	args: {
 		onRegister: fn(async () => {
-			await new Promise((resolve) => {
-				setTimeout(resolve, 400);
-			});
+			await sleep(400);
 		}),
 	},
 	play: async () => {

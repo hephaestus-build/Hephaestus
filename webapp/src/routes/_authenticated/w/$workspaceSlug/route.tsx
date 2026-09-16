@@ -9,9 +9,11 @@ import { hasText } from "@/lib/text";
 // the old path into another workspace, which is the navigation this route exists to prevent.
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 	beforeLoad: async ({ context, params }) => {
-		const workspaces = await context.queryClient.query(listWorkspacesOptions()).catch(() => {});
 		// A list that cannot be fetched is not revoked access: keep the route rather than evicting
 		// the reader on a network error.
+		const workspaces = await context.queryClient
+			.query(listWorkspacesOptions())
+			.catch(() => undefined);
 		if (!workspaces) {
 			return;
 		}

@@ -20,8 +20,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-const SIDEBAR_COOKIE_NAME = "sidebar_state";
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
+/**
+ * ⚠️ Diverges from the shadcn registry — `shadcn add sidebar` restores the following; re-apply.
+ *
+ * 1. `SidebarProvider` does not write the `sidebar_state` cookie: upstream sets it so a Next.js
+ *    server render can read the open state, and nothing in this SPA reads it.
+ */
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
@@ -75,8 +79,6 @@ function SidebarProvider({
 		} else {
 			_setOpen(openState);
 		}
-
-		document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
 	};
 
 	const toggleSidebar = () =>

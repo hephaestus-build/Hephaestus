@@ -1,4 +1,4 @@
-import { basename, isAbsolute, relative } from "node:path";
+import path from "node:path";
 
 import { defineRule } from "@oxlint/plugins";
 
@@ -24,13 +24,13 @@ const PATH_SEPARATOR = /[\\/]/u;
  * rule falls back to that rather than to guessing.
  */
 function ownedSegments(filename: string, cwd: string): string[] {
-	const relativePath = relative(cwd, filename);
+	const relativePath = path.relative(cwd, filename);
 	if (
 		relativePath === "" ||
-		isAbsolute(relativePath) ||
+		path.isAbsolute(relativePath) ||
 		relativePath.split(PATH_SEPARATOR)[0] === ".."
 	) {
-		return [basename(filename)];
+		return [path.basename(filename)];
 	}
 	return relativePath.split(PATH_SEPARATOR);
 }

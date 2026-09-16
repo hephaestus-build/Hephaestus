@@ -9,6 +9,27 @@ import { propertyName } from "../property.ts";
  * and only `tsc` catches it. For the same reason the named form is recognised by the identifier
  * `meta`, which is the CSF convention rather than anything the tree states.
  */
+/** `Meta` and `SB.Meta` name the same type; a namespace import changes the spelling only. */
+function asMetaReference(type: ESTree.TSType | null | undefined) {
+	if (type?.type !== "TSTypeReference") {
+		return;
+	}
+	const { typeName } = type;
+	const named =
+		(typeName.type === "Identifier" && typeName.name === "Meta") ||
+		(typeName.type === "TSQualifiedName" && typeName.right.name === "Meta");
+	return named ? type : undefined;
+}
+
+function namesComponent(meta: ESTree.Node) {
+	return (
+		meta.type === "ObjectExpression" &&
+		meta.properties.some(
+			(property) => property.type === "Property" && propertyName(property) === "component",
+		)
+	);
+}
+
 export const typedStoryMeta = defineRule({
 	meta: {
 		type: "problem",
@@ -26,27 +47,6 @@ export const typedStoryMeta = defineRule({
 		},
 	},
 	create(context) {
-		/** `Meta` and `SB.Meta` name the same type; a namespace import changes the spelling only. */
-		const asMetaReference = (type: ESTree.TSType | null | undefined) => {
-			if (type?.type !== "TSTypeReference") {
-				return;
-			}
-			const { typeName } = type;
-			if (typeName.type === "Identifier" && typeName.name === "Meta") {
-				return type;
-			}
-			if (typeName.type === "TSQualifiedName" && typeName.right.name === "Meta") {
-				return type;
-			}
-			return;
-		};
-
-		const namesComponent = (meta: ESTree.Node) =>
-			meta.type === "ObjectExpression" &&
-			meta.properties.some(
-				(property) => property.type === "Property" && propertyName(property) === "component",
-			);
-
 		/** A stated `Meta` with no type argument pins nothing about the component it names. */
 		const checkStatedType = (
 			meta: ESTree.TSTypeReference,

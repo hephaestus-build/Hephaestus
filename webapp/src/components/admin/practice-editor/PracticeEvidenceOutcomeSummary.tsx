@@ -13,6 +13,10 @@ export interface PracticeEvidenceOutcomeSummaryProps {
 	sources: readonly PracticeEvidenceSourceOption[];
 }
 
+function reviews(count: number) {
+	return `${count} ${count === 1 ? "review" : "reviews"}`;
+}
+
 /**
  * What these requirements cost in practice. The number an operator is after is the share of reviews
  * they turned away, so the bar answers that before the words are read; the words then say which
@@ -26,7 +30,6 @@ export function PracticeEvidenceOutcomeSummary({
 		return null;
 	}
 	const skipped = outcome.consideredReviews - outcome.reviewedCount;
-	const reviews = (count: number) => `${count} ${count === 1 ? "review" : "reviews"}`;
 	return (
 		<div className="space-y-2 rounded-lg border p-4">
 			<div className="flex flex-wrap items-baseline justify-between gap-x-3">

@@ -167,12 +167,12 @@ export const noNondeterministicRender = defineRule({
 				return;
 			}
 			const hidden = node.type === "CallExpression" && node.callee.type === "Identifier";
+			let messageId = timing === "module" ? "moduleLoad" : "duringRender";
+			if (hidden) {
+				messageId = "hiddenClock";
+			}
 			// Two readings are two edits, so each is reported where it stands.
-			context.report({
-				node,
-				messageId: hidden ? "hiddenClock" : timing === "module" ? "moduleLoad" : "duringRender",
-				data: { reading: read },
-			});
+			context.report({ node, messageId, data: { reading: read } });
 		};
 		return {
 			ImportDeclaration(node) {

@@ -30,7 +30,11 @@ export function TeamFilter({ options, onTeamChange, selectedTeam = "all" }: Team
 			</Label>
 			<Select
 				value={selectedTeam}
-				onValueChange={(value) => hasText(value) && onTeamChange?.(value)}
+				onValueChange={(value) => {
+					if (hasText(value)) {
+						onTeamChange?.(value);
+					}
+				}}
 				items={items}
 			>
 				<SelectTrigger id="team" className="w-full">

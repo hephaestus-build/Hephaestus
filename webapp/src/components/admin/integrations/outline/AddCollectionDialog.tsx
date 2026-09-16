@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { CheckIcon, LibraryIcon, LockIcon } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 
 import { listOutlineCollectionCandidatesOptions } from "@/api/@tanstack/react-query.gen";
 import type { OutlineCollectionCandidate } from "@/api/types.gen";
@@ -119,6 +119,114 @@ export function AddCollectionDialog({
 
 	const total = selectedIds.length;
 
+	let picker: ReactNode;
+	if (isLoading) {
+		picker = (
+			<div className="space-y-2">
+				<Skeleton className="h-9 w-full" />
+				<Skeleton className="h-9 w-full" />
+				<Skeleton className="h-9 w-full" />
+			</div>
+		);
+	} else if (candidatesError) {
+		picker = (
+			<QueryErrorAlert
+				error={candidatesError}
+				title="Could not reach Outline"
+				onRetry={() => {
+					void refetch();
+				}}
+			/>
+		);
+	} else if (all.length === 0) {
+		picker = (
+			<Empty variant="outlined">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<LockIcon />
+					</EmptyMedia>
+					<EmptyTitle>This token cannot see any collections</EmptyTitle>
+					<EmptyDescription>
+						Outline only returns the collections its API key’s user is a member of. In Outline, open
+						the collection, choose <strong>Members</strong>, and add the bot user that owns this key
+						— then reopen this dialog.
+					</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		);
+	} else if (selectable.length === 0) {
+		picker = (
+			<Empty variant="outlined">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<LibraryIcon />
+					</EmptyMedia>
+					<EmptyTitle>Every visible collection is already mirrored</EmptyTitle>
+					<EmptyDescription>
+						Grant the bot user access to another collection in Outline to mirror more.
+					</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		);
+	} else {
+		picker = (
+			<Combobox
+				multiple
+				inline
+				items={all}
+				value={selectedCandidates}
+				onValueChange={(next) => setSelectedIds(next.map((c) => c.collectionId))}
+				filter={(candidate, query) => contains(candidate, query, searchTextOf)}
+				itemToStringLabel={labelOf}
+			>
+				<div ref={comboboxRef} className="rounded-lg border">
+					<ComboboxSearchInput
+						// oxlint-disable-next-line jsx-a11y/no-autofocus -- Narrowing the candidate list by typing is the only way through this dialog, so it opens onto the search box.
+						autoFocus
+						placeholder="Search collections…"
+						disabled={submitting}
+						aria-label="Search Outline collections"
+						aria-expanded="true"
+						aria-controls={collectionListId}
+					/>
+					<ComboboxEmpty>No collections match your search.</ComboboxEmpty>
+					<ComboboxList id={collectionListId} aria-label="Outline collections">
+						{(candidate: OutlineCollectionCandidate) => {
+							const label = labelOf(candidate);
+							const checked =
+								candidate.alreadyMirrored || selectedIds.includes(candidate.collectionId);
+							return (
+								<ComboboxItem
+									key={candidate.collectionId}
+									value={candidate}
+									disabled={candidate.alreadyMirrored || submitting}
+									className="pr-2"
+								>
+									<span
+										aria-hidden="true"
+										className="flex size-4 shrink-0 items-center justify-center rounded-xs border border-input"
+									>
+										{checked && <CheckIcon className="size-3.5" />}
+									</span>
+									<OutlineCollectionIcon icon={candidate.icon} color={candidate.color} />
+									<span className="min-w-0 flex-1">
+										<span className="block truncate text-sm font-medium">{label}</span>
+										{hasText(candidate.urlId) && (
+											<span className="block truncate font-mono text-xs text-muted-foreground">
+												{candidate.urlId}
+											</span>
+										)}
+									</span>
+									{candidate.alreadyMirrored && <Badge variant="outline">Already mirrored</Badge>}
+								</ComboboxItem>
+							);
+						}}
+					</ComboboxList>
+				</div>
+			</Combobox>
+		);
+	}
+
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent
@@ -141,104 +249,7 @@ export function AddCollectionDialog({
 						void submit();
 					}}
 				>
-					{isLoading ? (
-						<div className="space-y-2">
-							<Skeleton className="h-9 w-full" />
-							<Skeleton className="h-9 w-full" />
-							<Skeleton className="h-9 w-full" />
-						</div>
-					) : candidatesError ? (
-						<QueryErrorAlert
-							error={candidatesError}
-							title="Could not reach Outline"
-							onRetry={() => {
-								void refetch();
-							}}
-						/>
-					) : all.length === 0 ? (
-						<Empty variant="outlined">
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<LockIcon />
-								</EmptyMedia>
-								<EmptyTitle>This token cannot see any collections</EmptyTitle>
-								<EmptyDescription>
-									Outline only returns the collections its API key's user is a member of. In
-									Outline, open the collection, choose <strong>Members</strong>, and add the bot
-									user that owns this key — then reopen this dialog.
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
-					) : selectable.length === 0 ? (
-						<Empty variant="outlined">
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<LibraryIcon />
-								</EmptyMedia>
-								<EmptyTitle>Every visible collection is already mirrored</EmptyTitle>
-								<EmptyDescription>
-									Grant the bot user access to another collection in Outline to mirror more.
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
-					) : (
-						<Combobox
-							multiple
-							inline
-							items={all}
-							value={selectedCandidates}
-							onValueChange={(next) => setSelectedIds(next.map((c) => c.collectionId))}
-							filter={(candidate, query) => contains(candidate, query, searchTextOf)}
-							itemToStringLabel={labelOf}
-						>
-							<div ref={comboboxRef} className="rounded-lg border">
-								<ComboboxSearchInput
-									// oxlint-disable-next-line jsx-a11y/no-autofocus -- Narrowing the candidate list by typing is the only way through this dialog, so it opens onto the search box.
-									autoFocus
-									placeholder="Search collections…"
-									disabled={submitting}
-									aria-label="Search Outline collections"
-									aria-expanded="true"
-									aria-controls={collectionListId}
-								/>
-								<ComboboxEmpty>No collections match your search.</ComboboxEmpty>
-								<ComboboxList id={collectionListId} aria-label="Outline collections">
-									{(candidate: OutlineCollectionCandidate) => {
-										const label = labelOf(candidate);
-										const checked =
-											candidate.alreadyMirrored || selectedIds.includes(candidate.collectionId);
-										return (
-											<ComboboxItem
-												key={candidate.collectionId}
-												value={candidate}
-												disabled={candidate.alreadyMirrored || submitting}
-												className="pr-2"
-											>
-												<span
-													aria-hidden="true"
-													className="flex size-4 shrink-0 items-center justify-center rounded-xs border border-input"
-												>
-													{checked && <CheckIcon className="size-3.5" />}
-												</span>
-												<OutlineCollectionIcon icon={candidate.icon} color={candidate.color} />
-												<span className="min-w-0 flex-1">
-													<span className="block truncate text-sm font-medium">{label}</span>
-													{hasText(candidate.urlId) && (
-														<span className="block truncate font-mono text-xs text-muted-foreground">
-															{candidate.urlId}
-														</span>
-													)}
-												</span>
-												{candidate.alreadyMirrored && (
-													<Badge variant="outline">Already mirrored</Badge>
-												)}
-											</ComboboxItem>
-										);
-									}}
-								</ComboboxList>
-							</div>
-						</Combobox>
-					)}
+					{picker}
 
 					<div aria-live="polite" className="mt-3 min-h-5 text-sm">
 						{submitting && total > 0 && (

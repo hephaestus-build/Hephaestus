@@ -514,30 +514,30 @@ describe("Outline integration — Outline not enabled on this instance", () => {
 	});
 });
 
+/**
+ * The shared `SyncResourcesTable`, driven by the one hook. Rendered on its own here because it and
+ * the management card name the same collection — the count and freshness are printed once, by
+ * this one, so they cannot disagree.
+ */
+function LedgerContainer() {
+	const outline = useOutlineIntegration("demo");
+	return outline.hasConnection ? <SyncResourcesTable {...outline.syncResourcesProps} /> : null;
+}
+
+function renderLedger() {
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+	});
+	return render(
+		<QueryClientProvider client={queryClient}>
+			<SyncLivenessProvider livePushUnavailable={false}>
+				<LedgerContainer />
+			</SyncLivenessProvider>
+		</QueryClientProvider>,
+	);
+}
+
 describe("Outline integration — per-collection sync ledger", () => {
-	/**
-	 * The shared `SyncResourcesTable`, driven by the one hook. Rendered on its own here because it and
-	 * the management card name the same collection — the count and freshness are printed once, by
-	 * this one, so they cannot disagree.
-	 */
-	function LedgerContainer() {
-		const outline = useOutlineIntegration("demo");
-		return outline.hasConnection ? <SyncResourcesTable {...outline.syncResourcesProps} /> : null;
-	}
-
-	function renderLedger() {
-		const queryClient = new QueryClient({
-			defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-		});
-		return render(
-			<QueryClientProvider client={queryClient}>
-				<SyncLivenessProvider livePushUnavailable={false}>
-					<LedgerContainer />
-				</SyncLivenessProvider>
-			</QueryClientProvider>,
-		);
-	}
-
 	it("mounts the shared ledger for the Outline connection with its Documents column and freshness", async () => {
 		const collectionsRef = { current: [engineering] as unknown[] };
 		useConnectedHandlers(collectionsRef);

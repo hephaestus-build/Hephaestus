@@ -5,6 +5,20 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ProfileTimeframePicker } from "./ProfileTimeframePicker";
 
+function ControlledPicker() {
+	const [range, setRange] = useState<{ after: string; before?: string }>({
+		after: "2026-06-02T00:00:00",
+		before: "2026-06-07T00:00:00",
+	});
+	return (
+		<ProfileTimeframePicker
+			afterDate={range.after}
+			beforeDate={range.before}
+			onTimeframeChange={(after, before) => setRange({ after, before })}
+		/>
+	);
+}
+
 vi.mock("@/components/common/use-now", () => ({
 	useNow: () => new Date(2026, 8, 16, 12).getTime(),
 }));
@@ -19,7 +33,7 @@ describe("ProfileTimeframePicker", () => {
 		screen.getByRole("button", { name: /September 2nd, 2026/u });
 	});
 	it("renders bookmarked dates without rewriting them", () => {
-		const onTimeframeChange = vi.fn();
+		const onTimeframeChange = vi.fn<(afterDate: string, beforeDate?: string) => void>();
 		const { rerender } = render(
 			<ProfileTimeframePicker
 				afterDate="2026-06-02T00:00:00"
@@ -44,7 +58,7 @@ describe("ProfileTimeframePicker", () => {
 	});
 
 	it("chooses a custom end day with an exclusive upper bound", async () => {
-		const onTimeframeChange = vi.fn();
+		const onTimeframeChange = vi.fn<(afterDate: string, beforeDate?: string) => void>();
 		render(
 			<ProfileTimeframePicker
 				afterDate="2026-06-02T00:00:00"
@@ -59,19 +73,6 @@ describe("ProfileTimeframePicker", () => {
 		);
 	});
 	it("keeps the calendar open while a controlled range changes", async () => {
-		function ControlledPicker() {
-			const [range, setRange] = useState<{ after: string; before?: string }>({
-				after: "2026-06-02T00:00:00",
-				before: "2026-06-07T00:00:00",
-			});
-			return (
-				<ProfileTimeframePicker
-					afterDate={range.after}
-					beforeDate={range.before}
-					onTimeframeChange={(after, before) => setRange({ after, before })}
-				/>
-			);
-		}
 		render(<ControlledPicker />);
 		await userEvent.click(screen.getByRole("button", { name: "Choose custom dates" }));
 		await userEvent.click(screen.getByRole("button", { name: /June 12th, 2026/u }));

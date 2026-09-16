@@ -52,7 +52,7 @@ import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 import { isCopilotExcludedRoute } from "./-copilot-route";
 import { ImpersonationBannerHost } from "./-ImpersonationBannerHost";
 
-const GlobalCopilot = lazy(() => import("./-GlobalCopilot"));
+const GlobalCopilot = lazy(async () => import("./-GlobalCopilot"));
 
 interface MyRouterContext {
 	queryClient: QueryClient;
@@ -266,7 +266,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 		<div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-center py-16 text-center">
 			<h1 className="mb-4 text-3xl font-bold">Page Not Found</h1>
 			<p className="mb-8 text-muted-foreground">
-				The page you're looking for doesn't exist or you don't have permission to view it.
+				The page you’re looking for doesn’t exist or you don’t have permission to view it.
 			</p>
 			<Link to="/" className="font-medium text-primary hover:underline">
 				Return to Home
@@ -319,7 +319,9 @@ function HeaderContainer() {
 				) : null
 			}
 			onLogin={openLogin}
-			onLogout={() => void logout()}
+			onLogout={() => {
+				void logout();
+			}}
 		/>
 	);
 }
@@ -327,6 +329,24 @@ function HeaderContainer() {
 function ProviderColorScope({ children }: { children: ReactNode }) {
 	const { providerType } = useActiveWorkspaceSlug();
 	return <div data-provider={getProviderSlug(providerType)}>{children}</div>;
+}
+
+/** The workspace's own source-control provider, as the integration kind the sidebar lists it under. */
+function scmKindOf(providerType: string | undefined): ("GITHUB" | "GITLAB")[] {
+	if (providerType === "GITLAB" || providerType === "GITHUB") {
+		return [providerType];
+	}
+	return [];
+}
+
+function sidebarContextOf(pathname: string): SidebarContext {
+	if (pathname.startsWith("/admin")) {
+		return "admin";
+	}
+	if (pathname === "/mentor" || /^\/w\/[^/]+\/mentor/u.test(pathname)) {
+		return "mentor";
+	}
+	return "main";
 }
 
 function AppSidebarContainer() {
@@ -349,19 +369,11 @@ function AppSidebarContainer() {
 	const integrationKinds = [
 		...new Set([
 			...integrationCatalog.map((entry) => entry.kind),
-			...(chromeWorkspace?.providerType === "GITLAB"
-				? (["GITLAB"] as const)
-				: chromeWorkspace?.providerType === "GITHUB"
-					? (["GITHUB"] as const)
-					: []),
+			...scmKindOf(chromeWorkspace?.providerType),
 		]),
 	];
 
-	const sidebarContext: SidebarContext = pathname.startsWith("/admin")
-		? "admin"
-		: pathname === "/mentor" || /^\/w\/[^/]+\/mentor/u.test(pathname)
-			? "mentor"
-			: "main";
+	const sidebarContext = sidebarContextOf(pathname);
 
 	const {
 		data: mentorThreads,

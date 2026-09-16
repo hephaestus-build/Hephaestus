@@ -336,7 +336,7 @@ export const PracticeDetailOnKeyboardFocus: Story = {
 		).not.toBeInTheDocument();
 		// `link.focus()` would not do: the card opens on focus-*visible*, so focus has to arrive by
 		// keyboard. Bounded, so a DOM change ahead of the link fails the story instead of hanging it.
-		for (let step = 0; step < 12 && document.activeElement !== link; step++) {
+		for (let step = 0; step < 12 && document.activeElement !== link; step += 1) {
 			await userEvent.tab();
 		}
 		await expect(link).toHaveFocus();
@@ -491,7 +491,7 @@ export const NotReviewable: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /Observability/u }));
 		await expect(
-			canvas.getByText("This practice can't be reviewed automatically, so it stays off."),
+			canvas.getByText("This practice can’t be reviewed automatically, so it stays off."),
 		).toBeVisible();
 		await expect(canvas.getByRole("checkbox", { name: /^Select /u })).toHaveAttribute(
 			"aria-disabled",

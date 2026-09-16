@@ -126,6 +126,10 @@ interface FeedbackCardProps {
 
 function FeedbackCard({ item, pending, onTriage }: FeedbackCardProps) {
 	const resolved = item.resolvedAt !== undefined;
+	let triageLabel = resolved ? "Reopen" : "Mark resolved";
+	if (pending) {
+		triageLabel = "Saving…";
+	}
 	const context = [
 		hasText(item.pagePath) && (
 			<code key="page" className="break-all">
@@ -174,7 +178,7 @@ function FeedbackCard({ item, pending, onTriage }: FeedbackCardProps) {
 					onClick={() => onTriage(item, !resolved)}
 				>
 					{pending && <Spinner className="size-4" />}
-					{pending ? "Saving…" : resolved ? "Reopen" : "Mark resolved"}
+					{triageLabel}
 				</Button>
 			</CardFooter>
 		</Card>

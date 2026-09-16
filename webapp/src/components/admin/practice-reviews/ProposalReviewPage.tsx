@@ -305,7 +305,11 @@ function RejectFeedbackPopover({
 						variant="destructive"
 						size="sm"
 						disabled={disabled || !reason}
-						onClick={() => reason && onReject(feedbackId, reason, note.trim() || undefined)}
+						onClick={() => {
+							if (reason) {
+								onReject(feedbackId, reason, note.trim() || undefined);
+							}
+						}}
 					>
 						Reject feedback
 					</Button>

@@ -200,6 +200,15 @@ function AdminLlmConnectionFormDialogContent({
 		});
 	};
 
+	let testLabel = "Test & fetch models";
+	if (isProbing) {
+		testLabel = "Testing…";
+	} else if (isEdit && !fields.apiKey.trim() && !fields.clearApiKey) {
+		testLabel = "Test saved connection";
+	} else if (isEdit) {
+		testLabel = "Test changes";
+	}
+
 	return (
 		<DialogContent className="sm:max-w-lg">
 			<DialogForm onSubmit={handleSubmit}>
@@ -237,13 +246,7 @@ function AdminLlmConnectionFormDialogContent({
 							disabled={isProbing || !fields.baseUrl.trim()}
 							onClick={handleTest}
 						>
-							{isProbing
-								? "Testing…"
-								: isEdit && !fields.apiKey.trim() && !fields.clearApiKey
-									? "Test saved connection"
-									: isEdit
-										? "Test changes"
-										: "Test & fetch models"}
+							{testLabel}
 						</Button>
 						{/* The outcome of a button the admin just pressed, not a failure: `role="alert"` is
 						    assertive and would cut across whatever is being read (SC 4.1.3). */}

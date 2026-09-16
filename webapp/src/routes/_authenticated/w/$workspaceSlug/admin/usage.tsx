@@ -46,11 +46,20 @@ function AdminUsageContainer() {
 		placeholderData: keepPreviousData,
 	});
 	const report = reportQuery.data;
-	const view: UsageView = reportQuery.isError
-		? { status: "error", error: reportQuery.error, onRetry: () => void reportQuery.refetch() }
-		: report === undefined
-			? { status: "loading" }
-			: { status: "ready", report };
+	let view: UsageView;
+	if (reportQuery.isError) {
+		view = {
+			status: "error",
+			error: reportQuery.error,
+			onRetry: () => {
+				void reportQuery.refetch();
+			},
+		};
+	} else if (report === undefined) {
+		view = { status: "loading" };
+	} else {
+		view = { status: "ready", report };
+	}
 
 	const updateOwnProviderCap = useMutation({
 		...updateWorkspaceLlmBudgetMutation(),

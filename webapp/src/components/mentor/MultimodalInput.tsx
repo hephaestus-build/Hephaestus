@@ -15,8 +15,9 @@ export interface MultimodalInputProps {
 	status: "ready" | "submitted" | "error";
 	onStop: () => void;
 	attachments: Attachment[];
-	onAttachmentsChange: (attachments: Attachment[]) => void;
-	onFileUpload: (files: File[]) => Promise<(Attachment | undefined)[]>;
+	// Both are absent on a surface that disables attachments.
+	onAttachmentsChange?: (attachments: Attachment[]) => void;
+	onFileUpload?: (files: File[]) => Promise<(Attachment | undefined)[]>;
 	onSubmit: (data: { text: string; attachments: Attachment[] }) => void;
 	className?: string;
 	placeholder?: string;
@@ -88,7 +89,7 @@ export function MultimodalInput({
 
 	const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
 		const files = [...(event.target.files ?? [])];
-		if (files.length === 0) {
+		if (files.length === 0 || onFileUpload === undefined) {
 			return;
 		}
 
@@ -100,7 +101,7 @@ export function MultimodalInput({
 				(attachment) => attachment !== undefined,
 			);
 
-			onAttachmentsChange([...attachments, ...successfullyUploadedAttachments]);
+			onAttachmentsChange?.([...attachments, ...successfullyUploadedAttachments]);
 		} catch {
 			// The queue empties either way, so without this the files vanish with no symptom.
 			toast.error("Could not attach those files. Please try again.");
@@ -151,7 +152,9 @@ export function MultimodalInput({
 					ref={fileInputRef}
 					multiple
 					aria-label="Attach files"
-					onChange={(event) => void handleFileChange(event)}
+					onChange={(event) => {
+						void handleFileChange(event);
+					}}
 					tabIndex={-1}
 				/>
 			)}

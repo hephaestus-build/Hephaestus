@@ -130,7 +130,7 @@ export const EveryKindScheduled: Story = {
 export const CouldNotLoad: Story = {
 	args: { isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/recurring checks couldn't be loaded/iu);
+		canvas.getByText(/recurring checks couldn’t be loaded/iu);
 		// The failure is about this screen, not the workspace: read as "stopped", it costs a second
 		// check scheduled over the same work.
 		canvas.getByText(/still running/iu);

@@ -290,18 +290,17 @@ function PracticeActions({
 		? groups.find((candidate) => candidate.slug === practice.groupSlug)
 		: undefined;
 	const parentUnavailable = Boolean(practice.missingGroupSlug) || group?.status.offered === false;
-	const includeLabel = hasText(practice.missingGroupSlug)
-		? "Move to Unassigned or an included group first"
-		: parentUnavailable
-			? "Include when its group is included"
-			: "Include for workspaces";
-	const switchLabel = hasText(practice.missingGroupSlug)
-		? `${practice.name} cannot be included until it is moved out of the missing group`
-		: parentUnavailable
-			? practice.status.offered
-				? `${practice.name} is excluded because its group is excluded`
-				: `${practice.name} is not offered to workspaces`
-			: `Offer ${practice.name} to workspaces`;
+	let includeLabel = "Include for workspaces";
+	let switchLabel = `Offer ${practice.name} to workspaces`;
+	if (hasText(practice.missingGroupSlug)) {
+		includeLabel = "Move to Unassigned or an included group first";
+		switchLabel = `${practice.name} cannot be included until it is moved out of the missing group`;
+	} else if (parentUnavailable) {
+		includeLabel = "Include when its group is included";
+		switchLabel = practice.status.offered
+			? `${practice.name} is excluded because its group is excluded`
+			: `${practice.name} is not offered to workspaces`;
+	}
 	const persistedPractice = hasText(practice.missingGroupSlug)
 		? { ...practice, groupSlug: practice.missingGroupSlug }
 		: practice;

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { copyFile, glob, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { asRecord, asString, asStringArray, parseJson } from "./lib/json.ts";
@@ -37,8 +37,9 @@ const limits = ["SANDBOX_API_MAX_REQUEST_BYTES", "SANDBOX_API_REQUESTS_PER_MINUT
 const gatewayLimits = (scenario: string) => (scenario === "detection-mentor" ? limits : []);
 
 export function configuration(scenario: string, env: NodeJS.ProcessEnv) {
-	if (scenario !== "webhook-burst" && scenario !== "detection-mentor")
+	if (scenario !== "webhook-burst" && scenario !== "detection-mentor") {
 		throw new Error("Unknown load scenario");
+	}
 	const recorded = gatewayLimits(scenario);
 	const required = [
 		"BASE_URL",
@@ -47,7 +48,12 @@ export function configuration(scenario: string, env: NodeJS.ProcessEnv) {
 			? ["WEBHOOK_SECRET"]
 			: ["AUTH_TOKEN", "WORKSPACE_SLUG", "ARTIFACT_IDS"]),
 	];
-	for (const name of required) if (!env[name]?.trim()) throw new Error(`${name} is required`);
+	for (const name of required) {
+		const value = env[name]?.trim();
+		if (value === undefined || value === "") {
+			throw new Error(`${name} is required`);
+		}
+	}
 	const url = new URL(env.BASE_URL ?? "");
 	if (
 		!["http:", "https:"].includes(url.protocol) ||
@@ -55,11 +61,14 @@ export function configuration(scenario: string, env: NodeJS.ProcessEnv) {
 		url.password ||
 		url.search ||
 		url.hash
-	)
+	) {
 		throw new Error("BASE_URL must be an HTTP(S) URL without credentials, query or fragment");
-	for (const name of recorded)
-		if (!/^[1-9]\d*$/.test(env[name] ?? "") || !Number.isSafeInteger(Number(env[name])))
+	}
+	for (const name of recorded) {
+		if (!/^[1-9]\d*$/u.test(env[name] ?? "") || !Number.isSafeInteger(Number(env[name]))) {
 			throw new Error(`${name} must be a positive safe integer`);
+		}
+	}
 	return {
 		scenario,
 		image: k6Image,
@@ -77,12 +86,14 @@ function docker(args: string[], capture = false) {
 		maxBuffer: CAPTURE_LIMIT_BYTES,
 		stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",
 	});
-	if (result.error) throw result.error;
+	if (result.error) {
+		throw result.error;
+	}
 	return result;
 }
 
 async function checkScenarios(root: string) {
-	const directory = await mkdtemp(resolve(tmpdir(), "k6-contracts-"));
+	const directory = await mkdtemp(path.resolve(tmpdir(), "k6-contracts-"));
 	const container = [
 		"run",
 		"--rm",
@@ -108,8 +119,9 @@ async function checkScenarios(root: string) {
 	];
 	try {
 		for (const scenario of ["webhook-burst", "detection-mentor"]) {
-			if (docker([...container, "inspect", ...env, `/tests/${scenario}.js`], true).status !== 0)
+			if (docker([...container, "inspect", ...env, `/tests/${scenario}.js`], true).status !== 0) {
 				throw new Error(`Cannot inspect ${scenario}`);
+			}
 		}
 		for (const [name, expected] of [
 			["contracts", 0],
@@ -123,11 +135,14 @@ async function checkScenarios(root: string) {
 				`TEST_CASE=${name}`,
 				"/tests/scenarios.test.js",
 			]);
-			if (result.status !== expected)
+			if (result.status !== expected) {
 				throw new Error(`${name}: expected exit ${expected}, got ${result.status}`);
-			if (name !== "unfinished") continue;
+			}
+			if (name !== "unfinished") {
+				continue;
+			}
 			const summary = asRecord(
-				parseJson(await readFile(resolve(directory, "summary.json"), "utf8")),
+				parseJson(await readFile(path.resolve(directory, "summary.json"), "utf8")),
 				"summary",
 			);
 			const metrics = asRecord(summary.metrics, "metrics");
@@ -136,40 +151,46 @@ async function checkScenarios(root: string) {
 			if (
 				verdicts.length === 0 ||
 				verdicts.some((verdict) => asRecord(verdict, "threshold").ok !== false)
-			)
+			) {
 				throw new Error("Unfinished review threshold did not fail in the k6 summary");
+			}
 		}
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
 }
 
-const cell = (value: string) => value.replaceAll("|", "\\|").replaceAll(/\r?\n/g, " ");
+const cell = (value: string) => value.replaceAll("|", String.raw`\|`).replaceAll(/\r?\n/gu, " ");
 
 export function renderBaseline(summary: unknown, metadata: unknown, template: string) {
 	const metrics = asRecord(asRecord(summary, "summary").metrics, "metrics");
 	const run = asRecord(metadata, "run");
 	const config = asRecord(run.inputs, "inputs");
-	if (run.scenario !== "webhook-burst" && run.scenario !== "detection-mentor")
+	if (run.scenario !== "webhook-burst" && run.scenario !== "detection-mentor") {
 		throw new Error("Invalid run scenario");
+	}
 	// A recorded run stays renderable after the checkout moves its pin, so the image only has to prove
 	// it was digest-pinned; the document names the image the run actually used.
 	const image = asString(run.image, "image");
-	if (!/^grafana\/k6:[\w.-]+@sha256:[0-9a-f]{64}$/.test(image))
+	if (!/^grafana\/k6:[\w.-]+@sha256:[0-9a-f]{64}$/u.test(image)) {
 		throw new Error("Run must record a digest-pinned k6 image");
+	}
 	const pinned = image === k6Image ? "" : ` (this checkout pins ${k6Image})`;
-	if (!Number.isFinite(Date.parse(asString(run.startedAt, "startedAt"))))
-		throw new Error("Invalid run timestamp");
+	if (!Number.isFinite(Date.parse(asString(run.startedAt, "startedAt")))) {
+		throw new TypeError("Invalid run timestamp");
+	}
 	if (
 		run.exitCode !== null &&
 		(!Number.isInteger(run.exitCode) || Number(run.exitCode) < 0 || Number(run.exitCode) > 255)
-	)
+	) {
 		throw new Error("Invalid run exit code");
+	}
 	const options = asRecord(run.options, "options");
 	const expected = asRecord(options.thresholds, "options.thresholds");
 	const scenarios = asRecord(options.scenarios, "options.scenarios");
-	if (Object.keys(expected).length === 0 || Object.keys(scenarios).length === 0)
+	if (Object.keys(expected).length === 0 || Object.keys(scenarios).length === 0) {
 		throw new Error("Missing effective k6 options");
+	}
 	for (const [name, expressions] of Object.entries(expected)) {
 		const metric = asRecord(metrics[name], `metrics.${name}`);
 		const actual = asRecord(metric.thresholds, `metrics.${name}.thresholds`);
@@ -178,42 +199,55 @@ export function renderBaseline(summary: unknown, metadata: unknown, template: st
 			thresholds.length === 0 ||
 			thresholds.some((expression) => !(expression in actual)) ||
 			Object.keys(actual).length !== thresholds.length
-		)
+		) {
 			throw new Error(`Missing or mismatched threshold evidence for ${name}`);
+		}
 	}
 	const recorded = gatewayLimits(run.scenario);
 	for (const [key, value] of Object.entries(config)) {
-		if (![...inputs, ...recorded].includes(key) || secrets.has(key) || typeof value !== "string")
+		if (![...inputs, ...recorded].includes(key) || secrets.has(key) || typeof value !== "string") {
 			throw new Error(`Invalid recorded input ${key}`);
+		}
 	}
-	for (const key of recorded)
+	for (const key of recorded) {
 		if (
 			typeof config[key] !== "string" ||
-			!/^[1-9]\d*$/.test(config[key]) ||
+			!/^[1-9]\d*$/u.test(config[key]) ||
 			!Number.isSafeInteger(Number(config[key]))
-		)
+		) {
 			throw new Error(`Missing gateway limit ${key}`);
+		}
+	}
 	const rows: string[] = [];
 	let failed = run.exitCode !== 0;
 	for (const [name, value] of Object.entries(metrics).toSorted(([a], [b]) => a.localeCompare(b))) {
 		const metric = asRecord(value, name);
-		if (metric.thresholds === undefined) continue;
-		if (!(name in expected)) throw new Error(`Unexpected threshold metric ${name}`);
+		if (metric.thresholds === undefined) {
+			continue;
+		}
+		if (!(name in expected)) {
+			throw new Error(`Unexpected threshold metric ${name}`);
+		}
 		for (const [expression, verdict] of Object.entries(asRecord(metric.thresholds, "thresholds"))) {
 			const passed = asRecord(verdict, `metrics.${name}.thresholds.${expression}`).ok;
-			if (typeof passed !== "boolean") throw new Error("Expected a k6 threshold verdict");
+			if (typeof passed !== "boolean") {
+				throw new TypeError("Expected a k6 threshold verdict");
+			}
 			failed ||= !passed;
 			rows.push(`| ${cell(name)} | ${cell(expression)} | ${passed ? "PASS" : "FAIL"} |`);
 		}
 	}
-	if (rows.length === 0) throw new Error("Summary has no threshold evidence");
+	if (rows.length === 0) {
+		throw new Error("Summary has no threshold evidence");
+	}
 	const values = Object.entries(metrics)
 		.toSorted(([a], [b]) => a.localeCompare(b))
 		.flatMap(([name, value]) =>
 			Object.entries(asRecord(asRecord(value, name).values, `metrics.${name}.values`)).map(
 				([key, number]) => {
-					if (typeof number !== "number" || !Number.isFinite(number))
-						throw new Error(`Invalid metric ${name}.${key}`);
+					if (typeof number !== "number" || !Number.isFinite(number)) {
+						throw new TypeError(`Invalid metric ${name}.${key}`);
+					}
 					return `| ${cell(name)} | ${cell(key)} | ${number} |`;
 				},
 			),
@@ -236,45 +270,51 @@ export function renderBaseline(summary: unknown, metadata: unknown, template: st
 
 async function main() {
 	const [command, argument, ...extra] = process.argv.slice(2);
-	if (extra.length > 0 || (command !== "report" && argument !== undefined))
+	if (extra.length > 0 || (command !== "report" && argument !== undefined)) {
 		throw new Error("Unexpected load-test arguments");
-	const root = resolve(import.meta.dirname, "..");
+	}
+	const root = path.resolve(import.meta.dirname, "..");
 	if (command === "syntax") {
 		await checkScenarios(root);
 		return;
 	}
 	if (command === "report") {
-		if (!argument) throw new Error("Usage: report:load:baseline <run-directory>");
-		const directory = resolve(argument);
+		if (argument === undefined || argument === "") {
+			throw new Error("Usage: report:load:baseline <run-directory>");
+		}
+		const directory = path.resolve(argument);
 		const document = renderBaseline(
-			parseJson(await readFile(resolve(directory, "summary.json"), "utf8")),
-			parseJson(await readFile(resolve(directory, "run.json"), "utf8")),
-			await readFile(resolve(directory, "baseline-template.md"), "utf8"),
+			parseJson(await readFile(path.resolve(directory, "summary.json"), "utf8")),
+			parseJson(await readFile(path.resolve(directory, "run.json"), "utf8")),
+			await readFile(path.resolve(directory, "baseline-template.md"), "utf8"),
 		);
-		await writeFile(resolve(directory, "baseline.md"), document);
+		await writeFile(path.resolve(directory, "baseline.md"), document);
 		return;
 	}
 	const config = configuration(command ?? "", process.env);
-	if (process.env.LOAD_TEST_ACKNOWLEDGE !== "isolated-host")
+	if (process.env.LOAD_TEST_ACKNOWLEDGE !== "isolated-host") {
 		throw new Error("Set LOAD_TEST_ACKNOWLEDGE=isolated-host after reading load-tests/README.md");
+	}
 	const startedAt = new Date().toISOString();
-	const directory = resolve(
+	const directory = path.resolve(
 		process.env.LOAD_RESULTS_DIR ??
 			`load-results/${config.scenario}-${startedAt.replaceAll(":", "-")}`,
 	);
-	await mkdir(resolve(directory, ".."), { recursive: true });
+	await mkdir(path.resolve(directory, ".."), { recursive: true });
 	await mkdir(directory, { mode: 0o700 });
-	for (const file of await Array.fromAsync(glob("**/*.js", { cwd: resolve(root, "load-tests") }))) {
-		const target = resolve(directory, "scripts", file);
-		await mkdir(dirname(target), { recursive: true });
-		await copyFile(resolve(root, "load-tests", file), target);
+	for (const file of await Array.fromAsync(
+		glob("**/*.js", { cwd: path.resolve(root, "load-tests") }),
+	)) {
+		const target = path.resolve(directory, "scripts", file);
+		await mkdir(path.dirname(target), { recursive: true });
+		await copyFile(path.resolve(root, "load-tests", file), target);
 	}
 	await copyFile(
-		resolve(root, "load-tests/baseline-template.md"),
-		resolve(directory, "baseline-template.md"),
+		path.resolve(root, "load-tests/baseline-template.md"),
+		path.resolve(directory, "baseline-template.md"),
 	);
 	const metadata = { ...config, startedAt, exitCode: null };
-	await writeFile(resolve(directory, "run.json"), JSON.stringify(metadata, null, 2), {
+	await writeFile(path.resolve(directory, "run.json"), JSON.stringify(metadata, null, 2), {
 		flag: "wx",
 	});
 	const args = [
@@ -294,14 +334,16 @@ async function main() {
 		[...args, "inspect", "--include-system-env-vars", `/tests/${config.scenario}.js`],
 		true,
 	);
-	if (inspected.status !== 0) throw new Error("k6 inspection failed before load started");
+	if (inspected.status !== 0) {
+		throw new Error("k6 inspection failed before load started");
+	}
 	const inspectedOptions = asRecord(parseJson(inspected.stdout), "k6 options");
 	const options = {
 		scenarios: asRecord(inspectedOptions.scenarios, "scenarios"),
 		thresholds: asRecord(inspectedOptions.thresholds, "thresholds"),
 	};
 	await writeFile(
-		resolve(directory, "run.json"),
+		path.resolve(directory, "run.json"),
 		JSON.stringify({ ...metadata, options }, null, 2),
 	);
 	const result = docker([
@@ -313,11 +355,18 @@ async function main() {
 	]);
 	const exitCode = result.status ?? 1;
 	await writeFile(
-		resolve(directory, "run.json"),
+		path.resolve(directory, "run.json"),
 		JSON.stringify({ ...metadata, options, exitCode }, null, 2),
 	);
 	process.stdout.write(`Load evidence: ${directory}\n`);
 	process.exitCode = exitCode;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+const entrypoint = process.argv[1];
+if (
+	entrypoint !== undefined &&
+	entrypoint !== "" &&
+	import.meta.url === pathToFileURL(entrypoint).href
+) {
+	await main();
+}

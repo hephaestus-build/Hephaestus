@@ -6,7 +6,7 @@ const SERVER_URL = process.env.E2E_SERVER_URL ?? "http://localhost:8080";
 
 export const test = base.extend({
 	context: async ({ context }, use) => {
-		await context.route("**/env-config.js", (route) =>
+		await context.route("**/env-config.js", async (route) =>
 			route.fulfill({
 				contentType: "application/javascript",
 				body: `window.__ENV__ = ${JSON.stringify({
@@ -48,7 +48,7 @@ export async function loginAsDevAdmin(page: Page, username = "e2e"): Promise<voi
 		}
 		await page.getByRole("button", { name: "Continue" }).click();
 		// The consent route can mask its URL, so URL changes do not prove submission finished.
-		await expect(page.getByRole("heading", { name: "Let's get you set up" })).toBeHidden();
+		await expect(page.getByRole("heading", { name: "Let’s get you set up" })).toBeHidden();
 		await page.waitForURL((url) => url.pathname !== "/consent");
 	}
 }

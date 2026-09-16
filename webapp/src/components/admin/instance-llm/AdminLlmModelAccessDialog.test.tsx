@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { LlmModel } from "@/api/types.gen";
 
-import { AdminLlmModelAccessDialog } from "./AdminLlmModelAccessDialog";
+import {
+	AdminLlmModelAccessDialog,
+	type AdminLlmModelAccessDialogProps,
+} from "./AdminLlmModelAccessDialog";
 
 const model: LlmModel = {
 	id: 7,
@@ -29,11 +32,11 @@ describe("AdminLlmModelAccessDialog", () => {
 		render(
 			<AdminLlmModelAccessDialog
 				open
-				onOpenChange={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
 				model={model}
 				workspaceOptions={workspaces}
 				isSubmitting={false}
-				onSave={vi.fn()}
+				onSave={vi.fn<() => void>()}
 			/>,
 		);
 
@@ -43,11 +46,11 @@ describe("AdminLlmModelAccessDialog", () => {
 	});
 
 	it("saves the selected workspace allowlist", async () => {
-		const onSave = vi.fn();
+		const onSave = vi.fn<AdminLlmModelAccessDialogProps["onSave"]>();
 		render(
 			<AdminLlmModelAccessDialog
 				open
-				onOpenChange={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
 				model={{ ...model, visibility: "GRANTED", grantedWorkspaceIds: [10] }}
 				workspaceOptions={workspaces}
 				isSubmitting={false}
@@ -107,11 +110,11 @@ describe("AdminLlmModelAccessDialog", () => {
 		render(
 			<AdminLlmModelAccessDialog
 				open
-				onOpenChange={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
 				model={model}
 				workspaceOptions={workspaces}
 				isSubmitting={false}
-				onSave={vi.fn()}
+				onSave={vi.fn<() => void>()}
 			/>,
 		);
 
@@ -125,11 +128,11 @@ describe("AdminLlmModelAccessDialog", () => {
 	});
 
 	it("can grant public access even when the workspace directory is unavailable", () => {
-		const onSave = vi.fn();
+		const onSave = vi.fn<AdminLlmModelAccessDialogProps["onSave"]>();
 		render(
 			<AdminLlmModelAccessDialog
 				open
-				onOpenChange={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
 				model={{ ...model, visibility: "GRANTED", grantedWorkspaceIds: [10] }}
 				workspaceOptions={[]}
 				workspacesError={{ status: 503, detail: "Directory unavailable." }}

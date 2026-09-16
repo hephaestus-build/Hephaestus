@@ -42,19 +42,19 @@ describe("DangerZoneSection — data export", () => {
 		await waitFor(() => screen.getByText(/Preparing your export/iu));
 
 		// Drive the 2s poll interval forward; the next poll lands READY.
-		await act(() => vi.advanceTimersByTimeAsync(2000));
+		await act(async () => vi.advanceTimersByTimeAsync(2000));
 
 		await waitFor(() => screen.getByRole("button", { name: /Download/u }));
 		screen.getByText(/ready to download/iu);
 	});
 });
 
-describe("DangerZoneSection — account deletion", () => {
-	function openDeleteDialog() {
-		// The trigger button (collapsed) is labelled "Delete"; opening reveals the confirm input.
-		fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-	}
+/** The trigger button (collapsed) is labelled "Delete"; opening reveals the confirm input. */
+function openDeleteDialog() {
+	fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+}
 
+describe("DangerZoneSection — account deletion", () => {
 	it("keeps deletion disabled until the exact confirmation phrase is typed", async () => {
 		renderWithClient(<DangerZoneSection onAccountDeleted={vi.fn()} />);
 		openDeleteDialog();
@@ -92,8 +92,9 @@ describe("DangerZoneSection — account deletion", () => {
 		const confirmButton = within(dialog).getByRole<HTMLButtonElement>("button", {
 			name: "Delete account",
 		});
+		// trimmed + case-insensitive match
 		fireEvent.change(within(dialog).getByLabelText("Confirmation phrase"), {
-			target: { value: "  Delete My Account  " }, // trimmed + case-insensitive match
+			target: { value: "  Delete My Account  " },
 		});
 		// Button only enables once the session (account id) has resolved.
 		await waitFor(() => expect(confirmButton.disabled).toBe(false));

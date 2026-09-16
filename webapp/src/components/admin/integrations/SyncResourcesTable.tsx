@@ -188,7 +188,8 @@ function triageRank(
 	return 5;
 }
 
-type SortKey = "name" | "lastSynced" | (string & {});
+/** `"name"`, `"lastSynced"`, or the key of a count column. */
+type SortKey = string;
 interface SortState {
 	key: SortKey;
 	dir: "asc" | "desc";
@@ -251,7 +252,10 @@ function SortableHeadCell({
 	onSort?: (key: SortKey) => void;
 }) {
 	const active = sortState?.key === sortKey;
-	const ariaSort = active ? (sortState.dir === "asc" ? "ascending" : "descending") : "none";
+	let ariaSort: "ascending" | "descending" | "none" = "none";
+	if (active) {
+		ariaSort = sortState.dir === "asc" ? "ascending" : "descending";
+	}
 
 	if (!onSort) {
 		return (
@@ -414,19 +418,18 @@ function ResourceNameCell({
 	);
 }
 
+const STATUS_DOT_TONE: Record<string, string> = {
+	ERROR: "bg-destructive",
+	PENDING: "bg-muted-foreground",
+};
+
 /**
  * The row's status marker. Only the states that qualify the row's numbers get a mark; the word itself
  * stays available to a screen reader, which cannot see a coloured dot.
  */
 function StatusDot({ state }: { state: string }) {
-	const normalized = state.toUpperCase();
-	const tone =
-		normalized === "ERROR"
-			? "bg-destructive"
-			: normalized === "PENDING"
-				? "bg-muted-foreground"
-				: undefined;
-	if (!tone) {
+	const tone = STATUS_DOT_TONE[state.toUpperCase()];
+	if (tone === undefined) {
 		return null;
 	}
 	return (
@@ -761,12 +764,12 @@ export function SyncResourcesTable({
 					r.externalId.toLowerCase().includes(normalizedQuery),
 			)
 		: resources;
-	const faceted =
-		effectiveFacet === "attention"
-			? searched.filter((r) => isAttention(r, syncIntervalSeconds, now))
-			: effectiveFacet === "fresh"
-				? searched.filter((r) => !isAttention(r, syncIntervalSeconds, now))
-				: searched;
+	let faceted = searched;
+	if (effectiveFacet === "attention") {
+		faceted = searched.filter((r) => isAttention(r, syncIntervalSeconds, now));
+	} else if (effectiveFacet === "fresh") {
+		faceted = searched.filter((r) => !isAttention(r, syncIntervalSeconds, now));
+	}
 	const visible = [...faceted].sort((a, b) =>
 		compareResources(a, b, sortState, columns, syncIntervalSeconds, now),
 	);

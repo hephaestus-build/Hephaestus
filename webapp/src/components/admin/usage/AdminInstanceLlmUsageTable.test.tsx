@@ -8,7 +8,10 @@ import type {
 	WorkspaceLlmUsageReport,
 } from "@/api/types.gen";
 
-import { AdminInstanceLlmUsageTable } from "./AdminInstanceLlmUsageTable";
+import {
+	AdminInstanceLlmUsageTable,
+	type AdminInstanceLlmUsageTableProps,
+} from "./AdminInstanceLlmUsageTable";
 
 const workspace: AdminWorkspaceLlmUsage = {
 	workspaceSlug: "example-workspace",
@@ -75,8 +78,8 @@ function renderTable(
 			expandedWorkspaceSlug={null}
 			isDetailLoading={false}
 			detailError={null}
-			onToggleDetails={() => {}}
-			onEditSharedModelBudget={() => {}}
+			onToggleDetails={vi.fn<() => void>()}
+			onEditSharedModelBudget={vi.fn<() => void>()}
 		/>,
 	);
 }
@@ -96,7 +99,7 @@ function rowControlNames() {
 
 describe("AdminInstanceLlmUsageTable", () => {
 	it("offers an accessible per-workspace detail toggle", () => {
-		const onToggleDetails = vi.fn();
+		const onToggleDetails = vi.fn<AdminInstanceLlmUsageTableProps["onToggleDetails"]>();
 		render(
 			<AdminInstanceLlmUsageTable
 				rows={[workspace]}
@@ -109,7 +112,7 @@ describe("AdminInstanceLlmUsageTable", () => {
 				isDetailLoading={false}
 				detailError={null}
 				onToggleDetails={onToggleDetails}
-				onEditSharedModelBudget={() => {}}
+				onEditSharedModelBudget={vi.fn<() => void>()}
 			/>,
 		);
 
@@ -228,8 +231,8 @@ describe("AdminInstanceLlmUsageTable", () => {
 				detailReport={detailReport}
 				isDetailLoading={false}
 				detailError={null}
-				onToggleDetails={() => {}}
-				onEditSharedModelBudget={() => {}}
+				onToggleDetails={vi.fn<() => void>()}
+				onEditSharedModelBudget={vi.fn<() => void>()}
 			/>,
 		);
 
@@ -263,8 +266,8 @@ describe("AdminInstanceLlmUsageTable", () => {
 				}}
 				isDetailLoading={false}
 				detailError={null}
-				onToggleDetails={() => {}}
-				onEditSharedModelBudget={() => {}}
+				onToggleDetails={vi.fn<() => void>()}
+				onEditSharedModelBudget={vi.fn<() => void>()}
 			/>,
 		);
 
@@ -331,8 +334,8 @@ describe("AdminInstanceLlmUsageTable", () => {
 					}}
 					isDetailLoading={false}
 					detailError={null}
-					onToggleDetails={() => {}}
-					onEditSharedModelBudget={() => {}}
+					onToggleDetails={vi.fn<() => void>()}
+					onEditSharedModelBudget={vi.fn<() => void>()}
 				/>,
 			);
 

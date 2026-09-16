@@ -57,7 +57,7 @@ describe("product feedback wire contract", () => {
 		let requests = 0;
 		server.use(
 			http.post("*/workspaces/acme/product-feedback", () => {
-				requests++;
+				requests += 1;
 				return HttpResponse.json({ status: 429 }, { status: 429 });
 			}),
 		);
@@ -263,7 +263,7 @@ describe("product feedback wire contract", () => {
 		let requests = 0;
 		server.use(
 			http.post("*/product-feedback", () => {
-				requests++;
+				requests += 1;
 				return new HttpResponse(null, { status: 202 });
 			}),
 		);

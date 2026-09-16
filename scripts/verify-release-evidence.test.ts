@@ -39,7 +39,7 @@ void describe("release evidence manifest", () => {
 					inventory,
 					namespace,
 				),
-			/canonical order/,
+			/canonical order/u,
 		);
 		assert.throws(
 			() =>
@@ -48,7 +48,7 @@ void describe("release evidence manifest", () => {
 					inventory,
 					namespace,
 				),
-			/canonical order/,
+			/canonical order/u,
 		);
 		assert.throws(
 			() =>
@@ -57,7 +57,7 @@ void describe("release evidence manifest", () => {
 					inventory,
 					namespace,
 				),
-			/duplicate image platforms/,
+			/duplicate image platforms/u,
 		);
 	});
 
@@ -77,7 +77,7 @@ void describe("release evidence manifest", () => {
 						inventory,
 						namespace,
 					),
-				/malformed|does not match/,
+				/malformed|does not match/u,
 			);
 		}
 	});
@@ -91,7 +91,7 @@ void describe("release evidence manifest", () => {
 					{ schemaVersion: 1, images: ["server", "server"], upstream: [] },
 					namespace,
 				),
-			/duplicate release image/,
+			/duplicate release image/u,
 		);
 		assert.throws(
 			() =>
@@ -100,7 +100,7 @@ void describe("release evidence manifest", () => {
 					{ schemaVersion: 1, images: ["../server"], upstream: [] },
 					namespace,
 				),
-			/invalid image/,
+			/invalid image/u,
 		);
 	});
 
@@ -136,7 +136,7 @@ void describe("release evidence manifest", () => {
 					upstreamInventory,
 					namespace,
 				),
-			/does not match its inventory/,
+			/does not match its inventory/u,
 		);
 		assert.throws(
 			() =>
@@ -145,7 +145,7 @@ void describe("release evidence manifest", () => {
 					upstreamInventory,
 					namespace,
 				),
-			/does not match its inventory/,
+			/does not match its inventory/u,
 		);
 		assert.throws(
 			() =>
@@ -160,7 +160,7 @@ void describe("release evidence manifest", () => {
 					inventory,
 					namespace,
 				),
-			/one index digest/,
+			/one index digest/u,
 		);
 	});
 });
@@ -169,11 +169,14 @@ void describe("subprocess capture", () => {
 	void it("bounds every captured subprocess above Node's 1 MiB default", () => {
 		// A cosign attestation carries the whole SPDX SBOM base64-encoded. Under the default cap the
 		// capture raises ENOBUFS, which failed a release after the images were already tagged.
-		const source = readFileSync(new URL("./verify-release-evidence.ts", import.meta.url), "utf8");
-		assert.match(source, /maxBuffer: CAPTURE_LIMIT_BYTES/);
-		const limit = /const CAPTURE_LIMIT_BYTES = (\d+) \* 1024 \* 1024;/.exec(source);
+		const source = readFileSync(new URL("verify-release-evidence.ts", import.meta.url), "utf8");
+		assert.match(source, /maxBuffer: CAPTURE_LIMIT_BYTES/u);
+		const limit = /const CAPTURE_LIMIT_BYTES = (?<mebibytes>\d+) \* 1024 \* 1024;/u.exec(source);
 		assert.ok(limit, "CAPTURE_LIMIT_BYTES must be declared in MiB");
-		assert.ok(Number(limit[1]) >= 64, "an SBOM attestation needs far more than the 1 MiB default");
+		assert.ok(
+			Number(limit.groups?.mebibytes) >= 64,
+			"an SBOM attestation needs far more than the 1 MiB default",
+		);
 	});
 });
 
@@ -251,7 +254,8 @@ void describe("release evidence bindings", () => {
 	});
 
 	void it("refuses to pass or to skip an attestation it cannot read", () => {
-		for (const unreadable of ["", "   \n", '{"payload":"not-base64-json"}', "[]", '["envelope"]'])
+		for (const unreadable of ["", "   \n", '{"payload":"not-base64-json"}', "[]", '["envelope"]']) {
 			assert.throws(() => attestationContainsSbom(unreadable, attested("one")));
+		}
 	});
 });

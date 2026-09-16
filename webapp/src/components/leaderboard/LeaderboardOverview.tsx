@@ -52,6 +52,24 @@ function formatTimeRemaining(leaderboardEnd: string | undefined, now: Date): str
 	return `${diffSeconds}s`;
 }
 
+/** Scroll to the user's rank in the leaderboard table. */
+function scrollToRank(rank: number) {
+	const element = document.getElementById(`rank-${rank}`);
+	if (element) {
+		element.scrollIntoView({ behavior: "smooth" });
+	}
+}
+
+function trendIcon(change: number) {
+	if (change > 0) {
+		return <TrendingUp className="h-4 w-4" />;
+	}
+	if (change < 0) {
+		return <TrendingDown className="h-4 w-4" />;
+	}
+	return <MoveRight className="h-4 w-4" />;
+}
+
 export function LeaderboardOverview({
 	leaderboardEntry,
 	leaguePoints,
@@ -80,14 +98,6 @@ export function LeaderboardOverview({
 	if (!user) {
 		return null;
 	}
-
-	// Scroll to the user's rank in the leaderboard table
-	const scrollToRank = (rank: number) => {
-		const element = document.getElementById(`rank-${rank}`);
-		if (element) {
-			element.scrollIntoView({ behavior: "smooth" });
-		}
-	};
 
 	return (
 		<Card>
@@ -133,13 +143,7 @@ export function LeaderboardOverview({
 								<span className="text-muted-foreground">League points change:</span>
 								<div className="flex items-center gap-1">
 									<span className="font-medium">{leaguePointsChange}</span>
-									{leaguePointsChange > 0 ? (
-										<TrendingUp className="h-4 w-4" />
-									) : leaguePointsChange < 0 ? (
-										<TrendingDown className="h-4 w-4" />
-									) : (
-										<MoveRight className="h-4 w-4" />
-									)}
+									{trendIcon(leaguePointsChange)}
 								</div>
 							</div>
 						)}

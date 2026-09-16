@@ -53,7 +53,7 @@ function submitSpy() {
 	return vi.fn<(value: CuratedPracticeFormValue) => void>();
 }
 
-function renderForm(
+async function renderForm(
 	overrides: Partial<CuratedPracticeFormInitialValue> = {},
 	onSubmit = submitSpy(),
 ) {
@@ -96,7 +96,7 @@ describe("CuratedPracticeForm", () => {
 				groups={[]}
 				definitionOptions={mockPracticeDefinitionOptions}
 				isPending={false}
-				onSubmit={vi.fn()}
+				onSubmit={submitSpy()}
 			/>,
 			"/admin/catalog/new",
 		);
@@ -118,7 +118,7 @@ describe("CuratedPracticeForm", () => {
 				groups={[]}
 				definitionOptions={mockPracticeDefinitionOptions}
 				isPending={false}
-				onSubmit={vi.fn()}
+				onSubmit={submitSpy()}
 			/>,
 			"/admin/catalog/new",
 		);
@@ -142,7 +142,7 @@ describe("CuratedPracticeForm", () => {
 				groups={[]}
 				definitionOptions={mockPracticeDefinitionOptions}
 				isPending={false}
-				onSubmit={vi.fn()}
+				onSubmit={submitSpy()}
 			/>,
 			"/admin/catalog/new",
 		);
@@ -175,7 +175,7 @@ describe("CuratedPracticeForm", () => {
 				groups={[]}
 				definitionOptions={mockPracticeDefinitionOptions}
 				isPending={false}
-				onSubmit={vi.fn()}
+				onSubmit={submitSpy()}
 			/>,
 			"/admin/catalog/new",
 		);
@@ -202,8 +202,8 @@ describe("CuratedPracticeForm", () => {
 				initialData={initialData}
 				isPending={false}
 				conflict
-				onContinueWithDraft={vi.fn()}
-				onSubmit={vi.fn()}
+				onContinueWithDraft={vi.fn<() => void>()}
+				onSubmit={submitSpy()}
 			/>,
 			"/admin/catalog/practices/clear-pr-description",
 		);

@@ -26,13 +26,13 @@ const connection: LlmConnection = {
 function renderDialog(overrides: Partial<AdminLlmConnectionFormDialogProps> = {}) {
 	const props: AdminLlmConnectionFormDialogProps = {
 		open: true,
-		onOpenChange: vi.fn(),
+		onOpenChange: vi.fn<() => void>(),
 		editing: null,
 		isSubmitting: false,
-		onCreate: vi.fn(),
-		onUpdate: vi.fn(),
-		onProbe: vi.fn(),
-		onProbeSaved: vi.fn(),
+		onCreate: vi.fn<() => void>(),
+		onUpdate: vi.fn<() => void>(),
+		onProbe: vi.fn<() => void>(),
+		onProbeSaved: vi.fn<() => void>(),
 		isProbing: false,
 		...overrides,
 	};

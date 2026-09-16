@@ -18,7 +18,10 @@ import {
 } from "@/components/admin/integrations/sync-format";
 import type { SyncJobsTableProps } from "@/components/admin/integrations/SyncJobsTable";
 import type { SyncResourcesTableProps } from "@/components/admin/integrations/SyncResourcesTable";
-import type { SyncStatusHeaderProps } from "@/components/admin/integrations/SyncStatusHeader";
+import type {
+	SyncStatusHeaderError,
+	SyncStatusHeaderProps,
+} from "@/components/admin/integrations/SyncStatusHeader";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { problemDetailOf } from "@/lib/problem-detail";
 
@@ -141,17 +144,20 @@ export function useConnectionSync({
 		triggerSync.mutate({ path: { workspaceSlug, connectionId }, body: { type } });
 	};
 
+	// The connection lookup fails first; the status lookup only runs once there is a connection.
+	let headerError: SyncStatusHeaderError | undefined;
+	if (connectionError != null) {
+		headerError = { failedQuery: "connection", cause: connectionError };
+	} else if (statusQuery.isError) {
+		headerError = { failedQuery: "status", cause: statusQuery.error };
+	}
+
 	// `onBackfill` is always offered; the header shows it only where the server reports
 	// `backfillSupported`, which is the one home for which providers can backfill.
 	const syncStatusHeaderProps: Omit<SyncStatusHeaderProps, "label" | "actions"> = {
 		status,
 		isLoading: isConnectionLoading || statusQuery.isLoading,
-		error:
-			connectionError == null
-				? statusQuery.isError
-					? { failedQuery: "status", cause: statusQuery.error }
-					: undefined
-				: { failedQuery: "connection", cause: connectionError },
+		error: headerError,
 		isConnectionActive,
 		credentialsUnreadableSince,
 		triggeringType,
@@ -184,7 +190,9 @@ export function useConnectionSync({
 			isLoading: resourcesQuery.isLoading,
 			isError: resourcesQuery.isError,
 			error: resourcesQuery.error,
-			onRetry: () => void resourcesQuery.refetch(),
+			onRetry: () => {
+				void resourcesQuery.refetch();
+			},
 			resourceNoun,
 			resourceNounPlural,
 			syncIntervalSeconds: status?.syncIntervalSeconds,
@@ -195,7 +203,9 @@ export function useConnectionSync({
 			isLoading: jobsQuery.isLoading,
 			isError: jobsQuery.isError,
 			error: jobsQuery.error,
-			onRetry: () => void jobsQuery.refetch(),
+			onRetry: () => {
+				void jobsQuery.refetch();
+			},
 			page: jobsPage,
 			totalPages: jobsQuery.data?.totalPages ?? 1,
 			onPageChange: setJobsPage,

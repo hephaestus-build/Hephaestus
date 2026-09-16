@@ -34,7 +34,7 @@ describe("PracticeGroupStandingCard", () => {
 	});
 
 	it("opens a group", () => {
-		const onOpenDetails = vi.fn();
+		const onOpenDetails = vi.fn<(group: PracticeGroup) => void>();
 		render(
 			<PracticeGroupStandingCard
 				groups={[group]}

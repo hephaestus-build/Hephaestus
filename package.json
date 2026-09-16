@@ -15,6 +15,7 @@
 		"@nats-io/jetstream": "3.4.0",
 		"@nats-io/transport-node": "3.4.0",
 		"@openapitools/openapi-generator-cli": "2.41.0",
+		"@types/k6": "2.2.0",
 		"@types/node": "24.13.3",
 		"@types/npm-package-arg": "6.1.4",
 		"@types/pg": "8.23.1",

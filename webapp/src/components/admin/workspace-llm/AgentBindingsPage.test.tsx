@@ -25,8 +25,8 @@ const detectionBinding: AgentBinding = {
 };
 
 function renderPage(overrides: Partial<AgentBindingsPageProps> = {}) {
-	const onSave = vi.fn();
-	const onTurnOff = vi.fn();
+	const onSave = vi.fn<AgentBindingsPageProps["onSave"]>();
+	const onTurnOff = vi.fn<AgentBindingsPageProps["onTurnOff"]>();
 	render(
 		<AgentBindingsPage
 			workspaceSlug="demo"
@@ -38,7 +38,7 @@ function renderPage(overrides: Partial<AgentBindingsPageProps> = {}) {
 			isError={false}
 			loadError={null}
 			pendingPurposes={new Set()}
-			onRetry={vi.fn()}
+			onRetry={vi.fn<() => void>()}
 			onSave={onSave}
 			onTurnOff={onTurnOff}
 			{...overrides}

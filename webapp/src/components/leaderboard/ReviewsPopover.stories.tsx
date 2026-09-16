@@ -206,7 +206,7 @@ export const LongReviewList: Story = {
 		}
 		await expect(viewport.clientHeight).toBeLessThanOrEqual(200);
 		await expect(viewport.scrollHeight).toBeGreaterThan(viewport.clientHeight);
-		for (let tab = 0; tab < 16 && document.activeElement !== lastLink; tab++) {
+		for (let tab = 0; tab < 16 && document.activeElement !== lastLink; tab += 1) {
 			await userEvent.tab();
 		}
 		await expect(lastLink).toHaveFocus();

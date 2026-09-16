@@ -5,63 +5,63 @@
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 // language key -> [human label, regex] of deliberate-crash / force-unwrap constructs in ADDED code.
-const LANG_PATTERNS: Record<string, Array<[string, RegExp]>> = {
+const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 	swift: [
-		["try!", /\btry!/],
-		["fatalError", /\bfatalError\s*\(/],
-		["force-cast as!", /\bas!\s/],
-		["preconditionFailure", /\bpreconditionFailure\s*\(/],
-		["assertionFailure", /\bassertionFailure\s*\(/],
-		["force-unwrap", /[A-Za-z0-9_)\]]!(\.|\s|$|\))/],
+		["try!", /\btry!/u],
+		["fatalError", /\bfatalError\s*\(/u],
+		["force-cast as!", /\bas!\s/u],
+		["preconditionFailure", /\bpreconditionFailure\s*\(/u],
+		["assertionFailure", /\bassertionFailure\s*\(/u],
+		["force-unwrap", /[A-Za-z0-9_)\]]!(?:\.|\s|$|\))/u],
 	],
 	ts: [
-		["process.exit", /\bprocess\.exit\s*\(/],
-		["non-null assertion", /[A-Za-z0-9_)\]]![.;)\s]/],
+		["process.exit", /\bprocess\.exit\s*\(/u],
+		["non-null assertion", /[A-Za-z0-9_)\]]![.;)\s]/u],
 	],
-	js: [["process.exit", /\bprocess\.exit\s*\(/]],
+	js: [["process.exit", /\bprocess\.exit\s*\(/u]],
 	python: [
-		["sys.exit", /\bsys\.exit\s*\(/],
-		["os._exit", /\bos\._exit\s*\(/],
-		["raise SystemExit", /\braise\s+SystemExit\b/],
-		["bare assert in code", /^\s*assert\s+/],
+		["sys.exit", /\bsys\.exit\s*\(/u],
+		["os._exit", /\bos\._exit\s*\(/u],
+		["raise SystemExit", /\braise\s+SystemExit\b/u],
+		["bare assert in code", /^\s*assert\s+/u],
 	],
 	go: [
-		["panic(", /\bpanic\s*\(/],
-		["log.Fatal", /\blog\.Fatal[a-z]*\s*\(/],
-		["os.Exit", /\bos\.Exit\s*\(/],
+		["panic(", /\bpanic\s*\(/u],
+		["log.Fatal", /\blog\.Fatal[a-z]*\s*\(/u],
+		["os.Exit", /\bos\.Exit\s*\(/u],
 	],
 	java: [
-		["System.exit", /\bSystem\.exit\s*\(/],
-		["throw AssertionError", /\bthrow\s+new\s+AssertionError\b/],
-		["Optional.get()", /\bOptional[^;]*\.get\s*\(\s*\)/],
+		["System.exit", /\bSystem\.exit\s*\(/u],
+		["throw AssertionError", /\bthrow\s+new\s+AssertionError\b/u],
+		["Optional.get()", /\bOptional[^;]*\.get\s*\(\s*\)/u],
 	],
 	kotlin: [
-		["!! force non-null", /!!(\.|\s|$|\))/],
-		["error(", /(^|[^.\w])error\s*\(/],
-		["TODO(", /\bTODO\s*\(/],
+		["!! force non-null", /!!(?:\.|\s|$|\))/u],
+		["error(", /(?:^|[^.\w])error\s*\(/u],
+		["TODO(", /\bTODO\s*\(/u],
 	],
 	rust: [
-		[".unwrap()", /\.unwrap\s*\(\s*\)/],
-		[".expect(", /\.expect\s*\(/],
-		["panic!", /\bpanic!\s*\(/],
-		["unreachable!", /\bunreachable!\s*\(/],
-		["unimplemented!/todo!", /\b(unimplemented|todo)!\s*\(/],
+		[".unwrap()", /\.unwrap\s*\(\s*\)/u],
+		[".expect(", /\.expect\s*\(/u],
+		["panic!", /\bpanic!\s*\(/u],
+		["unreachable!", /\bunreachable!\s*\(/u],
+		["unimplemented!/todo!", /\b(?:unimplemented|todo)!\s*\(/u],
 	],
 	ruby: [
-		["exit!", /\bexit!/],
-		["abort", /\babort\b/],
+		["exit!", /\bexit!/u],
+		["abort", /\babort\b/u],
 	],
 	c: [
-		["abort(", /\babort\s*\(/],
-		["exit(", /\bexit\s*\(/],
-		["assert(", /\bassert\s*\(/],
+		["abort(", /\babort\s*\(/u],
+		["exit(", /\bexit\s*\(/u],
+		["assert(", /\bassert\s*\(/u],
 	],
 	csharp: [
-		["Environment.Exit", /\bEnvironment\.Exit\s*\(/],
-		["Environment.FailFast", /\bEnvironment\.FailFast\s*\(/],
-		["Debug.Assert", /\bDebug\.Assert\s*\(/],
-		["throw new", /\bthrow\s+new\s+\w+/],
-		["null-forgiving !", /[A-Za-z0-9_)\]]!\.(?=[A-Za-z_])/],
+		["Environment.Exit", /\bEnvironment\.Exit\s*\(/u],
+		["Environment.FailFast", /\bEnvironment\.FailFast\s*\(/u],
+		["Debug.Assert", /\bDebug\.Assert\s*\(/u],
+		["throw new", /\bthrow\s+new\s+\w+/u],
+		["null-forgiving !", /[A-Za-z0-9_)\]]!\.(?=[A-Za-z_])/u],
 	],
 };
 
@@ -118,12 +118,18 @@ export default function avoidsUnsafePanicsAndChosenCrashes(
 	const byLang: Record<string, number> = {};
 	for (const [path, df] of diffFiles) {
 		const lang = langOf(path);
-		if (!lang) continue;
+		if (lang === null) {
+			continue;
+		}
 		const patterns = LANG_PATTERNS[lang];
-		if (!patterns) continue;
+		if (!patterns) {
+			continue;
+		}
 		for (const [line, content] of df.addedLines) {
 			const trimmed = content.trimStart();
-			if (isComment(trimmed)) continue;
+			if (isComment(trimmed)) {
+				continue;
+			}
 			for (const [name, re] of patterns) {
 				if (re.test(content)) {
 					hints.push({

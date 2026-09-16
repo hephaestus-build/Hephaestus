@@ -4,7 +4,7 @@
  * with the digests its build produced.
  */
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import { readInventory, resolveAndVerify, resolveImages } from "./commit-image-lock.ts";
 import { requiredEnv } from "./lib/env.ts";
@@ -40,27 +40,44 @@ export async function resolvePromotion(
 ): Promise<Promotion> {
 	const { release, commit, allowRollback, freeze, refreshDatabaseImage } = request;
 	if (commit !== undefined) {
-		if (release !== undefined) throw new Error("Name a release or a commit, not both");
-		if (!isCommit(commit)) throw new Error(`Follow a full commit SHA, not '${commit}'`);
+		if (release !== undefined) {
+			throw new Error("Name a release or a commit, not both");
+		}
+		if (!isCommit(commit)) {
+			throw new Error(`Follow a full commit SHA, not '${commit}'`);
+		}
 		// Dispatch permission must not authorize commits outside main.
 		const status = await sources.compare(commit, "main");
-		if (status !== "identical" && status !== "ahead")
+		if (status !== "identical" && status !== "ahead") {
 			throw new Error(`${commit} is not on the default branch`);
+		}
 		const images = await sources.images(commit);
 		return {
 			channel: { release: commit, images, allowRollback, freeze, refreshDatabaseImage },
 			version: commit,
 		};
 	}
-	if (release === undefined) throw new Error("Name a release or a commit");
+	if (release === undefined) {
+		throw new Error("Name a release or a commit");
+	}
 	// A release runs the images its evidence describes, so there is no carried pin to refresh.
-	if (refreshDatabaseImage)
+	if (refreshDatabaseImage) {
 		throw new Error("refresh-database-image applies to a commit, not to a release");
-	if (!RELEASE_TAG.test(release))
+	}
+	if (!RELEASE_TAG.test(release)) {
 		throw new Error(`Promote an immutable vX.Y.Z release, not '${release}'`);
+	}
 	// The host binds the tag's source tree to the signed release lock before applying it.
-	if (await sources.isDraft(release)) throw new Error(`${release} is still a draft`);
+	if (await sources.isDraft(release)) {
+		throw new Error(`${release} is still a draft`);
+	}
 	return { channel: { release, allowRollback, freeze }, version: release.slice(1) };
+}
+
+function optional(name: string): string | undefined {
+	const value = process.env[name];
+	// A dispatch input left blank arrives as an empty string.
+	return value === "" ? undefined : value;
 }
 
 if (import.meta.main) {
@@ -68,11 +85,6 @@ if (import.meta.main) {
 	const owner = repository.slice(0, repository.indexOf("/"));
 	const environment = requiredEnv(process.env, "CHANNEL");
 	const hostname = requiredEnv(process.env, "HOSTNAME");
-	const optional = (name: string): string | undefined => {
-		const value = process.env[name];
-		// A dispatch input left blank arrives as an empty string.
-		return value === "" ? undefined : value;
-	};
 	const { channel, version } = await resolvePromotion(
 		{
 			release: optional("RELEASE"),
@@ -82,21 +94,21 @@ if (import.meta.main) {
 			refreshDatabaseImage: process.env.REFRESH_DATABASE_IMAGE === "true",
 		},
 		{
-			compare: (base, head) => compareStatus(repository, base, head),
-			isDraft: async (release) =>
-				(
-					await output("gh", [
-						"release",
-						"view",
-						release,
-						"--repo",
-						repository,
-						"--json",
-						"isDraft",
-						"--jq",
-						".isDraft",
-					])
-				).trim() !== "false",
+			compare: async (base, head) => compareStatus(repository, base, head),
+			isDraft: async (release) => {
+				const isDraft = await output("gh", [
+					"release",
+					"view",
+					release,
+					"--repo",
+					repository,
+					"--json",
+					"isDraft",
+					"--jq",
+					".isDraft",
+				]);
+				return isDraft.trim() !== "false";
+			},
 			// The inventory belongs to the commit being promoted; this checkout's may be newer than it.
 			images: async (commit) =>
 				resolveImages(
@@ -108,8 +120,8 @@ if (import.meta.main) {
 		},
 	);
 	const file = `channels/${environment.toLowerCase()}.json`;
-	await mkdir(join("deploy-state", "channels"), { recursive: true });
-	await writeFile(join("deploy-state", file), serializeChannel(channel));
+	await mkdir(path.join("deploy-state", "channels"), { recursive: true });
+	await writeFile(path.join("deploy-state", file), serializeChannel(channel));
 	await appendFile(
 		requiredEnv(process.env, "GITHUB_OUTPUT"),
 		`environment_url=https://${hostname}\nchannel=${file}\nrelease=${channel.release}\nversion=${version}\n`,

@@ -9,6 +9,38 @@ interface FeatureFlagDevToolsPanelProps {
 	isLoading: boolean;
 }
 
+function FlagList({ flags, isLoading }: FeatureFlagDevToolsPanelProps) {
+	if (isLoading) {
+		return <div className="px-2 py-3 text-center text-xs text-muted-foreground">Loading...</div>;
+	}
+	if (flags === undefined) {
+		return (
+			<div className="px-2 py-3 text-center text-xs text-muted-foreground">Not authenticated</div>
+		);
+	}
+	return (
+		<div className="space-y-1">
+			{Object.entries(flags)
+				.sort(([a], [b]) => a.localeCompare(b))
+				.map(([name, enabled]) => (
+					<div
+						key={name}
+						className="flex items-center justify-between rounded px-2 py-1 text-xs hover:bg-muted"
+					>
+						<span className="font-mono text-foreground">{name}</span>
+						<span
+							className={`rounded-full px-1.5 py-0.5 text-2xs font-medium ${
+								enabled ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+							}`}
+						>
+							{enabled ? "ON" : "OFF"}
+						</span>
+					</div>
+				))}
+		</div>
+	);
+}
+
 /**
  * Pure presentational panel for feature flag state.
  * Exported for Storybook — use {@link FeatureFlagDevTools} in application code.
@@ -31,35 +63,7 @@ export function FeatureFlagDevToolsPanel({ flags, isLoading }: FeatureFlagDevToo
 						</button>
 					</div>
 					<div className="max-h-80 overflow-y-auto p-2">
-						{isLoading ? (
-							<div className="px-2 py-3 text-center text-xs text-muted-foreground">Loading...</div>
-						) : flags ? (
-							<div className="space-y-1">
-								{Object.entries(flags)
-									.sort(([a], [b]) => a.localeCompare(b))
-									.map(([name, enabled]) => (
-										<div
-											key={name}
-											className="flex items-center justify-between rounded px-2 py-1 text-xs hover:bg-muted"
-										>
-											<span className="font-mono text-foreground">{name}</span>
-											<span
-												className={`rounded-full px-1.5 py-0.5 text-2xs font-medium ${
-													enabled
-														? "bg-success/10 text-success"
-														: "bg-destructive/10 text-destructive"
-												}`}
-											>
-												{enabled ? "ON" : "OFF"}
-											</span>
-										</div>
-									))}
-							</div>
-						) : (
-							<div className="px-2 py-3 text-center text-xs text-muted-foreground">
-								Not authenticated
-							</div>
-						)}
+						<FlagList flags={flags} isLoading={isLoading} />
 					</div>
 				</div>
 			)}

@@ -256,14 +256,18 @@ function RouteComponent() {
 			(slackAvailable && slackPreferencesQuery.isLoading),
 		isError: slackAvailable && slackPreferencesQuery.isError,
 		error: slackPreferencesQuery.error,
-		onRetry: () => void slackPreferencesQuery.refetch(),
+		onRetry: () => {
+			void slackPreferencesQuery.refetch();
+		},
 	};
 
 	return (
 		<SettingsPage
 			isLoading={isLoading}
 			settingsError={settingsError}
-			onRetrySettings={() => void refetchSettings()}
+			onRetrySettings={() => {
+				void refetchSettings();
+			}}
 			practiceFeedbackProps={{
 				practiceFeedbackDeliveryEnabled: settings?.practiceFeedbackDeliveryEnabled ?? true,
 				onTogglePracticeFeedback: handlePracticeFeedbackToggle,
@@ -285,7 +289,9 @@ function RouteComponent() {
 				isLoading: consentQuery.isLoading || researchConsentMutation.isPending,
 				isError: consentQuery.isError,
 				error: consentQuery.error,
-				onRetry: () => void consentQuery.refetch(),
+				onRetry: () => {
+					void consentQuery.refetch();
+				},
 			}}
 			linkedAccountsProps={linkedAccountsProps}
 			showSlackPreferencesSection={slackAvailable}

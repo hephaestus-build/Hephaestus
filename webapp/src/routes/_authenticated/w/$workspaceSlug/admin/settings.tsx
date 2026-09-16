@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Settings2 } from "lucide-react";
+import type { ReactNode } from "react";
 
 import {
 	computeUserLeagueStatsQueryKey,
@@ -103,6 +104,45 @@ function AdminSettings() {
 		});
 	};
 
+	let settings: ReactNode;
+	if (!hasText(workspaceSlug) || workspaceQuery.isLoading) {
+		settings = (
+			<div className="flex h-40 max-w-4xl items-center justify-center">
+				<Spinner className="size-6" />
+			</div>
+		);
+	} else if (workspaceQuery.isError || !workspaceData) {
+		settings = (
+			<div className="max-w-4xl">
+				<QueryErrorAlert
+					error={workspaceQuery.error}
+					title="Couldn't load workspace settings"
+					onRetry={() => {
+						void workspaceQuery.refetch();
+					}}
+				/>
+			</div>
+		);
+	} else {
+		settings = (
+			<WorkspaceSettingsPage
+				isResettingLeagues={resetLeagues.isPending}
+				onResetLeagues={() => {
+					resetLeagues.mutate({ path: { workspaceSlug } });
+				}}
+				features={{
+					mentorEnabled: workspaceData.mentorEnabled,
+					leaderboardEnabled: workspaceData.leaderboardEnabled,
+					progressionEnabled: workspaceData.progressionEnabled,
+					leaguesEnabled: workspaceData.leaguesEnabled,
+				}}
+				isSavingFeatures={updateFeatures.isPending}
+				onToggleFeature={handleToggleFeature}
+				workspaceSlug={workspaceSlug}
+			/>
+		);
+	}
+
 	return (
 		<PageLayout>
 			<PageHeader
@@ -110,35 +150,7 @@ function AdminSettings() {
 				title="Workspace settings"
 				description="Configure workspace features, leagues, and lifecycle."
 			/>
-			{!hasText(workspaceSlug) || workspaceQuery.isLoading ? (
-				<div className="flex h-40 max-w-4xl items-center justify-center">
-					<Spinner className="size-6" />
-				</div>
-			) : workspaceQuery.isError || !workspaceData ? (
-				<div className="max-w-4xl">
-					<QueryErrorAlert
-						error={workspaceQuery.error}
-						title="Couldn't load workspace settings"
-						onRetry={() => void workspaceQuery.refetch()}
-					/>
-				</div>
-			) : (
-				<WorkspaceSettingsPage
-					isResettingLeagues={resetLeagues.isPending}
-					onResetLeagues={() => {
-						resetLeagues.mutate({ path: { workspaceSlug } });
-					}}
-					features={{
-						mentorEnabled: workspaceData.mentorEnabled,
-						leaderboardEnabled: workspaceData.leaderboardEnabled,
-						progressionEnabled: workspaceData.progressionEnabled,
-						leaguesEnabled: workspaceData.leaguesEnabled,
-					}}
-					isSavingFeatures={updateFeatures.isPending}
-					onToggleFeature={handleToggleFeature}
-					workspaceSlug={workspaceSlug}
-				/>
-			)}
+			{settings}
 		</PageLayout>
 	);
 }

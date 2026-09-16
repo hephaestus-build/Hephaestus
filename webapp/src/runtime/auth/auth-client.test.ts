@@ -87,20 +87,39 @@ describe("toUserProfile", () => {
 	});
 });
 
-describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => {
-	const realLocation = window.location;
-	afterEach(() => {
-		Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+const realLocation = window.location;
+
+function restoreLocation() {
+	Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+}
+
+/** Replaces `window.location` with one that records every URL assigned to it. */
+function captureNavigation(): string[] {
+	const assigned: string[] = [];
+	Object.defineProperty(window, "location", {
+		configurable: true,
+		value: {
+			assign: (url: string) => {
+				assigned.push(url);
+			},
+		},
 	});
-	function stubLocation(): { assigned: string[] } {
-		const assigned: string[] = [];
-		const stub = { assign: (url: string) => assigned.push(url) };
-		Object.defineProperty(window, "location", { configurable: true, value: stub });
-		return { assigned };
-	}
+	return assigned;
+}
+
+function setCookie(raw: string) {
+	Object.defineProperty(document, "cookie", { configurable: true, get: () => raw });
+}
+
+function req(method: string): Request {
+	return new Request("http://localhost:8080/user", { method });
+}
+
+describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => {
+	afterEach(restoreLocation);
 
 	it("redirects to the server kickoff carrying a safe same-origin returnTo", () => {
-		const { assigned } = stubLocation();
+		const assigned = captureNavigation();
 		authClient.login("gitlab", "/settings/account");
 		expect(assigned).toHaveLength(1);
 		const [target] = assigned;
@@ -112,7 +131,7 @@ describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => 
 	});
 
 	it("drops an unsafe (open-redirect) returnTo down to '/'", () => {
-		const { assigned } = stubLocation();
+		const assigned = captureNavigation();
 		authClient.login("github", "//evil.example.com/phish");
 		const [target] = assigned;
 		assert(hasText(target));
@@ -121,7 +140,7 @@ describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => 
 	});
 
 	it("defaults the provider to github when no idpHint is given", () => {
-		const { assigned } = stubLocation();
+		const assigned = captureNavigation();
 		authClient.login(undefined, "/dashboard");
 		const [target] = assigned;
 		assert(hasText(target));
@@ -132,14 +151,9 @@ describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => 
 });
 
 describe("applyStateChangingHeaders (app-wide CSRF + impersonation guard)", () => {
-	function setCookie(raw: string) {
-		Object.defineProperty(document, "cookie", { configurable: true, get: () => raw });
-	}
-	function req(method: string): Request {
-		return new Request("http://localhost:8080/user", { method });
-	}
-
-	afterEach(() => setCookie(""));
+	afterEach(() => {
+		setCookie("");
+	});
 
 	it("adds the CSRF double-submit header on state-changing methods", () => {
 		setCookie("__Host-XSRF-TOKEN=tok-123");
@@ -174,19 +188,7 @@ describe("applyStateChangingHeaders (app-wide CSRF + impersonation guard)", () =
 });
 
 describe("authClient.logout", () => {
-	const realLocation = window.location;
-	afterEach(() => {
-		Object.defineProperty(window, "location", { configurable: true, value: realLocation });
-	});
-
-	function captureNavigation() {
-		const assigned: string[] = [];
-		Object.defineProperty(window, "location", {
-			configurable: true,
-			value: { assign: (url: string) => assigned.push(url) },
-		});
-		return assigned;
-	}
+	afterEach(restoreLocation);
 
 	it.each([204, 401])(
 		"returns home when HTTP %i confirms the session has ended",

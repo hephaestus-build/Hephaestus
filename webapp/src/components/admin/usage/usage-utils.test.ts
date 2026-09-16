@@ -17,12 +17,12 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
-describe("which month is now", () => {
-	function nowAt(iso: string) {
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date(iso));
-	}
+function nowAt(iso: string) {
+	vi.useFakeTimers();
+	vi.setSystemTime(new Date(iso));
+}
 
+describe("which month is now", () => {
 	it("answers both questions no for a month later than this one", () => {
 		nowAt("2026-07-15T00:00:00.000Z");
 		expect(isCurrentMonthUtc("2026-08")).toBe(false);

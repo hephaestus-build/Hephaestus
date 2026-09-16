@@ -34,7 +34,13 @@ export function ReviewRunCard({ job }: ReviewRunCardProps) {
 				<h3 id="run-card-heading" className="text-lg font-semibold">
 					How this review ran
 				</h3>
-				<Button variant="outline" size="sm" onClick={() => void copyConfiguration()}>
+				<Button
+					variant="outline"
+					size="sm"
+					onClick={() => {
+						void copyConfiguration();
+					}}
+				>
 					<CopyIcon aria-hidden />
 					Copy configuration
 				</Button>

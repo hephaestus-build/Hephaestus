@@ -70,7 +70,7 @@ export const ChatExample: Story = {
 			<div className="flex-1 space-y-1">
 				<div className="rounded-lg bg-muted p-3">
 					<p className="text-sm">
-						Hello! I'm your friendly mentor bot. How can I help you learn something new today?
+						Hello! I’m your friendly mentor bot. How can I help you learn something new today?
 					</p>
 				</div>
 				<p className="text-xs text-muted-foreground">Just now</p>

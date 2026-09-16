@@ -58,7 +58,7 @@ export const UnreadableGitLabToken: Story = {
 		</div>
 	),
 	play: async ({ canvas }) => {
-		canvas.getByText("The stored token can't be read");
+		canvas.getByText("The stored token can’t be read");
 		await expect(canvas.getByLabelText("New personal access token")).toBeEnabled();
 	},
 };
@@ -68,6 +68,6 @@ export const SuccessfulReplacement: Story = {
 		const input = canvas.getByLabelText("New personal access token");
 		await userEvent.type(input, "replacement-token");
 		await userEvent.click(canvas.getByRole("button", { name: "Replace token" }));
-		await waitFor(() => expect(input).toHaveValue(""));
+		await waitFor(async () => expect(input).toHaveValue(""));
 	},
 };

@@ -69,7 +69,7 @@ export function PracticeReviewSettings({
 			<PracticeReviewCoverageSettings
 				settings={policy.settings}
 				preview={coverage.preview}
-				onSave={(scope, sourceEtag) => policy.onUpdate({ reviewScope: scope }, sourceEtag)}
+				onSave={async (scope, sourceEtag) => policy.onUpdate({ reviewScope: scope }, sourceEtag)}
 				repositories={coverage.repositories}
 				people={coverage.people}
 			/>
@@ -125,7 +125,7 @@ function ModelReadiness({
 		return (
 			<Alert variant="warning" role="status">
 				<AlertCircle />
-				<AlertTitle>Couldn't check the review model</AlertTitle>
+				<AlertTitle>Couldn’t check the review model</AlertTitle>
 				<AlertDescription>
 					<Button variant="outline" size="sm" onClick={model.onRetry}>
 						Retry

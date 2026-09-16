@@ -1,5 +1,5 @@
 import { LinkIcon, type LucideIcon, Unlink } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 import type { IdentityProviderView, IdentityView } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -178,6 +178,157 @@ export function LinkedAccountsSection({
 		prevIdentityCount.current = identities.length;
 	}, [identities.length]);
 
+	let body: ReactNode;
+	if (isLoading) {
+		body = (
+			<div className="flex justify-center py-6">
+				<Spinner aria-label="Loading connected accounts" />
+			</div>
+		);
+	} else if (isError) {
+		body = (
+			<QueryErrorAlert error={error} title="Could not load connected accounts" onRetry={onRetry} />
+		);
+	} else {
+		body = (
+			<>
+				{identities.length === 0 ? (
+					<Empty variant="outlined">
+						<EmptyHeader>
+							<EmptyMedia variant="icon">
+								<LinkIcon aria-hidden="true" />
+							</EmptyMedia>
+							<EmptyTitle>No connected accounts yet</EmptyTitle>
+							<EmptyDescription>
+								Connect a provider below to sign in with it or attribute your work to this account.
+							</EmptyDescription>
+						</EmptyHeader>
+					</Empty>
+				) : (
+					<ItemGroup>
+						{identities.map((identity) => {
+							const identityId = identity.id;
+							const Icon = getProviderIcon(identity.providerType);
+							const name =
+								firstNonBlank(identity.displayName, identity.username, identity.subject) ??
+								"Account";
+							const lastLogin = formatLastLogin(identity.lastLoginAt);
+
+							return (
+								<Item
+									key={identityId ?? `${identity.providerType}:${identity.subject}`}
+									variant="outline"
+									role="listitem"
+								>
+									<ItemMedia variant="icon">
+										<Icon aria-hidden="true" />
+									</ItemMedia>
+									<ItemContent>
+										<ItemTitle>
+											<span className="truncate">{name}</span>
+											{hasText(identity.providerType) && (
+												<Badge variant="secondary">{getProviderLabel(identity.providerType)}</Badge>
+											)}
+										</ItemTitle>
+										{hasText(lastLogin) && (
+											<ItemDescription>Last sign-in {lastLogin}</ItemDescription>
+										)}
+									</ItemContent>
+									{identityId != null && (
+										<ItemActions>
+											<UnlinkControl
+												identityId={identityId}
+												name={name}
+												providerType={identity.providerType}
+												isOnlyIdentity={isOnlyIdentity}
+												isUnlinking={unlinkingId === identityId}
+												onConfirm={() => onUnlink(identityId)}
+											/>
+										</ItemActions>
+									)}
+								</Item>
+							);
+						})}
+					</ItemGroup>
+				)}
+
+				{linkOnlyProviders.length > 0 && (
+					<ItemGroup>
+						{linkOnlyProviders.map((provider) => {
+							const type = provider.providerType?.toUpperCase() ?? "";
+							const Icon = getProviderIcon(type);
+							const label =
+								firstNonBlank(provider.displayName) ?? getProviderLabel(type, "this account");
+							const { registrationId } = provider;
+							return (
+								<Item key={registrationId} variant="outline" role="listitem">
+									<ItemMedia variant="icon">
+										<Icon aria-hidden="true" />
+									</ItemMedia>
+									<ItemContent>
+										<ItemTitle>{label} is not connected</ItemTitle>
+										<ItemDescription>{LINK_ONLY_RATIONALE[type]}</ItemDescription>
+									</ItemContent>
+									<ItemActions>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => onLink(registrationId)}
+											aria-label={`Connect ${label}`}
+										>
+											<Icon className="mr-1.5 size-3.5" aria-hidden="true" />
+											Connect
+										</Button>
+									</ItemActions>
+								</Item>
+							);
+						})}
+					</ItemGroup>
+				)}
+
+				{signInProviders.length > 0 && (
+					<div className="space-y-2 pt-2">
+						<h3 className="text-sm font-medium">Connect another account</h3>
+						<p className="text-xs text-muted-foreground">
+							Connecting a provider sends you to its sign-in page; the identity you sign in with is
+							then linked to this account.
+						</p>
+						<div className="flex flex-wrap gap-2 pt-1">
+							{signInProviders.map((provider) => {
+								const Icon = getProviderIcon(provider.providerType);
+								const label =
+									firstNonBlank(provider.displayName, provider.registrationId) ?? "provider";
+								return (
+									<Button
+										key={provider.registrationId ?? label}
+										variant="outline"
+										size="sm"
+										onClick={() => {
+											if (hasText(provider.registrationId)) {
+												onLink(provider.registrationId);
+											}
+										}}
+										disabled={!hasText(provider.registrationId)}
+										aria-label={`Connect ${label}`}
+									>
+										<Icon className="mr-1.5 size-3.5" aria-hidden="true" />
+										Connect {label}
+									</Button>
+								);
+							})}
+						</div>
+					</div>
+				)}
+
+				{linkableProviders.length === 0 && identities.length > 0 && (
+					<p className="pt-2 text-xs text-muted-foreground">
+						You’ve connected all available providers.
+					</p>
+				)}
+			</>
+		);
+	}
+
 	return (
 		<section className="space-y-4" aria-labelledby="linked-accounts-heading">
 			<div className="space-y-1">
@@ -199,154 +350,7 @@ export function LinkedAccountsSection({
 				</p>
 			</div>
 
-			{isLoading ? (
-				<div className="flex justify-center py-6">
-					<Spinner aria-label="Loading connected accounts" />
-				</div>
-			) : isError ? (
-				<QueryErrorAlert
-					error={error}
-					title="Could not load connected accounts"
-					onRetry={onRetry}
-				/>
-			) : (
-				<>
-					{identities.length === 0 ? (
-						<Empty variant="outlined">
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<LinkIcon aria-hidden="true" />
-								</EmptyMedia>
-								<EmptyTitle>No connected accounts yet</EmptyTitle>
-								<EmptyDescription>
-									Connect a provider below to sign in with it or attribute your work to this
-									account.
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
-					) : (
-						<ItemGroup>
-							{identities.map((identity) => {
-								const identityId = identity.id;
-								const Icon = getProviderIcon(identity.providerType);
-								const name =
-									firstNonBlank(identity.displayName, identity.username, identity.subject) ??
-									"Account";
-								const lastLogin = formatLastLogin(identity.lastLoginAt);
-
-								return (
-									<Item
-										key={identityId ?? `${identity.providerType}:${identity.subject}`}
-										variant="outline"
-										role="listitem"
-									>
-										<ItemMedia variant="icon">
-											<Icon aria-hidden="true" />
-										</ItemMedia>
-										<ItemContent>
-											<ItemTitle>
-												<span className="truncate">{name}</span>
-												{hasText(identity.providerType) && (
-													<Badge variant="secondary">
-														{getProviderLabel(identity.providerType)}
-													</Badge>
-												)}
-											</ItemTitle>
-											{hasText(lastLogin) && (
-												<ItemDescription>Last sign-in {lastLogin}</ItemDescription>
-											)}
-										</ItemContent>
-										{identityId != null && (
-											<ItemActions>
-												<UnlinkControl
-													identityId={identityId}
-													name={name}
-													providerType={identity.providerType}
-													isOnlyIdentity={isOnlyIdentity}
-													isUnlinking={unlinkingId === identityId}
-													onConfirm={() => onUnlink(identityId)}
-												/>
-											</ItemActions>
-										)}
-									</Item>
-								);
-							})}
-						</ItemGroup>
-					)}
-
-					{linkOnlyProviders.length > 0 && (
-						<ItemGroup>
-							{linkOnlyProviders.map((provider) => {
-								const type = provider.providerType?.toUpperCase() ?? "";
-								const Icon = getProviderIcon(type);
-								const label =
-									firstNonBlank(provider.displayName) ?? getProviderLabel(type, "this account");
-								const { registrationId } = provider;
-								return (
-									<Item key={registrationId} variant="outline" role="listitem">
-										<ItemMedia variant="icon">
-											<Icon aria-hidden="true" />
-										</ItemMedia>
-										<ItemContent>
-											<ItemTitle>{label} is not connected</ItemTitle>
-											<ItemDescription>{LINK_ONLY_RATIONALE[type]}</ItemDescription>
-										</ItemContent>
-										<ItemActions>
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() => onLink(registrationId)}
-												aria-label={`Connect ${label}`}
-											>
-												<Icon className="mr-1.5 size-3.5" aria-hidden="true" />
-												Connect
-											</Button>
-										</ItemActions>
-									</Item>
-								);
-							})}
-						</ItemGroup>
-					)}
-
-					{signInProviders.length > 0 && (
-						<div className="space-y-2 pt-2">
-							<h3 className="text-sm font-medium">Connect another account</h3>
-							<p className="text-xs text-muted-foreground">
-								Connecting a provider sends you to its sign-in page; the identity you sign in with
-								is then linked to this account.
-							</p>
-							<div className="flex flex-wrap gap-2 pt-1">
-								{signInProviders.map((provider) => {
-									const Icon = getProviderIcon(provider.providerType);
-									const label =
-										firstNonBlank(provider.displayName, provider.registrationId) ?? "provider";
-									return (
-										<Button
-											key={provider.registrationId ?? label}
-											variant="outline"
-											size="sm"
-											onClick={() =>
-												hasText(provider.registrationId) && onLink(provider.registrationId)
-											}
-											disabled={!hasText(provider.registrationId)}
-											aria-label={`Connect ${label}`}
-										>
-											<Icon className="mr-1.5 size-3.5" aria-hidden="true" />
-											Connect {label}
-										</Button>
-									);
-								})}
-							</div>
-						</div>
-					)}
-
-					{linkableProviders.length === 0 && identities.length > 0 && (
-						<p className="pt-2 text-xs text-muted-foreground">
-							You've connected all available providers.
-						</p>
-					)}
-				</>
-			)}
+			{body}
 		</section>
 	);
 }

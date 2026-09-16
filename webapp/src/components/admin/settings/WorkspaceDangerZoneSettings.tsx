@@ -97,7 +97,9 @@ export function WorkspaceDangerZoneSettings({ workspaceSlug }: WorkspaceDangerZo
 								variant="outline"
 								className="w-full shrink-0 sm:mt-1 sm:w-auto"
 								disabled={isRoleFetching}
-								onClick={() => void refetchRole()}
+								onClick={() => {
+									void refetchRole();
+								}}
 							>
 								{isRoleFetching && <Spinner aria-hidden />}
 								{isRoleFetching ? "Retrying…" : "Retry"}

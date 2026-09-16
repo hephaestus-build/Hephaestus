@@ -45,7 +45,13 @@ function sectionState<T>(query: {
 		return { status: "loading" };
 	}
 	if (query.isError) {
-		return { status: "error", error: query.error, onRetry: () => void query.refetch() };
+		return {
+			status: "error",
+			error: query.error,
+			onRetry: () => {
+				void query.refetch();
+			},
+		};
 	}
 	return {
 		status: "ready",

@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { LlmConnection } from "@/api/types.gen";
 import { expectUnavailable } from "@/test/controls";
 
-import { AdminLlmConnectionsTable } from "./AdminLlmConnectionsTable";
+import {
+	AdminLlmConnectionsTable,
+	type AdminLlmConnectionsTableProps,
+} from "./AdminLlmConnectionsTable";
 
 const connection: LlmConnection = {
 	id: 1,
@@ -21,7 +24,7 @@ const connection: LlmConnection = {
 
 describe("AdminLlmConnectionsTable", () => {
 	it("opens a connection's models from a keyboard-focusable button", async () => {
-		const onSelect = vi.fn();
+		const onSelect = vi.fn<AdminLlmConnectionsTableProps["onSelect"]>();
 		render(
 			<AdminLlmConnectionsTable
 				connections={[connection]}
@@ -31,9 +34,9 @@ describe("AdminLlmConnectionsTable", () => {
 				mutatingIds={new Set<number>()}
 				selectedId={null}
 				onSelect={onSelect}
-				onEdit={vi.fn()}
-				onToggleEnabled={vi.fn()}
-				onDelete={vi.fn()}
+				onEdit={vi.fn<() => void>()}
+				onToggleEnabled={vi.fn<() => void>()}
+				onDelete={vi.fn<() => void>()}
 			/>,
 		);
 
@@ -47,8 +50,8 @@ describe("AdminLlmConnectionsTable", () => {
 
 	function renderTable(
 		modelCounts: Record<number, number>,
-		onToggleEnabled = vi.fn(),
-	): { onToggleEnabled: ReturnType<typeof vi.fn> } {
+		onToggleEnabled = vi.fn<AdminLlmConnectionsTableProps["onToggleEnabled"]>(),
+	) {
 		render(
 			<AdminLlmConnectionsTable
 				connections={[connection]}
@@ -57,10 +60,10 @@ describe("AdminLlmConnectionsTable", () => {
 				isError={false}
 				mutatingIds={new Set<number>()}
 				selectedId={null}
-				onSelect={vi.fn()}
-				onEdit={vi.fn()}
+				onSelect={vi.fn<() => void>()}
+				onEdit={vi.fn<() => void>()}
 				onToggleEnabled={onToggleEnabled}
-				onDelete={vi.fn()}
+				onDelete={vi.fn<() => void>()}
 			/>,
 		);
 		return { onToggleEnabled };
@@ -111,10 +114,10 @@ describe("AdminLlmConnectionsTable", () => {
 				isError={false}
 				mutatingIds={new Set<number>()}
 				selectedId={null}
-				onSelect={vi.fn()}
-				onEdit={vi.fn()}
-				onToggleEnabled={vi.fn()}
-				onDelete={vi.fn()}
+				onSelect={vi.fn<() => void>()}
+				onEdit={vi.fn<() => void>()}
+				onToggleEnabled={vi.fn<() => void>()}
+				onDelete={vi.fn<() => void>()}
 			/>,
 		);
 

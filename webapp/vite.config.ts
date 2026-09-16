@@ -1,20 +1,16 @@
-import * as fs from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-import { parse } from "jsonc-parser";
 import type { OxfmtConfig } from "oxfmt";
-import type { OxlintConfig } from "oxlint";
 import Terminal from "vite-plugin-terminal";
 import { configDefaults } from "vitest/config";
 
+import { readJsonc } from "./tools/jsonc.ts";
+import { loadLintConfig } from "./tools/oxlint/load-config.ts";
 import { appSourcePlugins } from "./vite.shared.ts";
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const formatConfig = parse(
-	fs.readFileSync(new URL("../.oxfmtrc.json", import.meta.url), "utf8"),
-) as OxfmtConfig;
+const formatConfig = readJsonc<OxfmtConfig>(new URL("../.oxfmtrc.json", import.meta.url));
 const fmt = {
 	...formatConfig,
 	ignorePatterns: [
@@ -26,17 +22,7 @@ const fmt = {
 	],
 };
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const lintConfig = parse(
-	fs.readFileSync(new URL(".oxlintrc.json", import.meta.url), "utf8"),
-) as OxlintConfig;
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- jsonc-parser's `parse` returns `any`.
-const rootLintConfig = parse(
-	fs.readFileSync(new URL("../.oxlintrc.json", import.meta.url), "utf8"),
-) as OxlintConfig;
-// oxlint reads `options` only from the config it treats as the root, so this tree's config
-// carries the root's; Vite+ hands it the `lint` object alone.
-const lint = { ...lintConfig, options: rootLintConfig.options };
+const lint = loadLintConfig(new URL(".oxlintrc.json", import.meta.url));
 
 const sentryUploadValues = [
 	process.env.SENTRY_AUTH_TOKEN,
@@ -93,7 +79,7 @@ const viteConfig = {
 	},
 	resolve: {
 		alias: {
-			"@": resolve(import.meta.dirname, "./src"),
+			"@": path.resolve(import.meta.dirname, "./src"),
 		},
 	},
 	server: {
@@ -102,7 +88,7 @@ const viteConfig = {
 		// Storybook writes a separate site inside this root; rebuilding it must not reload the app.
 		watch: { ignored: ["**/storybook-static/**"] },
 		fs: {
-			allow: [resolve(import.meta.dirname, "..")],
+			allow: [path.resolve(import.meta.dirname, "..")],
 		},
 	},
 };

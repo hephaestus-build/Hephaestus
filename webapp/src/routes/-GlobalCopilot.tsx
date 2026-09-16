@@ -9,6 +9,12 @@ import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 
+function copyToClipboard(content: string) {
+	navigator.clipboard.writeText(content).catch(() => {
+		toast.error("Couldn't copy that to the clipboard.");
+	});
+}
+
 export default function GlobalCopilot() {
 	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
 	// already is, rather than as a toast away from the conversation that failed.
@@ -38,12 +44,6 @@ export default function GlobalCopilot() {
 		}
 		mentorChat.setMessages(mentorChat.messages.slice(0, messageIndex));
 		mentorChat.sendMessage(content);
-	};
-
-	const handleCopy = (content: string) => {
-		navigator.clipboard.writeText(content).catch(() => {
-			toast.error("Couldn't copy that to the clipboard.");
-		});
 	};
 
 	if (
@@ -81,10 +81,10 @@ export default function GlobalCopilot() {
 				attachments={[]}
 				onMessageSubmit={handleMessageSubmit}
 				onMessageEdit={handleMessageEdit}
-				onStop={() => void mentorChat.stop()}
-				onFileUpload={() => Promise.resolve([])}
-				onAttachmentsChange={() => {}}
-				onCopy={handleCopy}
+				onStop={() => {
+					void mentorChat.stop();
+				}}
+				onCopy={copyToClipboard}
 				onVote={handleVote}
 				inputPlaceholder="Ask me anything..."
 				disableAttachments

@@ -78,7 +78,7 @@ export const Offline: Story = {
 		onlineManager.setOnline(false);
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/you're offline/iu);
+		canvas.getByText(/you’re offline/iu);
 		canvas.getByText(/snapshot/iu);
 		// Announced politely: the reader shouldn't be interrupted, but must not be left guessing.
 		canvas.getByRole("status");
@@ -101,7 +101,7 @@ export const OfflineOutranksLivePush: Story = {
 		),
 	],
 	play: async ({ canvas }) => {
-		canvas.getByText(/you're offline/iu);
+		canvas.getByText(/you’re offline/iu);
 		await expect(canvas.queryByText(/live updates are unavailable/iu)).not.toBeInTheDocument();
 	},
 };

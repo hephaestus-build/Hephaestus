@@ -13,17 +13,13 @@ export function PreviewAttachment({
 	return (
 		<div className="flex flex-col gap-2">
 			<div className="relative flex aspect-video h-16 w-20 flex-col items-center justify-center rounded-md bg-muted">
-				{contentType ? (
-					contentType.startsWith("image") ? (
-						<img
-							key={url}
-							src={url}
-							alt={name || "An image attachment"}
-							className="size-full rounded-md object-cover"
-						/>
-					) : (
-						<div />
-					)
+				{contentType.startsWith("image") ? (
+					<img
+						key={url}
+						src={url}
+						alt={name || "An image attachment"}
+						className="size-full rounded-md object-cover"
+					/>
 				) : (
 					<div />
 				)}

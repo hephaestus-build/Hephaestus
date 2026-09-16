@@ -156,7 +156,7 @@ export function ProductFeedbackMenu({
 								<ExternalLink aria-hidden className="size-3" />
 							</span>
 							<span id={`${id}-github`} className="text-xs text-muted-foreground">
-								If you'd rather discuss it in the open.
+								If you’d rather discuss it in the open.
 							</span>
 						</span>
 					</DropdownMenuItem>

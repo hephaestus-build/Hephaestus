@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, join, relative, resolve, sep } from "node:path";
+import { type Dirent, readdirSync, readFileSync, type Stats, statSync } from "node:fs";
+import path from "node:path";
 
 import { type AgentToolResult, defineTool } from "@earendil-works/pi-coding-agent";
 
@@ -45,18 +45,20 @@ function globToRegExp(glob: string): RegExp {
 			if (glob.charAt(i + 1) === "*") {
 				source += ".*";
 				i += 1;
-				if (glob.charAt(i + 1) === "/") i += 1;
+				if (glob.charAt(i + 1) === "/") {
+					i += 1;
+				}
 			} else {
 				source += "[^/]*";
 			}
 		} else if (c === "?") {
 			source += "[^/]";
 		} else {
-			source += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+			source += c.replaceAll(/[.+^${}()|[\]\\]/gu, String.raw`\$&`);
 		}
 	}
 	// A glob without a slash matches a basename anywhere, as ripgrep's does.
-	return new RegExp(glob.includes("/") ? `^${source}$` : `(^|/)${source}$`);
+	return new RegExp(glob.includes("/") ? `^${source}$` : `(^|/)${source}$`, "u");
 }
 
 function truncateLine(text: string): { text: string; wasTruncated: boolean } {
@@ -66,8 +68,10 @@ function truncateLine(text: string): { text: string; wasTruncated: boolean } {
 }
 
 function listFiles(cwd: string, root: string, out: string[], signal?: AbortSignal): void {
-	if (signal?.aborted) return;
-	let entries: import("node:fs").Dirent[];
+	if (signal?.aborted === true) {
+		return;
+	}
+	let entries: Dirent[];
 	try {
 		entries = readdirSync(root, { withFileTypes: true });
 	} catch {
@@ -76,14 +80,76 @@ function listFiles(cwd: string, root: string, out: string[], signal?: AbortSigna
 	entries.sort((a, b) => a.name.localeCompare(b.name));
 	for (const entry of entries) {
 		if (entry.isDirectory()) {
-			if (SKIPPED_ANYWHERE.has(entry.name)) continue;
-			const child = join(root, entry.name);
-			if (SKIPPED_PATHS.has(relative(cwd, child).split(sep).join("/"))) continue;
+			if (SKIPPED_ANYWHERE.has(entry.name)) {
+				continue;
+			}
+			const child = path.join(root, entry.name);
+			if (SKIPPED_PATHS.has(path.relative(cwd, child).split(path.sep).join("/"))) {
+				continue;
+			}
 			listFiles(cwd, child, out, signal);
 		} else if (entry.isFile()) {
-			out.push(join(root, entry.name));
+			out.push(path.join(root, entry.name));
 		}
 	}
+}
+
+function compilePattern(params: GrepParams): { matcher: RegExp } | { error: string } {
+	const flags = params.ignoreCase === true ? "i" : "";
+	const source =
+		params.literal === true
+			? params.pattern.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`)
+			: params.pattern;
+	try {
+		return { matcher: new RegExp(source, flags) };
+	} catch (error) {
+		return { error: `Invalid pattern: ${error instanceof Error ? error.message : String(error)}` };
+	}
+}
+
+/** The file's text, or `null` when it is too large, binary or unreadable and so not evidence. */
+function readSearchableText(file: string): string | null {
+	try {
+		if (statSync(file).size > MAX_FILE_BYTES) {
+			return null;
+		}
+		const raw = readFileSync(file);
+		if (raw.includes(0)) {
+			return null;
+		}
+		return raw.toString("utf8");
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Appends one match with its context lines in ripgrep's layout and reports whether any of the lines
+ * had to be truncated.
+ */
+function pushMatch(
+	blocks: string[],
+	shown: string,
+	lines: readonly string[],
+	lineNumber: number,
+	context: number,
+): boolean {
+	let linesTruncated = false;
+	const start = context > 0 ? Math.max(1, lineNumber - context) : lineNumber;
+	const end = context > 0 ? Math.min(lines.length, lineNumber + context) : lineNumber;
+	for (let current = start; current <= end; current += 1) {
+		const { text, wasTruncated } = truncateLine(lines[current - 1]?.replaceAll("\r", "") ?? "");
+		if (wasTruncated) {
+			linesTruncated = true;
+		}
+		blocks.push(
+			current === lineNumber ? `${shown}:${current}: ${text}` : `${shown}-${current}- ${text}`,
+		);
+	}
+	if (context > 0) {
+		blocks.push("--");
+	}
+	return linesTruncated;
 }
 
 /** Searches under `cwd` and returns the SDK grep tool's text output. Pure apart from reading files. */
@@ -92,16 +158,16 @@ export function searchFiles(
 	params: GrepParams,
 	signal?: AbortSignal,
 ): { text: string; details: GrepDetails } {
-	const searchRoot = resolve(cwd, params.path ?? ".");
-	const fromWorkspace = relative(cwd, searchRoot);
-	if (fromWorkspace === ".." || fromWorkspace.startsWith(`..${sep}`)) {
+	const searchRoot = path.resolve(cwd, params.path ?? ".");
+	const fromWorkspace = path.relative(cwd, searchRoot);
+	if (fromWorkspace === ".." || fromWorkspace.startsWith(`..${path.sep}`)) {
 		return {
 			text: `Path ${params.path} is outside the workspace.`,
 			details: { matches: 0, truncated: false },
 		};
 	}
 	// The skips apply to a search rooted inside them as much as to a walk reaching them.
-	const rootSegments = fromWorkspace === "" ? [] : fromWorkspace.split(sep);
+	const rootSegments = fromWorkspace === "" ? [] : fromWorkspace.split(path.sep);
 	const rootIsSkipped =
 		rootSegments.some((segment) => SKIPPED_ANYWHERE.has(segment)) ||
 		rootSegments.some((_, index) => SKIPPED_PATHS.has(rootSegments.slice(0, index + 1).join("/")));
@@ -111,25 +177,20 @@ export function searchFiles(
 			details: { matches: 0, truncated: false },
 		};
 	}
-	const flags = params.ignoreCase ? "i" : "";
-	const source = params.literal
-		? params.pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-		: params.pattern;
-	let matcher: RegExp;
-	try {
-		matcher = new RegExp(source, flags);
-	} catch (error) {
-		return {
-			text: `Invalid pattern: ${error instanceof Error ? error.message : String(error)}`,
-			details: { matches: 0, truncated: false },
-		};
+	const compiled = compilePattern(params);
+	if ("error" in compiled) {
+		return { text: compiled.error, details: { matches: 0, truncated: false } };
 	}
-	const globMatcher = params.glob ? globToRegExp(params.glob) : null;
+	const { matcher } = compiled;
+	const globMatcher =
+		params.glob !== undefined && params.glob !== "" ? globToRegExp(params.glob) : null;
 	const context =
-		params.context && params.context > 0 ? Math.min(MAX_CONTEXT, Math.floor(params.context)) : 0;
+		params.context !== undefined && params.context > 0
+			? Math.min(MAX_CONTEXT, Math.floor(params.context))
+			: 0;
 	const limit = Math.max(1, params.limit ?? DEFAULT_LIMIT);
 
-	let rootStat: import("node:fs").Stats;
+	let rootStat: Stats;
 	try {
 		rootStat = statSync(searchRoot);
 	} catch {
@@ -139,8 +200,11 @@ export function searchFiles(
 		};
 	}
 	const files: string[] = [];
-	if (rootStat.isDirectory()) listFiles(resolve(cwd), searchRoot, files, signal);
-	else files.push(searchRoot);
+	if (rootStat.isDirectory()) {
+		listFiles(path.resolve(cwd), searchRoot, files, signal);
+	} else {
+		files.push(searchRoot);
+	}
 
 	const blocks: string[] = [];
 	let matches = 0;
@@ -148,7 +212,7 @@ export function searchFiles(
 	let linesTruncated = false;
 	let aborted = signal?.aborted ?? false;
 	for (const file of files) {
-		if (signal?.aborted) {
+		if (signal?.aborted === true) {
 			aborted = true;
 			break;
 		}
@@ -156,51 +220,49 @@ export function searchFiles(
 			truncated = true;
 			break;
 		}
-		const relativePath = relative(searchRoot, file);
+		const relativePath = path.relative(searchRoot, file);
 		// A single-file search has no relative path; its name stands in, as ripgrep prints it.
-		const shown = relativePath === "" ? basename(file) : relativePath;
-		if (globMatcher && !globMatcher.test(shown.split(sep).join("/"))) continue;
-		let content: string;
-		try {
-			if (statSync(file).size > MAX_FILE_BYTES) continue;
-			const raw = readFileSync(file);
-			if (raw.includes(0)) continue;
-			content = raw.toString("utf8");
-		} catch {
+		const shown = relativePath === "" ? path.basename(file) : relativePath;
+		if (globMatcher !== null && !globMatcher.test(shown.split(path.sep).join("/"))) {
+			continue;
+		}
+		const content = readSearchableText(file);
+		if (content === null) {
 			continue;
 		}
 		const lines = content.split("\n");
 		// A file's final newline ends its last line; it does not start an empty one.
-		if (lines.at(-1) === "") lines.pop();
+		if (lines.at(-1) === "") {
+			lines.pop();
+		}
 		for (let index = 0; index < lines.length; index += 1) {
 			if (matches >= limit) {
 				truncated = true;
 				break;
 			}
-			const line = lines[index]?.replace(/\r/g, "") ?? "";
+			const line = lines[index]?.replaceAll("\r", "") ?? "";
 			matcher.lastIndex = 0;
-			if (!matcher.test(line)) continue;
-			matches += 1;
-			const lineNumber = index + 1;
-			const start = context > 0 ? Math.max(1, lineNumber - context) : lineNumber;
-			const end = context > 0 ? Math.min(lines.length, lineNumber + context) : lineNumber;
-			for (let current = start; current <= end; current += 1) {
-				const { text, wasTruncated } = truncateLine(lines[current - 1]?.replace(/\r/g, "") ?? "");
-				if (wasTruncated) linesTruncated = true;
-				blocks.push(
-					current === lineNumber ? `${shown}:${current}: ${text}` : `${shown}-${current}- ${text}`,
-				);
+			if (!matcher.test(line)) {
+				continue;
 			}
-			if (context > 0) blocks.push("--");
+			matches += 1;
+			if (pushMatch(blocks, shown, lines, index + 1, context)) {
+				linesTruncated = true;
+			}
 		}
 	}
 	const notes: string[] = [];
-	if (aborted) notes.push("[Search stopped: the session's time is up]");
-	if (truncated)
+	if (aborted) {
+		notes.push("[Search stopped: the session's time is up]");
+	}
+	if (truncated) {
 		notes.push(
 			`[Output truncated at ${limit} matches; narrow the pattern, path or glob to see more]`,
 		);
-	if (linesTruncated) notes.push(`[Some lines were truncated at ${MAX_LINE_LENGTH} characters]`);
+	}
+	if (linesTruncated) {
+		notes.push(`[Some lines were truncated at ${MAX_LINE_LENGTH} characters]`);
+	}
 	let body = blocks.join("\n");
 	if (body.length > MAX_OUTPUT_BYTES) {
 		body = body.slice(0, MAX_OUTPUT_BYTES);
@@ -276,9 +338,9 @@ export function buildGrepTool(cwd: string) {
 				},
 			},
 		},
-		execute: (_toolCallId, params, signal): Promise<AgentToolResult<GrepDetails>> => {
+		execute: async (_toolCallId, params, signal): Promise<AgentToolResult<GrepDetails>> => {
 			const { text, details } = searchFiles(cwd, readGrepParams(params), signal);
-			return Promise.resolve({ content: [{ type: "text", text }], details });
+			return { content: [{ type: "text", text }], details };
 		},
 	});
 }

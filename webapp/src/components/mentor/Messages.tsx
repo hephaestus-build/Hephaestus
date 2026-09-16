@@ -26,6 +26,22 @@ export interface MessagesProps {
 	className?: string;
 }
 
+function hasVisibleContent(message: ChatMessage): boolean {
+	const { parts } = message;
+	if (parts.length === 0) {
+		return false;
+	}
+	for (const p of parts) {
+		if (p.type === "text" && p.text.trim().length > 0) {
+			return true;
+		}
+		if (p.type === "file") {
+			return true;
+		}
+	}
+	return false;
+}
+
 export function Messages({
 	messages,
 	votes,
@@ -42,22 +58,6 @@ export function Messages({
 	className,
 }: MessagesProps) {
 	const isArtifact = variant === "artifact";
-
-	const hasVisibleContent = (message: ChatMessage): boolean => {
-		const { parts } = message;
-		if (parts.length === 0) {
-			return false;
-		}
-		for (const p of parts) {
-			if (p.type === "text" && p.text.trim().length > 0) {
-				return true;
-			}
-			if (p.type === "file") {
-				return true;
-			}
-		}
-		return false;
-	};
 
 	return (
 		<ScrollArea className="flex min-h-0 w-full flex-1 flex-col" viewportRef={containerRef}>

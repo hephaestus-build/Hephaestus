@@ -13,6 +13,7 @@ import type {
 import type { Wire } from "@/lib/dates";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -96,7 +97,7 @@ describe("source-control credential recovery", () => {
 
 			await screen.findByRole("button", { name: "Sync now" }, ROUTE_RENDER_WAIT);
 			expect(requests).toStrictEqual([{ personalAccessToken: "replacement-token" }]);
-			expect(screen.queryByText("The stored token can't be read")).toBeNull();
+			expect(screen.queryByText("The stored token can’t be read")).toBeNull();
 			await waitFor(() => expect(input).toHaveProperty("value", ""));
 		},
 	);
@@ -127,22 +128,19 @@ describe("source-control credential recovery", () => {
 
 		await screen.findByText("This connection changed. Reload before replacing its token.");
 		expect(input).toHaveProperty("value", "replacement-token");
-		screen.getByText("The stored token can't be read");
+		screen.getByText("The stored token can’t be read");
 		expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
 	});
 
 	it("isolates a pending token replacement when switching workspaces", async () => {
 		const { workspace } = mockConnection("GITHUB");
-		let releaseResponse = () => {};
-		const response = new Promise<void>((resolve) => {
-			releaseResponse = resolve;
-		});
+		const response = deferred<undefined>();
 		server.use(
 			http.get("*/workspaces", () =>
 				HttpResponse.json([workspaceListItem("acme"), workspaceListItem("other")]),
 			),
 			http.patch("*/workspaces/acme/token", async () => {
-				await response;
+				await response.promise;
 				return HttpResponse.json(workspace);
 			}),
 		);
@@ -157,7 +155,7 @@ describe("source-control credential recovery", () => {
 		await user.click(screen.getByRole("button", { name: "Replace token" }));
 		await screen.findByRole("button", { name: "Saving token…" });
 		try {
-			await act(() =>
+			await act(async () =>
 				router.navigate({
 					to: "/w/$workspaceSlug/admin/integrations/scm",
 					params: { workspaceSlug: "other" },
@@ -171,7 +169,7 @@ describe("source-control credential recovery", () => {
 				expect(screen.getByLabelText("New personal access token")).toHaveProperty("value", "");
 			});
 		} finally {
-			releaseResponse();
+			response.resolve(undefined);
 		}
 		await waitFor(() =>
 			expect(
@@ -213,7 +211,7 @@ describe("Outline connection drafts", () => {
 		await user.type(screen.getByLabelText("Server URL"), "https://outline.acme.test");
 		await user.type(input, "private-workspace-token");
 
-		await act(() =>
+		await act(async () =>
 			router.navigate({
 				to: "/w/$workspaceSlug/admin/integrations/outline",
 				params: { workspaceSlug: "other" },
@@ -236,10 +234,7 @@ describe("integration job history", () => {
 		"resets $integration pagination without showing the previous workspace's jobs",
 		async ({ integration, kind }) => {
 			const { entry } = mockConnection("GITHUB");
-			let releaseResponse = () => {};
-			const response = new Promise<void>((resolve) => {
-				releaseResponse = resolve;
-			});
+			const response = deferred<undefined>();
 			const requestedPages: (string | null)[] = [];
 			const job = {
 				id: 1,
@@ -262,7 +257,7 @@ describe("integration job history", () => {
 				),
 				http.get("*/workspaces/other/connections/7/sync/jobs", async ({ request }) => {
 					requestedPages.push(new URL(request.url).searchParams.get("page"));
-					await response;
+					await response.promise;
 					return HttpResponse.json({ content: [], totalPages: 0 });
 				}),
 				http.get("*/workspaces/acme/connections/7/sync/jobs", () =>
@@ -273,11 +268,13 @@ describe("integration job history", () => {
 			await screen.findByText("123,456", undefined, ROUTE_RENDER_WAIT);
 			await userEvent.setup().click(screen.getByRole("button", { name: "Go to next page" }));
 			try {
-				await act(() => router.navigate({ to: `/w/other/admin/integrations/${integration}` }));
+				await act(async () =>
+					router.navigate({ to: `/w/other/admin/integrations/${integration}` }),
+				);
 				await waitFor(() => expect(requestedPages).toStrictEqual(["0"]));
 				expect(screen.queryByText("123,456")).toBeNull();
 			} finally {
-				releaseResponse();
+				response.resolve(undefined);
 			}
 			await screen.findByText("No sync jobs yet");
 		},

@@ -1,5 +1,5 @@
 import { FolderGitIcon, Trash2Icon } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import {
@@ -145,6 +145,62 @@ export function WorkspaceRepositoriesSettings({
 	const hasRepositories = repositories.length > 0;
 	const failed = error != null;
 
+	let list: ReactNode;
+	if (isLoading) {
+		list = (
+			<ItemGroup>
+				{Array.from({ length: 3 }, (_, index) => (
+					<Item key={index} variant="outline" size="sm" role="listitem">
+						<ItemContent>
+							<Skeleton className="h-5 w-48" />
+						</ItemContent>
+						<ItemActions>
+							<Skeleton className="size-8 rounded-lg" />
+						</ItemActions>
+					</Item>
+				))}
+			</ItemGroup>
+		);
+	} else if (failed) {
+		list = (
+			<QueryErrorAlert
+				error={error}
+				title="We couldn't load the monitored repositories"
+				onRetry={onRetry}
+			/>
+		);
+	} else if (hasRepositories) {
+		list = (
+			<ScrollArea viewportClassName="max-h-80">
+				<ItemGroup className="pr-3">
+					{repositories.map((repo) => (
+						<RepositoryRow
+							key={repo.nameWithOwner}
+							repo={repo}
+							providerLabel={providerLabel}
+							isRemoving={isRemovingRepository}
+							onRemove={onRemoveRepository}
+						/>
+					))}
+				</ItemGroup>
+			</ScrollArea>
+		);
+	} else {
+		list = (
+			<Empty>
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<FolderGitIcon />
+					</EmptyMedia>
+					<EmptyTitle>No repositories monitored yet</EmptyTitle>
+					<EmptyDescription>
+						Add a repository below to start monitoring it for practice reviews.
+					</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		);
+	}
+
 	return (
 		<div className="space-y-6">
 			<Card>
@@ -157,52 +213,7 @@ export function WorkspaceRepositoriesSettings({
 				</CardHeader>
 
 				<CardContent className="space-y-4">
-					{isLoading ? (
-						<ItemGroup>
-							{Array.from({ length: 3 }, (_, index) => (
-								<Item key={index} variant="outline" size="sm" role="listitem">
-									<ItemContent>
-										<Skeleton className="h-5 w-48" />
-									</ItemContent>
-									<ItemActions>
-										<Skeleton className="size-8 rounded-lg" />
-									</ItemActions>
-								</Item>
-							))}
-						</ItemGroup>
-					) : failed ? (
-						<QueryErrorAlert
-							error={error}
-							title="We couldn't load the monitored repositories"
-							onRetry={onRetry}
-						/>
-					) : hasRepositories ? (
-						<ScrollArea viewportClassName="max-h-80">
-							<ItemGroup className="pr-3">
-								{repositories.map((repo) => (
-									<RepositoryRow
-										key={repo.nameWithOwner}
-										repo={repo}
-										providerLabel={providerLabel}
-										isRemoving={isRemovingRepository}
-										onRemove={onRemoveRepository}
-									/>
-								))}
-							</ItemGroup>
-						</ScrollArea>
-					) : (
-						<Empty>
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<FolderGitIcon />
-								</EmptyMedia>
-								<EmptyTitle>No repositories monitored yet</EmptyTitle>
-								<EmptyDescription>
-									Add a repository below to start monitoring it for practice reviews.
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
-					)}
+					{list}
 
 					<Field data-invalid={Boolean(addRepositoryError)}>
 						<FieldLabel htmlFor="add-repository">Add a repository</FieldLabel>

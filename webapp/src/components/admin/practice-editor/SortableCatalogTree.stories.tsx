@@ -191,7 +191,7 @@ type Story = StoryObj<typeof meta>;
 const openActions = async (canvas: StoryContext["canvas"], name: string) => {
 	// A menu left over from a previous step outlives the click that dismissed it by a frame, and
 	// `findByRole("menu")` would hand back that one.
-	await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+	await waitFor(async () => expect(screen.queryByRole("menu")).toBeNull());
 	await userEvent.click(canvas.getByRole("button", { name: `More actions for ${name}` }));
 	return within(await screen.findByRole("menu"));
 };
@@ -231,11 +231,11 @@ const dragTo = async (handle: HTMLElement, clientY: number) => {
 
 	send("pointerdown", startY, handle);
 	send("pointermove", startY + (clientY < startY ? -12 : 12));
-	await waitFor(() => expect(announcement()).toMatch(/^Picked up/u));
+	await waitFor(async () => expect(announcement()).toMatch(/^Picked up/u));
 	send("pointermove", clientY);
-	await waitFor(() => expect(announcement()).toMatch(/^Moving/u));
+	await waitFor(async () => expect(announcement()).toMatch(/^Moving/u));
 	send("pointerup", clientY);
-	await waitFor(() => expect(announcement()).toMatch(/^(?:Moved|Move cancelled)/u));
+	await waitFor(async () => expect(announcement()).toMatch(/^(?:Moved|Move cancelled)/u));
 };
 
 export const Default: Story = {};

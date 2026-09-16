@@ -44,7 +44,7 @@ export const Default: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Timeframe" }));
 		await userEvent.click(await screen.findByRole("option", { name: "All time" }));
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(canvas.getByRole("combobox", { name: "Timeframe" })).toHaveTextContent("All time"),
 		);
 	},

@@ -10,6 +10,7 @@ import {
 } from "@/mocks/fixtures/practice";
 import { realPracticeDefinition } from "@/mocks/fixtures/practice-catalog";
 import { expectNoOverflowingElement } from "@/stories/reflow";
+import { precedes } from "@/test/dom";
 
 import { PracticeDefinitionPreview } from "./PracticeDefinitionPreview";
 
@@ -116,9 +117,7 @@ export const RationaleLeadsTheRuleFollows: Story = {
 			canvas.queryByRole("heading", { name: "The standard", level: 4 }),
 		).not.toBeInTheDocument();
 		const rule = canvas.getByRole("button", { name: "How it decides" });
-		await expect(
-			rationale.compareDocumentPosition(rule) & Node.DOCUMENT_POSITION_FOLLOWING,
-		).toBeTruthy();
+		await expect(precedes(rationale, rule)).toBe(true);
 	},
 };
 

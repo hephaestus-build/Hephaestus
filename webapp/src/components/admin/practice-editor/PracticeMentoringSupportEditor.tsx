@@ -48,8 +48,9 @@ function fnv1a(input: string) {
 	let hash = 0x81_1c_9d_c5;
 	for (let index = 0; index < input.length; index += 1) {
 		// oxlint-disable-next-line unicorn/prefer-code-point -- The code is stored, so the hash stays over UTF-16 units; code points would change it for an astral character.
-		hash ^= input.charCodeAt(index);
-		hash = Math.imul(hash, 0x01_00_01_93) >>> 0;
+		const unit = input.charCodeAt(index);
+		// oxlint-disable-next-line no-bitwise -- FNV-1a is defined over 32-bit integer operations.
+		hash = Math.imul(hash ^ unit, 0x01_00_01_93) >>> 0;
 	}
 	return hash.toString(16).toUpperCase().padStart(8, "0");
 }
@@ -84,13 +85,12 @@ export function practicePolicyError(policy: PracticeAutomatedReviewPolicy) {
 			return "Each limitation needs a description of 1–500 characters.";
 		}
 	}
-	if (
+	const limitationIsMissing =
 		policy.automatedReview.evidenceSufficiency === "DECLARED_EVIDENCE_INSUFFICIENT" &&
-		policy.knownLimitations.length === 0
-	) {
-		return "Explain at least one limitation that requires additional context.";
-	}
-	return;
+		policy.knownLimitations.length === 0;
+	return limitationIsMissing
+		? "Explain at least one limitation that requires additional context."
+		: undefined;
 }
 
 export interface PracticeMentoringSupportEditorProps {

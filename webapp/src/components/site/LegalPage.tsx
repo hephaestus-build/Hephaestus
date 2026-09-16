@@ -82,8 +82,9 @@ function LegalContent({ page, profile, resolver }: LegalContentProps) {
 
 	useEffect(() => {
 		const controller = new AbortController();
-		resolver(page, { signal: controller.signal, profile })
-			.then((content) => {
+		async function load() {
+			try {
+				const content = await resolver(page, { signal: controller.signal, profile });
 				if (controller.signal.aborted) {
 					return;
 				}
@@ -95,8 +96,7 @@ function LegalContent({ page, profile, resolver }: LegalContentProps) {
 						`[legal] Disclaimer fallback served for page=${page}. Configure LEGAL_PROFILE or mount /legal-overrides/. See docs/admin/legal-pages.`,
 					);
 				}
-			})
-			.catch((error: unknown) => {
+			} catch (error: unknown) {
 				if (
 					controller.signal.aborted ||
 					(error instanceof DOMException && error.name === "AbortError")
@@ -104,7 +104,9 @@ function LegalContent({ page, profile, resolver }: LegalContentProps) {
 					return;
 				}
 				setLoadError(error instanceof Error ? error : new Error("Failed to load legal content"));
-			});
+			}
+		}
+		void load();
 		return () => controller.abort();
 	}, [page, profile, resolver]);
 

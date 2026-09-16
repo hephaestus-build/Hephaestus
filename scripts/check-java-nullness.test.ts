@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import path from "node:path";
 import test from "node:test";
-import { promisify } from "node:util";
 
 import {
 	discoverJavaSourcePaths,
@@ -12,9 +10,9 @@ import {
 	nullnessPolicyViolations,
 } from "./check-java-nullness.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
+import { run } from "./lib/process.ts";
 
-const execFileAsync = promisify(execFile);
-const REPO_ROOT = resolve(import.meta.dirname, "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 
 const source = (content: string) => [{ path: "Example.java", content }];
 
@@ -40,7 +38,7 @@ await test("rejects suppression arrays, concatenation, and Unicode escapes", () 
 	const examples = [
 		'@SuppressWarnings({ "unchecked", "NullAway" })',
 		'@SuppressWarnings("Null" + "Away")',
-		'@SuppressWarnings("Null\\u0041way")',
+		String.raw`@SuppressWarnings("Null\u0041way")`,
 	];
 	for (const example of examples) {
 		assert.deepEqual(nullnessPolicyViolations(source(example)), ["Example.java"]);
@@ -66,13 +64,13 @@ await test("matches only handwritten application Java sources", () => {
 		isHandwrittenJavaSource("server/application/src/test/java/example/ApplicationTest.java"),
 		true,
 	);
-	for (const path of [
+	for (const file of [
 		"server/generated-clients/src/main/java/example/Client.java",
 		"server/application/src/main/resources/example.java",
 		"server/src/main/java/example/Legacy.java",
 		"server/application/src/main/java/example/Application.kt",
 	]) {
-		assert.equal(isHandwrittenJavaSource(path), false, path);
+		assert.equal(isHandwrittenJavaSource(file), false, file);
 	}
 });
 
@@ -84,10 +82,10 @@ await test("discovers Application.java in the real checkout", async () => {
 });
 
 await test("fails closed when repository discovery finds no Java sources", async () => {
-	const root = await mkdtemp(join(tmpdir(), "java-nullness-"));
+	const root = await mkdtemp(path.join(tmpdir(), "java-nullness-"));
 	try {
-		await execFileAsync("git", ["init", "--quiet"], { cwd: root, env: environmentForGitFixture() });
-		await assert.rejects(discoverJavaSourcePaths(root), /No handwritten Java sources found/);
+		await run("git", ["init", "--quiet"], { cwd: root, env: environmentForGitFixture() });
+		await assert.rejects(discoverJavaSourcePaths(root), /No handwritten Java sources found/u);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

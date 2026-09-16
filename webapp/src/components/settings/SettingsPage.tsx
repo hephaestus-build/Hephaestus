@@ -74,7 +74,7 @@ export function SettingsPage({
 								Preferences
 							</h2>
 							<p className="text-sm text-destructive" role="alert">
-								We couldn't load your preferences, so your feedback and research settings aren't
+								We couldn’t load your preferences, so your feedback and research settings aren’t
 								shown.
 							</p>
 							{onRetrySettings && (

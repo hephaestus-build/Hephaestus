@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SlackMonitoredChannel } from "@/api/types.gen";
 
-import { RemoveChannelAlertDialog } from "./RemoveChannelAlertDialog";
+import {
+	RemoveChannelAlertDialog,
+	type RemoveChannelAlertDialogProps,
+} from "./RemoveChannelAlertDialog";
 
 const base = {
 	slackTeamId: "T0000000000",
@@ -21,7 +24,7 @@ const active: SlackMonitoredChannel = {
 
 describe("RemoveChannelAlertDialog — resets on close", () => {
 	it("clears a typed confirmation and reason after Cancel, ready for the next open", () => {
-		const onOpenChange = vi.fn();
+		const onOpenChange = vi.fn<RemoveChannelAlertDialogProps["onOpenChange"]>();
 		render(
 			<RemoveChannelAlertDialog channel={active} onOpenChange={onOpenChange} onConfirm={vi.fn()} />,
 		);

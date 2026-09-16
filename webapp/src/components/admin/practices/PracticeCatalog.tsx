@@ -151,6 +151,26 @@ export function PracticeCatalog({
 	const inheritedFromFor = (practice: Practice) =>
 		(hasText(practice.groupSlug) ? groupNames.get(practice.groupSlug) : null) ?? null;
 
+	let catalogContent;
+	if (library?.state.status === "error") {
+		catalogContent = (
+			<QueryErrorAlert
+				error={library.state.error}
+				title="Couldn't load the catalog"
+				onRetry={library.state.onRetry}
+			/>
+		);
+	} else if (visibleCatalogPractices) {
+		catalogContent = (
+			<AvailablePracticeList
+				practices={visibleCatalogPractices}
+				existingGroupSlugs={new Set(groups.map((group) => group.slug))}
+			/>
+		);
+	} else {
+		catalogContent = <PracticeListSkeleton rows={4} />;
+	}
+
 	return (
 		<div className="space-y-4">
 			<CatalogToolbar
@@ -171,20 +191,7 @@ export function PracticeCatalog({
 					// `prefers-reduced-motion`, where the arrival is the information and the travel is not.
 					className="rounded-lg border bg-muted/20 p-4 motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in motion-safe:slide-in-from-top-2"
 				>
-					{library.state.status === "error" ? (
-						<QueryErrorAlert
-							error={library.state.error}
-							title="Couldn't load the catalog"
-							onRetry={library.state.onRetry}
-						/>
-					) : visibleCatalogPractices ? (
-						<AvailablePracticeList
-							practices={visibleCatalogPractices}
-							existingGroupSlugs={new Set(groups.map((group) => group.slug))}
-						/>
-					) : (
-						<PracticeListSkeleton rows={4} />
-					)}
+					{catalogContent}
 				</Section>
 			)}
 			{focusFilter !== "ALL" && (
@@ -326,7 +333,7 @@ export function PracticeCatalog({
 						setNamingGroup(undefined);
 					}
 				}}
-				onSubmit={(details) =>
+				onSubmit={async (details) =>
 					namingGroup ? onUpdateGroup(namingGroup.slug, details) : onCreateGroup(details)
 				}
 			/>

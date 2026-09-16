@@ -52,6 +52,12 @@ export function ReviewPersonFacet({
 	const selectedOption =
 		options.find((option) => option.userId === selected) ??
 		(selected == null ? null : { userId: selected, label: fallbackName ?? `#${selected}` });
+	let emptyText = "No matches";
+	if (people.isError) {
+		emptyText = "Could not load people";
+	} else if (options.length === 0) {
+		emptyText = "No people in this workspace";
+	}
 
 	return (
 		<Combobox
@@ -92,13 +98,7 @@ export function ReviewPersonFacet({
 					placeholder="Search people…"
 					aria-label={`Search ${title.toLowerCase()} options`}
 				/>
-				<ComboboxEmpty>
-					{people.isError
-						? "Could not load people"
-						: options.length === 0
-							? "No people in this workspace"
-							: "No matches"}
-				</ComboboxEmpty>
+				<ComboboxEmpty>{emptyText}</ComboboxEmpty>
 				<ComboboxList aria-label={`${title} options`}>
 					{(option: PersonOption) => (
 						<ComboboxItem key={option.userId} value={option}>

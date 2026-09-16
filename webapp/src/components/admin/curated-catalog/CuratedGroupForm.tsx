@@ -132,6 +132,10 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 	const valid = errorSummary.length === 0;
 	const updateAvailable = mode === "edit" && initialData.status.state === "UPDATE_WAITING";
 	const resetLabel = updateAvailable ? "Apply Hephaestus update" : "Restore Hephaestus default";
+	let submitLabel = isPending ? "Saving…" : "Save changes";
+	if (mode === "create") {
+		submitLabel = isPending ? "Creating…" : "Create group";
+	}
 
 	const submit = (event: React.SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
@@ -286,7 +290,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 											)}
 										</div>
 										<FieldDescription id="group-slug-description">
-											Used in URLs and integrations. It can't be changed later.
+											Used in URLs and integrations. It can’t be changed later.
 										</FieldDescription>
 										{slugError && <FieldError id="group-slug-error">{slugError}</FieldError>}
 									</Field>
@@ -345,13 +349,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 					{cancel}
 					<Button type="submit" disabled={formDisabled || conflict}>
 						{isPending && <Spinner className="size-4" />}
-						{isPending
-							? mode === "create"
-								? "Creating…"
-								: "Saving…"
-							: mode === "create"
-								? "Create group"
-								: "Save changes"}
+						{submitLabel}
 					</Button>
 				</DrawerFooter>
 			</form>

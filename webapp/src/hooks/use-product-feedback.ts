@@ -136,14 +136,11 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 	});
 	const deciding = () =>
 		!hasText(workspaceSlug) || queryClient.isMutating({ mutationKey: SURVEY_DECISION }) > 0;
+	const failedWrite = [submit, decline].find((mutation) => mutation.isError);
 	return {
 		query,
 		isPending: submit.isPending || decline.isPending || undoDecline.isPending,
-		error: submit.isError
-			? submissionError(submit.error, "survey")
-			: decline.isError
-				? submissionError(decline.error, "survey")
-				: undefined,
+		error: failedWrite ? submissionError(failedWrite.error, "survey") : undefined,
 		reset: () => {
 			submit.reset();
 			decline.reset();

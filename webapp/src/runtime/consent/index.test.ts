@@ -18,7 +18,8 @@ describe("cookie consent", () => {
 		// reset the module-level snapshot cache between tests.
 		localStorage.clear();
 		getStoredConsent();
-		closeConsentReopen(); // drain any reopen flag so it can't leak between tests
+		// drain any reopen flag so it can't leak between tests
+		closeConsentReopen();
 	});
 	afterEach(() => localStorage.clear());
 
@@ -53,9 +54,10 @@ describe("cookie consent", () => {
 	});
 
 	it("re-prompts (treats as no decision) when the stored consent version is older/missing", () => {
+		// no version
 		localStorage.setItem(
 			CONSENT_STORAGE_KEY,
-			JSON.stringify({ errorMonitoring: true, decidedAt: "x" }), // no version
+			JSON.stringify({ errorMonitoring: true, decidedAt: "x" }),
 		);
 		expect(getStoredConsent()).toBeNull();
 		// Version 1 is the former consent surface, which still carried an analytics category.
@@ -112,7 +114,7 @@ describe("cookie consent", () => {
 	});
 
 	it("notifies subscribers on set and on reopen", () => {
-		const listener = vi.fn();
+		const listener = vi.fn<() => void>();
 		const unsubscribe = subscribeConsent(listener);
 		setStoredConsent({ errorMonitoring: false });
 		requestConsentReopen();

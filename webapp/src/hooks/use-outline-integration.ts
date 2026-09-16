@@ -48,7 +48,9 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		credentialsUnreadableSince: outlineConnection?.credentialsUnreadableSince,
 		isConnectionLoading: connectionsQuery.isLoading,
 		connectionError: connectionsQuery.error,
-		retryConnection: () => void connectionsQuery.refetch(),
+		retryConnection: () => {
+			void connectionsQuery.refetch();
+		},
 		resourceNoun: "collection",
 		resourceNounPlural: "collections",
 		expectedClassKeys: ["documents"],
@@ -88,7 +90,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		retry: false,
 	});
 
-	const invalidateConnections = () =>
+	const invalidateConnections = async () =>
 		queryClient.invalidateQueries({ queryKey: connectionsQueryOptions.queryKey });
 
 	const connect = useMutation({
@@ -210,9 +212,13 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		credentialsUnreadableSince: outlineConnection?.credentialsUnreadableSince,
 		isLoading: connectionsQuery.isLoading,
 		connectionsError: connectionsQuery.error,
-		retryConnections: () => void connectionsQuery.refetch(),
+		retryConnections: () => {
+			void connectionsQuery.refetch();
+		},
 		tokenStatusError,
-		retryTokenStatus: () => void refetchTokenStatus(),
+		retryTokenStatus: () => {
+			void refetchTokenStatus();
+		},
 		syncStatusHeaderProps: sync.syncStatusHeaderProps,
 		// The per-collection observability ledger — the same shared table SCM and Slack mount. Shown
 		// even when suspended, so an admin can see how far behind each collection got before sync stopped.
@@ -237,7 +243,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 					collections: collections ?? [],
 					isLoading: isLoadingCollections,
 					error: collectionsError,
-					onRetry: () => refetchCollections(),
+					onRetry: async () => refetchCollections(),
 					onRegisterCollection: handleRegisterCollection,
 					onUpdateCollectionState: handleUpdateCollectionState,
 					onRemoveCollection: handleRemoveCollection,

@@ -27,7 +27,8 @@ const SCOPES = [
 	"docker",
 
 	"ci",
-	"config", //  NOT for: application.yml (use 'server'), Dockerfiles (use service scope)
+	// NOT for: application.yml (use 'server'), Dockerfiles (use service scope)
+	"config",
 	"deps-dev",
 	"scripts",
 	"release",
@@ -45,8 +46,8 @@ const SCOPES = [
 
 // A breaking change is carried by a changeset, which is what sets the next version; a marker in the
 // title only says so where nothing reads it.
-const BREAKING_MARKER = /^[^:]*!:/;
-const SUBJECT_SHAPE = /^(?!.*\.$).*\S$/;
+const BREAKING_MARKER = /^[^:]*!:/u;
+const SUBJECT_SHAPE = /^(?!.*\.$).*\S$/u;
 const HELP_URL = "https://github.com/hephaestus-build/Hephaestus/blob/main/CONTRIBUTING.md";
 
 interface ParsedCommit {
@@ -62,7 +63,9 @@ const helpfulErrorsPlugin = {
 	rules: {
 		"type-enum-helpful": (parsed: ParsedCommit): RuleOutcome => {
 			const { type } = parsed;
-			if (!type) return [true];
+			if (type == null || type === "") {
+				return [true];
+			}
 			const valid = TYPES.includes(type);
 			return [
 				valid,
@@ -77,7 +80,9 @@ const helpfulErrorsPlugin = {
 		},
 		"scope-enum-helpful": (parsed: ParsedCommit): RuleOutcome => {
 			const { scope } = parsed;
-			if (!scope) return [true];
+			if (scope == null || scope === "") {
+				return [true];
+			}
 			const valid = SCOPES.includes(scope);
 			return [
 				valid,

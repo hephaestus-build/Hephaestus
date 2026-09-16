@@ -41,7 +41,7 @@ export interface EvidenceManifest extends ManifestMetadata {
 	readonly subjects: readonly Subject[];
 }
 
-const DIGEST = /^sha256:[a-f0-9]{64}$/;
+const DIGEST = /^sha256:[a-f0-9]{64}$/u;
 
 /**
  * Every image the bundle must cover: the first-party half as the resolver read it out of the
@@ -72,8 +72,9 @@ export function planEvidenceSubjects(
 	return images.flatMap((image) =>
 		PLATFORMS.map((platform) => {
 			const digest = platformDigest(image, platform);
-			if (!DIGEST.test(digest))
+			if (!DIGEST.test(digest)) {
 				throw new Error(`${image.image} ${platform} digest is malformed: ${digest || "<empty>"}`);
+			}
 			return {
 				digest,
 				image: image.image,
@@ -124,11 +125,14 @@ async function resolvePlatformDigests(
 		// not built for both architectures, which blocks a release rather than licensing a fallback to
 		// the index digest — Trivy resolves such a reference against the host it runs on, so the scan
 		// would quietly be `linux/amd64` while being filed as this platform's evidence.
-		if (!isImageIndex(index))
+		if (!isImageIndex(index)) {
 			throw new Error(`${reference} is a single manifest, not a multi-platform index`);
+		}
 		for (const platform of PLATFORMS) {
 			const digest = selectPlatformDigest(index, platform);
-			if (digest === undefined) throw new Error(`${reference} publishes no ${platform} manifest`);
+			if (digest === undefined) {
+				throw new Error(`${reference} publishes no ${platform} manifest`);
+			}
 			digests.set(`${image.image}\0${platform}`, digest);
 		}
 	}
@@ -220,13 +224,16 @@ export async function captureSubject(subject: Subject, directory: string): Promi
  * scanner version rather than argued about.
  */
 export async function toolVersions(): Promise<Record<string, string>> {
-	const read = async (command: string, args: string[], field: string): Promise<string> =>
-		asString(asRecord(JSON.parse(await output(command, args)), `${command} version`)[field], field);
 	return {
-		syft: await read("syft", ["version", "-o", "json"], "version"),
-		trivy: await read("trivy", ["version", "--format", "json"], "Version"),
-		cosign: await read("cosign", ["version", "--json"], "gitVersion"),
+		syft: await toolVersion("syft", ["version", "-o", "json"], "version"),
+		trivy: await toolVersion("trivy", ["version", "--format", "json"], "Version"),
+		cosign: await toolVersion("cosign", ["version", "--json"], "gitVersion"),
 	};
+}
+
+async function toolVersion(command: string, args: string[], field: string): Promise<string> {
+	const version: unknown = JSON.parse(await output(command, args));
+	return asString(asRecord(version, `${command} version`)[field], field);
 }
 
 export async function generateReleaseEvidence(options: {
@@ -252,11 +259,11 @@ export async function generateReleaseEvidence(options: {
 		images,
 		(image, platform) => digests.get(`${image.image}\0${platform}`) ?? "",
 	);
-	await captureSubjects(subjects, (subject) => captureSubject(subject, directory));
+	await captureSubjects(subjects, async (subject) => captureSubject(subject, directory));
 	const manifest = buildManifest(subjects, {
 		commit,
 		durationSeconds: Math.round((Date.now() - startedAt) / 1000),
-		generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+		generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/u, "Z"),
 		release,
 	});
 	await writeFile(path.join(directory, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
@@ -276,19 +283,30 @@ if (import.meta.main) {
 	for (let index = 0; index < rest.length; index += 2) {
 		const flag = rest[index];
 		const value = rest[index + 1];
-		if (flag === undefined || value === undefined || !flag.startsWith("--"))
+		if (flag === undefined || value === undefined || !flag.startsWith("--")) {
 			throw new Error(
 				"usage: generate-release-evidence <directory> --release <tag> --commit <sha> --digests <tsv>",
 			);
+		}
 		flags.set(flag.slice(2), value);
 	}
 	const release = flags.get("release");
 	const commit = flags.get("commit");
 	const digestsPath = flags.get("digests");
-	if (!directory || !release || !commit || !digestsPath)
+	if (
+		directory === undefined ||
+		directory === "" ||
+		release === undefined ||
+		release === "" ||
+		commit === undefined ||
+		commit === "" ||
+		digestsPath === undefined ||
+		digestsPath === ""
+	) {
 		throw new Error(
 			"usage: generate-release-evidence <directory> --release <tag> --commit <sha> --digests <tsv>",
 		);
+	}
 	const manifest = await generateReleaseEvidence({ commit, digestsPath, directory, release });
 	process.stdout.write(
 		`Evidenced ${manifest.subjects.length} subjects for ${release} in ${manifest.durationSeconds}s\n`,

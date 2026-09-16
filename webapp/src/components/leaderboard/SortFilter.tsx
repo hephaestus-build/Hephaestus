@@ -36,7 +36,11 @@ export function SortFilter({
 			</Label>
 			<Select
 				value={selectedSort}
-				onValueChange={(value) => value && onSortChange?.(value)}
+				onValueChange={(value) => {
+					if (value) {
+						onSortChange?.(value);
+					}
+				}}
 				items={visibleOptions}
 			>
 				<SelectTrigger id="sort" className="w-full">

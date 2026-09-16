@@ -235,7 +235,7 @@ export function AdminLlmConnectionsTable({
 					<>
 						This immediately stops requests through{" "}
 						{modelsOn(connection) === 1 ? "the model" : `all ${modelsOn(connection)} models`} on
-						this connection. Practice reviews and Mentor can't run on them until you turn the
+						this connection. Practice reviews and Mentor can’t run on them until you turn the
 						connection back on, or until each workspace picks another model.
 					</>
 				)}

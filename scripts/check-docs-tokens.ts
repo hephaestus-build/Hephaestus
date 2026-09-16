@@ -4,9 +4,9 @@
  * follow, instead of drifting a shade apart where nobody looks at both at once.
  */
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import path from "node:path";
 
-const repositoryRoot = resolve(import.meta.dirname, "..");
+const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const DOCS_CSS = "docs/src/css/custom.css";
 const APP_CSS = "webapp/src/styles.css";
 
@@ -54,12 +54,12 @@ export function readTokens(css: string): Record<Theme, Map<string, string>> {
 	let theme: Theme = "light";
 	for (const line of css.split("\n")) {
 		if (line.includes("{") && !line.trimStart().startsWith("--")) {
-			theme = /dark/.test(line) ? "dark" : "light";
+			theme = line.includes("dark") ? "dark" : "light";
 			continue;
 		}
-		const declaration = /^\s*(--[\w-]+):\s*(.+?);/.exec(line);
-		if (declaration?.[1] && declaration[2]) {
-			tokens[theme].set(declaration[1], declaration[2].trim());
+		const declaration = /^\s*(?<name>--[\w-]+):\s*(?<value>.+?);/u.exec(line)?.groups;
+		if (declaration?.name !== undefined && declaration.value !== undefined) {
+			tokens[theme].set(declaration.name, declaration.value.trim());
 		}
 	}
 	return tokens;
@@ -72,9 +72,9 @@ export function findDrift(docsCss: string, appCss: string): string[] {
 	for (const { infima, app: appToken, docsTheme, appTheme = docsTheme } of COPIED_TOKENS) {
 		const docsValue = docs[docsTheme].get(infima);
 		const appValue = app[appTheme].get(appToken);
-		if (!docsValue) {
+		if (docsValue === undefined || docsValue === "") {
 			problems.push(`${DOCS_CSS} no longer declares ${infima} for the ${docsTheme} theme.`);
-		} else if (!appValue) {
+		} else if (appValue === undefined || appValue === "") {
 			problems.push(`${APP_CSS} no longer declares ${appToken} for the ${appTheme} theme.`);
 		} else if (docsValue !== appValue) {
 			problems.push(
@@ -87,8 +87,8 @@ export function findDrift(docsCss: string, appCss: string): string[] {
 
 if (import.meta.main) {
 	const [docsCss, appCss] = await Promise.all([
-		readFile(resolve(repositoryRoot, DOCS_CSS), "utf8"),
-		readFile(resolve(repositoryRoot, APP_CSS), "utf8"),
+		readFile(path.resolve(repositoryRoot, DOCS_CSS), "utf8"),
+		readFile(path.resolve(repositoryRoot, APP_CSS), "utf8"),
 	]);
 	const problems = findDrift(docsCss, appCss);
 	if (problems.length > 0) {

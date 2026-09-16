@@ -212,7 +212,7 @@ export const FailedWithoutOutput: Story = {
 	},
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText("Review couldn't be completed")).toBeVisible();
+		await expect(await canvas.findByText("Review couldn’t be completed")).toBeVisible();
 		await expect(
 			await canvas.findByText("This review ended before it produced observations or feedback."),
 		).toBeVisible();

@@ -17,14 +17,17 @@
 // contract with Java lives; this file implements it and pi-mentor-runner.spec.ts drives it.
 
 import { randomUUID } from "node:crypto";
+import { once } from "node:events";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 import type {
 	AgentSessionEvent,
 	AgentToolResult,
 	CreateAgentSessionRuntimeFactory,
 } from "@earendil-works/pi-coding-agent";
+import type * as PiSdkModule from "@earendil-works/pi-coding-agent";
 
 import {
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
@@ -44,9 +47,10 @@ import {
 	type MentorWireEvent,
 } from "./pi-mentor-protocol.ts";
 import { loadProviderConfig, registerHephaestusProvider } from "./pi-provider.ts";
+import { hasText } from "./pi-text.ts";
 
 /** The Pi SDK module, resolved from `<workspace>/node_modules` by bare specifier at runtime. */
-type PiSdk = typeof import("@earendil-works/pi-coding-agent");
+type PiSdk = typeof PiSdkModule;
 
 // Pi SDK is loaded lazily so the protocol layer (framing, JSON-RPC dispatch, fetch_context
 // callback plumbing) can be exercised in test environments without an LLM proxy. Set
@@ -71,8 +75,10 @@ if (PROTOCOL_ONLY) {
 // forking the runner code. The workspace literals below are pinned by `SandboxLayoutSyncTest` —
 // keep them quoted strings, not template expressions, so the grep stays exact.
 const WORKSPACE_ROOT = "/workspace";
-const MENTOR_SYSTEM_PROMPT_PATH = "agent/mentor/system.md"; // SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH
-const PI_AGENT_DIR = "/workspace/.pi"; // SandboxLayout.PI_AGENT_DIR
+// SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH
+const MENTOR_SYSTEM_PROMPT_PATH = "agent/mentor/system.md";
+// SandboxLayout.PI_AGENT_DIR
+const PI_AGENT_DIR = "/workspace/.pi";
 const CWD = process.env.MENTOR_RUNNER_CWD ?? WORKSPACE_ROOT;
 const SESSIONS_DIR = process.env.MENTOR_RUNNER_SESSIONS_DIR ?? `${WORKSPACE_ROOT}/.sessions`;
 const SYSTEM_PROMPT_PATH =
@@ -130,17 +136,19 @@ const FETCH_CONTEXT_ALLOWED = new Set([
 	"inputs/context/outline_docs.json",
 ]);
 
+function logText(value: unknown): string {
+	if (value instanceof Error) {
+		return `${value.message}\n${value.stack ?? ""}`;
+	}
+	if (typeof value === "string") {
+		return value;
+	}
+	return JSON.stringify(value);
+}
+
 function log(...args: unknown[]) {
 	const ts = new Date().toISOString();
-	const msg = args
-		.map((a) =>
-			a instanceof Error
-				? `${a.message}\n${a.stack ?? ""}`
-				: typeof a === "string"
-					? a
-					: JSON.stringify(a),
-		)
-		.join(" ");
+	const msg = args.map((a) => logText(a)).join(" ");
 	process.stderr.write(`[pi-mentor-runner ${ts}] ${msg}\n`);
 }
 
@@ -157,7 +165,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * field check and reach an allow-list, a path join or the model as if the caller had sent text.
  */
 function jsonText(value: unknown): string {
-	if (typeof value === "string") return value;
+	if (typeof value === "string") {
+		return value;
+	}
 	if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
 		return String(value);
 	}
@@ -182,7 +192,8 @@ function asJsonRpcId(value: unknown): JsonRpcId | undefined {
 // rolling our own keeps the framing rule trivially auditable and shared with the test fixture.
 function createLineSplitter(onLine: (line: string) => void): (chunk: Buffer) => void {
 	let buffer: Buffer = Buffer.alloc(0);
-	const MAX_LINE_BYTES = 8 * 1024 * 1024; // 8 MiB hard cap; context JSONs are tiny but be safe
+	// 8 MiB hard cap; context JSONs are tiny but be safe
+	const MAX_LINE_BYTES = 8 * 1024 * 1024;
 	return (chunk: Buffer) => {
 		buffer = buffer.length === 0 ? chunk : Buffer.concat([buffer, chunk]);
 		for (;;) {
@@ -196,14 +207,16 @@ function createLineSplitter(onLine: (line: string) => void): (chunk: Buffer) => 
 			}
 			let lineBuf = buffer.subarray(0, nl);
 			buffer = buffer.subarray(nl + 1);
-			if (lineBuf.length > 0 && lineBuf[lineBuf.length - 1] === 0x0d) {
-				lineBuf = lineBuf.subarray(0, lineBuf.length - 1);
+			if (lineBuf.length > 0 && lineBuf.at(-1) === 0x0d) {
+				lineBuf = lineBuf.subarray(0, -1);
 			}
-			if (lineBuf.length === 0) continue;
+			if (lineBuf.length === 0) {
+				continue;
+			}
 			try {
 				onLine(lineBuf.toString("utf8"));
-			} catch (e) {
-				log("line handler threw:", e);
+			} catch (error) {
+				log("line handler threw:", error);
 			}
 		}
 	};
@@ -220,7 +233,9 @@ const STDOUT_BACKPRESSURE_THRESHOLD_BYTES = 256 * 1024;
 function sendResult(id: JsonRpcId | undefined, result: MentorResult) {
 	// JSON-RPC 2.0 §4: `id` absent (undefined here) = notification → MUST NOT respond.
 	// `id: null` is a valid request id — DO respond (used by §6 batch-rejection paths).
-	if (id === undefined) return;
+	if (id === undefined) {
+		return;
+	}
 	writeFrame({ jsonrpc: JSONRPC_VERSION, id, result });
 }
 
@@ -233,7 +248,9 @@ function sendError(
 	// Same rule as sendResult: only skip when id is genuinely absent (notification). `null`
 	// is a valid id and JSON-RPC §6 explicitly requires it for batch-error / parse-error
 	// responses where the server cannot determine which request id was at fault.
-	if (id === undefined) return;
+	if (id === undefined) {
+		return;
+	}
 	writeFrame({
 		jsonrpc: JSONRPC_VERSION,
 		id,
@@ -289,23 +306,35 @@ interface PendingFetchContext {
 
 const threads = new Map<string, ThreadState>();
 
-class ThreadState {
+interface ThreadState {
 	readonly threadId: string;
 	readonly sessionPath: string;
-	inFlight = false;
-	lastAgentEnd: Extract<AgentSessionEvent, { type: "agent_end" }> | null = null;
-	watchdogTimer: ReturnType<typeof setTimeout> | null = null;
-	readonly pendingFetchContexts = new Map<string, PendingFetchContext>();
-	unsubscribe: (() => void) | null = null;
+	inFlight: boolean;
+	lastAgentEnd: Extract<AgentSessionEvent, { type: "agent_end" }> | null;
+	watchdogTimer: ReturnType<typeof setTimeout> | null;
+	readonly pendingFetchContexts: Map<string, PendingFetchContext>;
+	unsubscribe: (() => void) | null;
+}
 
-	constructor(threadId: string, sessionPath: string) {
-		this.threadId = threadId;
-		this.sessionPath = sessionPath;
-	}
+function newThreadState(threadId: string, sessionPath: string): ThreadState {
+	return {
+		threadId,
+		sessionPath,
+		inFlight: false,
+		lastAgentEnd: null,
+		watchdogTimer: null,
+		pendingFetchContexts: new Map(),
+		unsubscribe: null,
+	};
+}
 
-	hasTurnInFlight() {
-		return this.inFlight;
-	}
+/**
+ * Read through a call rather than inline: a test of `state.inFlight` narrows the property for the
+ * rest of the function, which would make the same check after an await dead to the type system
+ * while the turn can settle during it.
+ */
+function hasTurnInFlight(state: ThreadState): boolean {
+	return state.inFlight;
 }
 
 // Currently-bound thread on the AgentSessionRuntime (since runtime is single-session at a time).
@@ -313,7 +342,8 @@ let activeThreadId: string | null = null;
 
 let runtime: MentorRuntime | null = null;
 let runtimeInitPromise: Promise<MentorRuntime> | null = null;
-let systemPrompt: string | null = null; // cached after first read
+// Cached after the first read.
+let systemPrompt: string | null = null;
 
 /** Fail-fast cooldown for runtime init: re-loading the SDK on every inbound frame is wasteful. */
 let runtimeInitFailure: { err: unknown; at: number } | null = null;
@@ -327,32 +357,39 @@ let dispatchQueue = Promise.resolve();
 // every task is fire-and-forget and its failure is already logged below — and handing one out
 // invites an `await` that would deadlock a task queued from inside another task.
 function enqueue(fn: () => unknown): void {
-	const previous = dispatchQueue;
-	dispatchQueue = (async () => {
+	dispatchQueue = runAfter(dispatchQueue, fn);
+}
+
+async function runAfter(previous: Promise<void>, fn: () => unknown): Promise<void> {
+	try {
 		await previous;
 		// Pause for stdout drain before running the next task if writes are backing up.
 		// Awaiting here naturally pauses the inbound pipe (since stdin frames also queue
 		// through enqueue), which is the correct backpressure target: don't accept more
 		// Pi events than we can ship to Java.
 		if (process.stdout.writableLength > STDOUT_BACKPRESSURE_THRESHOLD_BYTES) {
-			await new Promise<void>((resolve) => {
-				process.stdout.once("drain", () => resolve());
-			});
+			await once(process.stdout, "drain");
 		}
 		await fn();
-	})().catch((e: unknown) => log("dispatch queue swallowed:", errorText(e)));
+	} catch (error) {
+		log("dispatch queue swallowed:", errorText(error));
+	}
 }
 
 function cacheSystemPrompt() {
 	if (!existsSync(SYSTEM_PROMPT_PATH)) {
-		if (PROTOCOL_ONLY) return;
+		if (PROTOCOL_ONLY) {
+			return;
+		}
 		throw new Error(`mentor system prompt is missing: ${SYSTEM_PROMPT_PATH}`);
 	}
 	try {
 		systemPrompt = readFileSync(SYSTEM_PROMPT_PATH, "utf8");
 		log(`loaded system prompt: ${systemPrompt.length} bytes`);
-	} catch (e) {
-		throw new Error(`mentor system prompt could not be read: ${errorText(e)}`, { cause: e });
+	} catch (error) {
+		throw new Error(`mentor system prompt could not be read: ${errorText(error)}`, {
+			cause: error,
+		});
 	}
 }
 
@@ -379,19 +416,27 @@ async function createPiRuntime(sdk: PiSdk, agentDir: string): Promise<MentorRunt
 		allowModelNetwork: false,
 	});
 	const providerConfig = loadProviderConfig(CWD);
-	if (!providerConfig?.modelId || !registerHephaestusProvider(sharedModelRuntime, providerConfig)) {
+	if (
+		providerConfig === null ||
+		!hasText(providerConfig.modelId) ||
+		!registerHephaestusProvider(sharedModelRuntime, providerConfig)
+	) {
 		throw new Error(
 			"Hephaestus provider is not configured — pi-provider.json and proxy credentials are required",
 		);
 	}
 	const model = sharedModelRuntime.getModel("hephaestus", providerConfig.modelId);
-	if (!model) throw new Error(`Hephaestus model was not registered: ${providerConfig.modelId}`);
+	if (!model) {
+		throw new Error(`Hephaestus model was not registered: ${providerConfig.modelId}`);
+	}
 	log(
 		`registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} model=${providerConfig.modelId}`,
 	);
 
 	const mentorSystemPrompt = systemPrompt;
-	if (mentorSystemPrompt === null) throw new Error("mentor system prompt was not loaded");
+	if (mentorSystemPrompt === null) {
+		throw new Error("mentor system prompt was not loaded");
+	}
 	const resourceLoaderOptions = { systemPromptOverride: () => mentorSystemPrompt };
 
 	const createRuntime: CreateAgentSessionRuntimeFactory = async ({
@@ -429,8 +474,12 @@ async function createPiRuntime(sdk: PiSdk, agentDir: string): Promise<MentorRunt
 }
 
 async function ensureRuntime(): Promise<MentorRuntime> {
-	if (runtime) return runtime;
-	if (runtimeInitPromise) return runtimeInitPromise;
+	if (runtime) {
+		return runtime;
+	}
+	if (runtimeInitPromise) {
+		return runtimeInitPromise;
+	}
 	if (runtimeInitFailure && Date.now() - runtimeInitFailure.at < RUNTIME_INIT_COOLDOWN_MS) {
 		throw runtimeInitFailure.err;
 	}
@@ -449,9 +498,9 @@ async function ensureRuntime(): Promise<MentorRuntime> {
 		const r = await runtimeInitPromise;
 		runtimeInitFailure = null;
 		return r;
-	} catch (err) {
-		runtimeInitFailure = { err, at: Date.now() };
-		throw err;
+	} catch (error) {
+		runtimeInitFailure = { err: error, at: Date.now() };
+		throw error;
 	} finally {
 		runtimeInitPromise = null;
 	}
@@ -480,7 +529,7 @@ function defineFetchContextTool(sdk: PiSdk) {
 			if (!FETCH_CONTEXT_ALLOWED.has(contextKey)) {
 				throw new Error(`fetch_context: path "${contextKey}" is not in the allow-list`);
 			}
-			if (!activeThreadId) {
+			if (activeThreadId === null) {
 				throw new Error("fetch_context: no active thread bound to the runtime");
 			}
 			const state = threads.get(activeThreadId);
@@ -528,30 +577,38 @@ function defineLinkObservationTool(sdk: PiSdk) {
 				observationId: { type: "string", minLength: 1 },
 			},
 		},
-		execute: (_toolCallId, params): Promise<AgentToolResult<{ observationId: string }>> => {
+		execute: async (_toolCallId, params): Promise<AgentToolResult<{ observationId: string }>> => {
 			const observationId = jsonText(params.observationId).trim();
 			if (!observationId) {
-				return Promise.reject(new Error("link_observation: observationId is required"));
+				throw new Error("link_observation: observationId is required");
 			}
-			if (activeThreadId) {
+			if (activeThreadId !== null) {
 				sendEvent(activeThreadId, { type: "link_observation", observationId });
 			}
-			return Promise.resolve({
+			return {
 				content: [{ type: "text", text: `Linked observation ${observationId}` }],
 				details: { observationId },
-			});
+			};
 		},
 	});
 }
 
-function handleHello(id: JsonRpcId | undefined /*, params */) {
+function handleHello(id: JsonRpcId | undefined) {
 	// Java validates protocolOnly so a stub runtime cannot answer production traffic.
 	sendResult(id, { protocolVersion: PROTOCOL_VERSION, protocolOnly: PROTOCOL_ONLY });
 	// Reply before synchronously evaluating the SDK during background prewarm.
 	if (!PROTOCOL_ONLY) {
 		setImmediate(() => {
-			ensureRuntime().catch((e) => log("prewarm ensureRuntime failed (will retry on demand):", e));
+			void prewarmRuntime();
 		});
+	}
+}
+
+async function prewarmRuntime() {
+	try {
+		await ensureRuntime();
+	} catch (error) {
+		log("prewarm ensureRuntime failed (will retry on demand):", error);
 	}
 }
 
@@ -562,7 +619,7 @@ type MentorParams = Record<string, unknown>;
 type MethodHandler = (id: JsonRpcId | undefined, params: MentorParams) => void | Promise<void>;
 
 // Prevent thread IDs from escaping SESSIONS_DIR.
-const THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
 function normalizeThreadId(params: MentorParams) {
 	return jsonText(params.threadId).trim().toLowerCase();
@@ -571,16 +628,19 @@ function normalizeThreadId(params: MentorParams) {
 async function handleOpenThread(id: JsonRpcId | undefined, params: MentorParams) {
 	const threadId = normalizeThreadId(params);
 	if (!threadId) {
-		return sendError(id, ERR.INVALID_REQUEST, "threadId is required");
+		sendError(id, ERR.INVALID_REQUEST, "threadId is required");
+		return;
 	}
 	if (!THREAD_ID_PATTERN.test(threadId)) {
-		return sendError(id, ERR.INVALID_REQUEST, "threadId must be a canonical UUID");
+		sendError(id, ERR.INVALID_REQUEST, "threadId must be a canonical UUID");
+		return;
 	}
 	try {
 		await ensureRuntime();
-	} catch (e) {
-		log("runtime init failed:", e);
-		return sendError(id, ERR.PI_ERROR, `runtime init failed: ${errorText(e)}`);
+	} catch (error) {
+		log("runtime init failed:", error);
+		sendError(id, ERR.PI_ERROR, `runtime init failed: ${errorText(error)}`);
+		return;
 	}
 
 	let state = threads.get(threadId);
@@ -590,18 +650,19 @@ async function handleOpenThread(id: JsonRpcId | undefined, params: MentorParams)
 		// SESSIONS_DIR. `path.resolve` collapses any residual `..` or symlink hop.
 		const resolvedSessions = path.resolve(SESSIONS_DIR) + path.sep;
 		if (!path.resolve(sessionPath).startsWith(resolvedSessions)) {
-			return sendError(id, ERR.INVALID_REQUEST, "threadId resolves outside sessions dir");
+			sendError(id, ERR.INVALID_REQUEST, "threadId resolves outside sessions dir");
+			return;
 		}
-		state = new ThreadState(threadId, sessionPath);
+		state = newThreadState(threadId, sessionPath);
 		threads.set(threadId, state);
 	}
 
 	try {
 		await bindThread(state);
 		sendResult(id, { threadId, sessionPath: state.sessionPath });
-	} catch (e) {
-		log(`open_thread failed for ${threadId}:`, e);
-		sendError(id, ERR.PI_ERROR, `open_thread failed: ${errorText(e)}`);
+	} catch (error) {
+		log(`open_thread failed for ${threadId}:`, error);
+		sendError(id, ERR.PI_ERROR, `open_thread failed: ${errorText(error)}`);
 	}
 }
 
@@ -613,25 +674,21 @@ async function bindThread(state: ThreadState): Promise<MentorRuntime> {
 	// implies an initialised runtime" invariant inside one function instead of spread across every
 	// caller. `ensureRuntime` is a no-op once initialised.
 	const rt = await ensureRuntime();
+	// Already bound.
 	if (activeThreadId === state.threadId && state.unsubscribe) {
-		return rt; // already bound
+		return rt;
 	}
 	// Switch FIRST so a switchSession failure doesn't leave the previous session unsubscribed
 	// with no path back: if we tore down `prev.unsubscribe` first and switch threw, the
 	// previous thread would lose its event stream permanently. SDK guarantees the prior
 	// session's listeners are invalidated as a side effect of a successful switchSession.
-	const prevState = activeThreadId ? threads.get(activeThreadId) : null;
+	const prevState = activeThreadId === null ? null : threads.get(activeThreadId);
 	const { cancelled } = await rt.switchSession(state.sessionPath);
 	if (cancelled) {
 		throw new Error(`switchSession cancelled by extension hook for thread ${state.threadId}`);
 	}
-	if (prevState?.unsubscribe) {
-		try {
-			prevState.unsubscribe();
-		} catch (e) {
-			log("prev unsubscribe threw:", e);
-		}
-		prevState.unsubscribe = null;
+	if (prevState) {
+		dropSubscription(prevState);
 	}
 	activeThreadId = state.threadId;
 	state.unsubscribe = rt.session.subscribe((event) => forwardEvent(state, event));
@@ -688,13 +745,15 @@ function emitSessionPersisted(state: ThreadState) {
 	}
 	try {
 		const bytes = readFileSync(state.sessionPath, "utf8");
-		if (bytes.length === 0) return;
+		if (bytes.length === 0) {
+			return;
+		}
 		sendEvent(state.threadId, { type: "session_persisted", jsonl: bytes });
-	} catch (e) {
-		log(`emitSessionPersisted failed for thread=${state.threadId}: ${errorText(e)}`);
+	} catch (error) {
+		log(`emitSessionPersisted failed for thread=${state.threadId}: ${errorText(error)}`);
 		sendEvent(state.threadId, {
 			type: "pi_error",
-			message: `session_persist_read_failed: ${errorText(e)}`,
+			message: `session_persist_read_failed: ${errorText(error)}`,
 		});
 	}
 }
@@ -706,14 +765,18 @@ function maybePostTurnGc() {
 	// Captured rather than re-read inside the callback: `global.gc` only exists when the runtime
 	// was started with --expose-gc (MentorRunnerProfile passes it), and holding the reference
 	// means the guard and the call can never disagree.
-	const gc = global.gc;
-	if (typeof gc !== "function") return;
-	if (process.memoryUsage().heapUsed < POST_TURN_GC_HEAP_THRESHOLD_BYTES) return;
+	const { gc } = global;
+	if (typeof gc !== "function") {
+		return;
+	}
+	if (process.memoryUsage().heapUsed < POST_TURN_GC_HEAP_THRESHOLD_BYTES) {
+		return;
+	}
 	setImmediate(() => {
 		try {
 			gc();
-		} catch (e) {
-			log("post-turn gc threw:", e);
+		} catch (error) {
+			log("post-turn gc threw:", error);
 		}
 	});
 }
@@ -722,21 +785,25 @@ async function handlePrompt(id: JsonRpcId | undefined, params: MentorParams) {
 	const threadId = normalizeThreadId(params);
 	const text = jsonText(params.text);
 	if (!threadId || !text) {
-		return sendError(id, ERR.INVALID_REQUEST, "threadId and text are required");
+		sendError(id, ERR.INVALID_REQUEST, "threadId and text are required");
+		return;
 	}
 	const state = threads.get(threadId);
 	if (!state) {
-		return sendError(id, ERR.THREAD_NOT_OPEN, `thread ${threadId} is not open`);
+		sendError(id, ERR.THREAD_NOT_OPEN, `thread ${threadId} is not open`);
+		return;
 	}
 	if (state.inFlight) {
-		return sendError(id, ERR.TURN_IN_FLIGHT, `thread ${threadId} already has a turn in flight`);
+		sendError(id, ERR.TURN_IN_FLIGHT, `thread ${threadId} already has a turn in flight`);
+		return;
 	}
 
 	let rt: MentorRuntime;
 	try {
 		rt = await bindThread(state);
-	} catch (e) {
-		return sendError(id, ERR.PI_ERROR, `bind failed: ${errorText(e)}`);
+	} catch (error) {
+		sendError(id, ERR.PI_ERROR, `bind failed: ${errorText(error)}`);
+		return;
 	}
 
 	state.inFlight = true;
@@ -747,70 +814,83 @@ async function handlePrompt(id: JsonRpcId | undefined, params: MentorParams) {
 	// via subscribed events. This mirrors the SDK's own RPC mode semantics (rpc.md §44-77).
 	sendResult(id, { accepted: true });
 
-	rt.session
-		.prompt(text)
-		.then(() => {
-			log(`prompt resolved: thread=${threadId}`);
-		})
-		.catch((e: unknown) => {
-			log(`prompt rejected for thread ${threadId}: ${errorText(e)}`);
-			if (!state.inFlight) return;
-			sendEvent(threadId, { type: "pi_error", error: errorText(e) });
-			sendEvent(threadId, { type: "agent_end", messages: [], willRetry: false });
-			clearTurnWatchdog(state);
-			state.inFlight = false;
-		});
+	void runTurn(rt, state, text);
+}
+
+/** The turn itself, observed through the subscribed events; a rejection ends it as a failed turn. */
+async function runTurn(rt: MentorRuntime, state: ThreadState, text: string) {
+	const { threadId } = state;
+	try {
+		await rt.session.prompt(text);
+		log(`prompt resolved: thread=${threadId}`);
+	} catch (error) {
+		log(`prompt rejected for thread ${threadId}: ${errorText(error)}`);
+		if (!state.inFlight) {
+			return;
+		}
+		sendEvent(threadId, { type: "pi_error", error: errorText(error) });
+		sendEvent(threadId, { type: "agent_end", messages: [], willRetry: false });
+		clearTurnWatchdog(state);
+		state.inFlight = false;
+	}
 }
 
 async function handleSteer(id: JsonRpcId | undefined, params: MentorParams) {
 	const threadId = normalizeThreadId(params);
 	const text = jsonText(params.text);
 	if (!threadId || !text) {
-		return sendError(id, ERR.INVALID_REQUEST, "threadId and text are required");
+		sendError(id, ERR.INVALID_REQUEST, "threadId and text are required");
+		return;
 	}
 	const state = threads.get(threadId);
 	if (!state) {
-		return sendError(id, ERR.THREAD_NOT_OPEN, `thread ${threadId} is not open`);
+		sendError(id, ERR.THREAD_NOT_OPEN, `thread ${threadId} is not open`);
+		return;
 	}
 	try {
 		const rt = await bindThread(state);
 		await rt.session.steer(text);
 		sendResult(id, { accepted: true });
-	} catch (e) {
-		sendError(id, ERR.PI_ERROR, `steer failed: ${errorText(e)}`);
+	} catch (error) {
+		sendError(id, ERR.PI_ERROR, `steer failed: ${errorText(error)}`);
 	}
 }
 
 async function handleAbort(id: JsonRpcId | undefined, params: MentorParams) {
 	const threadId = normalizeThreadId(params);
 	if (!threadId) {
-		return sendError(id, ERR.INVALID_REQUEST, "threadId is required");
+		sendError(id, ERR.INVALID_REQUEST, "threadId is required");
+		return;
 	}
 	const state = threads.get(threadId);
 	if (!state) {
-		return sendError(id, ERR.THREAD_NOT_OPEN, `thread ${threadId} is not open`);
+		sendError(id, ERR.THREAD_NOT_OPEN, `thread ${threadId} is not open`);
+		return;
 	}
-	if (!state.hasTurnInFlight()) {
-		return sendError(id, ERR.INVALID_STATE, "no turn in flight for this thread");
+	if (!hasTurnInFlight(state)) {
+		sendError(id, ERR.INVALID_STATE, "no turn in flight for this thread");
+		return;
 	}
 	try {
 		const rt = await bindThread(state);
 		await rt.session.abort();
 		sendResult(id, { aborted: true });
-	} catch (e) {
-		sendError(id, ERR.PI_ERROR, `abort failed: ${errorText(e)}`);
+	} catch (error) {
+		sendError(id, ERR.PI_ERROR, `abort failed: ${errorText(error)}`);
 	}
 }
 
 function handleCloseThread(id: JsonRpcId | undefined, params: MentorParams) {
 	const threadId = normalizeThreadId(params);
 	if (!threadId) {
-		return sendError(id, ERR.INVALID_REQUEST, "threadId is required");
+		sendError(id, ERR.INVALID_REQUEST, "threadId is required");
+		return;
 	}
 	const state = threads.get(threadId);
 	if (!state) {
 		// Idempotent close.
-		return sendResult(id, { closed: false });
+		sendResult(id, { closed: false });
+		return;
 	}
 	cleanupThread(state);
 	threads.delete(threadId);
@@ -821,7 +901,7 @@ function handleCloseThread(id: JsonRpcId | undefined, params: MentorParams) {
 }
 
 /** A shutdown that has not drained by here is wedged; losing the frame beats never exiting. */
-const DRAIN_DEADLINE_MS = 5_000;
+const DRAIN_DEADLINE_MS = 5000;
 
 /**
  * Stops the runner once stdout has drained. `process.exit` discards whatever is still queued for a
@@ -831,12 +911,16 @@ const DRAIN_DEADLINE_MS = 5_000;
  */
 function exitWhenDrained(code: number): void {
 	// First failure wins: a later clean shutdown must not mask a crash's code.
-	if (code !== 0 || !process.exitCode) process.exitCode = code;
+	if (code !== 0 || process.exitCode === undefined) {
+		process.exitCode = code;
+	}
 	process.stdin.pause();
 	setTimeout(() => {
 		// Say what was lost. Exiting quietly on a wedged pipe is the defect this function exists for.
 		const unsent = process.stdout.writableLength;
-		if (unsent > 0) log(`drain deadline exceeded — exiting with ${unsent} bytes unsent`);
+		if (unsent > 0) {
+			log(`drain deadline exceeded — exiting with ${unsent} bytes unsent`);
+		}
 		process.exit(code);
 	}, DRAIN_DEADLINE_MS).unref();
 }
@@ -845,13 +929,15 @@ async function handleShutdown(id: JsonRpcId | undefined) {
 	sendResult(id, { shuttingDown: true });
 	// Reject pending fetch_context callbacks (Pi flushes a clean is-error tool result) and
 	// tear down sessions. cleanupThread is sync, so a plain loop is enough.
-	for (const state of threads.values()) cleanupThread(state);
+	for (const state of threads.values()) {
+		cleanupThread(state);
+	}
 	threads.clear();
 	activeThreadId = null;
 	try {
 		await runtime?.dispose();
-	} catch (e) {
-		log(`runtime.dispose during shutdown failed: ${errorText(e)}`);
+	} catch (error) {
+		log(`runtime.dispose during shutdown failed: ${errorText(error)}`);
 	}
 	log("shutdown requested — exiting");
 	exitWhenDrained(0);
@@ -889,6 +975,14 @@ class FetchContextServerError extends Error {
 	}
 }
 
+/** The context document as the model reads it: a string as sent, anything else serialised once. */
+function contextText(content: unknown): string {
+	if (content == null) {
+		return "{}";
+	}
+	return typeof content === "string" ? content : JSON.stringify(content);
+}
+
 // fetch_context responses (Java → runner)
 function handleFetchContextResponse(frame: Record<string, unknown>) {
 	const callbackId = jsonText(frame.id);
@@ -899,23 +993,18 @@ function handleFetchContextResponse(frame: Record<string, unknown>) {
 	// Search every thread for the matching pending callback (small N).
 	for (const state of threads.values()) {
 		const pending = state.pendingFetchContexts.get(callbackId);
-		if (!pending) continue;
+		if (!pending) {
+			continue;
+		}
 		state.pendingFetchContexts.delete(callbackId);
 		clearTimeout(pending.timer);
-		if (frame.error != null) {
-			// Reject so Pi records this tool call as failed (agent-loop.ts §632-638). Echo the
-			// JSON-RPC error code in the rejection so server-side diagnostics survive the
-			// rethrow → LLM tool-error round-trip.
-			pending.reject(FetchContextServerError.from(frame.error));
-		} else {
+		if (frame.error == null) {
 			// Pi tool results accept `content: [{type:"text", text: string}]` (verified against
 			// pi-mono SDK tool-result type). Java sends the context document as parsed JSON, so we
 			// stringify ONCE; a plain string passes through untouched. Double-stringifying a
 			// string ("\"foo\"" → "\\\"foo\\\"") would leak an extra layer of JSON escaping into
 			// the LLM prompt.
-			const content = isRecord(frame.result) ? frame.result.content : undefined;
-			let text =
-				content == null ? "{}" : typeof content === "string" ? content : JSON.stringify(content);
+			let text = contextText(isRecord(frame.result) ? frame.result.content : undefined);
 			const originalLength = text.length;
 			let truncated = false;
 			if (text.length > FETCH_CONTEXT_MAX_CHARS) {
@@ -935,6 +1024,11 @@ function handleFetchContextResponse(frame: Record<string, unknown>) {
 				content: parts,
 				details: { ok: true, length: text.length, truncated, originalLength },
 			});
+		} else {
+			// Reject so Pi records this tool call as failed (agent-loop.ts §632-638). Echo the
+			// JSON-RPC error code in the rejection so server-side diagnostics survive the
+			// rethrow → LLM tool-error round-trip.
+			pending.reject(FetchContextServerError.from(frame.error));
 		}
 		return;
 	}
@@ -945,7 +1039,7 @@ function startTurnWatchdog(state: ThreadState) {
 	clearTurnWatchdog(state);
 	// Serialize rebinding with RPC-driven session switches.
 	state.watchdogTimer = setTimeout(() => {
-		enqueue(() => runWatchdogRebind(state));
+		enqueue(async () => runWatchdogRebind(state));
 	}, TURN_BUDGET_MS + TURN_GRACE_MS);
 }
 
@@ -970,41 +1064,34 @@ async function runWatchdogRebind(state: ThreadState) {
 			pending.reject(new Error("fetch_context: turn aborted by watchdog"));
 			state.pendingFetchContexts.delete(cbId);
 		}
-		await rt?.session
-			.abort()
-			.catch((e: unknown) => log(`abort during watchdog failed: ${errorText(e)}`));
-		if (state.unsubscribe) {
-			try {
-				state.unsubscribe();
-			} catch {
-				/* ignore */
-			}
-			state.unsubscribe = null;
+		try {
+			await rt?.session.abort();
+		} catch (error) {
+			log(`abort during watchdog failed: ${errorText(error)}`);
 		}
+		dropSubscription(state);
 		// A runtime has one active session; remove its prior thread subscription before rebinding.
 		if (rt) {
 			try {
-				if (activeThreadId && activeThreadId !== state.threadId) {
-					const prev = threads.get(activeThreadId);
-					if (prev?.unsubscribe) {
-						try {
-							prev.unsubscribe();
-						} catch {
-							/* ignore */
-						}
-						prev.unsubscribe = null;
-					}
+				const prev =
+					activeThreadId === null || activeThreadId === state.threadId
+						? undefined
+						: threads.get(activeThreadId);
+				if (prev) {
+					dropSubscription(prev);
 				}
 				await rt.switchSession(state.sessionPath);
 				activeThreadId = state.threadId;
 				state.unsubscribe = rt.session.subscribe((event) => forwardEvent(state, event));
-			} catch (e) {
-				log(`watchdog rebind failed for thread=${state.threadId}: ${errorText(e)}`);
-				if (activeThreadId === state.threadId) activeThreadId = null;
+			} catch (error) {
+				log(`watchdog rebind failed for thread=${state.threadId}: ${errorText(error)}`);
+				if (activeThreadId === state.threadId) {
+					activeThreadId = null;
+				}
 			}
 		}
 	} finally {
-		if (state.hasTurnInFlight()) {
+		if (hasTurnInFlight(state)) {
 			state.lastAgentEnd = null;
 			sendEvent(state.threadId, { type: "agent_end", messages: [], willRetry: false });
 			state.inFlight = false;
@@ -1013,20 +1100,28 @@ async function runWatchdogRebind(state: ThreadState) {
 }
 
 function clearTurnWatchdog(state: ThreadState) {
-	if (state.watchdogTimer) clearTimeout(state.watchdogTimer);
+	if (state.watchdogTimer) {
+		clearTimeout(state.watchdogTimer);
+	}
 	state.watchdogTimer = null;
+}
+
+/** Detaches a thread's listener from the runtime session; a listener that throws on removal is gone either way. */
+function dropSubscription(state: ThreadState) {
+	if (state.unsubscribe === null) {
+		return;
+	}
+	try {
+		state.unsubscribe();
+	} catch (error) {
+		log("unsubscribe threw:", error);
+	}
+	state.unsubscribe = null;
 }
 
 function cleanupThread(state: ThreadState) {
 	clearTurnWatchdog(state);
-	if (state.unsubscribe) {
-		try {
-			state.unsubscribe();
-		} catch {
-			/* ignore */
-		}
-		state.unsubscribe = null;
-	}
+	dropSubscription(state);
 	for (const [cbId, pending] of state.pendingFetchContexts) {
 		clearTimeout(pending.timer);
 		// Reject so Pi sees a failed tool call (thrown error → isError: true).
@@ -1062,11 +1157,8 @@ async function dispatch(frame: unknown) {
 	// Reject loudly rather than silently dropping — a future Java caller that bundles
 	// open_thread + prompt would otherwise vanish into the log.
 	if (Array.isArray(frame)) {
-		return sendError(
-			null,
-			ERR.INVALID_REQUEST,
-			"batch requests are not supported on this transport",
-		);
+		sendError(null, ERR.INVALID_REQUEST, "batch requests are not supported on this transport");
+		return;
 	}
 	if (!isRecord(frame)) {
 		log("unrecognised frame:", JSON.stringify(frame).slice(0, 200));
@@ -1074,20 +1166,22 @@ async function dispatch(frame: unknown) {
 	}
 	const id = asJsonRpcId(frame.id);
 	if (typeof frame.method === "string" && frame.method.length > 0) {
-		const method = frame.method;
+		const { method } = frame;
 		if (!isMentorMethod(method)) {
-			return sendError(id, ERR.METHOD_NOT_FOUND, `unknown method: ${method}`);
+			sendError(id, ERR.METHOD_NOT_FOUND, `unknown method: ${method}`);
+			return;
 		}
 		try {
 			await METHODS[method](id, isRecord(frame.params) ? frame.params : {});
-		} catch (e) {
-			log(`handler ${method} threw: ${errorText(e)}`);
-			sendError(id, ERR.PI_ERROR, `internal error: ${errorText(e)}`);
+		} catch (error) {
+			log(`handler ${method} threw: ${errorText(error)}`);
+			sendError(id, ERR.PI_ERROR, `internal error: ${errorText(error)}`);
 		}
 		return;
 	}
 	if (frame.id != null && (frame.result !== undefined || frame.error !== undefined)) {
-		return handleFetchContextResponse(frame);
+		handleFetchContextResponse(frame);
+		return;
 	}
 	log("unrecognised frame:", JSON.stringify(frame).slice(0, 200));
 }
@@ -1142,13 +1236,14 @@ function createStubRuntime(): MentorRuntime {
 				throw new Error("stub: already streaming (caller should pass streamingBehavior)");
 			}
 			isStreaming = true;
-			const attempt = ++attemptGeneration;
-			const delay = Number(process.env.MENTOR_RUNNER_STUB_DELAY_MS) || 5;
+			attemptGeneration += 1;
+			const attempt = attemptGeneration;
+			const stubDelayMs = Number(process.env.MENTOR_RUNNER_STUB_DELAY_MS) || 5;
 			emit({ type: "agent_start" });
-			await new Promise((resolve) => {
-				setTimeout(resolve, delay);
-			});
-			if (attempt !== attemptGeneration) return;
+			await delay(stubDelayMs);
+			if (attempt !== attemptGeneration) {
+				return;
+			}
 			const delta = `stub: ${text}`;
 			emit({
 				type: "message_update",
@@ -1160,10 +1255,10 @@ function createStubRuntime(): MentorRuntime {
 					partial: stubAssistantMessage(delta),
 				},
 			});
-			await new Promise((resolve) => {
-				setTimeout(resolve, delay);
-			});
-			if (attempt !== attemptGeneration) return;
+			await delay(stubDelayMs);
+			if (attempt !== attemptGeneration) {
+				return;
+			}
 			const retryDelay = Number(process.env.MENTOR_RUNNER_STUB_RETRY_DELAY_MS) || 0;
 			if (retryDelay > 0) {
 				emit({
@@ -1171,35 +1266,34 @@ function createStubRuntime(): MentorRuntime {
 					messages: [stubAssistantMessage("stub: discarded attempt")],
 					willRetry: true,
 				});
-				await new Promise((resolve) => {
-					setTimeout(resolve, retryDelay);
-				});
-				if (attempt !== attemptGeneration) return;
+				await delay(retryDelay);
+				if (attempt !== attemptGeneration) {
+					return;
+				}
 			}
 			emit({ type: "agent_end", messages: [stubAssistantMessage(delta)], willRetry: false });
 			emit({ type: "agent_settled" });
 			isStreaming = false;
 		},
-		steer() {
-			return Promise.resolve();
+		async steer() {
+			// The stub answers nothing mid-turn.
 		},
-		abort() {
+		async abort() {
 			if (isStreaming) {
-				attemptGeneration++;
+				attemptGeneration += 1;
 				emit({ type: "agent_end", messages: [], willRetry: false });
 				emit({ type: "agent_settled" });
 				isStreaming = false;
 			}
-			return Promise.resolve();
 		},
 	};
 	return {
 		session: stubSession,
-		switchSession() {
-			return Promise.resolve({ cancelled: false });
+		async switchSession() {
+			return { cancelled: false };
 		},
-		dispose() {
-			return Promise.resolve();
+		async dispose() {
+			// The stub holds nothing to release.
 		},
 	};
 }
@@ -1226,14 +1320,14 @@ function start() {
 				// The only place untrusted bytes become values. `dispatch` takes `unknown` and
 				// narrows structurally from here, so nothing downstream trusts the shape.
 				frame = JSON.parse(line);
-			} catch (e) {
-				log(`parse error: ${errorText(e)} (line len=${line.length})`);
+			} catch (error) {
+				log(`parse error: ${errorText(error)} (line len=${line.length})`);
 				return;
 			}
 			try {
 				await dispatch(frame);
-			} catch (e) {
-				log("dispatch failed:", e);
+			} catch (error) {
+				log("dispatch failed:", error);
 			}
 		});
 	});
@@ -1242,7 +1336,7 @@ function start() {
 	// EOF routes through the dispatch queue so SIGTERM and EOF run the same teardown.
 	process.stdin.on("end", () => {
 		log("stdin EOF — shutting down");
-		enqueue(() => handleShutdown(undefined));
+		enqueue(async () => handleShutdown(undefined));
 	});
 	process.stdin.on("error", (e) => {
 		log("stdin error:", e);
@@ -1264,7 +1358,7 @@ function start() {
 	for (const signal of ["SIGTERM", "SIGINT"] as const) {
 		process.on(signal, () => {
 			log(`received ${signal} — initiating clean shutdown`);
-			enqueue(() => handleShutdown(undefined));
+			enqueue(async () => handleShutdown(undefined));
 		});
 	}
 

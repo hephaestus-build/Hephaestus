@@ -75,26 +75,30 @@ const makeGitHub = (options: GitHubOptions = {}) => {
 	const submitted: CreateReviewRequest[] = [];
 	const minimized: string[] = [];
 	const reviews = [...(options.reviews ?? [])];
-	const getPull = () =>
+	const getPull = async () =>
 		options.failPullWith
 			? Promise.reject(options.failPullWith)
 			: Promise.resolve({ data: options.resolvedPull ?? pull });
 
 	const github: GitHubApi = {
-		graphql: (_query, variables) => {
-			if (options.failMinimizeWith) return Promise.reject(options.failMinimizeWith);
+		graphql: async (_query, variables) => {
+			if (options.failMinimizeWith) {
+				throw options.failMinimizeWith;
+			}
 			minimized.push(variables.subjectId);
-			return Promise.resolve({});
+			return {};
 		},
-		paginate: () => Promise.resolve(reviews),
+		paginate: async () => reviews,
 		rest: {
 			pulls: {
 				get: getPull,
-				listReviews: () => Promise.resolve({ data: reviews }),
-				createReview: (params) => {
-					if (options.failReviewWith) return Promise.reject(options.failReviewWith);
+				listReviews: async () => ({ data: reviews }),
+				createReview: async (params) => {
+					if (options.failReviewWith) {
+						throw options.failReviewWith;
+					}
 					submitted.push(params);
-					return Promise.resolve({ data: { id: submitted.length } });
+					return { data: { id: submitted.length } };
 				},
 			},
 		},
@@ -203,7 +207,7 @@ void describe("review policy", () => {
 		void it("approves a listed maintainer, matching the login case-insensitively", () => {
 			const decision = decide({ ...base, maintainers: new Set(["maintainer"]) });
 			assert.equal(decision.kind, "approve");
-			assert.match(decision.reason, /REVIEW_POLICY_MAINTAINERS/);
+			assert.match(decision.reason, /REVIEW_POLICY_MAINTAINERS/u);
 		});
 
 		void it("does nothing for an author who is not listed", () => {
@@ -213,7 +217,7 @@ void describe("review policy", () => {
 				maintainers: new Set(["maintainer"]),
 			});
 			assert.equal(decision.kind, "skip");
-			assert.match(decision.reason, /needs an approval from someone with write access/);
+			assert.match(decision.reason, /needs an approval from someone with write access/u);
 		});
 
 		void it("approves nobody when the allow-list is empty", () => {
@@ -311,7 +315,7 @@ void describe("review policy", () => {
 
 			assert.equal(submitted.length, 1);
 			assert.equal(core.warnings.length, 1);
-			assert.match(String(core.warnings[0]), /minimization rejected/);
+			assert.match(String(core.warnings[0]), /minimization rejected/u);
 			assert.deepEqual(core.failures, []);
 		});
 
@@ -323,7 +327,7 @@ void describe("review policy", () => {
 
 			assert.deepEqual(submitted, []);
 			assert.equal(core.warnings.length, 1);
-			assert.match(String(core.warnings[0]), /REVIEW_POLICY_MAINTAINERS/);
+			assert.match(String(core.warnings[0]), /REVIEW_POLICY_MAINTAINERS/u);
 			assert.deepEqual(core.failures, []);
 		});
 
@@ -334,7 +338,7 @@ void describe("review policy", () => {
 
 			assert.deepEqual(submitted, []);
 			assert.equal(core.failures.length, 1);
-			assert.match(String(core.failures[0]), /API is down/);
+			assert.match(String(core.failures[0]), /API is down/u);
 		});
 
 		void it("fails the job when the review cannot be submitted", async () => {
@@ -343,7 +347,7 @@ void describe("review policy", () => {
 			await enforce({ github, context, core });
 
 			assert.equal(core.failures.length, 1);
-			assert.match(String(core.failures[0]), /review rejected/);
+			assert.match(String(core.failures[0]), /review rejected/u);
 		});
 
 		void it("fails loudly when an event carries no pull request at all", async () => {
@@ -371,14 +375,14 @@ void describe("review policy", () => {
 		const approvalJob = asRecord(jobs.approve, "approve");
 
 		void it("keeps the checkout on the default branch's copy of the policy", () => {
-			assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
-			assert.doesNotMatch(workflow, /ref: \$\{\{ github\.sha \}\}/);
-			assert.doesNotMatch(workflow, /github\.event\.pull_request\.head/);
+			assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/u);
+			assert.doesNotMatch(workflow, /ref: \$\{\{ github\.sha \}\}/u);
+			assert.doesNotMatch(workflow, /github\.event\.pull_request\.head/u);
 		});
 
 		void it("uses sparse checkout and keeps no credentials", () => {
-			assert.match(workflow, /persist-credentials: false/);
-			assert.match(workflow, /sparse-checkout: scripts/);
+			assert.match(workflow, /persist-credentials: false/u);
+			assert.match(workflow, /sparse-checkout: scripts/u);
 		});
 
 		void it("asks for write access to pull requests and nothing else", () => {
@@ -388,16 +392,16 @@ void describe("review policy", () => {
 		});
 
 		void it("re-runs on every push, because the ruleset dismisses stale approvals", () => {
-			assert.match(workflow, /types: \[opened, reopened, synchronize, ready_for_review, edited\]/);
+			assert.match(workflow, /types: \[opened, reopened, synchronize, ready_for_review, edited\]/u);
 		});
 
 		void it("runs for a stacked pull request, whatever branch it targets", () => {
-			assert.doesNotMatch(workflow, /^\s+branches:/m);
+			assert.doesNotMatch(workflow, /^\s+branches:/mu);
 		});
 
 		void it("does not create custom check runs or run for merge groups", () => {
-			assert.doesNotMatch(workflow, /checks\.create|checks: write/);
-			assert.doesNotMatch(workflow, /merge_group/);
+			assert.doesNotMatch(workflow, /checks\.create|checks: write/u);
+			assert.doesNotMatch(workflow, /merge_group/u);
 		});
 	});
 });

@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 
@@ -18,22 +18,22 @@ const REPORTED_STATUSES = [
 	"STARTED",
 ] as const;
 
-type Summary = {
+interface Summary {
 	actionable: MutationDetail[];
 	counts: Map<string, number>;
 	error?: string;
 	total: number;
 	valid: boolean;
-};
+}
 
-type MutationDetail = {
+interface MutationDetail {
 	className: string;
 	description: string;
 	line: string;
 	method: string;
 	mutator: string;
 	status: string;
-};
+}
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
 
@@ -48,7 +48,9 @@ export function summarizePitXml(xml: string): Summary {
 	const document: unknown = parser.parse(xml);
 	const root = isRecord(document) ? document.mutations : undefined;
 	const rawMutations = isRecord(root) ? root.mutation : undefined;
-	if (rawMutations === undefined) return invalidSummary("report contains no mutations");
+	if (rawMutations === undefined) {
+		return invalidSummary("report contains no mutations");
+	}
 	if (!isRecord(rawMutations) && !isRecordArray(rawMutations)) {
 		return invalidSummary("report contains a malformed mutation entry");
 	}
@@ -104,7 +106,7 @@ function runGradle(server: string, args: string[]): { exitCode: number; seconds:
 	const started = performance.now();
 	const result = spawnSync(
 		process.execPath,
-		[resolve(import.meta.dirname, "run-gradlew.ts"), ...args],
+		[path.resolve(import.meta.dirname, "run-gradlew.ts"), ...args],
 		{ cwd: server, stdio: "inherit" },
 	);
 	return {
@@ -148,14 +150,14 @@ function markdown(summary: Summary, elapsedSeconds: number, passed: boolean) {
 }
 
 function markdownCell(value: string): string {
-	return value.replaceAll("|", "\\|").replaceAll(/[\r\n]+/g, " ");
+	return value.replaceAll("|", String.raw`\|`).replaceAll(/[\r\n]+/gu, " ");
 }
 
 function main() {
-	const repo = resolve(import.meta.dirname, "..");
-	const server = resolve(repo, "server");
-	const reportDirectory = resolve(server, "application/build/reports/pitest");
-	const xmlPath = resolve(reportDirectory, "mutations.xml");
+	const repo = path.resolve(import.meta.dirname, "..");
+	const server = path.resolve(repo, "server");
+	const reportDirectory = path.resolve(server, "application/build/reports/pitest");
+	const xmlPath = path.resolve(reportDirectory, "mutations.xml");
 	rmSync(reportDirectory, { recursive: true, force: true });
 	mkdirSync(reportDirectory, { recursive: true });
 
@@ -163,9 +165,9 @@ function main() {
 	const analysis = runGradle(server, [":application:pitest", "--rerun"]);
 
 	let summary = invalidSummary(
-		analysis.exitCode !== 0
-			? `Mutation build failed (Gradle exit ${analysis.exitCode})`
-			: "mutation report was not produced",
+		analysis.exitCode === 0
+			? "mutation report was not produced"
+			: `Mutation build failed (Gradle exit ${analysis.exitCode})`,
 	);
 	if (analysis.exitCode === 0) {
 		try {
@@ -178,10 +180,18 @@ function main() {
 	}
 	const passed = analysis.exitCode === 0 && summary.valid;
 	const output = markdown(summary, analysis.seconds, passed);
-	writeFileSync(resolve(reportDirectory, "summary.md"), output);
+	writeFileSync(path.resolve(reportDirectory, "summary.md"), output);
 	process.stdout.write(output);
-	if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, output);
-	if (!passed) process.exitCode = 1;
+	const stepSummary = process.env.GITHUB_STEP_SUMMARY;
+	if (stepSummary !== undefined && stepSummary !== "") {
+		appendFileSync(stepSummary, output);
+	}
+	if (!passed) {
+		process.exitCode = 1;
+	}
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) main();
+const entry = process.argv[1];
+if (entry !== undefined && entry !== "" && path.resolve(entry) === import.meta.filename) {
+	main();
+}

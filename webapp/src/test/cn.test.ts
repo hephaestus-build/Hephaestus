@@ -55,7 +55,7 @@ describe("cn", () => {
 	it("reflects mutated conditional inputs after repeated calls", () => {
 		const classes = { "bg-primary": true, "bg-destructive": false };
 		const spacing = ["p-2"];
-		for (let iteration = 0; iteration < 10; iteration++) {
+		for (let iteration = 0; iteration < 10; iteration += 1) {
 			expect(cn("p-0", classes, spacing)).toBe("bg-primary p-2");
 		}
 		classes["bg-primary"] = false;

@@ -36,7 +36,7 @@ export function AboutMissionSection() {
 
 				<p className="text-lg leading-relaxed">
 					Developers learn to work well in a team by doing the work and getting feedback on it. That
-					feedback is a mentor's job, whether that is a coach on a university capstone or an
+					feedback is a mentor’s job, whether that is a coach on a university capstone or an
 					experienced maintainer on an open-source project, and there is never enough of that
 					attention to go round. The developers who need it most often get none. Hephaestus carries
 					the routine part so that everyone gets some.

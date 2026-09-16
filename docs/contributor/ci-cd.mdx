@@ -618,7 +618,7 @@ previews need every image at the head SHA; no other event has a preview.
 | --- | --- |
 | Quality → Webapp | `webapp/**`, `docs/images/readme/**`, `docs/src/css/custom.css`, the root oxlint and oxfmt configs, the four `scripts/check-*` files it runs, root package files |
 | Quality → App Server | `server/**` except `AGENTS.md` and `CLAUDE.md`, `scripts/run-gradlew.ts`, `docker/compose.app.yaml`, `docker/compose.core.yaml`, root package files |
-| Quality → Tooling and Docs | `scripts/**`, `docker/agents/**`, `load-tests/**`, `docs/**`, tsconfigs, oxlint and oxfmt configs, `.changeset/**`, `commitlint.config.ts`, instruction files, `renovate.json`, `openapitools.json` |
+| Quality → Tooling and Docs | `scripts/**`, `docker/agents/**`, `load-tests/**`, `docs/**`, tsconfigs, oxlint and oxfmt configs, the task graph (`vite.config.ts`), `.changeset/**`, `commitlint.config.ts`, instruction files, `renovate.json`, `openapitools.json` |
 | Every quality leg | `vite.config.ts`, `.vite-hooks/**`, `.java-version`, `cicd.yml`, `ci-quality-gates.yml`, `ci-quality-leg.yml` and the setup actions: the task graph, the hooks and the JDK decide every leg's verdict, so a change to one runs all of them |
 | Build artifact gates | contracts: the App Server paths or `docker/postgres/**`; E2E: webapp source and the server main sources; image: `server/application/src/main/**`, the Gradle build scripts, catalog, locks and wrapper, `server/application/project.toml`, `server/generated-clients/**` |
 | Docker images | `webapp-image`: the webapp build inputs and non-test source; `agent-images`: `docker/agents/**`; `postgres-image`: `docker/postgres/**` |

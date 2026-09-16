@@ -5,7 +5,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { TablePagination } from "@/components/common/TablePagination";
 
 import { clearedFeedbackFilters, FeedbackFilters, hasFeedbackFilter } from "./FeedbackFilters";
-import { FeedbackResults } from "./FeedbackResults";
+import { FeedbackResults, type FeedbackResultsState } from "./FeedbackResults";
 import type { FeedbackSearch } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
 
@@ -38,6 +38,14 @@ export function FeedbackListPage({
 	const hasFilter = hasFeedbackFilter(search);
 	const reset = () => onSearchChange(clearedFeedbackFilters());
 	const patchFilter = (patch: Partial<FeedbackSearch>) => onSearchChange({ ...patch, page: 0 });
+	let resultsState: FeedbackResultsState = { status: "ready", feedback: rows };
+	if (isLoading) {
+		resultsState = { status: "loading" };
+	} else if (rows.length === 0) {
+		resultsState = hasFilter
+			? { status: "empty", filtered: true, onClearFilters: reset }
+			: { status: "empty", filtered: false };
+	}
 
 	return (
 		<section aria-label="Feedback delivery" className="space-y-4">
@@ -51,18 +59,7 @@ export function FeedbackListPage({
 				recipientName={filteredRecipient?.name ?? filteredRecipient?.login}
 			/>
 			{error == null ? (
-				<FeedbackResults
-					workspaceSlug={workspaceSlug}
-					state={
-						isLoading
-							? { status: "loading" }
-							: rows.length === 0
-								? hasFilter
-									? { status: "empty", filtered: true, onClearFilters: reset }
-									: { status: "empty", filtered: false }
-								: { status: "ready", feedback: rows }
-					}
-				/>
+				<FeedbackResults workspaceSlug={workspaceSlug} state={resultsState} />
 			) : (
 				<QueryErrorAlert error={error} title="Couldn't load feedback" onRetry={onRetry} />
 			)}

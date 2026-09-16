@@ -6,7 +6,9 @@ export const CI_WORKFLOW = "cicd.yml";
 
 export function versionBranch(config: unknown): string {
 	const baseBranch = asString(asRecord(config, "changeset config").baseBranch, "baseBranch");
-	if (!baseBranch) throw new Error("changeset config declares no baseBranch");
+	if (!baseBranch) {
+		throw new Error("changeset config declares no baseBranch");
+	}
 	return `changeset-release/${baseBranch}`;
 }
 
@@ -67,12 +69,12 @@ async function branchHead(repository: string, branch: string): Promise<string | 
 
 if (import.meta.main) {
 	const repository = process.env.GITHUB_REPOSITORY;
-	if (!repository) throw new Error("GITHUB_REPOSITORY is required");
+	if (repository === undefined || repository === "") {
+		throw new Error("GITHUB_REPOSITORY is required");
+	}
 	const branch = versionBranch(await readJsonFile(".changeset/config.json"));
 	const headSha = await branchHead(repository, branch);
-	if (!headSha) {
-		process.stdout.write(`No ${branch} branch; nothing to validate.\n`);
-	} else {
+	if (headSha !== undefined && headSha !== "") {
 		const runs = parseRuns(
 			JSON.parse(
 				await gh([
@@ -89,5 +91,7 @@ if (import.meta.main) {
 		} else {
 			process.stdout.write(`CI/CD already ran for ${branch} at ${headSha}.\n`);
 		}
+	} else {
+		process.stdout.write(`No ${branch} branch; nothing to validate.\n`);
 	}
 }

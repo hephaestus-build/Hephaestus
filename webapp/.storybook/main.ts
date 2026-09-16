@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import path from "node:path";
 
 import type { StorybookConfig } from "@storybook/react-vite";
 
@@ -8,7 +8,7 @@ import { storybookChunkBudgets } from "./chunk-budgets.ts";
 const require = createRequire(import.meta.url);
 
 function getAbsolutePath(value: string): string {
-	return dirname(require.resolve(join(value, "package.json")));
+	return path.dirname(require.resolve(path.join(value, "package.json")));
 }
 
 const config: StorybookConfig = {

@@ -112,6 +112,44 @@ export function PracticeReviewSweepSchedule({
 	const scheduledKinds = new Set(schedules.map((schedule) => schedule.artifactKind));
 	const availableKinds = WORK_KIND_ITEMS.filter((kind) => !scheduledKinds.has(kind.value));
 
+	let scheduleList;
+	if (isLoading) {
+		scheduleList = (
+			<div className="flex justify-center py-6">
+				<Spinner />
+			</div>
+		);
+	} else if (schedules.length === 0) {
+		scheduleList = (
+			<Empty>
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<CalendarClock />
+					</EmptyMedia>
+					<EmptyTitle>Nothing is checked on a schedule</EmptyTitle>
+					<EmptyDescription>
+						Work that never raised a notification is never reviewed, and nothing says so. Add a
+						check below to review the last few days again.
+					</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		);
+	} else {
+		scheduleList = (
+			<div className="space-y-2">
+				{schedules.map((schedule) => (
+					<ScheduleRow
+						key={schedule.id}
+						schedule={schedule}
+						isSaving={isSaving}
+						onReplace={onReplace}
+						onDelete={onDelete}
+					/>
+				))}
+			</div>
+		);
+	}
+
 	return (
 		<section className="space-y-4" aria-labelledby="sweep-heading">
 			<div className="space-y-1">
@@ -127,7 +165,7 @@ export function PracticeReviewSweepSchedule({
 			{isError ? (
 				<Alert variant="destructive">
 					<AlertCircle />
-					<AlertTitle>Recurring checks couldn't be loaded</AlertTitle>
+					<AlertTitle>Recurring checks couldn’t be loaded</AlertTitle>
 					<AlertDescription>
 						<p>Whatever is scheduled is still running — this is only about showing it here.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
@@ -137,36 +175,7 @@ export function PracticeReviewSweepSchedule({
 				</Alert>
 			) : null}
 
-			{isLoading ? (
-				<div className="flex justify-center py-6">
-					<Spinner />
-				</div>
-			) : schedules.length === 0 ? (
-				<Empty>
-					<EmptyHeader>
-						<EmptyMedia variant="icon">
-							<CalendarClock />
-						</EmptyMedia>
-						<EmptyTitle>Nothing is checked on a schedule</EmptyTitle>
-						<EmptyDescription>
-							Work that never raised a notification is never reviewed, and nothing says so. Add a
-							check below to review the last few days again.
-						</EmptyDescription>
-					</EmptyHeader>
-				</Empty>
-			) : (
-				<div className="space-y-2">
-					{schedules.map((schedule) => (
-						<ScheduleRow
-							key={schedule.id}
-							schedule={schedule}
-							isSaving={isSaving}
-							onReplace={onReplace}
-							onDelete={onDelete}
-						/>
-					))}
-				</div>
-			)}
+			{scheduleList}
 
 			{availableKinds.length > 0 ? (
 				<AddScheduleForm
@@ -196,13 +205,15 @@ function ScheduleRow({
 	const lastRun = formatMoment(schedule.lastRunAt);
 
 	// A paused schedule must not promise a first check "within the hour".
+	let nextCheck = "Paused, so nothing is being checked.";
+	if (schedule.enabled) {
+		nextCheck = hasText(nextRun)
+			? `Next check ${nextRun}.`
+			: "The first check happens within the hour.";
+	}
 	const description = [
 		`${describeCadence(schedule)}.`,
-		schedule.enabled
-			? hasText(nextRun)
-				? `Next check ${nextRun}.`
-				: "The first check happens within the hour."
-			: "Paused, so nothing is being checked.",
+		nextCheck,
 		hasText(lastRun) ? `Last checked ${lastRun}.` : "It has not checked anything yet.",
 	].join(" ");
 

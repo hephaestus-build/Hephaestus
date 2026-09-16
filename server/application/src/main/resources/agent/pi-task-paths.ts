@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import path from "node:path";
 
 export const SUPPORTED_SCHEMA_VERSION = 2;
 
@@ -7,7 +7,7 @@ export function taskPaths(value: unknown) {
 		throw new Error("task.json: paths must be an object");
 	}
 	const object = value;
-	function path(key: string): string {
+	function workspacePath(key: string): string {
 		const candidate: unknown = Reflect.get(object, key);
 		if (
 			typeof candidate !== "string" ||
@@ -20,25 +20,25 @@ export function taskPaths(value: unknown) {
 		return candidate;
 	}
 	return {
-		contextRoot: path("contextRoot"),
-		repositoryRoot: path("repositoryRoot"),
-		manifest: path("manifest"),
-		practiceIndex: path("practiceIndex"),
-		compositionRequest: path("compositionRequest"),
-		preparedFeedback: path("preparedFeedback"),
-		precomputeScripts: path("precomputeScripts"),
+		contextRoot: workspacePath("contextRoot"),
+		repositoryRoot: workspacePath("repositoryRoot"),
+		manifest: workspacePath("manifest"),
+		practiceIndex: workspacePath("practiceIndex"),
+		compositionRequest: workspacePath("compositionRequest"),
+		preparedFeedback: workspacePath("preparedFeedback"),
+		precomputeScripts: workspacePath("precomputeScripts"),
 	};
 }
 
 export function resolveTaskPaths(root: string, value: unknown) {
 	const paths = taskPaths(value);
 	return {
-		contextRoot: resolve(root, paths.contextRoot),
-		repositoryRoot: resolve(root, paths.repositoryRoot),
-		manifest: resolve(root, paths.manifest),
-		practiceIndex: resolve(root, paths.practiceIndex),
-		compositionRequest: resolve(root, paths.compositionRequest),
-		preparedFeedback: resolve(root, paths.preparedFeedback),
-		precomputeScripts: resolve(root, paths.precomputeScripts),
+		contextRoot: path.resolve(root, paths.contextRoot),
+		repositoryRoot: path.resolve(root, paths.repositoryRoot),
+		manifest: path.resolve(root, paths.manifest),
+		practiceIndex: path.resolve(root, paths.practiceIndex),
+		compositionRequest: path.resolve(root, paths.compositionRequest),
+		preparedFeedback: path.resolve(root, paths.preparedFeedback),
+		precomputeScripts: path.resolve(root, paths.precomputeScripts),
 	};
 }

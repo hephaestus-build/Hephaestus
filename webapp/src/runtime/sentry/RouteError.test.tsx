@@ -18,7 +18,7 @@ vi.mock("@/runtime/sentry", () => ({ captureException }));
 
 it("reports a thrown route error once and renders recovery controls", async () => {
 	const error = new Error("failed route");
-	const onCaughtError = vi.fn();
+	const onCaughtError = vi.fn<(error: unknown) => void>();
 	using routeWarning = vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
 		expect(args).toStrictEqual(["Warning: Error in route match: //"]);
 	});

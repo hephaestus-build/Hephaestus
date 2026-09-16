@@ -39,7 +39,7 @@ export function narrowToEnum<T extends string>(
  */
 export function useSearchState() {
 	const navigate = useNavigate();
-	return (
+	return async (
 		update: (previous: Record<string, unknown>) => Record<string, unknown>,
 		state?: NonNullable<Parameters<typeof navigate>[0]>["state"],
 	) => navigate({ to: ".", search: update, state, resetScroll: false });

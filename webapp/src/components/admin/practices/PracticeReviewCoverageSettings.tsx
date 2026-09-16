@@ -166,6 +166,25 @@ export function PracticeReviewCoverageSettings({
 		}
 	};
 
+	let reviewButtonContent;
+	if (workflow.status === "checking") {
+		reviewButtonContent = (
+			<>
+				<Loader2Icon className="animate-spin" aria-hidden />
+				Checking impact…
+			</>
+		);
+	} else if (workflow.status === "saving") {
+		reviewButtonContent = (
+			<>
+				<Loader2Icon className="animate-spin" aria-hidden />
+				Saving…
+			</>
+		);
+	} else {
+		reviewButtonContent = "Review changes";
+	}
+
 	return (
 		<section className="space-y-6" aria-labelledby="reviewed-work-heading">
 			{unsavedChanges.dialog}
@@ -379,28 +398,22 @@ export function PracticeReviewCoverageSettings({
 					<Button
 						className="min-w-36"
 						disabled={!dirty || busy || conflicted}
-						onClick={() => void review()}
+						onClick={() => {
+							void review();
+						}}
 					>
-						{workflow.status === "checking" ? (
-							<>
-								<Loader2Icon className="animate-spin" aria-hidden />
-								Checking impact…
-							</>
-						) : workflow.status === "saving" ? (
-							<>
-								<Loader2Icon className="animate-spin" aria-hidden />
-								Saving…
-							</>
-						) : (
-							"Review changes"
-						)}
+						{reviewButtonContent}
 					</Button>
 				</div>
 			</div>
 
 			<AlertDialog
 				open={workflow.status === "confirm"}
-				onOpenChange={(open) => !open && setWorkflow({ status: "editing" })}
+				onOpenChange={(open) => {
+					if (!open) {
+						setWorkflow({ status: "editing" });
+					}
+				}}
 			>
 				<AlertDialogContent className="max-w-[calc(100vw-2rem)] min-w-0 overflow-hidden sm:max-w-lg">
 					<AlertDialogHeader>
@@ -457,15 +470,15 @@ function CoverageWorkflowStatus({ workflow, dirty }: { workflow: Workflow; dirty
 			</p>
 		);
 	}
+	let status = dirty ? "You have unsaved coverage changes." : "Coverage is up to date.";
+	if (workflow.status === "checking") {
+		status = "Checking impact…";
+	} else if (workflow.status === "saving") {
+		status = "Saving coverage…";
+	}
 	return (
 		<p role="status" className="max-w-md text-sm text-muted-foreground">
-			{workflow.status === "checking"
-				? "Checking impact…"
-				: workflow.status === "saving"
-					? "Saving coverage…"
-					: dirty
-						? "You have unsaved coverage changes."
-						: "Coverage is up to date."}
+			{status}
 		</p>
 	);
 }
@@ -485,7 +498,7 @@ function CoverageImpact({ preview }: { preview: PracticeReviewCoveragePreview })
 				<strong>{preview.proposed.coveredPeople}</strong> of {preview.proposed.eligiblePeople}
 			</p>
 			<p className="text-xs text-muted-foreground">
-				For scale, {preview.proposed.recentReviewVolume} review jobs entered this workspace's queue
+				For scale, {preview.proposed.recentReviewVolume} review jobs entered this workspace’s queue
 				during the last {preview.proposed.estimateWindowDays} days.
 			</p>
 		</div>
@@ -543,6 +556,11 @@ function RepositoryScopeRow({
 	onChange: (next: string[]) => void;
 }) {
 	const editorId = useId();
+	let description = "This workspace no longer syncs this repository, so nothing in it is reviewed.";
+	if (monitored) {
+		description =
+			baseBranches.length === 0 ? "Every base branch" : `Only ${baseBranches.join(", ")}`;
+	}
 	return (
 		<Collapsible>
 			<Item variant="outline" size="sm" role="listitem" className="flex-wrap">
@@ -553,13 +571,7 @@ function RepositoryScopeRow({
 						</span>
 						{monitored ? null : <Badge variant="warning">Not monitored</Badge>}
 					</ItemTitle>
-					<ItemDescription className="break-all">
-						{monitored
-							? baseBranches.length === 0
-								? "Every base branch"
-								: `Only ${baseBranches.join(", ")}`
-							: "This workspace no longer syncs this repository, so nothing in it is reviewed."}
-					</ItemDescription>
+					<ItemDescription className="break-all">{description}</ItemDescription>
 				</ItemContent>
 				<ItemActions>
 					<CollapsibleTrigger

@@ -193,6 +193,46 @@ export function WorkspaceMembersTable({
 		}
 	}, [isLoading, lastPage, onViewChange, view.page]);
 
+	let body: ReactElement | ReactElement[];
+	if (isLoading) {
+		body = (
+			<TableRow>
+				<TableCell colSpan={table.getVisibleLeafColumns().length} className="h-32 text-center">
+					<div className="flex flex-col items-center justify-center space-y-2">
+						<Spinner />
+						<p className="text-sm text-muted-foreground">Loading users...</p>
+					</div>
+				</TableCell>
+			</TableRow>
+		);
+	} else if (table.getRowModel().rows.length > 0) {
+		body = table.getRowModel().rows.map((row) => (
+			<TableRow key={row.id}>
+				{row.getVisibleCells().map((cell) => (
+					<TableCell key={cell.id}>
+						<FlexRender cell={cell} />
+					</TableCell>
+				))}
+			</TableRow>
+		));
+	} else {
+		body = (
+			<TableRow>
+				<TableCell colSpan={table.getVisibleLeafColumns().length} className="h-32 text-center">
+					<div className="flex flex-col items-center justify-center space-y-2">
+						<Users className="h-8 w-8 text-muted-foreground" />
+						<p className="text-sm font-medium">No users found</p>
+						<p className="text-xs text-muted-foreground">
+							{view.q || view.team !== "all"
+								? "Try adjusting your search or filter criteria"
+								: "No users have been added to the workspace yet"}
+						</p>
+					</div>
+				</TableCell>
+			</TableRow>
+		);
+	}
+
 	return (
 		<div className="w-full space-y-4">
 			<div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
@@ -210,7 +250,11 @@ export function WorkspaceMembersTable({
 					</InputGroup>
 					<Select
 						value={view.team}
-						onValueChange={(value) => hasText(value) && onViewChange({ team: value, page: 0 })}
+						onValueChange={(value) => {
+							if (hasText(value)) {
+								onViewChange({ team: value, page: 0 });
+							}
+						}}
 						items={teamFilterItems}
 					>
 						<SelectTrigger
@@ -278,48 +322,7 @@ export function WorkspaceMembersTable({
 
 			<Table bordered>
 				<DataTableHeader table={table} />
-				<TableBody>
-					{isLoading ? (
-						<TableRow>
-							<TableCell
-								colSpan={table.getVisibleLeafColumns().length}
-								className="h-32 text-center"
-							>
-								<div className="flex flex-col items-center justify-center space-y-2">
-									<Spinner />
-									<p className="text-sm text-muted-foreground">Loading users...</p>
-								</div>
-							</TableCell>
-						</TableRow>
-					) : table.getRowModel().rows.length > 0 ? (
-						table.getRowModel().rows.map((row) => (
-							<TableRow key={row.id}>
-								{row.getVisibleCells().map((cell) => (
-									<TableCell key={cell.id}>
-										<FlexRender cell={cell} />
-									</TableCell>
-								))}
-							</TableRow>
-						))
-					) : (
-						<TableRow>
-							<TableCell
-								colSpan={table.getVisibleLeafColumns().length}
-								className="h-32 text-center"
-							>
-								<div className="flex flex-col items-center justify-center space-y-2">
-									<Users className="h-8 w-8 text-muted-foreground" />
-									<p className="text-sm font-medium">No users found</p>
-									<p className="text-xs text-muted-foreground">
-										{view.q || view.team !== "all"
-											? "Try adjusting your search or filter criteria"
-											: "No users have been added to the workspace yet"}
-									</p>
-								</div>
-							</TableCell>
-						</TableRow>
-					)}
-				</TableBody>
+				<TableBody>{body}</TableBody>
 			</Table>
 
 			<div className="flex flex-col items-center justify-between space-y-4 py-4 sm:flex-row sm:space-y-0 sm:space-x-2">

@@ -41,7 +41,11 @@ function renderPicker(props: Omit<ModelPickerProps, "id" | "aria-labelledby">) {
 
 describe("ModelPicker", () => {
 	it("distinguishes duplicate model names by connection in the selection and options", () => {
-		renderPicker({ availableModels: models, value: { scope: "SHARED", id: 1 }, onChange: vi.fn() });
+		renderPicker({
+			availableModels: models,
+			value: { scope: "SHARED", id: 1 },
+			onChange: vi.fn<() => void>(),
+		});
 		expect(screen.getByRole("combobox").textContent).toContain("GPT-5 · Organization endpoint");
 		fireEvent.click(screen.getByRole("combobox"));
 		screen.getByRole("option", { name: /GPT-5 · Organization endpoint/u });
@@ -53,7 +57,7 @@ describe("ModelPicker", () => {
 	// Names written out rather than composed through `priceLabel`, the helper the component itself
 	// calls: a composed expectation catches "the price is gone" and never "the price is wrong".
 	it("keeps the price in each option's accessible name", () => {
-		renderPicker({ availableModels: models, value: null, onChange: vi.fn() });
+		renderPicker({ availableModels: models, value: null, onChange: vi.fn<() => void>() });
 		fireEvent.click(screen.getByRole("combobox"));
 
 		screen.getByRole("option", {
@@ -66,7 +70,7 @@ describe("ModelPicker", () => {
 		renderPicker({
 			availableModels: models,
 			value: null,
-			onChange: vi.fn(),
+			onChange: vi.fn<() => void>(),
 			invalid: true,
 			"aria-describedby": "picker-hint",
 		});

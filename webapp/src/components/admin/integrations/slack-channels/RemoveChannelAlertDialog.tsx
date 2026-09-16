@@ -84,6 +84,13 @@ export function RemoveChannelAlertDialog({
 		setSubmitting(false);
 	}
 
+	let actionLabel = "Remove & erase";
+	if (submitting) {
+		actionLabel = "Removing…";
+	} else if (nothingCollected) {
+		actionLabel = "Remove";
+	}
+
 	return (
 		<AlertDialog open={channel != null} onOpenChange={handleOpenChange}>
 			<AlertDialogContent>
@@ -152,9 +159,11 @@ export function RemoveChannelAlertDialog({
 					<AlertDialogAction
 						variant="destructive"
 						disabled={submitting}
-						onClick={() => void confirm()}
+						onClick={() => {
+							void confirm();
+						}}
 					>
-						{submitting ? "Removing…" : nothingCollected ? "Remove" : "Remove & erase"}
+						{actionLabel}
 					</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>

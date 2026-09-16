@@ -210,9 +210,12 @@ export function ReviewCountStrip({ slots, label }: { slots: ReviewCountSlot[]; l
 					>
 						{slot.count}
 					</span>
-					{/* A real space, so the pair reads "0 improvements" to a screen reader and in a test.
-					    Flex drops whitespace-only children, so the visible gap is still the one `gap-1`
-					    sets and this adds nothing to the layout. */}{" "}
+					{
+						// A real space, so the pair reads "0 improvements" to a screen reader and in a test.
+						// Flex drops whitespace-only children, so the visible gap is still the one `gap-1`
+						// sets and this adds nothing to the layout.
+						" "
+					}
 					<span className="min-w-0 break-words">{slot.label}</span>
 				</li>
 			))}

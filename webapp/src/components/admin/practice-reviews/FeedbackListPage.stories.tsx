@@ -41,6 +41,14 @@ function pool(rows: ReviewFeedback[]): ListPracticeReviewFeedbackResponse {
 	};
 }
 
+function selects(selected: string[] | undefined, actual: string | undefined): boolean {
+	return (
+		selected === undefined ||
+		selected.length === 0 ||
+		(actual !== undefined && selected.includes(actual))
+	);
+}
+
 /**
  * The route fetches; this screen only draws what it is handed. To keep the facets live in a story
  * without a network, the filtering the server does is applied here — over the query object the route
@@ -53,10 +61,6 @@ function feedbackPage(
 	search: FeedbackSearch,
 ): ListPracticeReviewFeedbackResponse {
 	const query = feedbackQuery(search, REVIEW_PAGE_SIZE);
-	const selects = (selected: string[] | undefined, actual: string | undefined) =>
-		selected === undefined ||
-		selected.length === 0 ||
-		(actual !== undefined && selected.includes(actual));
 	const rows = candidates.filter(
 		(row) =>
 			(!query.from || row.createdAt >= new Date(query.from)) &&

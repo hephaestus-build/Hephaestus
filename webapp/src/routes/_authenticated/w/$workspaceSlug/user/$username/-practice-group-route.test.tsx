@@ -10,10 +10,17 @@ import type { PracticeGroupTrend, ProfileActivityMonitor } from "@/api/types.gen
 import { currentUser } from "@/mocks/fixtures/auth";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { type Deferred, deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 40_000 });
 const path = "/w/acme/user/ada/practice-groups/review-ready-work";
+
+/** Answers each request with its own copy of a response the test releases later. */
+async function copyOf(held: Deferred<Response>) {
+	const response = await held.promise;
+	return response.clone();
+}
 const group = {
 	id: 1,
 	slug: "review-ready-work",
@@ -70,7 +77,7 @@ beforeEach(() => {
 			HttpResponse.json({ role: "MEMBER", userId: 1, userLogin: "ada", userName: "Ada" }),
 		),
 		http.get("*/workspaces/:workspaceSlug/practice-groups", () => {
-			practiceReads++;
+			practiceReads += 1;
 			return HttpResponse.json([group]);
 		}),
 		http.get("*/workspaces/:workspaceSlug/practice-groups/standings", () => HttpResponse.json([])),
@@ -126,20 +133,17 @@ describe("practice-group routes", () => {
 		expect(practiceReads).toBe(0);
 	});
 	it("waits for features without redirecting, then loads the enabled surface", async () => {
-		let respond = (_response: Response) => {};
-		const response = new Promise<Response>((resolve) => {
-			respond = resolve;
-		});
-		server.use(http.get("*/workspaces", () => response.then((value) => value.clone())));
+		const response = deferred<Response>();
+		server.use(http.get("*/workspaces", async () => copyOf(response)));
 		const { router, queryClient } = renderRouteAtWithRouter(path);
 		await waitFor(() =>
 			expect(queryClient.getQueryState(listWorkspacesQueryKey())?.fetchStatus).toBe("fetching"),
 		);
 		expect(router.state.location.pathname).toBe(path);
 		expect(practiceReads).toBe(0);
-		await act(async () =>
-			respond(HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })])),
-		);
+		await act(async () => {
+			response.resolve(HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]));
+		});
 		await screen.findByRole("heading", { name: group.name }, ROUTE_RENDER_WAIT);
 		expect(practiceReads).toBeGreaterThan(0);
 	});
@@ -183,27 +187,24 @@ describe("practice-group routes", () => {
 });
 
 it("does not label another developer's profile with the previous developer's data", async () => {
-	let respond = (_response: Response) => {};
-	const pendingProfile = new Promise<Response>((resolve) => {
-		respond = resolve;
-	});
+	const pendingProfile = deferred<Response>();
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/workspaces/:workspaceSlug/profile/ada", () => HttpResponse.json(profile("ada"))),
-		http.get("*/workspaces/:workspaceSlug/profile/bob", () =>
-			pendingProfile.then((value) => value.clone()),
-		),
+		http.get("*/workspaces/:workspaceSlug/profile/bob", async () => copyOf(pendingProfile)),
 	);
 	const { router } = renderRouteAtWithRouter("/w/acme/user/ada");
 	await screen.findByRole("heading", { name: "Developer ada" }, ROUTE_RENDER_WAIT);
-	await act(() =>
+	await act(async () =>
 		router.navigate({
 			to: "/w/$workspaceSlug/user/$username",
 			params: { workspaceSlug: "acme", username: "bob" },
 		}),
 	);
 	expect(screen.queryByRole("heading", { name: "Developer ada" })).toBeNull();
-	await act(async () => respond(HttpResponse.json(profile("bob"))));
+	await act(async () => {
+		pendingProfile.resolve(HttpResponse.json(profile("bob")));
+	});
 	await screen.findByRole("heading", { name: "Developer bob" }, ROUTE_RENDER_WAIT);
 });
 
@@ -321,10 +322,7 @@ it.each([
 );
 
 it("does not present the previous timeframe's activity as the newly selected range", async () => {
-	let respond = (_response: Response) => {};
-	const pendingActivity = new Promise<Response>((resolve) => {
-		respond = resolve;
-	});
+	const pendingActivity = deferred<Response>();
 	let activityReads = 0;
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
@@ -336,9 +334,9 @@ it("does not present the previous timeframe's activity as the newly selected ran
 	renderRouteAtWithRouter("/w/acme/user/ada?after=2026-06-02T00:00:00Z");
 	await screen.findByRole("heading", { name: "No review activity" }, ROUTE_RENDER_WAIT);
 	server.use(
-		http.get("*/workspaces/:workspaceSlug/profile/:login/activity-monitor", () => {
-			activityReads++;
-			return pendingActivity.then((response) => response.clone());
+		http.get("*/workspaces/:workspaceSlug/profile/:login/activity-monitor", async () => {
+			activityReads += 1;
+			return copyOf(pendingActivity);
 		}),
 	);
 	await userEvent.click(screen.getByRole("combobox", { name: "Timeframe" }));
@@ -347,6 +345,8 @@ it("does not present the previous timeframe's activity as the newly selected ran
 	expect(screen.queryByRole("heading", { name: "No review activity" })).toBeNull();
 	screen.getByRole("heading", { name: "Developer ada" });
 	screen.getByRole("combobox", { name: "Timeframe" });
-	await act(async () => respond(HttpResponse.json(activityMonitor)));
+	await act(async () => {
+		pendingActivity.resolve(HttpResponse.json(activityMonitor));
+	});
 	await screen.findByRole("heading", { name: "No review activity" }, ROUTE_RENDER_WAIT);
 });

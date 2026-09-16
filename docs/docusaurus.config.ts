@@ -22,7 +22,7 @@ function rawMermaidSourcePlugin(_context: LoadContext): Plugin {
 		configureWebpack() {
 			return {
 				module: {
-					rules: [{ test: /\.mmd$/i, type: "asset/source" }],
+					rules: [{ test: /\.mmd$/iu, type: "asset/source" }],
 				},
 			};
 		},

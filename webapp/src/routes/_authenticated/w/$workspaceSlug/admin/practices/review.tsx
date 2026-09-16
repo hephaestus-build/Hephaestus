@@ -1,6 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { InfoIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 import {
 	autonomyRollupOptions,
@@ -19,10 +20,15 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type {
 	CreateReviewBackfillRunRequest,
+	ListAgentsResponse,
 	UpdatePracticeReviewSettingsRequest,
 } from "@/api/types.gen";
 import { PracticeAutonomyPage } from "@/components/admin/practices/practice-autonomy/PracticeAutonomyPage";
 import { PracticeReviewBackfill } from "@/components/admin/practices/PracticeReviewBackfill";
+import type {
+	PeopleCoverageOptions,
+	RepositoryCoverageOptions,
+} from "@/components/admin/practices/PracticeReviewCoverageSettings";
 import {
 	type PracticeReviewField,
 	PracticeReviewSettings,
@@ -60,6 +66,20 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/pra
 	component: ReviewRoute,
 });
 
+/** The review model's readiness, read off the workspace's agent bindings. */
+function reviewModelOf(bindingsQuery: UseQueryResult<ListAgentsResponse>): ReviewModelState {
+	if (bindingsQuery.isPending) {
+		return { status: "loading" };
+	}
+	if (bindingsQuery.isError) {
+		return { status: "error" };
+	}
+	return {
+		status: "ready",
+		binding: bindingsQuery.data.find((agent) => agent.purpose === "PRACTICE_REVIEW"),
+	};
+}
+
 function ReviewRoute() {
 	const { workspaceSlug } = Route.useParams();
 	const { section, overrides } = Route.useSearch();
@@ -68,14 +88,7 @@ function ReviewRoute() {
 
 	const workspaceQuery = useQuery({ ...getWorkspaceOptions({ path: { workspaceSlug } }) });
 	const bindingsQuery = useQuery({ ...listAgentsOptions({ path: { workspaceSlug } }) });
-	const reviewModel: ReviewModelState = bindingsQuery.isPending
-		? { status: "loading" }
-		: bindingsQuery.isError
-			? { status: "error" }
-			: {
-					status: "ready",
-					binding: bindingsQuery.data.find((agent) => agent.purpose === "PRACTICE_REVIEW"),
-				};
+	const reviewModel = reviewModelOf(bindingsQuery);
 
 	const running: ReviewRunningState | undefined = workspaceQuery.data && {
 		enabled: workspaceQuery.data.practicesEnabled,
@@ -85,26 +98,26 @@ function ReviewRoute() {
 	return (
 		<ReviewPage
 			section={section ?? DEFAULT_REVIEW_SECTION}
-			onSectionChange={(next) =>
+			onSectionChange={(next) => {
 				void navigate({
 					search: (previous) => ({
 						...previous,
 						section: next === DEFAULT_REVIEW_SECTION ? undefined : next,
 					}),
-				})
-			}
+				});
+			}}
 			running={running}
 			sections={{
 				"how-much": (
 					<HowMuchSection
 						workspaceSlug={workspaceSlug}
 						overridesOnly={overrides === true}
-						onOverridesOnlyChange={(next) =>
+						onOverridesOnlyChange={(next) => {
 							void setSearch((previous) => ({
 								...previous,
 								overrides: next ? true : undefined,
-							}))
-						}
+							}));
+						}}
 					/>
 				),
 				"when-and-where": <WhenAndWhereSection workspaceSlug={workspaceSlug} />,
@@ -212,14 +225,7 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 		...getPracticeReviewSettingsOptions({ path: { workspaceSlug } }),
 	});
 	const bindingsQuery = useQuery({ ...listAgentsOptions({ path: { workspaceSlug } }) });
-	const settingsReviewModel: ReviewModelState = bindingsQuery.isPending
-		? { status: "loading" }
-		: bindingsQuery.isError
-			? { status: "error" }
-			: {
-					status: "ready",
-					binding: bindingsQuery.data.find((agent) => agent.purpose === "PRACTICE_REVIEW"),
-				};
+	const settingsReviewModel = reviewModelOf(bindingsQuery);
 	const workspaceQuery = useQuery({ ...getWorkspaceOptions({ path: { workspaceSlug } }) });
 	const schedulesQuery = useQuery(listSweepSchedulesOptions({ path: { workspaceSlug } }));
 	const repositoriesQuery = useQuery(getRepositoriesToMonitorOptions({ path: { workspaceSlug } }));
@@ -239,6 +245,120 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 	const isLoading = reviewSettingsQuery.isPending || workspaceQuery.isPending;
 	const error = reviewSettingsQuery.error ?? workspaceQuery.error;
 
+	let repositoryOptions: RepositoryCoverageOptions;
+	if (repositoriesQuery.isPending) {
+		repositoryOptions = { status: "loading" };
+	} else if (repositoriesQuery.isError) {
+		repositoryOptions = {
+			status: "error",
+			error: repositoriesQuery.error,
+			onRetry: () => {
+				void repositoriesQuery.refetch();
+			},
+		};
+	} else {
+		repositoryOptions = {
+			status: "ready",
+			options: repositoriesQuery.data.map((repository) => ({
+				value: repository,
+				label: repository,
+			})),
+		};
+	}
+
+	let peopleOptions: PeopleCoverageOptions;
+	if (membersQuery.isPending) {
+		peopleOptions = { status: "loading" };
+	} else if (membersQuery.isError) {
+		peopleOptions = {
+			status: "error",
+			error: membersQuery.error,
+			onRetry: () => {
+				void membersQuery.refetch();
+			},
+		};
+	} else {
+		peopleOptions = {
+			status: "ready",
+			options: membersQuery.data.flatMap((member) =>
+				member.userId == null || member.eligibleForPracticeReview !== true
+					? []
+					: [
+							{
+								value: member.userId,
+								label:
+									[member.userName, member.userLogin].find(
+										(name) => name != null && name.trim() !== "",
+									) ?? `Member ${member.userId}`,
+								description: hasText(member.userLogin) ? `@${member.userLogin}` : undefined,
+							},
+						],
+			),
+		};
+	}
+
+	let reviewSettings: ReactNode;
+	if (isLoading) {
+		reviewSettings = <ReviewSettingsSkeleton />;
+	} else if (error || !reviewSettingsQuery.data || !workspaceQuery.data) {
+		reviewSettings = (
+			<QueryErrorAlert
+				error={error}
+				title="Couldn't load the review settings"
+				onRetry={() => {
+					void reviewSettingsQuery.refetch();
+					void workspaceQuery.refetch();
+				}}
+			/>
+		);
+	} else {
+		reviewSettings = (
+			<PracticeReviewSettings
+				workspaceSlug={workspaceSlug}
+				model={
+					settingsReviewModel.status === "error"
+						? {
+								...settingsReviewModel,
+								onRetry: () => {
+									void bindingsQuery.refetch();
+								},
+							}
+						: settingsReviewModel
+				}
+				workspace={{
+					enabled: workspaceQuery.data.practicesEnabled,
+					autoTriggerEnabled: workspaceQuery.data.practiceReviewAutoTriggerEnabled,
+					manualTriggerEnabled: workspaceQuery.data.practiceReviewManualTriggerEnabled,
+					isSaving: updateFeatures.isPending,
+					onUpdate: (settings: PracticeReviewWorkspaceUpdate) =>
+						updateFeatures.mutate({ path: { workspaceSlug }, body: settings }),
+				}}
+				policy={{
+					settings: reviewSettingsQuery.data,
+					isSaving: updatePracticeReviewSettings.isPending,
+					onUpdate: async (settings: UpdatePracticeReviewSettingsRequest, sourceEtag?: string) => {
+						await updatePracticeReviewSettings.mutateAsync({
+							path: { workspaceSlug },
+							body: settings,
+							headers: hasText(sourceEtag) ? { "If-Match": sourceEtag } : undefined,
+						});
+					},
+					onReset: (field: PracticeReviewField) =>
+						updatePracticeReviewSettings.mutate({
+							path: { workspaceSlug },
+							body: { reset: [field] },
+						}),
+				}}
+				coverage={{
+					preview: async (scope) =>
+						coveragePreview.mutateAsync({ path: { workspaceSlug }, body: scope }),
+					repositories: repositoryOptions,
+					people: peopleOptions,
+				}}
+			/>
+		);
+	}
+
 	return (
 		<div className="max-w-3xl space-y-8">
 			{environment.deployment.environment === "preview" && (
@@ -252,105 +372,14 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 					</AlertDescription>
 				</Alert>
 			)}
-			{isLoading ? (
-				<ReviewSettingsSkeleton />
-			) : error || !reviewSettingsQuery.data || !workspaceQuery.data ? (
-				<QueryErrorAlert
-					error={error}
-					title="Couldn't load the review settings"
-					onRetry={() => {
-						void reviewSettingsQuery.refetch();
-						void workspaceQuery.refetch();
-					}}
-				/>
-			) : (
-				<PracticeReviewSettings
-					workspaceSlug={workspaceSlug}
-					model={
-						settingsReviewModel.status === "error"
-							? { ...settingsReviewModel, onRetry: () => void bindingsQuery.refetch() }
-							: settingsReviewModel
-					}
-					workspace={{
-						enabled: workspaceQuery.data.practicesEnabled,
-						autoTriggerEnabled: workspaceQuery.data.practiceReviewAutoTriggerEnabled,
-						manualTriggerEnabled: workspaceQuery.data.practiceReviewManualTriggerEnabled,
-						isSaving: updateFeatures.isPending,
-						onUpdate: (settings: PracticeReviewWorkspaceUpdate) =>
-							updateFeatures.mutate({ path: { workspaceSlug }, body: settings }),
-					}}
-					policy={{
-						settings: reviewSettingsQuery.data,
-						isSaving: updatePracticeReviewSettings.isPending,
-						onUpdate: async (
-							settings: UpdatePracticeReviewSettingsRequest,
-							sourceEtag?: string,
-						) => {
-							await updatePracticeReviewSettings.mutateAsync({
-								path: { workspaceSlug },
-								body: settings,
-								headers: hasText(sourceEtag) ? { "If-Match": sourceEtag } : undefined,
-							});
-						},
-						onReset: (field: PracticeReviewField) =>
-							updatePracticeReviewSettings.mutate({
-								path: { workspaceSlug },
-								body: { reset: [field] },
-							}),
-					}}
-					coverage={{
-						preview: (scope) =>
-							coveragePreview.mutateAsync({ path: { workspaceSlug }, body: scope }),
-						repositories: repositoriesQuery.isPending
-							? { status: "loading" }
-							: repositoriesQuery.isError
-								? {
-										status: "error",
-										error: repositoriesQuery.error,
-										onRetry: () => void repositoriesQuery.refetch(),
-									}
-								: {
-										status: "ready",
-										options: repositoriesQuery.data.map((repository) => ({
-											value: repository,
-											label: repository,
-										})),
-									},
-						people: membersQuery.isPending
-							? { status: "loading" }
-							: membersQuery.isError
-								? {
-										status: "error",
-										error: membersQuery.error,
-										onRetry: () => void membersQuery.refetch(),
-									}
-								: {
-										status: "ready",
-										options: membersQuery.data.flatMap((member) =>
-											member.userId == null || member.eligibleForPracticeReview !== true
-												? []
-												: [
-														{
-															value: member.userId,
-															label:
-																[member.userName, member.userLogin].find(
-																	(name) => name != null && name.trim() !== "",
-																) ?? `Member ${member.userId}`,
-															description: hasText(member.userLogin)
-																? `@${member.userLogin}`
-																: undefined,
-														},
-													],
-										),
-									},
-					}}
-				/>
-			)}
+			{reviewSettings}
 			<PracticeReviewSweepSchedule
 				schedules={schedulesQuery.data ?? []}
 				isLoading={schedulesQuery.isLoading}
 				isError={schedulesQuery.isError}
-				onRetry={() => void schedulesQuery.refetch()}
+				onRetry={() => {
+					void schedulesQuery.refetch();
+				}}
 				isSaving={schedules.isSaving}
 				onCreate={schedules.onCreate}
 				onReplace={schedules.onReplace}
@@ -373,7 +402,7 @@ function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 				: false,
 	});
 
-	const invalidate = () =>
+	const invalidate = async () =>
 		queryClient.invalidateQueries({
 			queryKey: listBackfillRunsQueryKey({ path: { workspaceSlug } }),
 		});
@@ -409,7 +438,9 @@ function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 				runs={runsQuery.data ?? []}
 				isLoading={runsQuery.isLoading}
 				isError={runsQuery.isError}
-				onRetry={() => void runsQuery.refetch()}
+				onRetry={() => {
+					void runsQuery.refetch();
+				}}
 				isEstimating={preflight.isPending}
 				onEstimate={(request: CreateReviewBackfillRunRequest) =>
 					preflight.mutate({ path: { workspaceSlug }, body: request })

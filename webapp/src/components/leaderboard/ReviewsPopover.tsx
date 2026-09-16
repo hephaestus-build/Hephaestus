@@ -98,7 +98,9 @@ export function ReviewsPopover({
 						size="icon"
 						aria-label={`Copy links to reviewed ${terms.pullRequests.toLowerCase()}`}
 						disabled={copyableLinks.length === 0}
-						onClick={() => void copyLinks()}
+						onClick={() => {
+							void copyLinks();
+						}}
 					>
 						<CopyIcon className="size-4" />
 					</Button>

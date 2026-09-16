@@ -1,5 +1,5 @@
 import { Plus, RotateCcw, Search, Shapes } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { cn } from "cn";
 import type {
@@ -163,6 +163,68 @@ export function CuratedCatalogPage({
 			)
 		: [];
 
+	let catalog: ReactNode;
+	if (catalogIsEmpty) {
+		catalog = (
+			<Empty variant="outlined" className="min-h-56">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<Shapes aria-hidden />
+					</EmptyMedia>
+					<EmptyTitle>The catalog is empty</EmptyTitle>
+					<EmptyDescription>
+						Create a group or practice, then include it for workspace administrators.
+					</EmptyDescription>
+				</EmptyHeader>
+				<EmptyContent>
+					<DetailStackLink entry={curatedPracticeLevel()} className={cn(buttonVariants())}>
+						<Plus className="mr-1.5 size-4" aria-hidden />
+						Create practice
+					</DetailStackLink>
+				</EmptyContent>
+			</Empty>
+		);
+	} else if (nothingMatches) {
+		catalog = (
+			<Empty variant="outlined" className="min-h-56">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<Shapes aria-hidden />
+					</EmptyMedia>
+					<EmptyTitle>Nothing matches</EmptyTitle>
+					<EmptyDescription>
+						Adjust the search or filters to see more of the catalog.
+					</EmptyDescription>
+				</EmptyHeader>
+				<EmptyContent>
+					<Button variant="outline" onClick={() => onSearchChange({})}>
+						Clear search and filters
+					</Button>
+				</EmptyContent>
+			</Empty>
+		);
+	} else {
+		catalog = (
+			<CuratedCatalogTree
+				groups={groups}
+				practices={practices}
+				visibleGroupSlugs={visibleGroupSlugs}
+				visiblePracticeSlugs={visiblePracticeSlugs}
+				forceOpenGroupSlugs={forcedOpenGroups}
+				canReorder={canReorder}
+				writePending={writePending}
+				pendingGroupSlugs={pendingGroupSlugs}
+				pendingPracticeSlugs={pendingPracticeSlugs}
+				onGroupStatusChange={onGroupStatusChange}
+				onPracticeStatusChange={onPracticeStatusChange}
+				onExcludeGroup={setExcludingGroup}
+				onExcludePractice={setExcludingPractice}
+				onReorderGroups={onReorderGroups}
+				onPlacePractice={onPlacePractice}
+			/>
+		);
+	}
+
 	return (
 		<>
 			<div className="space-y-4">
@@ -195,60 +257,7 @@ export function CuratedCatalogPage({
 					</p>
 				)}
 
-				{catalogIsEmpty ? (
-					<Empty variant="outlined" className="min-h-56">
-						<EmptyHeader>
-							<EmptyMedia variant="icon">
-								<Shapes aria-hidden />
-							</EmptyMedia>
-							<EmptyTitle>The catalog is empty</EmptyTitle>
-							<EmptyDescription>
-								Create a group or practice, then include it for workspace administrators.
-							</EmptyDescription>
-						</EmptyHeader>
-						<EmptyContent>
-							<DetailStackLink entry={curatedPracticeLevel()} className={cn(buttonVariants())}>
-								<Plus className="mr-1.5 size-4" aria-hidden />
-								Create practice
-							</DetailStackLink>
-						</EmptyContent>
-					</Empty>
-				) : nothingMatches ? (
-					<Empty variant="outlined" className="min-h-56">
-						<EmptyHeader>
-							<EmptyMedia variant="icon">
-								<Shapes aria-hidden />
-							</EmptyMedia>
-							<EmptyTitle>Nothing matches</EmptyTitle>
-							<EmptyDescription>
-								Adjust the search or filters to see more of the catalog.
-							</EmptyDescription>
-						</EmptyHeader>
-						<EmptyContent>
-							<Button variant="outline" onClick={() => onSearchChange({})}>
-								Clear search and filters
-							</Button>
-						</EmptyContent>
-					</Empty>
-				) : (
-					<CuratedCatalogTree
-						groups={groups}
-						practices={practices}
-						visibleGroupSlugs={visibleGroupSlugs}
-						visiblePracticeSlugs={visiblePracticeSlugs}
-						forceOpenGroupSlugs={forcedOpenGroups}
-						canReorder={canReorder}
-						writePending={writePending}
-						pendingGroupSlugs={pendingGroupSlugs}
-						pendingPracticeSlugs={pendingPracticeSlugs}
-						onGroupStatusChange={onGroupStatusChange}
-						onPracticeStatusChange={onPracticeStatusChange}
-						onExcludeGroup={setExcludingGroup}
-						onExcludePractice={setExcludingPractice}
-						onReorderGroups={onReorderGroups}
-						onPlacePractice={onPlacePractice}
-					/>
-				)}
+				{catalog}
 			</div>
 
 			<AlertDialog open={resettingOrder} onOpenChange={setResettingOrder}>
@@ -390,13 +399,11 @@ function CatalogFilters({
 			<Select
 				items={STATUS_FILTERS}
 				value={status}
-				onValueChange={(value) =>
-					value &&
-					onSearchChange({
-						...search,
-						status: value === "ALL" ? undefined : value,
-					})
-				}
+				onValueChange={(value) => {
+					if (value) {
+						onSearchChange({ ...search, status: value === "ALL" ? undefined : value });
+					}
+				}}
 			>
 				<SelectTrigger
 					className="w-full lg:hidden"

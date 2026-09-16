@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import path from "node:path";
 import { createInterface } from "node:readline";
 
 import { globFilesSync } from "./files.ts";
@@ -25,13 +25,17 @@ const GLOB_GREP_BATCH_SIZE = 256;
 function parseGrepLine(line: string, dir: string): GrepMatch | null {
 	// Path and line number are required groups; the trailing content group matches empty for a blank
 	// matched line, so it defaults instead of rejecting the whole match.
-	const [, file, lineNumber, content = ""] = line.match(/^(.+?):(\d+):(.*)$/) ?? [];
+	const {
+		file,
+		lineNumber,
+		content = "",
+	} = /^(?<file>.+?):(?<lineNumber>\d+):(?<content>.*)$/u.exec(line)?.groups ?? {};
 	if (file === undefined || lineNumber === undefined) {
 		return null;
 	}
 
 	return {
-		file: relative(dir, file),
+		file: path.relative(dir, file),
 		line: Number.parseInt(lineNumber, 10),
 		content: content.trim(),
 	};
@@ -43,17 +47,21 @@ async function collectGrepMatches(
 	maxResults: number,
 ): Promise<GrepMatch[]> {
 	const [command, ...commandArgs] = args;
-	if (!command) throw new Error("grep command is empty");
+	if (command === undefined || command === "") {
+		throw new Error("grep command is empty");
+	}
 	const child = spawn(command, commandArgs, {
 		stdio: ["ignore", "pipe", "ignore"],
 	});
 	let stoppedEarly = false;
-	const completed = new Promise<void>((resolve, reject) => {
-		child.once("error", reject);
-		child.once("close", (code) => {
-			if (stoppedEarly || code === 0 || code === 1) resolve();
-			else reject(new Error(`grep exited with status ${String(code)}`));
-		});
+	const completed = Promise.withResolvers<undefined>();
+	child.once("error", completed.reject);
+	child.once("close", (code) => {
+		if (stoppedEarly || code === 0 || code === 1) {
+			completed.resolve(undefined);
+		} else {
+			completed.reject(new Error(`grep exited with status ${String(code)}`));
+		}
 	});
 	const matches: GrepMatch[] = [];
 	const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
@@ -61,7 +69,9 @@ async function collectGrepMatches(
 	try {
 		for await (const line of lines) {
 			const match = parseGrepLine(line, dir);
-			if (!match) continue;
+			if (!match) {
+				continue;
+			}
 			matches.push(match);
 			if (matches.length >= maxResults) {
 				stoppedEarly = true;
@@ -71,7 +81,7 @@ async function collectGrepMatches(
 		}
 	} finally {
 		lines.close();
-		await completed;
+		await completed.promise;
 	}
 
 	return matches.slice(0, maxResults);
@@ -88,7 +98,7 @@ async function collectMatchesForGlob(
 	let batch: string[] = [];
 
 	for (const file of globFilesSync(glob, dir)) {
-		batch.push(join(dir, file));
+		batch.push(path.join(dir, file));
 		if (batch.length < GLOB_GREP_BATCH_SIZE) {
 			continue;
 		}
@@ -118,8 +128,8 @@ async function collectMatchesForGlob(
 	return matches.slice(0, maxResults);
 }
 
-function shouldIncludeDiscoveredFile(path: string): boolean {
-	const segments = path.split("/");
+function shouldIncludeDiscoveredFile(file: string): boolean {
+	const segments = file.split("/");
 	return !segments.some(
 		(segment) => segment === "node_modules" || segment === ".build" || segment.startsWith("."),
 	);
@@ -146,7 +156,7 @@ export async function grep(
 
 	const grepArgs = fixedString ? ["grep", "-H", "-n", "-F"] : ["grep", "-H", "-n", "-E"];
 
-	if (glob) {
+	if (glob !== undefined && glob !== "") {
 		// A basename-only glob matches only the root dir; prepend "**/" for recursion.
 		const recursiveGlob = glob.includes("/") ? glob : `**/${glob}`;
 		return collectMatchesForGlob(pattern, dir, grepArgs, recursiveGlob, maxResults);
@@ -175,16 +185,16 @@ export function matchesToHints(
 	}));
 }
 
-export async function readFileLines(path: string): Promise<Map<number, string>> {
+export async function readFileLines(file: string): Promise<Map<number, string>> {
 	try {
-		const content = await readFile(path, "utf8");
+		const content = await readFile(file, "utf8");
 		const lines = new Map<number, string>();
-		content.split("\n").forEach((line: string, i: number) => {
+		for (const [i, line] of content.split("\n").entries()) {
 			lines.set(i + 1, line);
-		});
+		}
 		return lines;
-	} catch (err) {
-		console.error(`[precompute] readFileLines failed for ${path}: ${String(err)}`);
+	} catch (error) {
+		console.error(`[precompute] readFileLines failed for ${file}: ${String(error)}`);
 		return new Map();
 	}
 }
@@ -192,8 +202,8 @@ export async function readFileLines(path: string): Promise<Map<number, string>> 
 export function findFiles(dir: string, extension: string): string[] {
 	const pattern = `**/*.${extension}`;
 	return globFilesSync(pattern, dir)
-		.filter((path) => shouldIncludeDiscoveredFile(path))
-		.map((path) => join(dir, path));
+		.filter((file) => shouldIncludeDiscoveredFile(file))
+		.map((file) => path.join(dir, file));
 }
 
 export function findSwiftFiles(dir: string): string[] {

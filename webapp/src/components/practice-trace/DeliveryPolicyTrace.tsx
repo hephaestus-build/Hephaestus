@@ -102,9 +102,21 @@ export function DeliveryPolicyTrace({ evaluations }: DeliveryPolicyTraceProps) {
 	);
 }
 
+function applicable(value: boolean | undefined) {
+	if (value == null) {
+		return "not applicable";
+	}
+	return value ? "yes" : "no";
+}
+
+function summarisePractices(practices: string[] | undefined) {
+	if (practices == null) {
+		return "not recorded";
+	}
+	return practices.length === 0 ? "none" : practices.join(", ");
+}
+
 function PolicyFacts({ facts }: { facts: DeliveryPolicyFactsSnapshot }) {
-	const applicable = (value: boolean | undefined) =>
-		value == null ? "not applicable" : value ? "yes" : "no";
 	const practices = facts.contributingPractices?.map((practice) => {
 		const autonomy = practice.autonomy
 			? DELIVERY_AUTONOMY_LABELS[practice.autonomy]
@@ -121,10 +133,7 @@ function PolicyFacts({ facts }: { facts: DeliveryPolicyFactsSnapshot }) {
 		["Repository matched", applicable(facts.repositoryMatched)],
 		["Branch matched", applicable(facts.branchMatched)],
 		["Person matched", applicable(facts.personMatched)],
-		[
-			"Contributing practices",
-			practices == null ? "not recorded" : practices.length === 0 ? "none" : practices.join(", "),
-		],
+		["Contributing practices", summarisePractices(practices)],
 	] as const;
 
 	return (

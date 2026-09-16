@@ -194,7 +194,7 @@ export const APracticeWhoseGroupIsGone: Story = {
 		});
 		await expect(disabledMove).toHaveAttribute("aria-disabled", "true");
 		await userEvent.keyboard("{Escape}");
-		await waitFor(() => expect(disabledMove).not.toBeInTheDocument());
+		await waitFor(async () => expect(disabledMove).not.toBeInTheDocument());
 		await userEvent.click(
 			canvas.getByRole("button", {
 				name: "More actions for Outlived the group it was filed under",

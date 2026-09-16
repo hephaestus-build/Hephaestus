@@ -173,7 +173,7 @@ function FieldSeparator({
 function resolveErrorContent(
 	children: React.ReactNode,
 	errors: ({ message?: string } | undefined)[] | undefined,
-) {
+): React.ReactNode {
 	if (rendersContent(children)) {
 		return children;
 	}

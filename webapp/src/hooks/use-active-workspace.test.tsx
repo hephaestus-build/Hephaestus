@@ -64,7 +64,7 @@ describe("useActiveWorkspaceSlug", () => {
 		const router = renderAt("/w/beta");
 
 		await screen.findByText("beta|beta|beta|GITLAB");
-		await act(() =>
+		await act(async () =>
 			router.navigate({ to: "/w/$workspaceSlug", params: { workspaceSlug: "alpha" } }),
 		);
 		await screen.findByText("alpha|alpha|alpha|GITHUB");

@@ -52,21 +52,31 @@ function AdminSurveysPage() {
 		...adminListProductSurveysOptions({ query: { page, size: PAGE_SIZE } }),
 		placeholderData: keepPreviousData,
 	});
-	const onPageChange = (next: number) =>
+	const onPageChange = (next: number) => {
 		void setSearch((previous) => ({ ...previous, page: pageParam(next) }));
+	};
 	useClampedPage(page, surveysQuery.data?.page?.totalPages, onPageChange);
 
-	const state: AdminSurveysTableState = surveysQuery.isPending
-		? { status: "loading" }
-		: surveysQuery.isError
-			? { status: "error", error: surveysQuery.error, onRetry: () => void surveysQuery.refetch() }
-			: {
-					status: "ready",
-					surveys: surveysQuery.data.content ?? [],
-					page,
-					totalPages: surveysQuery.data.page?.totalPages ?? 0,
-					onPageChange,
-				};
+	let state: AdminSurveysTableState;
+	if (surveysQuery.isPending) {
+		state = { status: "loading" };
+	} else if (surveysQuery.isError) {
+		state = {
+			status: "error",
+			error: surveysQuery.error,
+			onRetry: () => {
+				void surveysQuery.refetch();
+			},
+		};
+	} else {
+		state = {
+			status: "ready",
+			surveys: surveysQuery.data.content ?? [],
+			page,
+			totalPages: surveysQuery.data.page?.totalPages ?? 0,
+			onPageChange,
+		};
+	}
 
 	return (
 		<PageLayout>
@@ -104,7 +114,7 @@ function AdminSurveysPage() {
 								nested={level.nested}
 								// Replaces the composer in history: Back from the results should not reopen an
 								// empty composer for a survey that was just published.
-								onPublished={(surveyId) =>
+								onPublished={(surveyId) => {
 									void navigate({
 										search: (previous) => ({
 											...previous,
@@ -112,8 +122,8 @@ function AdminSurveysPage() {
 										}),
 										replace: true,
 										resetScroll: false,
-									})
-								}
+									});
+								}}
 							/>
 						);
 					}

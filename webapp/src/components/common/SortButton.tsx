@@ -12,6 +12,12 @@ export interface SortButtonProps {
 	children: ReactNode;
 }
 
+const SORT_ICONS = {
+	none: ChevronsUpDownIcon,
+	asc: ArrowUpIcon,
+	desc: ArrowDownIcon,
+};
+
 /**
  * The clickable label in a sortable column header. The icon carries the direction because
  * `aria-sort`, which belongs on the surrounding `<th>`, is invisible to everyone who can see.
@@ -21,8 +27,7 @@ export interface SortButtonProps {
  * look different depending on which one drives it.
  */
 export function SortButton({ sorted, onToggle, reverse = false, children }: SortButtonProps) {
-	const SortIcon =
-		sorted === false ? ChevronsUpDownIcon : sorted === "asc" ? ArrowUpIcon : ArrowDownIcon;
+	const SortIcon = SORT_ICONS[sorted === false ? "none" : sorted];
 
 	return (
 		<button

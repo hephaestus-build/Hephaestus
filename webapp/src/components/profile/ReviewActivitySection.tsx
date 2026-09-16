@@ -1,5 +1,6 @@
 import { CodeReviewIcon } from "@primer/octicons-react";
 import { ArrowRightIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type { ProfileReviewActivity } from "@/api/types.gen";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -26,36 +27,39 @@ export function ReviewActivitySection({
 	canViewAll,
 	onViewAll,
 }: ReviewActivitySectionProps) {
+	let list: ReactNode;
+	if (isLoading) {
+		list = Array.from({ length: 3 }, (_, i) => (
+			<ReviewActivityCard key={i} isLoading providerType={providerType} />
+		));
+	} else if (reviewActivity.length > 0) {
+		list = reviewActivity.map((activity) => (
+			<ReviewActivityCard
+				key={activity.id}
+				isLoading={false}
+				state={activity.state}
+				submittedAt={activity.submittedAt}
+				htmlUrl={activity.htmlUrl}
+				pullRequest={activity.pullRequest}
+				repositoryName={activity.pullRequest?.repository?.name}
+				score={activity.score}
+				providerType={providerType}
+			/>
+		));
+	} else {
+		list = (
+			<EmptyState
+				icon={<CodeReviewIcon className="size-6" size={24} />}
+				title="No review activity"
+				description={emptyMessage}
+			/>
+		);
+	}
+
 	return (
 		<div className="flex flex-col gap-4">
 			<h3 className="text-lg font-semibold">Review activity</h3>
-			<div className="flex flex-col gap-2">
-				{isLoading ? (
-					Array.from({ length: 3 }, (_, i) => (
-						<ReviewActivityCard key={i} isLoading providerType={providerType} />
-					))
-				) : reviewActivity.length > 0 ? (
-					reviewActivity.map((activity) => (
-						<ReviewActivityCard
-							key={activity.id}
-							isLoading={false}
-							state={activity.state}
-							submittedAt={activity.submittedAt}
-							htmlUrl={activity.htmlUrl}
-							pullRequest={activity.pullRequest}
-							repositoryName={activity.pullRequest?.repository?.name}
-							score={activity.score}
-							providerType={providerType}
-						/>
-					))
-				) : (
-					<EmptyState
-						icon={<CodeReviewIcon className="size-6" size={24} />}
-						title="No review activity"
-						description={emptyMessage}
-					/>
-				)}
-			</div>
+			<div className="flex flex-col gap-2">{list}</div>
 			{canViewAll && (
 				<Button type="button" variant="link" size="inline" className="w-fit" onClick={onViewAll}>
 					View all review activity

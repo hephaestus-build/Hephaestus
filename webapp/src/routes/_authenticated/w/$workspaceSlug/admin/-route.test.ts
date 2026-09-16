@@ -37,12 +37,13 @@ const adminUrls = routePaths
 
 function mockMembership(role: WorkspaceRole | null) {
 	server.use(
-		http.get("*/workspaces/:workspaceSlug/members/me", () =>
-			role
-				? HttpResponse.json({ role, userId: 1, userLogin: "ada", userName: "Ada" })
-				: // The server answers a non-member with 400, not 403.
-					HttpResponse.json({ status: 400, title: "Bad Request" }, { status: 400 }),
-		),
+		http.get("*/workspaces/:workspaceSlug/members/me", () => {
+			if (role) {
+				return HttpResponse.json({ role, userId: 1, userLogin: "ada", userName: "Ada" });
+			}
+			// The server answers a non-member with 400, not 403.
+			return HttpResponse.json({ status: 400, title: "Bad Request" }, { status: 400 });
+		}),
 	);
 }
 

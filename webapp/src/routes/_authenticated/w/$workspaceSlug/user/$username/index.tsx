@@ -21,6 +21,7 @@ import {
 	DEFAULT_ACTIVITY_MONITOR_LIMIT,
 	MAX_ACTIVITY_MONITOR_LIMIT,
 } from "@/lib/activity-monitor";
+import { asDate } from "@/lib/dates";
 import { resolveLeaderboardSchedule } from "@/lib/leaderboard-schedule";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useSearchState } from "@/lib/search-params";
@@ -99,15 +100,8 @@ function UserProfile() {
 	};
 	const effectiveDates = getEffectiveDates();
 
-	const parseDateParam = (value?: string) => {
-		if (!hasText(value)) {
-			return;
-		}
-		const parsed = new Date(value);
-		return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-	};
-	const parsedAfter = parseDateParam(effectiveDates.after);
-	const parsedBefore = parseDateParam(effectiveDates.before);
+	const parsedAfter = asDate(effectiveDates.after);
+	const parsedBefore = asDate(effectiveDates.before);
 	const selectedRepositoryIds = parseRepositoryIds(monitorRepositories);
 
 	const currUserIsDashboardUser = isCurrentUser(username);
@@ -136,18 +130,14 @@ function UserProfile() {
 		...listPracticeStandingsOptions({ path: { workspaceSlug } }),
 		enabled: Boolean(workspaceSlug) && showsPracticeStandings,
 	});
-	const practicesByGroup = (standingsQuery.data ?? []).reduce<Record<string, PracticeStanding[]>>(
-		(grouped, practice) => {
-			if (!hasText(practice.groupSlug)) {
-				return grouped;
-			}
-			const forGroup = grouped[practice.groupSlug] ?? [];
+	const practicesByGroup: Record<string, PracticeStanding[]> = {};
+	for (const practice of standingsQuery.data ?? []) {
+		if (hasText(practice.groupSlug)) {
+			const forGroup = practicesByGroup[practice.groupSlug] ?? [];
 			forGroup.push(practice);
-			grouped[practice.groupSlug] = forGroup;
-			return grouped;
-		},
-		{},
-	);
+			practicesByGroup[practice.groupSlug] = forGroup;
+		}
+	}
 
 	const profileQuery = useQuery({
 		...getUserProfileOptions({
@@ -227,7 +217,9 @@ function UserProfile() {
 				activityMonitorQuery.isPlaceholderData
 			}
 			error={profileQuery.error ?? undefined}
-			onRetry={() => void profileQuery.refetch()}
+			onRetry={() => {
+				void profileQuery.refetch();
+			}}
 			username={username}
 			currUserIsDashboardUser={currUserIsDashboardUser}
 			workspaceSlug={workspaceSlug}

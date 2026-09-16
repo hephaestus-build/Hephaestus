@@ -153,6 +153,7 @@ jobs:
               # halves of that pair have to reach the leg that runs it.
               - 'docs/src/css/custom.css'
               - '.oxlintrc.json'
+              - 'oxlint.react.jsonc'
               - '.oxfmtrc.json'
               - 'scripts/check-docs-tokens.ts'
               - 'scripts/check-docs-tokens.test.ts'
@@ -205,7 +206,9 @@ jobs:
               - 'tsconfig.agents.json'
               - 'tsconfig.json'
               - '.oxlintrc.json'
+              - 'oxlint.react.jsonc'
               - '.oxfmtrc.json'
+              - 'vite.config.ts'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'

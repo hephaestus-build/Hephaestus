@@ -38,7 +38,9 @@ export function useWorkspaceFeatures(workspaceSlug: string | undefined): Workspa
 		isLoading: authLoading || query.isLoading,
 		isError: query.isError || workspaceMissing,
 		error: query.error ?? (workspaceMissing ? new Error("Workspace not found") : undefined),
-		refetch: () => void query.refetch(),
+		refetch: () => {
+			void query.refetch();
+		},
 	};
 }
 

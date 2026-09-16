@@ -7,7 +7,7 @@ import {
 	useNavigate,
 } from "@tanstack/react-router";
 import { formatISO } from "date-fns";
-import { useEffect } from "react";
+import { type ReactNode, useEffect } from "react";
 import { z } from "zod";
 
 import {
@@ -25,6 +25,7 @@ import type { LeaderboardSortType } from "@/components/leaderboard/SortFilter";
 import { Spinner } from "@/components/ui/spinner";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
+import { asDate } from "@/lib/dates";
 import { resolveLeaderboardSchedule } from "@/lib/leaderboard-schedule";
 import { hasText } from "@/lib/text";
 import {
@@ -90,16 +91,8 @@ function LeaderboardContainer() {
 	};
 	const effectiveDates = getEffectiveDates();
 
-	const parseDateParam = (value?: string | null) => {
-		if (!hasText(value)) {
-			return;
-		}
-		const parsed = new Date(value);
-		return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-	};
-
-	const parsedAfter = parseDateParam(effectiveDates.after);
-	const parsedBefore = parseDateParam(effectiveDates.before);
+	const parsedAfter = asDate(effectiveDates.after);
+	const parsedBefore = asDate(effectiveDates.before);
 
 	const teamsQuery = useQuery({
 		...getAllTeamsOptions({
@@ -166,11 +159,11 @@ function LeaderboardContainer() {
 		return names.reverse().join(" / ");
 	};
 
-	const teamLabelsById = teamsList.reduce<Record<number, string>>((acc, candidate) => {
+	const teamLabelsById: Record<number, string> = {};
+	for (const candidate of teamsList) {
 		const label = makeLabel(candidate);
-		acc[candidate.id] = label.length > 0 ? label : candidate.name;
-		return acc;
-	}, {});
+		teamLabelsById[candidate.id] = label.length > 0 ? label : candidate.name;
+	}
 
 	const visibleTeamEntries = teamsList
 		.filter((t) => t.hidden !== true)
@@ -340,7 +333,7 @@ function LeaderboardContainer() {
 			)}
 			selectedMode={mode}
 			onModeChange={handleModeChange}
-			renderTeamLink={(teamId, children) => {
+			renderTeamLink={(teamId, children): ReactNode => {
 				const label = teamLabelsById[teamId];
 				return hasText(label) ? (
 					<Link

@@ -4,7 +4,7 @@ import { isRecord } from "@/lib/is-record";
 import { hasText } from "@/lib/text";
 
 type EntityType = NonNullable<ConfigAuditEntryView["entityType"]>;
-type Action = NonNullable<ConfigAuditEntryView["action"]>;
+export type Action = NonNullable<ConfigAuditEntryView["action"]>;
 type ActorKind = NonNullable<ConfigAuditEntryView["actorKind"]>;
 
 /** The trail is append-only, so a row keeps the spelling it was written under: entity types that no
@@ -190,10 +190,9 @@ function parseSnapshot(value: string | undefined): Record<string, unknown> | nul
 }
 
 function leafAt(obj: Record<string, unknown>, path: string): unknown {
-	return path.split(".").reduce<unknown>((acc, segment) => {
-		if (isRecord(acc)) {
-			return acc[segment];
-		}
-		return;
-	}, obj);
+	let leaf: unknown = obj;
+	for (const segment of path.split(".")) {
+		leaf = isRecord(leaf) ? leaf[segment] : undefined;
+	}
+	return leaf;
 }

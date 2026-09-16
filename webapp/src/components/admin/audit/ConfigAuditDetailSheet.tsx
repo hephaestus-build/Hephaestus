@@ -1,6 +1,7 @@
 import type { ConfigAuditEntryView } from "@/api/types.gen";
 import { ELEVATION_DESCRIPTION, ElevationBadge } from "@/components/admin/audit/ElevationBadge";
 import { prettyJson } from "@/components/admin/audit/pretty-json";
+import { workspaceLabel } from "@/components/admin/audit/ref-label";
 import { formatTimestamp } from "@/components/admin/audit/time-format";
 import { DetailRow } from "@/components/common/DetailRow";
 import { Badge } from "@/components/ui/badge";
@@ -17,12 +18,20 @@ import { hasText } from "@/lib/text";
 
 import {
 	ACTION_BADGE,
+	type Action,
 	actionLabel,
 	actorDisplay,
 	entityTypeLabel,
+	type FieldChange,
 	fieldChanges,
 	subjectLabel,
 } from "./config-audit-format";
+
+const VALUES_HEADING: Record<Action, string> = {
+	CREATED: "Initial values",
+	UPDATED: "Changes",
+	DELETED: "Final values",
+};
 
 export interface ConfigAuditDetailSheetProps {
 	entry: ConfigAuditEntryView | null;
@@ -45,12 +54,7 @@ export function ConfigAuditDetailSheet({
 		entry?.workspaceId == null ? undefined : resolveWorkspaceName?.(entry.workspaceId);
 	const oldRaw = prettyJson(entry?.oldValue);
 	const newRaw = prettyJson(entry?.newValue);
-	const valuesHeading =
-		entry?.action === "CREATED"
-			? "Initial values"
-			: entry?.action === "DELETED"
-				? "Final values"
-				: "Changes";
+	const valuesHeading = VALUES_HEADING[entry?.action ?? "UPDATED"];
 
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
@@ -116,9 +120,7 @@ export function ConfigAuditDetailSheet({
 							<DetailRow label="Workspace">
 								{entry.workspaceId == null
 									? "Instance-wide"
-									: hasText(workspaceName)
-										? `${workspaceName} (#${entry.workspaceId})`
-										: `#${entry.workspaceId}`}
+									: workspaceLabel(entry.workspaceId, workspaceName)}
 							</DetailRow>
 						</dl>
 
@@ -137,23 +139,7 @@ export function ConfigAuditDetailSheet({
 												{change.path}
 											</dt>
 											<dd className="min-w-0 break-words">
-												{entry.action === "CREATED" ? (
-													<span>{change.after ?? "—"}</span>
-												) : entry.action === "DELETED" ? (
-													<span>{change.before ?? "—"}</span>
-												) : (
-													<span>
-														<span className="sr-only">changed from </span>
-														<span className="text-muted-foreground line-through decoration-muted-foreground/50">
-															{change.before ?? "—"}
-														</span>
-														<span aria-hidden className="mx-1.5 text-muted-foreground">
-															→
-														</span>
-														<span className="sr-only"> to </span>
-														<span className="font-medium">{change.after ?? "—"}</span>
-													</span>
-												)}
+												<ChangeValue action={entry.action} change={change} />
 											</dd>
 										</div>
 									))}
@@ -190,5 +176,27 @@ export function ConfigAuditDetailSheet({
 				)}
 			</SheetContent>
 		</Sheet>
+	);
+}
+
+function ChangeValue({ action, change }: { action: Action | undefined; change: FieldChange }) {
+	if (action === "CREATED") {
+		return <span>{change.after ?? "—"}</span>;
+	}
+	if (action === "DELETED") {
+		return <span>{change.before ?? "—"}</span>;
+	}
+	return (
+		<span>
+			<span className="sr-only">changed from </span>
+			<span className="text-muted-foreground line-through decoration-muted-foreground/50">
+				{change.before ?? "—"}
+			</span>
+			<span aria-hidden className="mx-1.5 text-muted-foreground">
+				→
+			</span>
+			<span className="sr-only"> to </span>
+			<span className="font-medium">{change.after ?? "—"}</span>
+		</span>
 	);
 }

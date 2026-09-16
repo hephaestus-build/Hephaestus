@@ -88,18 +88,18 @@ export const KeyboardNavigation: Story = {
 		await userEvent.click(trigger);
 
 		const search = await screen.findByPlaceholderText(/search channels/iu);
-		await waitFor(() => expect(search).toHaveFocus());
+		await waitFor(async () => expect(search).toHaveFocus());
 
 		await userEvent.keyboard("{ArrowDown}");
 		const first = await screen.findByRole("option", { name: /#general/iu });
-		await waitFor(() => expect(search).toHaveAttribute("aria-activedescendant", first.id));
+		await waitFor(async () => expect(search).toHaveAttribute("aria-activedescendant", first.id));
 
 		await userEvent.keyboard("{ArrowDown}");
 		const second = screen.getByRole("option", { name: /#team-standup/iu });
-		await waitFor(() => expect(search).toHaveAttribute("aria-activedescendant", second.id));
+		await waitFor(async () => expect(search).toHaveAttribute("aria-activedescendant", second.id));
 
 		await userEvent.keyboard("{ArrowUp}");
-		await waitFor(() => expect(search).toHaveAttribute("aria-activedescendant", first.id));
+		await waitFor(async () => expect(search).toHaveAttribute("aria-activedescendant", first.id));
 
 		await userEvent.keyboard("{Enter}");
 		await expect(args.onSelect).toHaveBeenCalledWith(
@@ -156,7 +156,7 @@ export const WithDisabledReasons: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
 		const search = await screen.findByPlaceholderText(/search channels/iu);
-		await waitFor(() => expect(search).toHaveFocus());
+		await waitFor(async () => expect(search).toHaveFocus());
 
 		const archived = await screen.findByRole("option", { name: /#team-archive/iu });
 		await expect(archived).toHaveTextContent("Archived");
@@ -164,7 +164,7 @@ export const WithDisabledReasons: Story = {
 		await expect(getComputedStyle(archived).pointerEvents).toBe("none");
 
 		await userEvent.keyboard("{ArrowUp}");
-		await waitFor(() => expect(archived).toHaveAttribute("data-highlighted"));
+		await waitFor(async () => expect(archived).toHaveAttribute("data-highlighted"));
 		await userEvent.keyboard("{Enter}");
 		await expect(args.onSelect).not.toHaveBeenCalled();
 		await expect(archived).toHaveAttribute("aria-selected", "false");

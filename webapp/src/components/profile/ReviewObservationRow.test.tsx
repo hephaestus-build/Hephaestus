@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PracticeGroupReviewObservation } from "@/api/types.gen";
 
-import { ReviewObservationRow } from "./ReviewObservationRow";
+import { ReviewObservationRow, type ReviewObservationRowProps } from "./ReviewObservationRow";
 
 const observation: PracticeGroupReviewObservation = {
 	observationId: "00000000-0000-0000-0000-000000000001",
@@ -20,13 +20,13 @@ const observation: PracticeGroupReviewObservation = {
 
 describe("ReviewObservationRow", () => {
 	it("submits a new dispute only after its required explanation is available", () => {
-		const onRespond = vi.fn();
+		const onRespond = vi.fn<NonNullable<ReviewObservationRowProps["onRespond"]>>();
 		render(
 			<ul>
 				<ReviewObservationRow
 					observation={observation}
 					isOpen
-					onToggle={vi.fn()}
+					onToggle={vi.fn<(observationId: string) => void>()}
 					onRespond={onRespond}
 				/>
 			</ul>,
@@ -53,7 +53,7 @@ describe("ReviewObservationRow", () => {
 	});
 
 	it("submits immediately when a dispute already has an explanation", () => {
-		const onRespond = vi.fn();
+		const onRespond = vi.fn<NonNullable<ReviewObservationRowProps["onRespond"]>>();
 		const explainedObservation = {
 			...observation,
 			feedbackResponseComment: "The provider requires this timeout.",
@@ -63,7 +63,7 @@ describe("ReviewObservationRow", () => {
 				<ReviewObservationRow
 					observation={explainedObservation}
 					isOpen
-					onToggle={vi.fn()}
+					onToggle={vi.fn<(observationId: string) => void>()}
 					onRespond={onRespond}
 				/>
 			</ul>,

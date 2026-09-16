@@ -53,7 +53,7 @@ function ModelsContainer() {
 	const pageQueries = [bindingsQuery, workspaceQuery, llmSettingsQuery, availableModelsQuery];
 
 	const bindingsKey = listAgentsQueryKey({ path: { workspaceSlug } });
-	const invalidateBindings = () => queryClient.invalidateQueries({ queryKey: bindingsKey });
+	const invalidateBindings = async () => queryClient.invalidateQueries({ queryKey: bindingsKey });
 
 	const cacheSavedBinding = (saved: AgentBinding) =>
 		queryClient.setQueryData<AgentBinding[]>(bindingsKey, (current) => {

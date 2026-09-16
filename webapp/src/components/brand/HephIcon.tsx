@@ -22,6 +22,10 @@ export function HephIcon({
 	className,
 	label,
 }: HephIconProps) {
+	let pingOpacity = "0";
+	if (animated) {
+		pingOpacity = streaming ? "1" : "0.5";
+	}
 	return (
 		<svg
 			className={cn(styles.icon, animated && styles.animated, className)}
@@ -48,7 +52,7 @@ export function HephIcon({
 						cy="2.8"
 						r={streaming ? 4 : 1.6}
 						fill="none"
-						opacity={animated ? (streaming ? "1" : "0.5") : "0"}
+						opacity={pingOpacity}
 					/>
 					<rect x="4" y="8" width="16" height="12" rx="3" />
 					<path d="M2 14h2" />

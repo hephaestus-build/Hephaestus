@@ -13,7 +13,12 @@ export function useSignInProviders(enabled = true): SignInOptions {
 		enabled,
 	});
 	if (query.isLoadingError) {
-		return { status: "error", onRetry: () => void query.refetch() };
+		return {
+			status: "error",
+			onRetry: () => {
+				void query.refetch();
+			},
+		};
 	}
 	if (query.data) {
 		return { status: "ready", providers: query.data };

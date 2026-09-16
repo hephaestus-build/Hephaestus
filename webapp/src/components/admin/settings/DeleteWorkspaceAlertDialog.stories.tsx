@@ -48,7 +48,7 @@ export const TypeToConfirm: Story = {
 		await userEvent.type(gate, " acme-corp");
 		await userEvent.click(submit);
 		await expect(args.onConfirm).not.toHaveBeenCalled();
-		await waitFor(() => expect(gate).toHaveAttribute("aria-invalid", "true"));
+		await waitFor(async () => expect(gate).toHaveAttribute("aria-invalid", "true"));
 		await expect(gate).toHaveAccessibleDescription(/does not match/iu);
 		dialog.getByText(/that does not match/iu);
 
@@ -64,7 +64,7 @@ export const ComplexContentStartsFocused: Story = {
 	play: async () => {
 		await userEvent.click(screen.getByRole("button", { name: /open deletion dialog/iu }));
 		await screen.findByRole("alertdialog");
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(screen.getByRole("heading", { name: /permanently delete/iu })).toHaveFocus(),
 		);
 	},

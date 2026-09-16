@@ -96,11 +96,11 @@ export function WorkspaceLlmProviderPanel({
 	});
 	const models = modelsQuery.data ?? [];
 
-	const invalidateConnections = () =>
+	const invalidateConnections = async () =>
 		queryClient.invalidateQueries({
 			queryKey: workspaceListLlmConnectionsQueryKey({ path: { workspaceSlug } }),
 		});
-	const invalidateModels = () =>
+	const invalidateModels = async () =>
 		queryClient.invalidateQueries({
 			queryKey: workspaceListLlmModelsQueryKey({ path: { workspaceSlug } }),
 		});
@@ -212,7 +212,9 @@ export function WorkspaceLlmProviderPanel({
 			<QueryErrorAlert
 				error={connectionsQuery.error}
 				title="Could not load your AI providers"
-				onRetry={() => void connectionsQuery.refetch()}
+				onRetry={() => {
+					void connectionsQuery.refetch();
+				}}
 			/>
 		);
 	}
@@ -228,7 +230,9 @@ export function WorkspaceLlmProviderPanel({
 			<QueryErrorAlert
 				error={modelsQuery.error}
 				title="Could not load your provider models"
-				onRetry={() => void modelsQuery.refetch()}
+				onRetry={() => {
+					void modelsQuery.refetch();
+				}}
 			/>
 		);
 	}

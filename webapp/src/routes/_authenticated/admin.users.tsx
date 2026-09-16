@@ -87,7 +87,7 @@ function AdminUsersPage() {
 			)
 		: allUsers;
 
-	const invalidateList = () =>
+	const invalidateList = async () =>
 		queryClient.invalidateQueries({
 			queryKey: adminListUsersQueryKey({ query: { size: PAGE_SIZE } }),
 		});
@@ -193,12 +193,12 @@ function AdminUsersPage() {
 					type="search"
 					placeholder="Search by name, email, role, or status…"
 					value={search}
-					onChange={(event) =>
+					onChange={(event) => {
 						void navigate({
 							search: { q: event.target.value || undefined },
 							replace: true,
-						})
-					}
+						});
+					}}
 				/>
 			</InputGroup>
 
@@ -211,7 +211,9 @@ function AdminUsersPage() {
 				currentUserId={currentUserId}
 				hasNextPage={listQuery.hasNextPage}
 				isFetchingNextPage={listQuery.isFetchingNextPage}
-				onLoadMore={() => void listQuery.fetchNextPage()}
+				onLoadMore={() => {
+					void listQuery.fetchNextPage();
+				}}
 				onChangeRole={(user) => {
 					updateRole.reset();
 					setRoleTarget({ user });
@@ -288,8 +290,8 @@ function AdminUsersPage() {
 							Force sign-out {signOutTarget?.user.displayName ?? "this user"}?
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							This revokes all of the account's active sessions immediately — they'll have to sign
-							in again, and any in-progress impersonation of this account ends. This can't be
+							This revokes all of the account’s active sessions immediately — they’ll have to sign
+							in again, and any in-progress impersonation of this account ends. This can’t be
 							undone.
 						</AlertDialogDescription>
 					</AlertDialogHeader>

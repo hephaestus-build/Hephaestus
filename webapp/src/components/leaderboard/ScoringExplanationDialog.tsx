@@ -36,7 +36,7 @@ export function ScoringExplanationDialog({
 				<div className="space-y-3 text-sm text-provider-muted-foreground">
 					<p>
 						The score approximates your contribution activity by evaluating your review interactions
-						and the complexity of the {terms.pullRequests.toLowerCase()} you've reviewed.
+						and the complexity of the {terms.pullRequests.toLowerCase()} you’ve reviewed.
 						<span className="font-medium"> Change requests are valued highest</span>, followed by
 						approvals and comments. The score increases with the number of review interactions.
 					</p>
@@ -84,7 +84,7 @@ export function ScoringExplanationDialog({
 
 					<p>
 						The final score balances your interactions with the complexity of the work reviewed,
-						highlighting both your engagement and the difficulty of the tasks you've undertaken.
+						highlighting both your engagement and the difficulty of the tasks you’ve undertaken.
 						This score reflects your impact but does not directly measure time invested or work
 						quality.
 					</p>

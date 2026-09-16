@@ -86,7 +86,9 @@ const SCHEMA_PATHS = ["server/application/src/main/resources/db/"] as const;
 
 /** A file under `db/` that actually shapes the schema. Prose there changes nothing. */
 function isSchemaChange(filename: string): boolean {
-	if (!SCHEMA_PATHS.some((path) => filename.startsWith(path))) return false;
+	if (!SCHEMA_PATHS.some((path) => filename.startsWith(path))) {
+		return false;
+	}
 	return !filename.endsWith(".md") && !filename.endsWith(".mmd");
 }
 
@@ -102,7 +104,9 @@ async function branchHasBlob(
 	ref: string,
 	file: PullRequestFile,
 ): Promise<boolean> {
-	if (file.sha === undefined) return false;
+	if (file.sha === undefined) {
+		return false;
+	}
 	try {
 		const content = await github.rest.repos.getContent({ owner, repo, path: file.filename, ref });
 		return content.data.sha === file.sha;
@@ -127,9 +131,17 @@ const hasPreviewLabel = (pull: PullRequest): boolean =>
 	pull.labels.some((label) => label.name === PREVIEW_LABEL);
 
 const maxActivePreviews = (): number =>
-	process.env.PREVIEW_MAX_ACTIVE
+	process.env.PREVIEW_MAX_ACTIVE !== undefined && process.env.PREVIEW_MAX_ACTIVE !== ""
 		? requiredPositiveInteger(process.env, "PREVIEW_MAX_ACTIVE")
 		: DEFAULT_MAX_ACTIVE;
+
+const isHttps = (value: string): boolean => {
+	try {
+		return new URL(value).protocol === "https:";
+	} catch {
+		return false;
+	}
+};
 
 /**
  * Environments still holding a slot. A pull request whose teardown has been requested does not hold
@@ -149,7 +161,9 @@ const occupiedEnvironments = async (
 	});
 	const occupied = new Set<string>();
 	for (const deployment of deployments) {
-		if (occupied.has(deployment.environment)) continue;
+		if (occupied.has(deployment.environment)) {
+			continue;
+		}
 		const statuses = await github.rest.repos.listDeploymentStatuses({
 			owner,
 			repo,
@@ -159,7 +173,9 @@ const occupiedEnvironments = async (
 		const latest = statuses.data[0]?.state;
 		// A requested teardown has been handed to Coolify and a failed deploy never reached the host,
 		// so neither holds anything — counting them would report a full host that is empty.
-		if (latest === "failure" || latest === "error") continue;
+		if (latest === "failure" || latest === "error") {
+			continue;
+		}
 		if (latest === "inactive" && statuses.data[0]?.description === TEARDOWN_REQUESTED_DESCRIPTION) {
 			continue;
 		}
@@ -170,8 +186,10 @@ const occupiedEnvironments = async (
 
 const resolve = async ({ github, context, core }: ControllerInput): Promise<void> => {
 	const { owner, repo } = context.repo;
-	if (!context.payload.pull_request) throw new Error("Pull request payload is incomplete.");
-	const number = context.payload.pull_request.number;
+	if (!context.payload.pull_request) {
+		throw new Error("Pull request payload is incomplete.");
+	}
+	const { number } = context.payload.pull_request;
 	const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: number });
 	const defaultBranch = context.payload.repository.default_branch;
 	const environment = `preview/pr-${number}`;
@@ -188,19 +206,25 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		core.setOutput("announce", String(labelled && !quiet));
 	};
 
-	if (!labelled) return skip(`PR #${number} does not carry the \`${PREVIEW_LABEL}\` label.`);
-	if (pull.state !== "open") return skip(`PR #${number} is closed.`);
+	if (!labelled) {
+		skip(`PR #${number} does not carry the \`${PREVIEW_LABEL}\` label.`);
+		return;
+	}
+	if (pull.state !== "open") {
+		skip(`PR #${number} is closed.`);
+		return;
+	}
 	if (pull.head.repo?.full_name !== `${owner}/${repo}`) {
-		return skip(
-			`PR #${number} comes from a fork. Previews run only for branches in this repository.`,
-		);
+		skip(`PR #${number} comes from a fork. Previews run only for branches in this repository.`);
+		return;
 	}
 	// Coolify is handed this association and refuses an untrusted one. Checking it here turns that
 	// into a skip reason on the pull request instead of a failure after the deployment is announced.
 	if (!TRUSTED_ASSOCIATIONS.has(pull.author_association)) {
-		return skip(
+		skip(
 			`PR #${number} was opened by a ${pull.author_association.toLowerCase()}, not a repository collaborator.`,
 		);
+		return;
 	}
 
 	// Compared against the default branch rather than this pull request's own base: a stacked layer's
@@ -213,9 +237,10 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 	});
 	const files = comparison.data.files ?? [];
 	if (files.length >= COMPARE_FILE_LIMIT) {
-		return skip(
+		skip(
 			`PR #${number} changes ${files.length}+ files, too many for GitHub to report in one comparison, so deployment policy cannot be verified.`,
 		);
+		return;
 	}
 	const protectedFile = files.find(
 		(file) =>
@@ -224,9 +249,10 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 			file.filename.startsWith(".github/actions/"),
 	);
 	if (protectedFile) {
-		return skip(
+		skip(
 			`PR #${number} changes trusted deployment policy (\`${protectedFile.filename}\`), so it cannot deploy until that change is merged.`,
 		);
+		return;
 	}
 
 	const deployments = await github.rest.repos.listDeployments({
@@ -244,7 +270,8 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 			per_page: 1,
 		});
 		if (LIVE_STATES.has(statuses.data[0]?.state ?? "")) {
-			return skip(`PR #${number} already has a current preview deployment.`, true);
+			skip(`PR #${number} already has a current preview deployment.`, true);
+			return;
 		}
 	}
 
@@ -281,16 +308,19 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 	// names the mechanisms as what branches in this state have run into, never as what this branch
 	// is guaranteed to hit.
 	if (behindFiles.length >= COMPARE_FILE_LIMIT) {
-		return skip(
+		skip(
 			`PR #${number} is ${behindFiles.length} files behind ${defaultBranch}, the most one GitHub ` +
 				`comparison reports, so whether this branch still carries ${defaultBranch}'s ` +
 				`migrations cannot be checked. A preview restores ${defaultBranch}'s database, and ` +
 				`branches behind on schema have failed to start against it. Merge ${defaultBranch} ` +
 				`in; the next push previews automatically.`,
 		);
+		return;
 	}
 	for (const file of behindFiles) {
-		if (!isSchemaChange(file.filename)) continue;
+		if (!isSchemaChange(file.filename)) {
+			continue;
+		}
 		// The comparison says what the default branch changed since the branches diverged; it says
 		// nothing about this branch's tree. A cherry-picked or independently applied migration is
 		// present here under a different commit, so the blob decides, not the ancestry.
@@ -298,8 +328,10 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		// A differing blob is still only unverifiable, never proof: two changelogs can reach the same
 		// schema by different text. So the reason reports what branches in this state have run into
 		// and stops short of asserting a mismatch this comparison cannot demonstrate.
-		if (await branchHasBlob(github, owner, repo, pull.head.sha, file)) continue;
-		return skip(
+		if (await branchHasBlob(github, owner, repo, pull.head.sha, file)) {
+			continue;
+		}
+		skip(
 			`PR #${number} does not have ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
 				`${defaultBranch}'s database, and branches in that state have failed to start against ` +
 				`it: Liquibase re-runs migrations that database has no record of and stops on a ` +
@@ -307,15 +339,17 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 				`one of those migrations dropped. Merge ${defaultBranch} in; the next push previews ` +
 				`automatically.`,
 		);
+		return;
 	}
 
 	const maxActive = maxActivePreviews();
 	const occupied = await occupiedEnvironments(github, owner, repo);
 	if (!occupied.includes(environment) && occupied.length >= maxActive) {
 		const holders = occupied.map((slot) => `#${slot.replace("preview/pr-", "")}`).join(", ");
-		return skip(
+		skip(
 			`The preview host is full (${occupied.length}/${maxActive}). Remove the \`${PREVIEW_LABEL}\` label from ${holders} to free a slot.`,
 		);
+		return;
 	}
 
 	const previewTemplate = requiredEnv(process.env, "COOLIFY_PREVIEW_URL_TEMPLATE");
@@ -361,10 +395,12 @@ const recheck = async ({ github, context, core }: ControllerInput): Promise<void
 		core.setOutput("proceed", "false");
 	};
 	if (pull.state !== "open" || !hasPreviewLabel(pull)) {
-		return halt(`PR #${number} opted out while deploying; cleanup takes it from here.`);
+		halt(`PR #${number} opted out while deploying; cleanup takes it from here.`);
+		return;
 	}
 	if (pull.head.sha !== headSha) {
-		return halt(`PR #${number} moved to a newer head; its own CI run will deploy it.`);
+		halt(`PR #${number} moved to a newer head; its own CI run will deploy it.`);
+		return;
 	}
 	if (pull.head.repo?.full_name !== `${owner}/${repo}`) {
 		core.setFailed(
@@ -469,13 +505,6 @@ const finalize = async ({ github, context, core }: ControllerInput): Promise<voi
 		state = "inactive";
 		description = "Preview opted out while deploying; cleanup owns the final state.";
 	}
-	const isHttps = (value: string): boolean => {
-		try {
-			return new URL(value).protocol === "https:";
-		} catch {
-			return false;
-		}
-	};
 	await github.rest.repos.createDeploymentStatus({
 		owner,
 		repo,
@@ -490,7 +519,9 @@ const finalize = async ({ github, context, core }: ControllerInput): Promise<voi
 	});
 
 	core.setOutput("final_state", state);
-	if (state !== "success") return;
+	if (state !== "success") {
+		return;
+	}
 	await retireDeployments(github, owner, repo, environment, { keepDeploymentId: deploymentId });
 };
 
@@ -514,7 +545,9 @@ async function retireDeployments(
 		per_page: 100,
 	});
 	for (const deployment of deployments) {
-		if (deployment.id === keepDeploymentId) continue;
+		if (deployment.id === keepDeploymentId) {
+			continue;
+		}
 		const statuses = await github.rest.repos.listDeploymentStatuses({
 			owner,
 			repo,

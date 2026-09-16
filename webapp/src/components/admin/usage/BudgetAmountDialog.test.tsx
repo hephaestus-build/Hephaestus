@@ -23,8 +23,8 @@ function renderDialog(overrides: Partial<BudgetAmountDialogProps> = {}) {
 			isPending={false}
 			fx={eur}
 			isCurrentMonth
-			onOpenChange={vi.fn()}
-			onSubmit={vi.fn()}
+			onOpenChange={vi.fn<() => void>()}
+			onSubmit={vi.fn<() => void>()}
 			{...overrides}
 		/>,
 	);
@@ -45,8 +45,8 @@ describe("the cap editor's currency hint", () => {
 				isPending={false}
 				fx={eur}
 				isCurrentMonth={false}
-				onOpenChange={vi.fn()}
-				onSubmit={vi.fn()}
+				onOpenChange={vi.fn<() => void>()}
+				onSubmit={vi.fn<() => void>()}
 			/>,
 		);
 

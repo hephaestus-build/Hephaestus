@@ -11,8 +11,10 @@ const FALLBACK_REPOSITORY = "hephaestus-build/Hephaestus";
 
 export function releaseSignerRepository(environment: NodeJS.ProcessEnv): string {
 	const repository = environment.GITHUB_REPOSITORY;
-	if (repository) return repository;
-	if (environment.CI) {
+	if (repository !== undefined && repository !== "") {
+		return repository;
+	}
+	if (environment.CI !== undefined && environment.CI !== "") {
 		throw new Error(
 			"GITHUB_REPOSITORY is not set. CI must provide the run's own repository so " +
 				"release-lock verification follows the repository identity instead of a stale literal.",

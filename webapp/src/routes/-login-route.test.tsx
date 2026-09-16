@@ -8,20 +8,14 @@ import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { authClient } from "@/runtime/auth/auth-client";
+import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 30_000 });
 
 beforeEach(() => {
 	// JSDOM has no viewport observer; the landing page uses it only for decorative motion.
-	vi.stubGlobal(
-		"IntersectionObserver",
-		class {
-			observe() {}
-			unobserve() {}
-			disconnect() {}
-		},
-	);
+	vi.stubGlobal("IntersectionObserver", ObserverStub);
 	server.use(
 		unauthenticatedUser,
 		http.get("*/identity-providers", () =>

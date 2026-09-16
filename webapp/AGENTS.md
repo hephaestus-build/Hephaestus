@@ -63,9 +63,11 @@ derives URL segments from the filenames there and the router owns that naming.
 
 ## Linting
 
-**oxlint lints, oxfmt formats.** `.oxlintrc.json` is the whole rule set, every rule it turns off
-carries the reason beside it, and every restriction states itself at the call site when it fires. None
-of that is repeated here. What follows is what no diagnostic will ever tell you.
+**oxlint lints, oxfmt formats.** `.oxlintrc.json` extends the repository base (`../.oxlintrc.json`)
+and the React layer (`../oxlint.react.jsonc`) and holds only what this tree adds — the design-system
+checks, the test and story rules, the house plugin's story rules — or decides differently, each with
+the reason beside it; every restriction states itself at the call site when it fires. None of that
+is repeated here. What follows is what no diagnostic will ever tell you.
 
 - **Suppress with `// oxlint-disable-next-line <rule> -- <why>`**, above the line the diagnostic
   points at, spelling the rule the way the **diagnostic** prints it — `plugin(rule)` becomes
@@ -104,14 +106,13 @@ of that is repeated here. What follows is what no diagnostic will ever tell you.
   repo root, `vp -C webapp lint -A all -D <rule> --report-unused-disable-directives-severity=off .`.
   `-A all` keeps the rest of the rule set out of the answer, and the severity flag keeps out the
   suppressions that rest of the rule set has just left unused. A nested `overrides` entry still
-  applies, so a rule an override turns off for some files stays off there. `vp -C webapp` keeps the
-  root config in charge; started with bare `oxlint` from inside `webapp/`, this file becomes the
-  root, `options` is only ever read from the root, and every type-aware rule reports nothing while
-  exiting 0.
-- **An `off` entry only means something when a category would otherwise switch the rule on.** Every
-  category but `correctness` and `suspicious` is off here, so `"off"` on a `pedantic`, `perf` or
-  `style` rule documents a decision the config does not need to make. Confirm before adding one:
-  delete the entry, re-run, and see whether anything reports.
+  applies, so a rule an override turns off for some files stays off there.
+- **An `off` entry only means something when the base, the React layer or a category would
+  otherwise switch the rule on.** Every category but `correctness` and `suspicious` is off, so
+  `"off"` on a rule none of the three names documents a decision the config does not need to make.
+  Confirm before adding one: delete the entry, re-run, and see whether anything reports. A rule the
+  base turns on and this tree turns off names the constraint that differs here — the browser
+  target, the React Compiler — not a preference.
 
 ## Which admin console a component belongs to
 
@@ -317,6 +318,12 @@ names the replacement in its message; for one it does not list, assert on the pl
 
 The matchers **are** available in stories, because `expect` from `storybook/test` ships them. Copying
 an assertion out of a story into a route test is exactly how this bites.
+
+A test that holds a response open until an assertion has run uses `deferred()` from `@/test/async`
+— `Promise.withResolvers()` in all but name, which `tsconfig.json`'s `lib` cannot reach because it
+follows the browser target. `pending()`, `sleep()` and `nextFrame()` sit beside it; `ObserverStub`
+(`@/test/observers`) stands in for jsdom's missing `IntersectionObserver`/`ResizeObserver`, and
+`precedes()` (`@/test/dom`) reads document order without spelling the bitmask.
 
 ## Type checking
 

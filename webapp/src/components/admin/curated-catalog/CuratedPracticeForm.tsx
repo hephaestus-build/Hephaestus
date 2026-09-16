@@ -186,7 +186,7 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 								<div>
 									<h2 className="text-lg font-semibold">What the author declared</h2>
 									<p className="text-sm text-muted-foreground">
-										The evidence requirements above are the author's own claim about this practice.
+										The evidence requirements above are the author’s own claim about this practice.
 										Nobody has checked them independently. The digests record the exact rules that
 										were declared, so a later change to them is visible rather than silent.
 									</p>

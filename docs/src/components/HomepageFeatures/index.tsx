@@ -4,13 +4,13 @@ import type { ReactNode } from "react";
 
 import styles from "./styles.module.css";
 
-type FeatureItem = {
+interface FeatureItem {
 	title: string;
 	kicker: string;
 	description: string;
 	bullets: string[];
 	cta: { label: string; to: string };
-};
+}
 
 const FeatureList: FeatureItem[] = [
 	{

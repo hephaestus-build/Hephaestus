@@ -77,6 +77,13 @@ export function AvailablePracticeList({
 				const available = entries.filter(({ availability }) => availability === "AVAILABLE").length;
 				const restorable = entries.filter(({ availability }) => availability === "ADOPTED").length;
 				const groupMissing = groupSlug !== undefined && !existingGroupSlugs.has(groupSlug);
+				// The whole group can only be reviewed at once when it is still to be created here.
+				let reviewLabel = `Review group · ${countLabel(available)}`;
+				if (groupMissing && available === 0) {
+					reviewLabel = `Restore group · ${countLabel(restorable)}`;
+				} else if (!groupMissing) {
+					reviewLabel = `Review ${countLabel(available)}`;
+				}
 
 				return (
 					<Section
@@ -95,11 +102,7 @@ export function AvailablePracticeList({
 									entry={{ kind: "catalog-group", id: groupSlug }}
 									className={buttonVariants({ size: "sm", variant: "outline" })}
 								>
-									{groupMissing && available === 0
-										? `Restore group · ${countLabel(restorable)}`
-										: existingGroupSlugs.has(groupSlug)
-											? `Review ${countLabel(available)}`
-											: `Review group · ${countLabel(available)}`}
+									{reviewLabel}
 								</DetailStackLink>
 							) : (
 								<span className="text-xs text-muted-foreground">{countLabel(entries.length)}</span>

@@ -38,7 +38,7 @@ export function ConsentBanner({
 					<CardTitle id={titleId}>Your privacy</CardTitle>
 					<CardDescription id={descriptionId}>
 						Hephaestus uses essential cookies to keep you signed in and secure. With your
-						permission, we'd also like to send error reports so we can fix problems faster. You can
+						permission, we’d also like to send error reports so we can fix problems faster. You can
 						change this anytime.
 						{rendersContent(privacyPolicy) ? <> {privacyPolicy}</> : null}
 					</CardDescription>

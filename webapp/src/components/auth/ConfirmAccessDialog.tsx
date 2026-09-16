@@ -1,4 +1,5 @@
 import { formatDuration, intervalToDuration } from "date-fns";
+import type { ReactNode } from "react";
 
 import type { IdentityProviderView } from "@/api/types.gen";
 import { SignInProviderButton } from "@/components/auth/SignInProviderButton";
@@ -44,6 +45,35 @@ export function ConfirmAccessDialog({
 	onSignIn,
 	onRetry,
 }: ConfirmAccessDialogProps) {
+	let body: ReactNode;
+	if (loading) {
+		body = (
+			<>
+				<span className="sr-only">Loading sign-in options…</span>
+				<Skeleton className="h-9 w-full" />
+			</>
+		);
+	} else if (error) {
+		body = (
+			<>
+				<p role="alert">Could not load sign-in options.</p>
+				<Button variant="outline" onClick={onRetry}>
+					Try again
+				</Button>
+			</>
+		);
+	} else if (providers.length === 0) {
+		body = <p>No supported sign-in provider is available. Contact your instance operator.</p>;
+	} else {
+		body = providers.map((provider) => (
+			<SignInProviderButton
+				key={provider.registrationId ?? provider.displayName}
+				provider={provider}
+				onSignIn={onSignIn}
+			/>
+		));
+	}
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent>
@@ -59,29 +89,7 @@ export function ConfirmAccessDialog({
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody className="flex flex-col gap-2" aria-busy={loading}>
-					{loading ? (
-						<>
-							<span className="sr-only">Loading sign-in options…</span>
-							<Skeleton className="h-9 w-full" />
-						</>
-					) : error ? (
-						<>
-							<p role="alert">Could not load sign-in options.</p>
-							<Button variant="outline" onClick={onRetry}>
-								Try again
-							</Button>
-						</>
-					) : providers.length === 0 ? (
-						<p>No supported sign-in provider is available. Contact your instance operator.</p>
-					) : (
-						providers.map((provider) => (
-							<SignInProviderButton
-								key={provider.registrationId ?? provider.displayName}
-								provider={provider}
-								onSignIn={onSignIn}
-							/>
-						))
-					)}
+					{body}
 				</DialogBody>
 			</DialogContent>
 		</Dialog>

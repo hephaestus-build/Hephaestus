@@ -113,7 +113,7 @@ export const SectionsAreRealTabs: Story = {
 		await userEvent.click(canvas.getByRole("tab", { name: "When and where" }));
 		await expect(args.onSectionChange).toHaveBeenCalledWith("when-and-where");
 		await expect(await canvas.findByText("Section body: when-and-where")).toBeVisible();
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(canvas.queryByText("Section body: how-much")).not.toBeInTheDocument(),
 		);
 	},

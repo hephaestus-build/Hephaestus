@@ -196,7 +196,8 @@ export function WorkspaceSlackNotificationSettings({
 		onSuccess: (initiation) => {
 			if (initiation.type === "REDIRECT" && hasText(initiation.vendorUrl)) {
 				window.location.assign(initiation.vendorUrl);
-				return; // page is unloading
+				// The page is unloading.
+				return;
 			}
 			throw new Error(`Unexpected non-redirect Slack initiation: ${initiation.type}`);
 		},

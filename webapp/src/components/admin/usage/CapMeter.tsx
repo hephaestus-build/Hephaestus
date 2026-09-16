@@ -51,12 +51,12 @@ export function CapMeter({ spendUsd, capUsd, percent, paused, label }: CapMeterP
 	const rounded = Math.round(percent);
 	// Comma, not an em-dash: screen readers render an em-dash inconsistently, and some spell it out.
 	const valueText = `${rounded}% used, ${formatCostUsd(spendUsd)} of ${formatCapUsd(capUsd)}`;
-	const tone =
-		paused || percent >= 100
-			? "bg-destructive"
-			: percent >= BUDGET_WARN_PERCENT
-				? "bg-warning"
-				: "bg-primary";
+	let tone = "bg-primary";
+	if (paused || percent >= 100) {
+		tone = "bg-destructive";
+	} else if (percent >= BUDGET_WARN_PERCENT) {
+		tone = "bg-warning";
+	}
 
 	return (
 		<Progress

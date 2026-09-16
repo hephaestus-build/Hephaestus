@@ -165,8 +165,12 @@ function ConfigAuditView({
 				onResetFilters={reset}
 				hasNextPage={listQuery.hasNextPage}
 				isFetchingNextPage={listQuery.isFetchingNextPage}
-				onLoadMore={() => void listQuery.fetchNextPage()}
-				onRetry={() => void listQuery.refetch()}
+				onLoadMore={() => {
+					void listQuery.fetchNextPage();
+				}}
+				onRetry={() => {
+					void listQuery.refetch();
+				}}
 				onFilterActor={(actorId) => onSearchChange({ actorId })}
 				showWorkspace={showWorkspace}
 				resolveWorkspaceName={resolveWorkspaceName}

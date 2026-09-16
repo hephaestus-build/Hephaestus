@@ -146,7 +146,11 @@ export function LlmConnectionFields({
 						<Select
 							items={PROVIDER_PRESET_SELECT_ITEMS}
 							value={value.preset}
-							onValueChange={(next) => next && applyPreset(next)}
+							onValueChange={(next) => {
+								if (hasText(next)) {
+									applyPreset(next);
+								}
+							}}
 						>
 							<SelectTrigger id={presetId} className="w-full">
 								<SelectValue />
@@ -198,7 +202,7 @@ export function LlmConnectionFields({
 				/>
 				{isEdit && (
 					<FieldDescription>
-						Endpoint, API shape and authentication can't change. Add a connection instead.
+						Endpoint, API shape and authentication can’t change. Add a connection instead.
 					</FieldDescription>
 				)}
 				{hasText(errors.baseUrl) && <FieldError id={baseUrlErrorId}>{errors.baseUrl}</FieldError>}
@@ -215,7 +219,11 @@ export function LlmConnectionFields({
 							{ value: "API_KEY", label: "api-key header" },
 						]}
 						value={value.authMode}
-						onValueChange={(next) => next && update({ authMode: next })}
+						onValueChange={(next) => {
+							if (hasText(next)) {
+								update({ authMode: next });
+							}
+						}}
 					>
 						<SelectTrigger id={authModeId} className="w-full">
 							<SelectValue />

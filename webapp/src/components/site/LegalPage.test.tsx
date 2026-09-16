@@ -62,6 +62,12 @@ function makeResolver(markdown: string): typeof resolveLegalContent {
 	});
 }
 
+const disclaimerResolver: typeof resolveLegalContent = async () => ({
+	markdown: "# fallback",
+	source: "disclaimer",
+	profile: "",
+});
+
 describe("LegalPage — XSS guardrail", () => {
 	it("strips raw HTML, javascript: hrefs, and data: images from operator markdown", async () => {
 		const { container } = render(
@@ -137,15 +143,10 @@ describe("LegalPage — XSS guardrail", () => {
 	it.each(["imprint", "privacy"] as const)(
 		"renders the %s disclaimer and warns exactly once across page mounts",
 		async (page) => {
-			using warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-			const resolver: typeof resolveLegalContent = async () => ({
-				markdown: "# fallback",
-				source: "disclaimer",
-				profile: "",
-			});
+			using warn = vi.spyOn(console, "warn").mockImplementation(vi.fn<() => void>());
 			const expected = `[legal] Disclaimer fallback served for page=${page}. Configure LEGAL_PROFILE or mount /legal-overrides/. See docs/admin/legal-pages.`;
 			const first = render(
-				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={resolver} />,
+				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={disclaimerResolver} />,
 			);
 			// The load-error alert says the opposite about the deployment; assert the disclaimer copy.
 			const alert = await first.findByRole("alert");
@@ -154,7 +155,7 @@ describe("LegalPage — XSS guardrail", () => {
 			first.unmount();
 
 			const remounted = render(
-				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={resolver} />,
+				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={disclaimerResolver} />,
 			);
 			const remountedAlert = await remounted.findByRole("alert");
 			expect(remountedAlert.textContent).toMatch(/has not been configured with a legal profile/iu);
