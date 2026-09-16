@@ -155,7 +155,7 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
      * <p>
      * On conflict (same SHA in same repository), updates the mutable fields. {@code COALESCE} keeps an
      * existing value where the caller passes null, because a webhook or API payload carries less
-     * than native Git. What native Git captured — {@code git_details_captured_at} set — is never
+     * than JGit. What JGit captured — {@code git_details_captured_at} set — is never
      * overwritten by a lesser source: the message, the timestamps and the statistics stay.
      */
     @Modifying

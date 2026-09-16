@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
@@ -95,11 +94,6 @@ public class JobTypeHandlerConfiguration {
     }
 
     @Bean
-    SecretDiffScanner secretDiffScanner(NativeGitExecutor git) {
-        return new SecretDiffScanner(git, objectMapper);
-    }
-
-    @Bean
     PracticeReviewPreparation practiceReviewPreparation(PracticeCatalogInjector practiceCatalogInjector) {
         return new PracticeReviewPreparation(workspaceContextBuilder, practiceCatalogInjector, taskEnvelopeWriter);
     }
@@ -112,7 +106,6 @@ public class JobTypeHandlerConfiguration {
             FeedbackCompositionResultParser compositionResultParser,
             PracticeDetectionDeliveryService deliveryService,
             FeedbackDeliveryService feedbackService,
-            SecretDiffScanner secretDiffScanner,
             InContextDeliveryGate inContextDeliveryGate,
             ObservationRepository observationRepository) {
         return new PullRequestReviewHandler(
@@ -124,7 +117,6 @@ public class JobTypeHandlerConfiguration {
                 compositionResultParser,
                 deliveryService,
                 feedbackService,
-                secretDiffScanner,
                 feedbackResponseSuppressionFilter,
                 inContextDeliveryGate,
                 observationRepository);

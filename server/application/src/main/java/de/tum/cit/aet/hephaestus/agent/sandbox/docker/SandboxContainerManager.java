@@ -71,13 +71,8 @@ public class SandboxContainerManager {
      * @return the container ID
      */
     public String createContainer(DockerOperations.ContainerSpec spec) {
-        ensureImagePresent(spec.image());
+        imageGuard.ensurePresent(spec.image());
         return containerOps.createContainer(spec);
-    }
-
-    /** The guard every managed container passes; for a container created outside {@link #createContainer}. */
-    public void ensureImagePresent(String image) {
-        imageGuard.ensurePresent(image);
     }
 
     /** Start a created container. */

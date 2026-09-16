@@ -685,7 +685,7 @@ public class GitlabDataSyncScheduler {
                 }
             }
 
-            // Commits — the native Git backfill provides diff stats and file changes; the REST sync
+            // Commits — the JGit backfill provides diff stats and file changes; the REST sync
             // runs only when no backfill bean exists.
             if (commitBackfill != null) {
                 try {

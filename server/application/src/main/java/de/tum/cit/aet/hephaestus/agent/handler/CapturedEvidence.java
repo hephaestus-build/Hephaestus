@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
-import de.tum.cit.aet.hephaestus.agent.context.SecretScan;
 import de.tum.cit.aet.hephaestus.agent.context.providers.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -34,11 +33,9 @@ final class CapturedEvidence {
     private final ArtifactSourceManifest manifest;
     private final Set<SourceKind> availableSources;
     private final Map<String, Artifact> artifacts;
-    private final @Nullable SecretScan secretScan;
 
-    private CapturedEvidence(ArtifactSourceManifest manifest, @Nullable SecretScan secretScan) {
+    private CapturedEvidence(ArtifactSourceManifest manifest) {
         this.manifest = manifest;
-        this.secretScan = secretScan;
         Set<SourceKind> available = new HashSet<>();
         Map<String, Artifact> byPath = new HashMap<>();
         for (SourceCapture source : manifest.sources()) {
@@ -56,7 +53,7 @@ final class CapturedEvidence {
     }
 
     static CapturedEvidence of(ArtifactSourceManifest manifest) {
-        return new CapturedEvidence(manifest, null);
+        return new CapturedEvidence(manifest);
     }
 
     static CapturedEvidence of(AgentJob job, ObjectMapper mapper) {
@@ -68,11 +65,8 @@ final class CapturedEvidence {
         if (!manifest.isObject()) {
             throw new JobDeliveryException("Job evidence snapshot has no source manifest: jobId=" + job.getId());
         }
-        JsonNode secretScan = snapshot.path(SecretScan.SNAPSHOT_NODE);
         try {
-            return new CapturedEvidence(
-                    mapper.treeToValue(manifest, ArtifactSourceManifest.class),
-                    secretScan.isObject() ? mapper.treeToValue(secretScan, SecretScan.class) : null);
+            return new CapturedEvidence(mapper.treeToValue(manifest, ArtifactSourceManifest.class));
         } catch (JacksonException exception) {
             throw new JobDeliveryException(
                     "Job evidence snapshot is not a readable manifest: jobId=" + job.getId(), exception);
@@ -152,10 +146,5 @@ final class CapturedEvidence {
                     return Set.copyOf(paths);
                 })
                 .orElseThrow(() -> new JobDeliveryException("Captured diff is no longer available"));
-    }
-
-    @Nullable
-    SecretScan secretScan() {
-        return secretScan;
     }
 }

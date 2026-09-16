@@ -4,39 +4,45 @@ import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails.FileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Operation;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.Request;
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.Serial;
-import java.nio.ByteBuffer;
-import java.nio.charset.CodingErrorAction;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
-import org.apache.commons.io.input.BoundedInputStream;
+import java.util.stream.Stream;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.diff.DiffEntry;
+import org.eclipse.jgit.diff.DiffFormatter;
+import org.eclipse.jgit.diff.Edit;
+import org.eclipse.jgit.diff.RawTextComparator;
+import org.eclipse.jgit.lib.Constants;
+import org.eclipse.jgit.lib.FileMode;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectReader;
+import org.eclipse.jgit.lib.PersonIdent;
+import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.lib.StoredConfig;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevWalk;
+import org.eclipse.jgit.transport.RefSpec;
+import org.eclipse.jgit.transport.TagOpt;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.eclipse.jgit.treewalk.CanonicalTreeParser;
+import org.eclipse.jgit.treewalk.EmptyTreeIterator;
+import org.eclipse.jgit.treewalk.TreeWalk;
+import org.eclipse.jgit.util.io.DisabledOutputStream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,75 +50,156 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileSystemUtils;
 
+/**
+ * Bare mirrors under the fabric root, one per workspace and repository, and the checkouts a review
+ * reads from them. Every operation runs in this process; a role that runs Git owns its own mirrors.
+ */
 @Service
 @EnableConfigurationProperties(GitRepositoryProperties.class)
 public class GitRepositoryManager {
     public static final String TREE_LIMITATION_SUBMODULE = "SUBMODULE_EXCLUDED";
     public static final String TREE_LIMITATION_UNSAFE_PATH = "UNSAFE_PATH_EXCLUDED";
-    /** Name prefixes of what this manager creates under the fabric root, so a sweep can tell its leftovers apart. */
+    /** Name prefix of the checkouts this manager stages under the fabric root, so a sweep can tell its leftovers apart. */
     public static final String GIT_SNAPSHOT_PREFIX = "git-snapshot-";
+    /** Where a fetched review head lives in the mirror; content-addressed, so a refetch is idempotent. */
+    public static final String REVIEW_REFS = "refs/hephaestus/reviews/";
+    /** What the review container may see of the mirror's refs, with their types; the admission reads it back. */
+    public static final String CAPTURED_REFS = "hephaestus-captured-refs";
 
-    public static final String GIT_OUTPUT_PREFIX = "git-output-";
+    private static final String MIRRORS = "mirrors";
     private static final String PROCESS_SPOOL_ID = UUID.randomUUID() + "-";
     private static final Logger log = LoggerFactory.getLogger(GitRepositoryManager.class);
-    private static final Duration OPERATION_TIMEOUT = Duration.ofMinutes(15);
-    private static final int DETAIL_FRAME_BYTES = 16 * 1024 * 1024;
     private static final int PAGE_SIZE = 256;
-    /** Each page of details is one container; a walk stops here and the next cycle resumes from the captured set. */
+    /** A walk stops after this many pages that needed capture; the next sync cycle resumes from the captured set. */
     private static final int MAX_DETAIL_PAGES_PER_WALK = 32;
 
+    private static final List<RefSpec> MIRROR_REFSPECS =
+            List.of(new RefSpec("+refs/heads/*:refs/heads/*"), new RefSpec("+refs/tags/*:refs/tags/*"));
+    /** The mirror's heads become the checkout's remote branches, as in any developer's clone. */
+    private static final List<RefSpec> SNAPSHOT_REFSPECS = List.of(
+            new RefSpec("+refs/heads/*:refs/remotes/origin/*"),
+            new RefSpec("+refs/tags/*:refs/tags/*"),
+            new RefSpec("+" + REVIEW_REFS + "*:" + REVIEW_REFS + "*"));
+
     private final GitRepositoryProperties properties;
-    private final @Nullable NativeGitExecutor executor;
+    private final GitRepositoryLockManager locks;
     private final FabricLayout layout;
     private final Semaphore ingestionPermits;
 
-    /** A runtime role without a Git executor — the webhook receiver — has Git disabled whatever is configured. */
     public GitRepositoryManager(
-            GitRepositoryProperties properties, Optional<NativeGitExecutor> executor, FabricLayout layout) {
+            GitRepositoryProperties properties, GitRepositoryLockManager locks, FabricLayout layout) {
         this.properties = properties;
-        this.executor = executor.orElse(null);
+        this.locks = locks;
         this.layout = layout;
         this.ingestionPermits = new Semaphore(properties.maxConcurrentIngestions());
     }
 
     public boolean isEnabled() {
-        return properties.enabled() && executor != null;
+        return properties.enabled();
     }
 
     public boolean isRepositoryCloned(RepositoryKey repository) {
-        if (!isEnabled()) return false;
-        String status = scalar(repository, Operation.STATUS, List.of());
-        if (!status.equals("true") && !status.equals("false"))
-            throw new GitOperationException("Invalid Git repository status", new IOException("Invalid status"));
-        return status.equals("true");
+        return isEnabled() && Files.isRegularFile(mirror(repository).resolve(Constants.HEAD));
     }
 
+    /** Every workspace's mirror of the repository. */
     public void deleteOrphanedRepository(long repositoryId) {
-        if (executor != null) executor.deleteRepository(repositoryId);
+        Path mirrors = layout.root().resolve(MIRRORS);
+        if (!Files.isDirectory(mirrors)) return;
+        try (Stream<Path> workspaces = Files.list(mirrors)) {
+            for (Path workspace : workspaces.toList()) {
+                Path mirror = workspace.resolve(repositoryId + ".git");
+                if (Files.isDirectory(mirror)) FileSystemUtils.deleteRecursively(mirror);
+            }
+        } catch (IOException e) {
+            throw new GitOperationException("Cannot delete repository mirrors", e);
+        }
     }
 
     public void ensureRepository(RepositoryKey repository, String cloneUrl, @Nullable String token) {
-        execute(repository, new Request(Operation.FETCH, List.of(), cloneUrl, token), OutputStream.nullOutputStream());
+        requireEnabled();
+        locks.withWriteLock(repository, () -> {
+            Path mirror = mirror(repository);
+            try {
+                if (!isRepositoryCloned(repository) || !hasOrigin(mirror, cloneUrl)) {
+                    // A mirror is a cache keyed by ids a restore can reuse for another upstream: rebuild
+                    // rather than retarget, so no old objects survive.
+                    FileSystemUtils.deleteRecursively(mirror);
+                    Files.createDirectories(mirror.getParent());
+                    try (Git git = Git.init()
+                            .setBare(true)
+                            .setDirectory(mirror.toFile())
+                            .call()) {
+                        StoredConfig config = git.getRepository().getConfig();
+                        config.setString("remote", "origin", "url", cloneUrl);
+                        // A redirect would carry the credential to a host the clone URL never named.
+                        config.setBoolean("http", null, "followRedirects", false);
+                        // A checkout may pin a commit no ref reaches any more; it is fetched from the mirror by id.
+                        config.setBoolean("uploadpack", null, "allowAnySHA1InWant", true);
+                        config.save();
+                    }
+                }
+                try (Git git = Git.open(mirror.toFile())) {
+                    git.fetch()
+                            .setRemote("origin")
+                            .setRefSpecs(MIRROR_REFSPECS)
+                            .setTagOpt(TagOpt.NO_TAGS)
+                            .setRemoveDeletedRefs(true)
+                            .setCredentialsProvider(credentials(token))
+                            .call();
+                }
+                return null;
+            } catch (GitAPIException | IOException e) {
+                throw new GitOperationException("Cannot fetch repository " + repository.repositoryId(), e);
+            }
+        });
     }
 
+    /** Fetches the provider's review ref for a head no branch reaches, such as a fork's, and pins it. */
     public boolean fetchRemoteCommit(
             RepositoryKey repository, String cloneUrl, String remoteRef, String expectedSha, @Nullable String token) {
-        execute(
-                repository,
-                new Request(Operation.FETCH_COMMIT, List.of(remoteRef, expectedSha), cloneUrl, token),
-                OutputStream.nullOutputStream());
-        return commitExists(repository, expectedSha);
+        requireEnabled();
+        if (!Repository.isValidRefName(remoteRef) || !ObjectId.isId(expectedSha)) {
+            throw new IllegalArgumentException("Invalid remote review ref or expected commit SHA");
+        }
+        return locks.withWriteLock(repository, () -> {
+            String localRef = REVIEW_REFS + expectedSha.toLowerCase(Locale.ROOT);
+            try (Git git = Git.open(mirror(repository).toFile())) {
+                if (!hasOrigin(mirror(repository), cloneUrl)) throw new IOException("Mirror origin differs");
+                git.fetch()
+                        .setRemote("origin")
+                        .setRefSpecs(new RefSpec("+" + remoteRef + ":" + localRef))
+                        .setTagOpt(TagOpt.NO_TAGS)
+                        .setCredentialsProvider(credentials(token))
+                        .call();
+                ObjectId resolved = git.getRepository().resolve(localRef);
+                return resolved != null && resolved.getName().equals(expectedSha.toLowerCase(Locale.ROOT));
+            } catch (GitAPIException | IOException e) {
+                throw new GitOperationException("Cannot fetch review commit " + expectedSha, e);
+            }
+        });
     }
 
     public @Nullable String resolveBranchHead(RepositoryKey repository, String branch) {
-        if (!isEnabled()) return null;
-        String head = scalar(repository, Operation.RESOLVE, List.of("refs/remotes/origin/" + branch));
-        return head.isEmpty() ? null : head;
+        if (!isEnabled() || !Repository.isValidRefName(Constants.R_HEADS + branch)) return null;
+        return read(repository, repo -> {
+            Ref ref = repo.exactRef(Constants.R_HEADS + branch);
+            return ref == null || ref.getObjectId() == null
+                    ? null
+                    : ref.getObjectId().getName();
+        });
     }
 
     public boolean commitExists(RepositoryKey repository, String sha) {
-        if (!isEnabled()) return false;
-        return sha.equals(scalar(repository, Operation.RESOLVE, List.of(sha)));
+        if (!isEnabled() || !ObjectId.isId(sha)) return false;
+        return Boolean.TRUE.equals(read(repository, repo -> {
+            try (RevWalk walk = new RevWalk(repo)) {
+                walk.parseCommit(ObjectId.fromString(sha));
+                return true;
+            } catch (IOException e) {
+                return false;
+            }
+        }));
     }
 
     public void forEachCommitInRange(
@@ -122,21 +209,328 @@ public class GitRepositoryManager {
             Function<List<String>, Set<String>> captured,
             Consumer<CommitDetails> consumer) {
         if (!isEnabled()) return;
-        List<String> revisions = fromSha == null ? List.of(toSha) : List.of(fromSha, toSha);
-        visitCommitIds(repository, Operation.COMMIT_RANGE, revisions, captured, consumer);
+        read(repository, repo -> {
+            try (RevWalk walk = new RevWalk(repo)) {
+                walk.markStart(walk.parseCommit(repo.resolve(toSha)));
+                if (fromSha != null) walk.markUninteresting(walk.parseCommit(repo.resolve(fromSha)));
+                visit(repo, walk, captured, consumer);
+            }
+            return null;
+        });
     }
 
     public void forEachCommitSubject(RepositoryKey repository, String base, String head, Consumer<String> consumer) {
         if (!isEnabled()) return;
-        Path subjects = spool(repository, Operation.COMMIT_SUBJECTS, List.of(base, head));
-        try (InputStream input = new BufferedInputStream(Files.newInputStream(subjects))) {
-            String subject;
-            while ((subject = nulField(input)) != null) consumer.accept(subject);
-        } catch (IOException failure) {
-            throw new GitOperationException("Cannot read Git commit subjects", failure);
-        } finally {
-            deleteFile(subjects);
+        read(repository, repo -> {
+            try (RevWalk walk = new RevWalk(repo)) {
+                walk.markStart(walk.parseCommit(repo.resolve(head)));
+                walk.markUninteresting(walk.parseCommit(repo.resolve(base)));
+                for (RevCommit commit : walk) {
+                    checkInterrupted();
+                    consumer.accept(commit.getShortMessage());
+                }
+            }
+            return null;
+        });
+    }
+
+    /** Every commit reachable from any ref; completion markers skip individual SHAs, never ancestor ranges. */
+    public void forEachMissingCommit(
+            RepositoryKey repository, Function<List<String>, Set<String>> captured, Consumer<CommitDetails> consumer) {
+        if (!isEnabled()) return;
+        read(repository, repo -> {
+            try (RevWalk walk = new RevWalk(repo)) {
+                for (Ref ref : repo.getRefDatabase().getRefs()) {
+                    ObjectId id = ref.getObjectId();
+                    if (id == null) continue;
+                    // A tag on a tree or blob is witnessed, not walked.
+                    if (walk.peel(walk.parseAny(id)) instanceof RevCommit commit) walk.markStart(commit);
+                }
+                visit(repo, walk, captured, consumer);
+            }
+            return null;
+        });
+    }
+
+    private void visit(
+            Repository repo,
+            RevWalk walk,
+            Function<List<String>, Set<String>> captured,
+            Consumer<CommitDetails> consumer)
+            throws IOException {
+        List<RevCommit> page = new ArrayList<>(PAGE_SIZE);
+        int capturedPages = 0;
+        for (RevCommit commit : walk) {
+            checkInterrupted();
+            page.add(commit);
+            if (page.size() == PAGE_SIZE) {
+                if (capturedPages == MAX_DETAIL_PAGES_PER_WALK) {
+                    log.info("Git walk paused at its page budget: repository={}", repo.getDirectory());
+                    return;
+                }
+                if (visitPage(repo, page, captured, consumer)) capturedPages++;
+                page.clear();
+            }
         }
+        if (!page.isEmpty() && capturedPages < MAX_DETAIL_PAGES_PER_WALK) visitPage(repo, page, captured, consumer);
+    }
+
+    /** @return whether any commit of the page still needed capture */
+    private boolean visitPage(
+            Repository repo,
+            List<RevCommit> page,
+            Function<List<String>, Set<String>> captured,
+            Consumer<CommitDetails> consumer)
+            throws IOException {
+        Set<String> existing =
+                captured.apply(page.stream().map(RevCommit::getName).toList());
+        boolean any = false;
+        for (RevCommit commit : page) {
+            if (existing.contains(commit.getName())) continue;
+            any = true;
+            checkInterrupted();
+            CommitDetails details = details(repo, commit);
+            acquireIngestionPermit();
+            try {
+                consumer.accept(details);
+            } finally {
+                ingestionPermits.release();
+            }
+        }
+        return any;
+    }
+
+    private static CommitDetails details(Repository repo, RevCommit commit) throws IOException {
+        PersonIdent author = commit.getAuthorIdent();
+        PersonIdent committer = commit.getCommitterIdent();
+        List<FileChange> changes = fileChanges(repo, commit);
+        int additions = 0;
+        int deletions = 0;
+        for (FileChange change : changes) {
+            additions = Math.addExact(additions, change.additions());
+            deletions = Math.addExact(deletions, change.deletions());
+        }
+        String message = commit.getFullMessage().stripTrailing();
+        int newline = message.indexOf('\n');
+        String body = newline < 0 ? null : message.substring(newline + 1).strip();
+        return new CommitDetails(
+                commit.getName(),
+                newline < 0 ? message : message.substring(0, newline),
+                body == null || body.isEmpty() ? null : body,
+                author.getName(),
+                author.getEmailAddress(),
+                author.getWhenAsInstant(),
+                committer.getName(),
+                committer.getEmailAddress(),
+                committer.getWhenAsInstant(),
+                additions,
+                deletions,
+                changes.size(),
+                changes,
+                Stream.of(commit.getParents()).map(RevCommit::getName).toList());
+    }
+
+    /** A merge's changes are those against its first parent, as {@code --diff-merges=first-parent} lists them. */
+    private static List<FileChange> fileChanges(Repository repo, RevCommit commit) throws IOException {
+        List<FileChange> changes = new ArrayList<>();
+        try (RevWalk walk = new RevWalk(repo);
+                ObjectReader reader = repo.newObjectReader();
+                DiffFormatter formatter = new DiffFormatter(DisabledOutputStream.INSTANCE)) {
+            formatter.setRepository(repo);
+            formatter.setDiffComparator(RawTextComparator.DEFAULT);
+            formatter.setDetectRenames(true);
+            var newTree = new CanonicalTreeParser();
+            newTree.reset(reader, commit.getTree());
+            List<DiffEntry> entries;
+            if (commit.getParentCount() > 0) {
+                var oldTree = new CanonicalTreeParser();
+                oldTree.reset(reader, walk.parseCommit(commit.getParent(0)).getTree());
+                entries = formatter.scan(oldTree, newTree);
+            } else {
+                entries = formatter.scan(new EmptyTreeIterator(), newTree);
+            }
+            for (DiffEntry entry : entries) {
+                int added = 0;
+                int deleted = 0;
+                for (Edit edit : formatter.toFileHeader(entry).toEditList()) {
+                    deleted += edit.getEndA() - edit.getBeginA();
+                    added += edit.getEndB() - edit.getBeginB();
+                }
+                boolean renamedOrCopied = entry.getChangeType() == DiffEntry.ChangeType.RENAME
+                        || entry.getChangeType() == DiffEntry.ChangeType.COPY;
+                changes.add(new FileChange(
+                        entry.getChangeType() == DiffEntry.ChangeType.DELETE ? entry.getOldPath() : entry.getNewPath(),
+                        switch (entry.getChangeType()) {
+                            case ADD -> ChangeType.ADDED;
+                            case MODIFY -> ChangeType.MODIFIED;
+                            case DELETE -> ChangeType.REMOVED;
+                            case RENAME -> ChangeType.RENAMED;
+                            case COPY -> ChangeType.COPIED;
+                        },
+                        added,
+                        deleted,
+                        Math.addExact(added, deleted),
+                        renamedOrCopied ? entry.getOldPath() : null));
+            }
+        }
+        return List.copyOf(changes);
+    }
+
+    /**
+     * A checkout of {@code sha} with its own {@code .git}: the mirror's branches and tags as remote
+     * refs, the reviewed commit detached at HEAD, symbolic links written as files holding their target,
+     * no remote configuration and no credential. Measured before anything is written; a repository over
+     * the bound is refused whole. The caller closes the snapshot to delete the directory.
+     */
+    public GitTreeSnapshot readTreeSnapshot(RepositoryKey repository, String sha) {
+        requireEnabled();
+        if (!ObjectId.isId(sha)) throw new GitOperationException("Invalid commit", new IOException(sha));
+        return locks.withReadLock(repository, () -> {
+            Path mirror = mirror(repository);
+            Path staging = null;
+            try (Git source = Git.open(mirror.toFile())) {
+                Repository repo = source.getRepository();
+                RevCommit commit;
+                try (RevWalk walk = new RevWalk(repo)) {
+                    commit = walk.parseCommit(ObjectId.fromString(sha));
+                }
+                Set<String> limitations = new TreeSet<>();
+                long bytes = 0;
+                long files = 0;
+                List<String> excluded = new ArrayList<>();
+                try (ObjectReader reader = repo.newObjectReader();
+                        TreeWalk tree = new TreeWalk(reader)) {
+                    tree.addTree(commit.getTree());
+                    tree.setRecursive(true);
+                    while (tree.next()) {
+                        checkInterrupted();
+                        FileMode mode = tree.getFileMode(0);
+                        if (FileMode.GITLINK.equals(mode)) {
+                            limitations.add(TREE_LIMITATION_SUBMODULE);
+                            continue;
+                        }
+                        if (tree.getPathString().contains("\\")) {
+                            limitations.add(TREE_LIMITATION_UNSAFE_PATH);
+                            excluded.add(tree.getPathString());
+                            continue;
+                        }
+                        bytes = Math.addExact(bytes, reader.getObjectSize(tree.getObjectId(0), Constants.OBJ_BLOB));
+                        files++;
+                    }
+                }
+                long history = directorySize(mirror.resolve(Constants.OBJECTS));
+                if (bytes + history > properties.maxSnapshotBytes()) {
+                    throw new GitOperationException(
+                            "Repository snapshot exceeds hephaestus.git.max-snapshot-bytes", new IOException());
+                }
+                Files.createDirectories(layout.root());
+                staging = Files.createTempDirectory(layout.root(), GIT_SNAPSHOT_PREFIX + PROCESS_SPOOL_ID);
+                try (Git git = Git.init().setDirectory(staging.toFile()).call()) {
+                    StoredConfig config = git.getRepository().getConfig();
+                    // A link in the checkout would let the review read outside it; it is a file holding the target.
+                    config.setBoolean("core", null, "symlinks", false);
+                    config.save();
+                    git.fetch()
+                            .setRemote(mirror.toUri().toString())
+                            .setRefSpecs(SNAPSHOT_REFSPECS)
+                            .setTagOpt(TagOpt.NO_TAGS)
+                            .call();
+                    if (!git.getRepository().getObjectDatabase().has(commit)) {
+                        // The reviewed commit sits on no branch, tag or review ref: it was pinned by id only.
+                        git.fetch()
+                                .setRemote(mirror.toUri().toString())
+                                .setRefSpecs(new RefSpec(sha + ":" + REVIEW_REFS + sha))
+                                .setTagOpt(TagOpt.NO_TAGS)
+                                .call();
+                    }
+                    git.checkout().setName(sha).call();
+                    for (String path : excluded) Files.deleteIfExists(staging.resolve(path));
+                    writeCapturedRefs(git.getRepository());
+                }
+                return new GitTreeSnapshot(
+                        staging, sha, commit.getTree().getName(), bytes, files, limitations.isEmpty(), limitations);
+            } catch (GitOperationException e) {
+                if (staging != null) deleteTreeQuietly(staging);
+                throw e;
+            } catch (GitAPIException | IOException | RuntimeException e) {
+                if (staging != null) deleteTreeQuietly(staging);
+                throw new GitOperationException("Cannot prepare Git snapshot", e);
+            }
+        });
+    }
+
+    /** Tags are peeled and every line carries its type, so a tag on a tree or blob is witnessed, not walked. */
+    private static void writeCapturedRefs(Repository repo) throws IOException {
+        try (RevWalk walk = new RevWalk(repo);
+                Writer out = Files.newBufferedWriter(
+                        repo.getDirectory().toPath().resolve(CAPTURED_REFS), StandardCharsets.UTF_8)) {
+            List<Ref> refs = new ArrayList<>(repo.getRefDatabase().getRefsByPrefix(Constants.R_REMOTES + "origin/"));
+            refs.addAll(repo.getRefDatabase().getRefsByPrefix(Constants.R_TAGS));
+            for (Ref ref : refs) {
+                ObjectId id = ref.getObjectId();
+                if (id == null) continue;
+                Ref peeled = repo.getRefDatabase().peel(ref);
+                ObjectId target = peeled.getPeeledObjectId() != null ? peeled.getPeeledObjectId() : id;
+                out.write(Constants.typeString(walk.parseAny(target).getType()) + " " + target.getName() + " "
+                        + ref.getName() + "\n");
+            }
+        }
+    }
+
+    private static long directorySize(Path directory) throws IOException {
+        if (!Files.isDirectory(directory)) return 0;
+        try (Stream<Path> paths = Files.walk(directory)) {
+            long total = 0;
+            for (Path path : paths.toList()) {
+                if (Files.isRegularFile(path)) total = Math.addExact(total, Files.size(path));
+            }
+            return total;
+        }
+    }
+
+    /** The fabric root is process-local; only a previous process's checkout may be swept by age. */
+    public static boolean isCurrentProcessSpool(Path path) {
+        return path.getFileName().toString().startsWith(GIT_SNAPSHOT_PREFIX + PROCESS_SPOOL_ID);
+    }
+
+    /** A read of the mirror's object and ref databases. */
+    public interface MirrorRead<T> {
+        @Nullable
+        T apply(Repository repo) throws IOException;
+    }
+
+    /** Runs a read against the mirror under its read lock; a fetch cannot rewrite refs underneath it. */
+    public <T> @Nullable T read(RepositoryKey repository, MirrorRead<T> operation) {
+        return locks.withReadLock(repository, () -> {
+            try (Git git = Git.open(mirror(repository).toFile())) {
+                return operation.apply(git.getRepository());
+            } catch (IOException e) {
+                throw new GitOperationException("Cannot read repository " + repository.repositoryId(), e);
+            }
+        });
+    }
+
+    private Path mirror(RepositoryKey repository) {
+        return layout.root()
+                .resolve(MIRRORS)
+                .resolve(Long.toString(repository.workspaceId()))
+                .resolve(repository.repositoryId() + ".git");
+    }
+
+    /** JGit fetches from the first configured URL but reads back the last; a stale value ahead of the current one is a change. */
+    private static boolean hasOrigin(Path mirror, String cloneUrl) throws IOException {
+        try (Git git = Git.open(mirror.toFile())) {
+            String[] urls = git.getRepository().getConfig().getStringList("remote", "origin", "url");
+            return urls.length == 1 && cloneUrl.equals(urls[0]);
+        }
+    }
+
+    private static @Nullable UsernamePasswordCredentialsProvider credentials(@Nullable String token) {
+        return token == null || token.isBlank() ? null : new UsernamePasswordCredentialsProvider("oauth2", token);
+    }
+
+    private void requireEnabled() {
+        if (!isEnabled()) throw new IllegalStateException("Git repository preparation is disabled");
     }
 
     /** Bounds the commit rows written at once, not what is read from Git. */
@@ -149,319 +543,9 @@ public class GitRepositoryManager {
         }
     }
 
-    /** Completion markers skip individual SHAs, never entire ancestor ranges. */
-    public void forEachMissingCommit(
-            RepositoryKey repository, Function<List<String>, Set<String>> captured, Consumer<CommitDetails> consumer) {
-        visitCommitIds(repository, Operation.COMMIT_IDS, List.of(), captured, consumer);
-    }
-
-    private void visitCommitIds(
-            RepositoryKey repository,
-            Operation operation,
-            List<String> revisions,
-            Function<List<String>, Set<String>> captured,
-            Consumer<CommitDetails> consumer) {
-        Path ids = spool(repository, operation, revisions);
-        try (var lines = Files.newBufferedReader(ids)) {
-            List<String> page = new ArrayList<>(PAGE_SIZE);
-            int spooled = 0;
-            String sha;
-            while ((sha = lines.readLine()) != null) {
-                checkInterrupted();
-                page.add(sha);
-                if (page.size() == PAGE_SIZE) {
-                    if (spooled == MAX_DETAIL_PAGES_PER_WALK) {
-                        log.info("Git walk paused at its page budget: repositoryId={}", repository.repositoryId());
-                        return;
-                    }
-                    if (visitDetails(repository, page, captured, consumer)) spooled++;
-                    page.clear();
-                }
-            }
-            if (!page.isEmpty() && spooled < MAX_DETAIL_PAGES_PER_WALK)
-                visitDetails(repository, page, captured, consumer);
-        } catch (IOException e) {
-            throw new GitOperationException("Cannot read Git commit stream", e);
-        } finally {
-            deleteFile(ids);
-        }
-    }
-
-    /** @return whether a details container ran for this page */
-    private boolean visitDetails(
-            RepositoryKey repository,
-            List<String> page,
-            Function<List<String>, Set<String>> captured,
-            Consumer<CommitDetails> consumer) {
-        Set<String> existing = captured.apply(List.copyOf(page));
-        List<String> missing =
-                page.stream().filter(sha -> !existing.contains(sha)).toList();
-        if (missing.isEmpty()) return false;
-        Path details = spool(repository, Operation.COMMIT_DETAILS, missing);
-        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(details)))) {
-            for (String sha : missing) {
-                checkInterrupted();
-                acquireIngestionPermit();
-                try {
-                    long metadataLength = input.readLong();
-                    if (metadataLength < 0 || metadataLength > DETAIL_FRAME_BYTES)
-                        throw new IOException("Git metadata exceeds the ingestion frame budget");
-                    byte[] metadata = input.readNBytes((int) metadataLength);
-                    if (metadata.length != metadataLength) throw new IOException("Incomplete Git metadata frame");
-                    long changesLength = input.readLong();
-                    if (changesLength < 0 || changesLength > DETAIL_FRAME_BYTES - metadataLength)
-                        throw new IOException("Git commit details exceed the ingestion frame budget");
-                    List<FileChange> changes;
-                    try (var bounded = BoundedInputStream.builder()
-                            .setInputStream(input)
-                            .setMaxCount(changesLength)
-                            .setPropagateClose(false)
-                            .get()) {
-                        changes = parseFileChanges(bounded);
-                        if (bounded.getCount() != changesLength)
-                            throw new IOException("Incomplete Git file-change frame");
-                    }
-                    consumer.accept(commitDetails(sha, metadata, changes));
-                } finally {
-                    ingestionPermits.release();
-                }
-            }
-            if (input.read() != -1) throw new IOException("Unexpected Git stream trailer");
-            return true;
-        } catch (IOException e) {
-            throw new GitOperationException("Cannot decode Git commit details", e);
-        } finally {
-            deleteFile(details);
-        }
-    }
-
-    private static CommitDetails commitDetails(String expectedSha, byte[] metadata, List<FileChange> changes)
-            throws IOException {
-        String[] fields = new String(metadata, StandardCharsets.UTF_8).split("\0", 9);
-        if (fields.length != 9 || !fields[0].equals(expectedSha)) throw new IOException("Git commit identity mismatch");
-        String message = fields[8].stripTrailing();
-        int newline = message.indexOf('\n');
-        int additions = 0;
-        int deletions = 0;
-        for (FileChange change : changes) {
-            additions = Math.addExact(additions, change.additions());
-            deletions = Math.addExact(deletions, change.deletions());
-        }
-        return new CommitDetails(
-                expectedSha,
-                newline < 0 ? message : message.substring(0, newline),
-                newline < 0 ? null : message.substring(newline + 1).strip(),
-                fields[1],
-                fields[2],
-                Instant.parse(fields[3]),
-                fields[4],
-                fields[5],
-                Instant.parse(fields[6]),
-                additions,
-                deletions,
-                changes.size(),
-                changes,
-                fields[7].isEmpty() ? List.of() : List.of(fields[7].split(" ")));
-    }
-
-    private static List<FileChange> parseFileChanges(InputStream input) throws IOException {
-        Map<String, FileChange> changes = new LinkedHashMap<>();
-        Set<String> counted = new HashSet<>();
-        String field;
-        while ((field = nulField(input)) != null) {
-            if (field.startsWith(":")) {
-                String[] header = field.split(" ");
-                if (header.length != 5) throw new IOException("Invalid Git raw diff header");
-                char status = header[4].charAt(0);
-                String oldPath = Objects.requireNonNull(nulField(input));
-                String path = status == 'R' || status == 'C' ? Objects.requireNonNull(nulField(input)) : oldPath;
-                ChangeType type =
-                        switch (status) {
-                            case 'A' -> ChangeType.ADDED;
-                            case 'D' -> ChangeType.REMOVED;
-                            case 'R' -> ChangeType.RENAMED;
-                            case 'C' -> ChangeType.COPIED;
-                            case 'M', 'T' -> ChangeType.MODIFIED;
-                            default -> throw new IOException("Unsupported Git change type");
-                        };
-                changes.put(path, new FileChange(path, type, 0, 0, 0, status == 'R' || status == 'C' ? oldPath : null));
-            } else {
-                String[] stats = field.split("\t", 3);
-                if (stats.length != 3) throw new IOException("Invalid Git numstat record");
-                String path = stats[2];
-                if (path.isEmpty()) {
-                    nulField(input);
-                    path = Objects.requireNonNull(nulField(input));
-                }
-                FileChange change = changes.get(path);
-                if (change == null || !counted.add(path))
-                    throw new IOException("Git numstat has no unique matching change");
-                int added = stats[0].equals("-") ? 0 : Integer.parseInt(stats[0]);
-                int deleted = stats[1].equals("-") ? 0 : Integer.parseInt(stats[1]);
-                changes.put(
-                        path,
-                        new FileChange(
-                                path,
-                                change.changeType(),
-                                added,
-                                deleted,
-                                Math.addExact(added, deleted),
-                                change.previousFilename()));
-            }
-        }
-        if (counted.size() != changes.size()) throw new IOException("Git change statistics are incomplete");
-        return List.copyOf(changes.values());
-    }
-
-    private static @Nullable String nulField(InputStream input) throws IOException {
-        ByteArrayOutputStream field = new ByteArrayOutputStream();
-        int value;
-        while ((value = input.read()) != -1) {
-            if (value == 0)
-                return StandardCharsets.UTF_8
-                        .newDecoder()
-                        .onMalformedInput(CodingErrorAction.REPORT)
-                        .decode(ByteBuffer.wrap(field.toByteArray()))
-                        .toString();
-            if (field.size() >= DETAIL_FRAME_BYTES)
-                throw new IOException("Git metadata field exceeds ingestion budget");
-            field.write(value);
-        }
-        if (field.size() != 0) throw new IOException("Incomplete Git field");
-        return null;
-    }
-
-    public GitTreeSnapshot readTreeSnapshot(RepositoryKey repository, String sha) {
-        String resolved = scalar(repository, Operation.RESOLVE, List.of(sha));
-        String tree = scalar(repository, Operation.TREE_ID, List.of(resolved));
-        Path archive = spool(repository, Operation.SNAPSHOT, List.of(resolved));
-        Path directory;
-        try {
-            directory = Files.createTempDirectory(layout.root(), GIT_SNAPSHOT_PREFIX + PROCESS_SPOOL_ID);
-        } catch (IOException e) {
-            deleteFile(archive);
-            throw new GitOperationException("Cannot create snapshot directory", e);
-        }
-        Set<String> limitations = new TreeSet<>();
-        long bytes = 0;
-        long visited = 0;
-        try (var tar = new TarArchiveInputStream(Files.newInputStream(archive))) {
-            TarArchiveEntry entry;
-            while ((entry = tar.getNextEntry()) != null) {
-                checkInterrupted();
-                String name = entry.getName();
-                if (name.startsWith("./")) name = name.substring(2);
-                if (name.isEmpty()) continue;
-                Path target = directory.resolve(name).normalize();
-                if (!target.startsWith(directory) || name.startsWith("/") || name.indexOf('\0') >= 0)
-                    throw new IOException("Native snapshot contains an unsafe archive path");
-                if (name.contains("\\")) {
-                    limitations.add(TREE_LIMITATION_UNSAFE_PATH);
-                    continue;
-                }
-                if (entry.isSymbolicLink() || entry.isLink())
-                    throw new IOException("Native snapshot contains an unexpected filesystem link");
-                if (entry.isDirectory()) {
-                    Files.createDirectories(target);
-                    continue;
-                }
-                // isFile() is true for FIFO and device entries too; each is asked for by name.
-                if (!entry.isFile() || entry.isFIFO() || entry.isCharacterDevice() || entry.isBlockDevice())
-                    throw new IOException("Native snapshot contains an unsupported archive entry");
-                Files.createDirectories(target.getParent());
-                try (OutputStream out = Files.newOutputStream(target)) {
-                    bytes = Math.addExact(bytes, tar.transferTo(out));
-                }
-                if (bytes > properties.maxSnapshotBytes())
-                    throw new IOException("Repository snapshot exceeds hephaestus.git.max-snapshot-bytes");
-                if ((entry.getMode() & 0111) != 0 && !target.toFile().setExecutable(true, false))
-                    throw new IOException("Cannot preserve executable file mode");
-                if (!name.startsWith(".git/")) visited++;
-            }
-            Path entries = spool(repository, Operation.TREE_ENTRIES, List.of(resolved));
-            try (InputStream input = new BufferedInputStream(Files.newInputStream(entries))) {
-                String treeEntry;
-                while ((treeEntry = nulField(input)) != null)
-                    if (treeEntry.startsWith("160000 ")) limitations.add(TREE_LIMITATION_SUBMODULE);
-            } finally {
-                deleteFile(entries);
-            }
-            return new GitTreeSnapshot(directory, resolved, tree, bytes, visited, limitations.isEmpty(), limitations);
-        } catch (GitOperationException e) {
-            deleteTreeQuietly(directory);
-            throw e;
-        } catch (IOException | RuntimeException e) {
-            deleteTreeQuietly(directory);
-            throw new GitOperationException("Cannot prepare Git snapshot", e);
-        } finally {
-            deleteFile(archive);
-        }
-    }
-
-    private String scalar(RepositoryKey repository, Operation operation, List<String> revisions) {
-        Path result = spool(repository, operation, revisions);
-        try {
-            if (Files.size(result) > 256) throw new IOException("Invalid Git identity response");
-            return Files.readString(result).strip();
-        } catch (IOException e) {
-            throw new GitOperationException("Cannot resolve Git identity", e);
-        } finally {
-            deleteFile(result);
-        }
-    }
-
-    private Path spool(RepositoryKey repository, Operation operation, List<String> revisions) {
-        Path file = temporary(GIT_OUTPUT_PREFIX);
-        try (OutputStream output = Files.newOutputStream(file)) {
-            execute(repository, new Request(operation, revisions, null, null), output);
-            return file;
-        } catch (IOException e) {
-            deleteFile(file);
-            throw new GitOperationException("Cannot spool Git output", e);
-        } catch (RuntimeException e) {
-            deleteFile(file);
-            throw e;
-        }
-    }
-
-    /** The fabric root is process-local; only a previous process's spool may be swept by age. */
-    public static boolean isCurrentProcessSpool(Path path) {
-        String name = path.getFileName().toString();
-        return name.startsWith(GIT_SNAPSHOT_PREFIX + PROCESS_SPOOL_ID)
-                || name.startsWith(GIT_OUTPUT_PREFIX + PROCESS_SPOOL_ID);
-    }
-
-    private Path temporary(String prefix) {
-        try {
-            Files.createDirectories(layout.root());
-            return Files.createTempFile(layout.root(), prefix + PROCESS_SPOOL_ID, ".tmp");
-        } catch (IOException e) {
-            throw new GitOperationException("Cannot create Git operation output", e);
-        }
-    }
-
-    private void execute(RepositoryKey repository, Request request, OutputStream output) {
-        if (executor == null || !properties.enabled())
-            throw new IllegalStateException("Git repository preparation is disabled");
-        checkInterrupted();
-        try {
-            executor.execute(repository, request, OPERATION_TIMEOUT, output);
-        } catch (RuntimeException e) {
-            throw new GitOperationException("Native Git operation failed: " + request.operation(), e);
-        }
-    }
-
     private static void checkInterrupted() {
         if (Thread.currentThread().isInterrupted())
             throw new GitOperationException("Git operation interrupted", new InterruptedException());
-    }
-
-    private static void deleteFile(Path file) {
-        try {
-            Files.deleteIfExists(file);
-        } catch (IOException e) {
-            throw new GitOperationException("Cannot remove Git operation output", e);
-        }
     }
 
     static void deleteTreeQuietly(Path root) {

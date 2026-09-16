@@ -2,151 +2,115 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
+import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
-import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import java.util.Objects;
+import org.eclipse.jgit.api.Git;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
+/** Quotes are verified against the checkout the review saw, whose {@code .git} holds only what it could reach. */
 class HistoricalGitEvidenceTest extends BaseUnitTest {
+    private static final RepositoryKey KEY = new RepositoryKey(1L, 1L);
+
     private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
-    private final NativeGitExecutor git = mock(NativeGitExecutor.class);
-    private final HistoricalGitEvidence verifier = new HistoricalGitEvidence(files, git);
+    private final HistoricalGitEvidence verifier = new HistoricalGitEvidence(files);
     private final AgentJob job = new AgentJob();
 
     @TempDir
-    private Path repository;
+    private Path temporary;
+
+    private String first;
+    private String head;
+    private String unreachable;
+    private GitRepositoryManager.GitTreeSnapshot snapshot;
 
     @BeforeEach
-    void setUp() {
-        when(files.repositoryForVerification(job, "head-digest", "refs-digest")).thenReturn(repository);
-    }
-
-    @Test
-    void shouldVerifyAllSubmittedLocationsWithOneNativeRepositoryTransfer() {
-        var first = new HistoricalGitEvidence.Citation("a".repeat(40), "one.java", "same quote", 2, 2);
-        var second = new HistoricalGitEvidence.Citation("b".repeat(40), "two.java", "same quote", 1, 1);
-        doAnswer(invocation -> {
-                    NativeGitExecutor.Request request = invocation.getArgument(1);
-                    assertThat(request.operation()).isEqualTo(NativeGitExecutor.Operation.CITED_BLOBS);
-                    assertThat(request.revisions())
-                            .containsExactly(
-                                    "c".repeat(40), first.revision(), first.path(), second.revision(), second.path());
-                    try (var tar = new TarArchiveOutputStream((OutputStream) invocation.getArgument(3))) {
-                        entry(tar, "0", "other line\nsame quote\n");
-                        entry(tar, "1", "other line\nsame quote\n");
-                    }
-                    return null;
-                })
-                .when(git)
-                .executeInSnapshot(eq(repository), any(), any(), any());
-        var result =
-                verifier.verifyAll(job, "head-digest", "refs-digest", "c".repeat(40), List.of(first, second, first));
-        assertThat(java.util.Objects.requireNonNull(result.get(first)).matches())
-                .isTrue();
-        assertThat(java.util.Objects.requireNonNull(result.get(second)).matches())
-                .isFalse();
-        assertThat(java.util.Objects.requireNonNull(result.get(first)).artifactSha256())
-                .hasSize(64);
-        verify(git).executeInSnapshot(eq(repository), any(), any(), any());
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    void shouldAnswerMissingPathsAsAbsent(boolean includePresent) {
-        var present = new HistoricalGitEvidence.Citation("a".repeat(40), "one.java", "same quote", 2, 2);
-        var missing = new HistoricalGitEvidence.Citation("a".repeat(40), "gone.java", "same quote", 1, 1);
-        doAnswer(invocation -> {
-                    try (var tar = new TarArchiveOutputStream((OutputStream) invocation.getArgument(3))) {
-                        if (includePresent) entry(tar, "0", "other line\nsame quote\n");
-                    }
-                    return null;
-                })
-                .when(git)
-                .executeInSnapshot(eq(repository), any(), any(), any());
-        var citations = includePresent ? List.of(present, missing) : List.of(missing);
-        var result = verifier.verifyAll(job, "head-digest", "refs-digest", "c".repeat(40), citations);
-        if (includePresent) {
-            assertThat(java.util.Objects.requireNonNull(result.get(present)).matches())
-                    .isTrue();
+    void setUp() throws Exception {
+        Path source = Files.createDirectory(temporary.resolve("source"));
+        try (Git git = Git.init()
+                .setInitialBranch("main")
+                .setDirectory(source.toFile())
+                .call()) {
+            GitTestFixtures.disableSigning(git.getRepository());
+            Files.writeString(source.resolve("one.java"), "other line\nsame quote\n");
+            first = commit(git, "First");
+            Files.writeString(source.resolve("two.java"), "same quote\n");
+            head = commit(git, "Second");
+            git.checkout().setCreateBranch(true).setName("later").call();
+            Files.writeString(source.resolve("three.java"), "never captured\n");
+            unreachable = commit(git, "Never fetched");
+            git.checkout().setName("main").call();
+            git.branchDelete().setBranchNames("later").setForce(true).call();
         }
-        assertThat(result.get(missing)).isEqualTo(JobEvidenceFiles.QuoteMatch.absent());
+        var manager = new GitRepositoryManager(
+                new GitRepositoryProperties(true, 2, 8L << 30),
+                new GitRepositoryLockManager(),
+                new FabricLayout(temporary.resolve("fabric").toString()));
+        manager.ensureRepository(KEY, source.toUri().toString(), null);
+        snapshot = manager.readTreeSnapshot(KEY, head);
+        when(files.repositoryForVerification(job, "head-digest", "refs-digest")).thenReturn(snapshot.stagingDir());
     }
 
     @Test
-    void shouldRejectUnexpectedArchiveEntries() {
-        doAnswer(invocation -> {
-                    try (var tar = new TarArchiveOutputStream((OutputStream) invocation.getArgument(3))) {
-                        entry(tar, "../escape", "bytes");
-                    }
-                    return null;
-                })
-                .when(git)
-                .executeInSnapshot(eq(repository), any(), any(), any());
-        var citation = new HistoricalGitEvidence.Citation("a".repeat(40), "one.java", "quote", 1, 1);
-        assertThatThrownBy(
-                        () -> verifier.verifyAll(job, "head-digest", "refs-digest", "b".repeat(40), List.of(citation)))
-                .isInstanceOf(JobDeliveryException.class);
+    void shouldVerifyQuotesAgainstTheCitedRevisionAndAnswerAbsenceForTheRest() {
+        var match = new HistoricalGitEvidence.Citation(first, "one.java", "same quote", 2, 2);
+        var wrongLine = new HistoricalGitEvidence.Citation(head, "two.java", "same quote", 2, 2);
+        var missingPath = new HistoricalGitEvidence.Citation(head, "gone.java", "same quote", 1, 1);
+        var notCaptured = new HistoricalGitEvidence.Citation(unreachable, "three.java", "never captured", 1, 1);
+        var directory = new HistoricalGitEvidence.Citation(head, "", "same quote", 1, 1);
+        var result = verifier.verifyAll(
+                job,
+                "head-digest",
+                "refs-digest",
+                head,
+                List.of(match, wrongLine, missingPath, notCaptured, directory, match));
+        assertThat(result).hasSize(5);
+        assertThat(Objects.requireNonNull(result.get(match)).matches()).isTrue();
+        assertThat(Objects.requireNonNull(result.get(match)).artifactSha256()).hasSize(64);
+        assertThat(Objects.requireNonNull(result.get(wrongLine)).matches()).isFalse();
+        assertThat(Objects.requireNonNull(result.get(wrongLine)).artifactSha256())
+                .isNotNull();
+        assertThat(result.get(missingPath)).isEqualTo(JobEvidenceFiles.QuoteMatch.absent());
+        assertThat(result.get(notCaptured)).isEqualTo(JobEvidenceFiles.QuoteMatch.absent());
+        assertThat(result.get(directory)).isEqualTo(JobEvidenceFiles.QuoteMatch.absent());
     }
 
     @Test
-    void shouldRejectArchiveWhenAnIndexArrivesTwice() {
-        doAnswer(invocation -> {
-                    try (var tar = new TarArchiveOutputStream((OutputStream) invocation.getArgument(3))) {
-                        entry(tar, "0", "quote\n");
-                        entry(tar, "0", "quote\n");
-                    }
-                    return null;
-                })
-                .when(git)
-                .executeInSnapshot(eq(repository), any(), any(), any());
-        var citation = new HistoricalGitEvidence.Citation("a".repeat(40), "one.java", "quote", 1, 1);
-        assertThatThrownBy(
-                        () -> verifier.verifyAll(job, "head-digest", "refs-digest", "b".repeat(40), List.of(citation)))
-                .isInstanceOf(JobDeliveryException.class)
-                .hasMessage("Unexpected or duplicate native citation blob");
+    void shouldRefuseACheckoutWhoseHeadIsNotThePinnedOne() {
+        var citation = new HistoricalGitEvidence.Citation(first, "one.java", "same quote", 2, 2);
+        assertThatThrownBy(() -> verifier.verifyAll(job, "head-digest", "refs-digest", first, List.of(citation)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("pinned head");
     }
 
     @Test
-    void shouldRejectArchiveWhenAnIndexNamesNoRequestedBlob() {
-        doAnswer(invocation -> {
-                    try (var tar = new TarArchiveOutputStream((OutputStream) invocation.getArgument(3))) {
-                        entry(tar, "1", "quote\n");
-                    }
-                    return null;
-                })
-                .when(git)
-                .executeInSnapshot(eq(repository), any(), any(), any());
-        var citation = new HistoricalGitEvidence.Citation("a".repeat(40), "one.java", "quote", 1, 1);
-        assertThatThrownBy(
-                        () -> verifier.verifyAll(job, "head-digest", "refs-digest", "b".repeat(40), List.of(citation)))
-                .isInstanceOf(JobDeliveryException.class)
-                .hasMessage("Unexpected or duplicate native citation blob");
+    void shouldVerifyNothingWithoutCitations() {
+        assertThat(verifier.verifyAll(job, "head-digest", "refs-digest", head, List.of()))
+                .isEmpty();
     }
 
-    private static void entry(TarArchiveOutputStream tar, String name, String text) throws java.io.IOException {
-        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-        var entry = new TarArchiveEntry(name);
-        entry.setSize(bytes.length);
-        tar.putArchiveEntry(entry);
-        tar.write(bytes);
-        tar.closeArchiveEntry();
+    private static String commit(Git git, String message) throws Exception {
+        git.add().addFilepattern(".").call();
+        return git.commit()
+                .setSign(false)
+                .setMessage(message)
+                .setAuthor("Test", "test@example.com")
+                .setCommitter("Test", "test@example.com")
+                .call()
+                .name();
     }
 }

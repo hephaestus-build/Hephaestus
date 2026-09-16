@@ -376,17 +376,18 @@ One invocation may contain the governed union needed by several practices. The m
 union; this runtime uses an attribution boundary rather than process isolation. The practice index lists each
 practice's admissible logical source kinds. Every model-authored observation must cite an exact quote and artifact path.
 The sandbox and server independently verify that the source is declared and available, the path belongs to that
-source in the pinned manifest, and the quote occurs in the digest-addressed artifact. Deterministic secret-scanner
-observations are the deliberate exception: the transient secret quote is verified by digest, then only its redacted
-location is persisted. Delivery fails atomically on any mismatch.
+source in the pinned manifest, and the quote occurs in the digest-addressed artifact. Observations already persisted
+by the `secret-diff-scanner` detector are the one exception delivery still accepts: their citations carry a quote
+digest and a redacted location instead of the quote, and only the location is kept; no current detector produces
+them. Delivery fails atomically on any mismatch.
 This proves traceable grounding, not model causality; evaluations requiring non-interference must still run
 practices in isolated evidence views.
 
 A repository citation names `scm.repository.tree`, the captured `inputs/sources/scm/repo/.git/HEAD` witness as its
 `artifactPath`, a repository-relative `path`, the exact quote and line range, and optionally a
 `revision` — a full commit id from the captured history; omitted, it means the reviewed commit. The
-server answers every repository citation of a review from one native Git read of the snapshot it
-pins by the `inputs/sources/scm/repo/.git/HEAD` and captured-refs digests: a path that does not exist at that revision, or a
+server answers every repository citation of a review by opening, with JGit, the snapshot it pins by the
+`inputs/sources/scm/repo/.git/HEAD` and captured-refs digests: an object the snapshot never captured, a path that does not exist at that revision, or a
 quote that does not match those lines, withholds that observation and records
 `QUOTE_LOCATION_MISMATCH` against the citation. Shell output is not an artifact — a
 quote is verified against the Git object, never against what a command printed — and only

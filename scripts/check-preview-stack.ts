@@ -49,8 +49,7 @@ const DELIBERATELY_OMITTED = new Set([
 	"GH_APP_PRIVATE_KEY_LOCATION",
 	// The agent sandbox is off, so nothing reads its runtime, limits or image override.
 	"HEPHAESTUS_AGENT_IMAGE_REFERENCE",
-	// Git checkout is off, so no repository is prepared or ingested through the native image.
-	"HEPHAESTUS_IMAGE_GIT_PREPARATION",
+	// Git checkout is off, so no repository is mirrored or ingested.
 	"GIT_MAX_CONCURRENT_INGESTIONS",
 	"GIT_MAX_SNAPSHOT_BYTES",
 	"HEPHAESTUS_FABRIC_ROOT",

@@ -136,8 +136,7 @@ public class JobEvidenceFiles {
             });
             return new PreparedJobInputs(
                     new PreparedEvidence(frozen, staged, cleanups, inputs.artifactSourceManifest(), directories),
-                    inputs.automatedReviewReadinessReport(),
-                    inputs.secretScan());
+                    inputs.automatedReviewReadinessReport());
         } catch (IOException | RuntimeException exception) {
             if (staging != null) delete(staging);
             inputs.close();
@@ -326,8 +325,7 @@ public class JobEvidenceFiles {
         try (var entries = Files.list(layout.root())) {
             for (Path entry : entries.toList()) {
                 String name = entry.getFileName().toString();
-                if (!name.startsWith(GitRepositoryManager.GIT_SNAPSHOT_PREFIX)
-                        && !name.startsWith(GitRepositoryManager.GIT_OUTPUT_PREFIX)) continue;
+                if (!name.startsWith(GitRepositoryManager.GIT_SNAPSHOT_PREFIX)) continue;
                 if (GitRepositoryManager.isCurrentProcessSpool(entry)) continue;
                 try {
                     if (Files.getLastModifiedTime(entry, LinkOption.NOFOLLOW_LINKS)

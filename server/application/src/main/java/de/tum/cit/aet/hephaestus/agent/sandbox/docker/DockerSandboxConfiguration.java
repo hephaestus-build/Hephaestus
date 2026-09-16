@@ -7,11 +7,9 @@ import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
-import de.tum.cit.aet.hephaestus.agent.job.WorkerRegistryRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.DockerInteractiveSandboxAdapter;
@@ -23,10 +21,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -69,10 +63,7 @@ public class DockerSandboxConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(DockerSandboxConfiguration.class);
 
-    /**
-     * RPC connections per container: create/start, logs, and the archive upload a Git preparation holds open
-     * while it streams the canonical mirror in.
-     */
+    /** RPC connections per container: create/start, logs and the wait. */
     private static final int RPC_CONNECTIONS_PER_CONTAINER = 3;
 
     private static final Duration HTTP_CONNECTION_TIMEOUT = Duration.ofSeconds(5);
@@ -94,32 +85,19 @@ public class DockerSandboxConfiguration {
      */
     static final Duration HTTP_STREAMING_RESPONSE_TIMEOUT = ResourceLimits.MAX_RUNTIME.plusMinutes(10);
 
-    /**
-     * Calls whose response body is the stream: the wait on every container, and for a Git preparation
-     * the stdin/stdout attach as well, so each of those holds two connections for its whole run.
-     */
+    /** Calls whose response body is the stream: the wait on every container. */
     @Bean(name = "dockerStreamingClient", destroyMethod = "close")
-    public DockerClient dockerStreamingClient(
-            SandboxProperties properties,
-            DockerSandboxProperties dockerProperties,
-            DockerNativeGitExecutor.Settings gitPreparationSettings) {
+    public DockerClient dockerStreamingClient(SandboxProperties properties, DockerSandboxProperties dockerProperties) {
         return buildClient(
-                dockerProperties,
-                HTTP_STREAMING_RESPONSE_TIMEOUT,
-                properties.maxConcurrentContainers() + 2 * gitPreparationSettings.maxConcurrentOperations(),
-                "streaming");
+                dockerProperties, HTTP_STREAMING_RESPONSE_TIMEOUT, properties.maxConcurrentContainers(), "streaming");
     }
 
     @Bean(destroyMethod = "close")
-    public DockerClient dockerClient(
-            SandboxProperties properties,
-            DockerSandboxProperties dockerProperties,
-            DockerNativeGitExecutor.Settings gitPreparationSettings) {
+    public DockerClient dockerClient(SandboxProperties properties, DockerSandboxProperties dockerProperties) {
         return buildClient(
                 dockerProperties,
                 HTTP_RESPONSE_TIMEOUT,
-                (properties.maxConcurrentContainers() + gitPreparationSettings.maxConcurrentOperations())
-                        * RPC_CONNECTIONS_PER_CONTAINER,
+                properties.maxConcurrentContainers() * RPC_CONNECTIONS_PER_CONTAINER,
                 "rpc");
     }
 
@@ -181,30 +159,17 @@ public class DockerSandboxConfiguration {
     }
 
     /**
-     * Dedicated platform thread pool for Docker blocking wait operations: one thread per sandbox and
-     * one per Git preparation that may run at once.
+     * Dedicated platform thread pool for Docker blocking wait operations, one thread per sandbox that
+     * may run at once.
      *
      * <p>docker-java's Apache HttpClient5 has {@code synchronized} blocks that pin virtual threads in
      * Java 21, causing cascading failures. A dedicated bounded pool of platform threads avoids this.
      */
     @Bean(destroyMethod = "shutdownNow")
-    public ExecutorService dockerWaitExecutor(
-            SandboxProperties properties, DockerNativeGitExecutor.Settings gitPreparationSettings) {
+    public ExecutorService dockerWaitExecutor(SandboxProperties properties) {
         return Executors.newFixedThreadPool(
-                properties.maxConcurrentContainers() + gitPreparationSettings.maxConcurrentOperations(),
+                properties.maxConcurrentContainers(),
                 Thread.ofPlatform().name("docker-wait-", 0).daemon(true).factory());
-    }
-
-    /**
-     * Platform threads for the Git operations the hub dispatches to this worker, one per operation the
-     * executor admits: each attaches to its container through docker-java, which would pin a virtual
-     * thread's carrier for the whole run.
-     */
-    @Bean(name = "gitOperationExecutor", destroyMethod = "shutdownNow")
-    public ExecutorService gitOperationExecutor(DockerNativeGitExecutor.Settings gitPreparationSettings) {
-        return Executors.newFixedThreadPool(
-                gitPreparationSettings.maxConcurrentOperations(),
-                Thread.ofPlatform().name("git-operation-", 0).daemon(true).factory());
     }
 
     @Bean
@@ -250,17 +215,6 @@ public class DockerSandboxConfiguration {
                 meterRegistry,
                 gatewaySessions,
                 volumeOperations);
-    }
-
-    @Bean
-    public NativeGitVolumeReconciler nativeGitVolumeReconciler(
-            DockerClientOperations docker,
-            DockerSandboxProperties properties,
-            WorkerProperties worker,
-            WorkerRegistryRepository workers,
-            RepositoryRepository repositories,
-            RepositoryToMonitorRepository monitors) {
-        return new NativeGitVolumeReconciler(docker, properties, worker, workers, repositories, monitors);
     }
 
     @Bean
@@ -397,41 +351,5 @@ public class DockerSandboxConfiguration {
         } catch (IOException e) {
             throw new SandboxException("Failed to load seccomp profile: " + resourcePath, e);
         }
-    }
-
-    /** The image guards in {@code agent.sandbox} check {@code git.image()} exactly as they do the agent image. */
-    @Bean
-    public DockerNativeGitExecutor.Settings gitPreparationSettings(
-            GitRepositoryProperties git,
-            WorkerProperties worker,
-            SandboxProperties sandbox,
-            DockerSandboxProperties docker,
-            ScmServerEndpointPolicy scmEndpoints) {
-        boolean simulation = scmEndpoints.simulationConfigured();
-        String runtime = docker.containerRuntime();
-        // gVisor takes over the interfaces of the namespace it is given; joined to the worker's, it would
-        // take the worker's addresses with it.
-        if (simulation && runtime != null && !runtime.isBlank()) {
-            throw new IllegalStateException("An SCM simulation fetches from the worker's own network namespace,"
-                    + " which only the default container runtime can join; unset SANDBOX_DOCKER_CONTAINER_RUNTIME");
-        }
-        return new DockerNativeGitExecutor.Settings(
-                git.image(),
-                worker.resolvedWorkerId(),
-                sandbox.maxConcurrentContainers(),
-                git.maxSnapshotBytes(),
-                docker.owner(),
-                simulation);
-    }
-
-    @Bean
-    public DockerNativeGitExecutor dockerNativeGitExecutor(
-            DockerClientOperations docker,
-            SandboxContainerManager containers,
-            SandboxNetworkManager networks,
-            ContainerSecurityPolicy policy,
-            ObjectMapper mapper,
-            DockerNativeGitExecutor.Settings settings) {
-        return new DockerNativeGitExecutor(docker, containers, networks, policy, mapper, settings);
     }
 }

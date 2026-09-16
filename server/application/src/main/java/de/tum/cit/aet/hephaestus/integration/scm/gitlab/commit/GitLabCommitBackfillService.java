@@ -15,7 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -74,12 +74,12 @@ public class GitLabCommitBackfillService {
      * details are captured is skipped, and a commit whose capture failed is retried next cycle.
      *
      * @return sync result with the count of commits captured; an error result with count 0 when
-     *     native Git is disabled
+     *     local Git checkout is disabled
      */
     public SyncResult backfillCommits(Long scopeId, Repository repository) {
         if (!gitRepositoryManager.isEnabled()) {
             log.warn(
-                    "Skipped native Git commit backfill: reason=gitDisabled, repoId={}, repoName={} — caller should fall through to REST commit sync",
+                    "Skipped JGit commit backfill: reason=gitDisabled, repoId={}, repoName={} — caller should fall through to REST commit sync",
                     repository.getId(),
                     sanitizeForLog(repository.getNameWithOwner()));
             return SyncResult.abortedError(0);

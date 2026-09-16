@@ -25,7 +25,6 @@
 		"server/application/src/test/resources/agent/**/*.ts",
 		"server/application/src/main/resources/practices/precompute/**/*.ts",
 		"docker/agents/precompute/**/*.ts",
-		"docker/agents/pi/**/*.ts",
-		"docker/agents/git/**/*.ts"
+		"docker/agents/pi/**/*.ts"
 	]
 }

@@ -21,7 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.LinkedHashMap;
@@ -475,7 +475,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
     @Test
     void shouldReportCommitScanFailureInsteadOfEmptyEvidence() {
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        org.mockito.Mockito.doThrow(new IllegalStateException("Native Git failed"))
+        org.mockito.Mockito.doThrow(new IllegalStateException("JGit failed"))
                 .when(gitRepositoryManager)
                 .forEachCommitSubject(
                         eq(new RepositoryKey(99L, REPO_ID)), eq("a".repeat(40)), eq("abc123def456"), any());

@@ -265,7 +265,6 @@ services:
       # (hephaestus.runtime.worker.enabled), then gated per-workspace via WorkspaceFeatures.
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       HEPHAESTUS_AGENT_IMAGE_REFERENCE: ${HEPHAESTUS_IMAGE_AGENT_PI:?verified release lock required}
-      HEPHAESTUS_IMAGE_GIT_PREPARATION: ${HEPHAESTUS_IMAGE_GIT_PREPARATION:?verified release lock required}
       SANDBOX_DOCKER_HOST: ${SANDBOX_DOCKER_HOST:-unix:///var/run/docker.sock}
       SANDBOX_DOCKER_TLS_VERIFY: ${SANDBOX_DOCKER_TLS_VERIFY:-false}
       SANDBOX_DOCKER_CERT_PATH: ${SANDBOX_DOCKER_CERT_PATH:-}
@@ -397,7 +396,6 @@ services:
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       # Valueless, as on application-server above; this is the pod that actually opens sandboxes.
       HEPHAESTUS_AGENT_IMAGE_REFERENCE: ${HEPHAESTUS_IMAGE_AGENT_PI:?verified release lock required}
-      HEPHAESTUS_IMAGE_GIT_PREPARATION: ${HEPHAESTUS_IMAGE_GIT_PREPARATION:?verified release lock required}
       HEPHAESTUS_HUB_URL: ws://application-server:8080/api/workers/connect
       HEPHAESTUS_WORKER_REGISTRATION_TOKEN: ${HEPHAESTUS_WORKER_REGISTRATION_TOKEN:-}
       # Agent job queue (practice review). The queue runs on PostgreSQL — this pod needs no NATS at

@@ -1,9 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.context.SecretScan;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import java.util.List;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -68,13 +66,5 @@ public final class EvidenceSnapshotFixtures {
 
     public static ObjectNode admittedPractice(ObjectNode snapshot, String slug, long revisionId) {
         return snapshot.withArray("practices").addObject().put("slug", slug).put("revisionId", revisionId);
-    }
-
-    /** Records secret verdicts the way preparation does, bound to the staged diff by digest. */
-    public static void secretScan(
-            ObjectMapper mapper, ObjectNode snapshot, String diffSha256, List<SecretScan.Hit> hits) {
-        snapshot.set(
-                SecretScan.SNAPSHOT_NODE,
-                mapper.valueToTree(new SecretScan(CapturedEvidence.DIFF_ARTIFACT, diffSha256, hits)));
     }
 }

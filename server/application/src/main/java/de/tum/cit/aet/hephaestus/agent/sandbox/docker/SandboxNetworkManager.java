@@ -71,7 +71,7 @@ public class SandboxNetworkManager {
      * @return the app-server's IP address on the network
      */
     public @Nullable String connectAppServer(String networkId) {
-        String containerId = appServerContainerId();
+        String containerId = resolveAppServerContainerId();
         if (containerId == null || containerId.isBlank()) {
             log.warn("Cannot determine app-server container ID — app server is likely running on the host, "
                     + "not in Docker. Agent containers will use host.docker.internal to reach the LLM proxy. "
@@ -111,7 +111,7 @@ public class SandboxNetworkManager {
 
     /** Disconnect the app-server from a job network. Idempotent — no-op if already disconnected. */
     public void disconnectAppServer(String networkId) {
-        String containerId = appServerContainerId();
+        String containerId = resolveAppServerContainerId();
         if (containerId == null || containerId.isBlank()) {
             return;
         }
@@ -148,8 +148,7 @@ public class SandboxNetworkManager {
                 .toList();
     }
 
-    /** This worker's own container, or null when it runs on the host. */
-    public @Nullable String appServerContainerId() {
+    private String resolveAppServerContainerId() {
         if (appServerContainerId == null) {
             synchronized (this) {
                 if (appServerContainerId == null) {

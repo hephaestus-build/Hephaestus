@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
-import de.tum.cit.aet.hephaestus.agent.context.SecretScan;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -785,8 +784,7 @@ public class AgentJobExecutor {
                     agentSpec.promptDigest(),
                     sandboxSpec.inputFiles(),
                     job.getRetryCount(),
-                    preparedInputs.automatedReviewReadinessReport(),
-                    preparedInputs.secretScan());
+                    preparedInputs.automatedReviewReadinessReport());
             return new PreparedSandbox(sandboxSpec, preparedInputs);
         } catch (RuntimeException exception) {
             preparedInputs.close();
@@ -802,8 +800,7 @@ public class AgentJobExecutor {
                 null,
                 preparedInputs.files(),
                 retryCount,
-                preparedInputs.automatedReviewReadinessReport(),
-                preparedInputs.secretScan());
+                preparedInputs.automatedReviewReadinessReport());
     }
 
     /**
@@ -816,10 +813,9 @@ public class AgentJobExecutor {
             @Nullable String promptDigest,
             Map<String, byte[]> inputFiles,
             int retryCount,
-            @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
-            @Nullable SecretScan secretScan) {
+            @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport) {
         String inputsDigest = ProvenanceDigest.inputsDigestHex(inputFiles, jobId);
-        JsonNode evidenceSnapshot = evidenceSnapshot(inputFiles, automatedReviewReadinessReport, secretScan);
+        JsonNode evidenceSnapshot = evidenceSnapshot(inputFiles, automatedReviewReadinessReport);
         Integer updated = transactionTemplate.execute(status -> jobRepository.updateProvenanceDigests(
                 jobId,
                 workerId,
@@ -837,14 +833,9 @@ public class AgentJobExecutor {
         log.debug("Provenance digests: jobId={}, prompt={}, inputs={}", jobId, promptDigest, inputsDigest);
     }
 
-    /**
-     * The manifest and admitted practices as the sandbox sees them, plus what preparation established
-     * about the capture and only admission reads: the secret verdicts, which never enter the sandbox.
-     */
+    /** The manifest and admitted practices as the sandbox sees them. */
     private @Nullable JsonNode evidenceSnapshot(
-            Map<String, byte[]> inputFiles,
-            @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
-            @Nullable SecretScan secretScan) {
+            Map<String, byte[]> inputFiles, @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport) {
         byte[] manifest = inputFiles.get(SandboxLayout.MANIFEST_PATH);
         byte[] practices = inputFiles.get(SandboxLayout.PRACTICES_PREFIX + "index.json");
         // Java null, not NullNode: NullNode serializes to the JSON value null, which is a non-SQL-NULL
@@ -857,9 +848,6 @@ public class AgentJobExecutor {
         snapshot.set("manifest", objectMapper.readTree(manifest));
         if (practices != null) {
             snapshot.set("practices", objectMapper.readTree(practices));
-        }
-        if (secretScan != null) {
-            snapshot.set(SecretScan.SNAPSHOT_NODE, objectMapper.valueToTree(secretScan));
         }
         return snapshot;
     }

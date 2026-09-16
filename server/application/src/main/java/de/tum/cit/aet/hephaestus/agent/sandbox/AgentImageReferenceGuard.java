@@ -2,21 +2,16 @@ package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.core.release.ImageReference;
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
- * Refuses agent and Git preparation image references that cannot name a build matching this server.
- * The Git preparation image is judged in the worker role only, where {@link AgentImagePinGuard}
- * explains why.
+ * Refuses an agent image reference that cannot name a build matching this server.
  *
  * <p>Applies in every runtime profile, unlike {@link AgentImagePinGuard}: a digest is a production requirement, but a
  * <em>channel tag</em> — one that moves from build to build rather than naming one — is wrong in
@@ -79,14 +74,10 @@ public class AgentImageReferenceGuard {
                     + "image built from a different commit than this server. Name the full version instead. "
                     + FIX;
 
-    public AgentImageReferenceGuard(
-            AgentImageProperties properties, GitRepositoryProperties git, Environment environment) {
+    public AgentImageReferenceGuard(AgentImageProperties properties) {
         check("hephaestus.agent.image.reference", "HEPHAESTUS_AGENT_IMAGE_REFERENCE", properties.reference());
-        if (RuntimeRole.enabled(environment).contains(RuntimeRole.WORKER))
-            check("hephaestus.git.image", "HEPHAESTUS_IMAGE_GIT_PREPARATION", git.image());
     }
 
-    /** Both images derive their fallback tag from {@code spring.application.version}, so one judgement serves both. */
     private static void check(String setting, String variable, @Nullable String reference) {
         if (reference == null || reference.isBlank()) {
             throw new IllegalStateException(setting + " is not set and could not be derived. " + DOCS);

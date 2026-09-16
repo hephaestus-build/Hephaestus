@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
-import de.tum.cit.aet.hephaestus.agent.context.SecretScan;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionDeliveryService.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
@@ -79,9 +78,6 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     @Mock
     private PracticeDetectionDeliveryService deliveryService;
 
-    @Mock
-    private SecretDiffScanner secretScanner;
-
     private String capturedPaths = "";
 
     @Mock
@@ -111,7 +107,6 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
                 deliveryService,
                 feedbackService,
-                secretScanner,
                 new FeedbackResponseSuppressionFilter(
                         org.mockito.Mockito.mock(
                                 de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
@@ -201,19 +196,18 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
 
     private static final String DIFF_SHA = "b".repeat(64);
 
-    /** Every fixture practice admitted, over a captured diff whose secret scan found nothing. */
+    /** Every fixture practice admitted, over a captured diff. */
     private ObjectNode admittedPracticeSnapshot() {
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(objectMapper);
         EvidenceSnapshotFixtures.admittedPractice(snapshot, "pr-description-quality", 1)
                 .put("defectDetector", false);
         EvidenceSnapshotFixtures.admittedPractice(snapshot, "error-handling", 2).put("defectDetector", false);
-        EvidenceSnapshotFixtures.admittedPractice(snapshot, PullRequestReviewHandler.SECRET_PRACTICE, 3)
+        EvidenceSnapshotFixtures.admittedPractice(snapshot, "avoids-insecure-defaults-and-over-broad-permissions", 3)
                 .put("defectDetector", true);
         ObjectNode diff = EvidenceSnapshotFixtures.availableSource(
                 snapshot, "scm.pull-request.diff", "a".repeat(40) + ":" + "b".repeat(40));
         EvidenceSnapshotFixtures.artifact(diff, "inputs/context/diff_paths.nul", "a".repeat(64));
         EvidenceSnapshotFixtures.artifact(diff, "inputs/context/diff.patch", DIFF_SHA);
-        EvidenceSnapshotFixtures.secretScan(objectMapper, snapshot, DIFF_SHA, List.of());
         return snapshot;
     }
 
@@ -456,45 +450,6 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             assertThatThrownBy(() -> handler.prepareInputs(jobWithMetadata(sampleJobMetadata())))
                     .isInstanceOf(JobPreparationException.class)
                     .hasMessageContaining("Practice slug fails ABI pattern");
-        }
-
-        @Test
-        void shouldScanTheCapturedChangeOnlyWhenTheSecretPracticeIsReady() {
-            stubDefaults();
-            AgentJob job = jobWithMetadata(sampleJobMetadata());
-
-            assertThat(handler.prepareInputs(job).secretScan()).isNull();
-            verifyNoInteractions(secretScanner);
-
-            Practice secrets = createPractice(PullRequestReviewHandler.SECRET_PRACTICE, "Secrets", "criteria");
-            when(practiceRepository.findByWorkspaceIdAndArtifactKind(WORKSPACE_ID, ArtifactKinds.PULL_REQUEST))
-                    .thenReturn(List.of(secrets));
-            var scan = new SecretScan("inputs/context/diff.patch", "b".repeat(64), List.of());
-            when(secretScanner.scan(eq(job.getId()), any())).thenReturn(scan);
-
-            assertThat(handler.prepareInputs(job).secretScan()).isSameAs(scan);
-        }
-
-        @Test
-        void shouldReleaseTheCapturedEvidenceWhenTheSecretScanFails() {
-            stubDefaults();
-            var released = new java.util.concurrent.atomic.AtomicBoolean();
-            when(workspaceContextBuilder.prepare(
-                            any(ContextRequest.PracticeReviewRequest.class), any(EvidencePlan.class)))
-                    .thenReturn(new PreparedEvidence(
-                            Map.of("inputs/context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8)),
-                            Map.of(),
-                            List.of(() -> released.set(true)),
-                            org.mockito.Mockito.mock(ArtifactSourceManifest.class)));
-            when(practiceRepository.findByWorkspaceIdAndArtifactKind(WORKSPACE_ID, ArtifactKinds.PULL_REQUEST))
-                    .thenReturn(List.of(createPractice(PullRequestReviewHandler.SECRET_PRACTICE, "Secrets", "c")));
-            AgentJob job = jobWithMetadata(sampleJobMetadata());
-            when(secretScanner.scan(eq(job.getId()), any())).thenThrow(new JobPreparationException("scan failed"));
-
-            assertThatThrownBy(() -> handler.prepareInputs(job))
-                    .isInstanceOf(JobPreparationException.class)
-                    .hasMessage("scan failed");
-            assertThat(released).isTrue();
         }
 
         @Test
@@ -908,87 +863,6 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             assertThatThrownBy(() -> admit(job, rawOutput))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("filtered by diff scope");
-            verifyNoInteractions(deliveryService);
-        }
-
-        @Test
-        @SuppressWarnings("unchecked")
-        void injectsSecretFindingWhenModelAbstainsButDiffCommitsCredential() {
-            String rawOutput = """
-                {
-                  "observations": [{
-                    "practiceSlug": "pr-description-quality",
-                    "summary": "Clear description",
-                    "assessmentStatus": "ASSESSED", "presence": "PRESENT",
-                    "assessment": "GOOD",
-                    "severity": null,
-                    "evidenceRationale": "The description states the purpose.",
-                    "evidence": {}
-                  }]
-                }
-                """;
-            AgentJob job = jobWithMetadata(sampleJobMetadata());
-            ObjectNode output = objectMapper.createObjectNode();
-            output.put("rawOutput", rawOutput);
-            job.setOutput(output);
-            stubDiff("Sources/Config.swift");
-            EvidenceSnapshotFixtures.secretScan(
-                    objectMapper,
-                    (ObjectNode) java.util.Objects.requireNonNull(job.getEvidenceSnapshot()),
-                    DIFF_SHA,
-                    List.of(new SecretScan.Hit(
-                            "Sources/Config.swift",
-                            1,
-                            "b2b88104bf5c02259227480b0eabe2f9b7d63501e03e788b7b82a499b818e12a",
-                            "aws-access-token")));
-            ArgumentCaptor<List<PracticeDetectionResultParser.ValidatedObservation>> captor =
-                    ArgumentCaptor.forClass(List.class);
-            when(deliveryService.prepare(eq(job), captor.capture()))
-                    .thenReturn(org.mockito.Mockito.mock(PreparedObservations.class));
-
-            admit(job, rawOutput);
-
-            List<PracticeDetectionResultParser.ValidatedObservation> delivered = captor.getValue();
-            var secret = delivered.stream()
-                    .filter(f -> "avoids-insecure-defaults-and-over-broad-permissions".equals(f.practiceSlug()))
-                    .findFirst()
-                    .orElseThrow();
-            assertThat(secret.presence()).isEqualTo(Presence.PRESENT);
-            assertThat(secret.assessment()).isEqualTo(Assessment.BAD);
-            JsonNode evidence = secret.evidence();
-            org.junit.jupiter.api.Assertions.assertNotNull(evidence);
-            assertThat(evidence.path("detector").asString()).isEqualTo("secret-diff-scanner");
-            JsonNode citation = evidence.path("citations").get(0);
-            assertThat(citation.has("quote")).isFalse();
-            assertThat(citation.path("quoteSha256").asString())
-                    .isEqualTo("b2b88104bf5c02259227480b0eabe2f9b7d63501e03e788b7b82a499b818e12a");
-        }
-
-        @Test
-        void shouldRefuseToAdmitWhenTheRecordedSecretVerdictsAreNotThoseOfTheCapturedDiff() {
-            AgentJob job = jobWithMetadata(sampleJobMetadata());
-            stubDiff("Sources/Config.swift");
-            EvidenceSnapshotFixtures.secretScan(
-                    objectMapper,
-                    (ObjectNode) java.util.Objects.requireNonNull(job.getEvidenceSnapshot()),
-                    "f".repeat(64),
-                    List.of());
-
-            assertThatThrownBy(() -> admit(job, PRESENT_OBSERVATION))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("not those of the captured diff");
-            verifyNoInteractions(deliveryService);
-        }
-
-        @Test
-        void shouldRefuseToAdmitWhenTheSecretPracticeWasAskedButNoVerdictsWereRecorded() {
-            AgentJob job = jobWithMetadata(sampleJobMetadata());
-            stubDiff("Sources/Config.swift");
-            ((ObjectNode) java.util.Objects.requireNonNull(job.getEvidenceSnapshot())).remove(SecretScan.SNAPSHOT_NODE);
-
-            assertThatThrownBy(() -> admit(job, PRESENT_OBSERVATION))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("missing");
             verifyNoInteractions(deliveryService);
         }
     }

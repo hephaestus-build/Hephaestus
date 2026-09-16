@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Persists what native Git captured about one commit, one transaction per commit. A commit that is
+ * Persists what JGit captured about one commit, one transaction per commit. A commit that is
  * already captured is left alone; otherwise the row is upserted with its values fitted to the column
  * widths, its file changes replaced, and — when the row did not exist before — a
  * {@link ScmDomainEvent.CommitCreated} published for the listeners that fire after commit. One

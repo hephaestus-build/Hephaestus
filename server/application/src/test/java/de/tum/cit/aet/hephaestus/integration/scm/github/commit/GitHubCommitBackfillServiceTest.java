@@ -23,7 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -62,7 +62,7 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
     @InjectMocks
     private GitHubCommitBackfillService service;
 
-    /** Feeds the walk the way native Git does: ask which shas are captured, then hand over each commit. */
+    /** Feeds the walk the way JGit does: ask which shas are captured, then hand over each commit. */
     private void stubCommits(List<CommitDetails> commits) {
         doAnswer(invocation -> {
                     Function<List<String>, Set<String>> captured = invocation.getArgument(1);

@@ -128,14 +128,15 @@ store can use a presigned download without changing the agent contract.
 ### One job folder and one context mechanism
 
 At job start, the owning worker creates the attempt folder and renders every permitted non-repository
-area from PostgreSQL as plain files. It adds a working copy of each permitted repository: a
-`git-preparation` container fetches the reachable objects from the worker's bare mirror into a fresh
-bare repository and checks the reviewed commit out, and the worker reads that snapshot into the
-attempt folder as a tar it validates entry by entry. Hard-linking objects out of the mirror was
-rejected: the snapshot has to cross a container boundary, and Git's own local-clone hard-linking
-requires the source repository to be owned by the current user
+area from PostgreSQL as plain files. It adds a working copy of each permitted repository: JGit, in the
+worker's own process, fetches the reachable objects from the worker's bare mirror into a fresh
+repository under the fabric root and checks the reviewed commit out, and the worker copies that
+snapshot into the attempt folder entry by entry, refusing anything that is not a regular file or
+directory. Objects are not hard-linked out of the mirror: the JGit fetch copies them, so the snapshot
+shares no file with the mirror, and Git's own local-clone hard-linking would require the source
+repository to be owned by the current user
 ([`git clone --local`](https://git-scm.com/docs/git-clone#Documentation/git-clone.txt---local)). The
-worker is the sole writer to its mirror and a file lock serializes a fetch against readers.
+worker is the sole writer to its mirror and an in-process lock serializes a fetch against readers.
 
 Governance is evaluated independently per context area and per repository before rendering. The
 result intentionally has two read models: PostgreSQL serves the webapp and pipeline; files serve the
@@ -190,8 +191,9 @@ observation admission. The worker deletes a completed attempt’s folder when re
 observations were admitted; a sweep retries missed cleanup. Other ended or orphaned attempts become
 eligible for deletion one hour after the worker first records that they have ended, and are removed
 by a successful cleanup sweep. Running attempts are not swept. There are no keep-refs,
-content-addressed store, evidence payload rows, shared volume, or retained replay copies. Git spool
-files are released by their creating process; age-based cleanup reclaims only previous-process leftovers.
+content-addressed store, evidence payload rows, shared volume, or retained replay copies. Snapshot
+repositories under the fabric root are released by the process that created them; age-based cleanup
+reclaims only leftovers of a previous process.
 
 ### Bash and the sandbox boundary
 

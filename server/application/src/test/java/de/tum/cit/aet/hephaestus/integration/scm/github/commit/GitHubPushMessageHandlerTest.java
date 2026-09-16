@@ -97,7 +97,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                 new PassThroughTransactionTemplate());
     }
 
-    /** Feeds the walk the way native Git does: ask which shas are captured, then hand over each commit. */
+    /** Feeds the walk the way JGit does: ask which shas are captured, then hand over each commit. */
     private void stubCommitRange(List<CommitDetails> commits) {
         doAnswer(invocation -> {
                     Function<List<String>, Set<String>> captured = invocation.getArgument(3);
@@ -584,8 +584,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
 
             handler.handleEvent(event);
 
-            var key = new de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey(
-                    1, 100);
+            var key = new de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey(1, 100);
             verify(gitRepositoryManager).ensureRepository(key, "https://github.com/owner/repo.git", "test-token");
             verify(gitRepositoryManager).forEachCommitInRange(eq(key), eq("abc123"), eq("def456"), any(), any());
         }
@@ -604,9 +603,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             org.mockito.Mockito.doThrow(new RuntimeException("Git clone failed"))
                     .when(gitRepositoryManager)
                     .ensureRepository(
-                            any(
-                                    de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor
-                                            .RepositoryKey.class),
+                            any(de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey.class),
                             any(),
                             any());
 
@@ -780,16 +777,12 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             // Should NOT use local git
             verify(gitRepositoryManager, never())
                     .ensureRepository(
-                            any(
-                                    de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor
-                                            .RepositoryKey.class),
+                            any(de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey.class),
                             anyString(),
                             any());
             verify(gitRepositoryManager, never())
                     .forEachCommitInRange(
-                            any(
-                                    de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor
-                                            .RepositoryKey.class),
+                            any(de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey.class),
                             any(),
                             any(),
                             any(),

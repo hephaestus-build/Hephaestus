@@ -23,7 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.io.IOException;
@@ -344,10 +344,10 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         void shouldRefuseCaptureWhenNativeDiffFails() {
             stubGit();
             when(gitDiffOperations.capture(REPOSITORY, "a".repeat(40), "abc123def456"))
-                    .thenThrow(new JobPreparationException("Native Git failed"));
+                    .thenThrow(new JobPreparationException("JGit failed"));
             assertThatThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(DIFF)))
                     .isInstanceOf(JobPreparationException.class)
-                    .hasRootCauseMessage("Native Git failed");
+                    .hasRootCauseMessage("JGit failed");
         }
 
         @Test

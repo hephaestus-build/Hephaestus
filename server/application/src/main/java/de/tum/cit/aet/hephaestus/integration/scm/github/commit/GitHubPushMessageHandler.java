@@ -22,7 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeseri
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import java.time.Instant;
@@ -208,7 +208,7 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
     /**
      * Persists the push payload's commits, which carry file lists but no line statistics. As the
      * fallback after a local-git failure the statistics are withheld so {@code COALESCE} keeps what
-     * native Git already captured.
+     * JGit already captured.
      */
     private void processCommitsViaWebhook(GitHubPushEventDTO event, Repository repository, boolean asFallback) {
         transactions.executeWithoutResult(status -> persistWebhookCommits(event, repository, asFallback));

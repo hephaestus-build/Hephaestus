@@ -1,107 +1,96 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
-import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
-import org.apache.commons.io.FileUtils;
+import org.eclipse.jgit.lib.Constants;
+import org.eclipse.jgit.lib.FileMode;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevWalk;
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
+import org.eclipse.jgit.treewalk.TreeWalk;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
+/**
+ * Verifies quotes from the repository's history against the checkout the review saw: its {@code .git}
+ * holds exactly the commits the review could reach, so a commit that is not in it was never captured.
+ */
 @Component
 public class HistoricalGitEvidence {
     private final JobEvidenceFiles files;
-    private final NativeGitExecutor git;
 
-    public HistoricalGitEvidence(JobEvidenceFiles files, NativeGitExecutor git) {
+    public HistoricalGitEvidence(JobEvidenceFiles files) {
         this.files = files;
-        this.git = git;
     }
 
     public record Citation(String revision, String path, String quote, int startLine, int endLine) {}
 
-    private record Blob(String revision, String path) {}
-
-    /**
-     * CITED_BLOBS names entries by distinct (revision, path) request index; absent paths have no entry.
-     */
     public Map<Citation, JobEvidenceFiles.QuoteMatch> verifyAll(
             AgentJob job, String headDigest, String refsDigest, String pinnedHead, List<Citation> submitted) {
         if (submitted.isEmpty()) return Map.of();
-        List<Citation> citations = submitted.stream().distinct().toList();
-        List<Blob> blobs = citations.stream()
-                .map(citation -> new Blob(citation.revision(), citation.path()))
-                .distinct()
-                .toList();
-        Path repository = files.repositoryForVerification(job, headDigest, refsDigest);
-        List<String> arguments = new ArrayList<>();
-        arguments.add(pinnedHead);
-        blobs.forEach(blob -> {
-            arguments.add(blob.revision());
-            arguments.add(blob.path());
-        });
-        Path directory = null;
-        try {
-            directory = Files.createTempDirectory("hephaestus-cited-blobs-");
-            Path archive = directory.resolve("blobs.tar");
-            try (var output = Files.newOutputStream(archive)) {
-                git.executeInSnapshot(
-                        repository,
-                        new NativeGitExecutor.Request(NativeGitExecutor.Operation.CITED_BLOBS, arguments, null, null),
-                        Duration.ofMinutes(5),
-                        output);
+        Path checkout = files.repositoryForVerification(job, headDigest, refsDigest);
+        Map<Citation, JobEvidenceFiles.QuoteMatch> verified = new LinkedHashMap<>();
+        try (Repository repository = new FileRepositoryBuilder()
+                        .setGitDir(checkout.resolve(Constants.DOT_GIT).toFile())
+                        .setMustExist(true)
+                        .build();
+                RevWalk walk = new RevWalk(repository)) {
+            ObjectId head = repository.resolve(Constants.HEAD);
+            if (head == null || !head.getName().equals(pinnedHead)) {
+                throw new IllegalStateException("Captured repository does not match the pinned head");
             }
-            Map<Citation, JobEvidenceFiles.QuoteMatch> verified = new LinkedHashMap<>();
-            var received = new HashSet<Integer>();
-            try (var input = new TarArchiveInputStream(Files.newInputStream(archive))) {
-                for (var entry = input.getNextEntry(); entry != null; entry = input.getNextEntry()) {
-                    if (!entry.isFile()
-                            || entry.isLink()
-                            || entry.isSymbolicLink()
-                            || !entry.getName().matches("0|[1-9][0-9]*")) {
-                        throw new JobDeliveryException("Invalid native citation archive entry");
+            Path blob = Files.createTempFile("hephaestus-cited-blob-", "");
+            try {
+                for (Citation citation : submitted.stream().distinct().toList()) {
+                    ObjectId object = capturedBlob(repository, walk, citation.revision(), citation.path());
+                    if (object == null) {
+                        verified.put(citation, JobEvidenceFiles.QuoteMatch.absent());
+                        continue;
                     }
-                    int index;
-                    try {
-                        index = Integer.parseInt(entry.getName());
-                    } catch (NumberFormatException exception) {
-                        throw new JobDeliveryException("Invalid native citation archive index", exception);
+                    try (OutputStream out = Files.newOutputStream(blob)) {
+                        repository.open(object, Constants.OBJ_BLOB).copyTo(out);
                     }
-                    if (index >= blobs.size() || !received.add(index)) {
-                        throw new JobDeliveryException("Unexpected or duplicate native citation blob");
-                    }
-                    Blob identity = blobs.get(index);
-                    Path blob = directory.resolve("blob");
-                    Files.copy(input, blob);
-                    for (Citation citation : citations) {
-                        if (identity.revision().equals(citation.revision())
-                                && identity.path().equals(citation.path())) {
-                            verified.put(
-                                    citation,
-                                    JobEvidenceFiles.verifyUtf8AtLines(
-                                            blob, citation.quote(), citation.startLine(), citation.endLine()));
-                        }
-                    }
-                    Files.delete(blob);
+                    verified.put(
+                            citation,
+                            JobEvidenceFiles.verifyUtf8AtLines(
+                                    blob, citation.quote(), citation.startLine(), citation.endLine()));
                 }
-            }
-            for (Citation citation : citations) {
-                verified.putIfAbsent(citation, JobEvidenceFiles.QuoteMatch.absent());
+            } finally {
+                Files.deleteIfExists(blob);
             }
             return Map.copyOf(verified);
         } catch (IOException exception) {
             // The verifier, not the submission, failed: a 5xx the runner repeats, never a refusal.
             throw new IllegalStateException("Repository citations could not be verified", exception);
-        } finally {
-            if (directory != null) FileUtils.deleteQuietly(directory.toFile());
+        }
+    }
+
+    /** The regular file at {@code path} in {@code revision}, or null when the checkout holds no such thing. */
+    private static @Nullable ObjectId capturedBlob(Repository repository, RevWalk walk, String revision, String path)
+            throws IOException {
+        if (path.isEmpty()
+                || path.startsWith("/")
+                || path.endsWith("/")
+                || !ObjectId.isId(revision)
+                || !repository.getObjectDatabase().has(ObjectId.fromString(revision))) {
+            return null;
+        }
+        RevCommit commit = walk.parseCommit(ObjectId.fromString(revision));
+        try (TreeWalk tree = TreeWalk.forPath(repository, path, commit.getTree())) {
+            if (tree == null) return null;
+            FileMode mode = tree.getFileMode(0);
+            boolean regular = FileMode.REGULAR_FILE.equals(mode)
+                    || FileMode.EXECUTABLE_FILE.equals(mode)
+                    || FileMode.SYMLINK.equals(mode);
+            return regular ? tree.getObjectId(0) : null;
         }
     }
 }

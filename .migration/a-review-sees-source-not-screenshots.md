@@ -1,13 +1,9 @@
 #### 🔴 Repository capture and agent image upgrade
 
-Deploy matching server, worker, `git-preparation` and agent images: the agent image now carries
-runtime contract 3, and native Git runs in the new `git-preparation` image rather than in the
-application image. The shipped Compose files hand every server and worker container that image's
-digest from the verified release lock as `HEPHAESTUS_IMAGE_GIT_PREPARATION`; a deployment manifest of
-your own must forward it too, digest-pinned wherever the agent image must be. Drain running reviews
-before upgrading. Review and explicitly update stored source policies to contract `1.2.0` using
-the source-policy upgrade instructions. Startup does not rewrite installed policies; historical
-practice revisions and observations remain unchanged.
+Deploy matching server, worker and agent images: the agent image now carries runtime contract 3.
+Drain running reviews before upgrading. Review and explicitly update stored source policies to
+contract `1.2.0` using the source-policy upgrade instructions. Startup does not rewrite installed
+policies; historical practice revisions and observations remain unchanged.
 
 Remove `GIT_TREE_MAX_FILES`, `GIT_TREE_MAX_TOTAL_SIZE` and `GIT_TREE_MAX_FILE_SIZE`. A review now
 captures the whole repository at the reviewed commit together with the Git history reachable from it,
@@ -16,9 +12,6 @@ repository mirrors, per-attempt snapshots and sandbox input archives. A reposito
 mirrored history exceeds `GIT_MAX_SNAPSHOT_BYTES` (8 GiB by default) is refused whole rather than
 captured in part; raise it for larger monorepos. `GIT_MAX_CONCURRENT_INGESTIONS` (default 2) caps how
 many captured commits a worker writes to PostgreSQL at once.
-
-When the review includes the secret-scanning practice, a changed file larger than the scanner's
-8 MiB per-file budget refuses preparation rather than recording an incomplete scan as successful.
 
 Review the expanded repository-history scope with your deployment's privacy owner. Files deleted from
 the current checkout can remain accessible in history.
@@ -32,8 +25,10 @@ model requests or session transcripts, and archived transcripts from earlier rel
 admission verdicts nor replay evidence.
 
 Remove `HEPHAESTUS_FABRIC_GC_RETENTION_DAYS`; the content-addressed store and its retention sweep are
-gone. Repository mirrors now live in worker-owned Docker volumes named `hephaestus-git-*`, and the
-worker's `HEPHAESTUS_FABRIC_ROOT` holds only attempt folders and Git spool files. After the upgrade,
-once no attempt from the previous release is still running, delete the retired `sources/` and `cas/`
-directories and the previous layout's per-job `jobs/<job-id>/` directories under that root. Do not
-remove active attempt folders (`jobs/<workspace-id>/<job-id>/`) or the new mirror volumes.
+gone. Each server and worker container keeps its repository mirrors under its own
+`HEPHAESTUS_FABRIC_ROOT` as `mirrors/<workspace-id>/<repository-id>.git`, beside its attempt folders;
+the shipped Compose files give the worker its own volume for this. A mirror that is missing is cloned
+again on the next sync or review, so the previous release's mirrors need no migration. After the
+upgrade, once no attempt from the previous release is still running, delete the retired `sources/` and
+`cas/` directories and the previous layout's per-job `jobs/<job-id>/` directories under that root. Do
+not remove active attempt folders (`jobs/<workspace-id>/<job-id>/`) or `mirrors/`.

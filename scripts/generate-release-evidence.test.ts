@@ -62,7 +62,6 @@ void describe("the release evidence generator", () => {
 			"agent-pi",
 			"alpine",
 			"application-server",
-			"git-preparation",
 			"nats",
 			"nginx",
 			"postgres",

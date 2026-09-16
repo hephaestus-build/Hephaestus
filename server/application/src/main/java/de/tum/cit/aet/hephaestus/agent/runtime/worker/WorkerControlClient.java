@@ -6,10 +6,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.CapacityReport;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.ForceReconnect;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameCodec;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameEnvelope;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitAck;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitCancel;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOperation;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOutput;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.Heartbeat;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerControlFrame;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerHello;
@@ -41,7 +37,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,8 +89,6 @@ public class WorkerControlClient {
     private volatile @Nullable BiConsumer<UUID, String> cancelHandler;
 
     private volatile String controlSessionId = "";
-    private volatile Consumer<WorkerControlFrame> gitHandler = frame -> {};
-    private volatile Runnable gitDisconnect = () -> {};
 
     public WorkerControlClient(
             WorkerProperties properties, FrameCodec codec, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
@@ -156,11 +149,6 @@ public class WorkerControlClient {
         if (outbound.offer(FrameEnvelope.of(frame))) return true;
         sendDropped.increment();
         return false;
-    }
-
-    public void setGitHandler(Consumer<WorkerControlFrame> handler, Runnable disconnect) {
-        this.gitHandler = handler;
-        this.gitDisconnect = disconnect;
     }
 
     public String controlSessionId() {
@@ -245,10 +233,6 @@ public class WorkerControlClient {
                     log.info("Hub requested reconnect: {}", r.reason());
                     forceReconnect("server-requested:" + r.reason());
                 }
-                case GitOperation operation -> gitHandler.accept(operation);
-                case GitAck ack -> gitHandler.accept(ack);
-                case GitCancel cancel -> gitHandler.accept(cancel);
-                case GitOutput output -> warnSourceMismatch(output);
                 case CancelJob c -> handleCancelJob(c);
                 // Empty on purpose. Arrival is the whole signal — see Heartbeat — and the transport
                 // stamped lastInboundAt before dispatch, so there is nothing left to do here.
@@ -423,14 +407,8 @@ public class WorkerControlClient {
         }
     }
 
-    /**
-     * Git output frames are only meaningful to the session that dispatched the operation, so a lost
-     * transport drops the queued ones and cancels every running operation.
-     */
     private void onTransportLost() {
         connected.set(false);
-        outbound.removeIf(envelope -> envelope.payload() instanceof GitOutput);
-        gitDisconnect.run();
     }
 
     private static String httpBaseFrom(URI wsUri) {

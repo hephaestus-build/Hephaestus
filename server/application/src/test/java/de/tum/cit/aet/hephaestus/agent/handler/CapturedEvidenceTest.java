@@ -8,7 +8,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
-import de.tum.cit.aet.hephaestus.agent.context.SecretScan;
 import de.tum.cit.aet.hephaestus.agent.context.providers.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -86,12 +85,6 @@ class CapturedEvidenceTest extends BaseUnitTest {
                                 List.of())));
         ObjectNode snapshot = mapper.createObjectNode();
         snapshot.set("manifest", mapper.valueToTree(manifest));
-        snapshot.set(
-                SecretScan.SNAPSHOT_NODE,
-                mapper.valueToTree(new SecretScan(
-                        CapturedEvidence.DIFF_ARTIFACT,
-                        "c".repeat(64),
-                        List.of(new SecretScan.Hit("src/Config.java", 3, "f".repeat(64), "aws-access-token")))));
 
         CapturedEvidence captured = CapturedEvidence.of(jobWith(snapshot), mapper);
 
@@ -107,12 +100,6 @@ class CapturedEvidenceTest extends BaseUnitTest {
                                 RepositoryTreeContentSource.KIND, SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD")
                         .sha256())
                 .isEqualTo("e".repeat(64));
-        var scan = captured.secretScan();
-        assertThat(scan).isNotNull();
-        assertThat(scan.hits())
-                .singleElement()
-                .extracting(SecretScan.Hit::ruleId)
-                .isEqualTo("aws-access-token");
     }
 
     @Test

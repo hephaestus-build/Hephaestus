@@ -402,7 +402,6 @@ hephaestus:
     git:
         max-concurrent-ingestions: ${GIT_MAX_CONCURRENT_INGESTIONS:2}
         enabled: ${GIT_CHECKOUT_ENABLED:false}
-        image: ${HEPHAESTUS_IMAGE_GIT_PREPARATION:ghcr.io/hephaestus-build/git-preparation:${spring.application.version}}
         # A repository whose checkout and history exceed this is refused whole; nothing is captured in part.
         max-snapshot-bytes: ${GIT_MAX_SNAPSHOT_BYTES:8589934592}
 

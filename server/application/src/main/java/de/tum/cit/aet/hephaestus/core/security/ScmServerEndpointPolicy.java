@@ -34,11 +34,6 @@ public class ScmServerEndpointPolicy {
         }
     }
 
-    /** An SCM simulation is configured: the one plaintext origin, on this process's own loopback. */
-    public boolean simulationConfigured() {
-        return !simulationOrigin.isEmpty();
-    }
-
     public void validate(String serverUrl) {
         if (!isSimulation(serverUrl)) {
             ServerUrlValidator.validate(serverUrl);

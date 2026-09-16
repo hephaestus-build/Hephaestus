@@ -61,7 +61,6 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
                 deliveryService,
                 feedbackService,
-                org.mockito.Mockito.mock(SecretDiffScanner.class),
                 org.mockito.Mockito.mock(FeedbackResponseSuppressionFilter.class),
                 InContextDeliveryGateFixtures.gate(
                         practiceRepository,

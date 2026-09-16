@@ -9,10 +9,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.CapacityReport;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.ForceReconnect;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameCodec;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameEnvelope;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitAck;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitCancel;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOperation;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.GitOutput;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.Heartbeat;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerControlFrame;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerHello;
@@ -28,7 +24,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.socket.BinaryMessage;
@@ -52,8 +47,6 @@ public class WorkerControlWebSocketHandler extends TextWebSocketHandler {
         return t;
     });
     /** Wired by the application server's Git executor, which is the only consumer of worker Git output. */
-    private volatile BiConsumer<WorkerSession, GitOutput> gitOutputHandler = (session, output) -> {};
-
     public WorkerControlWebSocketHandler(
             WorkerSessionRegistry registry, FrameCodec codec, MeterRegistry meterRegistry) {
         this.registry = registry;
@@ -148,16 +141,8 @@ public class WorkerControlWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    public void setGitOutputHandler(BiConsumer<WorkerSession, GitOutput> handler) {
-        this.gitOutputHandler = handler;
-    }
-
     private void dispatch(WorkerSession session, WorkerControlFrame frame) {
         switch (frame) {
-            case GitOutput output -> gitOutputHandler.accept(session, output);
-            case GitOperation operation -> warnUnexpectedFrame(session, operation);
-            case GitAck ack -> warnUnexpectedFrame(session, ack);
-            case GitCancel cancel -> warnUnexpectedFrame(session, cancel);
             case WorkerHello hello -> handleHello(session, hello);
             case CapacityReport capacity -> {
                 session.updateCapacity(capacity);

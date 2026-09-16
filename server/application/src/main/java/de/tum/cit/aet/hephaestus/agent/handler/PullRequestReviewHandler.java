@@ -8,7 +8,6 @@ import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requ
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
-import de.tum.cit.aet.hephaestus.agent.context.SecretScan;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
@@ -25,29 +24,22 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.Task;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
-import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
-import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
@@ -58,9 +50,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
     private static final Logger log = LoggerFactory.getLogger(PullRequestReviewHandler.class);
 
-    /** The practice the deterministic secret verdicts are filed under. */
-    static final String SECRET_PRACTICE = "avoids-insecure-defaults-and-over-broad-permissions";
-
     private final JsonMapper objectMapper;
     private final JobEvidenceFiles evidenceFiles;
     private final PracticeCatalogInjector practiceCatalogInjector;
@@ -69,7 +58,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     private final FeedbackCompositionResultParser compositionResultParser;
     private final PracticeDetectionDeliveryService deliveryService;
     private final FeedbackDeliveryService feedbackService;
-    private final SecretDiffScanner secretDiffScanner;
     private final FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter;
     private final InContextDeliveryGate inContextDeliveryGate;
     private final ObservationRepository observationRepository;
@@ -83,7 +71,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             FeedbackCompositionResultParser compositionResultParser,
             PracticeDetectionDeliveryService deliveryService,
             FeedbackDeliveryService feedbackService,
-            SecretDiffScanner secretDiffScanner,
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter,
             InContextDeliveryGate inContextDeliveryGate,
             ObservationRepository observationRepository) {
@@ -95,7 +82,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         this.compositionResultParser = compositionResultParser;
         this.deliveryService = deliveryService;
         this.feedbackService = feedbackService;
-        this.secretDiffScanner = secretDiffScanner;
         this.feedbackResponseSuppressionFilter = feedbackResponseSuppressionFilter;
         this.inContextDeliveryGate = inContextDeliveryGate;
         this.observationRepository = observationRepository;
@@ -185,19 +171,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                     FeedbackCompositionInputs.stage(files, PracticeDetectionDeliveryService.originOf(metadata));
                     ContextMapWriter.write(files);
                 });
-        try {
-            // Scanned while the change is captured, so admission reads verdicts rather than running a
-            // container inside the request; only a review that asks the practice files them.
-            if (admits(inputs.automatedReviewReadinessReport(), SECRET_PRACTICE)) {
-                inputs = new PreparedJobInputs(
-                        inputs.evidence(),
-                        inputs.automatedReviewReadinessReport(),
-                        secretDiffScanner.scan(job.getId(), inputs.evidence()));
-            }
-        } catch (RuntimeException exception) {
-            inputs.close();
-            throw exception;
-        }
 
         long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000;
         log.info(
@@ -207,12 +180,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 repositoryId,
                 pullRequestId);
         return inputs;
-    }
-
-    private static boolean admits(@Nullable AutomatedReviewReadinessReport readiness, String practiceSlug) {
-        return readiness != null
-                && readiness.decisions().stream()
-                        .anyMatch(decision -> decision.ready() && practiceSlug.equals(decision.practiceSlug()));
     }
 
     private TaskEnvelope buildTaskEnvelope(AgentJob job, JsonNode metadata) {
@@ -334,11 +301,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
         CapturedEvidence captured = CapturedEvidence.of(job, objectMapper);
         Set<String> diffFiles = captured.diffPaths(job, evidenceFiles);
-        List<PracticeDetectionResultParser.ValidatedObservation> secretObservations =
-                practiceCatalogInjector.isAdmitted(job, SECRET_PRACTICE)
-                        ? secretObservations(job, captured)
-                        : List.of();
-
         // What is left to catch is a review that answered without reading the change. The paths counted
         // here and the patch staged for the run come from one capture, so a stale one is stale on both
         // sides and invisible from here. A diff citation is the one thing that cannot be produced
@@ -348,10 +310,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         // UNDETERMINED differ in what the run could tell, not in whether it settled anything.
         boolean nothingDecided =
                 parsed.validObservations().stream().noneMatch(f -> (f.assessmentStatus() == AssessmentStatus.ASSESSED));
-        if (nothingDecided
-                && secretObservations.isEmpty()
-                && !diffFiles.isEmpty()
-                && !readTheDiff(parsed.validObservations())) {
+        if (nothingDecided && !diffFiles.isEmpty() && !readTheDiff(parsed.validObservations())) {
             throw new ObservationsRefusedException(
                     "did_not_read_the_diff",
                     "No observation decided anything or quoted the diff, and the diff contains "
@@ -370,34 +329,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                     job.getId(),
                     parsed.validObservations().size(),
                     scopedObservations.size());
-        }
-        // Secret observations are inherently in-diff (their location is an added line) — inject AFTER the
-        // diff-scope filter so a path-normalisation mismatch can never silently drop a credential.
-        if (!secretObservations.isEmpty()) {
-            Set<String> scannerLocations = secretObservations.stream()
-                    .flatMap(f -> {
-                        JsonNode evidence = f.evidence();
-                        return evidence == null
-                                ? java.util.stream.Stream.empty()
-                                : evidence.path("citations").valueStream();
-                    })
-                    .map(citation -> citation.path("path").asString() + ":"
-                            + citation.path("startLine").asInt())
-                    .collect(java.util.stream.Collectors.toSet());
-            scopedObservations.removeIf(observation -> SECRET_PRACTICE.equals(observation.practiceSlug())
-                    && observation.evidence() != null
-                    && observation
-                            .evidence()
-                            .path("citations")
-                            .valueStream()
-                            .anyMatch(citation -> scannerLocations.contains(
-                                    citation.path("path").asString() + ":"
-                                            + citation.path("startLine").asInt())));
-            scopedObservations.addAll(secretObservations);
-            log.warn(
-                    "Secret pre-pass injected {} avoids-insecure-defaults-and-over-broad-permissions PRESENT/BAD observation(s); blocking any all-clear comment: jobId={}",
-                    secretObservations.size(),
-                    job.getId());
         }
         if (scopedObservations.isEmpty()) {
             throw new ObservationsRefusedException(
@@ -422,68 +353,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     @Override
     public boolean reconcilesMoreThanOneProviderObject() {
         return true;
-    }
-
-    /**
-     * The verdicts recorded when the change was captured, as observations. The record is bound to the
-     * staged patch by digest, so a snapshot that carries verdicts for some other capture is inadmissible.
-     */
-    private List<PracticeDetectionResultParser.ValidatedObservation> secretObservations(
-            AgentJob job, CapturedEvidence captured) {
-        SecretScan scan = captured.secretScan();
-        CapturedEvidence.Artifact diff = captured.artifact(CapturedEvidence.DIFF_ARTIFACT);
-        if (scan == null
-                || diff == null
-                || !scan.artifactPath().equals(CapturedEvidence.DIFF_ARTIFACT)
-                || !scan.artifactSha256().equals(diff.sha256())) {
-            throw new JobDeliveryException(
-                    "Secret scan verdicts are missing or not those of the captured diff: jobId=" + job.getId());
-        }
-        List<PracticeDetectionResultParser.ValidatedObservation> out = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
-        for (SecretScan.Hit hit : scan.hits()) {
-            String key = hit.path() + ":" + hit.newLine() + ":" + hit.ruleId();
-            if (!seen.add(key)) continue;
-            out.add(toSecretObservation(hit));
-        }
-        return out;
-    }
-
-    private PracticeDetectionResultParser.ValidatedObservation toSecretObservation(SecretScan.Hit hit) {
-        ObjectNode evidence = objectMapper.createObjectNode();
-        evidence.put("detector", "secret-diff-scanner");
-        ArrayNode citations = evidence.putArray("citations");
-        ObjectNode citation = citations.addObject();
-        citation.put("sourceKind", PracticeSubjectClause.DIFF_SOURCE.value());
-        citation.put("artifactPath", CapturedEvidence.DIFF_ARTIFACT);
-        citation.put("path", hit.path());
-        citation.put("side", "NEW");
-        citation.put("startLine", hit.newLine());
-        citation.put("endLine", hit.newLine());
-        citation.put("quoteSha256", hit.lineHash());
-        citation.put("quoteRedacted", true);
-
-        boolean lowSignal = secretDiffScanner.isLowSignalPath(hit.path());
-        Severity severity = lowSignal ? Severity.MINOR : Severity.MAJOR;
-
-        // The remediation rides in `reasoning` because this observation has no model behind it to bias: the
-        // scanner is deterministic, the sentence is written here rather than generated, and a leaked
-        // credential is the one case where the cost of the developer not being told what to do dominates
-        // everything else. It must not wait on a composition stage that is entitled to withhold.
-        String reasoning =
-                "A credential appears on the cited changed line. Committed secrets remain in git history even after removal, "
-                        + "so treat the credential as compromised: remove the literal value, rotate the credential immediately, and "
-                        + "load it at runtime from an environment variable or a secrets manager instead of hardcoding it.";
-
-        return new PracticeDetectionResultParser.ValidatedObservation(
-                SECRET_PRACTICE,
-                "Hardcoded secret on a changed line",
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.BAD,
-                severity,
-                evidence,
-                reasoning);
     }
 
     /**

@@ -27,7 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.NativeGitExecutor.RepositoryKey;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitMergeRequestLinker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -56,7 +56,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * entity exists before any commit processing.
  * <p>
  * When local git checkout is enabled ({@code hephaestus.git.enabled=true}), pushes to the
- * default branch trigger a local clone/fetch and native Git commit walk, providing line-level
+ * default branch trigger a local clone/fetch and JGit commit walk, providing line-level
  * diff statistics (additions/deletions per file). Falls back to webhook-only processing
  * on error or for non-default branches.
  * <p>
@@ -286,7 +286,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
     /**
      * Persists the push payload's commits, one transaction each so one bad commit does not roll back
      * its neighbours. As the fallback after a local-git failure the statistics and file lists are
-     * withheld so {@code COALESCE} keeps what native Git already captured.
+     * withheld so {@code COALESCE} keeps what JGit already captured.
      */
     private void processCommitsViaWebhook(GitLabPushEventDTO event, Repository repository, boolean asFallback) {
         List<CommitInfo> commits = event.commits();

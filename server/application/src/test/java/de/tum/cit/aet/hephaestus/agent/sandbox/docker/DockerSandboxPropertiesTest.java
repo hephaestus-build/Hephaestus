@@ -112,12 +112,10 @@ class DockerSandboxPropertiesTest {
                     assertThat(docker.tlsVerify()).isFalse();
                     assertThat(docker.resolvedAppServerContainerId()).isNull();
                     var configuration = new DockerSandboxConfiguration();
-                    var git = new DockerNativeGitExecutor.Settings(
-                            "git-preparation:test", "worker", 2, 1L << 33, "default", false);
                     assertThatCode(() -> {
-                                configuration.dockerClient(sandbox, docker, git).close();
+                                configuration.dockerClient(sandbox, docker).close();
                                 configuration
-                                        .dockerStreamingClient(sandbox, docker, git)
+                                        .dockerStreamingClient(sandbox, docker)
                                         .close();
                             })
                             .doesNotThrowAnyException();

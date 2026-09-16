@@ -33,9 +33,6 @@ const APPLICATION = `
 hephaestus:
     release:
         check-enabled: true
-    git:
-        image:
-            reference: ghcr.io/hephaestus-build/git-preparation:1.2.3
     sandbox:
         docker:
             host: unix:///var/run/docker.sock
