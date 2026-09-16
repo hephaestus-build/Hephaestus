@@ -12,7 +12,6 @@ import { TraceRefusalAlert } from "./TraceRefusalAlert";
  * re-worded prose can never cost a reader the way out.
  */
 const meta = {
-	title: "Practice trace/Refusal alert",
 	component: TraceRefusalAlert,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

@@ -183,8 +183,12 @@ describe("resolveCurrentUser", () => {
 		serve(asAppRole("APP_ADMIN"));
 		await resolveCurrentUser(queryClient);
 		await goStale(queryClient);
-		serve(asAppRole("APP_USER"));
+		const revoked = serve(asAppRole("APP_USER"));
+
+		// The stale answer is still instant — the navigation never waits on the network…
 		await expect(resolveCurrentUser(queryClient)).resolves.toMatchObject({ appRole: "APP_ADMIN" });
+		// …and the revocation fetched behind it lands for the next one.
+		await vi.waitFor(() => expect(revoked.times).toBe(1));
 		await vi.waitFor(() =>
 			expect(resolveCurrentUser(queryClient)).resolves.toMatchObject({ appRole: "APP_USER" }),
 		);

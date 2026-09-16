@@ -4,7 +4,6 @@ import { expect, fn, userEvent } from "storybook/test";
 import { ReferenceFilterPill } from "./ReferenceFilterPill";
 
 const meta = {
-	title: "Common/Reference filter pill",
 	component: ReferenceFilterPill,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

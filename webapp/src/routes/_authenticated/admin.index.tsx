@@ -14,8 +14,8 @@ import { InstanceReleaseCard } from "@/components/admin/instance/InstanceRelease
 import { OverviewStatCard } from "@/components/admin/instance/OverviewStatCard";
 import { RecentAuthActivityCard } from "@/components/admin/instance/RecentAuthActivityCard";
 import { SilentModeStatusCard } from "@/components/admin/instance/SilentModeStatusCard";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { instanceAdminHead } from "@/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/admin/")({

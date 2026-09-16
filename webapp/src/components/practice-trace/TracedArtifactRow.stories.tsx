@@ -15,7 +15,6 @@ const unlinkableConversation = tracedArtifact(88);
  * are kept apart on purpose: how much was recorded, and how much of it started a review.
  */
 const meta = {
-	title: "Practice trace/Traced artifact row",
 	component: TracedArtifactRow,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

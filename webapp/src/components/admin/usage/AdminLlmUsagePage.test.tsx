@@ -1,45 +1,16 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { assert, describe, expect, it, vi } from "vitest";
 
-import type { FxRateInfo, WorkspaceLlmUsageReport } from "@/api/types.gen";
+import type { WorkspaceLlmUsageReport } from "@/api/types.gen";
 import { renderWithRouter } from "@/test/router-harness";
 
 import { AdminLlmUsagePage } from "./AdminLlmUsagePage";
+import { eurRate, usageReport, withOwnProvider } from "./story-mock-data";
 
+/** Two runs without a price: enough to make the no-price warnings and the pause banners speak. */
 const baseReport: WorkspaceLlmUsageReport = {
-	month: "2026-07",
-	instanceMonthlyBudgetUsd: 25,
-	ownProviderMonthlyBudgetUsd: 10,
-	instanceTotalCostUsd: 4.25,
-	ownProviderTotalCostUsd: 1.75,
-	instanceBudgetVerdict: "WITHIN",
-	ownProviderBudgetVerdict: "WITHIN",
-	instancePaused: false,
-	ownProviderPaused: false,
+	...withOwnProvider(usageReport("2026-07")),
 	unpricedEventCount: 2,
-	byJobType: [
-		{
-			jobType: "PULL_REQUEST_REVIEW",
-			instanceTotalCostUsd: 4.25,
-			ownProviderTotalCostUsd: 1.75,
-			unpricedEventCount: 2,
-			inputTokens: 1000,
-			outputTokens: 250,
-			cacheReadTokens: 0,
-			cacheWriteTokens: 0,
-			totalCalls: 7,
-			events: 5,
-		},
-	],
-	byDay: [
-		{
-			day: new Date("2026-07-05T00:00:00.000Z"),
-			instanceTotalCostUsd: 4.25,
-			ownProviderTotalCostUsd: 1.75,
-			unpricedEventCount: 2,
-			events: 3,
-		},
-	],
 };
 
 async function renderPage(
@@ -89,15 +60,15 @@ describe("AdminLlmUsagePage", () => {
 		within(byJobType).getByRole("columnheader", { name: "Shared models" });
 		within(byJobType).getByRole("columnheader", { name: "Your provider" });
 		within(byJobType).getByRole("columnheader", { name: "No price set" });
-		within(byJobType).getByText("$4.25");
-		within(byJobType).getByText("$1.75");
+		within(byJobType).getByText("$8.20");
+		within(byJobType).getByText("$1.92");
 
 		const byDay = screen.getByRole("table", { name: "AI spend by day" });
 		within(byDay).getByRole("columnheader", { name: "Shared models" });
 		within(byDay).getByRole("columnheader", { name: "Your provider" });
 		within(byDay).getByRole("columnheader", { name: "No price set" });
-		within(byDay).getByText("$4.25");
-		within(byDay).getByText("$1.75");
+		within(byDay).getByText("$5.63");
+		within(byDay).getByText("$1.92");
 	});
 
 	it("gives each cap its own meter, named for whose money it is", async () => {
@@ -119,10 +90,11 @@ describe("AdminLlmUsagePage", () => {
 
 		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
 		within(byJobType).getByRole("columnheader", { name: "Avg per run" });
-		within(byJobType).getByText("$0.85");
-		within(byJobType).getByText("shared models");
-		within(byJobType).getByText("$0.35");
-		within(byJobType).getByText("your provider");
+		const mentorTurns = within(byJobType).getByRole("row", { name: /^Mentor turn/u });
+		within(mentorTurns).getByText("$0.06");
+		within(mentorTurns).getByText("shared models");
+		within(mentorTurns).getByText("$0.03");
+		within(mentorTurns).getByText("your provider");
 	});
 
 	describe("pause banners", () => {
@@ -275,13 +247,6 @@ describe("AdminLlmUsagePage", () => {
 	});
 
 	describe("display currency", () => {
-		const eur: FxRateInfo = {
-			currencyCode: "EUR",
-			ratePerUsd: 0.878966,
-			rateDate: new Date("2026-07-24T00:00:00.000Z"),
-			source: "ECB",
-		};
-
 		const twoDaysWithATotalRow: WorkspaceLlmUsageReport["byDay"] = [
 			{
 				day: new Date("2026-07-05T00:00:00.000Z"),
@@ -307,7 +272,7 @@ describe("AdminLlmUsagePage", () => {
 			ownProviderTotalCostUsd: 0,
 			unpricedEventCount: 0,
 			byJobType: [],
-			fx: eur,
+			fx: eurRate,
 		};
 
 		it("discloses the rate when only the table footers convert", async () => {
@@ -334,7 +299,7 @@ describe("AdminLlmUsagePage", () => {
 				unpricedEventCount: 0,
 				byJobType: [],
 				byDay: [],
-				fx: eur,
+				fx: eurRate,
 			});
 
 			expect(screen.queryByText(/≈ €/u)).toBeNull();
@@ -350,7 +315,7 @@ describe("AdminLlmUsagePage", () => {
 					ownProviderMonthlyBudgetUsd: undefined,
 					ownProviderTotalCostUsd: 0,
 					unpricedEventCount: 0,
-					fx: eur,
+					fx: eurRate,
 				},
 				{ now: new Date("2026-07-28T12:00:00.000Z") },
 			);

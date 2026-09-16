@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
 	type DetailStackEntry,
 	detailStackSchema,
-} from "@/components/core/detail-drawer/detail-stack";
+} from "@/components/layout/detail-drawer/detail-stack";
 
 /** The levels the surveys page can render. Anything else in the URL is dropped by the schema. */
 export const SURVEY_LEVEL_KINDS = ["survey", "survey-new"] as const;

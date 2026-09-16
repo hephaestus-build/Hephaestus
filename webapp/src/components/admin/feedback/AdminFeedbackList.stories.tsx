@@ -13,7 +13,6 @@ import {
 } from "./product-feedback-fixtures";
 
 const meta = {
-	title: "Instance admin/Product feedback/Feedback inbox",
 	component: AdminFeedbackList,
 	parameters: { layout: "fullscreen" },
 	decorators: [withStandardPage],

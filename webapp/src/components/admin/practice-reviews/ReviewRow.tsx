@@ -1,14 +1,13 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type ReactElement, type ReactNode } from "react";
 
 import { cn } from "cn";
 import { type StatusDef, statusToneClass } from "@/components/practice-vocabulary/status-def";
-import { rendersContent } from "@/lib/react-node";
 import { hasText } from "@/lib/text";
 
 export interface ReviewRowProps {
 	status: StatusDef;
 	title: ReactNode;
-	meta?: ReactNode;
+	meta?: ReactElement | undefined;
 	chips?: ReviewRowChip[];
 }
 
@@ -33,7 +32,7 @@ export function ReviewRow({ status, title, meta, chips }: ReviewRowProps) {
 					<div className="text-sm font-medium [&_a]:after:absolute [&_a]:after:inset-0 [&_a:hover]:underline">
 						{title}
 					</div>
-					{rendersContent(meta) && (
+					{meta !== undefined && (
 						<div className="min-w-0 space-y-0.5 text-xs text-muted-foreground">{meta}</div>
 					)}
 				</div>

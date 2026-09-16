@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, waitFor } from "storybook/test";
 
-import { STORY_NOW } from "@/components/common/story-clock";
 import { DEFAULT_SCHEDULE, formatDateRangeForApi, getDateRangeForPreset } from "@/lib/timeframe";
 import { Stateful } from "@/stories/stateful";
+import { STORY_NOW } from "@/stories/story-clock";
 
 import { ProfileTimeframePicker } from "./ProfileTimeframePicker";
 

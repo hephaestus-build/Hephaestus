@@ -9,7 +9,6 @@ import type {
 	PracticeDefinitionOptions,
 	PracticeGroup,
 } from "@/api/types.gen";
-import { AvailablePracticeList } from "@/components/admin/practice-adoption/AvailablePracticeList";
 import { WORK_TYPE_FILTER_OPTIONS } from "@/components/admin/practice-catalog/constants";
 import { automatedReviewUnavailableLabel } from "@/components/admin/practice-catalog/evidence-presentation";
 import {
@@ -24,14 +23,15 @@ import {
 	SortableCatalogTree,
 	UNASSIGNED_CATALOG_BUCKET,
 } from "@/components/admin/practice-catalog/SortableCatalogTree";
+import { AvailablePracticeList } from "@/components/admin/practices/AvailablePracticeList";
 import { practiceFormLevel } from "@/components/admin/practices/practice-search";
 import { PracticeListSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { FilterToggle } from "@/components/common/FilterToggle";
 import { MetaRow } from "@/components/common/MetaRow";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { DetailStackLink } from "@/components/core/detail-drawer/DetailStackLink";
-import { Section } from "@/components/core/Section";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { Section } from "@/components/layout/Section";
 import { AutonomyBadge } from "@/components/practice-vocabulary/AutonomyBadge";
 import { AutonomySourceNote } from "@/components/practice-vocabulary/AutonomySourceNote";
 import { DASHBOARD_VISIBILITY_DEFS } from "@/components/practice-vocabulary/dashboard-visibility-defs";

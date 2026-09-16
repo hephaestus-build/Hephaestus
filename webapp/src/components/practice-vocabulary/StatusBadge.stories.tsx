@@ -21,7 +21,6 @@ import { WITHHOLDING_FAMILY_DEFS } from "./withholding-defs";
  * entries may share an icon.
  */
 const meta = {
-	title: "Shared/Practice vocabulary/Status badge",
 	component: StatusBadge,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

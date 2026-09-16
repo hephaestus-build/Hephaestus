@@ -3,8 +3,8 @@ import { expect, screen, userEvent } from "storybook/test";
 
 import { expectSettledVisible } from "@/test/overlay";
 
+import { minutesBefore } from "@/stories/story-clock";
 import { RelativeTime } from "./RelativeTime";
-import { minutesBefore } from "./story-clock";
 
 const meta = {
 	component: RelativeTime,

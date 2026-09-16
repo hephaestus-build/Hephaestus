@@ -74,7 +74,6 @@ async function openEvaluation(canvas: StoryContext["canvas"], name: RegExp) {
 }
 
 const meta = {
-	title: "Workspace admin/Practices/Trace/Delivery policy",
 	component: DeliveryPolicyTrace,
 	tags: ["autodocs"],
 	args: { evaluations: [deniedDeliveryPolicyEvaluation] },

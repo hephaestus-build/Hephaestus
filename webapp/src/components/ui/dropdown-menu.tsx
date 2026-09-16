@@ -27,7 +27,9 @@ function DropdownMenuContent({
 	Pick<MenuPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
 	return (
 		<MenuPrimitive.Portal>
-			{/* Viewport-relative, not `absolute`, and capped to `--available-width` — see `overlay-reflow.stories.tsx`. */}
+			{/* ⚠️ Diverges from the shadcn registry: positioned `fixed` rather than `absolute`, and the
+			    popup is capped to `--available-width` instead of pinned to `--anchor-width`, so a wide
+			    menu reflows inside the viewport — pinned in `overlay-reflow.stories.tsx`. */}
 			<MenuPrimitive.Positioner
 				className="isolate z-50 outline-none"
 				align={align}

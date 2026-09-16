@@ -13,7 +13,6 @@ if (!reviewReadyGroup) {
 }
 
 const meta = {
-	title: "Workspace admin/Practices/Group details",
 	component: GroupDetailsDialog,
 	parameters: { layout: "centered" },
 	args: {

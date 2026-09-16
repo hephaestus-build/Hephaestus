@@ -3,24 +3,18 @@ import { toast } from "sonner";
 
 import {
 	deleteOutlineCollectionMutation,
-	getConnectionSyncStatusOptions,
 	getOutlineTokenStatusOptions,
 	initiateMutation,
-	listConnectionSyncJobsQueryKey,
-	listConnectionSyncResourcesOptions,
 	listOptions,
 	listOutlineCollectionsOptions,
 	registerOutlineCollectionMutation,
-	triggerSyncJobMutation,
 	updateConnectionStatusMutation,
-	updateConnectionSyncJobMutation,
 	updateOutlineCollectionStateMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { OutlineMirrorState } from "@/components/admin/integrations/outline/OutlineCollectionsSection";
 import type { OutlineConnectInput } from "@/components/admin/integrations/outline/OutlineConnectCard";
 import { syncPollInterval } from "@/components/admin/integrations/sync-format";
-import type { SyncResourcesTableProps } from "@/components/admin/integrations/SyncResourcesTable";
-import type { SyncStatusHeaderProps } from "@/components/admin/integrations/SyncStatusHeader";
+import { useConnectionSync } from "@/hooks/use-connection-sync";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { problemDetailOf } from "@/lib/problem-detail";
 
@@ -44,36 +38,27 @@ export function useOutlineIntegration(workspaceSlug: string) {
 	const isConnectionActive = outlineConnection?.state === "ACTIVE";
 	const connectionId = outlineConnection?.id;
 
-	const statusQueryOptions = getConnectionSyncStatusOptions({
-		path: { workspaceSlug, connectionId: connectionId ?? -1 },
-	});
-	const {
-		data: connectionStatus,
-		error: statusError,
-		refetch: refetchStatus,
-	} = useQuery({
-		...statusQueryOptions,
-		enabled: hasConnection && connectionId != null,
-		refetchInterval: (query) =>
-			syncPollInterval(query.state.data?.activeJob != null, livePushUnavailable),
-	});
-
-	const resourcesQueryOptions = listConnectionSyncResourcesOptions({
-		path: { workspaceSlug, connectionId: connectionId ?? -1 },
-	});
-	const {
-		data: resources,
-		isLoading: isResourcesLoading,
-		isError: isResourcesError,
-		error: resourcesError,
-		refetch: refetchResources,
-	} = useQuery({
-		...resourcesQueryOptions,
-		enabled: hasConnection && connectionId != null,
-		refetchInterval: syncPollInterval(connectionStatus?.activeJob != null, livePushUnavailable),
-	});
-
 	const collectionsQueryOptions = listOutlineCollectionsOptions({ path: { workspaceSlug } });
+	const tokenStatusQueryOptions = getOutlineTokenStatusOptions({ path: { workspaceSlug } });
+
+	const sync = useConnectionSync({
+		workspaceSlug,
+		connectionId,
+		isConnectionActive,
+		credentialsUnreadableSince: outlineConnection?.credentialsUnreadableSince,
+		isConnectionLoading: connectionsQuery.isLoading,
+		connectionError: connectionsQuery.error,
+		retryConnection: () => void connectionsQuery.refetch(),
+		resourceNoun: "collection",
+		resourceNounPlural: "collections",
+		expectedClassKeys: ["documents"],
+		// A run mirrors collections and is where a rejected token shows up, so both refresh with it.
+		invalidateAlso: () => {
+			void queryClient.invalidateQueries({ queryKey: collectionsQueryOptions.queryKey });
+			void queryClient.invalidateQueries({ queryKey: tokenStatusQueryOptions.queryKey });
+		},
+	});
+
 	const {
 		data: collections,
 		isLoading: isLoadingCollections,
@@ -91,7 +76,6 @@ export function useOutlineIntegration(workspaceSlug: string) {
 			),
 	});
 
-	const tokenStatusQueryOptions = getOutlineTokenStatusOptions({ path: { workspaceSlug } });
 	const {
 		data: tokenStatus,
 		isLoading: isTokenStatusLoading,
@@ -107,24 +91,12 @@ export function useOutlineIntegration(workspaceSlug: string) {
 	const invalidateConnections = () =>
 		queryClient.invalidateQueries({ queryKey: connectionsQueryOptions.queryKey });
 
-	const invalidateOutline = () => {
-		void queryClient.invalidateQueries({ queryKey: collectionsQueryOptions.queryKey });
-		void queryClient.invalidateQueries({ queryKey: statusQueryOptions.queryKey });
-		void queryClient.invalidateQueries({ queryKey: resourcesQueryOptions.queryKey });
-		void queryClient.invalidateQueries({ queryKey: tokenStatusQueryOptions.queryKey });
-		if (connectionId != null) {
-			void queryClient.invalidateQueries({
-				queryKey: listConnectionSyncJobsQueryKey({ path: { workspaceSlug, connectionId } }),
-			});
-		}
-	};
-
 	const connect = useMutation({
 		...initiateMutation(),
 		onSuccess: () => {
 			toast.success("Outline connected");
 			void invalidateConnections();
-			invalidateOutline();
+			sync.invalidateSyncActivity();
 		},
 		onError: (e) => {
 			toast.error("Could not connect Outline", { description: problemDetailOf(e) });
@@ -136,32 +108,10 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		onSuccess: () => {
 			toast.success("Outline disconnected");
 			void invalidateConnections();
-			invalidateOutline();
+			sync.invalidateSyncActivity();
 		},
 		onError: (e) => {
 			toast.error("Failed to disconnect Outline", { description: problemDetailOf(e) });
-		},
-	});
-
-	const syncNow = useMutation({
-		...triggerSyncJobMutation(),
-		onSuccess: () => {
-			toast.success("Sync started");
-			invalidateOutline();
-		},
-		onError: (e) => {
-			toast.error("Failed to start sync", { description: problemDetailOf(e) });
-		},
-	});
-
-	const cancelJob = useMutation({
-		...updateConnectionSyncJobMutation(),
-		onSuccess: () => {
-			toast.success("Cancelling — stopping after current collection…");
-			invalidateOutline();
-		},
-		onError: (e) => {
-			toast.error("Failed to cancel sync", { description: problemDetailOf(e) });
 		},
 	});
 
@@ -169,7 +119,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		...registerOutlineCollectionMutation(),
 		onSuccess: (collection) => {
 			toast.success(`Collection “${collection.name ?? collection.collectionId}” added`);
-			invalidateOutline();
+			sync.invalidateSyncActivity();
 		},
 		onError: (e) => {
 			toast.error("Failed to add collection", { description: problemDetailOf(e) });
@@ -180,7 +130,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		...updateOutlineCollectionStateMutation(),
 		onSuccess: (collection) => {
 			toast.success(collection.state === "PAUSED" ? "Collection paused" : "Collection resumed");
-			invalidateOutline();
+			sync.invalidateSyncActivity();
 		},
 		onError: (e) => {
 			toast.error("Failed to update collection", { description: problemDetailOf(e) });
@@ -191,7 +141,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		...deleteOutlineCollectionMutation(),
 		onSuccess: () => {
 			toast.success("Collection removed and its mirrored documents erased");
-			invalidateOutline();
+			sync.invalidateSyncActivity();
 		},
 		onError: (e) => {
 			toast.error("Failed to remove collection", { description: problemDetailOf(e) });
@@ -250,38 +200,6 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		await removeCollection.mutateAsync({ path: { workspaceSlug, collectionId } });
 	};
 
-	// The shared `SyncStatusHeader` renders the whole connection plane from the raw unified status.
-	// Outline exposes no backfill affordance, so `onBackfill` is omitted and the split button never
-	// appears.
-	const syncStatusHeaderProps: Omit<SyncStatusHeaderProps, "label"> = {
-		credentialsUnreadableSince: outlineConnection?.credentialsUnreadableSince,
-		status: connectionStatus,
-		isConnectionActive,
-		// Outline's only manual trigger is a reconciliation, so a bare `isPending` names it exactly.
-		triggeringType: syncNow.isPending ? "RECONCILIATION" : null,
-		isCancelling: cancelJob.isPending,
-		onRetry: () => void refetchStatus(),
-		onSync: () => {
-			if (connectionId == null) {
-				return;
-			}
-			syncNow.mutate({
-				path: { workspaceSlug, connectionId },
-				body: { type: "RECONCILIATION" },
-			});
-		},
-		onCancel: () => {
-			const jobId = connectionStatus?.activeJob?.id;
-			if (connectionId == null || jobId == null) {
-				return;
-			}
-			cancelJob.mutate({
-				path: { workspaceSlug, connectionId, jobId },
-				body: { cancelRequested: true },
-			});
-		},
-	};
-
 	return {
 		// Exposed even when SUSPENDED: reading job history is safe, and a suspended connection is when
 		// an admin most needs to see what the last run did. Sync controls stay gated (isConnectionActive).
@@ -290,33 +208,16 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		isConnectionActive,
 		connectionState: outlineConnection?.state,
 		credentialsUnreadableSince: outlineConnection?.credentialsUnreadableSince,
-		// Lets the route poll its job-history query on the same adaptive cadence as the rest.
-		hasActiveJob: connectionStatus?.activeJob != null,
 		isLoading: connectionsQuery.isLoading,
 		connectionsError: connectionsQuery.error,
 		retryConnections: () => void connectionsQuery.refetch(),
-		// The raw unified status; the route gates the shared header on its presence.
-		status: connectionStatus,
-		statusError,
-		retryStatus: () => void refetchStatus(),
 		tokenStatusError,
 		retryTokenStatus: () => void refetchTokenStatus(),
-		syncStatusHeaderProps,
+		syncStatusHeaderProps: sync.syncStatusHeaderProps,
 		// The per-collection observability ledger — the same shared table SCM and Slack mount. Shown
 		// even when suspended, so an admin can see how far behind each collection got before sync stopped.
-		syncResourcesProps: {
-			resources: resources ?? [],
-			isLoading: isResourcesLoading,
-			isError: isResourcesError,
-			error: resourcesError,
-			onRetry: () => void refetchResources(),
-			resourceNoun: "collection",
-			resourceNounPlural: "collections",
-			// The freshness cadence comes from the server so the client doesn't hard-code one; without it
-			// the ledger can't judge staleness.
-			syncIntervalSeconds: connectionStatus?.syncIntervalSeconds,
-			expectedClassKeys: ["documents"],
-		} satisfies SyncResourcesTableProps,
+		syncResourcesProps: sync.syncResourcesProps,
+		jobHistoryProps: sync.jobHistoryProps,
 		connectCardProps: {
 			connected: hasConnection,
 			connectionState: outlineConnection?.state,

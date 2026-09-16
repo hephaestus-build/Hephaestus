@@ -7,7 +7,6 @@ import { researchInvitation, surveyInvitation } from "./product-survey-fixtures"
 import { ProductFeedbackMenu } from "./ProductFeedbackMenu";
 
 const meta = {
-	title: "Product feedback/Header menu",
 	component: ProductFeedbackMenu,
 	args: { invitations: [surveyInvitation], onSendFeedback: fn(), onOpenSurvey: fn() },
 	decorators: [

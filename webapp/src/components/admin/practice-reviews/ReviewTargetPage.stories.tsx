@@ -56,7 +56,6 @@ const argsFor = (artifact: ReviewArtifact) => {
 };
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Reviewed work",
 	component: ReviewTargetPage,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 768, 1440] } },
 	tags: ["autodocs"],

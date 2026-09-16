@@ -14,7 +14,6 @@ import { TRACE_PAGE_SIZE, TraceListPage } from "./TraceListPage";
  * screen only shows it, so every state below is a prop rather than a mocked response.
  */
 const meta = {
-	title: "Practice trace/Review activity list",
 	component: TraceListPage,
 	parameters: {
 		layout: "fullscreen",

@@ -63,7 +63,6 @@ const selectedSettings = mockReviewSettings({
 });
 
 const meta = {
-	title: "Workspace admin/Practices/Review/When and where",
 	component: PracticeReviewSettings,
 	parameters: { layout: "padded", chromatic: { viewports: [1440] } },
 	tags: ["autodocs"],

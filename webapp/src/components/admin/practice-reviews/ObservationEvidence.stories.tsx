@@ -98,7 +98,6 @@ function citation(sourceKind: string, overrides: Partial<EvidenceCitation> = {})
 }
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Observation evidence",
 	component: ObservationEvidence,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],

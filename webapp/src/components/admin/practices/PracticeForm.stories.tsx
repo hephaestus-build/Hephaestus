@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, waitFor } from "storybook/test";
 
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import {
 	mockConversationWorkType,
 	mockPracticeDefinitionOptions,
@@ -27,7 +27,6 @@ const editSubmit = fn();
  * The level is guarded: only Cancel and Save leave it.
  */
 const meta = {
-	title: "Workspace admin/Practices/Practice editor",
 	component: PracticeForm,
 	parameters: {
 		layout: "fullscreen",

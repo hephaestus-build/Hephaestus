@@ -1,7 +1,7 @@
 import { UserRoundCog } from "lucide-react";
 
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { optionalIntegrationsAvailable } from "@/integrations/consent";

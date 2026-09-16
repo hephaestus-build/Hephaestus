@@ -10,7 +10,6 @@ if (!thinControllers) {
 }
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Practice link",
 	component: ReviewPracticeLink,
 	parameters: { layout: "centered", chromatic: { viewports: [1440] } },
 	tags: ["autodocs"],

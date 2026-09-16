@@ -9,7 +9,6 @@ import { ProductSurveyDialog } from "./ProductSurveyDialog";
 import { EMPTY_SURVEY_RESPONSE_DRAFT } from "./survey-questions";
 
 const meta = {
-	title: "Product feedback/Survey dialog",
 	component: ProductSurveyDialog,
 	args: {
 		survey: surveyInvitation,

@@ -1,8 +1,8 @@
 import { ScanEye } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import type { ReviewRunningState } from "./review-readiness";

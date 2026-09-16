@@ -69,7 +69,7 @@ export interface AdminSlackNotificationSettingsProps {
 	enabled: boolean;
 	scheduleDay?: number;
 	scheduleTime?: string;
-	channelCandidates?: readonly SlackChannelCandidate[];
+	channelCandidates: readonly SlackChannelCandidate[];
 	onSaved: () => void;
 }
 
@@ -87,8 +87,6 @@ const DAYS = [
 	{ value: "7", label: "Sunday" },
 ];
 
-const NO_CANDIDATES: readonly SlackChannelCandidate[] = [];
-
 export function AdminSlackNotificationSettings({
 	workspaceSlug,
 	hasSlackConnection,
@@ -98,7 +96,7 @@ export function AdminSlackNotificationSettings({
 	enabled,
 	scheduleDay,
 	scheduleTime,
-	channelCandidates = NO_CANDIDATES,
+	channelCandidates,
 	onSaved,
 }: AdminSlackNotificationSettingsProps) {
 	const selectableDigestChannels = channelCandidates.filter(

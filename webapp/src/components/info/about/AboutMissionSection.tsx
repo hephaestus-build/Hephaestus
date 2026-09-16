@@ -1,6 +1,6 @@
 import { Hammer } from "lucide-react";
 import { HephIcon } from "@/components/brand/HephIcon";
-import { InstitutionalAttribution } from "@/components/core/InstitutionalAttribution";
+import { InstitutionalAttribution } from "@/components/layout/InstitutionalAttribution";
 import { Badge } from "@/components/ui/badge";
 import { FeatureCard, type FeatureData } from "./FeatureCard";
 

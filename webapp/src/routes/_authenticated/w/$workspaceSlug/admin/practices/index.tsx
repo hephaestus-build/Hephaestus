@@ -25,15 +25,15 @@ import type {
 	Practice,
 	PracticeGroup,
 } from "@/api/types.gen";
-import { GroupAdoptionPanel } from "@/components/admin/practice-adoption/GroupAdoptionPanel";
-import { PracticeAdoptionPanel } from "@/components/admin/practice-adoption/PracticeAdoptionPanel";
 import { generateSlug } from "@/components/admin/practice-catalog/constants";
+import { GroupAdoptionPanel } from "@/components/admin/practices/GroupAdoptionPanel";
 import {
 	DETAIL_LEVEL_KINDS,
 	GUARDED_LEVEL_KINDS,
 	PRACTICE_SEARCH_PARAMS,
 	practiceSetupSearchSchema,
 } from "@/components/admin/practices/practice-search";
+import { PracticeAdoptionPanel } from "@/components/admin/practices/PracticeAdoptionPanel";
 import { type FocusFilter, PracticeCatalog } from "@/components/admin/practices/PracticeCatalog";
 import { PracticeForm } from "@/components/admin/practices/PracticeForm";
 import { PracticeFormLevel } from "@/components/admin/practices/PracticeFormLevel";
@@ -43,12 +43,12 @@ import {
 } from "@/components/admin/practices/PracticeSkeletons";
 import { WorkspacePracticePanel } from "@/components/admin/practices/WorkspacePracticePanel";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { detailStackKey, parseDetailStack } from "@/components/core/detail-drawer/detail-stack";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
-import { useDetailStack } from "@/components/core/detail-drawer/use-detail-stack";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { detailStackKey, parseDetailStack } from "@/components/layout/detail-drawer/detail-stack";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
+import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import {
 	AlertDialog,
 	AlertDialogAction,

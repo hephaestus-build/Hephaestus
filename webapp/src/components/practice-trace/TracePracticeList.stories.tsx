@@ -12,7 +12,6 @@ import { TracePracticeList } from "./TracePracticeList";
  * and change.
  */
 const meta = {
-	title: "Practice trace/Practice outcomes",
 	component: TracePracticeList,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

@@ -7,6 +7,23 @@ import { createContext, useContext } from "react";
 
 import { cn } from "cn";
 
+/**
+ * ⚠️ Diverges from the shadcn registry — `shadcn add drawer` drops the following; re-apply them.
+ *
+ * 1. `DrawerContent` takes `size`: `default` is upstream's width, `detail` a panel that replaces a
+ *    page, `panel` a fixed tool column beside one. Each owns its width and `--peek`.
+ * 2. `DrawerContent` takes `dimWhenNested`, documented at its definition.
+ * 3. `DrawerBody`, the scrollable middle, keyboard-focusable so a submitting form's disabled
+ *    controls do not strand the overflow. `DrawerHeader` and `DrawerFooter` are sized for it: the
+ *    footer is bordered and reverses to a row at `sm`, and neither centres on the y axis.
+ * 4. The motion tokens in `webapp/AGENTS.md` § Motion: 280ms in on a decelerate curve
+ *    (`--drawer-enter`, `--drawer-ease`), 200ms out on a standard curve (`--drawer-exit`), and a
+ *    `motion-reduce:` block that zeroes the scale, the peek and the travel and keeps the fade.
+ *    Upstream is 450ms both ways on one curve with no reduced-motion branch.
+ * 5. `height` is transitioned only on the y axis, for the reason at the popup's class list.
+ * 6. The overlay dims (`bg-black/25`) and never blurs; the viewport is `overflow-hidden` so the
+ *    bleed pseudo-element stays off the page's scroll width.
+ */
 interface DrawerContextProps {
 	hasSnapPoints: boolean;
 	modal: DrawerPrimitive.Root.Props["modal"];

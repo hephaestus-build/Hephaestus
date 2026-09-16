@@ -6,7 +6,7 @@ import { AddChannelDialog } from "./AddChannelDialog";
 describe("AddChannelDialog — form submit", () => {
 	it("submits on Enter once the pasted reference is valid", async () => {
 		const onSubmit = vi.fn().mockResolvedValue(undefined);
-		render(<AddChannelDialog open onOpenChange={vi.fn()} onSubmit={onSubmit} />);
+		render(<AddChannelDialog open onOpenChange={vi.fn()} candidates={[]} onSubmit={onSubmit} />);
 
 		const input = screen.getByLabelText(/paste a channel link or id/iu);
 		fireEvent.change(input, { target: { value: "C0974LJBPBK" } });
@@ -23,7 +23,7 @@ describe("AddChannelDialog — form submit", () => {
 	});
 
 	it("does not trim the pasted-reference field on every keystroke (no cursor jump)", () => {
-		render(<AddChannelDialog open onOpenChange={vi.fn()} onSubmit={vi.fn()} />);
+		render(<AddChannelDialog open onOpenChange={vi.fn()} candidates={[]} onSubmit={vi.fn()} />);
 
 		const input = screen.getByLabelText<HTMLInputElement>(/paste a channel link or id/iu);
 		fireEvent.change(input, { target: { value: "  C0974LJBPBK  " } });
@@ -36,7 +36,9 @@ describe("AddChannelDialog — form submit", () => {
 
 	it("resets the form fields on close instead of relying on a remount", () => {
 		const onOpenChange = vi.fn();
-		render(<AddChannelDialog open onOpenChange={onOpenChange} onSubmit={vi.fn()} />);
+		render(
+			<AddChannelDialog open onOpenChange={onOpenChange} candidates={[]} onSubmit={vi.fn()} />,
+		);
 
 		const input = screen.getByLabelText<HTMLInputElement>(/paste a channel link or id/iu);
 		fireEvent.change(input, { target: { value: "C0974LJBPBK" } });

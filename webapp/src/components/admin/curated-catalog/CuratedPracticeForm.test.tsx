@@ -30,7 +30,7 @@ const cancel = (
 	</Link>
 );
 
-vi.mock("@/components/shared/CodeEditor", () => ({
+vi.mock("@/components/common/CodeEditor", () => ({
 	CodeEditor: () => <div />,
 }));
 

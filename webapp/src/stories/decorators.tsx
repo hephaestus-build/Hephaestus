@@ -1,7 +1,7 @@
 import type { Decorator } from "@storybook/react";
 import { ListChecks } from "lucide-react";
 
-import { StandardPageSurface } from "@/components/core/StandardPageSurface";
+import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import { getProviderSlug, type ProviderType } from "@/lib/provider";
 
 /**

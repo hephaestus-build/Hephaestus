@@ -30,7 +30,6 @@ const feedback = {
 };
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Proposal review",
 	component: ProposalReviewPage,
 	parameters: {
 		layout: "padded",

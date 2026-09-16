@@ -5,12 +5,12 @@ import { TableRowsSkeleton } from "@/components/admin/integrations/TableRowsSkel
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { TablePagination } from "@/components/common/TablePagination";
-import { DetailStackLink } from "@/components/core/detail-drawer/DetailStackLink";
 import {
 	SURVEY_AVAILABILITY_DEFS,
 	surveyAvailability,
 } from "@/components/feedback/survey-availability-defs";
 import { SURVEY_PURPOSE_DEFS } from "@/components/feedback/survey-purpose-defs";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {

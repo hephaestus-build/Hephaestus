@@ -16,11 +16,12 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 
 /**
- * Every `⚠️ Diverges` axis under `ui/`, pinned on the rendered result so a re-vendor that drops one
- * fails here rather than in a page.
+ * The `⚠️ Diverges` axes under `ui/` whose loss no page would surface — a dropped variant still
+ * type-checks once the registry restores the prop, and the page renders the upstream look without a
+ * failing test. Each story pins the rendered result so a re-vendor fails here instead. An axis a
+ * page already asserts on, or whose loss is a type error, is not repeated here.
  */
 const meta = {
-	title: "Tests/Design system axes",
 	parameters: { layout: "padded", controls: { disable: true } },
 } satisfies Meta;
 
@@ -125,6 +126,23 @@ export const QuietRestsBelowFullContrast: Story = {
 		const ghost = canvas.getByRole("button", { name: "Ghost" });
 		const quiet = canvas.getByRole("button", { name: "Quiet" });
 		await expect(style(quiet).color).not.toBe(style(ghost).color);
+	},
+};
+
+export const InlineButtonInheritsSizeNotColour: Story = {
+	render: () => (
+		<p className="text-lg text-muted-foreground">
+			No review activity yet.{" "}
+			<Button size="inline" variant="link">
+				View repositories
+			</Button>
+		</p>
+	),
+	play: async ({ canvas }) => {
+		const button = canvas.getByRole("button", { name: "View repositories" });
+		const prose = style(canvas.getByText("No review activity yet."));
+		await expect(style(button).fontSize).toBe(prose.fontSize);
+		await expect(style(button).color).not.toBe(prose.color);
 	},
 };
 
@@ -285,10 +303,21 @@ export const OutlineMenuButtonRingsOnFocus: Story = {
 	),
 	play: async ({ canvas, userEvent }) => {
 		const button = canvas.getByRole("button", { name: "Workspace overview" });
+		// Tailwind composes a ring from five shadow slots, and a slot not in use serialises as a
+		// zero-extent layer, so the layers that paint are the ones with any length above 0px. Layers
+		// and the channels inside an `rgb(…)` are both comma-separated.
+		const paintedLayers = (shadow: string) =>
+			shadow
+				.split(/,(?![^(]*\))/u)
+				.filter((layer) =>
+					(layer.match(/-?\d*\.?\d+px/gu) ?? []).some((length) => px(length) !== 0),
+				);
 		const rest = style(button).boxShadow;
-		await expect(rest).not.toBe("none");
+		await expect(paintedLayers(rest)).toHaveLength(1);
 		await userEvent.tab();
 		await expect(button).toHaveFocus();
-		await expect(style(button).boxShadow).not.toBe(rest);
+		const focused = style(button).boxShadow;
+		await expect(focused).not.toBe(rest);
+		await expect(paintedLayers(focused)).toHaveLength(1);
 	},
 };

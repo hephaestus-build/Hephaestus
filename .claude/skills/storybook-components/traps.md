@@ -19,7 +19,7 @@ animation routinely. Any settle helper must `.catch()` the rejection and treat i
 ## 3. A hook suppression aimed at the `useEffect` line suppresses nothing
 
 `webapp/AGENTS.md` § Linting owns this: the two effect rules report on the `setState` line inside the
-effect, one `setState` usually trips both, and a directive naming `react/rules-of-hooks` silences
+effect, one `setState` usually trips both, and a directive naming `react-hooks/rules-of-hooks` silences
 every hook diagnostic in the component while the build fails about the directive instead.
 
 ## 4. One story's MSW handlers answer for the whole Docs page

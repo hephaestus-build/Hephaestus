@@ -12,8 +12,7 @@ already tells you are not here.
 | Task | Command |
 |------|---------|
 | Dev server | `vp run dev:webapp` — port 4200, `strictPort`, overridable with `WEBAPP_PORT` |
-| Type check | `vp run typecheck:webapp` |
-| Lint + format | `vp run check:webapp` — does **not** type-check; that is the separate leg above |
+| Lint + format + type check | `vp run check:webapp` — oxlint runs with `typeCheck` on, so the TypeScript errors come out of the lint; `typecheck:webapp` is a pointer to the same gate |
 | Tests | `vp run test:webapp` |
 | Storybook | `vp run --filter webapp storybook:dev` |
 | Story tests | `vp run --filter webapp test:storybook` |
@@ -40,6 +39,11 @@ leaves it optional.
 
 The payoff is that an upstream defect gets fixed here once, with the note attached, instead of being
 worked around at every call site.
+
+A variant with one caller is still a variant when it names a system axis — a tone, a size, a shape,
+an edge. `shadcn/no-restyle` forbids composing radius, spacing or a border onto a primitive at the
+call site, so where upstream documents `rounded-full` or `border-dashed` as `className` composition,
+here it is `shape="pill"` and `variant="outlined"`: one home for each axis, not one per screen.
 
 ## File naming
 
@@ -69,7 +73,7 @@ of that is repeated here. What follows is what no diagnostic will ever tell you.
   `options.reportUnusedDisableDirectives` is `error` — so a misspelt rule, a rule that does not exist
   and a suppression that outlived its reason are all caught for you. One shape escapes that, next.
 - **A hooks suppression silences the whole component.** oxlint routes every React-hooks diagnostic
-  through one directive name, so `// oxlint-disable-next-line react/rules-of-hooks` placed **anywhere
+  through one directive name, so `// oxlint-disable-next-line react-hooks/rules-of-hooks` placed **anywhere
   in a component body** also suppresses `react(set-state-in-effect)` and
   `react(no-deriving-state-in-effects)` for that whole component, whichever line it sits above.
   Neighbouring components in the same file keep reporting, so the file does not look disabled. The
@@ -96,11 +100,14 @@ of that is repeated here. What follows is what no diagnostic will ever tell you.
   them.
 - **The one exception `jsx-a11y/no-autofocus` earns** is the first field of an overlay the user just
   opened. Suppress that case inline with the reason; everything else is the bug the rule describes.
-- **Re-derive an off rule's findings before trusting or changing the reason beside it** — but run it
-  from the **repo root**, `oxlint -A all -D <rule> webapp`. Started from inside `webapp/` this config
-  becomes the one oxlint treats as the root, and `options` is only ever read from that config: this
-  file declares none, so `typeAware` goes off and every type-aware rule reports nothing while
-  exiting 0. `-A all` is what keeps the rest of the rule set out of the answer.
+- **Re-derive an off rule's findings before trusting or changing the reason beside it** — from the
+  repo root, `vp -C webapp lint -A all -D <rule> --report-unused-disable-directives-severity=off .`.
+  `-A all` keeps the rest of the rule set out of the answer, and the severity flag keeps out the
+  suppressions that rest of the rule set has just left unused. A nested `overrides` entry still
+  applies, so a rule an override turns off for some files stays off there. `vp -C webapp` keeps the
+  root config in charge; started with bare `oxlint` from inside `webapp/`, this file becomes the
+  root, `options` is only ever read from the root, and every type-aware rule reports nothing while
+  exiting 0.
 - **An `off` entry only means something when a category would otherwise switch the rule on.** Every
   category but `correctness` and `suspicious` is off here, so `"off"` on a `pedantic`, `perf` or
   `style` rule documents a decision the config does not need to make. Confirm before adding one:
@@ -129,7 +136,8 @@ in the tree. The prefix answers it, and it also shows up in imports and in the S
 ## Container/presentation split
 
 - **Routes** (`src/routes/**`): data fetching, loaders, auth guards, side effects.
-- **Hooks** (`src/hooks/use-*.ts`): a route's fetching, factored out when more than one route needs it.
+- **Hooks** (`src/hooks/use-*.ts`): a route's fetching, factored out when more than one route needs
+  it, or when a route's fetching has outgrown the route.
 - **Components** (`src/components/**`): presentational, with no exception for a "cohesive section".
   They take their data as props and never import the query layer.
 
@@ -208,7 +216,7 @@ snapshot never repeats. There are two sanctioned readings, and no third:
   a counter is not an input to the phrase, so the compiler would memoise the phrase and strand it on
   screen while the counter ticked underneath.
 - **A story takes it from `STORY_NOW` and the relative helpers beside it**
-  (`@/components/common/story-clock`), read once per module load. A hard-coded literal is not the
+  (`@/stories/story-clock`), read once per module load. A hard-coded literal is not the
   alternative — it drifts into "8 months ago" as the calendar moves and puts every "expires in …"
   branch permanently in the past.
 
@@ -344,7 +352,7 @@ wiring is lost.
 
 ## Drawer or route
 
-A detail surface goes in a `DetailDrawerStack` level (`src/components/core/detail-drawer/`) when
+A detail surface goes in a `DetailDrawerStack` level (`src/components/layout/detail-drawer/`) when
 **all three** hold. Fail one and it is a route.
 
 1. **Contextual** — the covered page is why the reader is here, and the column the stack leaves

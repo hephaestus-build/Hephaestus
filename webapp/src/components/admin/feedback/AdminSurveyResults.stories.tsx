@@ -2,8 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { Survey } from "@/api/types.gen";
-import { STORY_NOW } from "@/components/common/story-clock";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
 import {
 	adminSurvey,
 	researchResponses,
@@ -13,8 +11,10 @@ import {
 	surveyResponses,
 	surveySummary,
 } from "@/components/feedback/product-survey-fixtures";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { withPageBehind } from "@/stories/decorators";
 import { Stateful } from "@/stories/stateful";
+import { STORY_NOW } from "@/stories/story-clock";
 import { expectSettledVisible } from "@/test/overlay";
 
 import { surveyLevel } from "./admin-surveys-search";
@@ -36,7 +36,6 @@ function ready(survey: Survey, overrides: Partial<ReadyState> = {}): ReadyState 
 }
 
 const meta = {
-	title: "Instance admin/Product feedback/Survey results",
 	component: AdminSurveyResults,
 	parameters: { layout: "fullscreen", chromatic: { viewports: [1440] } },
 	decorators: [withPageBehind],

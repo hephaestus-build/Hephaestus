@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { Survey } from "@/api/types.gen";
-import { STORY_NOW } from "@/components/common/story-clock";
 import {
 	adminSurvey,
 	endedSurvey,
@@ -11,6 +10,7 @@ import {
 	scheduledSurvey,
 } from "@/components/feedback/product-survey-fixtures";
 import { withStandardPage } from "@/stories/decorators";
+import { STORY_NOW } from "@/stories/story-clock";
 
 import { AdminSurveysTable } from "./AdminSurveysTable";
 
@@ -25,7 +25,6 @@ const ready = (rows: Survey[], onPageChange = fn()) => ({
 });
 
 const meta = {
-	title: "Instance admin/Product feedback/Surveys table",
 	component: AdminSurveysTable,
 	parameters: { layout: "fullscreen" },
 	decorators: [withStandardPage],

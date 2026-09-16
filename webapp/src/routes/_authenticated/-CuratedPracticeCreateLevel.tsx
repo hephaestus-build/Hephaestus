@@ -14,7 +14,7 @@ import {
 } from "@/components/admin/curated-catalog/CuratedPracticeForm";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { DrawerBody } from "@/components/ui/drawer";
 import { problemDetailOf } from "@/lib/problem-detail";
 

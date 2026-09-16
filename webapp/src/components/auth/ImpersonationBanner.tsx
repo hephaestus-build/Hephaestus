@@ -34,8 +34,6 @@ export function ImpersonationBanner({
 }: ImpersonationBannerProps) {
 	return (
 		<div
-			role="status"
-			aria-live="polite"
 			className={cn(
 				"sticky top-0 z-50 flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b px-4 py-2 text-sm",
 				writesEnabled
@@ -50,14 +48,12 @@ export function ImpersonationBanner({
 			</span>
 
 			{writesEnabled ? (
-				<Button variant="destructive-outline" size="sm" className="h-7" onClick={onDisableWrites}>
+				<Button variant="destructive-outline" size="sm" onClick={onDisableWrites}>
 					Disable writes
 				</Button>
 			) : (
 				<AlertDialog>
-					<AlertDialogTrigger
-						render={<Button variant="warning-outline" size="sm" className="h-7" />}
-					>
+					<AlertDialogTrigger render={<Button variant="warning-outline" size="sm" />}>
 						Enable writes
 					</AlertDialogTrigger>
 					<AlertDialogContent>
@@ -85,7 +81,6 @@ export function ImpersonationBanner({
 				disabled={isExiting}
 				onClick={onExit}
 				aria-label="Stop impersonating and restore your account"
-				className="h-7"
 			>
 				{isExiting ? <Spinner className="mr-2 size-3.5" /> : null}
 				Stop impersonating

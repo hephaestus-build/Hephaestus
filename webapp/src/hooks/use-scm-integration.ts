@@ -4,29 +4,17 @@ import { toast } from "sonner";
 
 import {
 	addRepositoryToMonitorMutation,
-	getConnectionSyncStatusOptions,
-	getConnectionSyncStatusQueryKey,
 	getIntegrationCatalogOptions,
 	getRepositoriesToMonitorOptions,
 	getWorkspaceOptions,
-	listConnectionSyncJobsQueryKey,
-	listConnectionSyncResourcesOptions,
-	listConnectionSyncResourcesQueryKey,
 	removeRepositoryToMonitorMutation,
-	triggerSyncJobMutation,
-	updateConnectionSyncJobMutation,
 	updateTokenMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { Workspace } from "@/api/types.gen";
 import type { AdminRepositoriesSettings } from "@/components/admin/integrations/AdminRepositoriesSettings";
-import { syncPollInterval } from "@/components/admin/integrations/sync-format";
-import {
-	SCM_CLASS_KEYS,
-	type SyncResourcesTableProps,
-} from "@/components/admin/integrations/SyncResourcesTable";
-import type { SyncStatusHeaderProps } from "@/components/admin/integrations/SyncStatusHeader";
+import { SCM_CLASS_KEYS } from "@/components/admin/integrations/SyncResourcesTable";
 import type { WorkspaceScmTokenSettings } from "@/components/admin/integrations/WorkspaceScmTokenSettings";
-import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
+import { useConnectionSync } from "@/hooks/use-connection-sync";
 import { problemDetailOf } from "@/lib/problem-detail";
 
 type ScmKind = "GITHUB" | "GITLAB";
@@ -43,7 +31,6 @@ function scmProviderOf(workspace: Workspace | undefined): {
 
 export function useScmIntegration(workspaceSlug: string) {
 	const queryClient = useQueryClient();
-	const livePushUnavailable = useLivePushUnavailable();
 
 	const workspaceQueryOptions = getWorkspaceOptions({ path: { workspaceSlug } });
 	const workspaceQuery = useQuery(workspaceQueryOptions);
@@ -58,29 +45,21 @@ export function useScmIntegration(workspaceSlug: string) {
 	const isConnectionActive = entry?.connectionState === "ACTIVE";
 	const connectionId = hasConnection ? entry.connectionId : undefined;
 
-	const statusQuery = useQuery({
-		...getConnectionSyncStatusOptions({
-			path: { workspaceSlug, connectionId: connectionId ?? -1 },
-		}),
-		enabled: connectionId != null,
-		refetchInterval: (query) =>
-			syncPollInterval(query.state.data?.activeJob != null, livePushUnavailable),
-	});
-	const status = statusQuery.data;
-	const hasActiveJob = status?.activeJob != null;
-
-	const {
-		data: resources,
-		isLoading: isResourcesLoading,
-		isError: isResourcesError,
-		error: resourcesError,
-		refetch: refetchResources,
-	} = useQuery({
-		...listConnectionSyncResourcesOptions({
-			path: { workspaceSlug, connectionId: connectionId ?? -1 },
-		}),
-		enabled: connectionId != null,
-		refetchInterval: syncPollInterval(hasActiveJob, livePushUnavailable),
+	const sync = useConnectionSync({
+		workspaceSlug,
+		connectionId,
+		isConnectionActive,
+		credentialsUnreadableSince: entry?.credentialsUnreadableSince,
+		isConnectionLoading: workspaceQuery.isLoading || catalogQuery.isLoading,
+		connectionError: workspaceQuery.error ?? catalogQuery.error,
+		retryConnection: () => {
+			void workspaceQuery.refetch();
+			void catalogQuery.refetch();
+		},
+		resourceNoun: "repository",
+		resourceNounPlural: "repositories",
+		expectedClassKeys: SCM_CLASS_KEYS,
+		cancelsAfter: "step",
 	});
 
 	const repositoriesQueryOptions = getRepositoriesToMonitorOptions({ path: { workspaceSlug } });
@@ -93,36 +72,21 @@ export function useScmIntegration(workspaceSlug: string) {
 		...repositoriesQueryOptions,
 	});
 
-	const invalidateSyncState = () => {
-		if (connectionId == null) {
-			return;
-		}
-		void queryClient.invalidateQueries({
-			queryKey: getConnectionSyncStatusQueryKey({ path: { workspaceSlug, connectionId } }),
-		});
-		void queryClient.invalidateQueries({
-			queryKey: listConnectionSyncJobsQueryKey({ path: { workspaceSlug, connectionId } }),
-		});
-		void queryClient.invalidateQueries({
-			queryKey: listConnectionSyncResourcesQueryKey({ path: { workspaceSlug, connectionId } }),
-		});
-	};
-
-	const onRepositorySetChanged = () => {
+	const invalidateRepositorySet = () => {
 		void queryClient.invalidateQueries({ queryKey: repositoriesQueryOptions.queryKey });
-		invalidateSyncState();
+		sync.invalidateSyncActivity();
 	};
 
 	const addRepository = useMutation({
 		...addRepositoryToMonitorMutation(),
-		onSuccess: onRepositorySetChanged,
+		onSuccess: invalidateRepositorySet,
 		onError: (e) => {
 			toast.error("Failed to add repository", { description: problemDetailOf(e) });
 		},
 	});
 	const removeRepository = useMutation({
 		...removeRepositoryToMonitorMutation(),
-		onSuccess: onRepositorySetChanged,
+		onSuccess: invalidateRepositorySet,
 		onError: (e) => {
 			toast.error("Failed to stop monitoring repository", { description: problemDetailOf(e) });
 		},
@@ -136,72 +100,10 @@ export function useScmIntegration(workspaceSlug: string) {
 				queryClient.invalidateQueries({ queryKey: workspaceQueryOptions.queryKey }),
 				queryClient.invalidateQueries({ queryKey: catalogQueryOptions.queryKey }),
 			]);
-			invalidateSyncState();
+			sync.invalidateSyncActivity();
 			toast.success("Personal access token replaced");
 		},
 	});
-
-	const triggerSync = useMutation({
-		...triggerSyncJobMutation(),
-		onSuccess: (job) => {
-			invalidateSyncState();
-			toast.success(job.type === "BACKFILL" ? "Backfill started" : "Sync started");
-		},
-		onError: (e) => {
-			toast.error("Failed to start sync", { description: problemDetailOf(e) });
-		},
-	});
-
-	const cancelJob = useMutation({
-		...updateConnectionSyncJobMutation(),
-		onSuccess: () => {
-			invalidateSyncState();
-			toast.success("Cancelling — stopping after current step…");
-		},
-		onError: (e) => {
-			toast.error("Failed to cancel sync", { description: problemDetailOf(e) });
-		},
-	});
-
-	const pendingTriggerType = triggerSync.isPending ? triggerSync.variables.body.type : undefined;
-	const triggeringType =
-		pendingTriggerType === "RECONCILIATION" || pendingTriggerType === "BACKFILL"
-			? pendingTriggerType
-			: null;
-
-	const triggerSyncOfType = (type: "RECONCILIATION" | "BACKFILL") => {
-		if (connectionId == null) {
-			return;
-		}
-		triggerSync.mutate({ path: { workspaceSlug, connectionId }, body: { type } });
-	};
-
-	const syncStatusHeaderProps: Omit<SyncStatusHeaderProps, "label" | "actions"> = {
-		status,
-		isLoading: workspaceQuery.isLoading || catalogQuery.isLoading || statusQuery.isLoading,
-		error: workspaceQuery.error ?? catalogQuery.error ?? statusQuery.error,
-		isConnectionActive,
-		credentialsUnreadableSince: entry?.credentialsUnreadableSince,
-		triggeringType,
-		isCancelling: cancelJob.isPending,
-		onRetry: () => {
-			void workspaceQuery.refetch();
-			void catalogQuery.refetch();
-			void statusQuery.refetch();
-		},
-		onSync: () => triggerSyncOfType("RECONCILIATION"),
-		onBackfill: () => triggerSyncOfType("BACKFILL"),
-		onCancel: () => {
-			const jobId = status?.activeJob?.id;
-			if (connectionId == null || jobId == null) {
-				return;
-			}
-			cancelJob.mutate({
-				path: { workspaceSlug, connectionId, jobId },
-				body: { cancelRequested: true },
-			});
-		},
-	};
 
 	const handleReplaceToken = async (personalAccessToken: string) => {
 		try {
@@ -221,22 +123,9 @@ export function useScmIntegration(workspaceSlug: string) {
 		isConnectionActive,
 		connectionState: entry?.connectionState,
 		credentialsUnreadableSince: entry?.credentialsUnreadableSince,
-		// Lets the route poll its job-history query on the same adaptive cadence as the rest.
-		hasActiveJob,
-		connectionId,
-		status,
-		syncStatusHeaderProps,
-		syncResourcesProps: {
-			resources: resources ?? [],
-			isLoading: isResourcesLoading,
-			isError: isResourcesError,
-			error: resourcesError,
-			onRetry: () => void refetchResources(),
-			resourceNoun: "repository",
-			resourceNounPlural: "repositories",
-			syncIntervalSeconds: status?.syncIntervalSeconds,
-			expectedClassKeys: SCM_CLASS_KEYS,
-		} satisfies SyncResourcesTableProps,
+		syncStatusHeaderProps: sync.syncStatusHeaderProps,
+		syncResourcesProps: sync.syncResourcesProps,
+		jobHistoryProps: sync.jobHistoryProps,
 		tokenSettingsProps: {
 			providerLabel: label,
 			isSaving: replaceToken.isPending,

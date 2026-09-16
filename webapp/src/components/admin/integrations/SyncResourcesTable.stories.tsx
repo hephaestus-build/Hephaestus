@@ -3,7 +3,7 @@ import { type ComponentProps, useState } from "react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { SyncResourceState } from "@/api/types.gen";
-import { daysBefore, minutesBefore } from "@/components/common/story-clock";
+import { daysBefore, minutesBefore } from "@/stories/story-clock";
 import { expectSettledVisible } from "@/test/overlay";
 
 import { SCM_CLASS_KEYS, SyncResourcesTable } from "./SyncResourcesTable";

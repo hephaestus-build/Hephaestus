@@ -14,7 +14,6 @@ const status = (overrides: Partial<CatalogEntryStatus> = {}): CatalogEntryStatus
 });
 
 const meta = {
-	title: "Instance admin/Practice catalog/Entry badges",
 	component: CuratedEntryBadges,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],

@@ -31,7 +31,6 @@ const shipped = {
 };
 
 const meta = {
-	title: "Instance admin/Practice catalog/Hephaestus default panel",
 	component: HephaestusVersionPanel,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

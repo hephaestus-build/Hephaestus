@@ -56,7 +56,6 @@ it("announces success only after the clipboard write completes", async () => {
 	const copy = await openCopyAction();
 	fireEvent.click(copy);
 	expect(copy.disabled).toBe(true);
-	expect(copy.getAttribute("aria-label")).toBe("Copying review links…");
 	expect(screen.queryByText("Review links copied")).toBeNull();
 	await act(async () => {
 		finishWrite();

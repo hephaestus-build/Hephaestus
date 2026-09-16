@@ -3,8 +3,8 @@ import { MessageSquareText, ScanSearch, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "cn";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { tabsListVariants } from "@/components/ui/tabs";
 
 import type { ReviewScopeSearch } from "./review-search";

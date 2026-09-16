@@ -39,7 +39,6 @@ const PRACTICES: FacetSource = {
 };
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Observation filters",
 	component: ObservationFilters,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	decorators: [withStandardPage],

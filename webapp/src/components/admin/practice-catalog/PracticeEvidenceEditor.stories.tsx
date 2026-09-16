@@ -21,7 +21,6 @@ function ControlledEvidence(args: React.ComponentProps<typeof PracticeEvidenceEd
 }
 
 const meta = {
-	title: "Workspace admin/Practices/Occasion evidence",
 	component: PracticeEvidenceEditor,
 	args: {
 		options: mockPullRequestWorkType,

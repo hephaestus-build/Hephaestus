@@ -23,6 +23,7 @@ const meta = {
 		enabled: false,
 		scheduleDay: 1,
 		scheduleTime: "09:00",
+		channelCandidates: [],
 		onSaved: fn(),
 	},
 } satisfies Meta<typeof AdminSlackNotificationSettings>;

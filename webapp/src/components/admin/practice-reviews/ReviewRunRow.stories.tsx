@@ -31,7 +31,6 @@ const failed = run("bbbbbbbb-8888-8888-8888-888888888888");
  * review that found nothing.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Review run row",
 	component: ReviewRunRow,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],

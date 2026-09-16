@@ -3,8 +3,8 @@ import { CircleDollarSign } from "lucide-react";
 
 import type { WorkspaceLlmUsageReport } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -26,6 +26,21 @@ export interface AdminLlmUsagePageProps {
 	now: Date;
 }
 
+type UsageView =
+	| { state: "loading" }
+	| { state: "error"; error: unknown }
+	| { state: "ready"; report: WorkspaceLlmUsageReport };
+
+function viewOf(error: unknown, isLoading: boolean, report?: WorkspaceLlmUsageReport): UsageView {
+	if (error != null) {
+		return { state: "error", error };
+	}
+	if (isLoading || report == null) {
+		return { state: "loading" };
+	}
+	return { state: "ready", report };
+}
+
 export function AdminLlmUsagePage({
 	month,
 	isCurrentMonth,
@@ -38,6 +53,7 @@ export function AdminLlmUsagePage({
 	onEditOwnProviderCap,
 	now,
 }: AdminLlmUsagePageProps) {
+	const view = viewOf(error, isLoading, report);
 	return (
 		<PageLayout>
 			<PageHeader
@@ -60,44 +76,48 @@ export function AdminLlmUsagePage({
 				}
 			/>
 
-			{error == null ? (
-				isLoading || report == null ? (
-					<>
-						<div className="grid gap-4 md:grid-cols-2">
-							{["shared", "provider"].map((slot) => (
-								<Card key={slot}>
-									<CardHeader>
-										<Skeleton className="h-4 w-40" />
-										<Skeleton className="h-7 w-28" />
-									</CardHeader>
-									<CardContent>
-										<Skeleton className="h-1.5 w-full" />
-									</CardContent>
-								</Card>
-							))}
-						</div>
-						<Card>
-							<CardHeader>
-								<CardTitle>By run type</CardTitle>
-							</CardHeader>
-							<CardContent>
-								<LlmUsageByJobTypeTable />
-							</CardContent>
-						</Card>
-					</>
-				) : (
-					<AdminLlmUsageReport
-						report={report}
-						month={month}
-						isCurrentMonth={isCurrentMonth}
-						workspaceSlug={workspaceSlug}
-						onEditOwnProviderCap={onEditOwnProviderCap}
-						now={now}
-					/>
-				)
-			) : (
-				<QueryErrorAlert error={error} title="Couldn't load AI usage" onRetry={onRetry} />
+			{view.state === "error" && (
+				<QueryErrorAlert error={view.error} title="Couldn't load AI usage" onRetry={onRetry} />
+			)}
+			{view.state === "loading" && <UsageSkeleton />}
+			{view.state === "ready" && (
+				<AdminLlmUsageReport
+					report={view.report}
+					month={month}
+					isCurrentMonth={isCurrentMonth}
+					workspaceSlug={workspaceSlug}
+					onEditOwnProviderCap={onEditOwnProviderCap}
+					now={now}
+				/>
 			)}
 		</PageLayout>
+	);
+}
+
+function UsageSkeleton() {
+	return (
+		<>
+			<div className="grid gap-4 md:grid-cols-2">
+				{["shared", "provider"].map((slot) => (
+					<Card key={slot}>
+						<CardHeader>
+							<Skeleton className="h-4 w-40" />
+							<Skeleton className="h-7 w-28" />
+						</CardHeader>
+						<CardContent>
+							<Skeleton className="h-1.5 w-full" />
+						</CardContent>
+					</Card>
+				))}
+			</div>
+			<Card>
+				<CardHeader>
+					<CardTitle>By run type</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<LlmUsageByJobTypeTable />
+				</CardContent>
+			</Card>
+		</>
 	);
 }

@@ -11,8 +11,8 @@ import {
 import type { FeatureKey } from "@/components/admin/AdminFeaturesSettings";
 import { AdminSettingsPage } from "@/components/admin/AdminSettingsPage";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Spinner } from "@/components/ui/spinner";
 import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";

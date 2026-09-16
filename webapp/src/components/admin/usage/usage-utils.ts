@@ -74,6 +74,8 @@ export function budgetResetDayLabel(month: string): string {
  * Display only, and that is a rule: money is exact decimal on the server and binary64 here, so
  * nothing this returns may decide anything. Whether work is held back is `paused` on the payload.
  */
+export function budgetUsedPercent(spendUsd: number, capUsd: number): number;
+export function budgetUsedPercent(spendUsd: number, capUsd: number | undefined): number | undefined;
 export function budgetUsedPercent(
 	spendUsd: number,
 	capUsd: number | undefined,

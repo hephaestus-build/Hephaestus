@@ -20,7 +20,6 @@ const sections = {
 const readyBinding = { purpose: "PRACTICE_REVIEW", enabled: true, ready: true } as const;
 
 const meta = {
-	title: "Workspace admin/Practices/Review/Overview",
 	component: ReviewPage,
 	parameters: {
 		layout: "padded",

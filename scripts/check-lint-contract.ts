@@ -16,7 +16,7 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 
 import { parse } from "jsonc-parser";
@@ -103,11 +103,6 @@ const fixtures: Fixture[] = [
 		source: 'export const bad = <span className="text-[11px]" />;',
 	},
 	{
-		path: "src/components/ui/lint-contract-radius.tsx",
-		code: "shadcn(no-arbitrary-values)",
-		source: 'export const bad = <div className="rounded-[4px]" />;',
-	},
-	{
 		path: "src/lint-contract-scale-steps.tsx",
 		code: null,
 		// `text-2xs`, `tracking-display` and `ease-drawer` exist only in `styles.css`; the fixture fails
@@ -131,11 +126,6 @@ const fixtures: Fixture[] = [
 		path: "src/lint-contract-inline.tsx",
 		code: "shadcn(no-inline-styles)",
 		source: "export const bad = <div style={{ padding: 13 }} />;",
-	},
-	{
-		path: "src/components/ui/lint-contract-inline.tsx",
-		code: "shadcn(no-inline-styles)",
-		source: 'export const bad = <div style={{ color: "var(--color-primary)" }} />;',
 	},
 	{
 		path: "src/lint-contract-style-element.tsx",
@@ -186,17 +176,7 @@ const fixtures: Fixture[] = [
 		source: 'export const bad = <div className="hovr:flex" />;',
 	},
 	{
-		path: "src/components/ui/lint-contract-tailwind.tsx",
-		code: "shadcn(no-unknown-classes)",
-		source: 'export const bad = <div className="rounded-huge" />;',
-	},
-	{
 		path: "src/lint-contract-color.tsx",
-		code: "shadcn(no-raw-colors)",
-		source: 'export const bad = <div className="bg-primry" />;',
-	},
-	{
-		path: "src/components/ui/lint-contract-color.tsx",
 		code: "shadcn(no-raw-colors)",
 		source: 'export const bad = <div className="dark:bg-pink-500/50" />;',
 	},
@@ -240,9 +220,11 @@ const fixtures: Fixture[] = [
 		source: "const timestamp = Date.now(); void timestamp;",
 	},
 	{
-		path: "src/lint-contract-query.test.tsx",
+		// A story, where the matcher is registered and the query already proves presence.
+		path: story("in-the-document"),
 		code: "hephaestus(no-redundant-in-the-document)",
-		source: 'test("query", () => expect(canvas.getByRole("button")).toBeInTheDocument());',
+		source:
+			'export const Bad: Story = { play: async ({ canvas }) => { await expect(canvas.getByRole("button")).toBeInTheDocument(); } };',
 	},
 	{
 		path: story("a11y"),
@@ -263,7 +245,7 @@ const fixtures: Fixture[] = [
 	{
 		path: preferPath,
 		code: "hephaestus(prefer-auto-story-title)",
-		source: `const meta = { title: "components/ui/${basename(preferPath, ".stories.tsx")}", component: Button } satisfies Meta<typeof Button>; export default meta;`,
+		source: `const meta = { title: "Kit/Button", component: Button } satisfies Meta<typeof Button>; export default meta;`,
 	},
 	{
 		path: "src/lint-contract-svg.tsx",
@@ -280,36 +262,13 @@ const fixtures: Fixture[] = [
 		code: "typescript(no-unsafe-assignment)",
 		source: 'const unsafe: string = JSON.parse("null"); void unsafe;',
 	},
-	{
-		path: "src/lib/lint-contract-class-join.ts",
+	// `no-restricted-imports` options replace rather than merge, so every override that sets the rule
+	// restates the `react` entry; one fixture per override scope proves none has dropped it.
+	...["src/lib", "src/stores", "src/components/ui", "src/components", "src"].map((scope) => ({
+		path: `${scope}/lint-contract-memo.ts`,
 		code: "eslint(no-restricted-imports)",
-		source: 'export { clsx } from "clsx";',
-	},
-	{
-		path: "src/lib/lint-contract-classes.ts",
-		code: "eslint(no-restricted-imports)",
-		source: 'export { twMerge } from "tailwind-merge";',
-	},
-	{
-		path: "src/stores/lint-contract-classes.ts",
-		code: "eslint(no-restricted-imports)",
-		source: 'export { clsx } from "clsx";',
-	},
-	{
-		path: "src/components/ui/lint-contract-classes.ts",
-		code: "eslint(no-restricted-imports)",
-		source: 'export { twMerge } from "tailwind-merge";',
-	},
-	{
-		path: "src/components/lint-contract-classes.ts",
-		code: "eslint(no-restricted-imports)",
-		source: 'export { clsx } from "clsx";',
-	},
-	{
-		path: "src/lint-contract-classes.ts",
-		code: "eslint(no-restricted-imports)",
-		source: 'export { twMerge } from "tailwind-merge";',
-	},
+		source: 'export { useMemo } from "react";',
+	})),
 ];
 
 function effectiveLintOptions(scope: string) {

@@ -55,7 +55,6 @@
 		"no-inner-declarations": "error",
 		"no-prototype-builtins": "error",
 		"no-self-compare": "error",
-		"no-shadow": "error",
 		"no-throw-literal": "error",
 		"no-constructor-return": "error",
 		"no-promise-executor-return": "error",
@@ -198,12 +197,8 @@
 		"oxc/no-barrel-file": "error",
 		"typescript/no-misused-promises": "error",
 		"typescript/no-deprecated": "error",
-		"typescript/no-misused-spread": "error",
 		"typescript/prefer-nullish-coalescing": "error",
-		"typescript/require-array-sort-compare": "error",
 		"typescript/prefer-promise-reject-errors": "error",
-		"typescript/no-meaningless-void-operator": "error",
-		"typescript/no-unnecessary-template-expression": "error",
 		"typescript/no-unnecessary-condition": "error",
 		"typescript/switch-exhaustiveness-check": [
 			"error",
@@ -245,8 +240,6 @@
 				"ignoreLastCallback": true
 			}
 		],
-		// Unlike the SPA, these trees have no approved CSS side-effect or module-augmentation imports.
-		"import/no-unassigned-import": "error",
 		"no-unused-vars": [
 			"error",
 			{

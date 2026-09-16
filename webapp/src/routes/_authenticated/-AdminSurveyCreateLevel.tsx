@@ -13,7 +13,7 @@ import {
 	AdminSurveyComposerHeader,
 } from "@/components/admin/feedback/AdminSurveyComposer";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { DrawerBody } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { productSurveyQueryScope } from "@/hooks/use-product-feedback";

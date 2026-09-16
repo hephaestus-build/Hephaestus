@@ -230,7 +230,7 @@ export interface SyncStatusHeaderProps {
 	onBackfill?: () => void;
 	onCancel: () => void;
 	/** Integration-specific trailing controls, e.g. GitHub's "Manage installation" link. */
-	actions?: ReactNode;
+	actions?: ReactElement | undefined;
 }
 
 /**
@@ -372,7 +372,7 @@ export function SyncStatusHeader({
 										</Button>
 									)}
 								</ButtonGroup>
-								{rendersContent(actions) && <div className="ml-auto">{actions}</div>}
+								{actions !== undefined && <div className="ml-auto">{actions}</div>}
 							</div>
 						)}
 					</>

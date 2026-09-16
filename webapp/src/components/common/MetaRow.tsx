@@ -1,13 +1,11 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { cn } from "cn";
-
-import { rendersContent } from "@/lib/react-node";
 
 export interface MetaRowProps {
 	captions?: readonly ReactNode[];
 	/** Chips reporting a state. Rendered after the captions, at their own rhythm. */
-	badges?: ReactNode;
+	badges?: ReactElement | undefined;
 	className?: string;
 }
 
@@ -38,7 +36,7 @@ export function MetaRow({ captions = NO_CAPTIONS, badges, className }: MetaRowPr
 					))}
 				</span>
 			)}
-			{rendersContent(badges) && (
+			{badges !== undefined && (
 				<span className="flex flex-wrap items-center gap-1.5">{badges}</span>
 			)}
 		</span>

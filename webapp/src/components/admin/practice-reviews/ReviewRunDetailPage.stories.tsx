@@ -53,7 +53,6 @@ if (!THIN_CONTROLLERS) {
  * prop here rather than a moment you have to catch.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Review details",
 	component: ReviewRunDetailPage,
 	parameters: {
 		layout: "padded",

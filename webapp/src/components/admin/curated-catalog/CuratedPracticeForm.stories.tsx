@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
@@ -43,7 +43,6 @@ const initialData: CuratedPracticeFormInitialValue = {
 };
 
 const meta = {
-	title: "Instance admin/Practice catalog/Practice editor",
 	component: CuratedPracticeForm,
 	parameters: {
 		layout: "fullscreen",

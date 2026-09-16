@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { withPageBehind } from "@/stories/decorators";
 import { Stateful } from "@/stories/stateful";
 import { expectGenuinelyDisabled } from "@/test/controls";
@@ -12,7 +12,6 @@ import { GUARDED_SURVEY_LEVEL_KINDS, surveyLevel } from "./admin-surveys-search"
 import { AdminSurveyComposer } from "./AdminSurveyComposer";
 
 const meta = {
-	title: "Instance admin/Product feedback/Survey composer",
 	component: AdminSurveyComposer,
 	parameters: { layout: "fullscreen", chromatic: { viewports: [1440] } },
 	decorators: [withPageBehind],

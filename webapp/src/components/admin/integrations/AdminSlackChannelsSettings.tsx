@@ -55,7 +55,7 @@ export interface AdminSlackChannelsSettingsProps {
 	 * but inert: it explains what monitoring does and points at the connect card above. */
 	hasSlackConnection: boolean;
 	channels: SlackMonitoredChannel[];
-	channelCandidates?: readonly SlackChannelCandidate[];
+	channelCandidates: readonly SlackChannelCandidate[];
 	isLoading: boolean;
 	/** The channel list query failed — show a retry panel instead of the empty state. */
 	isError?: boolean;
@@ -78,8 +78,6 @@ export interface AdminSlackChannelsSettingsProps {
 	onRemoveChannel: (input: { slackChannelId: string; reason?: string }) => Promise<void> | void;
 }
 
-const NO_CANDIDATES: readonly SlackChannelCandidate[] = [];
-
 /**
  * Admin surface to allow-list Slack channels and drive their per-channel consent lifecycle
  * (PENDING → ACTIVE ⇄ PAUSED → REVOKED + erase). Pure: all data + mutations live in the route
@@ -90,7 +88,7 @@ export function AdminSlackChannelsSettings({
 	workspaceSlug,
 	hasSlackConnection,
 	channels,
-	channelCandidates = NO_CANDIDATES,
+	channelCandidates,
 	isLoading,
 	isError = false,
 	error,

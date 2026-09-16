@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { Gauge } from "lucide-react";
 
 import type { InstanceSettings } from "@/api/types.gen";
-import { minutesBefore } from "@/components/common/story-clock";
-import { PageHeader } from "@/components/core/PageHeader";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { minutesBefore } from "@/stories/story-clock";
 
 import { SilentModeBanner } from "./SilentModeBanner";
 

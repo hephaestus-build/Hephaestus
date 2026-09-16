@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn } from "storybook/test";
 import type { ObservationDetail, PracticeGroupReviewObservation } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
+import { daysBefore } from "@/stories/story-clock";
 import { ReviewObservationRow } from "./ReviewObservationRow";
 
 const strength = {
@@ -66,7 +66,6 @@ const observations: PracticeGroupReviewObservation[] = [
 ];
 
 const meta = {
-	title: "Profile/Review runs/Observation row",
 	component: ReviewObservationRow,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

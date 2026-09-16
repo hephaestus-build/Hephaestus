@@ -2,15 +2,15 @@ import { Pencil } from "lucide-react";
 
 import { cn } from "cn";
 import type { Practice, PracticeDefinitionOptions } from "@/api/types.gen";
-import { PracticeDefinitionPreview } from "@/components/admin/practice-adoption/PracticeDefinitionPreview";
 import { GroupPill } from "@/components/admin/practice-catalog/GroupPill";
 import { CatalogOriginBadge } from "@/components/admin/practices/CatalogOriginBadge";
 import { practiceFormLevel } from "@/components/admin/practices/practice-search";
+import { PracticeDefinitionPreview } from "@/components/admin/practices/PracticeDefinitionPreview";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
-import { DetailStackLink } from "@/components/core/detail-drawer/DetailStackLink";
+import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { AUTONOMY_DEFS } from "@/components/practice-vocabulary/autonomy-defs";
 import { AutonomySourceNote } from "@/components/practice-vocabulary/AutonomySourceNote";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";

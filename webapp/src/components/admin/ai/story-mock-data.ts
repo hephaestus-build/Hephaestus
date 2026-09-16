@@ -1,5 +1,5 @@
 import type { AgentJob, AvailableLlmModel, PracticeReviewSettings } from "@/api/types.gen";
-import { minutesAfter } from "@/components/common/story-clock";
+import { minutesAfter } from "@/stories/story-clock";
 
 export const mockAvailableModels: AvailableLlmModel[] = [
 	{

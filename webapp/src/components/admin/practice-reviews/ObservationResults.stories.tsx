@@ -34,7 +34,6 @@ if (!THIN_CONTROLLERS) {
 }
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Observation results",
 	component: ObservationResults,
 	parameters: {
 		layout: "padded",

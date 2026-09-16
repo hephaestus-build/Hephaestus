@@ -15,7 +15,6 @@ if (!firstFeedback) {
 const clearFilters = fn();
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Delivery results",
 	component: FeedbackResults,
 	parameters: {
 		layout: "padded",

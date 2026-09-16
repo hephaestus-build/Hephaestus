@@ -1,5 +1,5 @@
 import type { FeedbackItem } from "@/api/types.gen";
-import { daysBefore, hoursBefore, minutesBefore } from "@/components/common/story-clock";
+import { daysBefore, hoursBefore, minutesBefore } from "@/stories/story-clock";
 
 export const bugReport = {
 	id: "f1f1f1f1-0000-0000-0000-000000000001",

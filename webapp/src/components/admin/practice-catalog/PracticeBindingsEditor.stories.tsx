@@ -19,7 +19,6 @@ import { PracticeBindingsEditor, type PracticeOccasionMode } from "./PracticeBin
 import { outcome } from "./story-mock-data";
 
 const meta = {
-	title: "Workspace admin/Practices/Occasions",
 	component: PracticeBindingsEditor,
 	args: {
 		options: mockPullRequestWorkType,

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { PracticeGroupReviewObservation, PracticeGroupReviewRun } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
+import { daysBefore } from "@/stories/story-clock";
 import { ReviewRunTimeline } from "./ReviewRunTimeline";
 
 const baseObservation = {

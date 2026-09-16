@@ -34,7 +34,6 @@ function peopleFrom(
  * including the failure — is a story rather than a mocked request.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Person facet",
 	component: ReviewPersonFacet,
 	parameters: { layout: "centered", chromatic: { viewports: [1440] } },
 	tags: ["autodocs"],

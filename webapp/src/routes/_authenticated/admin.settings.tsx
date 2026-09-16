@@ -10,8 +10,8 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import { SilentModeCard } from "@/components/admin/instance/SilentModeCard";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import { mockPractices } from "@/components/admin/practices/story-mock-data";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { mockPracticeDefinitionOptions } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
 import { Stateful } from "@/stories/stateful";
@@ -27,7 +27,6 @@ const ready = (over: Partial<ReadyState> = {}): ReadyState => ({
 });
 
 const meta = {
-	title: "Workspace admin/Practices/Workspace practice",
 	component: WorkspacePracticePanel,
 	parameters: { layout: "fullscreen" },
 	decorators: [withPageBehind],

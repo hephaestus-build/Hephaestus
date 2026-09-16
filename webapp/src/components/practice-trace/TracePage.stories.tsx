@@ -18,7 +18,6 @@ import { TracePage } from "./TracePage";
  * [Practice outcomes](?path=/docs/practice-trace-practice-outcomes--docs).
  */
 const meta = {
-	title: "Practice trace/Review activity detail",
 	component: TracePage,
 	parameters: {
 		layout: "padded",

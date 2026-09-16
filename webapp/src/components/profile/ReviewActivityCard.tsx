@@ -3,7 +3,7 @@ import { formatDistanceToNow } from "date-fns";
 import { AwardIcon } from "lucide-react";
 
 import { cn } from "cn";
-import { FormattedTitle } from "@/components/shared/FormattedTitle";
+import { FormattedTitle } from "@/components/common/FormattedTitle";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";

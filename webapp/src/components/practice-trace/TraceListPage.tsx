@@ -7,7 +7,7 @@ import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { ResultCount } from "@/components/common/ResultCount";
 import { TablePagination } from "@/components/common/TablePagination";
-import { PageHeader } from "@/components/core/PageHeader";
+import { PageHeader } from "@/components/layout/PageHeader";
 import {
 	Empty,
 	EmptyDescription,

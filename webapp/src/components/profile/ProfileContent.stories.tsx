@@ -1,179 +1,18 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { endOfISOWeek, formatISO, startOfISOWeek } from "date-fns";
-import { fn } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
-import { daysBefore, STORY_NOW } from "@/components/common/story-clock";
+import { STORY_NOW } from "@/stories/story-clock";
 
-import { ProfileContent } from "./ProfileContent";
+import { ProfileContent, ZERO_ACTIVITY_STATS } from "./ProfileContent";
+import { authoredPullRequests, filledMonitor, reviewActivity } from "./story-mock-data";
 
 const now = new Date(STORY_NOW);
 const defaultAfter = formatISO(startOfISOWeek(now));
 const defaultBefore = formatISO(endOfISOWeek(now));
 
-const repositories = [
-	{
-		id: 1,
-		name: "Hephaestus",
-		nameWithOwner: "ls1intum/Hephaestus",
-		htmlUrl: "https://github.com/ls1intum/Hephaestus",
-		hiddenFromContributions: false,
-	},
-	{
-		id: 2,
-		name: "Artemis",
-		nameWithOwner: "ls1intum/Artemis",
-		htmlUrl: "https://github.com/ls1intum/Artemis",
-		hiddenFromContributions: false,
-	},
-	{
-		id: 3,
-		name: "Athena",
-		nameWithOwner: "ls1intum/Athena",
-		htmlUrl: "https://github.com/ls1intum/Athena",
-		hiddenFromContributions: false,
-	},
-];
-
-const reviewActivity = [
-	{
-		id: 1,
-		state: "APPROVED" as const,
-		submittedAt: daysBefore(2),
-		htmlUrl: "https://github.com/ls1intum/Hephaestus/pull/42",
-		pullRequest: {
-			id: 101,
-			title: "Add new feature to dashboard",
-			number: 42,
-			state: "OPEN" as const,
-			isDraft: false,
-			isMerged: false,
-			htmlUrl: "https://github.com/ls1intum/Hephaestus/pull/42",
-			repository: repositories[0],
-		},
-		score: 80,
-		isDismissed: false,
-		codeComments: 3,
-	},
-	{
-		id: 2,
-		state: "CHANGES_REQUESTED" as const,
-		submittedAt: daysBefore(5),
-		htmlUrl: "https://github.com/ls1intum/Artemis/pull/123",
-		pullRequest: {
-			id: 102,
-			title: "Fix authentication bugs",
-			number: 123,
-			state: "OPEN" as const,
-			isDraft: false,
-			isMerged: false,
-			htmlUrl: "https://github.com/ls1intum/Artemis/pull/123",
-			repository: repositories[1],
-		},
-		score: 65,
-		isDismissed: false,
-		codeComments: 2,
-	},
-	{
-		id: 3,
-		state: "COMMENTED" as const,
-		submittedAt: daysBefore(7),
-		htmlUrl: "https://github.com/ls1intum/Athena/pull/15",
-		pullRequest: {
-			id: 103,
-			title: "Update documentation",
-			number: 15,
-			state: "OPEN" as const,
-			isDraft: false,
-			isMerged: false,
-			htmlUrl: "https://github.com/ls1intum/Athena/pull/15",
-			repository: repositories[2],
-		},
-		score: 50,
-		isDismissed: false,
-		codeComments: 0,
-	},
-];
-
-const authoredPullRequests = [
-	{
-		id: 101,
-		number: 42,
-		title: "Add new analytics dashboard",
-		state: "OPEN" as const,
-		isDraft: false,
-		isMerged: false,
-		commentsCount: 5,
-		additions: 250,
-		deletions: 30,
-		htmlUrl: "https://github.com/ls1intum/Hephaestus/pull/42",
-		createdAt: daysBefore(3),
-		repository: repositories[0],
-		labels: [
-			{ id: 1, name: "enhancement", color: "0E8A16" },
-			{ id: 2, name: "frontend", color: "FBCA04" },
-		],
-	},
-	{
-		id: 102,
-		number: 87,
-		title: "WIP: Refactor authentication module",
-		state: "OPEN" as const,
-		isDraft: true,
-		isMerged: false,
-		commentsCount: 0,
-		additions: 320,
-		deletions: 280,
-		htmlUrl: "https://github.com/ls1intum/Artemis/pull/87",
-		createdAt: daysBefore(1),
-		repository: repositories[1],
-		labels: [
-			{ id: 3, name: "refactoring", color: "D93F0B" },
-			{ id: 4, name: "security", color: "5319E7" },
-		],
-	},
-];
-
-const activityStats = {
-	score: 195,
-	numberOfReviewedPRs: 3,
-	numberOfApprovals: 1,
-	numberOfChangeRequests: 1,
-	numberOfComments: 1,
-	numberOfCodeComments: 5,
-	numberOfUnknowns: 0,
-	numberOfOwnReplies: 2,
-	numberOfOpenPullRequests: 2,
-	numberOfMergedPullRequests: 1,
-	numberOfClosedPullRequests: 0,
-	numberOfOpenedIssues: 1,
-	numberOfClosedIssues: 1,
-};
-
-const filledMonitor = {
-	activityStats,
-	reviewActivity,
-	authoredPullRequests,
-	repositories,
-	totalReviewActivityCount: 8,
-	totalAuthoredPullRequestCount: 6,
-};
-
 const emptyMonitor = {
-	activityStats: {
-		score: 0,
-		numberOfReviewedPRs: 0,
-		numberOfApprovals: 0,
-		numberOfChangeRequests: 0,
-		numberOfComments: 0,
-		numberOfCodeComments: 0,
-		numberOfUnknowns: 0,
-		numberOfOwnReplies: 0,
-		numberOfOpenPullRequests: 0,
-		numberOfMergedPullRequests: 0,
-		numberOfClosedPullRequests: 0,
-		numberOfOpenedIssues: 0,
-		numberOfClosedIssues: 0,
-	},
+	activityStats: ZERO_ACTIVITY_STATS,
 	reviewActivity: [],
 	authoredPullRequests: [],
 	repositories: [],
@@ -181,34 +20,31 @@ const emptyMonitor = {
 	totalAuthoredPullRequestCount: 0,
 };
 
-const baseArgs = {
-	isLoading: false,
-	username: "johndoe",
-	currUserIsDashboardUser: true,
-	workspaceSlug: "aet",
-	afterDate: defaultAfter,
-	beforeDate: defaultBefore,
-	activityMonitorFilters: { repositoryIds: [], limit: 5 },
-	onActivityMonitorFiltersChange: fn(),
-	onTimeframeChange: fn(),
-};
-
 const meta = {
 	component: ProfileContent,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
+	args: {
+		isLoading: false,
+		username: "johndoe",
+		currUserIsDashboardUser: true,
+		workspaceSlug: "aet",
+		afterDate: defaultAfter,
+		beforeDate: defaultBefore,
+		activityMonitorFilters: { repositoryIds: [], limit: 5 },
+		activityMonitorData: filledMonitor,
+		onActivityMonitorFiltersChange: fn(),
+		onTimeframeChange: fn(),
+	},
 } satisfies Meta<typeof ProfileContent>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
-	args: { ...baseArgs, activityMonitorData: filledMonitor },
-};
+export const Default: Story = {};
 
 export const RepositoryFiltered: Story = {
 	args: {
-		...baseArgs,
 		activityMonitorFilters: { repositoryIds: [1], limit: 5 },
 		activityMonitorData: {
 			...filledMonitor,
@@ -221,33 +57,31 @@ export const RepositoryFiltered: Story = {
 };
 
 export const Loading: Story = {
-	args: { ...baseArgs, isLoading: true },
-};
-
-export const EmptyReviews: Story = {
-	args: {
-		...baseArgs,
-		activityMonitorData: {
-			...filledMonitor,
-			reviewActivity: [],
-			totalReviewActivityCount: 0,
-			activityStats: { ...activityStats, numberOfReviewedPRs: 0, numberOfApprovals: 0 },
-		},
-	},
-};
-
-export const EmptyPullRequests: Story = {
-	args: {
-		...baseArgs,
-		activityMonitorData: {
-			...filledMonitor,
-			authoredPullRequests: [],
-			totalAuthoredPullRequestCount: 0,
-			activityStats: { ...activityStats, numberOfOpenPullRequests: 0 },
-		},
-	},
+	args: { isLoading: true, activityMonitorData: undefined },
 };
 
 export const CompletelyEmpty: Story = {
-	args: { ...baseArgs, activityMonitorData: emptyMonitor },
+	args: { activityMonitorData: emptyMonitor },
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText("No review activity that counts yet. Try a wider timeframe."),
+		).toBeVisible();
+		await expect(canvas.getByText("Pull Requests you create will appear here.")).toBeVisible();
+	},
+};
+
+/** The empty sentences name the developer when the reader is someone else. */
+export const EmptyForAnotherDeveloper: Story = {
+	args: {
+		activityMonitorData: emptyMonitor,
+		currUserIsDashboardUser: false,
+		username: "janedoe",
+		displayName: "Jane Doe",
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText("Jane Doe has no review activity that counts in this timeframe."),
+		).toBeVisible();
+		await expect(canvas.getByText("Jane Doe doesn't have any open pull requests.")).toBeVisible();
+	},
 };

@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { CircleAlert, CircleDollarSign } from "lucide-react";
-import { useId } from "react";
+import { type ReactNode, useId } from "react";
 
 import type { WorkspaceLlmUsageReport } from "@/api/types.gen";
 import { BudgetExhaustedAlert } from "@/components/admin/ai/BudgetExhaustedAlert";
@@ -137,24 +137,37 @@ export function AdminLlmUsageReport({
 			)}
 
 			<div className="grid gap-4 md:grid-cols-2">
-				<SharedBudgetCard
+				<CapCard
+					spendLabel="Shared-model spend"
+					capDescription="Shared-model budget · set by your host"
+					noCapDescription="No shared-model budget set by your host"
+					meterLabel="Shared-model budget used"
 					isCurrentMonth={isCurrentMonth}
 					spendUsd={sharedSpend}
 					capUsd={sharedBudget}
-					percent={sharedPercent}
 					paused={sharedPaused}
 					titleFx={sharedTitleFx}
 				/>
 				{hasProviderCapOrSpend ? (
-					<ProviderCapCard
+					<CapCard
+						spendLabel="Your provider spend"
+						capDescription="Provider cap · set by you, billed by your provider"
+						noCapDescription="No provider cap set · billed to you by your provider"
+						meterLabel="Your provider cap used"
 						isCurrentMonth={isCurrentMonth}
 						spendUsd={providerSpend}
 						capUsd={providerCap}
-						percent={providerPercent}
 						paused={providerPaused}
-						onEditOwnProviderCap={onEditOwnProviderCap}
 						titleFx={providerTitleFx}
-					/>
+					>
+						{isCurrentMonth ? (
+							<Button variant="outline" size="sm" onClick={onEditOwnProviderCap}>
+								{providerCap == null ? "Set cap" : "Change cap"}
+							</Button>
+						) : (
+							<CapIsNotMonthScoped subject="cap" />
+						)}
+					</CapCard>
 				) : (
 					<NoProviderCard
 						isCurrentMonth={isCurrentMonth}
@@ -252,104 +265,55 @@ function CapHeadline({ spendUsd, capUsd, titleFx }: CapHeadlineProps) {
 	);
 }
 
-interface SharedBudgetCardProps {
+interface CapCardProps {
+	/** "Shared-model spend"; the card adds "so far" while the month is still running. */
+	spendLabel: string;
+	capDescription: string;
+	noCapDescription: string;
+	/** Accessible name of the meter, distinct per card. */
+	meterLabel: string;
 	isCurrentMonth: boolean;
 	spendUsd: number;
 	capUsd: number | undefined;
-	percent: number | undefined;
 	paused: boolean;
 	titleFx: FxConversion | null;
+	/** The control that acts on the cap, for the purse the reader owns. */
+	children?: ReactNode;
 }
 
-function SharedBudgetCard({
+function CapCard({
+	spendLabel,
+	capDescription,
+	noCapDescription,
+	meterLabel,
 	isCurrentMonth,
 	spendUsd,
 	capUsd,
-	percent,
 	paused,
 	titleFx,
-}: SharedBudgetCardProps) {
+	children,
+}: CapCardProps) {
 	const labelId = useId();
 	return (
 		<Card role="region" aria-labelledby={labelId}>
 			<CardHeader>
 				<CardDescription id={labelId}>
-					{isCurrentMonth ? "Shared-model spend so far" : "Shared-model spend"}
+					{isCurrentMonth ? `${spendLabel} so far` : spendLabel}
 				</CardDescription>
 				<CapHeadline spendUsd={spendUsd} capUsd={capUsd} titleFx={titleFx} />
-				<CardDescription>
-					{capUsd == null
-						? "No shared-model budget set by your host"
-						: "Shared-model budget · set by your host"}
-				</CardDescription>
+				<CardDescription>{capUsd == null ? noCapDescription : capDescription}</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-3">
-				{percent != null && capUsd != null && (
+				{capUsd != null && (
 					<CapMeterWithCaption
-						percent={percent}
 						paused={paused}
 						isCurrentMonth={isCurrentMonth}
 						spendUsd={spendUsd}
 						capUsd={capUsd}
-						label="Shared-model budget used"
+						label={meterLabel}
 					/>
 				)}
-			</CardContent>
-		</Card>
-	);
-}
-
-interface ProviderCapCardProps {
-	isCurrentMonth: boolean;
-	spendUsd: number;
-	capUsd: number | undefined;
-	percent: number | undefined;
-	paused: boolean;
-	onEditOwnProviderCap: () => void;
-	titleFx: FxConversion | null;
-}
-
-function ProviderCapCard({
-	isCurrentMonth,
-	spendUsd,
-	capUsd,
-	percent,
-	paused,
-	onEditOwnProviderCap,
-	titleFx,
-}: ProviderCapCardProps) {
-	const labelId = useId();
-	return (
-		<Card role="region" aria-labelledby={labelId}>
-			<CardHeader>
-				<CardDescription id={labelId}>
-					{isCurrentMonth ? "Your provider spend so far" : "Your provider spend"}
-				</CardDescription>
-				<CapHeadline spendUsd={spendUsd} capUsd={capUsd} titleFx={titleFx} />
-				<CardDescription>
-					{capUsd == null
-						? "No provider cap set · billed to you by your provider"
-						: "Provider cap · set by you, billed by your provider"}
-				</CardDescription>
-			</CardHeader>
-			<CardContent className="space-y-3">
-				{percent != null && capUsd != null && (
-					<CapMeterWithCaption
-						percent={percent}
-						paused={paused}
-						isCurrentMonth={isCurrentMonth}
-						spendUsd={spendUsd}
-						capUsd={capUsd}
-						label="Your provider cap used"
-					/>
-				)}
-				{isCurrentMonth ? (
-					<Button variant="outline" size="sm" onClick={onEditOwnProviderCap}>
-						{capUsd == null ? "Set cap" : "Change cap"}
-					</Button>
-				) : (
-					<CapIsNotMonthScoped subject="cap" />
-				)}
+				{children}
 			</CardContent>
 		</Card>
 	);
@@ -394,7 +358,6 @@ function NoProviderCard({
 }
 
 interface CapMeterWithCaptionProps {
-	percent: number;
 	paused: boolean;
 	isCurrentMonth: boolean;
 	spendUsd: number;
@@ -403,13 +366,13 @@ interface CapMeterWithCaptionProps {
 }
 
 function CapMeterWithCaption({
-	percent,
 	paused,
 	isCurrentMonth,
 	spendUsd,
 	capUsd,
 	label,
 }: CapMeterWithCaptionProps) {
+	const percent = budgetUsedPercent(spendUsd, capUsd);
 	const state = capState(percent, paused, isCurrentMonth);
 	return (
 		<div className="space-y-1.5">

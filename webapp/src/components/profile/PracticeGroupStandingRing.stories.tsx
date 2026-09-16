@@ -16,7 +16,6 @@ const repeat = (count: number, standing: PracticeStanding["standing"]): Practice
 	);
 
 const meta = {
-	title: "Profile/Practice group standing ring",
 	component: PracticeGroupStandingRing,
 	parameters: {
 		layout: "centered",

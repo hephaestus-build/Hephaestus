@@ -39,7 +39,7 @@ const ALLOWLIST = {
 		"webapp/src/components/admin/AdminDangerZoneSettings.tsx",
 		"webapp/src/components/admin/ai/WorkspaceLlmProviderPanel.tsx",
 		"webapp/src/components/admin/audit/AuthAuditPanel.tsx",
-		"webapp/src/components/admin/config-audit/ConfigAuditPanel.tsx",
+		"webapp/src/components/admin/audit/ConfigAuditPanel.tsx",
 		"webapp/src/components/admin/integrations/AdminSlackNotificationSettings.tsx",
 		"webapp/src/components/admin/integrations/outline/AddCollectionDialog.tsx",
 		"webapp/src/components/admin/integrations/slack-channels/ChannelHistorySheet.tsx",
@@ -50,7 +50,7 @@ const ALLOWLIST = {
 	storyMocks: [
 		"webapp/src/components/admin/AdminSettingsPage.stories.tsx",
 		"webapp/src/components/admin/audit/AuthAuditPanel.stories.tsx",
-		"webapp/src/components/admin/config-audit/ConfigAuditPanel.stories.tsx",
+		"webapp/src/components/admin/audit/ConfigAuditPanel.stories.tsx",
 		"webapp/src/components/admin/integrations/outline/AddCollectionDialog.stories.tsx",
 		"webapp/src/components/admin/integrations/slack-channels/ChannelHistorySheet.stories.tsx",
 		"webapp/src/components/settings/SessionsSection.stories.tsx",

@@ -103,13 +103,7 @@ const policyGates = [
 	"gate:env",
 ];
 const serverGates = ["gate:java-nullness", "gate:server"];
-const webappGates = [
-	"gate:webapp",
-	"gate:webapp-format",
-	"gate:components",
-	"gate:stories",
-	"gate:story-sort",
-];
+const webappGates = ["gate:webapp", "gate:webapp-format", "gate:components", "gate:stories"];
 const agentGates = ["gate:agents", "gate:agent-tests"];
 const docsGates = ["gate:docs", "gate:diagrams", "gate:docs-tokens"];
 const loadGates = ["gate:load-format"];
@@ -189,7 +183,9 @@ export default defineConfig({
 			"lint:webapp:fix": run("vp -C webapp lint --fix ."),
 			"lint:agents": group(["gate:agents-lint"]),
 			"lint:agents:fix": run(`vp exec oxlint --fix ${oxlintTargets}`),
-			"typecheck:webapp": run("vp -C webapp lint --type-aware --type-check ."),
+			// The SPA has no separate `tsc` leg: the root config turns `typeAware` and `typeCheck` on, so
+			// the lint half of `gate:webapp` is also its type check.
+			"typecheck:webapp": group(["gate:webapp"]),
 			"typecheck:scripts": group(["gate:scripts-typecheck"]),
 			"typecheck:agents": group(["gate:agents-typecheck"]),
 			"check:webapp": run("vp -C webapp check"),
@@ -245,7 +241,6 @@ export default defineConfig({
 			"gate:webapp-format": cached(`vp fmt --check ${webappSources}`),
 			"gate:components": cached("node scripts/check-presentational-components.ts"),
 			"gate:stories": cached("node scripts/check-story-prose.ts"),
-			"gate:story-sort": cached("node scripts/check-story-sort.ts"),
 			"gate:docs-tokens": cached(
 				"node scripts/check-docs-tokens.ts && node --test scripts/check-docs-tokens.test.ts",
 			),

@@ -107,7 +107,7 @@ export const noNondeterministicRender = defineRule({
 			duringRender:
 				"`{{reading}}` during render never gives the same answer twice, so stories and tests turn on what time it is. Take the time from `useNow` in `@/components/common/use-now`, or seed it once with `useState(() => …)`.",
 			moduleLoad:
-				"`{{reading}}` runs once at import, off the real clock, so what renders from it drifts with the calendar. In a story take it from `STORY_NOW` in `@/components/common/story-clock`; in component code from `useNow`.",
+				"`{{reading}}` runs once at import, off the real clock, so what renders from it drifts with the calendar. In a story take it from `STORY_NOW` in `@/stories/story-clock`; in component code from `useNow`.",
 		},
 	},
 	create(context) {

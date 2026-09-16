@@ -6,7 +6,6 @@ import { expectNoOverflowingElement } from "@/test/reflow";
 import { CuratedCatalogSummary } from "./CuratedCatalogSummary";
 
 const meta = {
-	title: "Instance admin/Practice catalog/Summary",
 	component: CuratedCatalogSummary,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

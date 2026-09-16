@@ -17,11 +17,6 @@ import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstac
 import type { SurveyInvitation } from "@/api/types.gen";
 import { LoginDialog } from "@/components/auth/LoginDialog";
 import { CookieConsentBanner } from "@/components/consent/CookieConsentBanner";
-import Footer from "@/components/core/Footer";
-import Header from "@/components/core/Header";
-import { AppSidebar, type SidebarContext } from "@/components/core/sidebar/AppSidebar";
-import { SkipToContent } from "@/components/core/SkipToContent";
-import { StandardPageSurface } from "@/components/core/StandardPageSurface";
 import type { FeedbackKind } from "@/components/feedback/feedback-copy";
 import {
 	PAGE_PATH_MAX_LENGTH,
@@ -35,6 +30,11 @@ import {
 	type SurveyResponseDraft,
 	surveyEstimate,
 } from "@/components/feedback/survey-questions";
+import Footer from "@/components/layout/Footer";
+import Header from "@/components/layout/Header";
+import { AppSidebar, type SidebarContext } from "@/components/layout/sidebar/AppSidebar";
+import { SkipToContent } from "@/components/layout/SkipToContent";
+import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";

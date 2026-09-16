@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen } from "storybook/test";
 
 import type { CatalogEntryStatus } from "@/api/types.gen";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { withPageBehind } from "@/stories/decorators";
 import { Stateful } from "@/stories/stateful";
 import { settledDrawerPanel } from "@/test/overlay";
@@ -35,7 +35,6 @@ const initialData = {
  * written — and so these stories exercise the surface people actually get.
  */
 const meta = {
-	title: "Instance admin/Practice catalog/Group editor",
 	component: CuratedGroupForm,
 	parameters: { layout: "fullscreen", chromatic: { viewports: [1440] } },
 	decorators: [withPageBehind],

@@ -5,8 +5,8 @@ import type { TeamInfo } from "@/api/types.gen";
 import type { ExtendedUserTeams } from "@/components/admin/types";
 import { UsersTable, type UsersTableView } from "@/components/admin/UsersTable";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 
 interface AdminMembersPageProps {
 	users: ExtendedUserTeams[];

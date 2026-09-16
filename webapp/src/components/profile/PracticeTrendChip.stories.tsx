@@ -22,7 +22,6 @@ const none: TrendSupport = {
 };
 
 const meta = {
-	title: "Profile/Practice trend chip",
 	component: PracticeTrendChip,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],

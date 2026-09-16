@@ -2,9 +2,9 @@ import { Users } from "lucide-react";
 import { useLayoutEffect } from "react";
 
 import type { TeamInfo } from "@/api/types.gen";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
-import { type Contributor, ContributorGrid } from "@/components/shared/ContributorGrid";
+import { type Contributor, ContributorGrid } from "@/components/common/ContributorGrid";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 

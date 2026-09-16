@@ -8,7 +8,7 @@
  * that share it.
  */
 import { readdir, readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 /** Resolved from this file, so the gate answers the same from the repo root or from webapp/. */
 const REPO_ROOT = resolve(import.meta.dirname, "..");
@@ -19,10 +19,35 @@ const COMMENT_LINE = /^\s*(\/\/|\/\*|\*)/;
 /** Markdown renders a backticked span as text, so prose *about* the tag is not prose using it. */
 const CODE_SPAN = /`[^`]*`/g;
 
-const entries = await readdir(STORIES, { recursive: true });
-const files = entries.filter((entry) => entry.endsWith(".stories.tsx"));
+const entries = await readdir(STORIES, { recursive: true, withFileTypes: true });
+const files = entries
+	.filter((entry) => entry.isFile() && entry.name.endsWith(".stories.tsx"))
+	.map((entry) => relative(STORIES, join(entry.parentPath, entry.name)));
 if (files.length === 0) {
 	console.error(`No story files found under ${STORIES} — this check would pass without checking.`);
+	process.exit(1);
+}
+
+/**
+ * Storybook files a story by its path, so two stems that differ only in case or punctuation, or a
+ * stem that is also a sibling directory's name, are one sidebar node for two things.
+ */
+const sidebarKey = (name: string) => name.replaceAll(/[^a-z0-9]/giu, "").toLowerCase();
+const collisions: string[] = [];
+const nodes = new Map<string, Map<string, string>>();
+for (const entry of entries) {
+	if (!entry.isDirectory() && !entry.name.endsWith(".stories.tsx")) continue;
+	const siblings = nodes.get(entry.parentPath) ?? new Map<string, string>();
+	nodes.set(entry.parentPath, siblings);
+	const key = sidebarKey(entry.name.replace(/\.stories\.tsx$/u, ""));
+	const path = relative(REPO_ROOT, join(entry.parentPath, entry.name));
+	const taken = siblings.get(key);
+	if (taken === undefined) siblings.set(key, path);
+	else collisions.push(`${path} shares a sidebar node with ${taken}`);
+}
+if (collisions.length > 0) {
+	console.error("Storybook files a story by its path; these would share one sidebar node:\n");
+	for (const collision of collisions) console.error(`  ${collision}`);
 	process.exit(1);
 }
 

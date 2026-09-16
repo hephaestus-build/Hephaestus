@@ -1,4 +1,4 @@
-import type { Contributor } from "@/components/shared/ContributorGrid";
+import type { Contributor } from "@/components/common/ContributorGrid";
 import { Separator } from "@/components/ui/separator";
 
 import { AboutCallToActionSection } from "./AboutCallToActionSection";

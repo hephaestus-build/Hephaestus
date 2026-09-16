@@ -4,12 +4,7 @@ import { expect, fn, userEvent } from "storybook/test";
 import { expectGenuinelyDisabled } from "@/test/controls";
 
 import type { ReleaseStatus } from "@/api/types.gen";
-import {
-	daysBefore,
-	hoursBefore,
-	minutesAfter,
-	minutesBefore,
-} from "@/components/common/story-clock";
+import { daysBefore, hoursBefore, minutesAfter, minutesBefore } from "@/stories/story-clock";
 
 import {
 	InstanceReleaseCard,

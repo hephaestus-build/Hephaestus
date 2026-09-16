@@ -12,7 +12,6 @@ const context = {
 };
 
 const meta = {
-	title: "Product feedback/Feedback dialog",
 	component: ProductFeedbackDialog,
 	args: {
 		open: true,

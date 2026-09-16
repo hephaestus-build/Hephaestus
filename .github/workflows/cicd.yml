@@ -158,7 +158,6 @@ jobs:
               - 'scripts/check-docs-tokens.test.ts'
               - 'scripts/check-presentational-components.ts'
               - 'scripts/check-story-prose.ts'
-              - 'scripts/check-story-sort.ts'
               - 'scripts/install-browser-deps.ts'
               - 'package.json'
               - 'pnpm-lock.yaml'

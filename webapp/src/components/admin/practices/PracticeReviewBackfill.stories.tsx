@@ -8,7 +8,6 @@ import { PracticeReviewBackfill } from "./PracticeReviewBackfill";
 import { backfillRun as run } from "./story-mock-data";
 
 const meta = {
-	title: "Workspace admin/Practices/Review/Past work",
 	component: PracticeReviewBackfill,
 	parameters: {
 		layout: "padded",

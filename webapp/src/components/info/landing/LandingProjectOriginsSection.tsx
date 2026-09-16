@@ -1,4 +1,4 @@
-import { InstitutionalAttribution } from "@/components/core/InstitutionalAttribution";
+import { InstitutionalAttribution } from "@/components/layout/InstitutionalAttribution";
 
 export function LandingProjectOriginsSection() {
 	return (

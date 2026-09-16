@@ -11,7 +11,6 @@ import { TraceHeader } from "./TraceHeader";
  * which those are, so being wrong in this direction costs a missing button rather than a broken one.
  */
 const meta = {
-	title: "Practice trace/Header",
 	component: TraceHeader,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

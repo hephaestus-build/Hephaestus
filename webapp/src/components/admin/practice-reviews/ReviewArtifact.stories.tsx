@@ -18,7 +18,6 @@ import {
  * GitLab one.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Reviewed work",
 	component: ReviewArtifactLabel,
 	parameters: { layout: "padded", chromatic: { viewports: [1440] } },
 	tags: ["autodocs"],

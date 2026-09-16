@@ -15,7 +15,6 @@ const failed = reviewJob("bbbbbbbb-8888-8888-8888-888888888888");
  * still has to read as English, because the server may add one this build has never heard of.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Review run notices",
 	component: ReviewRunNotices,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],

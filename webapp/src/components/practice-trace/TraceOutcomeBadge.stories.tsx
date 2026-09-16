@@ -7,7 +7,6 @@ import { OUTCOMES } from "./trace-format";
 import { TraceOutcomeBadge } from "./TraceOutcomeBadge";
 
 const meta = {
-	title: "Practice trace/Outcome badge",
 	component: TraceOutcomeBadge,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],

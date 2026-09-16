@@ -4,7 +4,6 @@ import { expect } from "storybook/test";
 import { GroupPill } from "./GroupPill";
 
 const meta = {
-	title: "Shared/Practice catalog/Group pill",
 	component: GroupPill,
 	parameters: { layout: "centered" },
 	args: { slug: "review-ready-work", name: "Review-ready work" },

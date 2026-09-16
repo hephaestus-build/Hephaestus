@@ -113,7 +113,6 @@ const byActionability = (a: ReviewObservation, b: ReviewObservation) =>
 	actionability(a) - actionability(b) || b.observedAt.getTime() - a.observedAt.getTime();
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Observations",
 	component: ObservationsListPage,
 	parameters: {
 		layout: "fullscreen",

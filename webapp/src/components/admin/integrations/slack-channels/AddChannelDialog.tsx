@@ -23,16 +23,14 @@ import { SlackChannelPasteField } from "./SlackChannelPasteField";
 export interface AddChannelDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	candidates?: readonly SlackChannelCandidate[];
+	candidates: readonly SlackChannelCandidate[];
 	onSubmit: (input: { slackChannelId: string; channelName?: string }) => Promise<void> | void;
 }
-
-const NO_CANDIDATES: readonly SlackChannelCandidate[] = [];
 
 export function AddChannelDialog({
 	open,
 	onOpenChange,
-	candidates = NO_CANDIDATES,
+	candidates,
 	onSubmit,
 }: AddChannelDialogProps) {
 	const [selectedCandidate, setSelectedCandidate] = useState<SlackChannelCandidate | null>(null);

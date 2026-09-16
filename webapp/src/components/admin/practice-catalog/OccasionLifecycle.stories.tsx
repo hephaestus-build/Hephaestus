@@ -19,7 +19,6 @@ import { expectNoOverflowingElement } from "@/test/reflow";
 import { OccasionLifecycle } from "./OccasionLifecycle";
 
 const meta = {
-	title: "Workspace admin/Practices/Occasion lifecycle",
 	component: OccasionLifecycle,
 	args: {
 		workType: mockPullRequestWorkType,

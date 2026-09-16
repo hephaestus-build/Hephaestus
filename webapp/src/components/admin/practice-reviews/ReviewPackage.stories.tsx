@@ -24,7 +24,6 @@ const feedback = {
 };
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Review package",
 	component: ReviewPackage,
 	parameters: {
 		layout: "padded",

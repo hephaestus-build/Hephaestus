@@ -2,7 +2,7 @@ import { CodeReviewIcon } from "@primer/octicons-react";
 import { ArrowRightIcon } from "lucide-react";
 
 import type { ProfileReviewActivity } from "@/api/types.gen";
-import { EmptyState } from "@/components/shared/EmptyState";
+import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
 import type { ProviderType } from "@/lib/provider";
 
@@ -12,8 +12,8 @@ export interface ReviewActivitySectionProps {
 	providerType: ProviderType;
 	reviewActivity: readonly ProfileReviewActivity[];
 	isLoading: boolean;
-	personLabel: string;
-	currUserIsDashboardUser: boolean;
+	/** Shown under "No review activity"; the caller knows whose profile this is. */
+	emptyMessage: string;
 	canViewAll: boolean;
 	onViewAll: () => void;
 }
@@ -22,8 +22,7 @@ export function ReviewActivitySection({
 	providerType,
 	reviewActivity,
 	isLoading,
-	personLabel,
-	currUserIsDashboardUser,
+	emptyMessage,
 	canViewAll,
 	onViewAll,
 }: ReviewActivitySectionProps) {
@@ -53,22 +52,12 @@ export function ReviewActivitySection({
 					<EmptyState
 						icon={<CodeReviewIcon className="size-6" size={24} />}
 						title="No review activity"
-						description={
-							currUserIsDashboardUser
-								? `No review activity that counts yet. Try a wider timeframe.`
-								: `${personLabel} has no review activity that counts in this timeframe.`
-						}
+						description={emptyMessage}
 					/>
 				)}
 			</div>
 			{canViewAll && (
-				<Button
-					type="button"
-					variant="link"
-					size="inline"
-					className="w-fit text-sm"
-					onClick={onViewAll}
-				>
+				<Button type="button" variant="link" size="inline" className="w-fit" onClick={onViewAll}>
 					View all review activity
 					<ArrowRightIcon data-icon="inline-end" />
 				</Button>

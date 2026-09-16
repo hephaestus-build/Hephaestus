@@ -16,8 +16,8 @@ const PATH_SEPARATOR = /[\\/]/u;
 /**
  * The part of the path this repo owns. `context.filename` is absolute, so it carries the checkout
  * path with it — and that belongs to whoever cloned the repo, who may well have a name of their own
- * outside ASCII. Every lint script here starts from the repo root (`AGENTS.md`), so `context.cwd` is
- * that root and what remains after it is exactly the path under version control.
+ * outside ASCII. oxlint runs from the repo root or a package root (`vp -C webapp`); either way
+ * `context.cwd` is inside the checkout and what remains is a path this repo owns.
  *
  * When `cwd` turns out not to contain the file, the relative path climbs out through `..` and says
  * nothing about the repo; the file's own name is the part that is still certainly the repo's, so the

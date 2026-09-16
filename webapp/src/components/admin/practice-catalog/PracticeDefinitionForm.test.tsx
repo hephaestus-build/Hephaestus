@@ -7,7 +7,7 @@ import { renderWithRouter } from "@/test/router-harness";
 
 import { PracticeDefinitionForm, type PracticeDefinitionValue } from "./PracticeDefinitionForm";
 
-vi.mock("@/components/shared/CodeEditor", () => ({
+vi.mock("@/components/common/CodeEditor", () => ({
 	CodeEditor: () => <div />,
 }));
 

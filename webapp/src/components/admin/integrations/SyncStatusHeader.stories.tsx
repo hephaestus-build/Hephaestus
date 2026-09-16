@@ -3,8 +3,8 @@ import { ExternalLinkIcon } from "lucide-react";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { ConnectionSyncStatus, SyncJob } from "@/api/types.gen";
-import { minutesAfter, minutesBefore } from "@/components/common/story-clock";
 import { buttonVariants } from "@/components/ui/button";
+import { minutesAfter, minutesBefore } from "@/stories/story-clock";
 import { expectSettledVisible } from "@/test/overlay";
 
 import { SyncStatusHeader } from "./SyncStatusHeader";

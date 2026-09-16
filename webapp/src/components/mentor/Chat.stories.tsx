@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "storybook/test";
 
 import type { ChatMessageVote } from "@/api/types.gen";
-import { STORY_NOW } from "@/components/common/story-clock";
 import type { ChatMessage } from "@/lib/types";
+import { STORY_NOW } from "@/stories/story-clock";
 
 import { Chat } from "./Chat";
 

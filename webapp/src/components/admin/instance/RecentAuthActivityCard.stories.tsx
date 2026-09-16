@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn } from "storybook/test";
 
 import type { AuthEventView } from "@/api/types.gen";
-import { hoursBefore, minutesBefore } from "@/components/common/story-clock";
+import { hoursBefore, minutesBefore } from "@/stories/story-clock";
 
 import { RecentAuthActivityCard } from "./RecentAuthActivityCard";
 

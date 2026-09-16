@@ -40,7 +40,6 @@ function reviewsFor(search: RunsSearch): ListPracticeReviewsResponse {
 }
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Reviews",
 	component: ReviewRunsPage,
 	parameters: {
 		layout: "fullscreen",

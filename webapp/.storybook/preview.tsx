@@ -95,30 +95,6 @@ const preview: Preview = {
 				date: /Date$/u,
 			},
 		},
-		options: {
-			storySort: {
-				// Product surfaces first, roughly outside-in by who opens them, then the shared kit, then
-				// the auto-titled path trees, then cross-cutting regression suites. Every top-level
-				// segment any story declares has to appear here — one that does not sorts alphabetically
-				// below every segment that does, silently. That includes segments nobody wrote: a story
-				// with no explicit title gets one derived from its path.
-				order: [
-					"Workspace admin",
-					"Instance admin",
-					"Practice trace",
-					"Workspace",
-					"Profile",
-					"Product feedback",
-					"Common",
-					"Shared",
-					"Provider",
-					"Icons",
-					"components",
-					"integrations",
-					"Tests",
-				],
-			},
-		},
 		docs: {
 			story: {
 				inline: true,

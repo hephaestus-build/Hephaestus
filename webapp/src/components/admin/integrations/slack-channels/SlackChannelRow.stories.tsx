@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { SlackMonitoredChannel } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { daysBefore } from "@/stories/story-clock";
 import { expectSettledVisible } from "@/test/overlay";
 
 import { SlackChannelRow } from "./SlackChannelRow";

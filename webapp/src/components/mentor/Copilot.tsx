@@ -1,5 +1,4 @@
 import { Sparkles, SquareArrowOutUpRight, SquarePen, X } from "lucide-react";
-import { useState } from "react";
 
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
@@ -21,12 +20,6 @@ import { HephIcon } from "@/components/brand/HephIcon";
 export interface CopilotProps {
 	/** Content to display in the panel (typically Chat component) */
 	children: React.ReactNode;
-	/** Whether the widget is initially open */
-	defaultOpen?: boolean;
-	/** Controlled open state */
-	open?: boolean;
-	/** Handler for open state changes */
-	onOpenChange?: (open: boolean) => void;
 	/** Optional CSS class name for the launcher's container */
 	className?: string;
 	/** Trigger starting a fresh chat session */
@@ -43,20 +36,13 @@ export interface CopilotProps {
  */
 export function Copilot({
 	children,
-	defaultOpen = false,
-	open: controlledOpen,
-	onOpenChange,
 	className,
 	onNewChat,
 	onOpenFullChat,
 	hasMessages = false,
 }: CopilotProps) {
-	const [internalOpen, setInternalOpen] = useState(defaultOpen);
-	const isOpen = controlledOpen ?? internalOpen;
-	const setIsOpen = onOpenChange ?? setInternalOpen;
-
 	return (
-		<Drawer open={isOpen} onOpenChange={setIsOpen} swipeDirection="right">
+		<Drawer swipeDirection="right">
 			<div className={cn("fixed right-6 bottom-6 z-50", className)}>
 				<DrawerTrigger
 					render={

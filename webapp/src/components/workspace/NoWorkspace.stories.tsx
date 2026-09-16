@@ -3,7 +3,6 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { NoWorkspace } from "./NoWorkspace";
 
 const meta: Meta<typeof NoWorkspace> = {
-	title: "Workspace/No workspace",
 	component: NoWorkspace,
 	parameters: {
 		layout: "centered",

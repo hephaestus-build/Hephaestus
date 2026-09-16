@@ -9,7 +9,6 @@ import {
 import { ReviewRunActions } from "./ReviewRunActions";
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Review actions",
 	component: ReviewRunActions,
 	parameters: {
 		layout: "centered",

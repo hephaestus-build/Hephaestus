@@ -20,7 +20,7 @@ Load the one file that answers your question.
 | `rules/props-state-shape.md` | What shape should this prop be — object or scalars, union or flags, controlled or not — and does it deserve to exist? |
 | `rules/composition-and-slots.md` | Should this be `children`, a prop, a slot, context, or a compound API — and what does a slotted element owe the primitive? |
 | `rules/vocabulary-registries.md` | Where do a status's label, icon and colour come from, and when does a badge render nothing? |
-| `rules/story-titles.md` | Where does this story land in the sidebar, and does it need an explicit `title`? |
+| `rules/story-titles.md` | Where does this story land in the sidebar? |
 | `rules/story-args-and-coverage.md` | Which states earn a story, and how do the Controls stay wired to the real component? |
 | `rules/play-assertions.md` | Can this play function fail, and how do I assert against a portal or a just-opened overlay? |
 | `rules/a11y.md` | What does axe not catch here, and what must a component name for itself? |
@@ -46,6 +46,10 @@ list, since a rule can be added without this file changing. Those that reach a s
   `await expect(getBy…)` is `vitest/valid-expect`, which catches it for every subject.
 - `hephaestus/no-within-canvas-element` — `within(canvasElement)` when the play function was handed
   `canvas`.
+- `hephaestus/prefer-auto-story-title` — any `title` on a meta; the sidebar mirrors the source tree.
+- `hephaestus/no-nondeterministic-render` — `new Date()`, `Date.now()` or `Math.random()` at module
+  scope or in render; a story takes its clock from `@/stories/story-clock`.
+- `hephaestus/svg-needs-accessible-name` — an inline `<svg>` with neither `aria-hidden` nor a name.
 
 The ones that only make sense in a story file are scoped to `**/*.stories.tsx` in the `overrides`
 block of `webapp/.oxlintrc.json` rather than named in its top-level `rules`. A house rule missing
@@ -53,9 +57,8 @@ from both is simply off, and nothing reports that.
 
 Beyond oxlint:
 
-- `scripts/check-story-prose.ts` (`gate:stories`) — `<p>` in a comment Storybook publishes.
-- `scripts/check-story-sort.ts` (`gate:story-sort`) — a title segment missing from `storySort.order`,
-  or an `order` entry no story claims.
+- `scripts/check-story-prose.ts` (`gate:stories`) — `<p>` in a comment Storybook publishes, and two
+  story files that Storybook would file under one sidebar node.
 - `scripts/check-presentational-components.ts` (`gate:components`) — a component importing the
   query layer, and a story installing MSW handlers. Its allowlist is shrink-only.
 - `webapp/.storybook/preview.tsx` sets `a11y: { test: "error" }` project-wide. Adding a per-story

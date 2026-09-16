@@ -1,4 +1,4 @@
-import { defineRule, type ESTree, type Options } from "@oxlint/plugins";
+import { defineRule, type ESTree } from "@oxlint/plugins";
 
 import { memberName, propertyName, type VisitedProperty } from "../property.ts";
 
@@ -38,17 +38,7 @@ export const asRegExp = (glob: string) =>
 		"u",
 	);
 
-const configuredNames = (options: Readonly<Options>) => {
-	const [first] = options;
-	if (typeof first !== "object" || first === null || Array.isArray(first)) {
-		return;
-	}
-	const names = first.assertFunctionNames;
-	if (!Array.isArray(names)) {
-		return;
-	}
-	return names.filter((name) => typeof name === "string");
-};
+const ASSERT_PATTERNS = ASSERT_FUNCTION_NAMES.map(asRegExp);
 
 /**
  * `Open.play?.(context)` runs another story's play and inherits its assertions. A glob would have to
@@ -72,16 +62,8 @@ export const playMustAssert = defineRule({
 			noAssertion:
 				"This play drives the component but never asserts on the result. Assert what the interaction was for: a `getBy*` query for the element it should have produced, or `expect` on the value it should have changed.",
 		},
-		schema: [
-			{
-				type: "object",
-				properties: { assertFunctionNames: { type: "array", items: { type: "string" } } },
-				additionalProperties: false,
-			},
-		],
 	},
 	create(context) {
-		const patterns = (configuredNames(context.options) ?? ASSERT_FUNCTION_NAMES).map(asRegExp);
 		// A stack, not a flag: plays nest (a `step` callback holds one), and two stories side by side
 		// must not lend each other an assertion.
 		const plays: { key: ESTree.Node; asserted: boolean }[] = [];
@@ -116,7 +98,7 @@ export const playMustAssert = defineRule({
 					return;
 				}
 				const callee = context.sourceCode.getText(node.callee);
-				play.asserted = patterns.some((pattern) => pattern.test(callee));
+				play.asserted = ASSERT_PATTERNS.some((pattern) => pattern.test(callee));
 			},
 		};
 	},

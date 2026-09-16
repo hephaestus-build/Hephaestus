@@ -111,7 +111,6 @@ const idle = {
 };
 
 const meta = {
-	title: "Workspace admin/Practices/Review/How much",
 	component: PracticeAutonomyPage,
 	parameters: {
 		layout: "padded",

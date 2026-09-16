@@ -4,7 +4,6 @@ import { type ReactNode, useId, useRef, useState } from "react";
 
 import type { CreateSurvey, Question, Survey } from "@/api/types.gen";
 import { type FormError, FormErrorSummary } from "@/components/common/FormErrorSummary";
-import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
 import { ProductSurveyDialog } from "@/components/feedback/ProductSurveyDialog";
 import { SURVEY_PURPOSE_DEFS } from "@/components/feedback/survey-purpose-defs";
 import {
@@ -13,6 +12,7 @@ import {
 	NPS_LABELS,
 	QUESTION_TYPE_LABELS,
 } from "@/components/feedback/survey-questions";
+import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/components/ui/drawer";

@@ -28,7 +28,6 @@ const PEOPLE: ReviewPeople = {
  * response.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Delivery filters",
 	component: FeedbackFilters,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	decorators: [withStandardPage],

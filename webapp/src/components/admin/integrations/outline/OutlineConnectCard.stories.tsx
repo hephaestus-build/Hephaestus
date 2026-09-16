@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
-import { daysAfter, daysBefore } from "@/components/common/story-clock";
+import { daysAfter, daysBefore } from "@/stories/story-clock";
 
 import { OutlineConnectCard } from "./OutlineConnectCard";
 

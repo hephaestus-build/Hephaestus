@@ -11,13 +11,13 @@ import type {
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { TablePagination } from "@/components/common/TablePagination";
-import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
 import {
 	SURVEY_AVAILABILITY_DEFS,
 	surveyAvailability,
 } from "@/components/feedback/survey-availability-defs";
 import { SURVEY_PURPOSE_DEFS } from "@/components/feedback/survey-purpose-defs";
 import { formatAnswer, NPS_LABELS } from "@/components/feedback/survey-questions";
+import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";

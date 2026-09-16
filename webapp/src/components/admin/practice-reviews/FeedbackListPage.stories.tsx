@@ -79,7 +79,6 @@ function feedbackPage(
 }
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Delivery",
 	component: FeedbackListPage,
 	parameters: {
 		layout: "fullscreen",

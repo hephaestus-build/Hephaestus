@@ -53,6 +53,7 @@ function setup(overrides: Partial<Parameters<typeof AdminSlackChannelsSettings>[
 		hasSlackConnection: true,
 		isLoading: false,
 		channels: [pending, active],
+		channelCandidates: [],
 		onRegisterChannel: vi.fn(),
 		onUpdateConsent: vi.fn(),
 		onRemoveChannel: vi.fn(),

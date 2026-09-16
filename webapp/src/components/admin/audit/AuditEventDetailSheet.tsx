@@ -1,11 +1,8 @@
 import type { AuthEventView } from "@/api/types.gen";
-import {
-	ELEVATION_DESCRIPTION,
-	ElevationBadge,
-} from "@/components/admin/audit-shared/ElevationBadge";
-import { prettyJson } from "@/components/admin/audit-shared/pretty-json";
-import { refLabel } from "@/components/admin/audit-shared/ref-label";
-import { formatTimestamp } from "@/components/admin/audit-shared/time-format";
+import { ELEVATION_DESCRIPTION, ElevationBadge } from "@/components/admin/audit/ElevationBadge";
+import { prettyJson } from "@/components/admin/audit/pretty-json";
+import { refLabel } from "@/components/admin/audit/ref-label";
+import { formatTimestamp } from "@/components/admin/audit/time-format";
 import { DetailRow } from "@/components/common/DetailRow";
 import { Badge } from "@/components/ui/badge";
 import {

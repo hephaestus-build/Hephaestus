@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { BrainCircuit, ChevronDown } from "lucide-react";
-import { type ReactNode, type SubmitEvent, useEffect, useId, useRef, useState } from "react";
+import { type ReactElement, type SubmitEvent, useEffect, useId, useRef, useState } from "react";
 
 import type {
 	AgentBinding,
@@ -9,8 +9,8 @@ import type {
 	WorkspaceLlmUsageReport,
 } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +27,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
-import { rendersContent } from "@/lib/react-node";
 import { hasText } from "@/lib/text";
 
 import { BudgetExhaustedAlert } from "./BudgetExhaustedAlert";
@@ -113,7 +112,7 @@ export interface AgentBindingsPageProps {
 	availableModels: AvailableLlmModel[];
 	practicesEnabled: boolean;
 	mentorEnabled: boolean;
-	providerPanel?: ReactNode;
+	providerPanel?: ReactElement | undefined;
 	usage?: WorkspaceLlmUsageReport;
 	isLoading: boolean;
 	isError: boolean;
@@ -203,7 +202,7 @@ export function AgentBindingsPage({
 							))}
 						</section>
 
-						{rendersContent(providerPanel) && (
+						{providerPanel !== undefined && (
 							<section className="space-y-4">{providerPanel}</section>
 						)}
 					</div>

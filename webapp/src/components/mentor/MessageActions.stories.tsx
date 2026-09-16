@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, waitFor } from "storybook/test";
 
-import { STORY_NOW } from "@/components/common/story-clock";
+import { STORY_NOW } from "@/stories/story-clock";
 
 import { MessageActions } from "./MessageActions";
 

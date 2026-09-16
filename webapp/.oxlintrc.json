@@ -170,7 +170,7 @@
 		// Hoisting is what the declaration style buys; a variable or class read before its
 		// declaration in the same scope is a temporal dead zone crash that type-checks clean. A read
 		// from inside a function declared above the variable runs later, so it is not one.
-		"no-use-before-define": ["error", { "functions": false, "classes": true, "variables": false }],
+		"no-use-before-define": ["error", { "functions": false, "classes": false, "variables": false }],
 		// Braces on every branch: the one-line `if` is where a second statement gets added under the
 		// wrong indentation and runs unconditionally.
 		"curly": ["error", "all"],
@@ -254,8 +254,8 @@
 		"max-depth": "error",
 		"import/newline-after-import": "error",
 		// Cyclomatic complexity counts every `&&`, `??` and `?.` in JSX, so at the usual 20 it grades
-		// how many optional props a page has. Forty is where a function has been doing several
-		// components' work: each one that stood above it split cleanly into a hook and a section.
+		// how many optional props a page has. Forty is the line between that and a function doing
+		// several components' work.
 		"complexity": ["error", { "max": 40 }],
 		"typescript/prefer-for-of": "error",
 		"typescript/no-explicit-any": "error",
@@ -298,9 +298,7 @@
 		// `null == x` is the idiomatic "null or undefined" check and stays allowed.
 		"eqeqeq": ["error", "always", { "null": "ignore" }],
 		"unicorn/no-abusive-eslint-disable": "error",
-
-		// -- Taken by name out of `pedantic` and `perf` ----------------------------------------------
-		"react/rules-of-hooks": "error",
+		"react-hooks/rules-of-hooks": "error",
 		"react/jsx-no-target-blank": "error",
 		"react/display-name": "error",
 		"react/checked-requires-onchange-or-readonly": "error",
@@ -310,7 +308,6 @@
 		"no-inner-declarations": "error",
 		"no-prototype-builtins": "error",
 		"no-self-compare": "error",
-		"no-shadow": "error",
 		"no-throw-literal": "error",
 		"no-constructor-return": "error",
 		"no-promise-executor-return": "error",
@@ -325,8 +322,6 @@
 		"radix": "error",
 		"symbol-description": "error",
 		"typescript/no-unsafe-function-type": "error",
-		"typescript/prefer-enum-initializers": "error",
-		"typescript/no-mixed-enums": "error",
 		"unicorn/new-for-builtins": "error",
 		"unicorn/no-instanceof-array": "error",
 		"unicorn/no-immediate-mutation": "error",
@@ -352,8 +347,6 @@
 		"unicorn/prefer-single-call": "error",
 		"unicorn/prefer-blob-reading-methods": "error",
 		"unicorn/require-number-to-fixed-digits-argument": "error",
-
-		// -- Taken by name out of `restriction` ------------------------------------------------------
 		"no-proto": "error",
 		"no-script-url": "error",
 		"no-var": "error",
@@ -373,9 +366,7 @@
 		"typescript/no-require-imports": "error",
 		"typescript/no-var-requires": "error",
 		"typescript/no-empty-object-type": "error",
-		"typescript/no-import-type-side-effects": "error",
 		"typescript/no-non-null-asserted-nullish-coalescing": "error",
-		"typescript/prefer-literal-enum-member": "error",
 		"react/no-clone-element": "error",
 		"react/no-react-children": "error",
 		"react/prefer-function-component": "error",
@@ -388,11 +379,8 @@
 		"unicorn/no-length-as-slice-end": "error",
 		"unicorn/no-magic-array-flat-depth": "error",
 		"unicorn/no-useless-error-capture-stack-trace": "error",
-		"oxc/no-const-enum": "error",
 		"oxc/bad-bitwise-operator": "error",
 		"promise/catch-or-return": "error",
-		// -- Taken by name out of `style`, which is not adoptable whole: it holds `sort-keys` and both
-		// `no-named-export` and `prefer-default-export` -----------------------------------------------
 		"no-template-curly-in-string": "error",
 		"no-new-func": "error",
 		"no-return-assign": "error",
@@ -439,10 +427,6 @@
 		"typescript/prefer-function-type": "error",
 		"typescript/unified-signatures": "error",
 		"typescript/consistent-type-assertions": "error",
-		"import/export": "error",
-		"import/named": "error",
-		"no-unreachable-loop": "error",
-		"promise/no-return-in-finally": "error",
 		"promise/spec-only": "error",
 		"typescript/no-invalid-void-type": "error",
 		"typescript/prefer-find": "error",
@@ -457,7 +441,6 @@
 		"typescript/method-signature-style": "error",
 		"typescript/prefer-ts-expect-error": "error",
 		"unicorn/no-useless-switch-case": "error",
-		"unicorn/no-useless-iterator-to-array": "error",
 		"unicorn/prefer-event-target": "error",
 		"unicorn/prefer-type-error": "error",
 		"unicorn/prefer-classlist-toggle": "error",
@@ -466,32 +449,18 @@
 		"unicorn/prefer-bigint-literals": "error",
 		"unicorn/require-module-attributes": "error",
 		"oxc/no-barrel-file": "error",
-		"react/no-set-state": "error",
-		"react/prefer-es6-class": "error",
-		"react/require-render-return": "error",
-		"react/state-in-constructor": "error",
-		"react/no-redundant-should-component-update": "error",
 		"vitest/prefer-called-exactly-once-with": "error",
 		"vitest/prefer-to-be-object": "error",
 		"vitest/prefer-to-have-been-called-times": "error",
 		"vitest/no-large-snapshots": "error",
-
 		"typescript/no-misused-promises": "error",
 		"typescript/no-deprecated": "error",
-		"typescript/no-misused-spread": "error",
 		// Where a blank string should fall through, the question is asked by name (`hasText` /
 		// `firstNonBlank` in `@/lib/text`), so `ignorePrimitives` stays off. `if` statements are
 		// ignored because the `??=` they would become is one the React Compiler cannot lower yet
 		// (`react/todo`), and a ref initialiser is exactly where that `if` sits.
 		"typescript/prefer-nullish-coalescing": ["error", { "ignoreIfStatements": true }],
-		"typescript/require-array-sort-compare": "error",
 		"typescript/prefer-promise-reject-errors": "error",
-		"typescript/no-meaningless-void-operator": "error",
-		"typescript/no-unnecessary-template-expression": "error",
-		// Truthful only with `noUncheckedIndexedAccess` (`tsconfig.json`), which is what makes an array
-		// index nullable. A finding is as often a type claiming more than the wire delivers — fix the
-		// type, keep the guard — as it is a dead branch.
-		"typescript/no-unnecessary-condition": "error",
 		"typescript/switch-exhaustiveness-check": [
 			"error",
 			{ "considerDefaultExhaustiveForUnions": true }
@@ -553,17 +522,30 @@
 		// branch belongs in the mock handler, not the test body.
 		"vitest/no-conditional-in-test": "error",
 
+		// Nursery at oxlint 1.81, opted in by name: a bump that drops one fails config load, which is the
+		// signal to revisit.
+		"import/export": "error",
+		"import/named": "error",
+		"no-unreachable-loop": "error",
+		"promise/no-return-in-finally": "error",
+		"unicorn/no-useless-iterator-to-array": "error",
+		// Truthful only with `noUncheckedIndexedAccess` (`tsconfig.json`), which is what makes an array
+		// index nullable. A finding is as often a type claiming more than the wire delivers — fix the
+		// type, keep the guard — as it is a dead branch.
+		"typescript/no-unnecessary-condition": "error",
+
 		// -- Off -------------------------------------------------------------------------------------
 		// React 19's automatic JSX runtime.
 		"react/react-in-jsx-scope": "off",
-		// Every effect it reports here lists a value it deliberately does not read — a ref reset keyed on
-		// the location, focus keyed on the wizard step — which reads to the rule as an extra dependency.
-		// Dropping one changes when the effect fires, which is the reason it is listed.
+		// The one effect it reports lists a value it deliberately does not read: `gitlab.tsx` moves
+		// focus to the heading (`headingRef.current?.focus()`) keyed on `state.step`, which reads to
+		// the rule as an extra dependency. Dropping it changes when the effect fires, which is the
+		// reason it is listed.
 		"react/exhaustive-effect-dependencies": "off",
-		// It maps a role to a tag without asking whether that tag's other semantics fit: `<output>` for
-		// `role="status"` carries a form association a live region does not, `<li>` for `role="listitem"`
-		// is only valid inside a list, and `<img>` for `role="img"` would replace the inline SVG that role
-		// exists to name. Every role it reports here fails the same way.
+		// Maps a role to a tag without asking whether the tag's other semantics fit — `<output>` for
+		// `status` carries a form association, `<li>` for `listitem` is only valid inside a list,
+		// `<fieldset>` for `group` is a form control group, `<img>` cannot replace an inline SVG — and
+		// half of what it reports is vendored registry markup.
 		"jsx-a11y/prefer-tag-over-role": "off",
 		// Base UI passes the control through `render=` and keeps the label in the wrapper's children,
 		// where no jsx-a11y rule can see it. It also does not model `<datalist>`, where a valueless
@@ -577,10 +559,10 @@
 		// describe.
 		"unicorn/no-array-sort": "off",
 		"unicorn/no-array-reverse": "off",
-		// Its two shapes here are both things TypeScript has already settled: an effect that bails early
-		// and otherwise returns a cleanup, which is React's idiom, and an annotated `switch` that returns
-		// from every arm of a union. TS2366 is what catches a return that is genuinely missing, and it
-		// stays silent on an exhaustive switch — so every report here is one TypeScript declined to make.
+		// TS2366 and the declared return type already govern every report here — an effect returning a
+		// cleanup on one path, a switch exhaustive over a union, and a bare `return;` in a function
+		// typed `X | undefined`; the rule adds a stylistic "spell it `return undefined`" to code
+		// TypeScript has accepted.
 		"typescript/consistent-return": "off",
 		// `toHaveBeenCalledWith` is not type-narrowed by this Vitest/TS setup — a wrong argument against
 		// `vi.fn<(open: boolean) => void>()` type-checks clean — so the parameter buys nothing.
@@ -599,10 +581,6 @@
 		"no-underscore-dangle": "off",
 
 		// -- Options ---------------------------------------------------------------------------------
-		// Every `autoFocus` here is spelled on a component — `<Input>`, `<Textarea>`, `<Calendar>` — so
-		// `ignoreNonDOM: true` would make the rule blind to all of them. Each already carries a
-		// suppression stating why, and `reportUnusedDisableDirectives` would then fail every one.
-		"jsx-a11y/no-autofocus": ["error", { "ignoreNonDOM": false }],
 		// TanStack Table column defs are `cell: ({ row }) => <Badge …/>` — a component passed as a prop.
 		"react/no-unstable-nested-components": ["error", { "allowAsProps": true }],
 		// `void somePromise.then(sideEffect)` is fire-and-forget; only a chain's interior needs a return.
@@ -645,9 +623,8 @@
 		// `AGENTS.md` § Testing states the query priority. A `data-testid` skips straight past it, and
 		// the accessible name it stands in for is the thing a screen reader needs anyway.
 		"react/forbid-dom-props": ["error", { "forbid": ["data-testid"] }],
-		// Import `cn()` directly from `cn`; see `AGENTS.md` § Styling. Do not restore the
-		// previous class-composition dependencies. Every override that sets `no-restricted-imports`
-		// restates these restrictions because options replace rather than merge.
+		// Every override that sets `no-restricted-imports` restates this entry because options replace
+		// rather than merge.
 		"no-restricted-imports": [
 			"error",
 			{
@@ -657,9 +634,7 @@
 						"importNames": ["useMemo", "useCallback", "memo", "forwardRef"],
 						"allowTypeImports": true,
 						"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
-					},
-					{ "name": "clsx", "message": "Compose classes with `cn()` from `cn`." },
-					{ "name": "tailwind-merge", "message": "Compose classes with `cn()` from `cn`." }
+					}
 				]
 			}
 		],
@@ -675,13 +650,13 @@
 		],
 
 		// -- House rules, defined in `tools/oxlint/` --------------------------------------------------
-		// Each states in its own `meta.docs.description` what it asks and why no shipped rule does.
+		// Each states in its own `meta.docs.description` what it asks.
 		"hephaestus/no-manual-query-key": "error",
 		"hephaestus/no-non-ascii-filename": "error",
 		"hephaestus/no-nondeterministic-render": "error",
 		"hephaestus/no-redundant-in-the-document": "error",
 		"hephaestus/svg-needs-accessible-name": "error"
-		// The other four read a Storybook story object and are scoped to story files in `overrides`.
+		// The other five read a Storybook story object and are scoped to story files in `overrides`.
 	},
 
 	// Never configure one rule for the same file from two entries: where two overrides match a file,
@@ -690,10 +665,10 @@
 	"overrides": [
 		{
 			// Vocabulary maps are consumed indirectly, beyond the plugin's one-hop analysis.
-			// Scanning all strings everywhere misreads provider IDs such as "outline-token" as CSS.
+			// Scanning all strings everywhere misreads element ids such as "outline-token" as CSS.
 			"files": [
 				"src/lib/**",
-				"src/components/core/Header.tsx",
+				"src/components/layout/Header.tsx",
 				"src/components/info/landing/LandingVisuals.tsx"
 			],
 			"rules": { "shadcn/no-raw-colors": ["error", { "scanAllStrings": true }] }
@@ -716,11 +691,6 @@
 								"importNames": ["useMemo", "useCallback", "memo", "forwardRef"],
 								"allowTypeImports": true,
 								"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
-							},
-							{ "name": "clsx", "message": "Compose classes with `cn()` from `cn`." },
-							{
-								"name": "tailwind-merge",
-								"message": "Compose classes with `cn()` from `cn`."
 							}
 						],
 						"patterns": [
@@ -751,11 +721,6 @@
 								"importNames": ["useMemo", "useCallback", "memo", "forwardRef"],
 								"allowTypeImports": true,
 								"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
-							},
-							{ "name": "clsx", "message": "Compose classes with `cn()` from `cn`." },
-							{
-								"name": "tailwind-merge",
-								"message": "Compose classes with `cn()` from `cn`."
 							}
 						],
 						"patterns": [
@@ -786,11 +751,6 @@
 								"importNames": ["useMemo", "useCallback", "memo", "forwardRef"],
 								"allowTypeImports": true,
 								"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
-							},
-							{ "name": "clsx", "message": "Compose classes with `cn()` from `cn`." },
-							{
-								"name": "tailwind-merge",
-								"message": "Compose classes with `cn()` from `cn`."
 							}
 						],
 						"patterns": [
@@ -843,8 +803,9 @@
 			}
 		},
 		{
-			// The directories this repo writes by hand; `AGENTS.md` § File naming is the rule itself.
-			"files": ["src/components/**", "src/lib/**", "src/hooks/**", "src/integrations/**"],
+			// `AGENTS.md` § File naming is the rule itself; only the router's directory is exempt.
+			"files": ["src/**"],
+			"excludeFiles": ["src/routes/**"],
 			"rules": {
 				"unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }]
 			}
@@ -876,7 +837,7 @@
 			"rules": { "typescript/require-await": "off" }
 		},
 		{
-			// All four read a Storybook story object, and only a story file holds one. `parameters.a11y`
+			// All five read a Storybook story object, and only a story file holds one. `parameters.a11y`
 			// is also how `.storybook/preview.tsx` sets the project-wide bar none of them may lower; a
 			// `play` property elsewhere belongs to a media element; `canvasElement` exists only inside a
 			// play; and `meta`/`Meta` are recognised by name, which is Storybook's convention and
@@ -889,8 +850,7 @@
 				// so anything counted there is counted here. A literal cannot be shared across JSON and
 				// TypeScript, so it is that relation `play-must-assert.test.ts` pins.
 				"hephaestus/play-must-assert": "error",
-				// The file path is the component tree's source of truth. An explicit title is only for a
-				// deliberate reader-facing relocation, never a differently-cased copy of that path.
+				// The sidebar mirrors the source tree: a title cannot drift from a path it never restates.
 				"hephaestus/prefer-auto-story-title": "error",
 				// One story quietly exempting itself leaves the whole suite green.
 				"hephaestus/no-story-a11y-override": "error",

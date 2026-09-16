@@ -4,17 +4,17 @@ import { typedStoryMeta } from "./typed-story-meta.ts";
 ruleTester.run("typed-story-meta", typedStoryMeta, {
 	valid: [
 		"const meta = { component: Button } satisfies Meta<typeof Button>;",
-		"const meta = { title: 'Icons/Brand' } satisfies Meta;",
+		"const meta = { parameters: { layout: 'centered' } } satisfies Meta;",
 		"const meta = { parameters: { docs: { description: { component: 'All icons.' } } } } satisfies Meta;",
 		"const meta = { ...base } satisfies Meta;",
 		"const story = { component: Button } satisfies StoryObj;",
 		// The annotation spelling.
 		"const meta: Meta<typeof Button> = { component: Button };",
-		"const meta: Meta = { title: 'Icons/Brand' };",
+		"const meta: Meta = { parameters: { layout: 'centered' } };",
 		"const meta: StoryObj = { component: Button };",
 		// An untyped object that is not a `meta` belongs to whoever declared it.
 		"const preset = { component: Button };",
-		"const meta = { title: 'Icons/Brand' };",
+		"const meta = { parameters: { layout: 'centered' } };",
 		"const widths = [40, 80] as const;",
 		// No object literal is stated here, so there is nothing to check the type argument against.
 		"let meta: Meta;",
@@ -30,8 +30,8 @@ ruleTester.run("typed-story-meta", typedStoryMeta, {
 	],
 	invalid: [
 		{
-			code: "const meta = { title: 'Button', component: Button } satisfies Meta;",
-			errors: [{ messageId: "untyped", line: 1, column: 14, endColumn: 52 }],
+			code: "const meta = { parameters: { layout: 'centered' }, component: Button } satisfies Meta;",
+			errors: [{ messageId: "untyped", line: 1, column: 14, endColumn: 71 }],
 		},
 		{
 			code: "const meta = { 'component': Button } satisfies Meta;",
@@ -48,7 +48,7 @@ ruleTester.run("typed-story-meta", typedStoryMeta, {
 			errors: [{ messageId: "untyped" }],
 		},
 		{
-			code: "const meta: Meta = { title: 'Button', component: Button };",
+			code: "const meta: Meta = { parameters: { layout: 'centered' }, component: Button };",
 			errors: [{ messageId: "untyped" }],
 		},
 		{
@@ -57,7 +57,7 @@ ruleTester.run("typed-story-meta", typedStoryMeta, {
 		},
 		{
 			// Even without a `component`, the assertion is what stops the check.
-			code: "const meta = { title: 'Icons/Brand' } as Meta;",
+			code: "const meta = { parameters: { layout: 'centered' } } as Meta;",
 			errors: [{ messageId: "asserted" }],
 		},
 		{

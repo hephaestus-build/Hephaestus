@@ -37,8 +37,8 @@ import {
 	practicePolicyError,
 	practicePolicyErrorTarget,
 } from "@/components/admin/practice-catalog/PracticeMentoringSupportEditor";
+import { CodeEditor } from "@/components/common/CodeEditor";
 import { type FormError, FormErrorSummary } from "@/components/common/FormErrorSummary";
-import { CodeEditor } from "@/components/shared/CodeEditor";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
@@ -221,7 +221,8 @@ interface FormErrors {
 	bindings?: BindingsProblem;
 	/**
 	 * One list, in the order the fields appear, so the summary reads down the form and the first
-	 * entry is also the field to focus. Deriving both from it keeps them from disagreeing.
+	 * entry is also the field to focus. The summary and the focus target both come from it, so they
+	 * cannot disagree; the messages beside each control are worded for that control and are not.
 	 */
 	summary: FormError[];
 }
@@ -493,7 +494,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 										required
 										minLength={3}
 										maxLength={128}
-										aria-invalid={Boolean(shownErrors.name)}
+										aria-invalid={hasText(shownErrors.name)}
 										aria-describedby={hasText(shownErrors.name) ? "practice-name-error" : undefined}
 									/>
 									<FieldDescription>Use a short, action-oriented name.</FieldDescription>
@@ -562,7 +563,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									required
 									minLength={3}
 									maxLength={50_000}
-									aria-invalid={Boolean(shownErrors.criteria)}
+									aria-invalid={hasText(shownErrors.criteria)}
 									aria-describedby={`practice-criteria-description${
 										hasText(shownErrors.criteria) ? " practice-criteria-error" : ""
 									}`}
@@ -789,7 +790,7 @@ function PracticeIdentifierField({
 					required={mode === "create"}
 					minLength={3}
 					maxLength={64}
-					aria-invalid={Boolean(error)}
+					aria-invalid={hasText(error)}
 					aria-describedby={
 						["practice-slug-description", hasText(error) ? "practice-slug-error" : undefined]
 							.filter(Boolean)

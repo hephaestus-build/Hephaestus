@@ -3,7 +3,7 @@ import { delay, HttpResponse, http } from "msw";
 import { expect, fn, screen, within } from "storybook/test";
 
 import type { SlackChannelConsentEvent, SlackMonitoredChannel } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
+import { daysBefore } from "@/stories/story-clock";
 import { expectSettledVisible } from "@/test/overlay";
 
 import { ChannelHistorySheet } from "./ChannelHistorySheet";

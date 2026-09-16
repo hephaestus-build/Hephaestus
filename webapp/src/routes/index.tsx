@@ -1,8 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
-import { StandardPageSurface } from "@/components/core/StandardPageSurface";
 import { LandingPage } from "@/components/info/landing/LandingPage";
+import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
 import { useAuth } from "@/integrations/auth/AuthContext";

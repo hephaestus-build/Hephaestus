@@ -1,6 +1,5 @@
-import assert from "node:assert/strict";
 import { Blob as NodeBlob } from "node:buffer";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { copyReviewLinks, reviewLinkUrl } from "./review-links";
 
@@ -66,7 +65,7 @@ describe("review links", () => {
 		const url = new URL('https://github.com/org/repo/pull/1?q="&other=value').href;
 		await copyReviewLinks([{ label, url }]);
 		const item = write.mock.calls[0]?.[0][0];
-		assert.ok(item);
+		assert(item);
 		const htmlBlob = await item.getType("text/html");
 		const html = new DOMParser().parseFromString(await htmlBlob.text(), "text/html");
 		expect(html.querySelector("img")).toBeNull();

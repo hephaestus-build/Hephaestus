@@ -1,5 +1,5 @@
 import type { LabelInfo, RepositoryInfo, TeamInfo } from "@/api/types.gen";
-import { LabelBadge } from "@/components/shared/LabelBadge";
+import { LabelBadge } from "@/components/common/LabelBadge";
 import { Toggle } from "@/components/ui/toggle";
 
 export interface RepositoryLabelsToggleProps {

@@ -10,7 +10,6 @@ import { getProviderSlug, getProviderTerms, type ProviderType } from "./provider
  * with their correct icons and color tokens.
  */
 const meta = {
-	title: "Provider/Icons",
 	tags: ["autodocs"],
 	parameters: {
 		layout: "centered",

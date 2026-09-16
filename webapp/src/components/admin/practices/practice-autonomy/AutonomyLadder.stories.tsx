@@ -48,7 +48,6 @@ function rungsOf(radios: HTMLElement[]): HTMLElement[] {
 }
 
 const meta = {
-	title: "Workspace admin/Practices/Review/Autonomy ladder",
 	component: AutonomyLadder,
 	parameters: {
 		layout: "padded",

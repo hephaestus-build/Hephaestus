@@ -24,16 +24,6 @@ ruleTester.run("play-must-assert", playMustAssert, {
 		"export const Open: Story = { play: sharedPlay };",
 		// A key computed from an expression names whatever that evaluates to, which is unreadable here.
 		"export const Open: Story = { [key]: async ({ userEvent }) => { await userEvent.click(trigger); } };",
-		{
-			// An empty option object states no list, so the rule's own list stands.
-			code: "export const Wide: Story = { play: async () => { await expectNoPageOverflow(); } };",
-			options: [{}],
-		},
-		{
-			// A configured list replaces the rule's, so it can name a helper the rule never would.
-			code: "export const Row: Story = { play: async ({ canvas }) => { checkRow(canvas); } };",
-			options: [{ assertFunctionNames: ["checkRow"] }],
-		},
 	],
 	invalid: [
 		{
@@ -51,11 +41,6 @@ ruleTester.run("play-must-assert", playMustAssert, {
 		{
 			// A `queryBy*` returns null instead of throwing, so on its own it asserts nothing.
 			code: "export const Open: Story = { play: async ({ canvas }) => { canvas.queryByRole('alert'); } };",
-			errors: [{ messageId: "noAssertion" }],
-		},
-		{
-			code: "export const Open: Story = { play: async ({ canvas }) => { await expectNoPageOverflow(); } };",
-			options: [{ assertFunctionNames: ["expect", "getBy*", "**.getBy*"] }],
 			errors: [{ messageId: "noAssertion" }],
 		},
 		{

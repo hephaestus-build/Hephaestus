@@ -7,7 +7,6 @@ import { PracticeEvidenceOutcomeSummary } from "./PracticeEvidenceOutcomeSummary
 import { outcome } from "./story-mock-data";
 
 const meta = {
-	title: "Workspace admin/Practices/Evidence outcomes",
 	component: PracticeEvidenceOutcomeSummary,
 	args: {
 		sources: mockPullRequestWorkType.allowedSources,

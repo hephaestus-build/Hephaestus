@@ -39,12 +39,12 @@ import {
 import { CuratedCatalog } from "@/components/admin/curated-catalog/CuratedCatalog";
 import { PracticeTreeSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { parseDetailStack } from "@/components/core/detail-drawer/detail-stack";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { DetailStackLink } from "@/components/core/detail-drawer/DetailStackLink";
-import { useDetailStack } from "@/components/core/detail-drawer/use-detail-stack";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { parseDetailStack } from "@/components/layout/detail-drawer/detail-stack";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { instanceAdminHead } from "@/lib/page-title";

@@ -1,9 +1,23 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
-import { STORY_NOW } from "@/components/common/story-clock";
+import type { ProfileReviewActivity } from "@/api/types.gen";
 import { withProvider } from "@/stories/decorators";
 
-import { ReviewActivityCard } from "./ReviewActivityCard";
+import { ReviewActivityCard, type ReviewActivityCardProps } from "./ReviewActivityCard";
+import { approvedReview, changesRequestedReview, commentedReview } from "./story-mock-data";
+
+/** The same projection `ReviewActivitySection` makes for each of its rows. */
+function cardArgs(activity: ProfileReviewActivity): ReviewActivityCardProps {
+	return {
+		isLoading: false,
+		state: activity.state,
+		submittedAt: activity.submittedAt,
+		htmlUrl: activity.htmlUrl,
+		pullRequest: activity.pullRequest,
+		repositoryName: activity.pullRequest?.repository?.name,
+		score: activity.score,
+	};
+}
 
 /**
  * Card component that displays a user's review activity for a pull request / merge request.
@@ -61,126 +75,42 @@ type Story = StoryObj<typeof meta>;
  * Shows a review where the user approved the pull request and earned points.
  */
 export const Approved: Story = {
-	args: {
-		isLoading: false,
-		state: "APPROVED",
-		submittedAt: new Date(STORY_NOW),
-		htmlUrl: "https://github.com/ls1intum/Hephaestus/pull/42",
-		pullRequest: {
-			title: "Add new feature to dashboard",
-			number: 42,
-			repository: {
-				name: "Hephaestus",
-			},
-		},
-		repositoryName: "Hephaestus",
-		score: 5,
-	},
+	args: cardArgs(approvedReview),
 };
 
 /**
  * Shows a review where the user requested changes to the pull request.
  */
 export const ChangesRequested: Story = {
-	args: {
-		isLoading: false,
-		state: "CHANGES_REQUESTED",
-		submittedAt: new Date(STORY_NOW),
-		htmlUrl: "https://github.com/ls1intum/Artemis/pull/123",
-		pullRequest: {
-			title: "Fix bug in submission process",
-			number: 123,
-			repository: {
-				name: "Artemis",
-			},
-		},
-		repositoryName: "Artemis",
-		score: 3,
-	},
+	args: cardArgs(changesRequestedReview),
 };
 
 /**
  * Shows a review where the user only left comments without approving or requesting changes.
  */
 export const Commented: Story = {
-	args: {
-		isLoading: false,
-		state: "COMMENTED",
-		submittedAt: new Date(STORY_NOW),
-		htmlUrl: "https://github.com/ls1intum/Athena/pull/56",
-		pullRequest: {
-			title: "Update documentation for API endpoints",
-			number: 56,
-			repository: {
-				name: "Athena",
-			},
-		},
-		repositoryName: "Athena",
-		score: 1,
-	},
+	args: cardArgs(commentedReview),
 };
 
 /**
  * Shows the loading state of the card when data is being fetched.
  */
 export const Loading: Story = {
-	args: {
-		isLoading: true,
-		state: "COMMENTED",
-		submittedAt: new Date(STORY_NOW),
-		htmlUrl: "https://github.com/ls1intum/Hephaestus/pull/77",
-		pullRequest: {
-			title: "Loading...",
-			number: 77,
-			repository: {
-				name: "Hephaestus",
-			},
-		},
-		repositoryName: "Hephaestus",
-		score: 0,
-	},
+	args: { ...cardArgs(commentedReview), isLoading: true },
 };
 
 /**
  * Shows a dismissed review which no longer counts towards the user's score.
  */
 export const Dismissed: Story = {
-	args: {
-		isLoading: false,
-		state: "DISMISSED",
-		submittedAt: new Date(STORY_NOW),
-		htmlUrl: "https://github.com/ls1intum/Hephaestus/pull/99",
-		pullRequest: {
-			title: "Refactor authentication system",
-			number: 99,
-			repository: {
-				name: "Hephaestus",
-			},
-		},
-		repositoryName: "Hephaestus",
-		score: 0,
-	},
+	args: { ...cardArgs(approvedReview), state: "DISMISSED", score: 0 },
 };
 
 /**
  * Shows a review with an unknown state.
  */
 export const Unknown: Story = {
-	args: {
-		isLoading: false,
-		state: "UNKNOWN",
-		submittedAt: new Date(STORY_NOW),
-		htmlUrl: "https://github.com/ls1intum/ExampleRepo/pull/78",
-		pullRequest: {
-			title: "Initial implementation of feature X",
-			number: 78,
-			repository: {
-				name: "ExampleRepo",
-			},
-		},
-		repositoryName: "ExampleRepo",
-		score: 0,
-	},
+	args: { ...cardArgs(approvedReview), state: "UNKNOWN", score: 0 },
 };
 
 /**
@@ -188,19 +118,11 @@ export const Unknown: Story = {
  */
 export const WithCodeInTitle: Story = {
 	args: {
-		isLoading: false,
-		state: "APPROVED",
-		submittedAt: new Date(STORY_NOW),
-		htmlUrl: "https://github.com/ls1intum/Hephaestus/pull/42",
+		...cardArgs(approvedReview),
 		pullRequest: {
+			...approvedReview.pullRequest,
 			title: "Update `LeaderboardTable` component and fix `ProfileContent` layout",
-			number: 42,
-			repository: {
-				name: "Hephaestus",
-			},
 		},
-		repositoryName: "Hephaestus",
-		score: 5,
 	},
 };
 
@@ -226,6 +148,6 @@ export const UnknownMergeRequest: Story = {
 	args: {
 		...Unknown.args,
 		providerType: "GITLAB",
-		htmlUrl: "https://gitlab.com/ls1intum/ExampleRepo/-/merge_requests/78",
+		htmlUrl: "https://gitlab.com/ls1intum/Hephaestus/-/merge_requests/42",
 	},
 };

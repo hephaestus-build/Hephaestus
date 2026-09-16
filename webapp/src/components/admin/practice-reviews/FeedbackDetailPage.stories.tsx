@@ -46,7 +46,6 @@ const rejectedFeedback = {
 };
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Feedback details",
 	component: FeedbackDetailPage,
 	parameters: {
 		layout: "padded",

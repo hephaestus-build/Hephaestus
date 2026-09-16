@@ -5,16 +5,16 @@ import { toast } from "sonner";
 import { adminListAuthEventsInfiniteOptions } from "@/api/@tanstack/react-query.gen";
 import { adminExportAuthEvents } from "@/api/sdk.gen";
 import type { AuthEventView } from "@/api/types.gen";
+import { AdminAuditTable } from "@/components/admin/audit/AdminAuditTable";
+import { EVENT_TYPE_LABELS } from "@/components/admin/audit/audit-format";
 import {
 	type AuditSearch,
 	dayAfterInstant,
 	dayStartInstant,
 	fromDateRange,
 	toDateRange,
-} from "@/components/admin/audit-shared/audit-search";
-import { nameForRef } from "@/components/admin/audit-shared/name-for-ref";
-import { AdminAuditTable } from "@/components/admin/audit/AdminAuditTable";
-import { EVENT_TYPE_LABELS } from "@/components/admin/audit/audit-format";
+} from "@/components/admin/audit/audit-search";
+import { nameForRef } from "@/components/admin/audit/name-for-ref";
 import { DateRangeFacet } from "@/components/common/DateRangeFacet";
 import { FacetMultiSelect, toFacetOptions } from "@/components/common/FacetMultiSelect";
 import { FilterToolbar } from "@/components/common/FilterToolbar";

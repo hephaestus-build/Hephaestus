@@ -15,7 +15,7 @@ import { CuratedFormLevel } from "@/components/admin/curated-catalog/CuratedForm
 import { CuratedGroupForm } from "@/components/admin/curated-catalog/CuratedGroupForm";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { DrawerBody } from "@/components/ui/drawer";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 

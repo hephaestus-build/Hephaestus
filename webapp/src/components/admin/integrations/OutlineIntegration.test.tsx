@@ -49,13 +49,6 @@ function OutlineIntegrationTestContainer() {
 	}
 	return (
 		<>
-			{outline.hasConnection && outline.statusError && (
-				<QueryErrorAlert
-					error={outline.statusError}
-					title="We couldn't load Outline sync status"
-					onRetry={outline.retryStatus}
-				/>
-			)}
 			{outline.tokenStatusError && (
 				<QueryErrorAlert
 					error={outline.tokenStatusError}
@@ -66,7 +59,9 @@ function OutlineIntegrationTestContainer() {
 			{outline.hasConnection && !outline.isConnectionActive && (
 				<ConnectionStateNotice connectionState={outline.connectionState} displayName="Outline" />
 			)}
-			{outline.status && <SyncStatusHeader label="Outline" {...outline.syncStatusHeaderProps} />}
+			{outline.hasConnection && (
+				<SyncStatusHeader label="Outline" {...outline.syncStatusHeaderProps} />
+			)}
 			<OutlineConnectCard {...outline.connectCardProps} />
 			{outline.collectionsProps && <OutlineCollectionsSection {...outline.collectionsProps} />}
 		</>

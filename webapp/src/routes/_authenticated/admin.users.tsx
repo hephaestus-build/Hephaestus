@@ -18,8 +18,8 @@ import { AdminUsersTable } from "@/components/admin/users/AdminUsersTable";
 import { ChangeRoleDialog } from "@/components/admin/users/ChangeRoleDialog";
 import { ImpersonateDialog } from "@/components/admin/users/ImpersonateDialog";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import {
 	AlertDialog,
 	AlertDialogAction,

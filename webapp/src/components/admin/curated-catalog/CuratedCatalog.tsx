@@ -11,7 +11,7 @@ import {
 	WORK_ARTIFACT_FILTER_ITEMS,
 	type WorkArtifact,
 } from "@/components/admin/practice-catalog/constants";
-import { DetailStackLink } from "@/components/core/detail-drawer/DetailStackLink";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import {
 	AlertDialog,
 	AlertDialogAction,

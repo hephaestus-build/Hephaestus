@@ -180,7 +180,6 @@ function CatalogTreeHarness({
 
 /** No `autodocs`: these stories render a harness, whose props would be published as the API. */
 const meta = {
-	title: "Shared/Practice catalog/Catalog tree",
 	component: CatalogTreeHarness,
 	parameters: { layout: "padded" },
 	args: { onPlaceEntry: fn(), onReorderGroups: fn() },

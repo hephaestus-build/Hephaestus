@@ -6,7 +6,7 @@ import type {
 import { ActivityBadges } from "@/components/leaderboard/ActivityBadges";
 import type { ReviewedPullRequest } from "@/components/leaderboard/ReviewsPopover";
 import { type ActivityMonitorFilters, MAX_ACTIVITY_MONITOR_LIMIT } from "@/lib/activity-monitor";
-import type { ProviderType } from "@/lib/provider";
+import { getProviderTerms, type ProviderType } from "@/lib/provider";
 import { firstNonBlank } from "@/lib/text";
 import type { LeaderboardSchedule } from "@/lib/timeframe";
 
@@ -31,7 +31,7 @@ export interface ProfileContentProps {
 	schedule?: LeaderboardSchedule;
 }
 
-const NO_ACTIVITY_STATS: ProfileActivityStats = {
+export const ZERO_ACTIVITY_STATS: ProfileActivityStats = {
 	numberOfApprovals: 0,
 	numberOfChangeRequests: 0,
 	numberOfClosedIssues: 0,
@@ -61,8 +61,16 @@ export function ProfileContent({
 	onTimeframeChange,
 	schedule,
 }: ProfileContentProps) {
-	const stats = activityMonitorData?.activityStats ?? NO_ACTIVITY_STATS;
+	const stats = activityMonitorData?.activityStats ?? ZERO_ACTIVITY_STATS;
 	const personLabel = firstNonBlank(displayName) ?? username;
+	const terms = getProviderTerms(providerType);
+	const pullRequestsTerm = terms.pullRequests.toLowerCase();
+	const reviewActivityEmptyMessage = currUserIsDashboardUser
+		? "No review activity that counts yet. Try a wider timeframe."
+		: `${personLabel} has no review activity that counts in this timeframe.`;
+	const pullRequestsEmptyMessage = currUserIsDashboardUser
+		? `${terms.pullRequests} you create will appear here.`
+		: `${personLabel} doesn't have any open ${pullRequestsTerm}.`;
 	const repositories = activityMonitorData?.repositories ?? [];
 
 	const reviewActivity = (activityMonitorData?.reviewActivity ?? []).filter(
@@ -132,8 +140,7 @@ export function ProfileContent({
 					providerType={providerType}
 					reviewActivity={reviewActivity}
 					isLoading={isLoading}
-					personLabel={personLabel}
-					currUserIsDashboardUser={currUserIsDashboardUser}
+					emptyMessage={reviewActivityEmptyMessage}
 					canViewAll={canViewAllReviewActivity}
 					onViewAll={expandMonitor}
 				/>
@@ -141,8 +148,7 @@ export function ProfileContent({
 					providerType={providerType}
 					pullRequests={pullRequests}
 					isLoading={isLoading}
-					personLabel={personLabel}
-					currUserIsDashboardUser={currUserIsDashboardUser}
+					emptyMessage={pullRequestsEmptyMessage}
 					canViewAll={canViewAllPullRequests}
 					onViewAll={expandMonitor}
 				/>

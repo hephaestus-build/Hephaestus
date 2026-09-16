@@ -10,7 +10,6 @@ import { expectNoOverflowingElement } from "@/test/reflow";
 import { GroupVisualPicker, type GroupVisualPickerProps } from "./GroupVisualPicker";
 
 const meta = {
-	title: "Shared/Practice catalog/Group visual picker",
 	component: GroupVisualPicker,
 	parameters: {
 		layout: "centered",

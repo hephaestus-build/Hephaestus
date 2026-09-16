@@ -7,7 +7,6 @@ const composedAt = new Date("2026-07-28T13:42:00Z");
 const deliveredAt = new Date("2026-07-28T13:43:00Z");
 
 const meta = {
-	title: "Shared/Practice vocabulary/Delivery trace",
 	component: DeliveryTrace,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 768] } },
 	tags: ["autodocs"],

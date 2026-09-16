@@ -19,8 +19,8 @@ import type {
 import { LoginProviderFormDialog } from "@/components/admin/login-providers/LoginProviderFormDialog";
 import { LoginProvidersTable } from "@/components/admin/login-providers/LoginProvidersTable";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";

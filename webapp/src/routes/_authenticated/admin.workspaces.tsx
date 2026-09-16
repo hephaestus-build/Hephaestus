@@ -9,8 +9,8 @@ import { adminListWorkspacesOptions, impersonateMutation } from "@/api/@tanstack
 import type { AdminWorkspaceView } from "@/api/types.gen";
 import { ImpersonateDialog } from "@/components/admin/users/ImpersonateDialog";
 import { AdminWorkspacesTable } from "@/components/admin/workspaces/AdminWorkspacesTable";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { instanceAdminHead } from "@/lib/page-title";

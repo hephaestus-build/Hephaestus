@@ -61,7 +61,6 @@ import { expectNoPageOverflow, expectOverlayFollowsTrigger } from "@/test/reflow
  * measuring: the closed state never overflowed, which is exactly why this shipped.
  */
 const meta = {
-	title: "Tests/Overlay reflow",
 	tags: ["autodocs"],
 	parameters: {
 		layout: "fullscreen",

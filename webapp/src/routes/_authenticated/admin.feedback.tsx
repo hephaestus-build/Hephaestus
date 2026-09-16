@@ -16,8 +16,8 @@ import {
 } from "@/components/admin/feedback/AdminFeedbackList";
 import { FilterToggle } from "@/components/common/FilterToggle";
 import { ResultCount } from "@/components/common/ResultCount";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { useClampedPage } from "@/hooks/use-clamped-page";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { instanceAdminHead } from "@/lib/page-title";

@@ -1,5 +1,5 @@
 import type { Survey, SurveyInvitation, SurveyResponse, SurveySummary } from "@/api/types.gen";
-import { daysAfter, daysBefore, hoursBefore, STORY_NOW } from "@/components/common/story-clock";
+import { daysAfter, daysBefore, hoursBefore, STORY_NOW } from "@/stories/story-clock";
 
 export const surveyQuestions = [
 	{

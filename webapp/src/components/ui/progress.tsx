@@ -1,6 +1,7 @@
 import { Progress as ProgressPrimitive } from "@base-ui/react/progress";
 
 import { cn } from "cn";
+import { rendersContent } from "@/lib/react-node";
 
 /**
  * ⚠️ Diverges from the shadcn registry — `shadcn add progress` drops the following; re-apply it.
@@ -17,7 +18,9 @@ function Progress({ className, children, value, ...props }: ProgressPrimitive.Ro
 			className={cn("flex flex-wrap gap-3", className)}
 			{...props}
 		>
-			{children ?? (
+			{rendersContent(children) ? (
+				children
+			) : (
 				<ProgressTrack>
 					<ProgressIndicator />
 				</ProgressTrack>

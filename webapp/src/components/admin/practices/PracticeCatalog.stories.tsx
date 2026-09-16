@@ -105,7 +105,6 @@ const idlePending = {
 };
 
 const meta = {
-	title: "Workspace admin/Practices/Practice setup",
 	component: PracticeCatalog,
 	parameters: {
 		layout: "padded",

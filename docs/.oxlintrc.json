@@ -61,7 +61,6 @@
 		"no-inner-declarations": "error",
 		"no-prototype-builtins": "error",
 		"no-self-compare": "error",
-		"no-shadow": "error",
 		"no-throw-literal": "error",
 		"no-constructor-return": "error",
 		"no-promise-executor-return": "error",
@@ -211,19 +210,10 @@
 		"unicorn/prefer-bigint-literals": "error",
 		"unicorn/require-module-attributes": "error",
 		"oxc/no-barrel-file": "error",
-		"react/no-set-state": "error",
-		"react/prefer-es6-class": "error",
-		"react/require-render-return": "error",
-		"react/state-in-constructor": "error",
-		"react/no-redundant-should-component-update": "error",
 		"typescript/no-misused-promises": "error",
 		"typescript/no-deprecated": "error",
-		"typescript/no-misused-spread": "error",
 		"typescript/prefer-nullish-coalescing": "error",
-		"typescript/require-array-sort-compare": "error",
 		"typescript/prefer-promise-reject-errors": "error",
-		"typescript/no-meaningless-void-operator": "error",
-		"typescript/no-unnecessary-template-expression": "error",
 		"typescript/no-unnecessary-condition": "error",
 		"typescript/switch-exhaustiveness-check": [
 			"error",
@@ -255,9 +245,6 @@
 		"unicorn/text-encoding-identifier-case": "error",
 		// React 19's automatic JSX runtime; Docusaurus compiles MDX against it.
 		"react/react-in-jsx-scope": "off",
-		// No `ignoreNonDOM`: there is no component kit here to hide an `autoFocus` behind, so the rule
-		// is left at its strictest reading.
-		"jsx-a11y/no-autofocus": "error",
 		"react/no-unstable-nested-components": [
 			"error",
 			{

@@ -1,8 +1,8 @@
 import { ArrowRightIcon } from "lucide-react";
 
 import type { PullRequestInfo } from "@/api/types.gen";
-import { EmptyState } from "@/components/shared/EmptyState";
-import { IssueCard } from "@/components/shared/IssueCard";
+import { EmptyState } from "@/components/common/EmptyState";
+import { IssueCard } from "@/components/common/IssueCard";
 import { Button } from "@/components/ui/button";
 import { getProviderTerms, getPullRequestStateIcon, type ProviderType } from "@/lib/provider";
 
@@ -10,8 +10,8 @@ export interface OpenPullRequestsSectionProps {
 	providerType: ProviderType;
 	pullRequests: readonly PullRequestInfo[];
 	isLoading: boolean;
-	personLabel: string;
-	currUserIsDashboardUser: boolean;
+	/** Shown under the empty-state title; the caller knows whose profile this is. */
+	emptyMessage: string;
 	canViewAll: boolean;
 	onViewAll: () => void;
 }
@@ -20,8 +20,7 @@ export function OpenPullRequestsSection({
 	providerType,
 	pullRequests,
 	isLoading,
-	personLabel,
-	currUserIsDashboardUser,
+	emptyMessage,
 	canViewAll,
 	onViewAll,
 }: OpenPullRequestsSectionProps) {
@@ -59,22 +58,12 @@ export function OpenPullRequestsSection({
 					<EmptyState
 						icon={<PrIcon className="size-6" size={24} />}
 						title={`No open ${terms.pullRequests.toLowerCase()}`}
-						description={
-							currUserIsDashboardUser
-								? `${terms.pullRequests} you create will appear here.`
-								: `${personLabel} doesn't have any open ${terms.pullRequests.toLowerCase()}.`
-						}
+						description={emptyMessage}
 					/>
 				)}
 			</div>
 			{canViewAll && (
-				<Button
-					type="button"
-					variant="link"
-					size="inline"
-					className="w-fit text-sm"
-					onClick={onViewAll}
-				>
+				<Button type="button" variant="link" size="inline" className="w-fit" onClick={onViewAll}>
 					View all {terms.pullRequests.toLowerCase()}
 					<ArrowRightIcon data-icon="inline-end" />
 				</Button>

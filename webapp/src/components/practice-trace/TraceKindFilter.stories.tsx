@@ -12,7 +12,6 @@ import { TraceKindFilter } from "./TraceKindFilter";
  * an empty value, and it is the only spelling of "no filter" that ever reaches the URL.
  */
 const meta = {
-	title: "Practice trace/Work-type filter",
 	component: TraceKindFilter,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

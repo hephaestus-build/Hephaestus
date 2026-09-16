@@ -22,8 +22,8 @@ import {
 } from "@/components/admin/usage/usage-search";
 import { canStepForwardFrom, isCurrentMonthUtc } from "@/components/admin/usage/usage-utils";
 import { useNow } from "@/components/common/use-now";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 

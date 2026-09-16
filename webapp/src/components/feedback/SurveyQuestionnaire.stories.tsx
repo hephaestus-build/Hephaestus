@@ -18,7 +18,6 @@ const question = (
 });
 
 const meta = {
-	title: "Product feedback/Survey questionnaire",
 	component: SurveyQuestionnaire,
 	args: {
 		questions: surveyQuestions,

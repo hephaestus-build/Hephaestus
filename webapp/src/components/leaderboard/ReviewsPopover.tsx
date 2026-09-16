@@ -7,7 +7,6 @@ import type { PullRequestBaseInfo, PullRequestInfo } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Spinner } from "@/components/ui/spinner";
 import { getProviderTerms, getPullRequestStateIcon, type ProviderType } from "@/lib/provider";
 import { hasText } from "@/lib/text";
 
@@ -46,6 +45,8 @@ export function ReviewsPopover({
 	}));
 	const copyableLinks = links.flatMap(({ label, url }) => (hasText(url) ? [{ label, url }] : []));
 
+	// The pending flag only guards against a second press; the write is far under a second, so the
+	// toast is the whole of the feedback.
 	const copyLinks = async () => {
 		setIsCopying(true);
 		try {
@@ -91,35 +92,38 @@ export function ReviewsPopover({
 					<Button
 						variant="outline"
 						size="icon"
-						aria-label={
-							isCopying
-								? "Copying review links…"
-								: `Copy links to reviewed ${terms.pullRequests.toLowerCase()}`
-						}
+						aria-label={`Copy links to reviewed ${terms.pullRequests.toLowerCase()}`}
 						disabled={isCopying || copyableLinks.length === 0}
 						onClick={() => void copyLinks()}
 					>
-						{isCopying ? <Spinner /> : <CopyIcon className="size-4" />}
+						<CopyIcon className="size-4" />
 					</Button>
 				</div>
 				{hasReviews && (
 					<ScrollArea className="-mr-2.5 rounded-md" viewportClassName="max-h-50">
 						<div className="flex flex-col rounded-md pr-2.5 text-sm text-muted-foreground">
-							{links.map((pullRequest) => (
-								<a
-									key={pullRequest.id}
-									href={pullRequest.url}
-									target="_blank"
-									rel="noopener noreferrer"
-									className={cn(
-										"justify-start rounded-md px-3 py-2",
-										hasText(pullRequest.url) && "transition-colors duration-200 hover:bg-accent",
-									)}
-									title={pullRequest.title}
-								>
-									{pullRequest.label}
-								</a>
-							))}
+							{links.map((pullRequest) =>
+								hasText(pullRequest.url) ? (
+									<a
+										key={pullRequest.id}
+										href={pullRequest.url}
+										target="_blank"
+										rel="noopener noreferrer"
+										className="justify-start rounded-md px-3 py-2 transition-colors duration-200 hover:bg-accent"
+										title={pullRequest.title}
+									>
+										{pullRequest.label}
+									</a>
+								) : (
+									<span
+										key={pullRequest.id}
+										className="justify-start rounded-md px-3 py-2"
+										title={pullRequest.title}
+									>
+										{pullRequest.label}
+									</span>
+								),
+							)}
 						</div>
 					</ScrollArea>
 				)}

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { minutesBefore } from "@/components/common/story-clock";
+import { minutesBefore } from "@/stories/story-clock";
 
 import { tracedSignals } from "./story-mock-data";
 import { SIGNAL_STATE_REASON_LABELS } from "./trace-format";
@@ -14,7 +14,6 @@ import { TraceSignalTimeline } from "./TraceSignalTimeline";
  * in the third person: any member can open this page, and the occurrence is usually somebody else's.
  */
 const meta = {
-	title: "Practice trace/Signal timeline",
 	component: TraceSignalTimeline,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

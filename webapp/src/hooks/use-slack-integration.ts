@@ -2,19 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
-	getConnectionSyncStatusOptions,
-	getConnectionSyncStatusQueryKey,
 	getIntegrationCatalogOptions,
 	getWorkspaceOptions,
-	listConnectionSyncJobsQueryKey,
-	listConnectionSyncResourcesOptions,
-	listConnectionSyncResourcesQueryKey,
 	listSlackChannelCandidatesOptions,
 	listSlackChannelConsentEventsQueryKey,
 	listSlackChannelsOptions,
 	registerSlackChannelMutation,
-	triggerSyncJobMutation,
-	updateConnectionSyncJobMutation,
 	updateSlackChannelConsentMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { Workspace } from "@/api/types.gen";
@@ -24,8 +17,7 @@ import type {
 } from "@/components/admin/integrations/AdminSlackChannelsSettings";
 import type { AdminSlackNotificationSettingsProps } from "@/components/admin/integrations/AdminSlackNotificationSettings";
 import { syncPollInterval } from "@/components/admin/integrations/sync-format";
-import type { SyncResourcesTableProps } from "@/components/admin/integrations/SyncResourcesTable";
-import type { SyncStatusHeaderProps } from "@/components/admin/integrations/SyncStatusHeader";
+import { useConnectionSync } from "@/hooks/use-connection-sync";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
@@ -59,38 +51,33 @@ export function useSlackIntegration(workspaceSlug: string) {
 	const workspaceQueryOptions = getWorkspaceOptions({ path: { workspaceSlug } });
 	const workspaceQuery = useQuery(workspaceQueryOptions);
 	const workspaceData = workspaceQuery.data;
-	const hasSlackToken = workspaceData?.hasSlackToken === true;
+	const hasSlackCredentials = workspaceData?.hasSlackToken === true;
 
 	const catalogQueryOptions = getIntegrationCatalogOptions({ path: { workspaceSlug } });
 	const catalogQuery = useQuery(catalogQueryOptions);
 	const entry = catalogQuery.data?.find((e) => e.kind === "SLACK");
 	const hasConnection = entry?.connected === true;
-	const isConnectionActive = entry?.connectionState === "ACTIVE" && hasSlackToken;
+	const isConnectionActive = entry?.connectionState === "ACTIVE" && hasSlackCredentials;
 	const connectionId = hasConnection ? entry.connectionId : undefined;
 
-	const statusQuery = useQuery({
-		...getConnectionSyncStatusOptions({
-			path: { workspaceSlug, connectionId: connectionId ?? -1 },
-		}),
-		enabled: connectionId != null,
-		refetchInterval: (query) =>
-			syncPollInterval(query.state.data?.activeJob != null, livePushUnavailable),
-	});
-	const status = statusQuery.data;
-	const hasActiveJob = status?.activeJob != null;
+	const isLoading = workspaceQuery.isLoading || catalogQuery.isLoading;
+	const loadError = workspaceQuery.error ?? catalogQuery.error;
+	const retryLoad = () => {
+		void workspaceQuery.refetch();
+		void catalogQuery.refetch();
+	};
 
-	const {
-		data: resources,
-		isLoading: isResourcesLoading,
-		isError: isResourcesError,
-		error: resourcesError,
-		refetch: refetchResources,
-	} = useQuery({
-		...listConnectionSyncResourcesOptions({
-			path: { workspaceSlug, connectionId: connectionId ?? -1 },
-		}),
-		enabled: connectionId != null,
-		refetchInterval: syncPollInterval(hasActiveJob, livePushUnavailable),
+	const sync = useConnectionSync({
+		workspaceSlug,
+		connectionId,
+		isConnectionActive,
+		credentialsUnreadableSince: entry?.credentialsUnreadableSince,
+		isConnectionLoading: isLoading,
+		connectionError: loadError,
+		retryConnection: retryLoad,
+		resourceNoun: "channel",
+		resourceNounPlural: "channels",
+		expectedClassKeys: ["messages"],
 	});
 
 	const slackChannelsQueryOptions = listSlackChannelsOptions({ path: { workspaceSlug } });
@@ -101,8 +88,8 @@ export function useSlackIntegration(workspaceSlug: string) {
 		refetch: refetchSlackChannels,
 	} = useQuery({
 		...slackChannelsQueryOptions,
-		enabled: hasSlackToken,
-		refetchInterval: syncPollInterval(hasActiveJob, livePushUnavailable),
+		enabled: hasSlackCredentials,
+		refetchInterval: syncPollInterval(sync.hasActiveJob, livePushUnavailable),
 	});
 
 	const slackChannelCandidatesQueryOptions = listSlackChannelCandidatesOptions({
@@ -115,28 +102,14 @@ export function useSlackIntegration(workspaceSlug: string) {
 		refetch: refetchSlackChannelCandidates,
 	} = useQuery({
 		...slackChannelCandidatesQueryOptions,
-		enabled: hasSlackToken,
+		enabled: hasSlackCredentials,
 	});
 
+	// A channel joining or leaving the set is a change to what sync mirrors, so the ledger refreshes too.
 	const invalidateSlackChannels = () => {
 		void queryClient.invalidateQueries({ queryKey: slackChannelsQueryOptions.queryKey });
 		void queryClient.invalidateQueries({ queryKey: slackChannelCandidatesQueryOptions.queryKey });
-		if (connectionId != null) {
-			void queryClient.invalidateQueries({
-				queryKey: listConnectionSyncResourcesQueryKey({
-					path: { workspaceSlug, connectionId },
-				}),
-			});
-		}
-	};
-
-	const invalidateSyncActivity = (id: number) => {
-		void queryClient.invalidateQueries({
-			queryKey: getConnectionSyncStatusQueryKey({ path: { workspaceSlug, connectionId: id } }),
-		});
-		void queryClient.invalidateQueries({
-			queryKey: listConnectionSyncJobsQueryKey({ path: { workspaceSlug, connectionId: id } }),
-		});
+		sync.invalidateSyncActivity();
 	};
 
 	const registerSlackChannel = useMutation({
@@ -174,62 +147,6 @@ export function useSlackIntegration(workspaceSlug: string) {
 		},
 	});
 
-	const triggerSync = useMutation({
-		...triggerSyncJobMutation(),
-		onSuccess: () => {
-			if (connectionId == null) {
-				return;
-			}
-			invalidateSyncActivity(connectionId);
-			toast.success("Sync started");
-		},
-		onError: (e) => {
-			toast.error("Failed to start sync", { description: problemDetailOf(e) });
-		},
-	});
-
-	const cancelJob = useMutation({
-		...updateConnectionSyncJobMutation(),
-		onSuccess: () => {
-			if (connectionId == null) {
-				return;
-			}
-			invalidateSyncActivity(connectionId);
-			toast.success("Cancelling — stopping after current channel…");
-		},
-		onError: (e) => {
-			toast.error("Failed to cancel sync", { description: problemDetailOf(e) });
-		},
-	});
-
-	const syncStatusHeaderProps: Omit<SyncStatusHeaderProps, "label"> = {
-		status,
-		isConnectionActive,
-		credentialsUnreadableSince: entry?.credentialsUnreadableSince,
-		triggeringType: triggerSync.isPending ? "RECONCILIATION" : null,
-		isCancelling: cancelJob.isPending,
-		onRetry: () => void statusQuery.refetch(),
-		onSync: () => {
-			if (connectionId == null) {
-				return;
-			}
-			triggerSync.mutate({
-				path: { workspaceSlug, connectionId },
-				body: { type: "RECONCILIATION" },
-			});
-		},
-		onCancel: () => {
-			const jobId = status?.activeJob?.id;
-			if (connectionId == null || jobId == null) {
-				return;
-			}
-			cancelJob.mutate({
-				path: { workspaceSlug, connectionId, jobId },
-				body: { cancelRequested: true },
-			});
-		},
-	};
-
 	const handleRegisterChannel = async ({
 		slackChannelId,
 		channelName,
@@ -265,11 +182,12 @@ export function useSlackIntegration(workspaceSlug: string) {
 		slackChannelId: string;
 		reason?: string;
 	}) => {
+		const trimmedReason = reason?.trim();
 		await updateSlackChannelConsent.mutateAsync({
 			path: { workspaceSlug, slackChannelId },
 			body: {
 				consentState: "REVOKED",
-				reason: hasText(reason?.trim()) ? reason : undefined,
+				reason: hasText(trimmedReason) ? trimmedReason : undefined,
 			},
 		});
 	};
@@ -277,36 +195,15 @@ export function useSlackIntegration(workspaceSlug: string) {
 	const { key: notificationSettingsKey, ...digestSettings } = digestSettingsOf(workspaceData);
 
 	return {
-		connectionId,
 		hasConnection,
-		isConnectionActive,
 		connectionState: entry?.connectionState,
 		credentialsUnreadableSince: entry?.credentialsUnreadableSince,
-		// Lets the route poll its job-history query on the same adaptive cadence as the rest.
-		hasActiveJob,
-		isLoading: workspaceQuery.isLoading || catalogQuery.isLoading,
-		loadError: workspaceQuery.error ?? catalogQuery.error,
-		retryLoad: () => {
-			void workspaceQuery.refetch();
-			void catalogQuery.refetch();
-			void statusQuery.refetch();
-		},
-		status,
-		isStatusError: statusQuery.isError,
-		statusError: statusQuery.error,
-		retryStatus: () => void statusQuery.refetch(),
-		syncStatusHeaderProps,
-		syncResourcesProps: {
-			resources: resources ?? [],
-			isLoading: isResourcesLoading,
-			isError: isResourcesError,
-			error: resourcesError,
-			onRetry: () => void refetchResources(),
-			resourceNoun: "channel",
-			resourceNounPlural: "channels",
-			syncIntervalSeconds: status?.syncIntervalSeconds,
-			expectedClassKeys: ["messages"],
-		} satisfies SyncResourcesTableProps,
+		isLoading,
+		loadError,
+		retryLoad,
+		syncStatusHeaderProps: sync.syncStatusHeaderProps,
+		syncResourcesProps: sync.syncResourcesProps,
+		jobHistoryProps: sync.jobHistoryProps,
 		notificationSettingsKey,
 		notificationSettingsProps: {
 			workspaceSlug,

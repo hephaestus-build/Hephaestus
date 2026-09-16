@@ -10,7 +10,7 @@ import {
 	SortableCatalogTree,
 	UNASSIGNED_CATALOG_BUCKET,
 } from "@/components/admin/practice-catalog/SortableCatalogTree";
-import { DetailStackLink } from "@/components/core/detail-drawer/DetailStackLink";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

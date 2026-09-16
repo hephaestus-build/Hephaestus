@@ -3,8 +3,8 @@ import { endOfISOWeek, formatISO, startOfISOWeek } from "date-fns";
 import { fn } from "storybook/test";
 
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
-import { STORY_NOW } from "@/components/common/story-clock";
 import { withStandardPage } from "@/stories/decorators";
+import { STORY_NOW } from "@/stories/story-clock";
 import { expectNoPageOverflow } from "@/test/reflow";
 
 import { PracticeGroupStandingCard } from "./PracticeGroupStandingCard";

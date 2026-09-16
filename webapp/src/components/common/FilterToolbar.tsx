@@ -1,14 +1,13 @@
 import { XIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { rendersContent } from "@/lib/react-node";
 
 export interface FilterToolbarProps {
 	children: ReactNode;
 	hasFilter: boolean;
 	onReset: () => void;
-	actions?: ReactNode;
+	actions?: ReactElement | undefined;
 }
 
 export function FilterToolbar({ children, hasFilter, onReset, actions }: FilterToolbarProps) {
@@ -21,9 +20,7 @@ export function FilterToolbar({ children, hasFilter, onReset, actions }: FilterT
 					<XIcon aria-hidden data-icon="inline-end" />
 				</Button>
 			)}
-			{rendersContent(actions) && (
-				<div className="flex items-center gap-2 sm:ml-auto">{actions}</div>
-			)}
+			{actions !== undefined && <div className="flex items-center gap-2 sm:ml-auto">{actions}</div>}
 		</div>
 	);
 }

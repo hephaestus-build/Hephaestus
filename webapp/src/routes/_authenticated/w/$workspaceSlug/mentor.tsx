@@ -1,7 +1,7 @@
 import { createFileRoute, Navigate, Outlet } from "@tanstack/react-router";
 
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { StandardPageSurface } from "@/components/core/StandardPageSurface";
+import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import { Spinner } from "@/components/ui/spinner";
 import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";

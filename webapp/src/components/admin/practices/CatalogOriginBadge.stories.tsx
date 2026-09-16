@@ -4,7 +4,6 @@ import { expect, waitFor, within } from "storybook/test";
 import { CatalogOriginBadge } from "./CatalogOriginBadge";
 
 const meta = {
-	title: "Workspace admin/Practices/Catalog status",
 	component: CatalogOriginBadge,
 	tags: ["autodocs"],
 	args: {

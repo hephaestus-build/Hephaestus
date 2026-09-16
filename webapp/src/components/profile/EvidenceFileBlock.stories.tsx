@@ -4,7 +4,6 @@ import { EvidenceFileBlock } from "./EvidenceFileBlock";
 const meta = {
 	component: EvidenceFileBlock,
 	tags: ["autodocs"],
-	title: "Profile/EvidenceFileBlock",
 	parameters: {
 		docs: {
 			description: {

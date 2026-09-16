@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import type { LeaderboardSchedule } from "@/lib/timeframe";
 
 import type { LeaderboardEntry, UserInfo } from "@/api/types.gen";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import type { ProviderType } from "@/lib/provider";
 
 import { LeaderboardFilter } from "./LeaderboardFilter";

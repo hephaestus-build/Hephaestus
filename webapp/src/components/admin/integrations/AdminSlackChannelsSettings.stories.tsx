@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import type { SlackMonitoredChannel } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
+import { daysBefore } from "@/stories/story-clock";
 
 import { AdminSlackChannelsSettings } from "./AdminSlackChannelsSettings";
 
@@ -28,6 +28,7 @@ const meta = {
 		hasSlackConnection: true,
 		isLoading: false,
 		channels: [],
+		channelCandidates: [],
 		onRegisterChannel: fn(),
 		onUpdateConsent: fn(),
 		onRemoveChannel: fn(),

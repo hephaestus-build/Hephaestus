@@ -59,7 +59,6 @@ function RefusalCatalogue(props: RefusalFixLinkProps) {
 }
 
 const meta = {
-	title: "Practice trace/Refusal fix link",
 	component: RefusalFixLink,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],

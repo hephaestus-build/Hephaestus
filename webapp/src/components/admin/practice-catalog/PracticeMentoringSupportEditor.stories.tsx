@@ -8,7 +8,6 @@ import { expectNoOverflowingElement } from "@/test/reflow";
 import { PracticeMentoringSupportEditor } from "./PracticeMentoringSupportEditor";
 
 const meta = {
-	title: "Workspace admin/Practices/AI mentoring",
 	component: PracticeMentoringSupportEditor,
 	args: {
 		value: mockPullRequestWorkType.recommendedPolicy,

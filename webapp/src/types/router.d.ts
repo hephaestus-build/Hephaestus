@@ -8,7 +8,7 @@ import "@tanstack/react-router";
 declare module "@tanstack/react-router" {
 	interface HistoryState {
 		autoGreeting?: boolean;
-		/** Stamped by {@link import("@/components/core/detail-drawer/DetailStackLink").DetailStackLink} on the entry it pushes, so a dismiss knows it can go back rather than forward to a shorter URL. */
+		/** Stamped by {@link import("@/components/layout/detail-drawer/DetailStackLink").DetailStackLink} on the entry it pushes, so a dismiss knows it can go back rather than forward to a shorter URL. */
 		detailPush?: boolean;
 	}
 }

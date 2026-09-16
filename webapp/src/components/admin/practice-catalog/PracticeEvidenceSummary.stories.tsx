@@ -12,7 +12,6 @@ import { expectNoOverflowingElement } from "@/test/reflow";
 import { PracticeEvidenceSummary } from "./PracticeEvidenceSummary";
 
 const meta = {
-	title: "Shared/Practice catalog/Evidence summary",
 	component: PracticeEvidenceSummary,
 	args: {
 		policy: mockPullRequestPolicy,

@@ -14,7 +14,6 @@ import { ReviewRunFilters } from "./ReviewRunFilters";
  * a filter an act of memory: matching a word here to a tag there.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Review run filters",
 	component: ReviewRunFilters,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],

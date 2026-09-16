@@ -13,7 +13,6 @@ import { observationDetail, reviewObservationDetail, workspacePractices } from "
  * produced.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Observation details",
 	component: ObservationDetailPage,
 	parameters: {
 		layout: "padded",

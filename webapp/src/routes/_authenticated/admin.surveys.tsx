@@ -14,12 +14,15 @@ import {
 	type AdminSurveysTableState,
 } from "@/components/admin/feedback/AdminSurveysTable";
 import { useNow } from "@/components/common/use-now";
-import { encodeDetailStack, parseDetailStack } from "@/components/core/detail-drawer/detail-stack";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { DetailStackLink } from "@/components/core/detail-drawer/DetailStackLink";
-import { useDetailStack } from "@/components/core/detail-drawer/use-detail-stack";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import {
+	encodeDetailStack,
+	parseDetailStack,
+} from "@/components/layout/detail-drawer/detail-stack";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { buttonVariants } from "@/components/ui/button";
 import { useClampedPage } from "@/hooks/use-clamped-page";
 import { instanceAdminHead } from "@/lib/page-title";

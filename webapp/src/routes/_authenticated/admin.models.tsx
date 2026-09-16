@@ -39,8 +39,8 @@ import { AdminLlmModelsSection } from "@/components/admin/llm/AdminLlmModelsSect
 import { InstanceLlmSettingsCard } from "@/components/admin/llm/InstanceLlmSettingsCard";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
