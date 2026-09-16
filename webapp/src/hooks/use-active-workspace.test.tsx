@@ -10,12 +10,12 @@ import { act, render, screen } from "@testing-library/react";
 import { describe, it, vi } from "vitest";
 
 import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
-import { QUERY_STALE_TIME_MS } from "@/integrations/tanstack-query/query-defaults";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
+import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
 
 import { useActiveWorkspaceSlug } from "./use-active-workspace";
 
-vi.mock("@/integrations/auth/AuthContext", () => ({
+vi.mock("@/runtime/auth/AuthContext", () => ({
 	useAuth: () => ({ isAuthenticated: true, isLoading: false }),
 }));
 

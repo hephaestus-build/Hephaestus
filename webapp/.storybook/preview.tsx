@@ -7,8 +7,8 @@ import { initialize, mswLoader } from "msw-storybook-addon";
 import type { ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
-import { ThemeProvider } from "@/integrations/theme";
 import { handlers } from "@/mocks/handlers";
+import { ThemeProvider } from "@/runtime/theme/ThemeContext";
 
 import "@/styles.css";
 

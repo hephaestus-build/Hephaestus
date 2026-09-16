@@ -3,7 +3,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { assert, describe, expect, it, vi } from "vitest";
 
-import { bindingsProblem } from "@/components/admin/practice-catalog/bindings";
+import { bindingsProblem } from "@/components/admin/practice-editor/bindings";
 import { buttonVariants } from "@/components/ui/button";
 import {
 	mockAuthorDeclaredEvidenceValidation,

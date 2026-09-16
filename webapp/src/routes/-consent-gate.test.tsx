@@ -3,11 +3,11 @@ import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { consentIsPending } from "@/integrations/auth/guard";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
+import { consentIsPending } from "@/runtime/auth/guard";
 
 // `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
 vi.setConfig({ testTimeout: 15_000 });

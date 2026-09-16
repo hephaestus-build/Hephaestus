@@ -9,12 +9,12 @@ import type {
 	PracticeGroup,
 	UpdatePracticeRequest,
 } from "@/api/types.gen";
-import { soleBinding } from "@/components/admin/practice-catalog/bindings";
+import { soleBinding } from "@/components/admin/practice-editor/bindings";
 import {
 	PracticeDefinitionForm,
 	type PracticeDefinitionValue,
-} from "@/components/admin/practice-catalog/PracticeDefinitionForm";
-import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-catalog/PracticeEvidenceSummary";
+} from "@/components/admin/practice-editor/PracticeDefinitionForm";
+import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { hasText } from "@/lib/text";

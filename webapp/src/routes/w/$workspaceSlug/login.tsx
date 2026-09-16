@@ -4,9 +4,9 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { getWorkspaceOptions } from "@/api/@tanstack/react-query.gen";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { resolveCurrentUser } from "@/integrations/auth/guard";
 import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { resolveCurrentUser } from "@/runtime/auth/guard";
 
 interface WorkspaceLoginSearch {
 	error?: string;

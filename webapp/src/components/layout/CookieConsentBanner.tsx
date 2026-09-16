@@ -9,7 +9,7 @@ import {
 	setStoredConsent,
 	useConsentReopenRequested,
 	useCookieConsent,
-} from "@/integrations/consent";
+} from "@/runtime/consent";
 
 export function CookieConsentBanner() {
 	const consent = useCookieConsent();

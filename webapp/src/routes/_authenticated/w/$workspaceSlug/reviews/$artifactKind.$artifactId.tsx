@@ -8,9 +8,9 @@ import {
 	requestPracticeReviewMutation,
 } from "@/api/@tanstack/react-query.gen";
 import { TracePage } from "@/components/practice-trace/TracePage";
-import { workspaceMembershipQueryOptions } from "@/integrations/auth/guard";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
+import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/reviews/$artifactKind/$artifactId",

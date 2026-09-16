@@ -30,9 +30,9 @@ import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAcc
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
 import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
-import { useAuth } from "@/integrations/auth/AuthContext";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/settings")({
 	component: RouteComponent,

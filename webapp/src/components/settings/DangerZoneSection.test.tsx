@@ -8,9 +8,9 @@ import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AuthProvider } from "@/integrations/auth/AuthContext";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
+import { AuthProvider } from "@/runtime/auth/AuthContext";
 
 import { DangerZoneSection } from "./DangerZoneSection";
 

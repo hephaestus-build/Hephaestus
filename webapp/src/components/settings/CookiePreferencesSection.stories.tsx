@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, screen, userEvent } from "storybook/test";
 
 import { CookieConsentBanner } from "@/components/layout/CookieConsentBanner";
-import { CONSENT_STORAGE_KEY, closeConsentReopen, setStoredConsent } from "@/integrations/consent";
+import { CONSENT_STORAGE_KEY, closeConsentReopen, setStoredConsent } from "@/runtime/consent";
 
 import { CookiePreferencesSection } from "./CookiePreferencesSection";
 

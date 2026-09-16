@@ -10,9 +10,9 @@ import {
 	getUsersWithTeamsQueryKey,
 	updateMemberVisibilityMutation,
 } from "@/api/@tanstack/react-query.gen";
-import { adaptApiUserTeams } from "@/components/admin/user-teams";
-import type { UsersTableView } from "@/components/admin/UsersTable";
-import { WorkspaceMembersPage } from "@/components/admin/WorkspaceMembersPage";
+import { adaptApiUserTeams } from "@/components/admin/members/user-teams";
+import { WorkspaceMembersPage } from "@/components/admin/members/WorkspaceMembersPage";
+import type { WorkspaceMembersTableView } from "@/components/admin/members/WorkspaceMembersTable";
 import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { workspaceAdminHead } from "@/lib/page-title";
@@ -108,7 +108,7 @@ function AdminMembersContainer() {
 		hasText(search.team) && teams.some((team) => team.id.toString() === search.team)
 			? search.team
 			: "all";
-	const view: UsersTableView = {
+	const view: WorkspaceMembersTableView = {
 		q: search.q ?? "",
 		team: selectedTeam,
 		sort: search.sort ?? "name",

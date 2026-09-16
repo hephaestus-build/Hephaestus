@@ -1,7 +1,7 @@
 import { ChevronRight, Library } from "lucide-react";
 
 import type { CatalogPracticeSummary } from "@/api/types.gen";
-import { GroupPill } from "@/components/admin/practice-catalog/GroupPill";
+import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Section } from "@/components/layout/Section";

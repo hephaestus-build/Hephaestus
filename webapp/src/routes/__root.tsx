@@ -44,10 +44,11 @@ import { useProductSurveys, useSubmitProductFeedback } from "@/hooks/use-product
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
-import { type AuthContextType, useAuth } from "@/integrations/auth/AuthContext";
-import { safeReturnTo } from "@/integrations/auth/guard";
-import { FeatureFlagDevTools, useFeatureFlag } from "@/integrations/feature-flags";
 import { getProviderSlug } from "@/lib/provider/provider-terms";
+import { type AuthContextType, useAuth } from "@/runtime/auth/AuthContext";
+import { safeReturnTo } from "@/runtime/auth/guard";
+import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools";
+import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 import { isCopilotExcludedRoute } from "./-copilot-route";
 import { ImpersonationBannerHost } from "./-ImpersonationBannerHost";
 

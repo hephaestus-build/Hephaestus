@@ -4,7 +4,7 @@ import { ShieldCheck, ShieldOff, UserCog, Users } from "lucide-react";
 import { useDeferredValue, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { withSessionMutationLock } from "@/integrations/auth/session-mutation";
+import { withSessionMutationLock } from "@/runtime/auth/session-mutation";
 
 import {
 	adminListUsersInfiniteOptions,
@@ -33,10 +33,10 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { loadedPages } from "@/integrations/tanstack-query/spring-page";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 
 const PAGE_SIZE = 25;
 

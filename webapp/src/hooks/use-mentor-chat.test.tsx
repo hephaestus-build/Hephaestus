@@ -21,7 +21,7 @@ vi.mock("@/hooks/use-active-workspace", () => ({
 	useActiveWorkspaceSlug: vi.fn(),
 }));
 
-vi.mock("@/integrations/auth", () => ({
+vi.mock("@/runtime/auth/auth-client", () => ({
 	csrfHeaders: vi.fn(() => ({ "X-XSRF-TOKEN": "mock-csrf" })),
 }));
 

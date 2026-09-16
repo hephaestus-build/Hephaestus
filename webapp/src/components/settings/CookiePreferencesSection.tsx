@@ -3,7 +3,7 @@ import {
 	errorMonitoringConfigured,
 	requestConsentReopen,
 	useCookieConsent,
-} from "@/integrations/consent";
+} from "@/runtime/consent";
 
 /**
  * Lets a signed-in user revisit the cookie choice they made in the consent banner. "Change cookie

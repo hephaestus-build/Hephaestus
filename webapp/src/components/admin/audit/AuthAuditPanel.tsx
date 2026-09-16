@@ -22,10 +22,10 @@ import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { loadedPages, springPageParams } from "@/integrations/tanstack-query/spring-page";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { saveTextFile } from "@/lib/download";
 import { narrowToEnum, nonEmpty } from "@/lib/search-params";
+import { loadedPages, springPageParams } from "@/runtime/tanstack-query/spring-page";
 
 const PAGE_SIZE = 50;
 

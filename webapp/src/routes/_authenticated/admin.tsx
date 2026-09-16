@@ -4,7 +4,7 @@ import { createFileRoute, Outlet, redirect, useMatchRoute } from "@tanstack/reac
 import { adminGetInstanceSettingsOptions } from "@/api/@tanstack/react-query.gen";
 import { SilentModeBanner } from "@/components/admin/instance/SilentModeBanner";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { isAppAdmin, resolveCurrentUser } from "@/integrations/auth/guard";
+import { isAppAdmin, resolveCurrentUser } from "@/runtime/auth/guard";
 
 /**
  * The client is not a security boundary — every `/admin` endpoint is enforced server-side by

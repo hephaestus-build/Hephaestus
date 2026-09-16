@@ -2,11 +2,11 @@ import { CopyIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import type { AgentJob } from "@/api/types.gen";
-import { formatTokens, modelLabel } from "@/components/admin/ai/job-utils";
-import { JOB_TYPE_LABELS } from "@/components/admin/usage/usage-utils";
+import { formatTokens, JOB_TYPE_LABELS } from "@/components/admin/usage/usage-utils";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { Button } from "@/components/ui/button";
 import { hasText } from "@/lib/text";
+import { modelLabel } from "./job-utils";
 
 import { ReviewFact, ReviewFactGrid } from "./ReviewDetailHeader";
 

@@ -24,9 +24,9 @@ import { FacetMultiSelect, toFacetOptions } from "@/components/common/FacetMulti
 import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
-import { springPageParams } from "@/integrations/tanstack-query/spring-page";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { narrowToEnum, nonEmpty } from "@/lib/search-params";
+import { springPageParams } from "@/runtime/tanstack-query/spring-page";
 
 const PAGE_SIZE = 50;
 

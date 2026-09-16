@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { optionalIntegrationsAvailable } from "@/integrations/consent";
+import { optionalIntegrationsAvailable } from "@/runtime/consent";
 
 import { CookiePreferencesSection } from "./CookiePreferencesSection";
 import { DangerZoneSection } from "./DangerZoneSection";

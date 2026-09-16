@@ -1,5 +1,4 @@
 import type { LlmUsageByJobType, WorkspaceLlmUsageReport } from "@/api/types.gen";
-import { formatTokens, MoneyCell } from "@/components/admin/ai/job-utils";
 import { TableRowsSkeleton } from "@/components/admin/integrations/TableRowsSkeleton";
 import {
 	Table,
@@ -12,9 +11,10 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { formatCostUsd, formatRateUsd } from "@/lib/money";
+import { MoneyCell } from "./MoneyCell";
 
 import { type Fx, FxSpendLine } from "./fx";
-import { formatUsageDay, JOB_TYPE_LABELS } from "./usage-utils";
+import { formatTokens, formatUsageDay, JOB_TYPE_LABELS } from "./usage-utils";
 
 function sumBy<T>(rows: T[], pick: (row: T) => number): number {
 	return rows.reduce((total, row) => total + pick(row), 0);

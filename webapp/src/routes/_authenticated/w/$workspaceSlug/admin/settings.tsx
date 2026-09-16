@@ -8,8 +8,8 @@ import {
 	getWorkspaceOptions,
 	resetAndRecalculateLeaguesMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { FeatureKey } from "@/components/admin/WorkspaceFeaturesSettings";
-import { WorkspaceSettingsPage } from "@/components/admin/WorkspaceSettingsPage";
+import type { FeatureKey } from "@/components/admin/settings/WorkspaceFeaturesSettings";
+import { WorkspaceSettingsPage } from "@/components/admin/settings/WorkspaceSettingsPage";
 import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";

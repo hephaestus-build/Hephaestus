@@ -9,20 +9,20 @@ import type {
 	PracticeDefinitionOptions,
 	PracticeGroup,
 } from "@/api/types.gen";
-import { WORK_TYPE_FILTER_OPTIONS } from "@/components/admin/practice-catalog/constants";
-import { automatedReviewUnavailableLabel } from "@/components/admin/practice-catalog/evidence-presentation";
+import { WORK_TYPE_FILTER_OPTIONS } from "@/components/admin/practice-editor/constants";
+import { automatedReviewUnavailableLabel } from "@/components/admin/practice-editor/evidence-presentation";
 import {
 	type GroupDetails,
 	GroupDetailsDialog,
-} from "@/components/admin/practice-catalog/GroupDetailsDialog";
-import { GroupVisualPicker } from "@/components/admin/practice-catalog/GroupVisualPicker";
+} from "@/components/admin/practice-editor/GroupDetailsDialog";
+import { GroupVisualPicker } from "@/components/admin/practice-editor/GroupVisualPicker";
 import {
 	type ActionTriggerRef,
 	type CatalogEntryMoveActions,
 	type CatalogMoveActions,
 	SortableCatalogTree,
 	UNASSIGNED_CATALOG_BUCKET,
-} from "@/components/admin/practice-catalog/SortableCatalogTree";
+} from "@/components/admin/practice-editor/SortableCatalogTree";
 import { AvailablePracticeList } from "@/components/admin/practices/AvailablePracticeList";
 import { practiceFormLevel } from "@/components/admin/practices/practice-search";
 import { PracticeListSkeleton } from "@/components/admin/practices/PracticeSkeletons";

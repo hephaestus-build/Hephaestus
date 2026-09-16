@@ -23,9 +23,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import { ACCOUNT_DELETED_NOTICE_KEY } from "@/integrations/auth/account-deleted-notice";
-import { useAuth } from "@/integrations/auth/AuthContext";
 import { hasText } from "@/lib/text";
+import { ACCOUNT_DELETED_NOTICE_KEY } from "@/runtime/auth/account-deleted-notice";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 const DELETE_CONFIRM_PHRASE = "delete my account";
 

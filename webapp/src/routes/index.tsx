@@ -2,12 +2,12 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 import { NoWorkspace } from "@/components/common/NoWorkspace";
-import { LandingPage } from "@/components/info/landing/LandingPage";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
+import { LandingPage } from "@/components/site/landing/LandingPage";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { consentIsPending, resolveCurrentUser } from "@/integrations/auth/guard";
 import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { consentIsPending, resolveCurrentUser } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/")({
 	staticData: { surface: "bleed" },

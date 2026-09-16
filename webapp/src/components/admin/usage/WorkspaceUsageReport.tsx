@@ -3,7 +3,7 @@ import { CircleAlert, CircleDollarSign } from "lucide-react";
 import { type ReactNode, useId } from "react";
 
 import type { WorkspaceLlmUsageReport } from "@/api/types.gen";
-import { BudgetExhaustedAlert } from "@/components/admin/ai/BudgetExhaustedAlert";
+import { BudgetExhaustedAlert } from "@/components/admin/workspace-llm/BudgetExhaustedAlert";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

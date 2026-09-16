@@ -6,8 +6,8 @@ import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import { Spinner } from "@/components/ui/spinner";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { useFeatureFlag } from "@/integrations/feature-flags";
 import { hasText } from "@/lib/text";
+import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor")({
 	staticData: { surface: "fullscreen" },

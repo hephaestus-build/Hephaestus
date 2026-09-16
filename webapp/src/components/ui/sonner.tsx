@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
-import { useTheme } from "@/integrations/theme";
+import { useTheme } from "@/runtime/theme/ThemeContext";
 
 /** Every toast announces politely, `toast.error` included: sonner exposes no assertive path. */
 function Toaster({ ...props }: ToasterProps) {

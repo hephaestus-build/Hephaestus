@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import type { CuratedPracticeDefinition, PracticeDefinitionOptions } from "@/api/types.gen";
-import { PracticeEvidenceSummary } from "@/components/admin/practice-catalog/PracticeEvidenceSummary";
+import { PracticeEvidenceSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { Section } from "@/components/layout/Section";
 import {

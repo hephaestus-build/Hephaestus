@@ -2,8 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import { useState } from "react";
 import type { AutonomyRollup, Practice, PracticeReviewSettings } from "@/api/types.gen";
-import { automatedReviewLimitationLabel } from "@/components/admin/practice-catalog/evidence-presentation";
-import { PracticeDetailHoverCard } from "@/components/admin/practice-catalog/PracticeDetailHoverCard";
+import { automatedReviewLimitationLabel } from "@/components/admin/practice-editor/evidence-presentation";
+import { PracticeDetailHoverCard } from "@/components/admin/practice-editor/PracticeDetailHoverCard";
 import { AUTONOMY_DEFS } from "@/components/practice-vocabulary/autonomy-defs";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
 import {

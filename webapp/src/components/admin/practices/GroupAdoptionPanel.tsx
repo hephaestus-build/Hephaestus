@@ -1,7 +1,7 @@
 import { ChevronRight, CircleAlert } from "lucide-react";
 
 import type { CatalogGroupAdoptionPreview } from "@/api/types.gen";
-import { GroupPill } from "@/components/admin/practice-catalog/GroupPill";
+import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
 import { PracticeListSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";

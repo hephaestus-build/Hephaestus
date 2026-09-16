@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
 import { Spinner } from "@/components/ui/spinner";
-import { consentIsPending, resolveCurrentUser } from "@/integrations/auth/guard";
+import { consentIsPending, resolveCurrentUser } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/_authenticated")({
 	beforeLoad: async ({ context, location }) => {

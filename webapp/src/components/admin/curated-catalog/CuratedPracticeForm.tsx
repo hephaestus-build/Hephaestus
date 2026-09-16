@@ -9,8 +9,8 @@ import type {
 import {
 	PracticeDefinitionForm,
 	type PracticeDefinitionValue,
-} from "@/components/admin/practice-catalog/PracticeDefinitionForm";
-import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-catalog/PracticeEvidenceSummary";
+} from "@/components/admin/practice-editor/PracticeDefinitionForm";
+import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
 	AlertDialog,

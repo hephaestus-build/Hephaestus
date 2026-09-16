@@ -3,8 +3,8 @@ import { RotateCcw } from "lucide-react";
 import { useState } from "react";
 
 import type { CatalogEntryStatus, CuratedGroupRequest } from "@/api/types.gen";
-import { generateSlug, isValidSlug } from "@/components/admin/practice-catalog/constants";
-import { GroupVisualPicker } from "@/components/admin/practice-catalog/GroupVisualPicker";
+import { generateSlug, isValidSlug } from "@/components/admin/practice-editor/constants";
+import { GroupVisualPicker } from "@/components/admin/practice-editor/GroupVisualPicker";
 import { type FormError, FormErrorSummary } from "@/components/common/FormErrorSummary";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {

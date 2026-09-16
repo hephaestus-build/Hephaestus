@@ -3,8 +3,8 @@ import { useEffect } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { safeReturnTo } from "@/integrations/auth/guard";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { safeReturnTo } from "@/runtime/auth/guard";
 
 interface CallbackSearch {
 	returnTo?: string;

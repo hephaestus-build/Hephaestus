@@ -8,7 +8,7 @@ import type {
 	CuratedPracticeDefinition,
 	PracticeDefinitionOptions,
 } from "@/api/types.gen";
-import { PracticeEvidenceSummary } from "@/components/admin/practice-catalog/PracticeEvidenceSummary";
+import { PracticeEvidenceSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Spinner } from "@/components/ui/spinner";

@@ -4,8 +4,8 @@ import { toast } from "sonner";
 
 import { exitImpersonationMutation } from "@/api/@tanstack/react-query.gen";
 import { ImpersonationBanner } from "@/components/auth/ImpersonationBanner";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { withSessionMutationLock } from "@/integrations/auth/session-mutation";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { withSessionMutationLock } from "@/runtime/auth/session-mutation";
 import { useImpersonationStore } from "@/stores/impersonation-store";
 
 export function ImpersonationBannerHost() {

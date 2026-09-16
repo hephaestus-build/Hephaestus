@@ -7,8 +7,8 @@ import { type BrandIcon, GithubIcon, GitlabIcon } from "@/components/icons/brand
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { useAuth } from "@/integrations/auth/AuthContext";
 import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/workspaces/new/")({
 	component: ProviderSelectionPage,

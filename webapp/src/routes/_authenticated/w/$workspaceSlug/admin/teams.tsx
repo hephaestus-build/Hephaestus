@@ -16,7 +16,7 @@ import type {
 	UpdateRepositoryVisibilityData,
 	UpdateTeamVisibilityData,
 } from "@/api/types.gen";
-import { WorkspaceTeamsTable } from "@/components/admin/WorkspaceTeamsTable";
+import { WorkspaceTeamsTable } from "@/components/admin/teams/WorkspaceTeamsTable";
 import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { workspaceAdminHead } from "@/lib/page-title";

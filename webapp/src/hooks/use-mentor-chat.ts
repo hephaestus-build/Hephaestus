@@ -15,10 +15,10 @@ import {
 import type { ChatMessageVote, ChatThreadDetail, ChatThreadSummary } from "@/api/types.gen";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { csrfHeaders } from "@/integrations/auth";
 import { extractVotesFromThreadDetail, parseThreadMessages } from "@/lib/chat-validation";
 import { hasText } from "@/lib/text";
 import type { ChatMessage } from "@/lib/types";
+import { csrfHeaders } from "@/runtime/auth/auth-client";
 
 interface UseMentorChatOptions {
 	threadId?: string;

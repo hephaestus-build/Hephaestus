@@ -8,8 +8,8 @@ import {
 	getConsentStatusQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import { ConsentPage, type ConsentSubmission } from "@/components/auth/ConsentPage";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { resolveCurrentUser, safeReturnTo } from "@/integrations/auth/guard";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { resolveCurrentUser, safeReturnTo } from "@/runtime/auth/guard";
 
 interface ConsentSearch {
 	returnTo?: string;

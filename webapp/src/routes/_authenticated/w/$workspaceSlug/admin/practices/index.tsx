@@ -25,7 +25,7 @@ import type {
 	Practice,
 	PracticeGroup,
 } from "@/api/types.gen";
-import { generateSlug } from "@/components/admin/practice-catalog/constants";
+import { generateSlug } from "@/components/admin/practice-editor/constants";
 import { GroupAdoptionPanel } from "@/components/admin/practices/GroupAdoptionPanel";
 import {
 	DETAIL_LEVEL_KINDS,

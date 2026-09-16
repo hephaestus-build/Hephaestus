@@ -115,9 +115,10 @@ of that is repeated here. What follows is what no diagnostic will ever tell you.
 
 ## Which admin console a component belongs to
 
-`src/components/admin/**` holds two different consoles, and **the directory name does not tell you
-which**: `admin/llm/` is the instance-wide LLM console, `admin/ai/` is the per-workspace one. The
-**component name** is what carries the scope, and it is the only thing that does:
+`src/components/admin/**` holds two different consoles, and most directories serve both — `usage`,
+`audit`, `practices`, `practice-editor` are imported by instance and workspace routes alike. Only
+the two LLM consoles have a directory each, `admin/instance-llm/` and `admin/workspace-llm/`. So
+the **component name** is what carries the scope:
 
 - `Admin*` or `Instance*` — instance-wide. Configures the deployment for every workspace.
 - `Workspace*` — scoped to one workspace.
@@ -270,7 +271,7 @@ Never re-invent `role === "ADMIN"`; use the shared pieces:
 - **Individual controls**: `useWorkspaceAccess()` returns `role` and `isAdmin`; the role math is
   `hasMinimumWorkspaceRole` (`src/lib/workspace-roles.ts`). Pure role predicates live in `src/lib/`;
   QueryClient-coupled resolvers (`resolveWorkspaceMembership`, `workspaceMembershipQueryOptions`) live
-  in `src/integrations/auth/guard.ts`. Fetch membership only via `workspaceMembershipQueryOptions` so
+  in `src/runtime/auth/guard.ts`. Fetch membership only via `workspaceMembershipQueryOptions` so
   every caller shares one cache entry and one `staleTime`.
 - **Hide rather than disable** — for permissions specifically. Disabling is the better default for a
   control the user could still unlock, but ["hiding is recommended in cases where the user will never be

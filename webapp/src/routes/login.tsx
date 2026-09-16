@@ -4,9 +4,9 @@ import { toast } from "sonner";
 
 import { LoginPage } from "@/components/auth/LoginPage";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
-import { ACCOUNT_DELETED_NOTICE_KEY } from "@/integrations/auth/account-deleted-notice";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { safeReturnTo } from "@/integrations/auth/guard";
+import { ACCOUNT_DELETED_NOTICE_KEY } from "@/runtime/auth/account-deleted-notice";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { safeReturnTo } from "@/runtime/auth/guard";
 
 interface LoginSearch {
 	returnTo?: string;

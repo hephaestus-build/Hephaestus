@@ -134,3 +134,10 @@ export function projectBudget(
 		reachedOn: new Date(Date.UTC(year, monthIndex, dayReached)),
 	};
 }
+
+export function formatTokens(value: number | undefined): string {
+	if (value == null) {
+		return "—";
+	}
+	return value.toLocaleString();
+}

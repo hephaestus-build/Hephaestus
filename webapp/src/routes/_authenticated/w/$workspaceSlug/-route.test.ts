@@ -55,7 +55,7 @@ describe("workspace route gate", () => {
 
 	it("opens a just-created workspace the cache carries before the server lists it", async () => {
 		listWorkspaces("acme");
-		// The app's own `staleTime` (`integrations/tanstack-query/root-provider.tsx`), so the gate
+		// The app's own `staleTime` (`runtime/tanstack-query/root-provider.tsx`), so the gate
 		// answers from the list the creation wizard wrote rather than refetching past it.
 		const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
 		queryClient.setQueryData(listWorkspacesQueryKey(), [

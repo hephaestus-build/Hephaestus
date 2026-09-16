@@ -16,7 +16,6 @@ import { useNow } from "@/components/common/use-now";
 import { PracticeGroupStandingCard } from "@/components/profile/PracticeGroupStandingCard";
 import { ProfilePage } from "@/components/profile/ProfilePage";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { useAuth } from "@/integrations/auth/AuthContext";
 import {
 	type ActivityMonitorFilters,
 	DEFAULT_ACTIVITY_MONITOR_LIMIT,
@@ -27,6 +26,7 @@ import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 import { formatDateRangeForApi, getDateRangeForPreset } from "@/lib/timeframe";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 const profileSearchSchema = z.object({
 	after: z.string().optional(),

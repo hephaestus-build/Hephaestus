@@ -5,9 +5,9 @@ import { Copilot } from "@/components/mentor/Copilot";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { useFeatureFlag } from "@/integrations/feature-flags";
 import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 
 export default function GlobalCopilot() {
 	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader

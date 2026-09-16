@@ -25,11 +25,11 @@ import {
 	type ObservationDetailState,
 } from "@/components/profile/review-runs";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { resolveCurrentUser } from "@/integrations/auth/guard";
-import { loadedPages } from "@/integrations/tanstack-query/spring-page";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
+import { resolveCurrentUser } from "@/runtime/auth/guard";
+import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 
 const ACTIVITY_PAGE_SIZE = 10;
 

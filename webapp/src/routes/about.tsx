@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { listGlobalContributorsOptions } from "@/api/@tanstack/react-query.gen";
-import { AboutPage } from "@/components/info/about/AboutPage";
-import type { ProjectManager } from "@/components/info/about/ProjectManagerCard";
+import { AboutPage } from "@/components/site/about/AboutPage";
+import type { ProjectManager } from "@/components/site/about/ProjectManagerCard";
 
 export const Route = createFileRoute("/about")({
 	component: AboutContainer,

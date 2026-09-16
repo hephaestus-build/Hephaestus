@@ -2,7 +2,7 @@ import { CircleAlert, Copy, ShieldCheck } from "lucide-react";
 
 import { cn } from "cn";
 import type { CatalogPracticePreview, PracticeDefinitionOptions } from "@/api/types.gen";
-import { GroupPill } from "@/components/admin/practice-catalog/GroupPill";
+import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
 import { PracticeDefinitionPreview } from "@/components/admin/practices/PracticeDefinitionPreview";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { DetailRow } from "@/components/common/DetailRow";

@@ -16,7 +16,7 @@ import {
 	adminUpdateCuratedPracticeStatusMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type {
-	CuratedCatalog as Catalog,
+	CuratedCatalog,
 	CuratedGroup,
 	CuratedPractice,
 	CuratedPracticeSummary,
@@ -36,7 +36,7 @@ import {
 	curatedPracticeLevel,
 	GUARDED_CURATED_LEVEL_KINDS,
 } from "@/components/admin/curated-catalog/curated-catalog-search";
-import { CuratedCatalog } from "@/components/admin/curated-catalog/CuratedCatalog";
+import { CuratedCatalogPage } from "@/components/admin/curated-catalog/CuratedCatalogPage";
 import { PracticeTreeSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { parseDetailStack } from "@/components/layout/detail-drawer/detail-stack";
@@ -104,7 +104,7 @@ function AdminCuratedCatalogPage() {
 		},
 	});
 	const onGroupStatusSettled = (slug: string, offered: boolean) => ({
-		onSuccess: (catalog: Catalog) => {
+		onSuccess: (catalog: CuratedCatalog) => {
 			queryClient.setQueryData(adminGetCuratedCatalogQueryKey(), catalog);
 			queryClient.removeQueries({ queryKey: detailKey("group", slug), exact: true });
 			toast.success(offered ? "Group included for workspaces" : "Group is no longer included");
@@ -141,7 +141,7 @@ function AdminCuratedCatalogPage() {
 		scope: STRUCTURE_SCOPE,
 		onMutate: async (variables) => {
 			await queryClient.cancelQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
-			const previous = queryClient.getQueryData<Catalog>(adminGetCuratedCatalogQueryKey());
+			const previous = queryClient.getQueryData<CuratedCatalog>(adminGetCuratedCatalogQueryKey());
 			if (previous) {
 				queryClient.setQueryData(
 					adminGetCuratedCatalogQueryKey(),
@@ -164,7 +164,7 @@ function AdminCuratedCatalogPage() {
 		scope: STRUCTURE_SCOPE,
 		onMutate: async (variables) => {
 			await queryClient.cancelQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
-			const previous = queryClient.getQueryData<Catalog>(adminGetCuratedCatalogQueryKey());
+			const previous = queryClient.getQueryData<CuratedCatalog>(adminGetCuratedCatalogQueryKey());
 			if (previous) {
 				const groupSlug = variables.body.groupSlug ?? null;
 				queryClient.setQueryData(
@@ -188,7 +188,7 @@ function AdminCuratedCatalogPage() {
 		scope: STRUCTURE_SCOPE,
 		onMutate: async (variables) => {
 			await queryClient.cancelQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
-			const previous = queryClient.getQueryData<Catalog>(adminGetCuratedCatalogQueryKey());
+			const previous = queryClient.getQueryData<CuratedCatalog>(adminGetCuratedCatalogQueryKey());
 			if (previous) {
 				queryClient.setQueryData(
 					adminGetCuratedCatalogQueryKey(),
@@ -246,7 +246,7 @@ function AdminCuratedCatalogPage() {
 			<PageHeader
 				icon={<LibraryBig />}
 				title="Practice catalog"
-				description="Choose which groups and practices workspace administrators can add. Catalog changes never rewrite existing workspace practices."
+				description="Choose which groups and practices workspace administrators can add. CuratedCatalog changes never rewrite existing workspace practices."
 				actions={
 					<div className="flex flex-wrap gap-2">
 						{writePending ? (
@@ -287,7 +287,7 @@ function AdminCuratedCatalogPage() {
 					onRetry={() => void catalogQuery.refetch()}
 				/>
 			) : (
-				<CuratedCatalog
+				<CuratedCatalogPage
 					groups={catalogQuery.data.groups}
 					practices={catalogQuery.data.practices}
 					summary={catalogQuery.data.summary}

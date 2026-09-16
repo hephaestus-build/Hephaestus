@@ -31,12 +31,12 @@ import type {
 	UpdateInstanceLlmSettingsRequest,
 	UpdateLlmConnectionRequest,
 } from "@/api/types.gen";
-import { AdminLlmConnectionFormDialog } from "@/components/admin/llm/AdminLlmConnectionFormDialog";
-import { AdminLlmConnectionsTable } from "@/components/admin/llm/AdminLlmConnectionsTable";
-import { AdminLlmModelAccessDialog } from "@/components/admin/llm/AdminLlmModelAccessDialog";
-import { AdminLlmModelFormDialog } from "@/components/admin/llm/AdminLlmModelFormDialog";
-import { AdminLlmModelsSection } from "@/components/admin/llm/AdminLlmModelsSection";
-import { InstanceLlmSettingsCard } from "@/components/admin/llm/InstanceLlmSettingsCard";
+import { AdminLlmConnectionFormDialog } from "@/components/admin/instance-llm/AdminLlmConnectionFormDialog";
+import { AdminLlmConnectionsTable } from "@/components/admin/instance-llm/AdminLlmConnectionsTable";
+import { AdminLlmModelAccessDialog } from "@/components/admin/instance-llm/AdminLlmModelAccessDialog";
+import { AdminLlmModelFormDialog } from "@/components/admin/instance-llm/AdminLlmModelFormDialog";
+import { AdminLlmModelsSection } from "@/components/admin/instance-llm/AdminLlmModelsSection";
+import { InstanceLlmSettingsCard } from "@/components/admin/instance-llm/InstanceLlmSettingsCard";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";

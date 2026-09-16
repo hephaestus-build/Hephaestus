@@ -669,7 +669,7 @@
 			"files": [
 				"src/lib/**",
 				"src/components/layout/Header.tsx",
-				"src/components/info/landing/LandingVisuals.tsx"
+				"src/components/site/landing/LandingVisuals.tsx"
 			],
 			"rules": { "shadcn/no-raw-colors": ["error", { "scanAllStrings": true }] }
 		},

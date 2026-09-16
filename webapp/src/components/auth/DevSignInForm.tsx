@@ -3,8 +3,8 @@ import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { authClient } from "@/integrations/auth/auth-client";
 import { hasText } from "@/lib/text";
+import { authClient } from "@/runtime/auth/auth-client";
 
 /**
  * Passwordless dev/test sign-in, shown only when the server advertises the `dev` provider. It mints a

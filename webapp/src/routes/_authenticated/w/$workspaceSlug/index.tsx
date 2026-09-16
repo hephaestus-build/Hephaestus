@@ -25,7 +25,6 @@ import type { LeaderboardSortType } from "@/components/leaderboard/SortFilter";
 import { Spinner } from "@/components/ui/spinner";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { useAuth } from "@/integrations/auth/AuthContext";
 import { resolveLeaderboardSchedule } from "@/lib/leaderboard-schedule";
 import { hasText } from "@/lib/text";
 import {
@@ -33,6 +32,7 @@ import {
 	getLeaderboardWeekEnd,
 	getLeaderboardWeekStart,
 } from "@/lib/timeframe";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 const leaderboardSearchSchema = z.object({
 	team: z.string().default("all"),

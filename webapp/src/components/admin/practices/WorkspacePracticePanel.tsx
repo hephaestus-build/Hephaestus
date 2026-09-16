@@ -2,7 +2,7 @@ import { Pencil } from "lucide-react";
 
 import { cn } from "cn";
 import type { Practice, PracticeDefinitionOptions } from "@/api/types.gen";
-import { GroupPill } from "@/components/admin/practice-catalog/GroupPill";
+import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
 import { CatalogOriginBadge } from "@/components/admin/practices/CatalogOriginBadge";
 import { practiceFormLevel } from "@/components/admin/practices/practice-search";
 import { PracticeDefinitionPreview } from "@/components/admin/practices/PracticeDefinitionPreview";

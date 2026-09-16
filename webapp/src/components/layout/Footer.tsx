@@ -4,8 +4,8 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { optionalIntegrationsAvailable, requestConsentReopen } from "@/integrations/consent";
 import { hasText } from "@/lib/text";
+import { optionalIntegrationsAvailable, requestConsentReopen } from "@/runtime/consent";
 
 export interface FooterProps {
 	className?: string;
