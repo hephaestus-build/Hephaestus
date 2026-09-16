@@ -28,6 +28,7 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
             SandboxLayout.CONTEXT_PREFIX + ReviewThreadContentSource.FILE_NAME,
             SandboxLayout.CONTEXT_PREFIX + GeneralReviewCommentContentSource.FILE_NAME,
             LinkedWorkItemContentSource.OUTPUT_FILE,
+            LinkedWorkItemContentSource.ITEMS_PREFIX + "<n>.md",
             // Conversation thread
             ConversationThreadContentSource.OUTPUT_KEY,
             // Document
@@ -54,15 +55,22 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
             OutlineDocumentContentSource.REVIEW_PREFIX);
 
     @Test
-    void citationAndCandidateInstructionsDistinguishSourceTextFromPresentation() throws IOException {
+    @DisplayName("the prompt states the observation contract the runtime and the server enforce")
+    void promptStatesTheObservationContract() throws IOException {
         String prompt = resolvedDocumentedPrompt();
         assertThat(prompt)
-                .contains(
-                        "remove those display",
-                        "underlying file text",
-                        "quote `    render()`",
-                        "a mention alone does not establish guidance supplied or adopted by the author");
-        assertThat(prompt).doesNotContain("issues this PR closes or links", "the evidence — quote from here");
+                .contains("| ASSESSED | PRESENT | GOOD | POSITIVE | null |")
+                .contains("| ASSESSED | ABSENT | GOOD | NEGATIVE | required |")
+                .contains("| ASSESSED | PRESENT | BAD | NEGATIVE | required |")
+                .contains("| ASSESSED | ABSENT | BAD | POSITIVE | null |")
+                .contains("| NOT_APPLICABLE | null | null | none | null |")
+                .contains("| UNDETERMINED | null | null | none | null |")
+                .contains("`evidence.inapplicability`", "`evidence.search`", "`evidence.undecidability`")
+                .contains("a mention alone does not establish guidance supplied or adopted by the author");
+        // The criteria decide the outcome; the prompt itself pushes toward neither outcome.
+        assertThat(prompt)
+                .contains("a positive outcome is as ordinary as a negative one")
+                .doesNotContain("Report all justified negative observations", "genuinely exemplary");
     }
 
     @Test
@@ -108,45 +116,6 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                         .isTrue());
     }
 
-    @Test
-    void shouldScopeChangedLineRequirementsToCodeObservations() throws IOException {
-        String prompt = resolvedDocumentedPrompt();
-        String rules = prompt.substring(prompt.indexOf("## Rules"), prompt.indexOf("## Context"));
-        assertThat(rules)
-                .contains("Changed-code observations", "Non-diff citations", "bounded search of the relevant")
-                .contains("description corpus", "conversation and documentation practices")
-                .doesNotContain("Before any negative observation, confirm the evidence is from changed lines")
-                .doesNotContain("Evidence snippets must be copied character-for-character from `+` or `-` lines");
-    }
-
-    @Test
-    void shouldDistinguishDirectInspectionFromReportedCoverage() throws IOException {
-        String prompt = resolvedDocumentedPrompt();
-        assertThat(prompt)
-                .contains("Attribute inspection and reported coverage separately")
-                .contains("cite and attribute those facts to that record")
-                .contains("A report of a check is not evidence that you personally executed it")
-                .contains("distinguish the supplied records you searched from the broader corpus");
-    }
-
-    @Test
-    void shouldKeepOutcomeRationaleSeverityAndOccasionCoherent() throws IOException {
-        String prompt = resolvedDocumentedPrompt();
-        assertThat(prompt)
-                .contains("derive the outcome from the matrix", "appropriate omission or no material deficiency")
-                .contains("diagnostic probes are not observations")
-                .contains("including stored history", "not whether that judgment was", "current captured sources")
-                .contains("do not flip assessment to BAD", "No fault found does not establish positive absence")
-                .contains("practice's severity criteria to the evidenced consequence")
-                .contains(
-                        "Use NOT_APPLICABLE with evidence.inapplicability",
-                        "Use UNDETERMINED with evidence.undecidability")
-                .contains("No changed test file does not establish", "existing tests or manual checks were omitted")
-                .contains("citation's artifactPath", "optional changed-code location")
-                .doesNotContain("COHERENCE RULE", "confident BAD", "the two honest states", "in `reasoning`")
-                .doesNotContain("the marked state is ahead of the work", "keyed off the countable fact");
-    }
-
     private static String resolvedDocumentedPrompt() throws IOException {
         Path candidate = Path.of("src/main/resources/agent/pi-orchestrator.md");
         Path resolved = Files.exists(candidate)
@@ -176,7 +145,7 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
     private static String documentedWorkspaceSection() throws IOException {
         String resolvedPrompt = resolvedDocumentedPrompt();
         int workspaceStart = resolvedPrompt.indexOf("## Workspace");
-        int workspaceEnd = resolvedPrompt.indexOf("## Rules", workspaceStart);
+        int workspaceEnd = resolvedPrompt.indexOf("## Tools", workspaceStart);
         assertThat(workspaceStart).isNotNegative();
         assertThat(workspaceEnd).isGreaterThan(workspaceStart);
         return resolvedPrompt.substring(workspaceStart, workspaceEnd);

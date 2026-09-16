@@ -15,7 +15,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +62,13 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
     private static final Logger log = LoggerFactory.getLogger(LinkedWorkItemContentSource.class);
 
     static final String OUTPUT_FILE = OUTPUT_PREFIX + "linked_work_items.json";
+
+    /**
+     * One file per resolved item, its title on the first line and its body as written: what a review
+     * quotes. The JSON projection carries the same text escaped into one line, which a model cannot
+     * cite by line and quotes across its escapes; the text file is the one to cite.
+     */
+    static final String ITEMS_PREFIX = OUTPUT_PREFIX + "linked_work_items/";
 
     static final int MAX_ITEMS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
@@ -153,6 +162,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
 
             ArrayNode items = objectMapper.createArrayNode();
             List<Integer> unresolved = new ArrayList<>();
+            Map<String, byte[]> files = new LinkedHashMap<>();
             int examined = 0;
             for (int number : numbers) {
                 if (examined++ >= MAX_ITEMS) break;
@@ -164,6 +174,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
                     continue;
                 }
                 items.add(toItem(resolved.get()));
+                files.put(ITEMS_PREFIX + number + ".md", asText(resolved.get()));
             }
 
             ObjectNode root = objectMapper.createObjectNode();
@@ -172,8 +183,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
             unresolved.forEach(unresolvedRefs::add);
             root.put("truncated", numbers.size() > MAX_ITEMS);
 
-            Map<String, byte[]> files = Map.of(
-                    OUTPUT_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
+            files.put(OUTPUT_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
             log.info("Linked work items: wrote {} item(s), unresolved={}", items.size(), unresolved.size());
             return new EvidenceContribution(
                     files,
@@ -188,6 +198,11 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         } catch (Exception e) {
             throw new EvidenceCollectionException("Linked-work-item collection failed", e);
         }
+    }
+
+    private static byte[] asText(Issue issue) {
+        String body = issue.getBody() == null ? "" : issue.getBody();
+        return ("# " + issue.getTitle() + "\n\n" + body).getBytes(StandardCharsets.UTF_8);
     }
 
     private ObjectNode toItem(Issue issue) {

@@ -133,17 +133,34 @@ if (scenario) {
 							}
 							if (text.includes("## This turn")) {
 								// The composition turn, in the same session.
+								const card = {
+									channel: "IN_APP",
+									practiceSlug: "test-practice",
+									basedOn: ["observation-1"],
+									action: "NEW",
+									title: "Insecure call",
+									body: "The pattern across your work.",
+									nextStep: "Check the call before pushing.",
+								};
+								// One occurrence is not a pattern: with no history, the card is refused.
+								const alone = await tool("report_feedback").execute("f-0", { units: [card] });
+								record(`feedback-alone:${JSON.stringify(alone)}`);
+								mkdirSync(join(cwd, "history"), { recursive: true });
+								writeFileSync(
+									join(cwd, "history/observations.json"),
+									JSON.stringify({
+										observations: [
+											{
+												practiceSlug: "test-practice",
+												outcome: "NEGATIVE",
+												artifact: { kind: "scm.pull_request", number: 7, title: "Earlier change" },
+											},
+										],
+									}),
+								);
 								const reply = await tool("report_feedback").execute("f-1", {
 									units: [
-										{
-											channel: "IN_APP",
-											practiceSlug: "test-practice",
-											basedOn: ["observation-1"],
-											action: "NEW",
-											title: "Insecure call",
-											body: "The pattern across your work.",
-											nextStep: "Check the call before pushing.",
-										},
+										card,
 										{
 											channel: "IN_APP",
 											practiceSlug: "test-practice",
@@ -164,7 +181,6 @@ if (scenario) {
 							}
 							const report = tool("report_observation");
 							assert.match(report.description, /local review state/);
-							assert.match(report.description, /not a dry-run validator/);
 							if (scenario === "refusal-cap") {
 								const wrong = observation("test-practice", "Wrong quote", {
 									...changeCitation,
@@ -183,10 +199,14 @@ if (scenario) {
 								return;
 							}
 							if (scenario === "tree-citation") {
-								const cite = (path: string, quote: string) =>
+								const cite = (
+									path: string,
+									quote: string,
+									summary = "Unsafe authentication call",
+								) =>
 									report.execute("o-1", {
 										observations: [
-											observation("test-practice", "Unsafe authentication call", {
+											observation("test-practice", summary, {
 												sourceKind: "scm.repository.tree",
 												artifactPath: "repos/primary/.git/HEAD",
 												path,
@@ -204,9 +224,34 @@ if (scenario) {
 								record("citation:refused");
 								await cite("src/Auth.java", "insecure();");
 								record("citation:stored");
+								// Coordinates alone: the runner records the line and echoes what it recorded.
+								const echoed: unknown = await cite("src/Auth.java", "", "Cited by line alone");
+								const firstContent: unknown =
+									typeof echoed === "object" &&
+									echoed !== null &&
+									"content" in echoed &&
+									Array.isArray(echoed.content)
+										? echoed.content[0]
+										: undefined;
+								const echoedText =
+									typeof firstContent === "object" &&
+									firstContent !== null &&
+									"text" in firstContent &&
+									typeof firstContent.text === "string"
+										? firstContent.text
+										: "";
+								record(`citation:echo:${echoedText.split("\n")[1] ?? ""}`);
 								writeFileSync(join(cwd, "out", "stray.txt"), "left by a session");
 								return;
 							}
+							// A list sent as a string that is not JSON is refused with the parse error, never
+							// silently emptied.
+							await report
+								.execute("o-0", { observations: "[{not json" })
+								.then(() => record("unparsed:accepted"))
+								.catch((error: unknown) =>
+									record(`unparsed:${error instanceof Error ? error.message : String(error)}`),
+								);
 							// The ordinary turn: two observations in one call, one of them refused.
 							const reply = await report.execute("o-1", {
 								observations: [
@@ -402,6 +447,10 @@ if (scenario) {
 							break;
 						case "batch": {
 							assert.equal(child.status, 0, child.stderr);
+							assert.match(
+								events.find((event) => event.startsWith("unparsed:")) ?? "",
+								/observations refused — the list arrived as a string that is not a JSON array/,
+							);
 							const reply = events.find((event) => event.startsWith("batch:")) ?? "";
 							assert.match(reply, /#1 test-practice: stored \(negative\)/);
 							assert.match(
@@ -465,7 +514,11 @@ if (scenario) {
 							assert.equal(child.status, 0, child.stderr);
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("citation:")),
-								["citation:refused", "citation:stored"],
+								[
+									"citation:refused",
+									"citation:stored",
+									'citation:echo:   src/Auth.java:2-2 recorded "  insecure();"',
+								],
 								child.stderr,
 							);
 							assert.ok(!existsSync(join(cwd, "out/stray.txt")));
@@ -486,6 +539,10 @@ if (scenario) {
 								["prompt:1", "prompt:2"],
 							);
 							assert.equal(events.filter((event) => event.startsWith("create:")).length, 1);
+							assert.match(
+								events.find((event) => event.startsWith("feedback-alone:")) ?? "",
+								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NEGATIVE on 1/,
+							);
 							const reply = events.find((event) => event.startsWith("feedback:")) ?? "";
 							assert.match(reply, /#1: stored a IN_APP unit for test-practice \(NEW\); 1\/1 used/);
 							assert.match(reply, /#2: a feedback unit needs a channel/);

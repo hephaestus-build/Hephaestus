@@ -81,7 +81,8 @@ execute on Node; see
 - **`inputs/context/`** — the stored records of the artifact under review, projected to JSON with no
   narrative, no aggregates and no excerpts: a title, a body, a list of comments, a list of threads.
   `change.json` pins the reviewed range (`base_sha`, `head_sha`) and is the artifact a citation of the
-  change names; the change itself is read from the checkout. `description.md` is the description as its
+  change names; the change itself is read from the checkout. `linked_work_items/<n>.md` is each linked
+  issue as text, title first, for quoting. `description.md` is the description as its
   author wrote it, for quoting; `metadata.json` carries the same text escaped, for programs. Every
   projection is pretty-printed, one field per line, so a line citation into it is possible. A source with nothing to report still
   writes its file, holding an empty list: "the record was read and held nothing" is a fact a review may
@@ -110,7 +111,10 @@ execute on Node; see
   receives this directory as its fifth argument and reads it through `lib/change.ts`.
 - **`work/`** — agent + precompute scratch. The Pi agent may write here; the server never
   collects it.
-- **`out/`** — the *only* directory the sandbox collects after the run.
+- **`out/`** — the *only* directory the sandbox collects after the run. `runner-debug.json` carries the
+  per-turn trace — calls, tool calls by name, observations stored and refused with the refusal reasons,
+  compactions, provider retries — which the server keeps in the job output, so friction in production
+  is read from the job record rather than from a transcript.
 - **`node_modules`** — a symlink to `/opt/pi-sdk/node_modules`, so the runner's bare-specifier
   import of `@earendil-works/pi-coding-agent` resolves. The runner, precompute scripts, and SDK native
   bindings execute on Node.
@@ -234,9 +238,12 @@ for the measuring turns and, when composition was requested, `report_feedback` a
 the composition turn. The two feedback tools store nothing until the server has admitted the recorded
 observations. `report_observation` and `report_feedback` take a list — several observations or units in
 one call, each stored or refused on its own with the reason — and accept that list as a JSON string as
-well as an array, because a smaller model serialises it either way. A refused citation is answered with
-what the cited lines really hold, and a quote of the change copied with its `+`/`-` markers is recorded
-as the line's content, because admission reads the blob at the revision, where no marker exists. The
+well as an array, because a smaller model serialises it either way. A citation's quote is optional: by
+coordinates alone, the runner records the cited lines and echoes them back. A quote given with a diff
+marker, a `[L<n>]` prefix, a non-breaking space read as a space, or a JSON string's text read without
+its escapes is recorded as the artifact's own bytes, because admission verifies those bytes; a quote
+whose lines were miscounted is recorded at the lines where the text is, when it occurs once; a refused
+citation is answered with what the cited lines really hold. The
 mentor runner exposes no native tool at all: its context arrives through `fetch_context`, and it links
 evidence with `link_observation`.
 

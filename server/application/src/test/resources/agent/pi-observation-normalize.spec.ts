@@ -21,7 +21,7 @@ import {
 	validateEvidenceSources,
 	validateInapplicabilityScope,
 	validateSearchScope,
-	quoteAsContent,
+	resolveQuote,
 	withoutCoordinates,
 } from "../../../main/resources/agent/pi-observation-normalize.ts";
 
@@ -150,9 +150,10 @@ void test("citation requires an exact artifact path and quote", () => {
 	delete onlyCitation(missingPath.evidence.citations).artifactPath;
 	assert.throws(() => normalizeObservation(missingPath), /artifactPath is required/);
 
+	// No quote is a citation by coordinates alone; the runner fills it from the artifact.
 	const missingQuote = baseObservation();
 	delete onlyCitation(missingQuote.evidence.citations).quote;
-	assert.throws(() => normalizeObservation(missingQuote), /quote is required/);
+	assert.equal(onlyCitation(normalizeObservation(missingQuote).evidence.citations).quote, "");
 });
 
 void test("citation side is present exactly for pull-request diffs", () => {
@@ -205,22 +206,29 @@ void test("a citation must name a source this run staged, and the artifact that 
 	);
 });
 
-void test("diff citations bind the quote to the claimed file and line", () => {
+void test("diff citations bind the quote to the claimed file and side; a wrong line is corrected when the text is unique", () => {
 	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
 	const diff =
 		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n";
 	assert.equal(citationMatchesArtifact(citation, diff), true);
 	assert.equal(citationMatchesArtifact({ ...citation, path: "src/Other.java" }, diff), false);
-	assert.equal(citationMatchesArtifact({ ...citation, startLine: 11 }, diff), false);
-	assert.equal(citationMatchesArtifact({ ...citation, endLine: 12 }, diff), false);
+	assert.equal(citationMatchesArtifact({ ...citation, side: "OLD" }, diff), false);
+	assert.deepEqual(resolveQuote({ ...citation, startLine: 11, endLine: 12 }, diff), {
+		quote: " insecure();",
+		startLine: 10,
+		endLine: 10,
+	});
 });
 
-void test("a quote may drop the diff marker but must preserve indentation", () => {
+void test("a quote may drop the diff marker and read the spacing differently; the text must match", () => {
 	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
 	const diff =
 		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] +    insecure();\n";
 
-	assert.notEqual(describeCitationMismatch({ ...citation, quote: "insecure();" }, diff), null);
+	// The coordinate pins the line, so spacing cannot confuse two lines; the record is the line's bytes.
+	assert.deepEqual(resolveQuote({ ...citation, quote: "insecure();" }, diff), {
+		quote: "    insecure();",
+	});
 	assert.equal(describeCitationMismatch({ ...citation, quote: "    insecure();" }, diff), null);
 	assert.equal(describeCitationMismatch({ ...citation, quote: "+    insecure();" }, diff), null);
 	// Different text at that coordinate is still refused, trimmed or not.
@@ -242,30 +250,83 @@ void test("a quote may drop the diff marker but must preserve indentation", () =
 	);
 });
 
-void test("a matching diff quote is stored as the content its lines carry, markers dropped", () => {
+void test("a matching diff quote is recorded as the content its lines carry, markers dropped", () => {
 	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
 	const diff =
 		"diff --git a/run.sh b/run.sh\n+++ b/run.sh\n@@ -10,2 +10,2 @@\n[L10] +    -flag --now\n[L11] +  next\n";
 	const cited = { ...citation, path: "run.sh", endLine: 11 };
+	const mismatch = (result: ReturnType<typeof resolveQuote>) =>
+		"mismatch" in result ? result.mismatch : "";
 	// Admission reads the blob at the revision, where no marker exists; so the quote must not carry one.
-	assert.equal(
-		quoteAsContent({ ...cited, quote: "+    -flag --now\n+  next" }, diff),
-		"    -flag --now\n  next",
+	assert.deepEqual(resolveQuote({ ...cited, quote: "+    -flag --now\n+  next" }, diff), {
+		quote: "    -flag --now\n  next",
+	});
+	assert.deepEqual(resolveQuote({ ...cited, quote: "    -flag --now\n  next" }, diff), {
+		quote: "    -flag --now\n  next",
+	});
+	// Coordinates alone record the lines.
+	assert.deepEqual(resolveQuote({ ...cited, quote: "" }, diff), {
+		quote: "    -flag --now\n  next",
+	});
+	assert.match(mismatch(resolveQuote({ ...cited, quote: "", endLine: 12 }, diff)), /no \[L12\]/);
+	// What does not match is refused with what the line reads.
+	assert.match(
+		mismatch(resolveQuote({ ...cited, quote: "+    -flag\n+  next" }, diff)),
+		/\[L10\] reads/,
 	);
-	assert.equal(
-		quoteAsContent({ ...cited, quote: "    -flag --now\n  next" }, diff),
-		"    -flag --now\n  next",
+});
+
+void test("a quote is recorded as the artifact spells it: JSON escapes and non-breaking spaces", () => {
+	const { side: _side, ...plain } = onlyCitation(
+		normalizeObservation(baseObservation()).evidence.citations,
 	);
-	// What does not match is left as quoted, for the refusal to name.
-	assert.equal(
-		quoteAsContent({ ...cited, quote: "+    -flag\n+  next" }, diff),
-		"+    -flag\n+  next",
+	const citation = { ...plain, sourceKind: "scm.linked-work-items", startLine: 2, endLine: 2 };
+	const mismatch = (result: ReturnType<typeof resolveQuote>) =>
+		"mismatch" in result ? result.mismatch : "";
+	const serialized =
+		'{\n  "body" : "## Criteria\\n- [x] stored in `diagrams/`\\n- say \\"hi\\""\n}\n';
+	// The model quotes the text it read; the record is the escaped form the file holds.
+	assert.deepEqual(resolveQuote({ ...citation, quote: '- say "hi"' }, serialized), {
+		quote: '- say \\"hi\\"',
+	});
+	assert.deepEqual(
+		resolveQuote({ ...citation, quote: "- [x] stored in `diagrams/`" }, serialized),
+		{
+			quote: "- [x] stored in `diagrams/`",
+		},
 	);
-	// A non-diff citation has no markers to drop.
-	assert.equal(
-		quoteAsContent({ ...citation, sourceKind: "scm.pull-request.core", quote: "+x" }, "+x\n"),
-		"+x",
+	// A non-breaking space read as a space still records the artifact's own byte.
+	const nbsp = "* Launch app and open\u00a0`Venues`.\n";
+	const first = { ...citation, startLine: 1, endLine: 1 };
+	assert.deepEqual(resolveQuote({ ...first, quote: "* Launch app and open `Venues`." }, nbsp), {
+		quote: "* Launch app and open\u00a0`Venues`.",
+	});
+	// A blank line read with a stray space, and non-breaking spaces read as spaces, across lines.
+	const steps = "## Testing\n\n1. Launch app and open\u00a0**Coupons**\u00a0tab.\n2. Verify.\n";
+	assert.deepEqual(
+		resolveQuote(
+			{
+				...citation,
+				startLine: 1,
+				endLine: 4,
+				quote: "## Testing\n \n1. Launch app and open **Coupons** tab.\n2. Verify.",
+			},
+			steps,
+		),
+		{ quote: "## Testing\n\n1. Launch app and open\u00a0**Coupons**\u00a0tab.\n2. Verify." },
 	);
+	// Coordinates alone record the line, up to a bound.
+	assert.deepEqual(resolveQuote({ ...first, quote: "" }, nbsp), {
+		quote: "* Launch app and open\u00a0`Venues`.",
+	});
+	assert.match(
+		mismatch(resolveQuote({ ...first, quote: "" }, `${"x".repeat(2001)}\n`)),
+		/cite fewer lines or quote a fragment/,
+	);
+	// A quote across the body's line breaks is a reading of the escaped form and resolves to it.
+	assert.deepEqual(resolveQuote({ ...citation, quote: "## Criteria\n- [x] stored" }, serialized), {
+		quote: "## Criteria\\n- [x] stored",
+	});
 });
 
 void test("a quote from the other side of the change is refused, however it is written", () => {
@@ -303,20 +364,32 @@ void test("a refused citation says which of the coordinate, the side and the tex
 		"diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n";
 
 	assert.equal(describeCitationMismatch(citation, diff), null);
-	// The coordinate is not in the diff at all.
+	// The coordinate is not in the diff, but the text is, once: it is recorded where it is.
+	assert.deepEqual(resolveQuote({ ...citation, startLine: 11, endLine: 11 }, diff), {
+		quote: " insecure();",
+		startLine: 10,
+		endLine: 10,
+	});
+	// Neither the coordinate nor the text is in the diff.
 	assert.match(
-		describeCitationMismatch({ ...citation, startLine: 11, endLine: 11 }, diff) ?? "",
-		/no \[L11] on the NEW side of src\/Auth\.java/,
+		describeCitationMismatch({ ...citation, startLine: 11, endLine: 11, quote: "gone();" }, diff) ??
+			"",
+		/no \[L11] on that side of that path/,
 	);
 	// The coordinate is there and says something else, so the refusal shows both.
 	assert.match(
 		describeCitationMismatch({ ...citation, quote: "+ secure();" }, diff) ?? "",
 		/\[L10] reads "\+ insecure\(\);", not "\+ secure\(\);"/,
 	);
-	// The quote and the line span disagree.
+	// The quote and the line span disagree, but the block occurs once: recorded where it is.
+	assert.deepEqual(resolveQuote({ ...citation, endLine: 12 }, diff), {
+		quote: " insecure();",
+		startLine: 10,
+		endLine: 10,
+	});
 	assert.match(
-		describeCitationMismatch({ ...citation, endLine: 12 }, diff) ?? "",
-		/quote is 1 line\(s\) and the citation covers 3/,
+		describeCitationMismatch({ ...citation, endLine: 12, quote: "gone();\nalso();" }, diff) ?? "",
+		/quote is 2 line\(s\) and the citation covers 3/,
 	);
 });
 
@@ -355,10 +428,9 @@ void test("contradictory axes are rejected, not silently corrected", () => {
 			/explicit null/,
 		);
 	}
-	assert.throws(
-		() => normalizeObservation(baseObservation({ assessment: "GOOD" })),
-		/null severity/,
-	);
+	// A severity beside a POSITIVE outcome is surplus, dropped rather than refused; a NEGATIVE one
+	// without a severity is a contradiction.
+	assert.equal(normalizeObservation(baseObservation({ assessment: "GOOD" })).severity, null);
 	assert.throws(
 		() => normalizeObservation(baseObservation({ severity: null })),
 		/invalid severity/,
@@ -389,7 +461,7 @@ const goodSearch = {
 };
 
 void test("an ABSENT observation must record where it searched", () => {
-	assert.throws(() => normalizeObservation(absentObservation(undefined)), /exactly search/);
+	assert.throws(() => normalizeObservation(absentObservation(undefined)), /must record its search/);
 	assert.throws(
 		() => normalizeObservation(absentObservation({ ...goodSearch, consulted: [] })),
 		/at least one source/,
@@ -407,17 +479,15 @@ void test("an ABSENT observation must record where it searched", () => {
 	assert.deepEqual(out.evidence.search?.consulted, ["scm.review-threads"]);
 });
 
-void test("a non-ABSENT observation rejects an exhaustive-search branch", () => {
+void test("a search recorded beside a non-ABSENT claim is surplus and dropped, not refused", () => {
 	assert.doesNotThrow(() => normalizeObservation(baseObservation()));
 	assert.equal("search" in normalizeObservation(baseObservation()).evidence, false);
-	assert.throws(
-		() =>
-			normalizeObservation({
-				...baseObservation(),
-				evidence: { ...baseObservation().evidence, search: goodSearch },
-			}),
-		/exactly citations/,
-	);
+	const withSurplus = normalizeObservation({
+		...baseObservation(),
+		evidence: { ...baseObservation().evidence, search: goodSearch },
+	});
+	assert.equal("search" in withSurplus.evidence, false);
+	assert.equal(withSurplus.evidence.citations.length, 1);
 });
 
 void test("ABSENT is refused unless the search covered every source the practice asserts absence over", () => {
@@ -519,13 +589,16 @@ void test("a claim about an earlier review is bound to the staged history like a
 		describeCitationMismatch({ ...invented, startLine: 3, endLine: 3 }, `${bytes}\n`),
 		"the artifact has 1 line(s), so there is no [L3]",
 	);
-	// A quote that spans a serialized body's line breaks can never be found; the refusal says how to.
+	// A quote across a serialized body's line breaks is a reading of the escaped form, and resolves to it;
+	// text that is not there at all is refused with how to quote such a line.
 	const serialized = '{"body": "## Criteria\\n- [x] stored in `diagrams/`\\n- [x] embedded"}\n';
+	assert.deepEqual(
+		resolveQuote({ ...invented, quote: "## Criteria\n- [x] stored in `diagrams/`" }, serialized),
+		{ quote: "## Criteria\\n- [x] stored in `diagrams/`" },
+	);
 	assert.match(
-		describeCitationMismatch(
-			{ ...invented, quote: "## Criteria\n- [x] stored in `diagrams/`" },
-			serialized,
-		) ?? "",
+		describeCitationMismatch({ ...invented, quote: "## Criteria\n- [x] missing" }, serialized) ??
+			"",
 		/^\[L1\] reads .*; this is a JSON string whose line breaks are the two characters \\n, so quote a fragment from between two of them, or spell them as the line does$/,
 	);
 	assert.equal(
@@ -577,7 +650,7 @@ const goodInapplicability = {
 void test("a NOT_APPLICABLE observation must say what rules the practice out", () => {
 	assert.throws(
 		() => normalizeObservation(notApplicableObservation(undefined)),
-		/exactly inapplicability/,
+		/must say why the practice does not apply/,
 	);
 	assert.throws(
 		() => normalizeObservation(notApplicableObservation({ ...goodInapplicability, consulted: [] })),
@@ -837,7 +910,7 @@ void test("normalization preserves the quoted source indentation and trailing sp
 	assert.equal(onlyCitation(normalizeObservation(raw).evidence.citations).quote, quote);
 });
 
-void test("serialized-source citations must quote the specified lines, not elsewhere in the artifact", () => {
+void test("a serialized-source quote at the wrong lines is recorded where it occurs, when that is one place", () => {
 	const citation: NormalizedCitation = {
 		sourceKind: "scm.pull-request.core",
 		artifactPath: "inputs/context/metadata.json",
@@ -847,7 +920,16 @@ void test("serialized-source citations must quote the specified lines, not elsew
 		quote: '"changed_files" : 1',
 	};
 	const content = '{\n  "changed_files" : 1\n}\n';
-	assert.equal(citationMatchesArtifact(citation, content), false);
+	assert.deepEqual(resolveQuote(citation, content), {
+		quote: '"changed_files" : 1',
+		startLine: 2,
+		endLine: 2,
+	});
+	// The same text in two places is not relocated: the refusal names both.
+	assert.match(
+		describeCitationMismatch(citation, `${content}  "changed_files" : 1\n`) ?? "",
+		/it occurs at \[L2\], \[L4\] — cite the one you mean/,
+	);
 	assert.equal(citationMatchesArtifact({ ...citation, startLine: 2, endLine: 2 }, content), true);
 	assert.equal(
 		citationMatchesArtifact(
@@ -878,8 +960,6 @@ void test("normalization preserves raw quote bytes and local preflight matches s
 	const citation = onlyCitation(normalizeObservation(raw).evidence.citations);
 	assert.equal(citation.quote, "  Trivio:  # TODO: Adjust Name\r\n\r\n");
 	assert.equal(describeCitationMismatch(citation, diff), null);
-	onlyCitation(raw.evidence.citations).quote = " \t\n";
-	assert.throws(() => normalizeObservation(raw), /quote is required/);
 });
 
 void test("citation coordinates are bounded and control-only quotes are blank", () => {
@@ -891,9 +971,6 @@ void test("citation coordinates are bounded and control-only quotes are blank", 
 		onlyCitation(raw.evidence.citations).endLine = line;
 		assert.throws(() => normalizeObservation(raw), /endLine/);
 	}
-	const raw = baseObservation();
-	onlyCitation(raw.evidence.citations).quote = "\u001c\u001d\u001e\u001f";
-	assert.throws(() => normalizeObservation(raw), /quote is required/);
 });
 
 void test("annotated source text is not parsed as a header and Unicode separators remain source text", () => {

@@ -55,6 +55,33 @@ void test("the brief shows each captured file under its workspace path, the chan
 	}
 });
 
+void test("each linked issue's text file follows the linked-items record, in number order", () => {
+	const root = workspace({
+		"inputs/context/linked_work_items.json": '{"workItems": []}',
+		"inputs/context/linked_work_items/12.md": "# Twelve\n\nbody\n",
+		"inputs/context/linked_work_items/7.md": "# Seven\n\n- [x] done\n",
+	});
+	try {
+		const brief = buildBrief(root, paths);
+		const order = [
+			"### `inputs/context/linked_work_items.json`",
+			"### `inputs/context/linked_work_items/7.md`",
+			"### `inputs/context/linked_work_items/12.md`",
+		].map((heading) => brief.indexOf(heading));
+		assert.ok(
+			order.every((index) => index >= 0),
+			brief,
+		);
+		assert.deepEqual(
+			order,
+			[...order].toSorted((a, b) => a - b),
+		);
+		assert.match(brief, /```markdown\n\[L1\] # Seven\n\[L2\] \n\[L3\] - \[x\] done\n```/);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 void test("a file over its bound is named with its size instead of shown, and an empty one is skipped", () => {
 	const root = workspace({
 		"inputs/context/metadata.json": '{"title": "t"}',

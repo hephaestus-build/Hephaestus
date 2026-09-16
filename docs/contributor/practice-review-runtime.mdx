@@ -86,8 +86,10 @@ The durable boundaries, which the implementation may reschedule freely behind:
 - **Observations** — the agent reports through `report_observation`; server admission validates it, and
   persistence assigns an occurrence identity and a separate evidence-location grouping key.
 - **Feedback** — after admission, the same agent session reports through `report_feedback` in a closed
-  intervention phase;
-  server admission validates the result without invalidating completed measurement. Admitted feedback,
+  intervention phase; the runner refuses a practice-page card unless the practice is NEGATIVE on as many
+  distinct pieces of work as the composition request's `minDistinctArtifacts`, counting this work and
+  the staged history, so one occurrence stays a note on the work.
+  Server admission validates the result without invalidating completed measurement. Admitted feedback,
   server suppressions, replacements, and placements enter the ledger; a model `WITHHOLD` remains only in
   the bounded job output. The seam itself is
   [ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md).

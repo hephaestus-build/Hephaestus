@@ -130,7 +130,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
 
     private JsonNode payload(ObjectNode metadata) throws Exception {
         var captured = provider.capture(request(metadata), Set.of(KIND));
-        assertThat(captured.files()).containsOnlyKeys(LinkedWorkItemContentSource.OUTPUT_FILE);
+        assertThat(captured.files()).containsKey(LinkedWorkItemContentSource.OUTPUT_FILE);
         return objectMapper.readTree(captured.files().get(LinkedWorkItemContentSource.OUTPUT_FILE));
     }
 
@@ -197,6 +197,27 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             assertThat(item.get("subIssuesCompleted").asInt()).isEqualTo(1);
             assertThat(root.get("unresolvedReferences")).isEmpty();
             assertThat(root.get("truncated").asBoolean()).isFalse();
+        }
+
+        @Test
+        void shouldWriteEachResolvedIssueAsTextForQuoting() {
+            pullRequestWithBody("Closes #42 and mentions #999");
+            Issue linked = issue(42, "Add token refresh", "## Acceptance criteria\n- [ ] refreshes silently\n");
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.of(linked));
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 999)).thenReturn(Optional.empty());
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(KIND));
+
+            // The body as written, title first, so a line of it can be cited by number; nothing for a
+            // reference this repository does not resolve.
+            assertThat(captured.files())
+                    .containsOnlyKeys(
+                            LinkedWorkItemContentSource.OUTPUT_FILE,
+                            LinkedWorkItemContentSource.ITEMS_PREFIX + "42.md");
+            assertThat(new String(
+                            captured.files().get(LinkedWorkItemContentSource.ITEMS_PREFIX + "42.md"),
+                            java.nio.charset.StandardCharsets.UTF_8))
+                    .isEqualTo("# Add token refresh\n\n## Acceptance criteria\n- [ ] refreshes silently\n");
         }
 
         @Test
