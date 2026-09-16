@@ -414,7 +414,12 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         var captured = provider.capture(request(sampleMetadata()), Set.of(CORE, DIFF));
 
         assertThat(captured.files().keySet())
-                .containsExactlyInAnyOrder("inputs/context/metadata.json", PullRequestContentSource.CHANGE_FILE);
+                .containsExactlyInAnyOrder(
+                        "inputs/context/metadata.json",
+                        PullRequestContentSource.DESCRIPTION_FILE,
+                        PullRequestContentSource.CHANGE_FILE);
+        assertThat(provider.sourceKindFor(PullRequestContentSource.DESCRIPTION_FILE))
+                .isEqualTo(CORE);
         assertThat(captured.immutableIdentities().get(CORE)).isEqualTo(BASE + ":" + HEAD);
         assertThat(captured.immutableIdentities().get(CORE))
                 .isEqualTo(captured.immutableIdentities().get(DIFF));

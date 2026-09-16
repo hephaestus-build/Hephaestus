@@ -21,6 +21,8 @@ import {
 	validateEvidenceSources,
 	validateInapplicabilityScope,
 	validateSearchScope,
+	quoteAsContent,
+	withoutCoordinates,
 } from "../../../main/resources/agent/pi-observation-normalize.ts";
 
 interface ObservationOverrides {
@@ -237,6 +239,32 @@ void test("a quote may drop the diff marker but must preserve indentation", () =
 	assert.equal(
 		describeCitationMismatch({ ...citation, path: "run.sh", quote: "+    -flag --now" }, flagDiff),
 		null,
+	);
+});
+
+void test("a matching diff quote is stored as the content its lines carry, markers dropped", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	const diff =
+		"diff --git a/run.sh b/run.sh\n+++ b/run.sh\n@@ -10,2 +10,2 @@\n[L10] +    -flag --now\n[L11] +  next\n";
+	const cited = { ...citation, path: "run.sh", endLine: 11 };
+	// Admission reads the blob at the revision, where no marker exists; so the quote must not carry one.
+	assert.equal(
+		quoteAsContent({ ...cited, quote: "+    -flag --now\n+  next" }, diff),
+		"    -flag --now\n  next",
+	);
+	assert.equal(
+		quoteAsContent({ ...cited, quote: "    -flag --now\n  next" }, diff),
+		"    -flag --now\n  next",
+	);
+	// What does not match is left as quoted, for the refusal to name.
+	assert.equal(
+		quoteAsContent({ ...cited, quote: "+    -flag\n+  next" }, diff),
+		"+    -flag\n+  next",
+	);
+	// A non-diff citation has no markers to drop.
+	assert.equal(
+		quoteAsContent({ ...citation, sourceKind: "scm.pull-request.core", quote: "+x" }, "+x\n"),
+		"+x",
 	);
 });
 
@@ -477,12 +505,32 @@ void test("a claim about an earlier review is bound to the staged history like a
 	assert.doesNotThrow(() => validateEvidenceSources(observation, staged, artifacts));
 	const bytes = '{"observations":[{"recurrenceKey": "rec-1","title":"Caught and ignored"}]}';
 	assert.equal(citationMatchesArtifact(onlyCitation(observation.evidence.citations), bytes), true);
+	const invented = {
+		...onlyCitation(observation.evidence.citations),
+		quote: '"recurrenceKey": "invented"',
+	};
+	assert.equal(citationMatchesArtifact(invented, bytes), false);
+	// The refusal shows what the cited lines hold: a body serialized into one JSON line is one line.
 	assert.equal(
-		citationMatchesArtifact(
-			{ ...onlyCitation(observation.evidence.citations), quote: '"recurrenceKey": "invented"' },
-			bytes,
-		),
-		false,
+		describeCitationMismatch(invented, bytes),
+		`[L1] reads ${JSON.stringify(bytes)}, not ${JSON.stringify(invented.quote)}`,
+	);
+	assert.equal(
+		describeCitationMismatch({ ...invented, startLine: 3, endLine: 3 }, `${bytes}\n`),
+		"the artifact has 1 line(s), so there is no [L3]",
+	);
+	// A quote that spans a serialized body's line breaks can never be found; the refusal says how to.
+	const serialized = '{"body": "## Criteria\\n- [x] stored in `diagrams/`\\n- [x] embedded"}\n';
+	assert.match(
+		describeCitationMismatch(
+			{ ...invented, quote: "## Criteria\n- [x] stored in `diagrams/`" },
+			serialized,
+		) ?? "",
+		/^\[L1\] reads .*; this is a JSON string whose line breaks are the two characters \\n, so quote a fragment from between two of them, or spell them as the line does$/,
+	);
+	assert.equal(
+		describeCitationMismatch({ ...invented, quote: "- [x] stored in `diagrams/`" }, serialized),
+		null,
 	);
 });
 
@@ -886,4 +934,41 @@ void test("normalization preserves nonblank citation path identifiers", () => {
 		onlyCitation(blank.evidence.citations)[field] = " \t\n";
 		assert.throws(() => normalizeObservation(blank), new RegExp(`${field} is required`));
 	}
+});
+
+void test("a quote copied with the brief's line coordinates is stored without them", () => {
+	assert.equal(withoutCoordinates("[L15] to test the winner", 15), "to test the winner");
+	assert.equal(withoutCoordinates("[L15] first\n[L16] second\n", 15), "first\nsecond\n");
+	// A coordinate that names another line is text, and stays.
+	assert.equal(withoutCoordinates("[L9] elsewhere", 15), "[L9] elsewhere");
+	assert.equal(withoutCoordinates("plain", 3), "plain");
+});
+
+void test("the pinned change file is not a quotable artifact; the refusal names the two right places", () => {
+	assert.throws(
+		() =>
+			normalizeObservation({
+				practiceSlug: "p",
+				summary: "Empty change",
+				assessmentStatus: "NOT_APPLICABLE",
+				presence: null,
+				assessment: null,
+				severity: null,
+				evidenceRationale: "r",
+				evidence: {
+					citations: [
+						{
+							sourceKind: "scm.pull-request.diff",
+							artifactPath: "inputs/context/change.json",
+							path: "change.json",
+							side: "NEW",
+							startLine: 2,
+							quote: '"base_sha" : "a"',
+						},
+					],
+					inapplicability: { consulted: ["scm.pull-request.diff"], subject: "s", ruledOutBy: "r" },
+				},
+			}),
+		/not quotable.*work\/change\/diff\.patch.*metadata\.json/,
+	);
 });

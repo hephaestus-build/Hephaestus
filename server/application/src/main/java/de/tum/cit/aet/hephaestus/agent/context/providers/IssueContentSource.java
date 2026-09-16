@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -176,6 +177,10 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
                     .sorted()
                     .forEach(assignees::add);
             writeJson(files, "metadata.json", meta);
+            // The description as written, for quoting; metadata.json carries it escaped, for programs.
+            files.put(
+                    OUTPUT_PREFIX + "description.md",
+                    (issue.getBody() == null ? "" : issue.getBody()).getBytes(StandardCharsets.UTF_8));
             completeness.put(CORE, SourceCompleteness.COMPLETE);
             if (issue.getLastSyncAt() != null) {
                 observedAt.put(CORE, issue.getLastSyncAt());
@@ -227,7 +232,9 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
 
     private void writeJson(Map<String, byte[]> files, String name, Object node) {
         try {
-            files.put(OUTPUT_PREFIX + name, objectMapper.writeValueAsBytes(node));
+            files.put(
+                    OUTPUT_PREFIX + name,
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(node));
         } catch (Exception e) {
             throw new JobPreparationException("Failed to serialize " + name + ": " + e.getMessage(), e);
         }

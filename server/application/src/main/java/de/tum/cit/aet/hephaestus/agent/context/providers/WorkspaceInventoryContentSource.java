@@ -168,7 +168,7 @@ public class WorkspaceInventoryContentSource implements EvidenceSource {
         boolean truncated = issues.size() >= MAX_PER_TYPE || pullRequests.size() >= MAX_PER_TYPE;
         root.put("truncated", truncated);
 
-        files.put(OUTPUT_FILE, objectMapper.writeValueAsBytes(root));
+        files.put(OUTPUT_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
         log.info(
                 "Project inventory: {} issue(s) + {} PR(s), truncated={}, repoId={}",
                 issuesEmitted,
@@ -232,7 +232,7 @@ public class WorkspaceInventoryContentSource implements EvidenceSource {
         boolean truncated = perTypeTruncated || repoCapHit;
         root.put("truncated", truncated);
 
-        files.put(OUTPUT_FILE, objectMapper.writeValueAsBytes(root));
+        files.put(OUTPUT_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
         log.info(
                 "Workspace-wide project inventory: {} issue(s) + {} PR(s) across {} repo(s), truncated={}, workspaceId={}",
                 issuesEmitted,

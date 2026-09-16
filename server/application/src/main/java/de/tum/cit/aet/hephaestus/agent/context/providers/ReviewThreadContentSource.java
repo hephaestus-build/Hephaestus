@@ -167,7 +167,9 @@ public class ReviewThreadContentSource implements EvidenceSource {
                 root.path("threads").isEmpty() && root.path("reviewDecisions").isEmpty();
         boolean truncated = root.path("truncated").asBoolean();
         return new EvidenceContribution(
-                Map.of(OUTPUT_PREFIX + FILE_NAME, objectMapper.writeValueAsBytes(root)),
+                Map.of(
+                        OUTPUT_PREFIX + FILE_NAME,
+                        objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root)),
                 Map.of(KIND, truncated ? SourceCompleteness.PARTIAL : SourceCompleteness.COMPLETE),
                 Map.of(),
                 Map.of(),

@@ -172,7 +172,8 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
             unresolved.forEach(unresolvedRefs::add);
             root.put("truncated", numbers.size() > MAX_ITEMS);
 
-            Map<String, byte[]> files = Map.of(OUTPUT_FILE, objectMapper.writeValueAsBytes(root));
+            Map<String, byte[]> files = Map.of(
+                    OUTPUT_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
             log.info("Linked work items: wrote {} item(s), unresolved={}", items.size(), unresolved.size());
             return new EvidenceContribution(
                     files,

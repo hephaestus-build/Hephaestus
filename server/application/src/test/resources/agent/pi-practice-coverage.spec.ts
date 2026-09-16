@@ -5,9 +5,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { PracticeCoverageLedger } from "../../../main/resources/agent/pi-practice-coverage.ts";
-import { mapConcurrent } from "../../../main/resources/agent/pi-review-tree.ts";
 
-void test("a watchdog abort leaves a complete atomic coverage snapshot", async () => {
+void test("an abort after two practices leaves a complete atomic coverage snapshot", () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-practice-coverage-"));
 	try {
 		const eligible = ["a", "b", "c", "d"];
@@ -21,15 +20,11 @@ void test("a watchdog abort leaves a complete atomic coverage snapshot", async (
 			outcomes: eligible.map((practiceSlug) => ({ practiceSlug, outcome: "NOT_REACHED" })),
 		});
 
-		await mapConcurrent(
-			eligible,
-			1,
-			(slug, index) => {
-				ledger.markEvaluated([slug]);
-				if (index === 1) abort.abort();
-			},
-			abort.signal,
-		);
+		for (const [index, slug] of eligible.entries()) {
+			if (abort.signal.aborted) break;
+			ledger.markEvaluated([slug]);
+			if (index === 1) abort.abort();
+		}
 
 		assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), {
 			eligible: 4,

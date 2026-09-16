@@ -24,7 +24,7 @@ here. Mount isolation is defined under [Path conventions](#path-conventions).
 │   ├── sources/                     #   Integration-namespaced source materialisations (ADR 0020).
 │   │   └── scm/repo/                #   Pinned, read-only SCM checkout and sanitized Git history.
 │   ├── context/                     #   Stored records as JSON, populated by the ContentSource SPI.
-│   │                                #   Files: metadata.json, change.json, comments.json, linked_work_items.json,
+│   │                                #   Files: metadata.json, description.md, change.json, comments.json, linked_work_items.json,
 │   │                                #   review_threads.json, general_comments.json, project_inventory.json,
 │   │                                #   conversation_thread.json, document.json + document.md,
 │   │                                #   outline/index.json + outline/{collection}/{doc}.md — whichever
@@ -36,6 +36,7 @@ here. Mount isolation is defined under [Path conventions](#path-conventions).
 ├── work/                            # AGENT + PRECOMPUTE SCRATCH. Never collected back into SQL.
 │   ├── change/                      #   The change view pi-change.ts derives from the checkout with git:
 │   │                                #   diff.patch ([L<n>]-annotated), diff_stat.txt, files.json, commits.json.
+│   ├── notes/review.md              #   What the review has recorded, appended by the runner; read back after compaction.
 │   ├── precompute/                  #   Per-practice precompute scripts (TypeScript, run on Node).
 │   ├── precompute-out/              #   Precompute runtime output (logs, structured hints).
 │   ├── analysis/practices/          #   Per-practice analysis output (holds the .gitkeep marker).
@@ -57,7 +58,8 @@ here. Mount isolation is defined under [Path conventions](#path-conventions).
 ├── pi-precompute.ts                 # Precompute launcher using task-declared paths.
 ├── pi-observation-normalize.ts      # Normalises sandbox observations before out/ is written.
 ├── pi-runner-usage.ts               # Token-usage accounting sidecar.
-├── pi-runner-timings.ts             # Attempt-timing sidecar.
+├── pi-review-brief.ts               # The first turn's brief: the captured records and the change view, line-numbered.
+├── pi-review-turns.ts               # Practices as turns per catalog group; the budget's fair shares.
 ├── pi-runner-composition.ts         # Feedback-composition contract and coherence rules.
 ├── feedback-composer.md             # Composition-stage prompt; digested with the prompt scaffolding.
 ├── node_modules -> /opt/pi-sdk/…    # Symlink baked into the agent image, not staged.
@@ -79,7 +81,9 @@ execute on Node; see
 - **`inputs/context/`** — the stored records of the artifact under review, projected to JSON with no
   narrative, no aggregates and no excerpts: a title, a body, a list of comments, a list of threads.
   `change.json` pins the reviewed range (`base_sha`, `head_sha`) and is the artifact a citation of the
-  change names; the change itself is read from the checkout. A source with nothing to report still
+  change names; the change itself is read from the checkout. `description.md` is the description as its
+  author wrote it, for quoting; `metadata.json` carries the same text escaped, for programs. Every
+  projection is pretty-printed, one field per line, so a line citation into it is possible. A source with nothing to report still
   writes its file, holding an empty list: "the record was read and held nothing" is a fact a review may
   reason from, and "the file is not there" is not.
 - **`inputs/history/`** — earlier observations and feedback, present on every review. Never reported
@@ -224,17 +228,17 @@ outer boundary.
 
 ## Practice review tools
 
-Each session's tool set is fixed when the runner creates it, in `pi-runner.ts`:
-
-| Session | Native Pi tools | Reporting tools |
-|---------|-----------------|-----------------|
-| Reconnaissance | `read`, `grep`, `find`, `ls`, `write`, `edit`, `bash` | none |
-| Practice observer and retry | the same seven | `report_observation` |
-| Composer | `read`, `grep`, `find`, `ls` | `report_feedback`, `report_summary` |
-
-The composer writes feedback from observations the server has already admitted, so it reads and
-reports but has no `write`, `edit` or `bash`. The mentor runner exposes no native tool at all: its
-context arrives through `fetch_context`, and it links evidence with `link_observation`.
+One review is one session, and its tool set is fixed when the runner creates it, in `pi-runner.ts`:
+the native Pi tools `read`, `grep`, `find`, `ls`, `write`, `edit` and `bash`, plus `report_observation`
+for the measuring turns and, when composition was requested, `report_feedback` and `report_summary` for
+the composition turn. The two feedback tools store nothing until the server has admitted the recorded
+observations. `report_observation` and `report_feedback` take a list — several observations or units in
+one call, each stored or refused on its own with the reason — and accept that list as a JSON string as
+well as an array, because a smaller model serialises it either way. A refused citation is answered with
+what the cited lines really hold, and a quote of the change copied with its `+`/`-` markers is recorded
+as the line's content, because admission reads the blob at the revision, where no marker exists. The
+mentor runner exposes no native tool at all: its context arrives through `fetch_context`, and it links
+evidence with `link_observation`.
 
 The image provides Bash, Git, ripgrep, fd-find, and standard shell utilities. `PI_OFFLINE=1`
 disables tool downloads. Use `work/` or `$TMPDIR` for scratch files; scratch files are not

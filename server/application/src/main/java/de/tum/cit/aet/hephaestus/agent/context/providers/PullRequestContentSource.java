@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -63,6 +64,13 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
      * this file is what pins the range those views are of, and the artifact a diff citation names.
      */
     public static final String CHANGE_FILE = OUTPUT_PREFIX + "change.json";
+
+    /**
+     * The description as its author wrote it, one line per line. {@code metadata.json} carries the same
+     * text as a JSON string for programs; a review quotes the description from here, where a sentence is
+     * the bytes it reads, not their escaped form.
+     */
+    public static final String DESCRIPTION_FILE = OUTPUT_PREFIX + "description.md";
 
     @Override
     public SourceKind sourceKindFor(String path) {
@@ -138,6 +146,9 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         }
         if (selectedKinds.contains(CORE)) {
             storeMetadata(files, pullRequest, metadata);
+            files.put(
+                    DESCRIPTION_FILE,
+                    (pullRequest.getBody() == null ? "" : pullRequest.getBody()).getBytes(StandardCharsets.UTF_8));
             completeness.put(CORE, SourceCompleteness.COMPLETE);
             if (pullRequest.getLastSyncAt() != null) {
                 observedAt.put(CORE, pullRequest.getLastSyncAt());

@@ -97,7 +97,7 @@ public class ConversationThreadContentSource implements EvidenceSource, ReviewCo
 
         ObjectNode payload = projection.buildThreadPayload(workspaceId, channelId, threadTs);
         try {
-            files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(payload));
+            files.put(OUTPUT_KEY, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(payload));
         } catch (Exception e) {
             throw new JobPreparationException("Failed to serialize conversation_thread.json: " + e.getMessage(), e);
         }

@@ -228,7 +228,10 @@ export function normalizeEvidence(
 			throw new Error("historical citations require scm.repository.tree and a full commit SHA");
 		const startLine = Number(fields.startLine);
 		const endLine = fields.endLine == null ? startLine : Number(fields.endLine);
-		const quote = typeof fields.quote === "string" ? fields.quote : "";
+		const quote = withoutCoordinates(
+			typeof fields.quote === "string" ? fields.quote : "",
+			startLine,
+		);
 		if (!sourceKind) throw new Error("evidence citation sourceKind is required");
 		if (!artifactPath.trim()) throw new Error("evidence citation artifactPath is required");
 		if (sourceKind === "scm.repository.tree" && !artifactPath.endsWith("/.git/HEAD"))
@@ -236,6 +239,12 @@ export function normalizeEvidence(
 				"repository citations must use the captured .git/HEAD artifact and a repository-relative path",
 			);
 		if (!path.trim()) throw new Error("evidence citation path is required");
+		if (sourceKind === "scm.pull-request.diff" && /(^|\/)change\.json$/.test(path))
+			throw new Error(
+				"change.json pins the reviewed range and is not quotable: quote a changed line from " +
+					"work/change/diff.patch with its repository path and OLD/NEW side, or cite metadata.json " +
+					"(scm.pull-request.core) for the pull request's own facts",
+			);
 		if (sourceKind === "scm.pull-request.diff" && declaredSide !== "OLD" && declaredSide !== "NEW")
 			throw new Error("diff evidence citation side must be OLD or NEW");
 		if (sourceKind !== "scm.pull-request.diff" && declaredSide !== null)
@@ -566,14 +575,47 @@ export function describeCitationMismatch(
 	content: string,
 ): string | null {
 	if (citation.sourceKind !== "scm.pull-request.diff") {
-		const citedText = content
-			.split(/(?<=\n)/)
-			.slice(citation.startLine - 1, citation.endLine)
-			.join("");
-		return citedText.includes(citation.quote)
-			? null
-			: "that text is not in the artifact at the cited lines";
+		const lines = content.split(/(?<=\n)/);
+		const citedText = lines.slice(citation.startLine - 1, citation.endLine).join("");
+		if (citedText.includes(citation.quote)) return null;
+		if (citation.startLine > lines.length) {
+			return `the artifact has ${lines.length} line(s), so there is no [L${citation.startLine}]`;
+		}
+		// What the lines really hold, so the next quote can be copied from them. A body serialized into
+		// one JSON line reads as one line, escapes and all: the excerpt shows it, and the hint says how
+		// to quote it, since a quote that spans its line breaks can never be found.
+		const where = `[L${citation.startLine}]${citation.endLine === citation.startLine ? "" : `-[L${citation.endLine}]`}`;
+		const hint = citedText.includes("\\n")
+			? "; this is a JSON string whose line breaks are the two characters \\n, so quote a fragment from between two of them, or spell them as the line does"
+			: "";
+		return `${where} reads ${excerpt(citedText.replace(/\n$/, ""))}, not ${excerpt(citation.quote)}${hint}`;
 	}
+	const citedLines = diffLinesOf(citation, content);
+	if (typeof citedLines === "string") return citedLines;
+	const citedLineCount = citation.endLine - citation.startLine + 1;
+	const quoteLines = citation.quote.split(/\r\n|\r|\n/);
+	if (quoteLines.length === citedLineCount + 1 && quoteLines.at(-1) === "") quoteLines.pop();
+	if (quoteLines.length !== citedLineCount) {
+		return `the quote is ${quoteLines.length} line(s) and the citation covers ${citedLineCount}`;
+	}
+	for (const [index, quoteLine] of quoteLines.entries()) {
+		const lineNumber = citation.startLine + index;
+		const diffLine = citedLines.get(lineNumber);
+		if (diffLine === undefined) {
+			return `the diff has no [L${lineNumber}] on the ${citation.side ?? "NEW"} side of ${citation.path}`;
+		}
+		if (!quotesDiffLine(diffLine, withoutOwnCoordinate(quoteLine, lineNumber))) {
+			return `[L${lineNumber}] reads ${excerpt(diffLine)}, not ${excerpt(quoteLine)}`;
+		}
+	}
+	return null;
+}
+
+/**
+ * The annotated diff's lines on the cited side of the cited path, by line number, or why they could
+ * not be read.
+ */
+function diffLinesOf(citation: NormalizedCitation, content: string): Map<number, string> | string {
 	let oldPath: string | null = null;
 	let newPath: string | null = null;
 	const citedLines = new Map<number, string>();
@@ -599,28 +641,47 @@ export function describeCitationMismatch(
 			if (side === citation.side && path === citation.path) citedLines.set(lineNumber, line);
 		}
 	}
-	const citedLineCount = citation.endLine - citation.startLine + 1;
-	const quoteLines = citation.quote.split(/\r\n|\r|\n/);
-	if (quoteLines.length === citedLineCount + 1 && quoteLines.at(-1) === "") quoteLines.pop();
-	if (quoteLines.length !== citedLineCount) {
-		return `the quote is ${quoteLines.length} line(s) and the citation covers ${citedLineCount}`;
-	}
-	for (const [index, quoteLine] of quoteLines.entries()) {
-		const lineNumber = citation.startLine + index;
-		const diffLine = citedLines.get(lineNumber);
-		if (diffLine === undefined) {
-			return `the diff has no [L${lineNumber}] on the ${citation.side ?? "NEW"} side of ${citation.path}`;
-		}
-		if (!quotesDiffLine(diffLine, withoutOwnCoordinate(quoteLine, lineNumber))) {
-			return `[L${lineNumber}] reads ${excerpt(diffLine)}, not ${excerpt(quoteLine)}`;
-		}
-	}
-	return null;
+	return citedLines;
 }
 
 /** Diff markers are presentation; indentation and content are evidence. */
 function quotesDiffLine(diffLine: string, quoted: string): boolean {
 	return diffLine.length > 0 && (diffLine === quoted || diffLine.slice(1) === quoted);
+}
+
+/**
+ * A matching citation's quote as the content its lines carry. A diff quote copied with its `+`/`-`
+ * markers passes the check above, but admission reads the blob at the revision, where no marker
+ * exists; storing the content is what makes the two checks agree. Any other citation, and a diff
+ * citation that does not match, is returned as quoted.
+ */
+export function quoteAsContent(citation: NormalizedCitation, content: string): string {
+	if (citation.sourceKind !== "scm.pull-request.diff") return citation.quote;
+	if (describeCitationMismatch(citation, content) !== null) return citation.quote;
+	const citedLines = diffLinesOf(citation, content);
+	if (typeof citedLines === "string") return citation.quote;
+	const lines: string[] = [];
+	for (let lineNumber = citation.startLine; lineNumber <= citation.endLine; lineNumber++) {
+		lines.push((citedLines.get(lineNumber) ?? "").slice(1));
+	}
+	return lines.join("\n");
+}
+
+/**
+ * The quote without the `[L<n>] ` coordinates the brief and the diff view print in front of every
+ * line. A coordinate that names the line it sits on is presentation, copied along with the text;
+ * one that does not is left in place, so a mismatch is reported as the text it is.
+ */
+export function withoutCoordinates(quote: string, startLine: number): string {
+	if (!Number.isSafeInteger(startLine)) return quote;
+	return quote
+		.split(/(?<=\r\n|\r|\n)/)
+		.map((line, index) => {
+			const ending = line.match(/\r\n|\r|\n$/)?.[0] ?? "";
+			const text = ending ? line.slice(0, -ending.length) : line;
+			return withoutOwnCoordinate(text, startLine + index) + ending;
+		})
+		.join("");
 }
 
 /** A copied annotation must agree with the cited coordinate. */

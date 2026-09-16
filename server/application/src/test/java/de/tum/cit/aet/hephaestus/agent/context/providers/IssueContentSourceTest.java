@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -389,8 +390,10 @@ class IssueContentSourceTest extends BaseUnitTest {
             Map<String, byte[]> files = new LinkedHashMap<>();
             provider.contribute(request(sampleMetadata()), files);
 
-            // No rendered summary: the review reads the issue from its data.
-            assertThat(files).containsOnlyKeys(METADATA_KEY, COMMENTS_KEY);
+            // No rendered summary: the review reads the issue from its data, and its description as written.
+            assertThat(files).containsOnlyKeys(METADATA_KEY, "inputs/context/description.md", COMMENTS_KEY);
+            assertThat(new String(files.get("inputs/context/description.md"), StandardCharsets.UTF_8))
+                    .isEqualTo("Make the catalogue honest.");
 
             JsonNode comments = objectMapper.readTree(files.get(COMMENTS_KEY));
             assertThat(comments).hasSize(1);

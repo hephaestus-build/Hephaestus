@@ -400,7 +400,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
 
     private byte[] serialize(ObjectNode payload, String path) {
         try {
-            return objectMapper.writeValueAsBytes(payload);
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(payload);
         } catch (RuntimeException e) {
             throw new EvidenceCollectionException("Failed to serialize review history: " + path, e);
         }

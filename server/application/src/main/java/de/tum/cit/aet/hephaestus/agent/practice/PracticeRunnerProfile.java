@@ -19,14 +19,12 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-error-text.ts",
             "pi-observation-normalize.ts",
             "pi-practice-coverage.ts",
+            "pi-review-brief.ts",
+            "pi-review-turns.ts",
             "pi-runner-output.ts",
             "pi-runner-usage.ts",
-            "pi-runner-timings.ts",
-            "pi-runner-recording-pace.ts",
             "pi-runner-retry.ts",
             "pi-runner-composition.ts",
-            "pi-review-tree.ts",
-            "pi-session-tree.ts",
             "pi-session-lifecycle.ts",
             SandboxLayout.PROVIDER_HELPER_FILENAME);
 

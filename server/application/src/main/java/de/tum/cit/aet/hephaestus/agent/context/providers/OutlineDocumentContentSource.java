@@ -207,7 +207,7 @@ public class OutlineDocumentContentSource implements EvidenceSource {
             emitted++;
         }
         try {
-            files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(array));
+            files.put(OUTPUT_KEY, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(array));
         } catch (JacksonException e) {
             throw new IllegalStateException("Failed to serialize Outline documents context", e);
         }
@@ -388,7 +388,8 @@ public class OutlineDocumentContentSource implements EvidenceSource {
         }
         ArrayNode unresolvedRefs = root.putArray("unresolvedReferences");
         unresolved.forEach(unresolvedRefs::add);
-        files.put(REVIEW_INDEX_KEY, objectMapper.writeValueAsBytes(root));
+        files.put(
+                REVIEW_INDEX_KEY, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
     }
 
     /**

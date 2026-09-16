@@ -126,6 +126,16 @@ const INTENTIONALLY_MISSING_PATHS = [
 		reason: "a per-run directory created inside the agent workspace",
 	},
 	{
+		document: "docs/contributor/agent/workspace-abi.mdx",
+		value: "description.md",
+		reason: "a captured artifact written into the agent workspace",
+	},
+	{
+		document: "docs/contributor/practice-review-runtime.mdx",
+		value: "work/notes/review.md",
+		reason: "the review's notes file, created inside the agent workspace",
+	},
+	{
 		document: "MIGRATION.md",
 		value: "docker/.env",
 		reason: "a deployment-local secrets file that must stay untracked",

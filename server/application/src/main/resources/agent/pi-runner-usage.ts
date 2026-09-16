@@ -3,7 +3,7 @@
 // Typed against the SDK's own message shapes rather than against a hand-written picture of them, which
 // is how two fields that had never existed came to light: see `responseId` and `reasoningTokens` below.
 //
-// Its own module for the same reason pi-runner-timings.ts is: pi-runner.ts reads /workspace and the
+// Its own module for the same reason pi-review-turns.ts is: pi-runner.ts reads /workspace and the
 // environment at module scope, so the only way to exercise these rules is to have them somewhere a test
 // can call. The rules here decide a bill, which is the strongest reason yet to be able to.
 

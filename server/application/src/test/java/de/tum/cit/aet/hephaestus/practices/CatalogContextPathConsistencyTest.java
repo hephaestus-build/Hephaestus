@@ -27,6 +27,7 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
     /** Workspace-relative files the ContentSources actually write under {@code inputs/context/}. */
     private static final Set<String> REAL_CONTEXT_FILES = Set.of(
             "metadata.json",
+            "description.md", // PullRequestContentSource.DESCRIPTION_FILE — the description as written, for quoting
             "change.json", // PullRequestContentSource.CHANGE_FILE — the pinned base and head of the change
             "comments.json",
             // The raw SQL-only projections (the agent cannot get these from the checkout):
