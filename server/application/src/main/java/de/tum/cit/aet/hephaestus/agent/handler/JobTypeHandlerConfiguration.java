@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -8,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
@@ -31,7 +31,6 @@ import tools.jackson.databind.json.JsonMapper;
 public class JobTypeHandlerConfiguration {
 
     private final JsonMapper objectMapper;
-    private final JobEvidenceFiles jobEvidenceFiles;
     private final PracticeReviewProperties reviewProperties;
     private final WorkspaceContextBuilder workspaceContextBuilder;
     private final TaskEnvelopeWriter taskEnvelopeWriter;
@@ -39,13 +38,11 @@ public class JobTypeHandlerConfiguration {
 
     JobTypeHandlerConfiguration(
             JsonMapper objectMapper,
-            JobEvidenceFiles jobEvidenceFiles,
             PracticeReviewProperties reviewProperties,
             WorkspaceContextBuilder workspaceContextBuilder,
             TaskEnvelopeWriter taskEnvelopeWriter,
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter) {
         this.objectMapper = objectMapper;
-        this.jobEvidenceFiles = jobEvidenceFiles;
         this.reviewProperties = reviewProperties;
         this.workspaceContextBuilder = workspaceContextBuilder;
         this.taskEnvelopeWriter = taskEnvelopeWriter;
@@ -94,8 +91,10 @@ public class JobTypeHandlerConfiguration {
     }
 
     @Bean
-    PracticeReviewPreparation practiceReviewPreparation(PracticeCatalogInjector practiceCatalogInjector) {
-        return new PracticeReviewPreparation(workspaceContextBuilder, practiceCatalogInjector, taskEnvelopeWriter);
+    PracticeReviewPreparation practiceReviewPreparation(
+            PracticeCatalogInjector practiceCatalogInjector, GitRepositoryManager gitRepositoryManager) {
+        return new PracticeReviewPreparation(
+                workspaceContextBuilder, practiceCatalogInjector, taskEnvelopeWriter, gitRepositoryManager);
     }
 
     @Bean
@@ -110,7 +109,6 @@ public class JobTypeHandlerConfiguration {
             ObservationRepository observationRepository) {
         return new PullRequestReviewHandler(
                 objectMapper,
-                jobEvidenceFiles,
                 practiceCatalogInjector,
                 preparation,
                 resultParser,

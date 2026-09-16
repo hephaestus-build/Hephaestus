@@ -23,7 +23,6 @@ export interface ProjectInventory {
 	focal?: { type?: string; number?: number };
 	issues?: InventoryItem[];
 	pullRequests?: InventoryItem[];
-	counts?: { issuesListed?: number; pullRequestsListed?: number };
 	truncated?: boolean;
 }
 
@@ -73,7 +72,6 @@ function parseInventoryItems(value: unknown): InventoryItem[] | undefined {
 export function parseProjectInventory(value: unknown): ProjectInventory | null {
 	if (!isJsonObject(value)) return null;
 	const focal = isJsonObject(value.focal) ? value.focal : undefined;
-	const counts = isJsonObject(value.counts) ? value.counts : undefined;
 	return {
 		repository: optionalString(value.repository),
 		focal: focal && {
@@ -82,10 +80,6 @@ export function parseProjectInventory(value: unknown): ProjectInventory | null {
 		},
 		issues: parseInventoryItems(value.issues),
 		pullRequests: parseInventoryItems(value.pullRequests),
-		counts: counts && {
-			issuesListed: optionalNumber(counts.issuesListed),
-			pullRequestsListed: optionalNumber(counts.pullRequestsListed),
-		},
 		truncated: optionalBoolean(value.truncated),
 	};
 }

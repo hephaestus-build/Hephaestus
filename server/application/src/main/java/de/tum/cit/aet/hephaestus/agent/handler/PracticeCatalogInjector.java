@@ -91,7 +91,6 @@ class PracticeCatalogInjector {
             }
         }
         ArrayNode index = objectMapper.createArrayNode();
-        StringBuilder bundle = new StringBuilder();
         Map<String, String> why = new LinkedHashMap<>();
         revisions.values().stream()
                 .sorted(Comparator.comparing(PracticeRevision::getSlug))
@@ -104,11 +103,6 @@ class PracticeCatalogInjector {
                     files.put(
                             SandboxLayout.PRACTICES_PREFIX + revision.getSlug() + ".md",
                             criteria.getBytes(StandardCharsets.UTF_8));
-                    bundle.append("# ")
-                            .append(revision.getSlug())
-                            .append("\n\n")
-                            .append(criteria)
-                            .append("\n\n---\n\n");
                     if (revision.getWhyItMatters() != null
                             && !revision.getWhyItMatters().isBlank()) {
                         why.put(revision.getSlug(), revision.getWhyItMatters());
@@ -119,9 +113,6 @@ class PracticeCatalogInjector {
         } catch (JacksonException e) {
             throw new JobPreparationException("Failed to serialize composition practice index: " + e.getMessage(), e);
         }
-        files.put(
-                SandboxLayout.PRACTICES_PREFIX + "all-criteria.md",
-                bundle.toString().getBytes(StandardCharsets.UTF_8));
         return Map.copyOf(why);
     }
 
@@ -266,19 +257,10 @@ class PracticeCatalogInjector {
             throw new JobPreparationException("Failed to serialize practice index.json: " + e.getMessage(), e);
         }
 
-        StringBuilder bundle = new StringBuilder();
         for (Practice p : practices) {
             String criteria = p.getCriteria() + renderKnownLimitations(p);
             files.put(SandboxLayout.PRACTICES_PREFIX + p.getSlug() + ".md", criteria.getBytes(StandardCharsets.UTF_8));
-            bundle.append("# ")
-                    .append(p.getSlug())
-                    .append("\n\n")
-                    .append(criteria)
-                    .append("\n\n---\n\n");
         }
-        files.put(
-                SandboxLayout.PRACTICES_PREFIX + "all-criteria.md",
-                bundle.toString().getBytes(StandardCharsets.UTF_8));
 
         files.put(SandboxLayout.ANALYSIS_PRACTICES_PREFIX + ".gitkeep", new byte[0]);
 

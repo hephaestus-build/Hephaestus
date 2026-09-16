@@ -171,6 +171,83 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 .containsEntry(ReviewHistoryContentSource.FEEDBACK_HISTORY, SourceContentState.EMPTY);
     }
 
+    @Nested
+    class TheBoundsEachFileStates {
+
+        @Test
+        void observationsAndFeedbackCarryTheWindowStartAndTheLimitAsValues() {
+            Instant before = Instant.now();
+            JsonNode observations = read(captureObservationHistory().files().get("inputs/history/observations.json"));
+            var feedbackCapture = captureFeedbackHistory();
+            JsonNode feedback = read(feedbackCapture.files().get("inputs/history/feedback.json"));
+
+            // The bound is data the review can compare, not prose it has to parse; how partial the
+            // capture is belongs to the manifest.
+            assertThat(observations.propertyNames()).containsExactlyInAnyOrder("since", "limit", "observations");
+            assertThat(feedback.propertyNames()).containsExactlyInAnyOrder("since", "limit", "feedback");
+            assertThat(observations.get("limit").isInt()).isTrue();
+            assertThat(observations.get("limit").asInt()).isPositive();
+            assertThat(feedback.get("limit").asInt()).isPositive();
+            Instant observationsSince = Instant.parse(observations.get("since").asString());
+            Instant feedbackSince = Instant.parse(feedback.get("since").asString());
+            assertThat(observationsSince).isBefore(before);
+            assertThat(feedbackSince).isBefore(before);
+        }
+
+        @Test
+        void preparedFeedbackCarriesTheLimitOnly() {
+            JsonNode prepared = read(captureFeedbackHistory().files().get("inputs/history/prepared.json"));
+
+            // What is queued has no window: it is everything not yet received, up to the limit.
+            assertThat(prepared.propertyNames()).containsExactlyInAnyOrder("limit", "prepared");
+            assertThat(prepared.get("limit").asInt()).isPositive();
+        }
+    }
+
+    @Test
+    void stagesTheRecordedTextAsItWasWritten() {
+        String rationale = "The practice requires a test; the assessment is BAD -> MAJOR severity band.";
+        String body = "Per the fixed bucketing this is a MINOR severity tier finding.";
+        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+                .thenReturn(List.of(observationWithRationale(rationale)));
+        when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+                .thenReturn(List.of(Feedback.builder()
+                        .channel(FeedbackChannel.IN_CONTEXT)
+                        .body(body)
+                        .deliveredAt(Instant.parse("2026-07-01T09:00:00Z"))
+                        .build()));
+        when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
+                .thenReturn(List.of(Feedback.builder()
+                        .channel(FeedbackChannel.IN_APP)
+                        .threadKey("in-app:99:swallows-errors")
+                        .body(body)
+                        .createdAt(Instant.parse("2026-07-02T09:00:00Z"))
+                        .build()));
+
+        var feedbackCapture = captureFeedbackHistory();
+
+        // History is the record of what was observed and said; rewriting it would stage a record that
+        // never existed.
+        assertThat(read(captureObservationHistory().files().get("inputs/history/observations.json"))
+                        .get("observations")
+                        .get(0)
+                        .get("evidenceRationale")
+                        .asString())
+                .isEqualTo(rationale);
+        assertThat(read(feedbackCapture.files().get("inputs/history/feedback.json"))
+                        .get("feedback")
+                        .get(0)
+                        .get("body")
+                        .asString())
+                .isEqualTo(body);
+        assertThat(read(feedbackCapture.files().get("inputs/history/prepared.json"))
+                        .get("prepared")
+                        .get(0)
+                        .get("body")
+                        .asString())
+                .isEqualTo(body);
+    }
+
     @Test
     void stagesEarlierObservationsWithTheRecurrenceKeyThatLinksThem() {
         when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
@@ -457,12 +534,27 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         return observation(practiceSlug, recurrenceKey, title, null, null);
     }
 
+    private static Observation observationWithRationale(String rationale) {
+        return observation("swallows-errors", "rec-1", "Caught and ignored", null, null, rationale);
+    }
+
     private static Observation observation(
             String practiceSlug,
             String recurrenceKey,
             String title,
             @Nullable ArtifactKind artifactKind,
             @Nullable Long artifactId) {
+        return observation(
+                practiceSlug, recurrenceKey, title, artifactKind, artifactId, "The catch block logs and continues.");
+    }
+
+    private static Observation observation(
+            String practiceSlug,
+            String recurrenceKey,
+            String title,
+            @Nullable ArtifactKind artifactKind,
+            @Nullable Long artifactId,
+            String evidenceRationale) {
         Practice practice = new Practice();
         practice.setSlug(practiceSlug);
         return Observation.builder()
@@ -476,7 +568,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 .artifactKind(artifactKind)
                 .artifactId(artifactId)
                 .observedAt(Instant.parse("2026-07-01T09:00:00Z"))
-                .evidenceRationale("The catch block logs and continues.")
+                .evidenceRationale(evidenceRationale)
                 .build();
     }
 }

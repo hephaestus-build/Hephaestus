@@ -18,7 +18,7 @@
 			"description": "Source contract used to interpret every source state in this manifest."
 		},
 		"catalogDigest": {
-			"const": "ceef3f03a68b1474c593cc4fda1be757f80f5d2609052502aede3246d5ae1cd7",
+			"const": "51d5881fa473f13dd31b75fe8c6784db97a51fc5c9cb7f90935674bbdd36938a",
 			"description": "SHA-256 digest of the exact source catalog used by the runtime."
 		},
 		"artifactKind": {

@@ -206,9 +206,9 @@ export const mockPracticeDefinitionOptions = {
 				{
 					sourceKind: "scm.pull-request.core",
 					displayName: "Pull request details",
-					description: "The pull request record and its ordered commit history.",
+					description: "The pull request record: its fields as the provider holds them.",
 					selectionScope:
-						"One pull request selected by the job, with its mirrored fields and the complete commits.json history over the same pinned review range as the diff. The target and head commit identities are fixed for the captured review. Commit records include subjects, bodies when present, author and committer timestamps, parent counts, and rename-aware changed-file counts for single-parent commits. History is streamed without a commit-count cutoff; unavailable Git history is a collection error.",
+						"One pull request selected by the job, with its mirrored fields: number, title, description, branches, state, draft flag, author and the provider's change counts. Its commits are not projected: the review reads them from the captured repository over the pinned range.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "COMPLETE",
 					supportsExhaustiveEvidence: true,

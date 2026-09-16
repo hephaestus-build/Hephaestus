@@ -224,11 +224,11 @@ void it("linked-work analysis reads only explicitly supplied context, never a re
 		await mkdir(context, { recursive: true });
 		await writeFile(
 			join(legacy, "linked_work_items.json"),
-			JSON.stringify({ workItems: [{ bodyExcerpt: "- [ ] WRONG CONTEXT" }] }),
+			JSON.stringify({ workItems: [{ body: "- [ ] WRONG CONTEXT" }] }),
 		);
 		await writeFile(
 			join(context, "linked_work_items.json"),
-			JSON.stringify({ workItems: [{ bodyExcerpt: "Acceptance criteria\n- [ ] one\n- [ ] two" }] }),
+			JSON.stringify({ workItems: [{ body: "Acceptance criteria\n- [ ] one\n- [ ] two" }] }),
 		);
 		const metadata = {
 			source_branch: "fix-example",

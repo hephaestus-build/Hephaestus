@@ -177,7 +177,7 @@ public class IssueReviewHandler implements JobTypeHandler {
                 + " in "
                 + repoName
                 + ". This is an ISSUE, not a pull request — there is no code diff. Read the issue context files "
-                + "(inputs/context/issue_summary.md, inputs/context/metadata.json, inputs/context/comments.json, and "
+                + "(inputs/context/metadata.json, inputs/context/comments.json, and "
                 + "inputs/context/project_inventory.json for cross-artifact checks like duplicate/overlapping issues), then "
                 + "evaluate each practice in inputs/practices/ against the issue and persist every justified observation via the "
                 + "report_observation tool. Evidence citations should reference the issue thread/metadata, not source files. "

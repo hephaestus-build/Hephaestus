@@ -23,9 +23,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
-import java.io.Closeable;
-import java.io.IOException;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -33,7 +30,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.commons.io.IOUtils;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
@@ -61,10 +57,17 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         return Set.of(CORE, DIFF, COMMENTS);
     }
 
+    /**
+     * The change the review is about, as {@code base_sha} and {@code head_sha}. The container derives
+     * every view of it — the patch, its statistics, its commits — from the checkout with {@code git};
+     * this file is what pins the range those views are of, and the artifact a diff citation names.
+     */
+    public static final String CHANGE_FILE = OUTPUT_PREFIX + "change.json";
+
     @Override
     public SourceKind sourceKindFor(String path) {
         if (path.endsWith("comments.json")) return COMMENTS;
-        if (GitDiffOperations.FILES.stream().anyMatch(path::endsWith)) return DIFF;
+        if (path.equals(CHANGE_FILE)) return DIFF;
         return CORE;
     }
 
@@ -74,7 +77,6 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     private final GitRepositoryManager gitRepositoryManager;
     private final PullRequestRepository pullRequestRepository;
     private final PullRequestReviewCommentRepository reviewCommentRepository;
-    private final GitDiffOperations gitDiffOperations;
     private final ReviewRepositoryPreparer repositoryPreparer;
 
     public PullRequestContentSource(
@@ -82,13 +84,11 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             GitRepositoryManager gitRepositoryManager,
             PullRequestRepository pullRequestRepository,
             PullRequestReviewCommentRepository reviewCommentRepository,
-            GitDiffOperations gitDiffOperations,
             ReviewRepositoryPreparer repositoryPreparer) {
         this.objectMapper = objectMapper;
         this.gitRepositoryManager = gitRepositoryManager;
         this.pullRequestRepository = pullRequestRepository;
         this.reviewCommentRepository = reviewCommentRepository;
-        this.gitDiffOperations = gitDiffOperations;
         this.repositoryPreparer = repositoryPreparer;
     }
 
@@ -99,7 +99,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
 
     @Override
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
-        throw new UnsupportedOperationException("Pull request diffs are staged from disk; use capture()");
+        throw new UnsupportedOperationException("Pull request evidence records its capture state; use capture()");
     }
 
     @Override
@@ -151,43 +151,19 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
                     COMMENTS, comments.comments().isEmpty() ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
         }
         if (prepared != null) {
-            var key = new RepositoryKey(job.getWorkspace().getId(), repositoryId);
-            String[] range = {prepared.target(), prepared.head()};
-            Map<String, Path> onDisk = new HashMap<>();
-            List<Closeable> captures = new ArrayList<>();
-            try {
-                if (selectedKinds.contains(CORE)) {
-                    var commits = gitDiffOperations.captureCommits(key, range[0], range[1]);
-                    captures.add(commits);
-                    onDisk.put(OUTPUT_PREFIX + "commits.json", commits.path());
-                    identities.put(CORE, range[0] + ":" + range[1]);
-                }
-                if (selectedKinds.contains(DIFF)) {
-                    var diff = gitDiffOperations.capture(key, range[0], range[1]);
-                    captures.add(diff);
-                    completeness.put(DIFF, SourceCompleteness.COMPLETE);
-                    identities.put(DIFF, range[0] + ":" + range[1]);
-                    contentStates.put(DIFF, diff.isEmpty() ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
-                    diff.files().forEach((name, path) -> onDisk.put(OUTPUT_PREFIX + name, path));
-                }
-                return new EvidenceContribution(
-                        files,
-                        completeness,
-                        identities,
-                        observedAt,
-                        Map.of(),
-                        contentStates,
-                        Map.of(),
-                        onDisk,
-                        () -> IOUtils.close(captures.toArray(Closeable[]::new)),
-                        Map.of());
-            } catch (IOException | RuntimeException exception) {
-                try {
-                    IOUtils.close(captures.toArray(Closeable[]::new));
-                } catch (IOException cleanup) {
-                    exception.addSuppressed(cleanup);
-                }
-                throw new JobPreparationException("Could not stage reviewed change", exception);
+            String range = prepared.target() + ":" + prepared.head();
+            if (selectedKinds.contains(CORE)) identities.put(CORE, range);
+            if (selectedKinds.contains(DIFF)) {
+                storeChange(files, prepared);
+                completeness.put(DIFF, SourceCompleteness.COMPLETE);
+                identities.put(DIFF, range);
+                contentStates.put(
+                        DIFF,
+                        gitRepositoryManager
+                                        .changedPaths(prepared.key(), prepared.target(), prepared.head())
+                                        .isEmpty()
+                                ? SourceContentState.EMPTY
+                                : SourceContentState.NON_EMPTY);
             }
         }
         return new EvidenceContribution(files, completeness, identities, observedAt, Map.of(), contentStates);
@@ -216,6 +192,17 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
                     objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(pullRequestMetadata));
         } catch (JacksonException e) {
             throw new JobPreparationException("Failed to serialize pull request metadata", e);
+        }
+    }
+
+    private void storeChange(Map<String, byte[]> files, ReviewRepositoryPreparer.PreparedReview prepared) {
+        ObjectNode change = objectMapper.createObjectNode();
+        change.put("base_sha", prepared.target());
+        change.put("head_sha", prepared.head());
+        try {
+            files.put(CHANGE_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(change));
+        } catch (JacksonException e) {
+            throw new JobPreparationException("Failed to serialize the reviewed change", e);
         }
     }
 

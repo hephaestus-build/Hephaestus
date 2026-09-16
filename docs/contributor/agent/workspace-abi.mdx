@@ -11,7 +11,11 @@ a separate workspace contract.
 ## Layout
 
 The workspace has three data regions: read-only `inputs/`, writable `work/` scratch, and
-collected `out/` results. Mount isolation is defined under [Path conventions](#path-conventions).
+collected `out/` results. The rule that divides them: **the server projects what it stores and
+verifies what comes back; every derived view of the work is produced inside the container.** A file
+under `inputs/` is a stored record or a checkout, shaped into JSON and nothing more; the patch, its
+statistics, the commit list and every precompute hint are written under `work/` by TypeScript running
+here. Mount isolation is defined under [Path conventions](#path-conventions).
 
 ```text
 /workspace/
@@ -19,18 +23,19 @@ collected `out/` results. Mount isolation is defined under [Path conventions](#p
 │   ├── manifest.json                #   Versioned source, capture-state, and artifact index.
 │   ├── sources/                     #   Integration-namespaced source materialisations (ADR 0020).
 │   │   └── scm/repo/                #   Pinned, read-only SCM checkout and sanitized Git history.
-│   ├── context/                     #   System-written, AI-readable. Populated by the ContentSource SPI.
-│   │                                #   Files: metadata.json, commits.json, comments.json, diff.patch, diff_summary.md,
-│   │                                #   diff_stat.txt, linked_work_items.json, review_threads.json,
-│   │                                #   general_comments.json, project_inventory.json, context-map.md,
-│   │                                #   issue_summary.md, conversation_thread.json, document.md,
+│   ├── context/                     #   Stored records as JSON, populated by the ContentSource SPI.
+│   │                                #   Files: metadata.json, change.json, comments.json, linked_work_items.json,
+│   │                                #   review_threads.json, general_comments.json, project_inventory.json,
+│   │                                #   conversation_thread.json, document.json + document.md,
 │   │                                #   outline/index.json + outline/{collection}/{doc}.md — whichever
 │   │                                #   of them apply to the artifact kind under review.
 │   ├── history/                     #   What earlier reviews recorded and already said, about the
 │   │                                #   person whose work this is: observations.json, feedback.json.
 │   │                                #   ALWAYS present, empty on a first-ever review.
-│   └── practices/                   #   Practice catalog (index.json, {slug}.md, all-criteria.md).
+│   └── practices/                   #   Practice catalog (index.json, {slug}.md).
 ├── work/                            # AGENT + PRECOMPUTE SCRATCH. Never collected back into SQL.
+│   ├── change/                      #   The change view pi-change.ts derives from the checkout with git:
+│   │                                #   diff.patch ([L<n>]-annotated), diff_stat.txt, files.json, commits.json.
 │   ├── precompute/                  #   Per-practice precompute scripts (TypeScript, run on Node).
 │   ├── precompute-out/              #   Precompute runtime output (logs, structured hints).
 │   ├── analysis/practices/          #   Per-practice analysis output (holds the .gitkeep marker).
@@ -47,6 +52,7 @@ collected `out/` results. Mount isolation is defined under [Path conventions](#p
 ├── pi-provider.ts                   # Provider/model helper imported by both runners.
 ├── pi-error-text.ts                 # Shared error-message helper.
 ├── pi-task-paths.ts                 # Task path validation and resolution.
+├── pi-change.ts                     # Derives work/change/ from the checkout; runs first, and its failure is the review's.
 ├── pi-precompute.sh                 # Bounded, best-effort precompute bootstrap.
 ├── pi-precompute.ts                 # Precompute launcher using task-declared paths.
 ├── pi-observation-normalize.ts      # Normalises sandbox observations before out/ is written.
@@ -70,9 +76,12 @@ execute on Node; see
   read-only. `work/`, `out/`, the Pi session directories `.pi` and `.sessions` are separate writable volumes of the same
   attempt, removed with it. There is no runtime allowlist of `inputs/`; the server validates every
   path it packs into the tar before the container exists.
-- **`inputs/context/`** — system-written, AI-readable source materializations of the artifact under
-  review. A source with nothing to report still writes its file, holding an empty list: "the record was
-  read and held nothing" is a fact a review may reason from, and "the file is not there" is not.
+- **`inputs/context/`** — the stored records of the artifact under review, projected to JSON with no
+  narrative, no aggregates and no excerpts: a title, a body, a list of comments, a list of threads.
+  `change.json` pins the reviewed range (`base_sha`, `head_sha`) and is the artifact a citation of the
+  change names; the change itself is read from the checkout. A source with nothing to report still
+  writes its file, holding an empty list: "the record was read and held nothing" is a fact a review may
+  reason from, and "the file is not there" is not.
 - **`inputs/history/`** — earlier observations and feedback, present on every review. Never reported
   `COMPLETE`: it is a bounded window over a growing record.
 - **`inputs/manifest.json`** — the source and artifact index, and the authoritative statement of what a run
@@ -89,6 +98,12 @@ execute on Node; see
   hydrated, and its presence makes the capture `PARTIAL` with `SUBMODULE_EXCLUDED` recorded in
   `inputs/manifest.json`. Only the `inputs/sources/scm/repo/.git/HEAD` and captured-refs witnesses carry manifest digests;
   the checkout itself is transferred by traversal.
+- **`work/change/`** — what `pi-change.ts` derives from `inputs/sources/scm/repo/` with `git` before
+  the precompute scripts and the model run: `git diff` from `base_sha` to `head_sha` with renames
+  detected and every hunk line prefixed `[L<n>]` and a space (the coordinate a change citation names),
+  `git diff --stat`, the changed files with their status letters, and the commits of the range with
+  their full messages. Absent when no change was captured (an issue review). A precompute script
+  receives this directory as its fifth argument and reads it through `lib/change.ts`.
 - **`work/`** — agent + precompute scratch. The Pi agent may write here; the server never
   collects it.
 - **`out/`** — the *only* directory the sandbox collects after the run.
@@ -111,7 +126,7 @@ All seven `paths` fields are required:
 
 | Field | Location |
 |-------|----------|
-| `contextRoot` | Captured context directory, including `metadata.json` and `diff.patch` when applicable |
+| `contextRoot` | Captured context directory, including `metadata.json` and `change.json` when applicable |
 | `repositoryRoot` | Captured repository directory |
 | `manifest` | Source and artifact manifest file |
 | `practiceIndex` | Practice index file; practice documents share its directory |

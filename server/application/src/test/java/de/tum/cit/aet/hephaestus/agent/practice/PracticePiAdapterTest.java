@@ -40,16 +40,19 @@ class PracticePiAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldStagePrecomputeBootstrapWithItsRunner() {
+    void shouldDeriveTheChangeBeforePrecomputeAndStageBothWithTheRunner() {
         var spec = adapter.buildSandboxSpec(proxyRequest());
-        assertThat(spec.inputFiles()).containsKeys("pi-precompute.sh", "pi-precompute.ts", "pi-task-paths.ts");
+        assertThat(spec.inputFiles())
+                .containsKeys("pi-change.ts", "pi-precompute.sh", "pi-precompute.ts", "pi-task-paths.ts");
         assertThat(spec.command())
-                .anySatisfy(command -> assertThat(command).contains("sh /workspace/pi-precompute.sh 30 && "));
+                .anySatisfy(command -> assertThat(command)
+                        .contains("node /workspace/pi-change.ts && sh /workspace/pi-precompute.sh 30 && "));
     }
 
     @Test
     void shouldCapPrecomputeAtThirtySecondsAndOneTenthOfTheJobDeadline() {
-        assertThat(PracticePiAdapter.buildPrecomputeStep(600)).contains("pi-precompute.sh 30 &&");
+        assertThat(PracticePiAdapter.buildPrecomputeStep(600))
+                .isEqualTo("node /workspace/pi-change.ts && sh /workspace/pi-precompute.sh 30 && ");
         assertThat(PracticePiAdapter.buildPrecomputeStep(120)).contains("pi-precompute.sh 12 &&");
         assertThat(PracticePiAdapter.buildPrecomputeStep(61)).contains("pi-precompute.sh 6 &&");
     }

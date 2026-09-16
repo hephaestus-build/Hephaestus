@@ -1,25 +1,23 @@
 // Precompute traceability hints; the model judges readiness from the captured handoff.
+import { readCommits } from "../lib/change.ts";
+import { branchIssueReferences, issueNumberReferences } from "../lib/references.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
-/** Bare `#N` mention (group 1 = number), rejecting `#1a2b` colours / `#1.2` versions / `#42px` units. */
-const BARE_REF = /#(\d+)(?![\w.])/g;
-/** Issue id at the start of a branch-slug segment, e.g. `1313-foo` or `feat/1313-foo`. */
-const BRANCH_REF = /(?:^|\/)(\d{1,7})-/g;
-
-export default function readyAndTraceableHandoff(
+export default async function readyAndTraceableHandoff(
 	_repoPath: string,
 	_d: Map<string, DiffFile>,
 	m: PullRequestMetadata,
+	_contextDir?: string,
+	changeDir?: string,
 ) {
 	const directions: string[] = [];
 
 	// --- Traceability: does the handoff reference a motivating issue at all? ---
-	const body = `${m.body ?? ""}\n${(m.commits ?? []).map((c) => c.message ?? "").join("\n")}`;
+	const commits = await readCommits(changeDir);
+	const body = `${m.body ?? ""}\n${commits.map((c) => c.message).join("\n")}`;
 	const branch = m.source_branch;
-	const bodyRefs = new Set<string>();
-	for (const mt of body.matchAll(BARE_REF)) bodyRefs.add(`#${mt[1]}`);
-	const branchRefs = new Set<string>();
-	for (const mt of branch.matchAll(BRANCH_REF)) branchRefs.add(`#${mt[1]}`);
+	const bodyRefs = new Set(issueNumberReferences(body).map((n) => `#${n}`));
+	const branchRefs = new Set(branchIssueReferences(branch).map((n) => `#${n}`));
 	const allRefs = new Set<string>([...bodyRefs, ...branchRefs]);
 	if (allRefs.size > 0) {
 		directions.push(
@@ -27,7 +25,7 @@ export default function readyAndTraceableHandoff(
 		);
 	} else {
 		directions.push(
-			`Traceability fact: no issue reference (#N, 'Refs #N', closing keyword, or issue-number branch prefix) was found in the body, commits, or branch '${branch}' — confirm in the body before concluding the handoff is untraceable.`,
+			`Traceability fact: no issue reference (#N, 'Refs #N', closing keyword, or issue-number branch prefix) was found in the body, the ${commits.length} commit message(s), or branch '${branch}' — confirm in the body before concluding the handoff is untraceable.`,
 		);
 	}
 
@@ -35,6 +33,7 @@ export default function readyAndTraceableHandoff(
 		hints: [],
 		metrics: {
 			issueMentionSyntaxCandidateCount: allRefs.size,
+			commitCount: commits.length,
 		},
 		directions,
 	};

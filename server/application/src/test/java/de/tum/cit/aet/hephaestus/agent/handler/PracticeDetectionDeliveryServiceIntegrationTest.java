@@ -6,7 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
@@ -14,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -37,20 +41,26 @@ import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeDetectionCompletedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.revwalk.RevCommit;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
@@ -64,6 +74,8 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * <p>No mocks required — this service layer does not call external APIs. It resolves practice
  * slugs against the DB and persists observations via {@code ObservationRepository.insertIfAbsent()}.
+ * The reviewed change is quoted from a real checkout staged in the attempt folder, the way the
+ * repository-tree source stages one, so the quote is verified through JGit rather than a double.
  */
 @RecordApplicationEvents
 class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTest {
@@ -111,10 +123,18 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
 
     private final java.util.List<PreparedJobInputs> preparedEvidence = new java.util.ArrayList<>();
 
+    private static final String HEAD_PATH = SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD";
+    private static final String REFS_PATH = SandboxLayout.REPO_MOUNT_RELATIVE + ".git/hephaestus-captured-refs";
+
+    @TempDir
+    private Path temporary;
+
     private Workspace workspace;
     private AgentJob agentJob;
     private User developer;
     private Long prId;
+    private String baseSha;
+    private String headSha;
 
     @org.junit.jupiter.api.AfterEach
     void releasePreparedEvidence() throws Exception {
@@ -132,7 +152,7 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
     }
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         databaseTestUtils.cleanDatabase();
 
         workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("delivery-test"));
@@ -212,14 +232,39 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
         metadata.put("repository_full_name", repo.getNameWithOwner());
         metadata.put("pr_number", 42);
         agentJob.setMetadata(metadata);
+        // The change: line 10 of src/Auth.java reads requireAdmin() at the base and insecure() at the head.
+        Path checkout = Files.createDirectory(temporary.resolve("repo"));
+        String treeSha;
+        try (Git git = Git.init()
+                .setInitialBranch("main")
+                .setDirectory(checkout.toFile())
+                .call()) {
+            GitTestFixtures.disableSigning(git.getRepository());
+            Files.createDirectories(checkout.resolve("src"));
+            Files.writeString(checkout.resolve("src/Auth.java"), authSource("requireAdmin();"));
+            baseSha = commit(git, "Base").name();
+            Files.writeString(checkout.resolve("src/Auth.java"), authSource("insecure();"));
+            RevCommit head = commit(git, "Head");
+            headSha = head.name();
+            treeSha = head.getTree().name();
+        }
+        Files.writeString(checkout.resolve(".git/hephaestus-captured-refs"), headSha + " HEAD\n");
+        byte[] headWitness = Files.readAllBytes(checkout.resolve(".git/HEAD"));
+        byte[] refsWitness = Files.readAllBytes(checkout.resolve(".git/hephaestus-captured-refs"));
+        byte[] change = ("{\"base_sha\":\"" + baseSha + "\",\"head_sha\":\"" + headSha + "\"}")
+                .getBytes(StandardCharsets.UTF_8);
+
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(OBJECT_MAPPER);
-        var source = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", "abc123");
-        byte[] diff =
-                "diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n"
-                        .getBytes(StandardCharsets.UTF_8);
-        EvidenceSnapshotFixtures.artifact(source, "inputs/context/diff.patch", ProvenanceDigest.sha256Hex(diff))
-                .put("mediaType", "text/x-diff")
-                .put("bytes", diff.length);
+        var diff = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", baseSha + ":" + headSha);
+        EvidenceSnapshotFixtures.artifact(
+                        diff, PullRequestContentSource.CHANGE_FILE, ProvenanceDigest.sha256Hex(change))
+                .put("mediaType", "application/json")
+                .put("bytes", change.length);
+        var tree = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.repository.tree", headSha + ":" + treeSha);
+        EvidenceSnapshotFixtures.artifact(tree, HEAD_PATH, ProvenanceDigest.sha256Hex(headWitness))
+                .put("bytes", headWitness.length);
+        EvidenceSnapshotFixtures.artifact(tree, REFS_PATH, ProvenanceDigest.sha256Hex(refsWitness))
+                .put("bytes", refsWitness.length);
         EvidenceSnapshotFixtures.admittedPractice(
                 snapshot,
                 description.getSlug(),
@@ -230,9 +275,36 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
                 errors.getSlug(),
                 java.util.Objects.requireNonNull(errors.getCurrentRevision().getId()));
         preparedEvidence.add(evidenceFiles.prepare(
-                agentJob, PreparedJobInputs.filesOnly(Map.of("inputs/context/diff.patch", diff))));
+                agentJob,
+                new PreparedJobInputs(
+                        new PreparedEvidence(
+                                Map.of(PullRequestContentSource.CHANGE_FILE, change),
+                                Map.of(
+                                        HEAD_PATH,
+                                        checkout.resolve(".git/HEAD"),
+                                        REFS_PATH,
+                                        checkout.resolve(".git/hephaestus-captured-refs")),
+                                List.of(),
+                                null,
+                                List.of(new EvidenceDirectory(SandboxLayout.REPO_MOUNT_RELATIVE, checkout))),
+                        null)));
         agentJob.setEvidenceSnapshot(snapshot);
         agentJob = agentJobRepository.save(agentJob);
+    }
+
+    /** Nine lines of context, then {@code line10} at line 10. */
+    private static String authSource(String line10) {
+        return "// context\n".repeat(9) + line10 + "\n";
+    }
+
+    private static RevCommit commit(Git git, String message) throws Exception {
+        git.add().addFilepattern(".").call();
+        return git.commit()
+                .setSign(false)
+                .setMessage(message)
+                .setAuthor("Test", "test@example.com")
+                .setCommitter("Test", "test@example.com")
+                .call();
     }
 
     private Practice createPractice(String slug, String name) {
@@ -276,12 +348,12 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
         evidence.putArray("citations")
                 .addObject()
                 .put("sourceKind", "scm.pull-request.diff")
-                .put("artifactPath", "inputs/context/diff.patch")
+                .put("artifactPath", PullRequestContentSource.CHANGE_FILE)
                 .put("path", "src/Auth.java")
                 .put("side", "NEW")
                 .put("startLine", 10)
                 .put("endLine", 10)
-                .put("quote", "+ insecure();");
+                .put("quote", "insecure();");
         // An ABSENT observation asserts a universal, so delivery requires it to record its search.
         if (presence == Presence.ABSENT) {
             ObjectNode search = evidence.putObject("search");
@@ -327,9 +399,50 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
 
             deleteFixtureEvidence();
 
-            assertThat(evidenceFiles.inspect(agentJob, "inputs/context/diff.patch", sha, reader -> Boolean.TRUE))
+            assertThat(evidenceFiles.inspect(
+                            agentJob, PullRequestContentSource.CHANGE_FILE, sha, reader -> Boolean.TRUE))
                     .isEmpty();
             assertThatCode(() -> deliveryService.requirePublished(agentJob)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("a quote of the change is read from the captured checkout at the side's revision")
+        void shouldVerifyEachSideOfTheChangeAgainstTheCapturedCheckout() {
+            var atHead = observation("pr-description-quality", Presence.PRESENT);
+            var atBase = observation("error-handling", Presence.PRESENT);
+            ((ObjectNode) java.util.Objects.requireNonNull(atBase.evidence())
+                            .withArray("citations")
+                            .get(0))
+                    .put("side", "OLD")
+                    .put("quote", "requireAdmin();");
+
+            var result = publishVerified(agentJob, List.of(atHead, atBase));
+
+            assertThat(result.inserted()).isEqualTo(2);
+            assertThat(observationRepository.findAll())
+                    .extracting(persisted -> java.util.Objects.requireNonNull(persisted.getEvidence())
+                            .at("/citations/0/revision")
+                            .asString())
+                    .containsExactlyInAnyOrder(headSha, baseSha);
+            assertThatCode(() -> deliveryService.requirePublished(agentJob)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("a quote the checkout does not hold at the cited side is withheld, and the sound claim delivered")
+        void shouldWithholdAQuoteTheCheckoutDoesNotHold() {
+            var sound = observation("pr-description-quality", Presence.PRESENT);
+            var wrongSide = observation("error-handling", Presence.PRESENT);
+            ((ObjectNode) java.util.Objects.requireNonNull(wrongSide.evidence())
+                            .withArray("citations")
+                            .get(0))
+                    .put("side", "OLD");
+
+            var result = publishVerified(agentJob, List.of(sound, wrongSide));
+
+            assertThat(result.inserted()).isEqualTo(1);
+            assertThat(observationRepository.findAll())
+                    .extracting(persisted -> persisted.getPractice().getSlug())
+                    .containsExactly("pr-description-quality");
         }
 
         @Test

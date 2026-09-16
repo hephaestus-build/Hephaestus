@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -46,9 +48,6 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
     @Mock
     ScmTokenSource tokens;
 
-    @Mock
-    GitDiffOperations diffs;
-
     private ReviewRepositoryPreparer preparer;
     private AgentJob job;
     private Repository repository;
@@ -57,13 +56,11 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        org.mockito.Mockito.lenient()
-                .when(diffs.resolveDiffRange(
-                        org.mockito.ArgumentMatchers.any(),
-                        org.mockito.ArgumentMatchers.anyString(),
-                        org.mockito.ArgumentMatchers.anyString()))
-                .thenAnswer(invocation -> new String[] {invocation.getArgument(1), invocation.getArgument(2)});
-        preparer = new ReviewRepositoryPreparer(git, diffs, pullRequests, monitors, connections, List.of(tokens));
+        // The target is its own review base unless a test pins a merge base explicitly.
+        lenient()
+                .when(git.reviewBase(any(), anyString(), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
+        preparer = new ReviewRepositoryPreparer(git, pullRequests, monitors, connections, List.of(tokens));
         var workspace = new Workspace();
         workspace.setId(1L);
         job = new AgentJob();
@@ -209,7 +206,7 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         when(git.commitExists(KEY, HEAD)).thenReturn(true);
         when(git.commitExists(KEY, base)).thenReturn(true);
         assertThat(preparer.prepare(job).target()).isEqualTo(base);
-        verifyNoInteractions(diffs);
+        verify(git, never()).reviewBase(any(), anyString(), anyString());
     }
 
     @org.junit.jupiter.params.ParameterizedTest
@@ -225,7 +222,7 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         assertThatThrownBy(() -> preparer.prepare(job))
                 .isInstanceOf(JobPreparationException.class)
                 .hasMessageContaining(stale ? "does not match" : "base commit is unavailable");
-        verifyNoInteractions(diffs);
+        verify(git, never()).reviewBase(any(), anyString(), anyString());
     }
 
     @Test
@@ -234,7 +231,19 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
         when(git.commitExists(KEY, HEAD)).thenReturn(true);
         when(git.commitExists(KEY, "b".repeat(40))).thenReturn(true);
-        when(diffs.resolveDiffRange(KEY, "b".repeat(40), HEAD)).thenReturn(new String[] {"c".repeat(40), HEAD});
+        when(git.reviewBase(KEY, "b".repeat(40), HEAD)).thenReturn("c".repeat(40));
         assertThat(preparer.prepare(job).target()).isEqualTo("c".repeat(40));
+    }
+
+    @Test
+    void shouldFailWhenTheTargetAndHeadShareNoReviewBase() {
+        authorize();
+        when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
+        when(git.commitExists(KEY, HEAD)).thenReturn(true);
+        when(git.commitExists(KEY, "b".repeat(40))).thenReturn(true);
+        when(git.reviewBase(KEY, "b".repeat(40), HEAD)).thenReturn(null);
+        assertThatThrownBy(() -> preparer.prepare(job))
+                .isInstanceOf(JobPreparationException.class)
+                .hasMessageContaining("The pinned review diff range is unavailable");
     }
 }

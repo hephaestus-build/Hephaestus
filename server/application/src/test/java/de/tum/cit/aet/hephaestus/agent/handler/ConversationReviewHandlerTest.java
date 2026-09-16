@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -16,6 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -48,6 +48,9 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
     private WorkspaceContextBuilder workspaceContextBuilder;
 
     @Mock
+    private GitRepositoryManager gitRepositoryManager;
+
+    @Mock
     private PracticeCatalogInjector practiceCatalogInjector;
 
     @Mock
@@ -66,7 +69,10 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
         handler = new ConversationReviewHandler(
                 objectMapper,
                 new PracticeReviewPreparation(
-                        workspaceContextBuilder, practiceCatalogInjector, new TaskEnvelopeWriter(objectMapper)),
+                        workspaceContextBuilder,
+                        practiceCatalogInjector,
+                        new TaskEnvelopeWriter(objectMapper),
+                        gitRepositoryManager),
                 new PracticeDetectionResultParser(objectMapper),
                 deliveryService,
                 eventPublisher,
@@ -171,8 +177,7 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
                                     SandboxLayout.CONTEXT_PREFIX + "conversation_thread.json",
                                     "{\"messages\":[]}".getBytes()),
                             org.mockito.Mockito.mock(ArtifactSourceManifest.class)));
-            when(workspaceContextBuilder.prepareAutomatedReviewReadiness(
-                            any(), any(), anyString(), any(), any(), any()))
+            when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
                     .thenReturn(new ContextManifestBuilder.PreparedAutomatedReviewReadiness(
                             List.of(practice), mock(AutomatedReviewReadinessReport.class)));
 

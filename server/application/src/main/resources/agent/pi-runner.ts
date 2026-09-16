@@ -18,6 +18,7 @@ import {
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
 } from "./pi-agent-sandbox.ts";
+import { CHANGE_ROOT } from "./pi-change.ts";
 import { errorText } from "./pi-error-text.ts";
 import {
 	ASSESSMENT_STATUS_VALUES,
@@ -422,7 +423,12 @@ const evidenceSchema = {
 					sourceKind: { type: "string", enum: availableSourceKindValues },
 					artifactPath: { type: "string", enum: stagedArtifactPaths },
 					path: { type: "string", minLength: 1 },
-					side: { type: "string", enum: ["OLD", "NEW"] },
+					side: {
+						type: "string",
+						enum: ["OLD", "NEW"],
+						description:
+							"For a quote of the change: artifactPath names the pinned change (change.json), path is the file as named on that side, and the lines are the [L<n>] coordinates of work/change/diff.patch.",
+					},
 					revision: {
 						type: "string",
 						pattern: "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
@@ -592,12 +598,15 @@ function normalizeAndValidateObservation(rawObservation: unknown): NormalizedObs
 	validateInapplicabilityScope(observation, availableSourceKinds);
 	for (const citation of observation.evidence.citations) {
 		// A historical repository citation is verified against the immutable capture by admission; one
-		// at the captured HEAD is read from the checkout so the session gets its correction here.
+		// at the captured HEAD is read from the checkout so the session gets its correction here. A
+		// quote of the change is read from the diff this container derived from the checkout.
 		if (citation.sourceKind === "scm.repository.tree" && citation.revision !== undefined) continue;
 		const content =
 			citation.sourceKind === "scm.repository.tree"
 				? readCheckoutFile(citation.path)
-				: readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
+				: citation.sourceKind === "scm.pull-request.diff"
+					? readFileSync(`${CWD}/${CHANGE_ROOT}/diff.patch`, "utf8")
+					: readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
 		const mismatch =
 			content === null
 				? "no such file in the checkout"
@@ -606,7 +615,7 @@ function normalizeAndValidateObservation(rawObservation: unknown): NormalizedObs
 			throw new Error(
 				`citation does not match ${citation.path}:${citation.startLine}-${citation.endLine} ` +
 					`(${citation.side ?? "text"}) in '${citation.artifactPath}': ${mismatch}. Copy the exact ` +
-					`artifact text and, for a diff, use its [L<n>] coordinates and OLD/NEW side`,
+					`artifact text and, for the change, the [L<n>] coordinates and OLD/NEW side of ${CHANGE_ROOT}/diff.patch`,
 			);
 		}
 	}

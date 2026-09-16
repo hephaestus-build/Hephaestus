@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -76,6 +77,11 @@ import tools.jackson.databind.node.ObjectNode;
 class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    /** The pinned range of the reviewed change; nothing here quotes it, so no checkout is staged. */
+    private static final String BASE_SHA = "a".repeat(40);
+
+    private static final String HEAD_SHA = "b".repeat(40);
 
     @Autowired
     private JobTypeHandlerRegistry handlerRegistry;
@@ -358,13 +364,10 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                 EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.core", null),
                 "inputs/context/metadata.json",
                 "{\"body\":\"Test body\"}");
-        var diff = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", "pipelinesha");
         addArtifact(
-                diff,
-                "inputs/context/diff.patch",
-                "diff --git a/src/Main.java b/src/Main.java\n+++ b/src/Main.java\n@@ -10 +10 @@\n[L10] + insecure();\n");
-        // The changed paths travel as their own NUL-terminated artifact, as native capture writes them.
-        addArtifact(diff, "inputs/context/diff_paths.nul", "src/Main.java\0");
+                EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", BASE_SHA + ":" + HEAD_SHA),
+                PullRequestContentSource.CHANGE_FILE,
+                "{\"base_sha\":\"" + BASE_SHA + "\",\"head_sha\":\"" + HEAD_SHA + "\"}");
         for (Practice practice : practices) {
             EvidenceSnapshotFixtures.admittedPractice(
                     snapshot,
@@ -379,7 +382,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
         capturedFiles.put(path, bytes);
         EvidenceSnapshotFixtures.artifact(source, path, ProvenanceDigest.sha256Hex(bytes))
-                .put("mediaType", path.endsWith(".json") ? "application/json" : "text/x-diff")
+                .put("mediaType", "application/json")
                 .put("bytes", bytes.length);
     }
 

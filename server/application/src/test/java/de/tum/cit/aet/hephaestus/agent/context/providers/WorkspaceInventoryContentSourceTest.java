@@ -158,7 +158,7 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void listsEveryIssueAndPullRequestExcludingTheFocalIssue() throws Exception {
+    void listsEveryIssueAndPullRequestIncludingTheFocalIssue() throws Exception {
         Issue withMilestone = issue(12, "Login fails on Safari", Issue.State.OPEN, "bob");
         withMilestone.setMilestone(milestone("Sprint 7"));
         when(issueRepository.findIssueInventoryByRepositoryId(eq(REPO_ID), any(Pageable.class)))
@@ -174,23 +174,27 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
 
         assertThat(files).containsKey(OUTPUT);
         JsonNode root = objectMapper.readTree(files.get(OUTPUT));
+        // The listing and which artifact is under review; no guidance and no tallies.
+        assertThat(root.propertyNames())
+                .containsExactlyInAnyOrder("repository", "focal", "issues", "pullRequests", "truncated");
         assertThat(root.get("repository").asString()).isEqualTo("acme/widgets");
         assertThat(root.get("focal").get("type").asString()).isEqualTo("scm.issue");
         assertThat(root.get("focal").get("number").asInt()).isEqualTo(99);
 
         JsonNode issues = root.get("issues");
-        // The focal issue #99 is excluded; the other two remain.
-        assertThat(issues).hasSize(2);
-        assertThat(issues.get(0).get("number").asInt()).isEqualTo(12);
-        assertThat(issues.get(0).get("title").asString()).isEqualTo("Login fails on Safari");
-        assertThat(issues.get(0).get("state").asString()).isEqualTo("OPEN");
-        assertThat(issues.get(0).get("author").asString()).isEqualTo("bob");
-        assertThat(issues.get(0).get("url").asString()).isEqualTo("https://example.com/issues/12");
-        assertThat(issues.get(0).get("milestone").asString()).isEqualTo("Sprint 7");
+        // The focal issue #99 is listed like any other; "focal" says which one it is.
+        assertThat(issues).hasSize(3);
+        assertThat(issues.get(0).get("number").asInt()).isEqualTo(99);
+        assertThat(issues.get(1).get("number").asInt()).isEqualTo(12);
+        assertThat(issues.get(1).get("title").asString()).isEqualTo("Login fails on Safari");
+        assertThat(issues.get(1).get("state").asString()).isEqualTo("OPEN");
+        assertThat(issues.get(1).get("author").asString()).isEqualTo("bob");
+        assertThat(issues.get(1).get("url").asString()).isEqualTo("https://example.com/issues/12");
+        assertThat(issues.get(1).get("milestone").asString()).isEqualTo("Sprint 7");
         // Issue nodes never carry a draft flag (that is a PR-only field).
-        assertThat(issues.get(0).has("isDraft")).isFalse();
-        // The second issue has no milestone -> the field is omitted, not null.
-        assertThat(issues.get(1).has("milestone")).isFalse();
+        assertThat(issues.get(1).has("isDraft")).isFalse();
+        // The third issue has no milestone -> the field is omitted, not null.
+        assertThat(issues.get(2).has("milestone")).isFalse();
 
         JsonNode prs = root.get("pullRequests");
         assertThat(prs).hasSize(1);
@@ -198,19 +202,15 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
         assertThat(prs.get(0).get("state").asString()).isEqualTo("MERGED");
         assertThat(prs.get(0).get("isDraft").asBoolean()).isFalse();
 
-        assertThat(root.get("counts").get("issuesListed").asInt()).isEqualTo(2);
-        assertThat(root.get("counts").get("pullRequestsListed").asInt()).isEqualTo(1);
         assertThat(root.get("truncated").asBoolean()).isFalse();
     }
 
     @Test
-    void truncatedIsTrueWhenAFullPageReturnsAndFocalExclusionIsCountedOff() throws Exception {
-        // A full MAX_PER_TYPE page (one row focal) → emitted is one short of the cap, but the listing is
-        // NOT exhaustive: truncated must be derived from the PRE-exclusion page size, not the emitted count,
-        // so absence-of-match cannot be read as uniqueness.
+    void truncatedIsTrueWhenAFullPageReturns() throws Exception {
+        // A listing of exactly MAX_PER_TYPE rows is NOT known to be exhaustive, so absence-of-match
+        // cannot be read as uniqueness.
         List<Issue> fullPage = new ArrayList<>();
-        fullPage.add(issue(1, "Focal issue under review", Issue.State.OPEN, "alice"));
-        for (int n = 2; n <= WorkspaceInventoryContentSource.MAX_PER_TYPE; n++) {
+        for (int n = 1; n <= WorkspaceInventoryContentSource.MAX_PER_TYPE; n++) {
             fullPage.add(issue(n, "Issue " + n, Issue.State.OPEN, "bob"));
         }
         when(issueRepository.findIssueInventoryByRepositoryId(eq(REPO_ID), any(Pageable.class)))
@@ -221,13 +221,11 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
 
         JsonNode root = objectMapper.readTree(files.get(OUTPUT));
         assertThat(root.get("truncated").asBoolean()).isTrue();
-        // Focal #1 is excluded from the emitted list, so the count is one below the cap even though the page was full.
-        assertThat(root.get("counts").get("issuesListed").asInt())
-                .isEqualTo(WorkspaceInventoryContentSource.MAX_PER_TYPE - 1);
+        assertThat(root.get("issues")).hasSize(WorkspaceInventoryContentSource.MAX_PER_TYPE);
     }
 
     @Test
-    void excludesTheFocalPullRequestInPrFlow() throws Exception {
+    void listsTheFocalPullRequestInPrFlow() throws Exception {
         when(pullRequestRepository.findPullRequestInventoryByRepositoryId(eq(REPO_ID), any(Pageable.class)))
                 .thenReturn(List.of(
                         pr(42, "The PR under review", Issue.State.OPEN, false),
@@ -238,10 +236,12 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
 
         JsonNode root = objectMapper.readTree(files.get(OUTPUT));
         assertThat(root.get("focal").get("type").asString()).isEqualTo("scm.pull_request");
+        assertThat(root.get("focal").get("number").asInt()).isEqualTo(42);
         JsonNode prs = root.get("pullRequests");
-        assertThat(prs).hasSize(1);
-        assertThat(prs.get(0).get("number").asInt()).isEqualTo(41);
-        assertThat(prs.get(0).get("isDraft").asBoolean()).isTrue();
+        assertThat(prs).hasSize(2);
+        assertThat(prs.get(0).get("number").asInt()).isEqualTo(42);
+        assertThat(prs.get(1).get("number").asInt()).isEqualTo(41);
+        assertThat(prs.get(1).get("isDraft").asBoolean()).isTrue();
     }
 
     /** A repository tracking no work still stages the inventory, holding empty lists. */
@@ -250,19 +250,19 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
         var captured = provider.capture(issueRequest(1), provider.sourceKinds());
 
         assertThat(captured.files()).containsKey(OUTPUT);
-        // Present, and still EMPTY: emptiness is read out of the counts, not out of the file list.
+        // Present, and still EMPTY: emptiness is read out of the listing, not out of the file list.
         assertThat(captured.contentStates()).containsValue(SourceContentState.EMPTY);
     }
 
     @Test
-    void reportsEmptyWhenOnlyTheExcludedFocalArtifactExists() {
+    void reportsNonEmptyWhenTheFocalArtifactIsTheOnlyOneListed() {
         when(issueRepository.findIssueInventoryByRepositoryId(eq(REPO_ID), any(Pageable.class)))
                 .thenReturn(List.of(issue(1, "Focal issue", Issue.State.OPEN, "alice")));
 
         var captured = provider.capture(issueRequest(1), provider.sourceKinds());
 
         assertThat(captured.files()).containsKey(OUTPUT);
-        assertThat(captured.contentStates()).containsValue(SourceContentState.EMPTY);
+        assertThat(captured.contentStates()).containsValue(SourceContentState.NON_EMPTY);
     }
 
     @Test
@@ -291,7 +291,7 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
     // --- conversation flow: aggregated across every repository the workspace monitors ---
 
     @Test
-    void conversationFlow_aggregatesAcrossEveryMonitoredRepository_withNoFocalExclusion() throws Exception {
+    void conversationFlow_aggregatesAcrossEveryMonitoredRepository() throws Exception {
         Repository repoA = repository(1L, "acme/widgets");
         Repository repoB = repository(2L, "acme/gadgets");
         when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID)).thenReturn(List.of(repoA, repoB));
@@ -317,7 +317,7 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
         assertThat(repos.get(1).asString()).isEqualTo("acme/gadgets");
 
         assertThat(root.get("focal").get("type").asString()).isEqualTo("chat.conversation_thread");
-        // A conversation isn't itself an issue/PR, so nothing is excluded.
+        // A conversation isn't itself an issue/PR, so there is no focal number.
         assertThat(root.get("focal").has("number")).isFalse();
 
         JsonNode issues = root.get("issues");
@@ -325,8 +325,8 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
         JsonNode prs = root.get("pullRequests");
         assertThat(prs).hasSize(1);
 
-        assertThat(root.get("counts").get("issuesListed").asInt()).isEqualTo(2);
-        assertThat(root.get("counts").get("pullRequestsListed").asInt()).isEqualTo(1);
+        assertThat(root.propertyNames())
+                .containsExactlyInAnyOrder("repositories", "focal", "issues", "pullRequests", "truncated");
         assertThat(root.get("truncated").asBoolean()).isFalse();
     }
 
@@ -367,8 +367,7 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
 
         JsonNode root = objectMapper.readTree(files.get(OUTPUT));
         assertThat(root.get("truncated").asBoolean()).isTrue();
-        assertThat(root.get("counts").get("issuesListed").asInt())
-                .isEqualTo(WorkspaceInventoryContentSource.MAX_PER_TYPE);
+        assertThat(root.get("issues")).hasSize(WorkspaceInventoryContentSource.MAX_PER_TYPE);
     }
 
     @Test

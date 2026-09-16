@@ -65,6 +65,9 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     private static final SourceKind OUTLINE = new SourceKind("outline.documents");
     private static final SourceKind PROJECT_INVENTORY = new SourceKind("workspace.project-inventory");
     private static final Instant NOW = Instant.parse("2026-09-11T10:00:00Z");
+    private static final String CHANGE_PATH = "inputs/context/change.json";
+    private static final byte[] CHANGE_JSON =
+            "{\"base_sha\":\"abc123\",\"head_sha\":\"def456\"}".getBytes(StandardCharsets.UTF_8);
 
     private final JsonMapper mapper = JsonMapper.builder().build();
     private ContextManifestBuilder builder;
@@ -77,13 +80,12 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     @Test
     void shouldExposeCitationDigestsWithoutInternalMetadata() {
         Map<String, byte[]> files = new LinkedHashMap<>();
-        byte[] diff = "diff --git a b".getBytes(StandardCharsets.UTF_8);
-        files.put("inputs/context/diff.patch", diff);
+        files.put(CHANGE_PATH, CHANGE_JSON);
         EvidencePlan plan = plan();
 
         builder.augment(
                 files,
-                Map.of("inputs/context/diff.patch", DIFF),
+                Map.of(CHANGE_PATH, DIFF),
                 "job-42",
                 plan,
                 new ContextManifestBuilder.CaptureMetadata(
@@ -99,9 +101,9 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         assertThat(visible.toString()).doesNotContain("job-42").doesNotContain("workspaceId");
         JsonNode diffSource = findSource(visible, DIFF.value());
         assertThat(diffSource.path("state").path("availability").asString()).isEqualTo("AVAILABLE");
-        assertThat(diffSource.path("artifacts").get(0).path("path").asString()).isEqualTo("inputs/context/diff.patch");
+        assertThat(diffSource.path("artifacts").get(0).path("path").asString()).isEqualTo(CHANGE_PATH);
         assertThat(diffSource.path("artifacts").get(0).path("sha256").asString())
-                .isEqualTo(de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest.sha256Hex(diff));
+                .isEqualTo(de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest.sha256Hex(CHANGE_JSON));
     }
 
     @Test
@@ -181,13 +183,13 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
     @Test
     void shouldAllowPracticeSpecificOccasionJudgmentForACompleteEmptyDiff() {
-        // Capture readiness qualifies the evidence, not the practice-specific occasion or outcome.
+        // Capture readiness qualifies the evidence, not the practice-specific occasion or outcome. The
+        // range is pinned either way; that nothing changed inside it is the reported content state.
         Map<String, byte[]> files = new LinkedHashMap<>();
-        String path = "inputs/context/diff.patch";
-        files.put(path, new byte[0]);
+        files.put(CHANGE_PATH, CHANGE_JSON);
         ArtifactSourceManifest manifest = builder.augment(
                 files,
-                Map.of(path, DIFF),
+                Map.of(CHANGE_PATH, DIFF),
                 "job-empty-diff",
                 plan(),
                 new ContextManifestBuilder.CaptureMetadata(
@@ -227,10 +229,9 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
     @Test
     void shouldRejectPartialDiffEvenWhenItsCapturedBytesAreEmpty() {
-        String path = "inputs/context/diff.patch";
         assertThatThrownBy(() -> builder.augment(
-                        new LinkedHashMap<>(Map.of(path, new byte[0])),
-                        Map.of(path, DIFF),
+                        new LinkedHashMap<>(Map.of(CHANGE_PATH, new byte[0])),
+                        Map.of(CHANGE_PATH, DIFF),
                         "job-partial-empty-diff",
                         plan(),
                         new ContextManifestBuilder.CaptureMetadata(
@@ -288,11 +289,10 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     @Test
     void shouldNameNoReasonWhenACompleteCaptureHeldSomething() {
         Map<String, byte[]> files = new LinkedHashMap<>();
-        String path = "inputs/context/diff.patch";
-        files.put(path, "diff --git a b".getBytes(StandardCharsets.UTF_8));
+        files.put(CHANGE_PATH, CHANGE_JSON);
         ArtifactSourceManifest manifest = builder.augment(
                 files,
-                Map.of(path, DIFF),
+                Map.of(CHANGE_PATH, DIFF),
                 "job-good-diff",
                 plan(),
                 new ContextManifestBuilder.CaptureMetadata(
@@ -537,7 +537,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         ArtifactSourceManifest manifest = coreManifest(builder, "job-refused", NOW);
 
         var prepared = builder.prepareAutomatedReviewReadiness(
-                manifest, List.of(practiceRequiringComments()), "job-refused", NOW, null, Map.of());
+                manifest, List.of(practiceRequiringComments()), NOW, null, Map.of(), null);
         assertThat(prepared.readyPractices()).isEmpty();
         JsonNode report = mapper.valueToTree(prepared.report());
         JsonNode decision = report.path("decisions").get(0);
@@ -618,8 +618,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
         Practice practice = practiceRequiring(CORE, "pr-core");
         assertThat(laterBuilder
-                        .prepareAutomatedReviewReadiness(
-                                manifest, List.of(practice), "job-future-watermark", NOW, null, Map.of())
+                        .prepareAutomatedReviewReadiness(manifest, List.of(practice), NOW, null, Map.of(), null)
                         .readyPractices())
                 .containsExactly(practice);
     }
@@ -644,8 +643,8 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                 files, Map.of("inputs/context/metadata.json", CORE), "job-delayed", plan(), metadata(CORE, NOW));
         Practice practice = practiceRequiring(CORE, "pr-core");
 
-        var prepared = delayedBuilder.prepareAutomatedReviewReadiness(
-                manifest, List.of(practice), "job-delayed", NOW, null, Map.of());
+        var prepared =
+                delayedBuilder.prepareAutomatedReviewReadiness(manifest, List.of(practice), NOW, null, Map.of(), null);
         assertThat(prepared.readyPractices()).containsExactly(practice);
         JsonNode sourceCheck = mapper.valueToTree(prepared.report())
                 .path("decisions")
@@ -870,15 +869,15 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
         @Test
         void shouldWithholdThePracticeAndRecordThePredicateThatRuledItOut() {
-            var prepared =
-                    diffCapture("job-subject-absent", "diff --git a/src/App.java b/src/App.java\n@@ -1 +1 @@\n+x\n");
+            var prepared = changeCapture("job-subject-absent");
 
             AutomatedReviewReadinessResult result = builder.checkAutomatedReviewReadiness(
                     java.util.Objects.requireNonNull(prepared.manifest()),
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
                     null,
-                    prepared.files());
+                    prepared.files(),
+                    change(Set.of("src/App.java")));
 
             assertThat(result.readyPractices()).isEmpty();
             var decision = result.decisions().getFirst();
@@ -893,32 +892,42 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
         @Test
         void shouldAskThePracticeWhenTheSubjectIsInTheWork() {
-            var prepared = diffCapture("job-subject-present", "diff --git a/pom.xml b/pom.xml\n@@ -1 +1 @@\n+<dep/>\n");
+            var prepared = changeCapture("job-subject-present");
 
             AutomatedReviewReadinessResult result = builder.checkAutomatedReviewReadiness(
                     java.util.Objects.requireNonNull(prepared.manifest()),
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
                     null,
-                    prepared.files());
+                    prepared.files(),
+                    change(Set.of("src/App.java", "pom.xml")));
 
             assertThat(result.readyPractices()).hasSize(1);
             assertThat(result.decisions().getFirst().reasonCodes()).isEmpty();
         }
 
         /**
-         * A caller holding the manifest but not the capture it describes — a replay, or any code path
-         * that has not been taught to pass the bytes. It must ask the practice, never skip it.
+         * A caller holding the manifest but not the change it describes — a replay, or any code path
+         * that has not been taught to pass it. It must ask the practice, never skip it.
          */
         @Test
-        void shouldAskThePracticeWhenNobodySuppliedTheStagedBytes() {
-            var prepared = diffCapture("job-no-bytes", "diff --git a/src/App.java b/src/App.java\n@@ -1 +1 @@\n+x\n");
+        void shouldAskThePracticeWhenNobodySuppliedTheChange() {
+            var prepared = changeCapture("job-no-change");
+            List<Practice> practices =
+                    List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject()));
 
-            AutomatedReviewReadinessResult result = builder.checkAutomatedReviewReadinessAsOfNow(
+            AutomatedReviewReadinessResult asOfNow = builder.checkAutomatedReviewReadinessAsOfNow(
+                    java.util.Objects.requireNonNull(prepared.manifest()), practices);
+            AutomatedReviewReadinessResult withoutChange = builder.checkAutomatedReviewReadiness(
                     java.util.Objects.requireNonNull(prepared.manifest()),
-                    List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())));
+                    practices,
+                    NOW,
+                    null,
+                    prepared.files(),
+                    null);
 
-            assertThat(result.readyPractices()).hasSize(1);
+            assertThat(asOfNow.readyPractices()).hasSize(1);
+            assertThat(withoutChange.readyPractices()).hasSize(1);
         }
 
         /**
@@ -941,7 +950,8 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
                     null,
-                    Map.of());
+                    Map.of(),
+                    change(Set.of("pom.xml")));
 
             assertThat(result.readyPractices()).isEmpty();
             var decision = result.decisions().getFirst();
@@ -951,12 +961,13 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                     .containsExactly(SourceReadinessReason.SOURCE_NOT_AVAILABLE);
         }
 
-        private PreparedDiff diffCapture(String jobId, String diff) {
+        /** The pinned range on disk; what it touches is read from the mirror, here an inline change. */
+        private PreparedDiff changeCapture(String jobId) {
             Map<String, byte[]> files = new LinkedHashMap<>();
-            files.put("inputs/context/diff.patch", diff.getBytes(StandardCharsets.UTF_8));
+            files.put(CHANGE_PATH, CHANGE_JSON);
             ArtifactSourceManifest manifest = builder.augment(
                     files,
-                    Map.of("inputs/context/diff.patch", DIFF),
+                    Map.of(CHANGE_PATH, DIFF),
                     jobId,
                     plan(),
                     new ContextManifestBuilder.CaptureMetadata(
@@ -971,6 +982,20 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         }
 
         private record PreparedDiff(ArtifactSourceManifest manifest, Map<String, byte[]> files) {}
+
+        private static ReviewChange change(Set<String> paths) {
+            return new ReviewChange() {
+                @Override
+                public Set<String> changedPaths() {
+                    return paths;
+                }
+
+                @Override
+                public String text() {
+                    return "";
+                }
+            };
+        }
     }
 
     private static PracticeSubject dependencySubject() {

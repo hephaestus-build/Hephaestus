@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -44,6 +45,9 @@ class IssueReviewHandlerTest extends BaseUnitTest {
 
     @Mock
     private WorkspaceContextBuilder workspaceContextBuilder;
+
+    @Mock
+    private GitRepositoryManager gitRepositoryManager;
 
     @Mock
     private PracticeRepository practiceRepository;
@@ -90,7 +94,10 @@ class IssueReviewHandlerTest extends BaseUnitTest {
         handler = new IssueReviewHandler(
                 objectMapper,
                 new PracticeReviewPreparation(
-                        workspaceContextBuilder, practiceCatalogInjector, new TaskEnvelopeWriter(objectMapper)),
+                        workspaceContextBuilder,
+                        practiceCatalogInjector,
+                        new TaskEnvelopeWriter(objectMapper),
+                        gitRepositoryManager),
                 practiceCatalogInjector,
                 new PracticeDetectionResultParser(objectMapper),
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),

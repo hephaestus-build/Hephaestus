@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -23,10 +21,6 @@ import tools.jackson.databind.ObjectMapper;
 
 /** Typed access to the persisted evidence snapshot. */
 final class CapturedEvidence {
-
-    static final String DIFF_ARTIFACT = ContentSource.OUTPUT_PREFIX + "diff.patch";
-
-    static final String DIFF_PATHS_ARTIFACT = ContentSource.OUTPUT_PREFIX + "diff_paths.nul";
 
     record Artifact(SourceKind kind, String sha256) {}
 
@@ -119,32 +113,15 @@ final class CapturedEvidence {
         return head;
     }
 
-    Set<String> diffPaths(AgentJob job, JobEvidenceFiles evidenceFiles) {
-        if (!availableSources.contains(PracticeSubjectClause.DIFF_SOURCE)) return Set.of();
-        Artifact listing = artifacts.get(DIFF_PATHS_ARTIFACT);
-        if (listing == null || !listing.kind().equals(PracticeSubjectClause.DIFF_SOURCE)) {
-            throw new JobDeliveryException("Captured diff source has no diff artifact: jobId=" + job.getId());
+    /** The reviewed range as {@code {base, head}}, from the change the diff source pinned. */
+    String[] reviewRange() {
+        String identity = immutableIdentity(PracticeSubjectClause.DIFF_SOURCE);
+        String[] range = identity == null ? new String[0] : identity.split(":", -1);
+        if (range.length != 2
+                || !range[0].matches(CitationVerification.GIT_OBJECT_ID)
+                || !range[1].matches(CitationVerification.GIT_OBJECT_ID)) {
+            throw new JobDeliveryException("Captured change has no pinned base and head");
         }
-        return evidenceFiles
-                .inspect(job, DIFF_PATHS_ARTIFACT, listing.sha256(), reader -> {
-                    Set<String> paths = new HashSet<>();
-                    StringBuilder path = new StringBuilder();
-                    int value;
-                    while ((value = reader.read()) != -1) {
-                        if (value == 0) {
-                            if (path.isEmpty()) throw new JobDeliveryException("Captured diff contains an empty path");
-                            paths.add(path.toString());
-                            path.setLength(0);
-                        } else {
-                            if (path.length() >= 32_768)
-                                throw new JobDeliveryException(
-                                        "Captured diff path exceeds the filesystem path resource bound");
-                            path.append((char) value);
-                        }
-                    }
-                    if (!path.isEmpty()) throw new JobDeliveryException("Captured diff path is not NUL terminated");
-                    return Set.copyOf(paths);
-                })
-                .orElseThrow(() -> new JobDeliveryException("Captured diff is no longer available"));
+        return range;
     }
 }

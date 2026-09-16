@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewChange;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -13,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,14 +32,17 @@ final class PracticeReviewPreparation {
     private final WorkspaceContextBuilder workspaceContextBuilder;
     private final PracticeCatalogInjector practiceCatalogInjector;
     private final TaskEnvelopeWriter taskEnvelopeWriter;
+    private final GitRepositoryManager gitRepositoryManager;
 
     PracticeReviewPreparation(
             WorkspaceContextBuilder workspaceContextBuilder,
             PracticeCatalogInjector practiceCatalogInjector,
-            TaskEnvelopeWriter taskEnvelopeWriter) {
+            TaskEnvelopeWriter taskEnvelopeWriter,
+            GitRepositoryManager gitRepositoryManager) {
         this.workspaceContextBuilder = workspaceContextBuilder;
         this.practiceCatalogInjector = practiceCatalogInjector;
         this.taskEnvelopeWriter = taskEnvelopeWriter;
+        this.gitRepositoryManager = gitRepositoryManager;
     }
 
     /**
@@ -59,7 +64,12 @@ final class PracticeReviewPreparation {
         try {
             ArtifactSourceManifest manifest = Objects.requireNonNull(prepared.manifest(), "manifest");
             var readiness = workspaceContextBuilder.prepareAutomatedReviewReadiness(
-                    manifest, eligible, job.getId().toString(), job.getCreatedAt(), signal, prepared.files());
+                    manifest,
+                    eligible,
+                    job.getCreatedAt(),
+                    signal,
+                    prepared.files(),
+                    ReviewChange.of(gitRepositoryManager, request));
             List<Practice> ready = readiness.readyPractices();
             if (ready.size() < eligible.size()) {
                 log.info(

@@ -50,8 +50,13 @@ public class PracticePiAdapter {
         return resultParser.parse(sandboxResult);
     }
 
+    /**
+     * What runs before the model: the change view is derived from the checkout (a failure there is the
+     * review's failure, since nothing could be reviewed), then the practices' precompute scripts, which
+     * only add hints and may fail quietly.
+     */
     static String buildPrecomputeStep(int timeoutSeconds) {
         int budgetSeconds = Math.min(30, Math.max(1, timeoutSeconds / 10));
-        return "sh /workspace/pi-precompute.sh " + budgetSeconds + " && ";
+        return "node /workspace/pi-change.ts && sh /workspace/pi-precompute.sh " + budgetSeconds + " && ";
     }
 }

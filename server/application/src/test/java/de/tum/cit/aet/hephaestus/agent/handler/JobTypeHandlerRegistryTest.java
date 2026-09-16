@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -20,7 +20,7 @@ import tools.jackson.databind.json.JsonMapper;
 class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     @Mock
-    private JobEvidenceFiles cas;
+    private GitRepositoryManager gitRepositoryManager;
 
     @Mock
     private PracticeRepository practiceRepository;
@@ -46,7 +46,10 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     private PracticeReviewPreparation preparation(PracticeCatalogInjector practiceCatalogInjector) {
         return new PracticeReviewPreparation(
-                workspaceContextBuilder, practiceCatalogInjector, new TaskEnvelopeWriter(objectMapper));
+                workspaceContextBuilder,
+                practiceCatalogInjector,
+                new TaskEnvelopeWriter(objectMapper),
+                gitRepositoryManager);
     }
 
     private JobTypeHandler prReviewHandler() {
@@ -54,7 +57,6 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
         var practiceCatalogInjector = practiceCatalogInjector();
         return new PullRequestReviewHandler(
                 objectMapper,
-                cas,
                 practiceCatalogInjector,
                 preparation(practiceCatalogInjector),
                 parser,

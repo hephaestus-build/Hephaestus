@@ -258,7 +258,12 @@ standard as an experiment or a convention as a proven outcome.
    editor completion and CI validation, and Git history is the bundled version history. Declare the one
    occasion as `on` — a bare signal name is shorthand for a binding on that signal reading the
    artifact kind's default evidence. Reference any precompute script explicitly; a script must be named
-   after the practice slug, and an unreferenced one fails validation.
+   after the practice slug, and an unreferenced one fails validation. A precompute script is where a
+   practice's own feature extraction lives: it runs inside the review container, receives the parsed
+   diff, the artifact metadata, the captured context directory and the derived change directory
+   (`work/change/`), and reads them through the supplied library under `docker/agents/precompute/lib/`
+   (`context.ts`, `change.ts`, `references.ts`, `grep.ts`, `files.ts`, …). Nothing practice-specific is
+   computed on the server.
 6. Add or update focused automated-review tests, including required-source skipping and valid-empty evidence.
 7. Review the admin presentation and a representative piece of delivered feedback.
 

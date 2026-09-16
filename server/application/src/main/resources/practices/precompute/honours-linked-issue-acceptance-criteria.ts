@@ -25,9 +25,8 @@ interface LinkedWorkItem {
 	number?: number | string;
 	iid?: number | string;
 	title?: string;
-	// The SCM connector (LinkedWorkItemContentSource) emits the issue body under `bodyExcerpt`; keep
-	// `body`/`description` as host-general fallbacks for other connectors.
-	bodyExcerpt?: string;
+	// The SCM connector (LinkedWorkItemContentSource) emits the issue body under `body`; `description`
+	// is a host-general fallback for other connectors.
 	body?: string;
 	description?: string;
 }
@@ -49,7 +48,6 @@ function toLinkedWorkItem(entry: unknown): LinkedWorkItem {
 		number: optionalRef(entry.number),
 		iid: optionalRef(entry.iid),
 		title: optionalText(entry.title),
-		bodyExcerpt: optionalText(entry.bodyExcerpt),
 		body: optionalText(entry.body),
 		description: optionalText(entry.description),
 	};
@@ -103,13 +101,13 @@ export default async function honoursLinkedIssueAcceptanceCriteria(
 
 	const linked = unwrapLinkedItems(await readContextJson(contextDir, "linked_work_items.json"));
 	const linkedIssueBodyPresent = linked?.some(
-		(i) => (i.bodyExcerpt ?? i.body ?? i.description ?? "").trim().length > 0,
+		(i) => (i.body ?? i.description ?? "").trim().length > 0,
 	);
 	let acHeading = false;
 	let acBoxes = 0;
 	if (linked) {
 		for (const i of linked) {
-			const f = acFacts((i.bodyExcerpt ?? i.body ?? i.description ?? "").trim());
+			const f = acFacts((i.body ?? i.description ?? "").trim());
 			acHeading = acHeading || f.heading;
 			acBoxes += f.boxes;
 		}

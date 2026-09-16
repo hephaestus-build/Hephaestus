@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import de.tum.cit.aet.hephaestus.agent.context.HistoricalGitEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.DocumentContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
@@ -32,12 +33,6 @@ import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeDetectionCompletedEvent;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.Reader;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -136,7 +131,7 @@ public class PracticeDetectionDeliveryService {
         Admissible admissible = requireAdmissible(job, metadata);
         CapturedEvidence captured = admissible.evidence();
         Map<String, PracticeRevision> revisionsBySlug = admissible.revisionsBySlug();
-        var repositoryQuotes = verifyRepositoryQuotes(job, validObservations, captured);
+        var codeQuotes = verifyCodeQuotes(job, validObservations, captured);
         // A quote that does not verify discredits its own claim, and only EvidenceQuoteUnverifiedException
         // means that. Every other refusal here — an unstaged source, a malformed citation, work attributed
         // to the wrong person — impugns the run, so it stays fatal.
@@ -183,7 +178,7 @@ public class PracticeDetectionDeliveryService {
             }
             enforceAttribution(observation, revision, job);
             try {
-                var verifiedEvidence = enforceEvidenceBoundary(observation, revision, captured, job, repositoryQuotes);
+                var verifiedEvidence = enforceEvidenceBoundary(observation, revision, captured, job, codeQuotes);
                 observation = new ValidatedObservation(
                         observation.practiceSlug(),
                         observation.summary(),
@@ -317,7 +312,7 @@ public class PracticeDetectionDeliveryService {
             String evidenceJson = null;
             if (observation.evidence() != null) {
                 try {
-                    evidenceJson = objectMapper.writeValueAsString(evidenceForPersistence(observation.evidence()));
+                    evidenceJson = objectMapper.writeValueAsString(observation.evidence());
                 } catch (JacksonException e) {
                     throw new JobDeliveryException("Could not serialize validated evidence: jobId=" + job.getId(), e);
                 }
@@ -463,40 +458,83 @@ public class PracticeDetectionDeliveryService {
                 + job.getId());
     }
 
-    private Map<HistoricalGitEvidence.Citation, JobEvidenceFiles.QuoteMatch> verifyRepositoryQuotes(
+    /** The two repository sources a quote of code can name: the checkout, and the change within it. */
+    private static boolean isCodeSource(SourceKind kind) {
+        return RepositoryTreeContentSource.KIND.equals(kind) || PracticeSubjectClause.DIFF_SOURCE.equals(kind);
+    }
+
+    /**
+     * Every quote of code, verified in one pass against the attempt's checkout. A quote from the change
+     * is a quote from the head (NEW) or the base (OLD) of the pinned range, at a path the change touches.
+     */
+    private CodeQuotes verifyCodeQuotes(
             AgentJob job, List<ValidatedObservation> observations, CapturedEvidence captured) {
         List<JsonNode> candidates = new ArrayList<>();
+        boolean citesChange = false;
         for (ValidatedObservation observation : observations) {
             JsonNode evidence = observation.evidence();
             if (evidence == null) continue;
             for (JsonNode citation : evidence.path("citations")) {
-                if (RepositoryTreeContentSource.KIND
-                        .value()
-                        .equals(citation.path("sourceKind").asString())) {
+                String kind = citation.path("sourceKind").asString();
+                if (RepositoryTreeContentSource.KIND.value().equals(kind)
+                        || PracticeSubjectClause.DIFF_SOURCE.value().equals(kind)) {
                     candidates.add(citation);
+                    citesChange |= PracticeSubjectClause.DIFF_SOURCE.value().equals(kind);
                 }
             }
         }
-        if (candidates.isEmpty()) return Map.of();
+        if (candidates.isEmpty()) return new CodeQuotes(Map.of(), Set.of());
         SourceKind kind = RepositoryTreeContentSource.KIND;
         String root = SandboxLayout.REPO_MOUNT_RELATIVE;
         CapturedEvidence.Artifact head = captured.requireArtifact(kind, root + ".git/HEAD");
         CapturedEvidence.Artifact refs = captured.requireArtifact(kind, root + ".git/hephaestus-captured-refs");
         String pinnedHead = captured.pinnedHead();
         var requested = candidates.stream()
-                .map(citation -> repositoryCitation(citation, pinnedHead))
+                .map(citation -> codeCitation(citation, captured))
                 .toList();
-        return historicalGit.verifyAll(job, head.sha256(), refs.sha256(), pinnedHead, requested);
+        Set<String> changedPaths = Set.of();
+        if (citesChange) {
+            String[] range = captured.reviewRange();
+            changedPaths = historicalGit.changedPaths(job, head.sha256(), refs.sha256(), range[0], range[1]);
+        }
+        return new CodeQuotes(
+                historicalGit.verifyAll(job, head.sha256(), refs.sha256(), pinnedHead, requested), changedPaths);
     }
 
-    private static HistoricalGitEvidence.Citation repositoryCitation(JsonNode citation, String pinnedHead) {
-        String revision = citation.path("revision").asString(pinnedHead);
+    private record CodeQuotes(
+            Map<HistoricalGitEvidence.Citation, JobEvidenceFiles.QuoteMatch> matches, Set<String> changedPaths) {}
+
+    /**
+     * A quote of code as a revision, a path and a line range. A checkout citation names the captured
+     * {@code .git/HEAD} and may select a revision; a change citation names the pinned change and a side,
+     * which selects the revision for it.
+     */
+    private static HistoricalGitEvidence.Citation codeCitation(JsonNode citation, CapturedEvidence captured) {
+        boolean change = PracticeSubjectClause.DIFF_SOURCE
+                .value()
+                .equals(citation.path("sourceKind").asString());
+        String expectedArtifact =
+                change ? PullRequestContentSource.CHANGE_FILE : SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD";
+        String side = citation.path("side").asString("");
+        String revision;
+        if (change) {
+            if (!citation.path("revision").isMissingNode() || !(side.equals("OLD") || side.equals("NEW"))) {
+                throw new JobDeliveryException(
+                        "Invalid change citation: name the OLD or NEW side of the pinned change, not a revision");
+            }
+            String[] range = captured.reviewRange();
+            revision = side.equals("OLD") ? range[0] : range[1];
+        } else {
+            if (!citation.path("side").isMissingNode()) {
+                throw new JobDeliveryException("Invalid repository citation: a checkout quote has no side");
+            }
+            revision = citation.path("revision").asString(captured.pinnedHead());
+        }
         String path = citation.path("path").asString();
         String quote = citation.path("quote").asString();
         int start = citation.path("startLine").asInt(-1);
         int end = citation.path("endLine").asInt(start);
-        if (!(SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD")
-                        .equals(citation.path("artifactPath").asString())
+        if (!expectedArtifact.equals(citation.path("artifactPath").asString())
                 || !revision.matches(CitationVerification.GIT_OBJECT_ID)
                 || !citation.path("path").isString()
                 || !citation.path("quote").isString()
@@ -506,10 +544,9 @@ public class PracticeDetectionDeliveryService {
                 || start < 1
                 || end < start
                 || (!citation.path("endLine").isMissingNode()
-                        && !citation.path("endLine").isIntegralNumber())
-                || !citation.path("side").isMissingNode()) {
+                        && !citation.path("endLine").isIntegralNumber())) {
             throw new JobDeliveryException(
-                    "Invalid repository citation: use the captured HEAD witness, relative path and exact line range");
+                    "Invalid code citation: name the captured artifact, a relative path and an exact line range");
         }
         CitationVerification.quoteDigest(quote);
         return new HistoricalGitEvidence.Citation(revision, path, quote, start, end);
@@ -520,7 +557,7 @@ public class PracticeDetectionDeliveryService {
             PracticeRevision revision,
             CapturedEvidence captured,
             AgentJob job,
-            Map<HistoricalGitEvidence.Citation, JobEvidenceFiles.QuoteMatch> repositoryQuotes) {
+            CodeQuotes codeQuotes) {
         if (revision.getAutomatedReviewPolicy() == null || revision.getBindings() == null) {
             throw new JobDeliveryException("Practice has no evidence requirements: slug=" + observation.practiceSlug()
                     + ", jobId=" + job.getId());
@@ -553,30 +590,17 @@ public class PracticeDetectionDeliveryService {
                 });
         enforceRecordedSearch(observation, exhaustive, captured, job);
         enforceStatedInapplicability(observation, captured, job);
-        String diffSource = PracticeSubjectClause.DIFF_SOURCE.value();
         for (int citationIndex = 0; citationIndex < citations.size(); citationIndex++) {
             JsonNode citation = citations.get(citationIndex);
             JsonNode sourceKind = citation.path("sourceKind");
             JsonNode artifactPath = citation.path("artifactPath");
-            JsonNode path = citation.path("path");
-            JsonNode side = citation.path("side");
             JsonNode startLine = citation.path("startLine");
             JsonNode endLine = citation.path("endLine");
             JsonNode quote = citation.path("quote");
-            JsonNode quoteSha256 = citation.path("quoteSha256");
-            boolean redactedSecretCitation =
-                    "secret-diff-scanner".equals(evidence.path("detector").asString())
-                            && diffSource.equals(sourceKind.asString())
-                            && quote.isMissingNode()
-                            && quoteSha256.isString()
-                            && quoteSha256.asString().matches(CitationVerification.SHA256_HEX);
             if (!citation.isObject()
                     || !sourceKind.isString()
                     || !artifactPath.isString()
-                    || !path.isString()
-                    || (diffSource.equals(sourceKind.asString())
-                            && (!side.isString() || !("OLD".equals(side.asString()) || "NEW".equals(side.asString()))))
-                    || (!diffSource.equals(sourceKind.asString()) && !side.isMissingNode())
+                    || !citation.path("path").isString()
                     || !startLine.isIntegralNumber()
                     || !startLine.canConvertToInt()
                     || startLine.asInt() < 1
@@ -584,7 +608,7 @@ public class PracticeDetectionDeliveryService {
                             && (!endLine.isIntegralNumber()
                                     || !endLine.canConvertToInt()
                                     || endLine.asInt() < startLine.asInt()))
-                    || (!quote.isString() && !redactedSecretCitation)) {
+                    || !quote.isString()) {
                 throw new JobDeliveryException(
                         "Observation has an invalid evidence citation: slug=" + observation.practiceSlug()
                                 + ", jobId="
@@ -611,76 +635,53 @@ public class PracticeDetectionDeliveryService {
                         + job.getId());
             }
             String exactQuote = quote.asString("");
-            if (!redactedSecretCitation && exactQuote.isBlank()) {
+            if (exactQuote.isBlank()) {
                 throw new JobDeliveryException(
                         "Observation has an empty evidence quote: slug=" + observation.practiceSlug()
                                 + ", jobId="
                                 + job.getId());
             }
-            String quoteDigest =
-                    redactedSecretCitation ? quoteSha256.asString() : CitationVerification.quoteDigest(exactQuote);
-            JsonNode gitRevision = citation.path("revision");
-            if (RepositoryTreeContentSource.KIND.equals(kind) || !gitRevision.isMissingNode()) {
-                if (!RepositoryTreeContentSource.KIND.equals(kind))
-                    throw new JobDeliveryException("Only repository citations may select a revision");
-                var requested = repositoryCitation(citation, captured.pinnedHead());
+            String quoteDigest = CitationVerification.quoteDigest(exactQuote);
+            if (isCodeSource(kind)
+                    || !citation.path("revision").isMissingNode()
+                    || !citation.path("side").isMissingNode()) {
+                if (!isCodeSource(kind))
+                    throw new JobDeliveryException("Only repository citations may select a revision or a side");
+                var requested = codeCitation(citation, captured);
                 ((ObjectNode) citation).put("revision", requested.revision());
-                var match = repositoryQuotes.get(requested);
-                if (match == null) throw new JobDeliveryException("Repository citation has no prepared verification");
+                if (PracticeSubjectClause.DIFF_SOURCE.equals(kind)
+                        && !codeQuotes.changedPaths().contains(requested.path())) {
+                    throw new EvidenceQuoteUnverifiedException(
+                            "Cited path is not touched by the reviewed change", citationIndex);
+                }
+                var match = codeQuotes.matches().get(requested);
+                if (match == null) throw new JobDeliveryException("Code citation has no prepared verification");
                 String blobDigest = match.artifactSha256();
                 if (blobDigest == null)
                     throw new EvidenceQuoteUnverifiedException(
                             "Cited path does not exist at the cited revision", citationIndex);
                 if (!match.matches())
                     throw new EvidenceQuoteUnverifiedException(
-                            "Historical quote does not match the cited revision and lines", citationIndex);
+                            "Quote does not match the cited revision and lines", citationIndex);
                 CitationVerification.record((ObjectNode) citation, job, blobDigest, quoteDigest);
                 continue;
             }
-            if (!PracticeSubjectClause.DIFF_SOURCE.equals(kind)) {
-                // The path of a serialized source is a label for the reader; the artifact and its lines
-                // are what the quote is verified against.
-                boolean containsQuote = evidenceFiles
-                        .containsUtf8AtLines(
-                                job,
-                                artifactPath.asString(),
-                                artifact.sha256(),
-                                exactQuote,
-                                startLine.asInt(),
-                                endLine.isMissingNode() ? startLine.asInt() : endLine.asInt())
-                        .orElseThrow(
-                                () -> new JobDeliveryException("Cited evidence artifact is no longer available: path="
-                                        + artifactPath.asString() + ", jobId=" + job.getId()));
-                if (!containsQuote) {
-                    throw new EvidenceQuoteUnverifiedException(
-                            "Evidence quote does not occur in the cited artifact: path=" + artifactPath.asString()
-                                    + ", jobId=" + job.getId(),
-                            citationIndex);
-                }
-                CitationVerification.record((ObjectNode) citation, job, artifact.sha256(), quoteDigest);
-                continue;
-            }
-            boolean matches = evidenceFiles
-                    .inspect(
+            // The path of a serialized source is a label for the reader; the artifact and its lines
+            // are what the quote is verified against.
+            boolean containsQuote = evidenceFiles
+                    .containsUtf8AtLines(
                             job,
                             artifactPath.asString(),
                             artifact.sha256(),
-                            reader -> diffContainsCitation(
-                                    reader,
-                                    path.asString(),
-                                    side.asString(),
-                                    startLine.asInt(),
-                                    endLine.isMissingNode() ? startLine.asInt() : endLine.asInt(),
-                                    exactQuote,
-                                    redactedSecretCitation ? quoteSha256.asString() : null))
-                    .orElseThrow(() -> new JobDeliveryException("Cited diff is no longer available"));
-            if (!matches) {
+                            exactQuote,
+                            startLine.asInt(),
+                            endLine.isMissingNode() ? startLine.asInt() : endLine.asInt())
+                    .orElseThrow(() -> new JobDeliveryException("Cited evidence artifact is no longer available: path="
+                            + artifactPath.asString() + ", jobId=" + job.getId()));
+            if (!containsQuote) {
                 throw new EvidenceQuoteUnverifiedException(
-                        "Evidence quote does not match the cited diff location: path=" + path.asString()
-                                + ", line="
-                                + startLine.asInt()
-                                + ", jobId="
-                                + job.getId(),
+                        "Evidence quote does not occur in the cited artifact: path=" + artifactPath.asString()
+                                + ", jobId=" + job.getId(),
                         citationIndex);
             }
             CitationVerification.record((ObjectNode) citation, job, artifact.sha256(), quoteDigest);
@@ -809,131 +810,6 @@ public class PracticeDetectionDeliveryService {
                             + ", jobId="
                             + job.getId());
         }
-    }
-
-    private static JsonNode evidenceForPersistence(JsonNode evidence) {
-        JsonNode persisted = evidence.deepCopy();
-        if ("secret-diff-scanner".equals(persisted.path("detector").asString())) {
-            for (JsonNode citation : persisted.path("citations")) {
-                if (citation instanceof ObjectNode object) {
-                    object.remove("quoteSha256");
-                }
-            }
-        }
-        return persisted;
-    }
-
-    private static boolean diffContainsCitation(
-            Reader reader,
-            String citedPath,
-            String citedSide,
-            int start,
-            int end,
-            String quote,
-            @Nullable String redactedDigest)
-            throws IOException {
-        List<String> expected = new ArrayList<>(List.of(quote.split("\r\n|\r|\n", -1)));
-        if (expected.size() == (long) end - start + 2 && expected.getLast().isEmpty()) expected.removeLast();
-        if (redactedDigest == null && expected.size() != (long) end - start + 1) return false;
-        @Nullable String[] paths = new String[2];
-        Map<Integer, Boolean> matches = new HashMap<>();
-        int prefixLength = Math.max(citedPath.length() * 4 + 64, quote.length() + 64);
-        DiffEvidenceReader.scan(reader, prefixLength, redactedDigest != null, stored -> {
-            String line = stored.prefix();
-            if (!line.startsWith("[L")) {
-                // A header the prefix could not hold names a file no citation can, and must not leave the
-                // previous file's name standing over the lines that follow it.
-                if (line.startsWith("diff --git")) {
-                    paths[0] = null;
-                    paths[1] = null;
-                } else if (line.startsWith("--- ")) {
-                    paths[0] = stored.complete() ? parseDiffPath(line.substring(4)) : null;
-                } else if (line.startsWith("+++ ")) {
-                    paths[1] = stored.complete() ? parseDiffPath(line.substring(4)) : null;
-                }
-                return;
-            }
-            int annotationEnd = line.indexOf("] ");
-            if (annotationEnd < 3) return;
-            int number;
-            try {
-                number = Integer.parseInt(line.substring(2, annotationEnd));
-            } catch (NumberFormatException exception) {
-                return;
-            }
-            line = line.substring(annotationEnd + 2);
-            if (line.isEmpty()) return;
-            boolean old = line.startsWith("-");
-            if (number < start
-                    || number > end
-                    || !citedSide.equals(old ? "OLD" : "NEW")
-                    || !citedPath.equals(paths[old ? 0 : 1])) return;
-            boolean match;
-            if (redactedDigest != null) {
-                match = start == end && redactedDigest.equals(stored.contentSha256());
-            } else {
-                String expectedLine = expected.get(number - start);
-                match = stored.complete()
-                        && (stored.prefix().equals(expectedLine)
-                                || line.equals(expectedLine)
-                                || (!line.isEmpty() && line.substring(1).equals(expectedLine)));
-            }
-            matches.merge(number, match, (previous, current) -> previous && current);
-        });
-        return matches.size() == (long) end - start + 1
-                && matches.values().stream().allMatch(Boolean::booleanValue);
-    }
-
-    static @Nullable String parseDiffPath(String value) {
-        String path = value;
-        if (path.startsWith("\"")) {
-            if (!path.endsWith("\"")) throw new JobDeliveryException("Malformed quoted Git path");
-            var bytes = new ByteArrayOutputStream();
-            for (int i = 1; i < path.length() - 1; i++) {
-                char character = path.charAt(i);
-                if (character != '\\') {
-                    int codePoint = path.codePointAt(i);
-                    bytes.writeBytes(new String(Character.toChars(codePoint)).getBytes(StandardCharsets.UTF_8));
-                    if (Character.isSupplementaryCodePoint(codePoint)) i++;
-                    continue;
-                }
-                if (++i >= path.length() - 1) throw new JobDeliveryException("Malformed Git path escape");
-                char escaped = path.charAt(i);
-                if (escaped >= '0' && escaped <= '7') {
-                    int octal = escaped - '0';
-                    for (int n = 0; n < 2 && i + 1 < path.length() - 1; n++) {
-                        char digit = path.charAt(i + 1);
-                        if (digit < '0' || digit > '7') break;
-                        octal = octal * 8 + digit - '0';
-                        i++;
-                    }
-                    bytes.write(octal);
-                } else {
-                    bytes.write(
-                            switch (escaped) {
-                                case 'a' -> 7;
-                                case 'b' -> '\b';
-                                case 't' -> '\t';
-                                case 'n' -> '\n';
-                                case 'v' -> 11;
-                                case 'f' -> '\f';
-                                case 'r' -> '\r';
-                                case '\\', '"' -> escaped;
-                                default -> throw new JobDeliveryException("Malformed Git path escape");
-                            });
-                }
-            }
-            try {
-                path = StandardCharsets.UTF_8
-                        .newDecoder()
-                        .decode(ByteBuffer.wrap(bytes.toByteArray()))
-                        .toString();
-            } catch (CharacterCodingException exception) {
-                throw new JobDeliveryException("Git path is not valid UTF-8", exception);
-            }
-        }
-        if ("/dev/null".equals(path)) return null;
-        return path.startsWith("a/") || path.startsWith("b/") ? path.substring(2) : path;
     }
 
     private Map<String, PracticeRevision> admittedRevisions(AgentJob job, Long workspaceId) {

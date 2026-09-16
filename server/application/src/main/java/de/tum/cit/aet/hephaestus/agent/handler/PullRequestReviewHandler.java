@@ -7,7 +7,6 @@ import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requ
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
@@ -31,7 +30,6 @@ import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -51,7 +49,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     private static final Logger log = LoggerFactory.getLogger(PullRequestReviewHandler.class);
 
     private final JsonMapper objectMapper;
-    private final JobEvidenceFiles evidenceFiles;
     private final PracticeCatalogInjector practiceCatalogInjector;
     private final PracticeReviewPreparation preparation;
     private final PracticeDetectionResultParser resultParser;
@@ -64,7 +61,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
     PullRequestReviewHandler(
             JsonMapper objectMapper,
-            JobEvidenceFiles evidenceFiles,
             PracticeCatalogInjector practiceCatalogInjector,
             PracticeReviewPreparation preparation,
             PracticeDetectionResultParser resultParser,
@@ -75,7 +71,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             InContextDeliveryGate inContextDeliveryGate,
             ObservationRepository observationRepository) {
         this.objectMapper = objectMapper;
-        this.evidenceFiles = evidenceFiles;
         this.practiceCatalogInjector = practiceCatalogInjector;
         this.preparation = preparation;
         this.resultParser = resultParser;
@@ -169,7 +164,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                     // rather than over this diff alone. Absent for a backfill sweep — see
                     // FeedbackCompositionInputs.
                     FeedbackCompositionInputs.stage(files, PracticeDetectionDeliveryService.originOf(metadata));
-                    ContextMapWriter.write(files);
                 });
 
         long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000;
@@ -300,45 +294,24 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         }
 
         CapturedEvidence captured = CapturedEvidence.of(job, objectMapper);
-        Set<String> diffFiles = captured.diffPaths(job, evidenceFiles);
-        // What is left to catch is a review that answered without reading the change. The paths counted
-        // here and the patch staged for the run come from one capture, so a stale one is stale on both
-        // sides and invisible from here. A diff citation is the one thing that cannot be produced
-        // without the patch: the runner re-reads every citation out of the artifact it names
-        // (citationMatchesArtifact in pi-observation-normalize.ts) and rejects the observation when the
-        // quote is not there. Both unassessed statuses count as deciding nothing — NOT_APPLICABLE and
-        // UNDETERMINED differ in what the run could tell, not in whether it settled anything.
+        // What is left to catch is a review that answered without reading the change. A change citation
+        // is the one thing that cannot be produced without it: the runner re-reads every citation out of
+        // the diff it derived from the checkout (citationMatchesArtifact in pi-observation-normalize.ts)
+        // and rejects the observation when the quote is not there, and admission verifies the quote
+        // against the pinned revision. Both unassessed statuses count as deciding nothing —
+        // NOT_APPLICABLE and UNDETERMINED differ in what the run could tell, not in whether it settled
+        // anything.
         boolean nothingDecided =
                 parsed.validObservations().stream().noneMatch(f -> (f.assessmentStatus() == AssessmentStatus.ASSESSED));
-        if (nothingDecided && !diffFiles.isEmpty() && !readTheDiff(parsed.validObservations())) {
+        boolean changeCaptured = captured.availableSources().contains(PracticeSubjectClause.DIFF_SOURCE);
+        if (nothingDecided && changeCaptured && !readTheDiff(parsed.validObservations())) {
             throw new ObservationsRefusedException(
                     "did_not_read_the_diff",
-                    "No observation decided anything or quoted the diff, and the diff contains "
-                            + diffFiles.size()
-                            + " files — the review answered without reading the change. "
-                            + "Refusing to deliver. jobId="
+                    "No observation decided anything or quoted the change, and a change was captured — the"
+                            + " review answered without reading it. Refusing to deliver. jobId="
                             + job.getId());
         }
-
-        List<PracticeDetectionResultParser.ValidatedObservation> scopedObservations =
-                new ArrayList<>(filterByDiffScope(parsed.validObservations(), diffFiles));
-        if (scopedObservations.size() < parsed.validObservations().size()) {
-            log.info(
-                    "Diff scope filter removed {} out-of-scope observations: jobId={}, before={}, after={}",
-                    parsed.validObservations().size() - scopedObservations.size(),
-                    job.getId(),
-                    parsed.validObservations().size(),
-                    scopedObservations.size());
-        }
-        if (scopedObservations.isEmpty()) {
-            throw new ObservationsRefusedException(
-                    "out_of_diff_scope",
-                    "All observations were filtered by diff scope: jobId=" + job.getId()
-                            + ", before="
-                            + parsed.validObservations().size()
-                            + ", diffFiles="
-                            + diffFiles.size());
-        }
+        List<PracticeDetectionResultParser.ValidatedObservation> scopedObservations = parsed.validObservations();
 
         var admissible =
                 deliveryService.prepare(job, PracticeDetectionResultParser.validateCoherence(scopedObservations));
@@ -386,58 +359,5 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             }
         }
         return false;
-    }
-
-    static List<PracticeDetectionResultParser.ValidatedObservation> filterByDiffScope(
-            List<PracticeDetectionResultParser.ValidatedObservation> observations, Set<String> diffFiles) {
-        if (diffFiles.isEmpty()) return observations;
-        List<PracticeDetectionResultParser.ValidatedObservation> filtered = new ArrayList<>();
-        for (var observation : observations) {
-            JsonNode evidence = observation.evidence();
-            if (evidence == null || evidence.isNull() || evidence.isMissingNode()) {
-                filtered.add(observation);
-                continue;
-            }
-            JsonNode citations = evidence.get("citations");
-            if (citations == null || !citations.isArray() || citations.isEmpty()) {
-                filtered.add(observation);
-                continue;
-            }
-            boolean hasInScopeLocation = false;
-            for (JsonNode citation : citations) {
-                String sourceKind = citation.path("sourceKind").asString();
-                if (sourceKind.isBlank()) {
-                    continue;
-                }
-                if (!PracticeSubjectClause.DIFF_SOURCE.value().equals(sourceKind)) {
-                    hasInScopeLocation = true;
-                    break;
-                }
-                JsonNode pathNode = citation.get("path");
-                if (pathNode == null || pathNode.isNull() || pathNode.isMissingNode()) {
-                    continue;
-                }
-                String path = pathNode.asString();
-                if (path.isBlank() || "null".equals(path)) {
-                    continue;
-                }
-                String repoRelative = path.startsWith(SandboxLayout.REPO_MOUNT_RELATIVE)
-                        ? path.substring(SandboxLayout.REPO_MOUNT_RELATIVE.length())
-                        : path;
-                if (diffFiles.contains(path) || diffFiles.contains(repoRelative)) {
-                    hasInScopeLocation = true;
-                    break;
-                }
-            }
-            if (hasInScopeLocation) {
-                filtered.add(observation);
-            } else {
-                log.info(
-                        "Filtered out-of-scope observation: slug={}, citations={}",
-                        observation.practiceSlug(),
-                        citations);
-            }
-        }
-        return filtered;
     }
 }

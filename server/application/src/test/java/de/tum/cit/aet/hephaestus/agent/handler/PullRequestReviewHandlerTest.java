@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -16,12 +15,11 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContextManifestBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
+import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionDeliveryService.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
@@ -34,6 +32,7 @@ import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -67,18 +66,16 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     private final JsonMapper objectMapper = JsonMapper.builder().build();
 
     @Mock
-    private JobEvidenceFiles cas;
+    private PracticeRepository practiceRepository;
 
     @Mock
-    private PracticeRepository practiceRepository;
+    private GitRepositoryManager gitRepositoryManager;
 
     @Mock
     private WorkspaceContextBuilder workspaceContextBuilder;
 
     @Mock
     private PracticeDetectionDeliveryService deliveryService;
-
-    private String capturedPaths = "";
 
     @Mock
     private FeedbackDeliveryService feedbackService;
@@ -100,9 +97,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults());
         handler = new PullRequestReviewHandler(
                 objectMapper,
-                cas,
                 practiceCatalogInjector,
-                new PracticeReviewPreparation(workspaceContextBuilder, practiceCatalogInjector, taskEnvelopeWriter),
+                new PracticeReviewPreparation(
+                        workspaceContextBuilder, practiceCatalogInjector, taskEnvelopeWriter, gitRepositoryManager),
                 resultParser,
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
                 deliveryService,
@@ -120,10 +117,6 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                                 de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
                         org.mockito.Mockito.mock(FeedbackLedgerRecorder.class)),
                 observationRepository);
-        lenient().when(cas.inspect(any(), anyString(), anyString(), any())).thenAnswer(invocation -> {
-            JobEvidenceFiles.TextInspection<?> inspection = invocation.getArgument(3);
-            return java.util.Optional.of(inspection.inspect(new java.io.StringReader(capturedPaths)));
-        });
     }
 
     @Test
@@ -194,9 +187,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         return job;
     }
 
-    private static final String DIFF_SHA = "b".repeat(64);
+    private static final String CHANGE_SHA = "b".repeat(64);
 
-    /** Every fixture practice admitted, over a captured diff. */
+    /** Every fixture practice admitted, over a captured change. */
     private ObjectNode admittedPracticeSnapshot() {
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(objectMapper);
         EvidenceSnapshotFixtures.admittedPractice(snapshot, "pr-description-quality", 1)
@@ -206,8 +199,16 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 .put("defectDetector", true);
         ObjectNode diff = EvidenceSnapshotFixtures.availableSource(
                 snapshot, "scm.pull-request.diff", "a".repeat(40) + ":" + "b".repeat(40));
-        EvidenceSnapshotFixtures.artifact(diff, "inputs/context/diff_paths.nul", "a".repeat(64));
-        EvidenceSnapshotFixtures.artifact(diff, "inputs/context/diff.patch", DIFF_SHA);
+        EvidenceSnapshotFixtures.artifact(diff, PullRequestContentSource.CHANGE_FILE, CHANGE_SHA);
+        return snapshot;
+    }
+
+    /** The same admission, over a review whose change could not be captured. */
+    private ObjectNode admittedPracticeSnapshotWithoutChange() {
+        ObjectNode snapshot = admittedPracticeSnapshot();
+        for (JsonNode source : snapshot.withObject("manifest").withArray("sources")) {
+            EvidenceSnapshotFixtures.unavailable((ObjectNode) source);
+        }
         return snapshot;
     }
 
@@ -238,8 +239,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                         any(ContextRequest.PracticeReviewRequest.class), any(EvidencePlan.class)))
                 .thenReturn(prepared(Map.of("inputs/context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8))));
         lenient()
-                .when(workspaceContextBuilder.prepareAutomatedReviewReadiness(
-                        any(), any(), anyString(), any(), any(), any()))
+                .when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
                 .thenAnswer(invocation -> readiness(invocation.getArgument(1)));
         lenient()
                 .when(practiceRepository.findByWorkspaceIdAndArtifactKind(WORKSPACE_ID, ArtifactKinds.PULL_REQUEST))
@@ -392,8 +392,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             when(workspaceContextBuilder.prepare(
                             any(ContextRequest.PracticeReviewRequest.class), any(EvidencePlan.class)))
                     .thenReturn(prepared(Map.of("inputs/context/metadata.json", metadataBytes)));
-            when(workspaceContextBuilder.prepareAutomatedReviewReadiness(
-                            any(), any(), anyString(), any(), any(), any()))
+            when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
                     .thenAnswer(invocation -> readiness(invocation.getArgument(1)));
             when(practiceRepository.findByWorkspaceIdAndArtifactKind(WORKSPACE_ID, ArtifactKinds.PULL_REQUEST))
                     .thenReturn(samplePractices());
@@ -428,7 +427,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
 
             assertThat(files).containsKey("inputs/practices/index.json");
-            assertThat(files).containsKey("inputs/practices/all-criteria.md");
+            assertThat(files).doesNotContainKey("inputs/practices/all-criteria.md");
             assertThat(files).containsKey("inputs/practices/pr-description-quality.md");
             assertThat(files).containsKey("inputs/practices/error-handling.md");
             assertThat(files).containsKey("work/analysis/practices/.gitkeep");
@@ -476,11 +475,10 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         void preservesProviderOrder() {
             var providerFiles = new LinkedHashMap<String, byte[]>();
             providerFiles.put("inputs/context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8));
-            providerFiles.put("inputs/context/diff.patch", "diff".getBytes(StandardCharsets.UTF_8));
+            providerFiles.put("inputs/context/change.json", "{}".getBytes(StandardCharsets.UTF_8));
             providerFiles.put("inputs/context/comments.json", "[]".getBytes(StandardCharsets.UTF_8));
             when(workspaceContextBuilder.prepare(any(), any())).thenReturn(prepared(providerFiles));
-            when(workspaceContextBuilder.prepareAutomatedReviewReadiness(
-                            any(), any(), anyString(), any(), any(), any()))
+            when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
                     .thenAnswer(invocation -> readiness(invocation.getArgument(1)));
             when(practiceRepository.findByWorkspaceIdAndArtifactKind(WORKSPACE_ID, ArtifactKinds.PULL_REQUEST))
                     .thenReturn(samplePractices());
@@ -489,7 +487,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
             var keys = files.keySet().iterator();
             assertThat(keys.next()).isEqualTo("inputs/context/metadata.json");
-            assertThat(keys.next()).isEqualTo("inputs/context/diff.patch");
+            assertThat(keys.next()).isEqualTo("inputs/context/change.json");
             assertThat(keys.next()).isEqualTo("inputs/context/comments.json");
         }
     }
@@ -712,88 +710,46 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             assertThat(secret.severity()).isEqualTo(Severity.CRITICAL);
         }
 
-        private void stubDiff(String path) {
-            capturedPaths = path + "\0";
-        }
-
-        private static final String PRESENT_OBSERVATION = """
+        private static final String NOTHING_DECIDED = """
             {
               "observations": [{
                 "practiceSlug": "pr-description-quality",
-                "summary": "Good PR description",
-                "assessmentStatus": "ASSESSED", "presence": "PRESENT",
-                "assessment": "GOOD",
-                "severity": null,
-                "evidenceRationale": "The description states the purpose.",
-                "evidence": {}
+                "summary": "Not applicable here",
+                "assessmentStatus": "NOT_APPLICABLE", "presence": null, "assessment": null, "severity": null,
+                "evidenceRationale": "The practice has no subject in this change.",
+                "evidence": { "citations": [], "inapplicability": { "reason": "No relevant subject exists." } }
               }]
             }
             """;
 
         @Test
-        void shouldRefuseACapturedDiffListingWithAnEmptyPath() {
-            AgentJob job = jobWithOutput(PRESENT_OBSERVATION);
-            capturedPaths = "Sources/Auth.swift\0\0";
-
-            assertThatThrownBy(() -> admit(job, PRESENT_OBSERVATION))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessage("Captured diff contains an empty path");
-            verifyNoInteractions(deliveryService);
-        }
-
-        @Test
-        void shouldRefuseACapturedDiffListingThatIsNotNulTerminated() {
-            AgentJob job = jobWithOutput(PRESENT_OBSERVATION);
-            capturedPaths = "Sources/Auth.swift";
-
-            assertThatThrownBy(() -> admit(job, PRESENT_OBSERVATION))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessage("Captured diff path is not NUL terminated");
-            verifyNoInteractions(deliveryService);
-        }
-
-        @Test
-        void shouldRefuseACapturedDiffPathOneByteOverTheBound() {
-            AgentJob job = jobWithOutput(PRESENT_OBSERVATION);
-            stubDiff("a".repeat(32_769));
-
-            assertThatThrownBy(() -> admit(job, PRESENT_OBSERVATION))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessage("Captured diff path exceeds the filesystem path resource bound");
-            verifyNoInteractions(deliveryService);
-        }
-
-        @Test
-        void shouldAcceptACapturedDiffPathExactlyAtTheBound() {
-            AgentJob job = jobWithOutput(PRESENT_OBSERVATION);
-            stubDiff("a".repeat(32_768));
-
-            assertThatCode(() -> admit(job, PRESENT_OBSERVATION)).doesNotThrowAnyException();
-        }
-
-        @Test
-        void throwsWhenAllNotApplicableButDiffHasFiles() {
-            String rawOutput = """
-                {
-                  "observations": [{
-                    "practiceSlug": "pr-description-quality",
-                    "summary": "Not applicable here",
-                    "assessmentStatus": "NOT_APPLICABLE", "presence": null, "assessment": null, "severity": null,
-                    "evidenceRationale": "The practice has no subject in this change.",
-                    "evidence": { "citations": [], "inapplicability": { "reason": "No relevant subject exists." } }
-                  }]
-                }
-                """;
+        void refusesWhenNothingWasDecidedOverACapturedChangeNobodyRead() {
             AgentJob job = jobWithMetadata(sampleJobMetadata());
             ObjectNode output = objectMapper.createObjectNode();
-            output.put("rawOutput", rawOutput);
+            output.put("rawOutput", NOTHING_DECIDED);
             job.setOutput(output);
-            stubDiff("Sources/Auth.swift");
 
-            assertThatThrownBy(() -> admit(job, rawOutput))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("answered without reading the change");
+            assertThatThrownBy(() -> admit(job, NOTHING_DECIDED))
+                    .isInstanceOfSatisfying(
+                            ObservationsRefusedException.class,
+                            e -> assertThat(e.reasonCode()).isEqualTo("did_not_read_the_diff"))
+                    .hasMessageContaining("answered without reading it");
             verifyNoInteractions(deliveryService);
+        }
+
+        @Test
+        void admitsWhenNothingWasDecidedAndNoChangeWasCaptured() {
+            AgentJob job = jobWithMetadata(sampleJobMetadata());
+            job.setEvidenceSnapshot(admittedPracticeSnapshotWithoutChange());
+            ObjectNode output = objectMapper.createObjectNode();
+            output.put("rawOutput", NOTHING_DECIDED);
+            job.setOutput(output);
+            when(deliveryService.prepare(eq(job), any()))
+                    .thenReturn(org.mockito.Mockito.mock(PreparedObservations.class));
+
+            admit(job, NOTHING_DECIDED);
+
+            verify(deliveryService).prepare(eq(job), any());
         }
 
         @Test
@@ -809,7 +765,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     "evidence": {
                       "citations": [{
                         "sourceKind": "scm.pull-request.diff",
-                        "artifactPath": "inputs/context/diff.patch",
+                        "artifactPath": "inputs/context/change.json",
                         "path": "Sources/Auth.swift",
                         "side": "NEW",
                         "startLine": 1,
@@ -825,7 +781,6 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             ObjectNode output = objectMapper.createObjectNode();
             output.put("rawOutput", rawOutput);
             job.setOutput(output);
-            stubDiff("Sources/Auth.swift");
             ArgumentCaptor<List<PracticeDetectionResultParser.ValidatedObservation>> captor =
                     ArgumentCaptor.forClass(List.class);
             when(deliveryService.prepare(eq(job), captor.capture()))
@@ -837,33 +792,6 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 assertThat(observation.practiceSlug()).isEqualTo("pr-description-quality");
                 assertThat(observation.assessmentStatus()).isEqualTo(AssessmentStatus.NOT_APPLICABLE);
             });
-        }
-
-        @Test
-        void throwsWhenAllFindingsFilteredByDiffScope() {
-            String rawOutput = """
-                {
-                  "observations": [{
-                    "practiceSlug": "error-handling",
-                    "summary": "Unhandled error path",
-                    "assessmentStatus": "ASSESSED", "presence": "ABSENT",
-                    "assessment": "GOOD",
-                    "severity": "MAJOR",
-                    "evidenceRationale": "The error branch is swallowed.",
-                    "evidence": { "citations": [{ "path": "Sources/NotInDiff.swift", "startLine": 3 }] }
-                  }]
-                }
-                """;
-            AgentJob job = jobWithMetadata(sampleJobMetadata());
-            ObjectNode output = objectMapper.createObjectNode();
-            output.put("rawOutput", rawOutput);
-            job.setOutput(output);
-            stubDiff("Sources/Other.swift");
-
-            assertThatThrownBy(() -> admit(job, rawOutput))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("filtered by diff scope");
-            verifyNoInteractions(deliveryService);
         }
     }
 }

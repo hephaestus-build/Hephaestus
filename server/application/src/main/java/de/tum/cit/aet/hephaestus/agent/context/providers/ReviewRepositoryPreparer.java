@@ -24,7 +24,6 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RequiredArgsConstructor
 public class ReviewRepositoryPreparer {
     private final GitRepositoryManager git;
-    private final GitDiffOperations diffs;
     private final PullRequestRepository pullRequests;
     private final RepositoryToMonitorRepository monitors;
     private final ConnectionService connections;
@@ -126,9 +125,9 @@ public class ReviewRepositoryPreparer {
             throw new JobPreparationException("Review base commit is unavailable");
         }
         if (recordedBase == null) {
-            String[] range = diffs.resolveDiffRange(key, target, head);
-            if (range == null) throw new JobPreparationException("The pinned review diff range is unavailable");
-            target = range[0];
+            String base = git.reviewBase(key, target, head);
+            if (base == null) throw new JobPreparationException("The pinned review diff range is unavailable");
+            target = base;
         }
         return new PreparedReview(key, head, target);
     }

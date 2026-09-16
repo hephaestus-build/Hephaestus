@@ -17,7 +17,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.DeveloperTextSanitizer;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -250,12 +249,8 @@ public class ReviewHistoryContentSource implements EvidenceSource {
      */
     private ObjectNode preparedPayload(long workspaceId, List<Feedback> queued) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("window", "composed for this developer and not yet received, newest first");
-        root.put("count", queued.size());
-        root.put(
-                "completeness",
-                "PARTIAL: the most recent " + MAX_PREPARED
-                        + " queued items. Absence here is not proof nothing is queued.");
+        // The most recent MAX_PREPARED, newest first; the manifest says the capture is partial.
+        root.put("limit", MAX_PREPARED);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
                 queued.stream()
@@ -286,21 +281,16 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             // situation, coaching goal, evidence summary and success signal, and the turn itself is still written live.
             // Null when the run that queued it composed nothing,
             // which leaves only the fact that something is queued.
-            node.put("body", DeveloperTextSanitizer.sanitize(f.getBody()));
+            node.put("body", f.getBody());
         }
         return root;
     }
 
     private ObjectNode observationsPayload(long workspaceId, List<Observation> observations, Instant since) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("window", "observations recorded since " + since + ", newest first");
-        root.put("count", observations.size());
-        // Stated in the file itself, which the model reads directly, so an empty list can't be read as
-        // "never happened".
-        root.put(
-                "completeness",
-                "PARTIAL: the most recent " + MAX_OBSERVATIONS
-                        + " observations within the window. An observation absent here may still have been recorded.");
+        // Recorded since `since`, the most recent MAX_OBSERVATIONS of them, newest first.
+        root.put("since", since.toString());
+        root.put("limit", MAX_OBSERVATIONS);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
                 observations.stream()
@@ -327,19 +317,15 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             node.put(
                     "observedAt",
                     o.getObservedAt() == null ? null : o.getObservedAt().toString());
-            node.put("evidenceRationale", DeveloperTextSanitizer.sanitize(o.getEvidenceRationale()));
+            node.put("evidenceRationale", o.getEvidenceRationale());
         }
         return root;
     }
 
     private ObjectNode feedbackPayload(long workspaceId, List<Feedback> delivered, Instant since) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("window", "feedback delivered since " + since + ", newest first");
-        root.put("count", delivered.size());
-        root.put(
-                "completeness",
-                "PARTIAL: the most recent " + MAX_FEEDBACK
-                        + " delivered items within the window. Feedback absent here may still have been delivered.");
+        root.put("since", since.toString());
+        root.put("limit", MAX_FEEDBACK);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
                 delivered.stream()
@@ -353,7 +339,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             node.put(
                     "deliveredAt",
                     f.getDeliveredAt() == null ? null : f.getDeliveredAt().toString());
-            node.put("body", DeveloperTextSanitizer.sanitize(f.getBody()));
+            node.put("body", f.getBody());
         }
         return root;
     }

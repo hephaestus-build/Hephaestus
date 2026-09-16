@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
@@ -89,7 +88,7 @@ public class ReviewThreadContentSource implements EvidenceSource {
         files.putAll(capture(request, selectedKinds).files());
     }
 
-    private ObjectNode collect(long pullRequestId, PullRequest pullRequest) {
+    private ObjectNode collect(long pullRequestId) {
         try {
             List<Long> threadIds = new java.util.ArrayList<>(
                     threadRepository.findRecentIdsByPullRequestId(pullRequestId, PageRequest.of(0, MAX_THREADS + 1)));
@@ -111,24 +110,13 @@ public class ReviewThreadContentSource implements EvidenceSource {
             ObjectNode root = objectMapper.createObjectNode();
 
             ArrayNode threadArray = objectMapper.createArrayNode();
-            int unresolved = 0;
-            int emittedThreads = 0;
             for (PullRequestReviewThread t : threads) {
-                if (t == null) {
+                if (t == null || isHephaestusThread(t)) {
                     continue;
-                }
-                if (isHephaestusThread(t)) {
-                    continue;
-                }
-                boolean isUnresolved = t.getState() == PullRequestReviewThread.State.UNRESOLVED;
-                if (isUnresolved) {
-                    unresolved++;
                 }
                 threadArray.add(toThread(t));
-                emittedThreads++;
             }
             root.set("threads", threadArray);
-            root.put("unresolvedCount", unresolved);
 
             ArrayNode decisionArray = objectMapper.createArrayNode();
             for (PullRequestReview review : reviews) {
@@ -144,15 +132,11 @@ public class ReviewThreadContentSource implements EvidenceSource {
             root.set("reviewDecisions", decisionArray);
             root.put("truncated", threadsTruncated || decisionsTruncated);
 
-            root.put("mergeState", mergeState(pullRequest));
-
             log.info(
-                    "ReviewThreads: prId={} threads={} unresolved={} decisions={} mergeState={}",
+                    "ReviewThreads: prId={} threads={} decisions={}",
                     pullRequestId,
-                    emittedThreads,
-                    unresolved,
-                    decisionArray.size(),
-                    root.get("mergeState").asString());
+                    threadArray.size(),
+                    decisionArray.size());
             return root;
         } catch (Exception e) {
             throw new EvidenceCollectionException("Review-thread collection failed", e);
@@ -178,7 +162,7 @@ public class ReviewThreadContentSource implements EvidenceSource {
         if (pullRequest == null || pullRequest.getDeletedAt() != null) {
             return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
         }
-        ObjectNode root = collect(pullRequestId, pullRequest);
+        ObjectNode root = collect(pullRequestId);
         boolean empty =
                 root.path("threads").isEmpty() && root.path("reviewDecisions").isEmpty();
         boolean truncated = root.path("truncated").asBoolean();
@@ -256,17 +240,6 @@ public class ReviewThreadContentSource implements EvidenceSource {
             node.put("submittedAt", review.getSubmittedAt().toString());
         }
         return node;
-    }
-
-    private static String mergeState(PullRequest pullRequest) {
-        if (pullRequest.isMerged()) {
-            return "MERGED";
-        }
-        if (pullRequest.getState() != null) {
-            // Issue.State: OPEN / CLOSED / MERGED.
-            return pullRequest.getState().name();
-        }
-        return "UNKNOWN";
     }
 
     private static @Nullable String login(@Nullable User user) {

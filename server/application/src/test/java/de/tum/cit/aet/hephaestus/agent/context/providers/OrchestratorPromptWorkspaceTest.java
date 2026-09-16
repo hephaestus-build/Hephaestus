@@ -22,28 +22,29 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
     private static final Set<String> STAGED_INPUT_PATHS = new LinkedHashSet<>(java.util.List.of(
             // Pull request
             SandboxLayout.CONTEXT_PREFIX + "metadata.json",
-            SandboxLayout.CONTEXT_PREFIX + "commits.json",
             SandboxLayout.CONTEXT_PREFIX + "comments.json",
-            SandboxLayout.CONTEXT_PREFIX + "diff.patch",
-            SandboxLayout.CONTEXT_PREFIX + "diff_stat.txt",
-            SandboxLayout.CONTEXT_PREFIX + "diff_summary.md",
-            SandboxLayout.CONTEXT_PREFIX + "context-map.md",
+            PullRequestContentSource.CHANGE_FILE,
             SandboxLayout.CONTEXT_PREFIX + ReviewThreadContentSource.FILE_NAME,
             SandboxLayout.CONTEXT_PREFIX + GeneralReviewCommentContentSource.FILE_NAME,
             LinkedWorkItemContentSource.OUTPUT_FILE,
-            // Issue
-            SandboxLayout.CONTEXT_PREFIX + "issue_summary.md",
             // Conversation thread
             ConversationThreadContentSource.OUTPUT_KEY,
             // Document
-            DocumentContentSource.OUTPUT_KEY,
+            DocumentContentSource.BODY_KEY,
+            DocumentContentSource.METADATA_KEY,
             // Workspace-wide, staged for every review whose artifact kind the source applies to
             WorkspaceInventoryContentSource.OUTPUT_FILE,
             OutlineDocumentContentSource.REVIEW_INDEX_KEY,
-            OutlineDocumentContentSource.UNRESOLVED_REFERENCES_KEY,
             ReviewHistoryContentSource.OBSERVATIONS_FILE,
             ReviewHistoryContentSource.FEEDBACK_FILE,
             SandboxLayout.MANIFEST_PATH));
+
+    /** What pi-change.ts derives in the container from the checkout; the prompt must send the model there. */
+    private static final Set<String> DERIVED_CHANGE_PATHS = Set.of(
+            "work/change/diff.patch",
+            "work/change/diff_stat.txt",
+            "work/change/files.json",
+            "work/change/commits.json");
 
     /** Directories and templated paths the prompt names as prefixes rather than as concrete files. */
     private static final Set<String> STAGED_INPUT_PREFIXES = Set.of(
@@ -59,8 +60,7 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                         "remove those display",
                         "underlying file text",
                         "quote `    render()`",
-                        "TEXT_MENTION",
-                        "not a provider-reported relationship or author adoption");
+                        "a mention alone does not establish guidance supplied or adopted by the author");
         assertThat(prompt).doesNotContain("issues this PR closes or links", "the evidence — quote from here");
     }
 
@@ -73,6 +73,12 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                 .as("the workspace section must describe each known collector output")
                 .allSatisfy(path ->
                         assertThat(prompt).as("prompt mentions %s", path).contains(path));
+        assertThat(DERIVED_CHANGE_PATHS)
+                .as("the workspace section must describe each file of the derived change view")
+                .allSatisfy(path ->
+                        assertThat(prompt).as("prompt mentions %s", path).contains(path));
+        assertThat(prompt)
+                .doesNotContain("inputs/context/diff", "inputs/context/commits", "context-map", "diff_summary");
     }
 
     @Test
@@ -162,7 +168,7 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                         .map(result -> result.group())
                         .toList())
                 .as("remaining notation must be a documented content placeholder, not an unresolved task path")
-                .allMatch(Set.of("<collection>", "<doc>", "<n>", "<slug>", "<verb>")::contains);
+                .allMatch(Set.of("<collection>", "<doc>", "<n>", "<sha>", "<slug>", "<verb>")::contains);
         return resolvedPrompt;
     }
 

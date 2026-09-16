@@ -20,8 +20,10 @@ public record EvidenceCitationDTO(
         if (sourceKind.isBlank()
                 || artifactPath.isBlank()
                 || path.isBlank()
+                // A quote of code records the commit it was verified at: the one a repository citation
+                // selected, or the side of the change a change citation named.
                 || (revision != null
-                        && (!sourceKind.equals("scm.repository.tree")
+                        && (!(sourceKind.equals("scm.repository.tree") || sourceKind.equals("scm.pull-request.diff"))
                                 || !revision.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")))
                 || startLine < 1
                 || endLine < startLine

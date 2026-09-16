@@ -27,7 +27,7 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * Handler for {@link AgentJobType#DOCUMENT_REVIEW} jobs. <strong>Repo-less</strong>: no clone, no diff,
  * no {@code inputs/sources/scm/} mount. The case context is one mirrored document — its prose, its
- * collection and its authorship — at {@code inputs/context/document.md}.
+ * collection and its authorship — at {@code inputs/context/document.md} and {@code document.json}.
  *
  * <p><b>Admission records observations; delivery has no provider side effect.</b> {@code docs.document} has one lane,
  * {@link de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackLane#IN_APP}, and no channel writes to

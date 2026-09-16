@@ -2,12 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -24,22 +20,18 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.io.StringReader;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class CapturedEvidenceTest extends BaseUnitTest {
 
     private final JsonMapper mapper = JsonMapper.builder().build();
-
-    @Mock
-    private JobEvidenceFiles evidenceFiles;
 
     private static AgentJob jobWith(ObjectNode snapshot) {
         var job = new AgentJob();
@@ -67,7 +59,7 @@ class CapturedEvidenceTest extends BaseUnitTest {
                                                 capturedAt, null, capturedAt, "a".repeat(40) + ":" + head),
                                         List.of("TRUNCATED")),
                                 List.of(new SourceArtifact(
-                                        CapturedEvidence.DIFF_ARTIFACT, "text/x-diff", "c".repeat(64), 7))),
+                                        PullRequestContentSource.CHANGE_FILE, "application/json", "c".repeat(64), 7))),
                         new SourceCapture(
                                 RepositoryTreeContentSource.KIND,
                                 new SourceCaptureState.Available(
@@ -91,11 +83,12 @@ class CapturedEvidenceTest extends BaseUnitTest {
         assertThat(captured.contractVersion()).isEqualTo(ArtifactSourceCatalogRegistry.CURRENT_VERSION);
         assertThat(captured.availableSources())
                 .containsExactlyInAnyOrder(PracticeSubjectClause.DIFF_SOURCE, RepositoryTreeContentSource.KIND);
-        assertThat(captured.artifact(CapturedEvidence.DIFF_ARTIFACT))
+        assertThat(captured.artifact(PullRequestContentSource.CHANGE_FILE))
                 .isEqualTo(new CapturedEvidence.Artifact(PracticeSubjectClause.DIFF_SOURCE, "c".repeat(64)));
         assertThat(captured.immutableIdentity(PracticeSubjectClause.DIFF_SOURCE))
                 .isEqualTo("a".repeat(40) + ":" + head);
         assertThat(captured.pinnedHead()).isEqualTo(head);
+        assertThat(captured.reviewRange()).containsExactly("a".repeat(40), head);
         assertThat(captured.requireArtifact(
                                 RepositoryTreeContentSource.KIND, SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD")
                         .sha256())
@@ -148,39 +141,51 @@ class CapturedEvidenceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldReadTheChangedPathsFromTheCapturedListingAndNothingWhenNoDiffWasCaptured() {
+    void shouldReadTheReviewRangeFromTheChangeTheDiffSourcePinned() {
+        String base = "a".repeat(40);
+        String head = "b".repeat(40);
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(mapper);
-        ObjectNode diff = EvidenceSnapshotFixtures.availableSource(
-                snapshot, PracticeSubjectClause.DIFF_SOURCE.value(), "a".repeat(40) + ":" + "b".repeat(40));
-        EvidenceSnapshotFixtures.artifact(diff, CapturedEvidence.DIFF_PATHS_ARTIFACT, "c".repeat(64));
-        AgentJob job = jobWith(snapshot);
-        when(evidenceFiles.inspect(eq(job), eq(CapturedEvidence.DIFF_PATHS_ARTIFACT), eq("c".repeat(64)), any()))
-                .thenAnswer(invocation -> {
-                    JobEvidenceFiles.TextInspection<?> inspection = invocation.getArgument(3);
-                    return Optional.of(inspection.inspect(new StringReader("src/A.java\0src/B.java\0")));
-                });
+        EvidenceSnapshotFixtures.artifact(
+                EvidenceSnapshotFixtures.availableSource(
+                        snapshot, PracticeSubjectClause.DIFF_SOURCE.value(), base + ":" + head),
+                PullRequestContentSource.CHANGE_FILE,
+                "c".repeat(64));
 
-        assertThat(CapturedEvidence.of(job, mapper).diffPaths(job, evidenceFiles))
-                .containsExactlyInAnyOrder("src/A.java", "src/B.java");
-
-        EvidenceSnapshotFixtures.unavailable(diff);
-        assertThat(CapturedEvidence.of(job, mapper).diffPaths(job, evidenceFiles))
-                .isEmpty();
+        assertThat(CapturedEvidence.of(jobWith(snapshot), mapper).reviewRange()).containsExactly(base, head);
     }
 
     @Test
-    void shouldRefuseACapturedDiffWithoutItsPathListing() {
+    void shouldRefuseAReviewRangeWhenNoChangeWasCaptured() {
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(mapper);
-        EvidenceSnapshotFixtures.artifact(
-                EvidenceSnapshotFixtures.availableSource(snapshot, PracticeSubjectClause.DIFF_SOURCE.value(), null),
-                CapturedEvidence.DIFF_ARTIFACT,
-                "c".repeat(64));
-        AgentJob job = jobWith(snapshot);
+        ObjectNode diff = EvidenceSnapshotFixtures.availableSource(
+                snapshot, PracticeSubjectClause.DIFF_SOURCE.value(), "a".repeat(40) + ":" + "b".repeat(40));
+        EvidenceSnapshotFixtures.unavailable(diff);
 
-        assertThatThrownBy(() -> CapturedEvidence.of(job, mapper).diffPaths(job, evidenceFiles))
+        assertThatThrownBy(() -> CapturedEvidence.of(jobWith(snapshot), mapper).reviewRange())
                 .isInstanceOf(JobDeliveryException.class)
-                .hasMessageContaining("no diff artifact");
-        org.mockito.Mockito.verify(evidenceFiles, org.mockito.Mockito.never())
-                .inspect(any(), anyString(), anyString(), any());
+                .hasMessageContaining("no pinned base and head");
+    }
+
+    @Test
+    void shouldRefuseAReviewRangeThatIsNotTwoCommitIds() {
+        List<@Nullable String> identities = new ArrayList<>();
+        identities.add("b".repeat(40));
+        identities.add("a".repeat(40) + ":" + "not-a-sha");
+        identities.add("x:y:z");
+        identities.add(null);
+        for (@Nullable String identity : identities) {
+            ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(mapper);
+            EvidenceSnapshotFixtures.artifact(
+                    EvidenceSnapshotFixtures.availableSource(
+                            snapshot, PracticeSubjectClause.DIFF_SOURCE.value(), identity),
+                    PullRequestContentSource.CHANGE_FILE,
+                    "c".repeat(64));
+
+            assertThatThrownBy(
+                            () -> CapturedEvidence.of(jobWith(snapshot), mapper).reviewRange())
+                    .as("identity=%s", identity)
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("no pinned base and head");
+        }
     }
 }

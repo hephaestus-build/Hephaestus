@@ -27,13 +27,9 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
     /** Workspace-relative files the ContentSources actually write under {@code inputs/context/}. */
     private static final Set<String> REAL_CONTEXT_FILES = Set.of(
             "metadata.json",
-            "commits.json",
+            "change.json", // PullRequestContentSource.CHANGE_FILE — the pinned base and head of the change
             "comments.json",
-            "diff.patch",
-            "diff_summary.md",
-            "diff_stat.txt",
-            "issue_summary.md",
-            // The two raw SQL-only graph projections (the agent cannot get these from the mounted worktree):
+            // The raw SQL-only projections (the agent cannot get these from the checkout):
             "linked_work_items.json", // LinkedWorkItemContentSource.OUTPUT_FILE — resolved linked-issue rows
             "review_threads.json", // ReviewThreadContentSource — review-decision/thread rows
             "general_comments.json", // GeneralReviewCommentContentSource — conversation-tab (non-inline) MR review
@@ -41,12 +37,19 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
             "project_inventory.json", // WorkspaceInventoryContentSource.OUTPUT_FILE — whole-project issue/PR index
             "conversation_thread.json", // ConversationThreadContentSource — the ordered human turns of one settled
             // Slack thread
-            "document.md" // DocumentContentSource.OUTPUT_KEY — the one mirrored wiki document a review is about
-            // These must never appear: test_presence.json + branch_graph.json are worktree-derived Transforms,
-            // not content; acceptance_criteria.json is emitted by no provider.
+            "document.json", // DocumentContentSource.METADATA_KEY — where the reviewed document lives and who wrote it
+            "document.md" // DocumentContentSource.BODY_KEY — the one mirrored wiki document a review is about
+            // Everything about the change itself — the patch, its statistics, the changed files, the
+            // commits — is derived in the container under work/change/, never staged under inputs/.
             );
 
+    /** Workspace-relative files pi-change.ts derives under {@code work/change/} inside the container. */
+    private static final Set<String> REAL_CHANGE_FILES =
+            Set.of("diff.patch", "diff_stat.txt", "files.json", "commits.json");
+
     private static final Pattern CONTEXT_PATH = Pattern.compile("inputs/context/([a-z_]+\\.[a-z]+)");
+
+    private static final Pattern CHANGE_PATH = Pattern.compile("work/change/([a-z_]+\\.[a-z]+)");
 
     @Test
     @DisplayName("default-catalog.json names no fictional context/target/ paths and every inputs/context/ path is real")
@@ -70,6 +73,16 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
                         "every inputs/context/<file> the catalogue cites must be a file a ContentSource emits — cited=%s",
                         cited)
                 .containsAll(cited);
+        Set<String> citedChange = new TreeSet<>();
+        Matcher change = CHANGE_PATH.matcher(catalogue);
+        while (change.find()) {
+            citedChange.add(change.group(1));
+        }
+        assertThat(REAL_CHANGE_FILES)
+                .as(
+                        "every work/change/<file> the catalogue cites must be a file pi-change.ts derives — cited=%s",
+                        citedChange)
+                .containsAll(citedChange);
     }
 
     private static String readCatalogue() throws IOException {

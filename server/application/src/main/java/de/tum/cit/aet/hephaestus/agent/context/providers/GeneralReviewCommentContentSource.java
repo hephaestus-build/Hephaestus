@@ -141,13 +141,14 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
             for (IssueComment c : comments) {
                 commentArray.add(toComment(c, c.getBody()));
             }
-            int emitted = commentArray.size();
-
             ObjectNode root = objectMapper.createObjectNode();
             root.set("comments", commentArray);
-            root.put("count", emitted);
             root.put("truncated", truncated);
-            log.info("GeneralReviewComments: prId={} emitted={} truncated={}", pullRequestId, emitted, truncated);
+            log.info(
+                    "GeneralReviewComments: prId={} emitted={} truncated={}",
+                    pullRequestId,
+                    commentArray.size(),
+                    truncated);
             return root;
         } catch (Exception e) {
             throw new EvidenceCollectionException("General-review-comment collection failed", e);

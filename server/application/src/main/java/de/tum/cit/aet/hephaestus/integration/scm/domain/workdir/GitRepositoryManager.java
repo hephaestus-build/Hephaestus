@@ -42,6 +42,7 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import org.eclipse.jgit.treewalk.EmptyTreeIterator;
 import org.eclipse.jgit.treewalk.TreeWalk;
+import org.eclipse.jgit.util.FileUtils;
 import org.eclipse.jgit.util.io.DisabledOutputStream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -109,7 +110,11 @@ public class GitRepositoryManager {
         try (Stream<Path> workspaces = Files.list(mirrors)) {
             for (Path workspace : workspaces.toList()) {
                 Path mirror = workspace.resolve(repositoryId + ".git");
-                if (Files.isDirectory(mirror)) FileSystemUtils.deleteRecursively(mirror);
+                // A fetch that just finished may still be packing in the background; a file it removes
+                // under the walk is not a failure to delete.
+                if (Files.isDirectory(mirror)) {
+                    FileUtils.delete(mirror.toFile(), FileUtils.RECURSIVE | FileUtils.RETRY | FileUtils.SKIP_MISSING);
+                }
             }
         } catch (IOException e) {
             throw new GitOperationException("Cannot delete repository mirrors", e);
@@ -200,6 +205,32 @@ public class GitRepositoryManager {
                 return false;
             }
         }));
+    }
+
+    /** {@link RepositoryDiff#reviewBase} on the mirror; null when the range is not a review. */
+    public @Nullable String reviewBase(RepositoryKey repository, String targetSha, String headSha) {
+        if (!isEnabled() || !ObjectId.isId(targetSha) || !ObjectId.isId(headSha)) return null;
+        return read(repository, repo -> {
+            ObjectId base =
+                    RepositoryDiff.reviewBase(repo, ObjectId.fromString(targetSha), ObjectId.fromString(headSha));
+            return base == null ? null : base.getName();
+        });
+    }
+
+    /** {@link RepositoryDiff#changedPaths} on the mirror. */
+    public Set<String> changedPaths(RepositoryKey repository, String baseSha, String headSha) {
+        Set<String> paths = read(
+                repository,
+                repo -> RepositoryDiff.changedPaths(repo, ObjectId.fromString(baseSha), ObjectId.fromString(headSha)));
+        return paths == null ? Set.of() : paths;
+    }
+
+    /** {@link RepositoryDiff#unifiedDiff} on the mirror. */
+    public String unifiedDiff(RepositoryKey repository, String baseSha, String headSha) {
+        String text = read(
+                repository,
+                repo -> RepositoryDiff.unifiedDiff(repo, ObjectId.fromString(baseSha), ObjectId.fromString(headSha)));
+        return text == null ? "" : text;
     }
 
     public void forEachCommitInRange(

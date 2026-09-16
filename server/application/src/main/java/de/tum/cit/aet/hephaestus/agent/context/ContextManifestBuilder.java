@@ -229,12 +229,12 @@ public class ContextManifestBuilder {
     public PreparedAutomatedReviewReadiness prepareAutomatedReviewReadiness(
             ArtifactSourceManifest manifest,
             List<Practice> practices,
-            String jobId,
             Instant temporalAnchor,
             @Nullable SignalName signal,
-            Map<String, byte[]> staged) {
+            Map<String, byte[]> staged,
+            @Nullable ReviewChange change) {
         AutomatedReviewReadinessResult result =
-                checkAutomatedReviewReadiness(manifest, practices, temporalAnchor, signal, staged);
+                checkAutomatedReviewReadiness(manifest, practices, temporalAnchor, signal, staged, change);
         if (result.decisions().isEmpty()) {
             throw new IllegalArgumentException("Cannot persist an empty automated-review readiness report");
         }
@@ -256,7 +256,7 @@ public class ContextManifestBuilder {
      */
     public AutomatedReviewReadinessResult checkAutomatedReviewReadinessAsOfNow(
             ArtifactSourceManifest manifest, List<Practice> practices) {
-        return checkAutomatedReviewReadiness(manifest, practices, clock.instant(), null, Map.of());
+        return checkAutomatedReviewReadiness(manifest, practices, clock.instant(), null, Map.of(), null);
     }
 
     /**
@@ -269,7 +269,7 @@ public class ContextManifestBuilder {
             List<Practice> practices,
             Instant temporalAnchor,
             @Nullable SignalName signal) {
-        return checkAutomatedReviewReadiness(manifest, practices, temporalAnchor, signal, Map.of());
+        return checkAutomatedReviewReadiness(manifest, practices, temporalAnchor, signal, Map.of(), null);
     }
 
     /**
@@ -277,13 +277,16 @@ public class ContextManifestBuilder {
      *               for it; {@code null} means nobody named an occasion and every binding does
      * @param staged the capture's own bytes, from which a practice's declared subject is decided. Empty
      *               means "not supplied", which leaves every subject undecided and every practice asked
+     * @param change the reviewed change, read from the mirror for the clauses about it; null leaves those
+     *               clauses undecided
      */
     public AutomatedReviewReadinessResult checkAutomatedReviewReadiness(
             ArtifactSourceManifest manifest,
             List<Practice> practices,
             Instant temporalAnchor,
             @Nullable SignalName signal,
-            Map<String, byte[]> staged) {
+            Map<String, byte[]> staged,
+            @Nullable ReviewChange change) {
         Objects.requireNonNull(temporalAnchor, "temporalAnchor");
         Objects.requireNonNull(staged, "staged");
         // A manifest recorded under a source contract this runtime no longer ships is unreplayable
@@ -381,7 +384,7 @@ public class ContextManifestBuilder {
                     && sourceChecks.stream().allMatch(SourceReadinessCheck::meetsRequirements);
             PracticeSubjectCheck subjectCheck = readableAndDeclared
                     ? subjectEvaluator.evaluate(
-                            PracticeBinding.subjectFor(practice.getBindings(), signal), manifest, staged)
+                            PracticeBinding.subjectFor(practice.getBindings(), signal), manifest, staged, change)
                     : null;
             if (subjectCheck != null && subjectCheck.absent()) {
                 decisionReasons.add(AutomatedReviewReadinessReason.SUBJECT_NOT_IN_THE_WORK);

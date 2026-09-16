@@ -31,12 +31,18 @@ export interface PracticeResult extends PracticeFindings {
 	status: "ok" | "error" | "timeout";
 }
 
-/** Injected scripts are untrusted; the runner validates their results with parseFindings. */
+/**
+ * Injected scripts are untrusted; the runner validates their results with parseFindings.
+ *
+ * @param contextDir the context the server projected (`inputs/context`), read with `lib/context.ts`
+ * @param changeDir the change view this container derived (`work/change`), read with `lib/change.ts`
+ */
 export type PracticeScript = (
 	repoPath: string,
 	diffFiles: Map<string, DiffFile>,
 	metadata: ArtifactMetadata,
 	contextDir?: string,
+	changeDir?: string,
 ) => PracticeFindings | Promise<PracticeFindings>;
 
 export interface DiffFile {
@@ -74,9 +80,4 @@ export interface PullRequestMetadata {
 	deletions?: number;
 	changed_files?: number;
 	author?: string;
-	commits?: Array<{
-		sha?: string;
-		title?: string;
-		message?: string;
-	}>;
 }

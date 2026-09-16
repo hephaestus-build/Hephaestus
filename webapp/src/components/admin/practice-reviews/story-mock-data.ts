@@ -323,7 +323,7 @@ const diff = (
 	quote: string,
 ): EvidenceCitation => ({
 	sourceKind: "scm.pull-request.diff",
-	artifactPath: "inputs/context/diff.patch",
+	artifactPath: "inputs/context/change.json",
 	path,
 	side: "NEW",
 	startLine,

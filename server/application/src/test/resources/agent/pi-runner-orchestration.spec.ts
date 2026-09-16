@@ -179,7 +179,7 @@ if (scenario) {
 										citations: [
 											{
 												sourceKind: "scm.pull-request.diff",
-												artifactPath: "evidence/diff.patch",
+												artifactPath: "evidence/change.json",
 												path: "src/Auth.java",
 												side: "NEW",
 												startLine: 10,
@@ -229,11 +229,17 @@ if (scenario) {
 				try {
 					mkdirSync(join(cwd, "catalog/practices"), { recursive: true });
 					mkdirSync(join(cwd, "evidence"), { recursive: true });
+					mkdirSync(join(cwd, "work/change"), { recursive: true });
 					writeFileSync(join(cwd, "AGENTS.md"), "Review the staged evidence.");
 					writeFileSync(join(cwd, "feedback-composer.md"), "Compose from admitted observations.");
 					writeFileSync(join(cwd, "events"), "");
 					writeFileSync(
-						join(cwd, "evidence/diff.patch"),
+						join(cwd, "evidence/change.json"),
+						JSON.stringify({ base_sha: "b".repeat(40), head_sha: "a".repeat(40) }),
+					);
+					// The change view the container derives from the checkout before the runner starts.
+					writeFileSync(
+						join(cwd, "work/change/diff.patch"),
 						"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,0 +10,1 @@\n[L10] + insecure();\n",
 					);
 					if (stage.startsWith("composer")) {
@@ -261,7 +267,7 @@ if (scenario) {
 								{
 									kind: "scm.pull-request.diff",
 									state: { availability: "AVAILABLE" },
-									artifacts: [{ path: "evidence/diff.patch" }],
+									artifacts: [{ path: "evidence/change.json" }],
 								},
 								...(stage === "tree-citation"
 									? [

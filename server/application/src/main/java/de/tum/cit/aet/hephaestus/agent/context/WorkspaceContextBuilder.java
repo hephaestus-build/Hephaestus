@@ -89,19 +89,20 @@ public class WorkspaceContextBuilder {
     /**
      * @param staged the capture's own bytes, so a practice's declared subject can be decided from the
      *               evidence rather than put to the model; pass {@link PreparedEvidence#files()}
+     * @param change the reviewed change, for the subjects declared over it; null leaves them undecided
      */
     public ContextManifestBuilder.PreparedAutomatedReviewReadiness prepareAutomatedReviewReadiness(
             ArtifactSourceManifest manifest,
             List<Practice> practices,
-            String jobId,
             Instant temporalAnchor,
             @Nullable SignalName signal,
-            Map<String, byte[]> staged) {
+            Map<String, byte[]> staged,
+            @Nullable ReviewChange change) {
         if (manifestBuilder == null) {
             throw new IllegalStateException("Evidence readiness requires a manifest builder");
         }
         return manifestBuilder.prepareAutomatedReviewReadiness(
-                manifest, practices, jobId, temporalAnchor, signal, staged);
+                manifest, practices, temporalAnchor, signal, staged, change);
     }
 
     private Map<String, byte[]> buildWithoutManifest(ContextRequest request) {
