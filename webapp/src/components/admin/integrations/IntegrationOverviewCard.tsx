@@ -102,12 +102,12 @@ export function IntegrationOverviewCard({
 			<CardContent className="space-y-3">
 				{!entry.connected ? (
 					<div className="space-y-3">
-						<p className="flex items-center gap-1.5 text-muted-foreground text-sm">
+						<p className="flex items-center gap-1.5 text-sm text-muted-foreground">
 							<PlugZapIcon className="size-4" />
 							Not connected
 						</p>
 						{isScm ? (
-							<p className="text-muted-foreground text-sm">
+							<p className="text-sm text-muted-foreground">
 								Source control is selected when the workspace is created.
 							</p>
 						) : (

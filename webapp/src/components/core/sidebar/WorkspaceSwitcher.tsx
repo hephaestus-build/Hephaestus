@@ -68,7 +68,7 @@ export function WorkspaceSwitcher({
 				<SidebarMenuItem>
 					<SidebarMenuButton size="lg" disabled aria-label="Loading workspaces">
 						<Skeleton className="aspect-square size-8 rounded-lg" />
-						<div className="grid flex-1 text-left text-sm leading-tight gap-1 group-data-[collapsible=icon]:hidden">
+						<div className="grid flex-1 gap-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
 							<Skeleton className="h-3 w-20" />
 							<Skeleton className="h-2.5 w-12" />
 						</div>
@@ -168,7 +168,7 @@ export function WorkspaceSwitcher({
 								onClick={() => onWorkspaceChange?.(workspace)}
 								className="gap-2 p-2"
 							>
-								<div className="flex size-6 items-center justify-center rounded-sm overflow-clip">
+								<div className="flex size-6 items-center justify-center overflow-clip rounded-sm">
 									<Avatar className="size-6 rounded-sm">
 										<AvatarImage
 											src={
@@ -179,7 +179,7 @@ export function WorkspaceSwitcher({
 											}
 											alt={workspace.displayName}
 										/>
-										<AvatarFallback className="rounded-sm text-xs bg-sidebar-primary text-sidebar-primary-foreground">
+										<AvatarFallback className="rounded-sm bg-sidebar-primary text-xs text-sidebar-primary-foreground">
 											{(workspace.displayName || workspace.workspaceSlug).slice(0, 2).toUpperCase()}
 										</AvatarFallback>
 									</Avatar>

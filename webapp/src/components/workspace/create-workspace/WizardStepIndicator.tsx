@@ -51,7 +51,7 @@ export function WizardStepIndicator({ currentStep }: { currentStep: WizardStep }
 						</span>
 						<span
 							className={cn(
-								"text-sm hidden sm:inline",
+								"hidden text-sm sm:inline",
 								isCurrent ? "font-medium text-foreground" : "text-muted-foreground",
 							)}
 						>

@@ -59,7 +59,7 @@ export function LegalPage({
 	const profile = profileOverride ?? environment.legal.profile;
 
 	return (
-		<div className="max-w-4xl mx-auto flex flex-col gap-4">
+		<div className="mx-auto flex max-w-4xl flex-col gap-4">
 			<h1 className="text-3xl font-bold">{title}</h1>
 			{/* Keyed by what identifies the content: a switch remounts, so the previous page's markdown
 			    is never on screen while the new one loads. */}
@@ -121,7 +121,7 @@ function LegalContent({ page, profile, resolver }: LegalContentProps) {
 			) : null}
 
 			{resolved ? (
-				<article lang="en" className="prose dark:prose-invert max-w-none">
+				<article lang="en" className="prose max-w-none dark:prose-invert">
 					{/* Empty `rehypePlugins` drops Streamdown's default rehype-raw, and its bundled
 				    rehype-harden ships `allowedProtocols: ["*"]`, so SAFE_COMPONENTS is the only
 				    thing keeping `javascript:` and unknown schemes out of the DOM. */}

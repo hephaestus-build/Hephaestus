@@ -25,13 +25,13 @@ export function LeagueProgressCard({ leaguePoints, onInfoClick }: LeagueProgress
 	return (
 		<div className="flex items-center gap-2 2xl:gap-4">
 			<LeagueIcon leaguePoints={leaguePoints} size="lg" />
-			<div className="flex flex-col -space-y-1 min-w-[140px]">
+			<div className="flex min-w-[140px] flex-col -space-y-1">
 				<div className="flex items-center gap-2">
 					<div>
 						<span className="text-sm font-semibold text-muted-foreground">
 							{currentLeague.name}
 						</span>
-						<div className="w-full flex items-center justify-center gap-1 text-sm text-muted-foreground">
+						<div className="flex w-full items-center justify-center gap-1 text-sm text-muted-foreground">
 							<span className="whitespace-nowrap">
 								{currentLeague.maxPoints === Number.POSITIVE_INFINITY
 									? `${leaguePoints}`
@@ -47,7 +47,7 @@ export function LeagueProgressCard({ leaguePoints, onInfoClick }: LeagueProgress
 					)}
 				</div>
 				{currentLeague.maxPoints !== Number.POSITIVE_INFINITY && (
-					<div className="flex items-center gap-2 mt-1">
+					<div className="mt-1 flex items-center gap-2">
 						<Progress
 							value={progressValue}
 							aria-label={`${Math.round(progressValue)}% progress to next league`}

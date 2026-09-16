@@ -77,7 +77,7 @@ export function ProposalReviewPage({
 	const subjectDiffers = feedback.subject && feedback.subject.id !== feedback.recipient?.id;
 
 	return (
-		<article className="min-w-0 max-w-4xl space-y-8">
+		<article className="max-w-4xl min-w-0 space-y-8">
 			<ReviewBreadcrumbs
 				workspaceSlug={workspaceSlug}
 				section={{
@@ -137,7 +137,7 @@ export function ProposalReviewPage({
 				</ReviewFact>
 				{feedback.reviewedRevision && (
 					<ReviewFact label="Reviewed revision">
-						<code className="break-all text-xs">{feedback.reviewedRevision}</code>
+						<code className="text-xs break-all">{feedback.reviewedRevision}</code>
 					</ReviewFact>
 				)}
 			</ReviewFactGrid>

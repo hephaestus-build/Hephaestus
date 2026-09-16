@@ -5,5 +5,5 @@ export interface SectionHeadingProps {
 }
 
 export function SectionHeading({ children }: SectionHeadingProps) {
-	return <h3 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">{children}</h3>;
+	return <h3 className="mb-1 text-xs font-semibold text-muted-foreground uppercase">{children}</h3>;
 }

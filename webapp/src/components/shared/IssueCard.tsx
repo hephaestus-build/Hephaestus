@@ -77,8 +77,8 @@ export function IssueCard({
 					"pb-0": isLoading || pullRequestLabels.length > 0,
 				})}
 			>
-				<div className="flex justify-between gap-2 items-center text-sm text-provider-muted-foreground">
-					<span className="font-medium flex justify-center items-center space-x-1">
+				<div className="flex items-center justify-between gap-2 text-sm text-provider-muted-foreground">
+					<span className="flex items-center justify-center space-x-1 font-medium">
 						{isLoading ? (
 							<>
 								<Skeleton className="size-5 bg-success/30" />
@@ -120,19 +120,19 @@ export function IssueCard({
 						) : (
 							<>
 								{additions !== undefined && (
-									<span className="text-provider-success-foreground font-bold">+{additions}</span>
+									<span className="font-bold text-provider-success-foreground">+{additions}</span>
 								)}
 								{deletions !== undefined && (
-									<span className="text-provider-danger-foreground font-bold">-{deletions}</span>
+									<span className="font-bold text-provider-danger-foreground">-{deletions}</span>
 								)}
 							</>
 						)}
 					</span>
 				</div>
 
-				<div className="flex justify-between font-medium contain-inline-size leading-normal">
+				<div className="flex justify-between leading-normal font-medium contain-inline-size">
 					{isLoading ? (
-						<Skeleton className="h-6 w-3/4 mb-4" />
+						<Skeleton className="mb-4 h-6 w-3/4" />
 					) : (
 						<FormattedTitle title={title ?? ""} />
 					)}
@@ -141,7 +141,7 @@ export function IssueCard({
 			</div>
 
 			{!isLoading && pullRequestLabels.length > 0 && (
-				<div className="flex flex-row items-center flex-wrap gap-2 p-4 pt-2">
+				<div className="flex flex-row flex-wrap items-center gap-2 p-4 pt-2">
 					{pullRequestLabels.map((label) => (
 						<LabelBadge key={label.id} label={label.name} color={label.color} />
 					))}

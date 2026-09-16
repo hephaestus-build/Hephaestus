@@ -83,8 +83,8 @@ function DrawerSwipeHandle({ className, ...props }: React.ComponentProps<"div">)
 			aria-hidden="true"
 			className={cn(
 				"relative z-10 flex shrink-0 cursor-grab items-center justify-center transition-opacity duration-200 group-data-nested-drawer-open/drawer-popup:opacity-0 group-data-nested-drawer-swiping/drawer-popup:opacity-100 group-data-[swipe-direction=left]/drawer-popup:order-last group-data-[swipe-direction=up]/drawer-popup:order-last active:cursor-grabbing",
-				"group-data-[swipe-axis=y]/drawer-popup:h-5 group-data-[swipe-axis=x]/drawer-popup:w-5",
-				"before:rounded-full before:bg-border group-data-[swipe-axis=y]/drawer-popup:before:h-1 group-data-[swipe-axis=y]/drawer-popup:before:w-10 group-data-[swipe-axis=x]/drawer-popup:before:h-10 group-data-[swipe-axis=x]/drawer-popup:before:w-1",
+				"group-data-[swipe-axis=x]/drawer-popup:w-5 group-data-[swipe-axis=y]/drawer-popup:h-5",
+				"before:rounded-full before:bg-border group-data-[swipe-axis=x]/drawer-popup:before:h-10 group-data-[swipe-axis=x]/drawer-popup:before:w-1 group-data-[swipe-axis=y]/drawer-popup:before:h-1 group-data-[swipe-axis=y]/drawer-popup:before:w-10",
 				className,
 			)}
 			{...props}
@@ -157,10 +157,10 @@ function DrawerContent({
 						drawerContentVariants({ size }),
 						// Reduced motion: keep the panel, drop what triggers vestibular symptoms. The scale and
 						// the step-back go to zero and the panel fades instead of travelling its own width.
-						"motion-reduce:[--stack-step:0] motion-reduce:[--peek:0px] motion-reduce:[--closed-transform:none] motion-reduce:data-ending-style:opacity-0 motion-reduce:data-starting-style:opacity-0",
+						"motion-reduce:[--closed-transform:none] motion-reduce:[--peek:0px] motion-reduce:[--stack-step:0] motion-reduce:data-ending-style:opacity-0 motion-reduce:data-starting-style:opacity-0",
 						// Stack — each nested drawer steps the ones behind it back by `--stack-step`.
 						"[--bleed:3rem] [--stack-height:var(--drawer-frontmost-height,var(--drawer-height,0px))] [--stack-peek-offset:max(0px,calc((var(--nested-drawers)-var(--stack-progress))*var(--peek)))] [--stack-progress:clamp(0,var(--drawer-swipe-progress),1)] [--stack-scale-base:max(0,calc(1-(var(--nested-drawers)*var(--stack-step))))] [--stack-scale:clamp(0,calc(var(--stack-scale-base)+(var(--stack-step)*var(--stack-progress))),1)] [--stack-shrink:calc(1-var(--stack-scale))] [--stack-step:0.05]",
-						"[--drawer-ease:cubic-bezier(0.05,0.7,0.1,1)] [--drawer-enter:280ms] [--drawer-exit:calc(var(--drawer-swipe-strength)*200ms)] duration-(--drawer-enter)",
+						"duration-(--drawer-enter) [--drawer-ease:cubic-bezier(0.05,0.7,0.1,1)] [--drawer-enter:280ms] [--drawer-exit:calc(var(--drawer-swipe-strength)*200ms)]",
 						// `opacity-[0.9999]`: Base UI waits for `element.getAnimations()` before unmounting, and a
 						// transform-only exit is not in that list, so the exit also animates opacity to just under 1.
 						"data-ending-style:transform-(--closed-transform) data-ending-style:opacity-[0.9999] data-ending-style:duration-(--drawer-exit) data-ending-style:[--drawer-ease:cubic-bezier(0.2,0,0.38,0.9)] data-nested-drawer-swiping:duration-0 data-ending-style:data-nested-drawer-swiping:duration-(--drawer-exit) data-starting-style:transform-(--closed-transform) data-swiping:duration-0 data-ending-style:data-swiping:duration-(--drawer-exit)",

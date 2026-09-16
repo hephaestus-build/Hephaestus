@@ -58,7 +58,7 @@ export function AutonomyLadder({
 						key={autonomy}
 						className={cn(
 							"w-full min-w-0 cursor-pointer items-center gap-2 bg-background p-2 font-normal transition-colors",
-							"has-data-unchecked:hover:bg-muted/60 has-data-checked:bg-accent",
+							"has-data-checked:bg-accent has-data-unchecked:hover:bg-muted/60",
 							"has-data-disabled:cursor-not-allowed has-data-disabled:opacity-60",
 							full && "flex-col items-start gap-1.5 p-3",
 						)}
@@ -81,7 +81,7 @@ export function AutonomyLadder({
 							</span>
 						</span>
 						{full && (
-							<span id={addsId} className="ps-6 text-muted-foreground text-xs">
+							<span id={addsId} className="ps-6 text-xs text-muted-foreground">
 								{PRACTICE_AUTONOMY_ADDS[autonomy]}
 							</span>
 						)}

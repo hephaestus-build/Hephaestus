@@ -38,7 +38,7 @@ export function RepositoryLabelsToggle({
 
 	return (
 		<div className="space-y-1.5">
-			<p className="font-medium text-sm">Labels</p>
+			<p className="text-sm font-medium">Labels</p>
 			<p className="text-xs text-muted-foreground">
 				Selecting labels limits this team's contribution metrics to items tagged with any of the
 				selected labels for this repository.

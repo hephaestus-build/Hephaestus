@@ -244,13 +244,13 @@ export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 							<CollapsibleContent className="mt-2">
 								<dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
 									<dt className="text-muted-foreground">Version</dt>
-									<dd className="break-all font-mono">{release.running.version}</dd>
+									<dd className="font-mono break-all">{release.running.version}</dd>
 									<dt className="text-muted-foreground">Commit</dt>
-									<dd className="break-all font-mono">
+									<dd className="font-mono break-all">
 										{release.running.commit ?? "not reported"}
 									</dd>
 									<dt className="text-muted-foreground">Image</dt>
-									<dd className="break-all font-mono">{release.running.image ?? "not reported"}</dd>
+									<dd className="font-mono break-all">{release.running.image ?? "not reported"}</dd>
 									<dt className="text-muted-foreground">Roles</dt>
 									<dd>{release.running.roles.map((role) => role.toLowerCase()).join(", ")}</dd>
 								</dl>

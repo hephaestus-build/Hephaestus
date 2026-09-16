@@ -379,7 +379,7 @@ export const ArtifactVariant: Story = {
 	},
 	decorators: [
 		(Story) => (
-			<div className="h-[600px] w-[500px] border border-border rounded-lg bg-background overflow-hidden">
+			<div className="h-[600px] w-[500px] overflow-hidden rounded-lg border border-border bg-background">
 				<Story />
 			</div>
 		),
@@ -401,7 +401,7 @@ export const ArtifactEmpty: Story = {
 	},
 	decorators: [
 		(Story) => (
-			<div className="h-[400px] w-[400px] border border-border rounded-lg bg-background overflow-hidden">
+			<div className="h-[400px] w-[400px] overflow-hidden rounded-lg border border-border bg-background">
 				<Story />
 			</div>
 		),
@@ -423,7 +423,7 @@ export const ArtifactStreaming: Story = {
 	},
 	decorators: [
 		(Story) => (
-			<div className="h-[600px] w-[500px] border border-border rounded-lg bg-background overflow-hidden">
+			<div className="h-[600px] w-[500px] overflow-hidden rounded-lg border border-border bg-background">
 				<Story />
 			</div>
 		),

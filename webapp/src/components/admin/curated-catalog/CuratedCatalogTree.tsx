@@ -234,10 +234,10 @@ function PracticeDetails({ practice }: { practice: TreePractice }) {
 	const reviewLimitation = automatedReviewLimitationLabel(practice.automatedReview);
 	return (
 		<ItemContent className="min-w-0">
-			<ItemTitle className="w-full min-w-0 line-clamp-none">
+			<ItemTitle className="line-clamp-none w-full min-w-0">
 				<DetailStackLink
 					entry={curatedPracticeLevel(practice.slug)}
-					className="break-words rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 				>
 					{practice.name}
 				</DetailStackLink>
@@ -398,7 +398,7 @@ function PracticeDragPreview({ practice }: { practice: TreePractice }) {
 				<GripVertical className="size-4" />
 			</div>
 			<ItemContent className="min-w-0">
-				<ItemTitle className="break-words line-clamp-none">{practice.name}</ItemTitle>
+				<ItemTitle className="line-clamp-none break-words">{practice.name}</ItemTitle>
 				<ItemDescription>{artifactKindLabel(practice.artifactKind)}</ItemDescription>
 			</ItemContent>
 		</Item>

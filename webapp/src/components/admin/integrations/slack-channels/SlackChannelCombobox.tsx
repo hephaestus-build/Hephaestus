@@ -75,11 +75,11 @@ export function SlackChannelCombobox({
 				{selectedLabel ? (
 					<span className="truncate">#{selectedLabel}</span>
 				) : selectedChannelId ? (
-					<span className="text-muted-foreground truncate">
+					<span className="truncate text-muted-foreground">
 						Channel <span className="font-mono">{selectedChannelId}</span>
 					</span>
 				) : (
-					<span className="text-muted-foreground truncate">{placeholder}</span>
+					<span className="truncate text-muted-foreground">{placeholder}</span>
 				)}
 				<ComboboxIcon render={<ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" />} />
 			</ComboboxTrigger>
@@ -105,7 +105,7 @@ export function SlackChannelCombobox({
 										{renderBadges?.(candidate)}
 										{disabledReason && <Badge variant="outline">{disabledReason}</Badge>}
 									</div>
-									<div className="text-muted-foreground font-mono text-xs">
+									<div className="font-mono text-xs text-muted-foreground">
 										{candidate.slackChannelId}
 									</div>
 								</div>

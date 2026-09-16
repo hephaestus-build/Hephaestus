@@ -157,7 +157,7 @@ function ColorSwatches({ provider }: { provider: ProviderType }) {
 			<div className="flex gap-4">
 				{COLOR_TOKENS.map(({ token, label, bgClass, fgClass }) => (
 					<div key={token} className="flex flex-col items-center gap-2">
-						<div className={`w-12 h-12 rounded-md ${bgClass}`} />
+						<div className={`h-12 w-12 rounded-md ${bgClass}`} />
 						<div className={`text-sm font-semibold ${fgClass}`}>Aa</div>
 						<span className="text-xs text-muted-foreground">{label}</span>
 					</div>
@@ -207,7 +207,7 @@ export const Sizes: Story = {
 							data-provider={provider === "GITLAB" ? getProviderSlug(provider) : undefined}
 						>
 							<h3 className="mb-3 text-sm font-semibold">{displayName}</h3>
-							<div className="flex gap-6 items-end">
+							<div className="flex items-end gap-6">
 								{sizes.map((size) => {
 									const { icon: Icon, colorClass } = getPullRequestStateIcon(provider, "OPEN");
 									return (

@@ -169,7 +169,7 @@ export function PracticeEvidenceEditor({
 					</FieldDescription>
 					{groupEvidenceSources(options.allowedSources).map((group) => (
 						<div key={group.family} className="space-y-1.5">
-							<p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+							<p className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
 								<group.def.icon className="size-3.5" aria-hidden />
 								{group.def.label}
 							</p>
@@ -244,7 +244,7 @@ function SourceRow({ source, role, idPrefix, disabled, onRoleChange }: SourceRow
 						className={cn(
 							"cursor-pointer border-l px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors first:border-l-0",
 							"hover:bg-muted",
-							"has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-ring",
+							"has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-inset",
 							selectedRole(role) === option.value && option.selected,
 							disabled && "cursor-not-allowed opacity-70",
 						)}

@@ -30,7 +30,7 @@ export function AboutMissionSection() {
 				<Badge className="mb-4" variant="outline">
 					Our purpose
 				</Badge>
-				<h2 id="about-mission-heading" className="text-3xl font-bold mb-6">
+				<h2 id="about-mission-heading" className="mb-6 text-3xl font-bold">
 					The mission
 				</h2>
 
@@ -43,7 +43,7 @@ export function AboutMissionSection() {
 				</p>
 			</div>
 
-			<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+			<div className="grid grid-cols-1 gap-8 md:grid-cols-2">
 				{FEATURES_DATA.map((feature) => (
 					<FeatureCard key={feature.title} feature={feature} />
 				))}
@@ -51,7 +51,7 @@ export function AboutMissionSection() {
 
 			<div className="rounded-2xl border border-border bg-muted/20 p-6 text-center">
 				<h3 className="text-xl font-semibold">Developed at TUM and open source</h3>
-				<p className="mx-auto mb-6 mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+				<p className="mx-auto mt-2 mb-6 max-w-2xl text-sm leading-relaxed text-muted-foreground">
 					Hephaestus is an MIT-licensed open-source project developed by Applied Education
 					Technologies at the Technical University of Munich.
 				</p>

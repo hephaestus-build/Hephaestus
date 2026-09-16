@@ -191,19 +191,19 @@ export function SessionsSection() {
 								aria-label={deviceLabel}
 								className="flex items-center justify-between gap-4 rounded-lg border p-4"
 							>
-								<div className="flex items-center gap-3 min-w-0">
+								<div className="flex min-w-0 items-center gap-3">
 									<MonitorIcon className="size-5 shrink-0" aria-hidden="true" />
 									<div className="min-w-0">
 										<div className="flex items-center gap-2">
 											<span
-												className="text-sm font-medium truncate"
+												className="truncate text-sm font-medium"
 												title={session.userAgent ?? undefined}
 											>
 												{deviceLabel}
 											</span>
 											{session.current && <Badge variant="secondary">This device</Badge>}
 										</div>
-										<p className="text-xs text-muted-foreground truncate">
+										<p className="truncate text-xs text-muted-foreground">
 											{[
 												session.ip,
 												signedInAt && `signed in ${signedInAt}`,

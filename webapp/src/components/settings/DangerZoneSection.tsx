@@ -150,9 +150,9 @@ function DataExportRow() {
 
 	return (
 		<div className="flex items-start justify-between gap-6 py-2">
-			<div className="space-y-1 flex-1">
+			<div className="flex-1 space-y-1">
 				<h3 className="text-base font-medium">Export my data</h3>
-				<p className="text-sm text-muted-foreground leading-relaxed">
+				<p className="text-sm leading-relaxed text-muted-foreground">
 					Download a copy of your personal data (GDPR Art. 20) as a JSON file.
 				</p>
 				{statusText && (
@@ -214,9 +214,9 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 
 	return (
 		<div className="flex items-start justify-between gap-6 py-2">
-			<div className="space-y-1 flex-1">
+			<div className="flex-1 space-y-1">
 				<h3 className="text-base font-medium">Delete account</h3>
-				<p className="text-sm text-muted-foreground leading-relaxed">
+				<p className="text-sm leading-relaxed text-muted-foreground">
 					Permanently delete your account and erase your personal data (GDPR Art. 17). You'll be
 					signed out on all devices immediately, and the account is scheduled for permanent deletion
 					after a ~48-hour cooldown. It can't be recovered from here.

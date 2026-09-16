@@ -11,11 +11,11 @@ interface ContributorSectionProps {
 export function ContributorSection({ contributors, isLoading, isError }: ContributorSectionProps) {
 	return (
 		<div className="space-y-6">
-			<div className="flex items-center gap-2 mb-4">
+			<div className="mb-4 flex items-center gap-2">
 				<Users className="h-5 w-5 text-primary" />
 				<h3 className="text-xl font-bold">Contributors</h3>
 			</div>
-			<p className="text-muted-foreground mb-8">
+			<p className="mb-8 text-muted-foreground">
 				Hephaestus is built by students, researchers, and open-source contributors. These are the
 				people who have shaped it so far.
 			</p>
@@ -29,8 +29,8 @@ export function ContributorSection({ contributors, isLoading, isError }: Contrib
 
 			{isError && (
 				<div className="rounded-lg border border-muted bg-gradient-to-br from-background to-muted/30 p-6 text-center sm:p-8">
-					<AlertCircle className="h-8 w-8 text-destructive mx-auto mb-4" />
-					<h4 className="text-lg font-medium mb-2">Contributor data unavailable</h4>
+					<AlertCircle className="mx-auto mb-4 h-8 w-8 text-destructive" />
+					<h4 className="mb-2 text-lg font-medium">Contributor data unavailable</h4>
 					<p className="text-muted-foreground">
 						We're having trouble reaching our contributor information. Please check back soon.
 					</p>

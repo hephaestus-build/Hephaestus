@@ -45,7 +45,7 @@ export function ReviewPackage({
 								<span className="flex min-w-0 items-start gap-2">
 									<FileCode2Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
 									<span className="min-w-0">
-										<span className="block break-all font-mono text-xs">{placement.path}</span>
+										<span className="block font-mono text-xs break-all">{placement.path}</span>
 										<span className="block text-xs font-normal text-muted-foreground">
 											{placement.endLine && placement.endLine !== placement.startLine
 												? `Lines ${placement.startLine}–${placement.endLine}`

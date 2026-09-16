@@ -64,7 +64,7 @@ export function MessageEditor({
 	return (
 		<div
 			className={cn(
-				"border-input placeholder:text-muted-foreground focus-within:border-ring focus-within:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-xl border bg-background px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-3 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+				"flex field-sizing-content min-h-16 w-full rounded-xl border border-input bg-background px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:aria-invalid:ring-destructive/40",
 				"flex-col gap-1",
 				className,
 			)}
@@ -85,7 +85,7 @@ export function MessageEditor({
 				/>
 			</div>
 
-			<div className="flex gap-2 justify-end">
+			<div className="flex justify-end gap-2">
 				<Button
 					variant="outline"
 					shape="pill"

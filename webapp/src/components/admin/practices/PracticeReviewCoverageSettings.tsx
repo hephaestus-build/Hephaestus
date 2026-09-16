@@ -166,10 +166,10 @@ export function PracticeReviewCoverageSettings({
 		<section className="space-y-6" aria-labelledby="reviewed-work-heading">
 			{unsavedChanges.dialog}
 			<div className="space-y-1">
-				<h2 id="reviewed-work-heading" className="font-semibold text-lg">
+				<h2 id="reviewed-work-heading" className="text-lg font-semibold">
 					What gets reviewed
 				</h2>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					A review starts only when both the repository and linked person it evaluates are covered.
 					That person is usually the author; reviewer practices use the reviewer. About{" "}
 					{settings.coverageSummary.recentReviewVolume} review jobs entered the queue in this
@@ -398,7 +398,7 @@ export function PracticeReviewCoverageSettings({
 				open={workflow.status === "confirm"}
 				onOpenChange={(open) => !open && setWorkflow({ status: "editing" })}
 			>
-				<AlertDialogContent className="min-w-0 max-w-[calc(100vw-2rem)] overflow-hidden sm:max-w-lg">
+				<AlertDialogContent className="max-w-[calc(100vw-2rem)] min-w-0 overflow-hidden sm:max-w-lg">
 					<AlertDialogHeader>
 						<AlertDialogTitle>Widen review coverage?</AlertDialogTitle>
 						<AlertDialogDescription>
@@ -444,7 +444,7 @@ function withPersistedOptions<TValue extends string | number>(
 function CoverageWorkflowStatus({ workflow, dirty }: { workflow: Workflow; dirty: boolean }) {
 	if (workflow.status === "error") {
 		return (
-			<p role="alert" className="max-w-md text-destructive text-sm">
+			<p role="alert" className="max-w-md text-sm text-destructive">
 				{workflow.action === "preview"
 					? "Couldn't estimate the impact. Your draft is unchanged; try again."
 					: "Couldn't save the coverage. Your draft is unchanged; try again."}
@@ -452,7 +452,7 @@ function CoverageWorkflowStatus({ workflow, dirty }: { workflow: Workflow; dirty
 		);
 	}
 	return (
-		<p role="status" className="max-w-md text-muted-foreground text-sm">
+		<p role="status" className="max-w-md text-sm text-muted-foreground">
 			{workflow.status === "checking"
 				? "Checking impact…"
 				: workflow.status === "saving"
@@ -466,7 +466,7 @@ function CoverageWorkflowStatus({ workflow, dirty }: { workflow: Workflow; dirty
 
 function CoverageImpact({ preview }: { preview: PracticeReviewCoveragePreview }) {
 	return (
-		<div className="min-w-0 space-y-2 break-words text-sm">
+		<div className="min-w-0 space-y-2 text-sm break-words">
 			<p>
 				Monitored repositories covered: <strong>{preview.current.coveredRepositories}</strong>
 				{" → "}
@@ -478,7 +478,7 @@ function CoverageImpact({ preview }: { preview: PracticeReviewCoveragePreview })
 				{" → "}
 				<strong>{preview.proposed.coveredPeople}</strong> of {preview.proposed.eligiblePeople}
 			</p>
-			<p className="text-muted-foreground text-xs">
+			<p className="text-xs text-muted-foreground">
 				For scale, {preview.proposed.recentReviewVolume} review jobs entered this workspace's queue
 				during the last {preview.proposed.estimateWindowDays} days.
 			</p>
@@ -516,7 +516,7 @@ function CoverageLabel({
 	return (
 		<div className="flex items-baseline justify-between gap-3">
 			<FieldTitle id={id}>{label}</FieldTitle>
-			<span className="text-muted-foreground text-sm">
+			<span className="text-sm text-muted-foreground">
 				{covered} of {total} {noun}
 			</span>
 		</div>

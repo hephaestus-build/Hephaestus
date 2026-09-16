@@ -109,7 +109,7 @@ function TraceStep({ icon: Icon, iconClassName, title, last = false, children }:
 				{!last && <span className="w-px flex-1 bg-border" aria-hidden />}
 			</div>
 			<div className={cn("min-w-0", last ? "pb-0" : "pb-4")}>
-				{title && <p className="text-sm font-medium leading-6">{title}</p>}
+				{title && <p className="text-sm leading-6 font-medium">{title}</p>}
 				<div className="min-w-0 text-sm text-muted-foreground">{children}</div>
 			</div>
 		</li>

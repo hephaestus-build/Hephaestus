@@ -141,7 +141,7 @@ export function AdminAuditTable({
 							const actor = refLabel(e.actor, actingAccountId);
 							return (
 								<TableRow key={e.id}>
-									<TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+									<TableCell className="text-sm whitespace-nowrap text-muted-foreground">
 										<RelativeTime value={e.occurredAt} />
 									</TableCell>
 									<TableCell>

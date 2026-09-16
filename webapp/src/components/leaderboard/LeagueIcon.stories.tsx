@@ -94,7 +94,7 @@ export const LargeSize: Story = {
 export const AllLeagueTiers: Story = {
 	argTypes: { leaguePoints: { control: false } },
 	render: (args) => (
-		<div className="flex gap-6 items-end">
+		<div className="flex items-end gap-6">
 			<div className="flex flex-col items-center">
 				<LeagueIcon {...args} {...NotRanked.args} />
 				<span className="mt-2 text-xs text-muted-foreground">Not Ranked</span>

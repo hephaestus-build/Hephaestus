@@ -47,7 +47,7 @@ describe("cn", () => {
 	});
 
 	it("lets caller classes override variant output", () => {
-		expect(cn("inline-flex h-9 px-3 bg-primary", "h-8 px-2", "h-12 bg-destructive")).toBe(
+		expect(cn("inline-flex h-9 bg-primary px-3", "h-8 px-2", "h-12 bg-destructive")).toBe(
 			"inline-flex px-2 h-12 bg-destructive",
 		);
 	});

@@ -77,13 +77,13 @@ export function ProductFeedbackMenu({
 				<MessageSquarePlus
 					data-icon="inline-start"
 					aria-hidden
-					className="transition-transform duration-200 group-hover:-rotate-12 group-hover:scale-110 motion-reduce:transition-none motion-reduce:group-hover:transform-none"
+					className="transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-12 motion-reduce:transition-none motion-reduce:group-hover:transform-none"
 				/>
 				<span className="hidden sm:inline">Feedback</span>
 				{count > 0 && (
 					<span
 						aria-hidden
-						className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-primary px-1.5 text-2xs font-semibold tabular-nums text-primary-foreground sm:static"
+						className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-primary px-1.5 text-2xs font-semibold text-primary-foreground tabular-nums sm:static"
 					>
 						{count}
 					</span>

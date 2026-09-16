@@ -142,7 +142,7 @@ export function ReviewObservationRow({
 			>
 				<CollapsibleTrigger
 					disabled={!canOpen}
-					className="grid w-full min-w-0 gap-2 px-4 py-3 text-left transition-colors enabled:hover:bg-muted/30 enabled:focus-visible:outline-none enabled:focus-visible:ring-2 enabled:focus-visible:ring-ring/50 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-4"
+					className="grid w-full min-w-0 gap-2 px-4 py-3 text-left transition-colors enabled:hover:bg-muted/30 enabled:focus-visible:ring-2 enabled:focus-visible:ring-ring/50 enabled:focus-visible:outline-none sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-4"
 				>
 					<div className="min-w-0">
 						<p className="truncate text-sm font-medium">{title}</p>

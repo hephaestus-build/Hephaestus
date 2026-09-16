@@ -371,7 +371,7 @@ function AutonomySummary({
 	overrides: { practices: number; groups: number };
 }) {
 	return (
-		<p className="min-w-0 text-muted-foreground text-sm" aria-live="polite" aria-atomic="true">
+		<p className="min-w-0 text-sm text-muted-foreground" aria-live="polite" aria-atomic="true">
 			{autonomyDistributionSentence(counts)} {byHandSentence(overrides)}
 		</p>
 	);
@@ -506,13 +506,13 @@ function GroupGroup({
 								<Badge variant="outline">{group.overriddenCount} set by hand</Badge>
 							)}
 						</span>
-						<span className="font-normal text-muted-foreground text-xs">
+						<span className="text-xs font-normal text-muted-foreground">
 							{autonomyDistributionSentence(group.counts)}
 						</span>
 					</span>
 				</AccordionTrigger>
 				{groupSlug === null ? (
-					<span className={cn("min-w-0 text-muted-foreground text-xs", DECISION_COLUMN)}>
+					<span className={cn("min-w-0 text-xs text-muted-foreground", DECISION_COLUMN)}>
 						Follows the workspace default
 					</span>
 				) : (
@@ -535,7 +535,7 @@ function GroupGroup({
 			</div>
 			<AccordionContent className="pb-3">
 				{group.practices.length === 0 ? (
-					<p className="py-2 text-muted-foreground text-sm">
+					<p className="py-2 text-sm text-muted-foreground">
 						{group.totalPractices === 0
 							? "No practices here."
 							: "No practices here were set by hand."}
@@ -612,12 +612,12 @@ function PracticeAutonomyRow({
 				/>
 			</ItemMedia>
 			<ItemContent className="min-w-0 gap-0.5">
-				<ItemTitle className="w-full min-w-0 line-clamp-none">
+				<ItemTitle className="line-clamp-none w-full min-w-0">
 					<PracticeDetailHoverCard practice={practice}>
 						<Link
 							to="/w/$workspaceSlug/admin/practices/$practiceSlug"
 							params={{ workspaceSlug, practiceSlug: practice.slug }}
-							className="break-words rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 						>
 							{practice.name}
 						</Link>
@@ -652,7 +652,7 @@ function PracticeAutonomyRow({
 						onClear={() => onClearAutonomy(practice.slug)}
 					/>
 				) : (
-					<p className="text-muted-foreground text-xs">
+					<p className="text-xs text-muted-foreground">
 						This practice can't be reviewed automatically, so it stays off.
 					</p>
 				)}
@@ -679,7 +679,7 @@ function inheritedSentenceOrNull(
 
 function DecisionNote({ follows, resetLabel, disabled, onClear }: DecisionNoteProps) {
 	return (
-		<p className="text-muted-foreground text-xs">
+		<p className="text-xs text-muted-foreground">
 			{follows ?? (
 				<>
 					Set here.{" "}

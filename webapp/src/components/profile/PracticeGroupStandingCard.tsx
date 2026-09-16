@@ -114,7 +114,7 @@ export function PracticeGroupStandingCard({
 									>
 										<Icon className="size-5" aria-hidden />
 									</span>
-									<h3 className="min-w-0 flex-1 text-lg font-medium leading-snug">{group.name}</h3>
+									<h3 className="min-w-0 flex-1 text-lg leading-snug font-medium">{group.name}</h3>
 									{onOpenDetails && (
 										<ChevronRightIcon className="size-4 text-muted-foreground" aria-hidden />
 									)}

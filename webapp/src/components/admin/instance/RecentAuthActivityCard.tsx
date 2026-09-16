@@ -101,7 +101,7 @@ export function RecentAuthActivityCard({
 									) : null}
 									<RelativeTime
 										value={event.occurredAt}
-										className="ml-auto shrink-0 whitespace-nowrap text-xs"
+										className="ml-auto shrink-0 text-xs whitespace-nowrap"
 									/>
 								</li>
 							);

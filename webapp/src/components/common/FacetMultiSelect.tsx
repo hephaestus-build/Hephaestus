@@ -193,7 +193,7 @@ export function FacetMultiSelect<TValue extends string | number>({
 							<span className="min-w-0 truncate">
 								{option.label}
 								{option.description && (
-									<span className="text-muted-foreground ml-1.5 text-xs">{option.description}</span>
+									<span className="ml-1.5 text-xs text-muted-foreground">{option.description}</span>
 								)}
 							</span>
 						</ComboboxItem>

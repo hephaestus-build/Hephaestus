@@ -190,8 +190,8 @@ export function UsersTable({
 
 	return (
 		<div className="w-full space-y-4">
-			<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-				<div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
+			<div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+				<div className="flex w-full flex-col items-start space-y-2 sm:w-auto sm:flex-row sm:items-center sm:space-y-0 sm:space-x-3">
 					<InputGroup className="w-full sm:w-auto">
 						<InputGroupAddon>
 							<Search />
@@ -219,7 +219,7 @@ export function UsersTable({
 						<SelectContent aria-label="Filter members by team">
 							<SelectItem value="all">
 								<div className="flex items-center space-x-2">
-									<div className="w-3 h-3 rounded-full bg-muted" />
+									<div className="h-3 w-3 rounded-full bg-muted" />
 									<span>All teams</span>
 								</div>
 							</SelectItem>
@@ -319,15 +319,15 @@ export function UsersTable({
 				</TableBody>
 			</Table>
 
-			<div className="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 sm:space-x-2 py-4">
-				<div className="flex-1 text-sm text-muted-foreground order-2 sm:order-1">
-					<div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+			<div className="flex flex-col items-center justify-between space-y-4 py-4 sm:flex-row sm:space-y-0 sm:space-x-2">
+				<div className="order-2 flex-1 text-sm text-muted-foreground sm:order-1">
+					<div className="flex flex-col gap-1 sm:flex-row sm:gap-4">
 						<span>
 							Showing {table.getRowModel().rows.length} of {table.getRowCount()} users
 						</span>
 					</div>
 				</div>
-				<div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6 lg:space-x-8 order-1 sm:order-2">
+				<div className="order-1 flex flex-col items-center space-y-4 sm:order-2 sm:flex-row sm:space-y-0 sm:space-x-6 lg:space-x-8">
 					<div className="flex items-center space-x-2">
 						<Label
 							id="member-rows-per-page-label"

@@ -24,11 +24,11 @@ export function AdminLeagueSettings({ isResetting, onResetLeagues }: AdminLeague
 	return (
 		<div className="space-y-6">
 			<div>
-				<h2 className="text-lg font-semibold mb-4">Leagues</h2>
+				<h2 className="mb-4 text-lg font-semibold">Leagues</h2>
 				<Card>
 					<CardContent>
 						<div className="space-y-4">
-							<p className="text-sm text-muted-foreground mb-4">
+							<p className="mb-4 text-sm text-muted-foreground">
 								Reset and recalculate all leagues. This will clear current league assignments and
 								recalculate based on the latest data.
 							</p>

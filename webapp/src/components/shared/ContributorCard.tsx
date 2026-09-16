@@ -38,16 +38,16 @@ export function ContributorCard({ contributor, size = "md", className }: Contrib
 				/>
 				<AvatarFallback>{getInitials(contributor.name, contributor.login)}</AvatarFallback>
 			</Avatar>
-			<div className="flex flex-col items-center min-w-0 w-full space-y-0.5">
+			<div className="flex w-full min-w-0 flex-col items-center space-y-0.5">
 				<div
 					className={cn(
-						"font-medium text-center w-full px-1 wrap-anywhere leading-tight",
+						"w-full px-1 text-center leading-tight font-medium wrap-anywhere",
 						isSmall ? "text-xs" : "text-sm",
 					)}
 				>
 					{contributor.name}
 				</div>
-				<div className="text-muted-foreground text-center w-full px-1 text-xs wrap-anywhere leading-tight">
+				<div className="w-full px-1 text-center text-xs leading-tight wrap-anywhere text-muted-foreground">
 					@{contributor.login}
 				</div>
 			</div>

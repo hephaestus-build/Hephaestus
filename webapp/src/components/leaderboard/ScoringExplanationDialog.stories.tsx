@@ -28,7 +28,7 @@ const meta: Meta<typeof ScoringExplanationDialog> = {
 	},
 	decorators: [
 		(Story) => (
-			<div className="p-6 max-w-sm">
+			<div className="max-w-sm p-6">
 				<Story />
 			</div>
 		),

@@ -51,7 +51,7 @@ export function DeliveryPolicyTrace({ evaluations }: DeliveryPolicyTraceProps) {
 										{DELIVERY_SURFACE_LABELS[evaluation.surface]} ·{" "}
 										{DELIVERY_STAGE_LABELS[evaluation.stage]}
 									</span>
-									<span className="block font-normal text-muted-foreground text-xs">
+									<span className="block text-xs font-normal text-muted-foreground">
 										<RelativeTime value={evaluation.evaluatedAt} tooltip={false} />
 									</span>
 								</span>
@@ -68,11 +68,11 @@ export function DeliveryPolicyTrace({ evaluations }: DeliveryPolicyTraceProps) {
 								{evaluation.decisiveReason && (
 									<p className="text-xs">{DELIVERY_REASON_SENTENCES[evaluation.decisiveReason]}</p>
 								)}
-								<p className="min-w-0 break-words text-xs text-muted-foreground">
+								<p className="min-w-0 text-xs break-words text-muted-foreground">
 									{scopeSentence(evaluation.facts)}
 								</p>
 								<PolicyFacts facts={evaluation.facts} />
-								<p className="min-w-0 break-all text-xs text-muted-foreground">
+								<p className="min-w-0 text-xs break-all text-muted-foreground">
 									Policy revision {evaluation.admittedRevision}
 									{evaluation.evaluatedRevision == null
 										? ""

@@ -21,7 +21,7 @@ export function ReviewPerson({ person, prefix, className }: ReviewPersonProps) {
 	return (
 		<span
 			className={cn(
-				"inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-xs",
+				"inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-xs",
 				className,
 			)}
 		>

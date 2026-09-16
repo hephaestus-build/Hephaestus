@@ -155,7 +155,7 @@ export function AdminTeamsTable({
 	return (
 		<PageLayout>
 			{header}
-			<div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
+			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 				<InputGroup className="w-full sm:max-w-md">
 					<InputGroupAddon>
 						<Search />
@@ -170,9 +170,9 @@ export function AdminTeamsTable({
 			</div>
 
 			{rootsAll.filter((t) => displaySet.has(t.id)).length === 0 ? (
-				<div className="text-center py-12">
-					<Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-					<h2 className="text-lg font-medium mb-2">No teams found</h2>
+				<div className="py-12 text-center">
+					<Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+					<h2 className="mb-2 text-lg font-medium">No teams found</h2>
 					<p className="text-muted-foreground">
 						{search ? "Try different search terms." : "No teams available."}
 					</p>

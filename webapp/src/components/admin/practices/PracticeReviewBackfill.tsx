@@ -169,10 +169,10 @@ function EstimateSection({
 	return (
 		<section className="space-y-4" aria-labelledby="backfill-estimate-heading">
 			<div className="space-y-1">
-				<h2 id="backfill-estimate-heading" className="font-semibold text-lg">
+				<h2 id="backfill-estimate-heading" className="text-lg font-semibold">
 					Review past work
 				</h2>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					Reviews normally start when work happens, so anything from before this workspace was set
 					up has never been measured. A backfill measures it once, as it stands today.
 				</p>
@@ -238,7 +238,7 @@ function EstimateSection({
 					{isEstimating ? <Spinner /> : null}
 					Estimate this backfill
 				</Button>
-				<p className="text-muted-foreground text-sm">Nothing is reviewed until you confirm.</p>
+				<p className="text-sm text-muted-foreground">Nothing is reviewed until you confirm.</p>
 			</div>
 		</section>
 	);
@@ -264,23 +264,23 @@ function ConfirmationSection({
 	return (
 		<section className="space-y-4" aria-labelledby="backfill-confirm-heading">
 			<div className="space-y-1">
-				<h2 id="backfill-confirm-heading" className="font-semibold text-lg">
+				<h2 id="backfill-confirm-heading" className="text-lg font-semibold">
 					Confirm this backfill
 				</h2>
-				<p className="text-muted-foreground text-sm">{formatWindow(run)}</p>
+				<p className="text-sm text-muted-foreground">{formatWindow(run)}</p>
 			</div>
 			<div className="grid gap-4 sm:grid-cols-2">
 				<div>
-					<p className="text-muted-foreground text-sm">Work to review</p>
-					<p className="font-semibold text-2xl">
+					<p className="text-sm text-muted-foreground">Work to review</p>
+					<p className="text-2xl font-semibold">
 						{countOf(run.estimatedArtifacts, run.artifactKind)}
 					</p>
 				</div>
 				<div>
-					<p className="text-muted-foreground text-sm">Estimated AI spend</p>
-					<p className="font-semibold text-2xl">{cost ?? "Unknown"}</p>
+					<p className="text-sm text-muted-foreground">Estimated AI spend</p>
+					<p className="text-2xl font-semibold">{cost ?? "Unknown"}</p>
 					{cost ? null : (
-						<p className="text-muted-foreground text-sm">
+						<p className="text-sm text-muted-foreground">
 							This workspace has no priced reviews yet, so there is nothing to base an estimate on.
 						</p>
 					)}
@@ -315,7 +315,7 @@ function ConfirmationSection({
 					Discard
 				</Button>
 				{nothingToDo ? (
-					<p className="text-muted-foreground text-sm">
+					<p className="text-sm text-muted-foreground">
 						Nothing was opened in that stretch. Discard this and try a longer one.
 					</p>
 				) : null}
@@ -341,18 +341,18 @@ function ActiveRunSection({
 		<section className="space-y-4" aria-labelledby="backfill-active-heading">
 			<div className="space-y-1">
 				<div className="flex items-center gap-2">
-					<h2 id="backfill-active-heading" className="font-semibold text-lg">
+					<h2 id="backfill-active-heading" className="text-lg font-semibold">
 						Backfill in progress
 					</h2>
 					<Badge variant={run.status === "PAUSED" ? "outline" : "secondary"}>
 						{run.status === "PAUSED" ? "Paused" : "Running"}
 					</Badge>
 				</div>
-				<p className="text-muted-foreground text-sm">{formatWindow(run)}</p>
+				<p className="text-sm text-muted-foreground">{formatWindow(run)}</p>
 			</div>
 			<div className="space-y-2">
 				<Progress value={percent} aria-label="Backfill progress" />
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					{walked} of {countOf(total, run.artifactKind)} looked at — {run.submittedCount} sent for
 					review, {run.passedCount} already measured or outside your review rules.
 					{run.failedCount > 0 ? ` ${run.failedCount} could not be read, and stay unmeasured.` : ""}
@@ -379,10 +379,10 @@ function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoad
 	return (
 		<section className="space-y-4" aria-labelledby="backfill-history-heading">
 			<div className="space-y-1">
-				<h2 id="backfill-history-heading" className="font-semibold text-lg">
+				<h2 id="backfill-history-heading" className="text-lg font-semibold">
 					Past backfills
 				</h2>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					What has already been measured, and by whose decision.
 				</p>
 			</div>

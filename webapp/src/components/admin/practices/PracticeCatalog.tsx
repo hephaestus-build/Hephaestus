@@ -168,7 +168,7 @@ export function PracticeCatalog({
 					// Arrives rather than appears: the toggle is above it, so a section that simply exists
 					// on the next frame gives no clue where it came from. Short, and off under
 					// `prefers-reduced-motion`, where the arrival is the information and the travel is not.
-					className="rounded-lg border bg-muted/20 p-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-200"
+					className="rounded-lg border bg-muted/20 p-4 motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in motion-safe:slide-in-from-top-2"
 				>
 					{library.state.status === "error" ? (
 						<QueryErrorAlert
@@ -187,7 +187,7 @@ export function PracticeCatalog({
 				</Section>
 			)}
 			{focusFilter !== "ALL" && (
-				<p className="text-muted-foreground text-sm">Clear the filter to reorder practices.</p>
+				<p className="text-sm text-muted-foreground">Clear the filter to reorder practices.</p>
 			)}
 
 			<SortableCatalogTree
@@ -240,7 +240,7 @@ export function PracticeCatalog({
 						title={
 							<DetailStackLink
 								entry={{ kind: "practice", id: practice.slug }}
-								className="break-words rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 							>
 								{practice.name}
 							</DetailStackLink>
@@ -577,7 +577,7 @@ function PracticeRowDetails({
 	const autonomySource = autonomySourceOf(practice.autonomy, inheritedFrom);
 	return (
 		<ItemContent className="min-w-0">
-			<ItemTitle className="w-full min-w-0 line-clamp-none">{title}</ItemTitle>
+			<ItemTitle className="line-clamp-none w-full min-w-0">{title}</ItemTitle>
 			<ItemDescription>
 				<MetaRow
 					captions={[

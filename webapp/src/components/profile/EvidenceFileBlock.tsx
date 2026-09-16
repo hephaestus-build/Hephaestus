@@ -97,7 +97,7 @@ export function EvidenceFileBlock({
 									className={cn("grid", locatedByLine ? "grid-cols-[auto_1fr]" : "grid-cols-1")}
 								>
 									{locatedByLine && (
-										<span className="sticky left-0 select-none bg-inherit pe-3 ps-2.5 text-end tabular-nums text-muted-foreground">
+										<span className="sticky left-0 bg-inherit ps-2.5 pe-3 text-end text-muted-foreground tabular-nums select-none">
 											{lineNumber}
 										</span>
 									)}

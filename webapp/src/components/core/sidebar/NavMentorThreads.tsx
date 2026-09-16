@@ -78,7 +78,7 @@ export function NavMentorThreads({
 			<SidebarGroup>
 				<SidebarGroupLabel>Chat history</SidebarGroupLabel>
 				<SidebarGroupContent>
-					<div className="text-sm text-muted-foreground p-2">Loading...</div>
+					<div className="p-2 text-sm text-muted-foreground">Loading...</div>
 				</SidebarGroupContent>
 			</SidebarGroup>
 		);
@@ -89,7 +89,7 @@ export function NavMentorThreads({
 			<SidebarGroup>
 				<SidebarGroupLabel>Chat history</SidebarGroupLabel>
 				<SidebarGroupContent>
-					<div className="text-sm text-destructive p-2">{error}</div>
+					<div className="p-2 text-sm text-destructive">{error}</div>
 				</SidebarGroupContent>
 			</SidebarGroup>
 		);
@@ -100,7 +100,7 @@ export function NavMentorThreads({
 			<SidebarGroup>
 				<SidebarGroupLabel>Chat history</SidebarGroupLabel>
 				<SidebarGroupContent>
-					<div className="text-sm text-muted-foreground p-2">No conversations yet</div>
+					<div className="p-2 text-sm text-muted-foreground">No conversations yet</div>
 				</SidebarGroupContent>
 			</SidebarGroup>
 		);

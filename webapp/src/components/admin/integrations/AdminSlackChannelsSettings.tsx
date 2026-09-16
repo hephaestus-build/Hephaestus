@@ -127,7 +127,7 @@ export function AdminSlackChannelsSettings({
 
 				<CardContent className="space-y-4">
 					{hasSlackConnection && (
-						<p className="text-muted-foreground text-sm">
+						<p className="text-sm text-muted-foreground">
 							You can also invite Hephaestus from Slack. In the channel, run{" "}
 							<code className="rounded bg-muted px-1 py-0.5">/invite @Hephaestus</code>; it appears
 							here as <strong>Not started</strong> until an admin activates monitoring.

@@ -61,7 +61,7 @@ export function ReviewRunCard({ job }: ReviewRunCardProps) {
 			{job.errorMessage && (
 				<div className="space-y-1 rounded-lg border border-destructive/40 p-3">
 					<p className="text-sm font-medium">What went wrong</p>
-					<pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs text-muted-foreground">
+					<pre className="max-h-48 overflow-auto text-xs break-words whitespace-pre-wrap text-muted-foreground">
 						{job.errorMessage}
 					</pre>
 				</div>

@@ -68,13 +68,13 @@ function ProviderSelectionPage() {
 		<div className="mx-auto w-full max-w-2xl">
 			<Link
 				to="/"
-				className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6"
+				className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
 				aria-label="Back to dashboard"
 			>
 				<ArrowLeftIcon className="size-3.5" />
 				Back
 			</Link>
-			<div className="space-y-1.5 mb-8">
+			<div className="mb-8 space-y-1.5">
 				<h1 className="text-2xl font-semibold tracking-tight">Create Workspace</h1>
 				<p className="text-muted-foreground">Choose your Git provider to get started.</p>
 			</div>
@@ -101,11 +101,11 @@ function ProviderSelectionPage() {
 					</AlertDescription>
 				</Alert>
 			) : providers.length === 0 && !isError ? (
-				<p className="text-center text-muted-foreground py-12">
+				<p className="py-12 text-center text-muted-foreground">
 					No providers are currently available. Contact your administrator.
 				</p>
 			) : (
-				<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 					{providers.map((provider) => (
 						<Link
 							key={provider.id}
@@ -114,7 +114,7 @@ function ProviderSelectionPage() {
 						>
 							<Card variant="interactive" className="h-full cursor-pointer">
 								<CardHeader>
-									<div className="flex items-center gap-3 mb-1">
+									<div className="mb-1 flex items-center gap-3">
 										<provider.icon className="size-6" />
 										<CardTitle className="text-lg">{provider.name}</CardTitle>
 									</div>

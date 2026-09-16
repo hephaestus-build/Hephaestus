@@ -94,7 +94,7 @@ interface DetailSectionIntroProps {
 function DetailSectionIntro({ id, title, description }: DetailSectionIntroProps) {
 	return (
 		<div className="grid content-start gap-1">
-			<h2 id={id} className="text-lg font-semibold leading-6">
+			<h2 id={id} className="text-lg leading-6 font-semibold">
 				{title}
 			</h2>
 			<p className="text-sm leading-5 text-muted-foreground">{description}</p>
@@ -206,7 +206,7 @@ export function PracticeGroupDetailPage({
 					>
 						<GroupIcon className="size-5" aria-hidden />
 					</span>
-					<h1 className="min-w-0 text-pretty text-2xl font-semibold">{group.name}</h1>
+					<h1 className="min-w-0 text-2xl font-semibold text-pretty">{group.name}</h1>
 					<StatusBadge def={badge} />
 					{groupTrend && (
 						<PracticeTrendChip
@@ -244,7 +244,7 @@ export function PracticeGroupDetailPage({
 						{isGroupDescriptionOpen && (
 							<p
 								id="practice-group-description"
-								className="w-full rounded-lg border bg-muted/20 p-3 text-pretty text-sm leading-5 text-muted-foreground"
+								className="w-full rounded-lg border bg-muted/20 p-3 text-sm leading-5 text-pretty text-muted-foreground"
 							>
 								{group.description}
 							</p>
@@ -291,7 +291,7 @@ export function PracticeGroupDetailPage({
 											aria-expanded={isSelected}
 											aria-controls={nextStepId}
 											onClick={() => onSelectPractice?.(isSelected ? undefined : practice.slug)}
-											className="absolute inset-0 z-10 cursor-pointer rounded-xl outline-none hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+											className="absolute inset-0 z-10 cursor-pointer rounded-xl outline-none hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
 										/>
 										<div className="grid min-h-16 grid-cols-[auto_1fr_auto] items-start gap-3 p-4">
 											<span
@@ -303,7 +303,7 @@ export function PracticeGroupDetailPage({
 												<NodeIcon className="size-4" aria-hidden />
 											</span>
 											<div className="flex min-w-0 flex-col gap-1">
-												<span className="text-pretty text-sm font-medium leading-5">
+												<span className="text-sm leading-5 font-medium text-pretty">
 													{practice.name}
 												</span>
 												<div className="relative z-20 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-5">
@@ -349,18 +349,18 @@ export function PracticeGroupDetailPage({
 										<div id={infoId} className="grid gap-4 border-t bg-background/70 p-4 text-sm">
 											{practice.whyItMatters && (
 												<div className="flex flex-col gap-1">
-													<h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+													<h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
 														Why it matters
 													</h3>
-													<p className="text-pretty leading-relaxed">{practice.whyItMatters}</p>
+													<p className="leading-relaxed text-pretty">{practice.whyItMatters}</p>
 												</div>
 											)}
 											{practice.whatGoodLooksLike && (
 												<div className="flex flex-col gap-1">
-													<h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+													<h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
 														What good looks like
 													</h3>
-													<p className="text-pretty leading-relaxed">
+													<p className="leading-relaxed text-pretty">
 														{practice.whatGoodLooksLike}
 													</p>
 												</div>
@@ -384,7 +384,7 @@ export function PracticeGroupDetailPage({
 				className={cn(
 					"flex min-w-0 flex-col gap-3",
 					practices && practices.length > 0
-						? "border-t pt-6 lg:row-span-2 lg:row-start-3 lg:grid lg:grid-rows-subgrid lg:content-start lg:gap-3 lg:self-stretch lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0"
+						? "border-t pt-6 lg:row-span-2 lg:row-start-3 lg:grid lg:grid-rows-subgrid lg:content-start lg:gap-3 lg:self-stretch lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6"
 						: "lg:col-span-2 lg:row-start-3",
 				)}
 			>

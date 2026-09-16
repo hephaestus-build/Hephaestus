@@ -338,16 +338,16 @@ code {
 		@apply bg-background text-foreground;
 	}
 	code.textCode {
-		@apply bg-provider-muted tracking-tight rounded px-1 py-0.5;
+		@apply rounded bg-provider-muted px-1 py-0.5 tracking-tight;
 	}
 }
 
 .shiki {
-	@apply text-sm bg-card text-card-foreground rounded-xl border p-4;
+	@apply rounded-xl border bg-card p-4 text-sm text-card-foreground;
 }
 
 .shiki code {
-	@apply whitespace-pre-wrap wrap-break-word;
+	@apply wrap-break-word whitespace-pre-wrap;
 	background: transparent !important;
 }
 

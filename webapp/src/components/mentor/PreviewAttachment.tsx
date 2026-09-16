@@ -12,14 +12,14 @@ export const PreviewAttachment = ({
 
 	return (
 		<div className="flex flex-col gap-2">
-			<div className="w-20 h-16 aspect-video bg-muted rounded-md relative flex flex-col items-center justify-center">
+			<div className="relative flex aspect-video h-16 w-20 flex-col items-center justify-center rounded-md bg-muted">
 				{contentType ? (
 					contentType.startsWith("image") ? (
 						<img
 							key={url}
 							src={url}
 							alt={name || "An image attachment"}
-							className="rounded-md size-full object-cover"
+							className="size-full rounded-md object-cover"
 						/>
 					) : (
 						<div />
@@ -34,7 +34,7 @@ export const PreviewAttachment = ({
 					</div>
 				)}
 			</div>
-			<div className="text-xs text-muted-foreground max-w-16 truncate">{name}</div>
+			<div className="max-w-16 truncate text-xs text-muted-foreground">{name}</div>
 		</div>
 	);
 };

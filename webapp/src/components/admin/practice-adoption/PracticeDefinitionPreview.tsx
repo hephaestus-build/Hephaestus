@@ -32,7 +32,7 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 	return (
 		<div className="space-y-6">
 			{definition.whyItMatters && (
-				<p className="max-w-2xl text-pretty text-lg leading-relaxed">{definition.whyItMatters}</p>
+				<p className="max-w-2xl text-lg leading-relaxed text-pretty">{definition.whyItMatters}</p>
 			)}
 
 			{definition.whatGoodLooksLike && (

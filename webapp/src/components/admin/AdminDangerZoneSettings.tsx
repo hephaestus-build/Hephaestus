@@ -48,19 +48,19 @@ export function AdminDangerZoneSettings({ workspaceSlug }: AdminDangerZoneSettin
 
 	return (
 		<section aria-labelledby="workspace-danger-zone-heading">
-			<h2 id="workspace-danger-zone-heading" className="text-lg font-semibold mb-4">
+			<h2 id="workspace-danger-zone-heading" className="mb-4 text-lg font-semibold">
 				Danger Zone
 			</h2>
 			<Card variant="destructive">
 				<CardContent>
 					<div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:gap-6">
-						<div className="space-y-2 flex-1">
+						<div className="flex-1 space-y-2">
 							<h3 className="text-base font-medium">Delete this workspace</h3>
-							<p className="text-sm text-muted-foreground leading-relaxed">
+							<p className="text-sm leading-relaxed text-muted-foreground">
 								Permanently deletes workspace content, settings, memberships, and locally stored
 								credentials. Audit and accounting records remain. This cannot be undone.
 							</p>
-							<p className="text-sm text-muted-foreground leading-relaxed">
+							<p className="text-sm leading-relaxed text-muted-foreground">
 								Hephaestus has no workspace-level export. The{" "}
 								<Link to="/settings" className="underline underline-offset-4 hover:text-foreground">
 									personal export in account settings

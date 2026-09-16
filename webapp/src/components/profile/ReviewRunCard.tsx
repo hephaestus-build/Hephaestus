@@ -84,11 +84,11 @@ export function ReviewRunCard({
 			)}
 			<div className="relative col-start-1 row-start-1 row-end-3 sm:col-start-2">
 				<span
-					className="absolute left-1/2 top-3 z-10 size-2.5 -translate-x-1/2 rounded-full border-2 border-background bg-muted-foreground"
+					className="absolute top-3 left-1/2 z-10 size-2.5 -translate-x-1/2 rounded-full border-2 border-background bg-muted-foreground"
 					aria-hidden
 				/>
 				<span
-					className="absolute bottom-0 left-1/2 top-5 w-px -translate-x-1/2 bg-border group-last:hidden"
+					className="absolute top-5 bottom-0 left-1/2 w-px -translate-x-1/2 bg-border group-last:hidden"
 					aria-hidden
 				/>
 			</div>

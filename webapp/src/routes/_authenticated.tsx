@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated")({
 		}
 	},
 	pendingComponent: () => (
-		<div className="flex items-center justify-center h-96">
+		<div className="flex h-96 items-center justify-center">
 			<Spinner className="size-8" />
 		</div>
 	),

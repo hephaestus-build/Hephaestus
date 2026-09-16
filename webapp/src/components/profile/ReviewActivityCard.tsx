@@ -106,8 +106,8 @@ export function ReviewActivityCard({
 			className={cn(htmlUrl && !isLoading && "cursor-pointer")}
 		>
 			<div className="flex flex-col gap-1 p-4">
-				<div className="flex justify-between gap-2 items-center text-sm text-provider-muted-foreground">
-					<span className="font-medium flex justify-center items-center space-x-1">
+				<div className="flex items-center justify-between gap-2 text-sm text-provider-muted-foreground">
+					<span className="flex items-center justify-center space-x-1 font-medium">
 						{isLoading ? (
 							<>
 								<Skeleton className={cn("size-5", stateStyle.skeletonColor)} />
@@ -126,7 +126,7 @@ export function ReviewActivityCard({
 					</span>
 
 					{!isLoading && score !== undefined && score > 0 && (
-						<span className="flex items-center gap-1 text-provider-done-foreground font-semibold">
+						<span className="flex items-center gap-1 font-semibold text-provider-done-foreground">
 							<Tooltip>
 								<TooltipTrigger className="flex items-center gap-1">
 									<AwardIcon size={16} />
@@ -138,7 +138,7 @@ export function ReviewActivityCard({
 					)}
 				</div>
 
-				<div className="flex justify-between font-medium contain-inline-size leading-normal">
+				<div className="flex justify-between leading-normal font-medium contain-inline-size">
 					{isLoading ? (
 						<Skeleton className="h-6 w-3/4" />
 					) : (

@@ -76,7 +76,7 @@ export function LeaderboardPage({
 			<div className="min-w-0">
 				<div className="grid min-w-0 grid-cols-1 gap-y-4 xl:grid-cols-4 xl:gap-4">
 					<div className="col-span-1 min-w-0 space-y-4">
-						<div className="xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-2rem)] xl:overflow-auto">
+						<div className="xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:self-start xl:overflow-auto">
 							<LeaderboardFilter
 								selectedMode={selectedMode}
 								onModeChange={onModeChange}
@@ -105,7 +105,7 @@ export function LeaderboardPage({
 							/>
 						)}
 
-						<div className="border rounded-md border-input overflow-auto">
+						<div className="overflow-auto rounded-md border border-input">
 							<LeaderboardTable
 								leaderboard={leaderboard}
 								isLoading={isLoading}

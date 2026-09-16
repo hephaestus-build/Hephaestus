@@ -53,7 +53,7 @@ function BackToProviders() {
 	return (
 		<Link
 			to="/workspaces/new"
-			className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6"
+			className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
 		>
 			<ArrowLeftIcon className="size-3.5" />
 			Back
@@ -318,14 +318,14 @@ function GitLabWizardPage() {
 
 			<Link
 				to="/workspaces/new"
-				className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6"
+				className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
 				aria-label="Back to provider selection"
 			>
 				<ArrowLeftIcon className="size-3.5" />
 				Back
 			</Link>
 
-			<div className="space-y-1.5 mb-6">
+			<div className="mb-6 space-y-1.5">
 				<h1
 					id="wizard-heading"
 					ref={headingRef}
@@ -357,7 +357,7 @@ function GitLabWizardPage() {
 				</Alert>
 			)}
 
-			<div className="flex justify-end gap-2 mt-6">
+			<div className="mt-6 flex justify-end gap-2">
 				{state.step > 1 && (
 					<Button
 						variant="outline"

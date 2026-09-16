@@ -55,8 +55,8 @@ function DiagnosticItem({
 				{icon}
 			</ItemMedia>
 			<ItemContent className="gap-0">
-				<span className="text-muted-foreground text-xs">{label}</span>
-				<ItemTitle className="font-normal text-sm">{children}</ItemTitle>
+				<span className="text-xs text-muted-foreground">{label}</span>
+				<ItemTitle className="text-sm font-normal">{children}</ItemTitle>
 			</ItemContent>
 		</Item>
 	);
@@ -285,7 +285,7 @@ export function SyncStatusHeader({
 						<Skeleton className="h-8 w-40" />
 					</div>
 				) : !status ? (
-					<p className="text-muted-foreground text-sm">
+					<p className="text-sm text-muted-foreground">
 						No {label} connection found for this workspace.
 					</p>
 				) : (

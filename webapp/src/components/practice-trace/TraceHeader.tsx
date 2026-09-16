@@ -29,7 +29,7 @@ export function TraceHeader({ trace, onRequestReview, requestPending }: TraceHea
 					<KindIcon className="size-4 shrink-0" aria-hidden />
 					{artifactKindLabel(trace.artifactKind)}
 				</p>
-				<h1 className="break-words text-2xl font-semibold tracking-tight">
+				<h1 className="text-2xl font-semibold tracking-tight break-words">
 					{trace.title}
 					{trace.number != null && (
 						<span className="ml-2 font-normal text-muted-foreground tabular-nums">

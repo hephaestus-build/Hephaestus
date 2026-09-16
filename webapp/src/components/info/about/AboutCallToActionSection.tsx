@@ -11,14 +11,14 @@ export function AboutCallToActionSection() {
 			<Badge className="mb-4" variant="outline">
 				Get involved
 			</Badge>
-			<h2 id="about-cta-heading" className="text-3xl font-bold mb-4">
+			<h2 id="about-cta-heading" className="mb-4 text-3xl font-bold">
 				Contribute to Hephaestus
 			</h2>
-			<p className="text-muted-foreground max-w-2xl mx-auto mb-8">
+			<p className="mx-auto mb-8 max-w-2xl text-muted-foreground">
 				Fix a bug, improve the documentation, or propose a feature. Start with the repository or
 				read the contributor guide.
 			</p>
-			<div className="flex flex-col sm:flex-row gap-4 justify-center">
+			<div className="flex flex-col justify-center gap-4 sm:flex-row">
 				<a
 					href="https://github.com/hephaestus-build/Hephaestus"
 					target="_blank"

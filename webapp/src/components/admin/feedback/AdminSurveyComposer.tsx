@@ -416,10 +416,10 @@ export function AdminSurveyComposer({
 
 							<section className="flex flex-col gap-4" aria-labelledby={fieldId("questions")}>
 								<div className="space-y-1">
-									<h2 id={fieldId("questions")} className="font-semibold text-lg">
+									<h2 id={fieldId("questions")} className="text-lg font-semibold">
 										Questions
 									</h2>
-									<p className="max-w-2xl text-muted-foreground text-sm">
+									<p className="max-w-2xl text-sm text-muted-foreground">
 										Short surveys get answered: aim for 1–3 questions, closed questions first and
 										one optional free-text question last. Ask what members did, not what they would
 										do.

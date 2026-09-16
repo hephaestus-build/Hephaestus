@@ -16,7 +16,7 @@ export function InstitutionalAttribution() {
 					loading="lazy"
 					className="size-10 shrink-0 object-contain dark:invert"
 				/>
-				<span className="text-left text-xs font-semibold leading-tight tracking-wide">
+				<span className="text-left text-xs leading-tight font-semibold tracking-wide">
 					Applied
 					<br />
 					Education

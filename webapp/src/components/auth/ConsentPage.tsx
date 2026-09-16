@@ -258,7 +258,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 					<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
 
 					<header className="space-y-4">
-						<h1 className="break-words text-2xl font-semibold tracking-tight">
+						<h1 className="text-2xl font-semibold tracking-tight break-words">
 							Let's get you set up
 						</h1>
 						<div className="flex items-start gap-3">

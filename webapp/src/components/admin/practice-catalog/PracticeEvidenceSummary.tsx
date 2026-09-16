@@ -118,7 +118,7 @@ export function PracticeAutomatedReviewValidationNote({
 	validation,
 }: PracticeAutomatedReviewValidationSummaryProps) {
 	return (
-		<p className="text-muted-foreground text-sm">{VALIDATION_DEFS[validation.status].sentence}</p>
+		<p className="text-sm text-muted-foreground">{VALIDATION_DEFS[validation.status].sentence}</p>
 	);
 }
 
@@ -129,7 +129,7 @@ export function PracticeAutomatedReviewValidationSummary({
 		<div className="space-y-1 text-sm">
 			<PracticeAutomatedReviewValidationNote validation={validation} />
 			{/* Monospaced and breakable: nobody reads a digest, they compare one against another. */}
-			<p className="text-muted-foreground text-xs">
+			<p className="text-xs text-muted-foreground">
 				Rules <code className="break-all">{validation.reviewRuleFingerprint}</code> · policy{" "}
 				<code className="break-all">{validation.policyDigest}</code>
 			</p>

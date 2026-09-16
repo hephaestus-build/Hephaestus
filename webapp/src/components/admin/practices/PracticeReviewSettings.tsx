@@ -88,7 +88,7 @@ function ReviewStatusSection({
 
 	return (
 		<section className="space-y-4" aria-labelledby="review-status-heading">
-			<h2 id="review-status-heading" className="font-semibold text-lg">
+			<h2 id="review-status-heading" className="text-lg font-semibold">
 				Practice reviews
 			</h2>
 			<Field orientation="horizontal">
@@ -181,10 +181,10 @@ function ReviewTimingSection({
 	return (
 		<section className="space-y-4" aria-labelledby="review-timing-heading">
 			<div className="space-y-1">
-				<h2 id="review-timing-heading" className="font-semibold text-lg">
+				<h2 id="review-timing-heading" className="text-lg font-semibold">
 					How reviews start
 				</h2>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					Reviews start from activity on connected work or from a request.
 				</p>
 			</div>
@@ -300,10 +300,10 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 	return (
 		<section className="space-y-4" aria-labelledby="feedback-delivery-heading">
 			<div className="space-y-1">
-				<h2 id="feedback-delivery-heading" className="font-semibold text-lg">
+				<h2 id="feedback-delivery-heading" className="text-lg font-semibold">
 					Sending feedback
 				</h2>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					Workspace-wide control for comments and mentor messages.
 				</p>
 			</div>
@@ -379,7 +379,7 @@ function InheritedSettingHint({
 }) {
 	if (!overridden) {
 		return (
-			<span className="self-start text-muted-foreground text-xs">Default: {inheritedValue}</span>
+			<span className="self-start text-xs text-muted-foreground">Default: {inheritedValue}</span>
 		);
 	}
 

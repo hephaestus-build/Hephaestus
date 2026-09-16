@@ -114,7 +114,7 @@ export function MultimodalInput({
 	const canSubmit = input.trim().length > 0 && uploadQueue.length === 0 && !readonly;
 
 	return (
-		<div className="relative w-full flex flex-col gap-4">
+		<div className="relative flex w-full flex-col gap-4">
 			<AnimatePresence>
 				{!isAtBottom && isCurrentVersion && (
 					<motion.div
@@ -122,12 +122,12 @@ export function MultimodalInput({
 						animate={{ opacity: 1, y: 0 }}
 						exit={{ opacity: 0, y: 10 }}
 						transition={{ type: "spring", stiffness: 300, damping: 20 }}
-						className="absolute left-1/2 -top-12 -translate-x-1/2 z-[95] backdrop-blur-sm rounded-full"
+						className="absolute -top-12 left-1/2 z-[95] -translate-x-1/2 rounded-full backdrop-blur-sm"
 					>
 						<Button
 							aria-label="Scroll to latest message"
 							shape="pill"
-							className="bg-background/80 dark:bg-background/80 border-border/50 shadow-lg hover:bg-background/90 dark:hover:bg-background/90"
+							className="border-border/50 bg-background/80 shadow-lg hover:bg-background/90 dark:bg-background/80 dark:hover:bg-background/90"
 							size="icon"
 							variant="outline"
 							onClick={(event) => {
@@ -144,7 +144,7 @@ export function MultimodalInput({
 			{!disableAttachments && (
 				<input
 					type="file"
-					className="fixed -top-4 -left-4 size-0.5 opacity-0 pointer-events-none"
+					className="pointer-events-none fixed -top-4 -left-4 size-0.5 opacity-0"
 					ref={fileInputRef}
 					multiple
 					aria-label="Attach files"
@@ -154,7 +154,7 @@ export function MultimodalInput({
 			)}
 
 			{(attachments.length > 0 || uploadQueue.length > 0) && (
-				<div className="flex flex-row gap-2 overflow-x-scroll items-end">
+				<div className="flex flex-row items-end gap-2 overflow-x-scroll">
 					{attachments.map((attachment) => (
 						<PreviewAttachment key={attachment.url} attachment={attachment} />
 					))}
@@ -175,7 +175,7 @@ export function MultimodalInput({
 
 			<div
 				className={cn(
-					"border-input placeholder:text-muted-foreground focus-within:border-ring focus-within:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-xl border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-3 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+					"flex field-sizing-content min-h-16 w-full rounded-xl border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:aria-invalid:ring-destructive/40",
 					"flex-col gap-1",
 					readonly && "cursor-not-allowed opacity-60",
 					className,
@@ -210,7 +210,7 @@ export function MultimodalInput({
 					/>
 				</div>
 
-				<div className="flex gap-2 justify-between">
+				<div className="flex justify-between gap-2">
 					<div className="flex gap-2">
 						{!disableAttachments && (
 							<AttachmentsButton fileInputRef={fileInputRef} status={status} readonly={readonly} />

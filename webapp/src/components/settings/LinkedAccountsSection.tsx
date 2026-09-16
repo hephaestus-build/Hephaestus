@@ -182,7 +182,7 @@ export function LinkedAccountsSection({
 					ref={headingRef}
 					tabIndex={-1}
 					id="linked-accounts-heading"
-					className="text-xl font-semibold rounded-sm outline-none focus:ring-2 focus:ring-ring"
+					className="rounded-sm text-xl font-semibold outline-none focus:ring-2 focus:ring-ring"
 				>
 					Connected Accounts
 				</h2>
@@ -290,7 +290,7 @@ export function LinkedAccountsSection({
 												onClick={() => onLink(registrationId)}
 												aria-label={`Connect ${label}`}
 											>
-												<Icon className="size-3.5 mr-1.5" aria-hidden="true" />
+												<Icon className="mr-1.5 size-3.5" aria-hidden="true" />
 												Connect
 											</Button>
 										</ItemActions>
@@ -321,7 +321,7 @@ export function LinkedAccountsSection({
 											disabled={!provider.registrationId}
 											aria-label={`Connect ${label}`}
 										>
-											<Icon className="size-3.5 mr-1.5" aria-hidden="true" />
+											<Icon className="mr-1.5 size-3.5" aria-hidden="true" />
 											Connect {label}
 										</Button>
 									);
@@ -371,7 +371,7 @@ function UnlinkControl({
 		return (
 			<p
 				id={`lockout-hint-${identityId}`}
-				className="shrink-0 max-w-3xs text-xs text-muted-foreground"
+				className="max-w-3xs shrink-0 text-xs text-muted-foreground"
 			>
 				Your only sign-in method — delete your account in the Danger Zone to remove it.
 			</p>
@@ -395,9 +395,9 @@ function UnlinkControl({
 						className="shrink-0 hover:text-destructive"
 					>
 						{isUnlinking ? (
-							<Spinner className="size-3.5 mr-1.5" aria-hidden="true" />
+							<Spinner className="mr-1.5 size-3.5" aria-hidden="true" />
 						) : (
-							<Unlink className="size-3.5 mr-1.5" aria-hidden="true" />
+							<Unlink className="mr-1.5 size-3.5" aria-hidden="true" />
 						)}
 						Disconnect
 					</Button>

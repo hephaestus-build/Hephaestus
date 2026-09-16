@@ -90,7 +90,7 @@ export function WorkspacePracticePanel({ state, nested }: WorkspacePracticePanel
 								<StatusBadge def={autonomy} />
 								<AutonomySourceNote
 									source={autonomySource}
-									className="text-muted-foreground text-xs font-normal"
+									className="text-xs font-normal text-muted-foreground"
 								/>
 							</ItemTitle>
 							<ItemDescription className="line-clamp-none">{autonomy.description}</ItemDescription>

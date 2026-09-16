@@ -66,7 +66,7 @@ function IntegrationsCallback() {
 					<div className="text-center">
 						<h1 className="text-xl font-semibold">{title}</h1>
 						{failed && reason && (
-							<p className="mt-2 wrap-anywhere text-sm text-muted-foreground">{reason}</p>
+							<p className="mt-2 text-sm wrap-anywhere text-muted-foreground">{reason}</p>
 						)}
 					</div>
 					<Button render={<Link to="/" />}>Return to dashboard</Button>

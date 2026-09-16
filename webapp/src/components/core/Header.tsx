@@ -76,7 +76,7 @@ export default function Header({
 	);
 
 	return (
-		<header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 justify-between">
+		<header className="flex h-16 shrink-0 items-center justify-between gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
 			<div className="flex items-center gap-2 px-2 sm:px-4">
 				{sidebarTrigger}
 				<div className="flex items-center gap-2">
@@ -107,7 +107,7 @@ export default function Header({
 										target="_blank"
 										rel="noopener noreferrer"
 										aria-label={badge.ariaLabel}
-										className="mt-1 hidden items-center gap-1 font-mono text-muted-foreground text-xs transition-colors hover:text-foreground sm:flex"
+										className="mt-1 hidden items-center gap-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground sm:flex"
 									/>
 								}
 							>
@@ -163,7 +163,7 @@ export default function Header({
 									<DropdownMenuGroup>
 										<DropdownMenuLabel className="font-normal">
 											<div className="flex flex-col space-y-1">
-												<p className="text-sm font-medium leading-none">{name}</p>
+												<p className="text-sm leading-none font-medium">{name}</p>
 											</div>
 										</DropdownMenuLabel>
 									</DropdownMenuGroup>

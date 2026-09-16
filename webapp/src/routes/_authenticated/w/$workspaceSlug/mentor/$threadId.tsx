@@ -41,37 +41,37 @@ function ThreadContainer() {
 
 	if (mentorChat.isThreadLoading) {
 		return (
-			<div className="flex flex-col flex-1 min-h-0">
+			<div className="flex min-h-0 flex-1 flex-col">
 				<div className="relative flex min-h-0 flex-1 flex-col">
 					<div className="flex-1 overflow-y-auto p-4 sm:p-6">
-						<div className="flex flex-col w-full pb-16 min-w-0 gap-8 flex-1 pt-4 relative mx-auto md:max-w-3xl">
-							<div className="flex items-start gap-3 justify-end">
-								<div className="space-y-2 max-w-[75%] text-right">
-									<Skeleton className="h-4 w-56 ml-auto" />
-									<Skeleton className="h-4 w-28 ml-auto" />
+						<div className="relative mx-auto flex w-full min-w-0 flex-1 flex-col gap-8 pt-4 pb-16 md:max-w-3xl">
+							<div className="flex items-start justify-end gap-3">
+								<div className="max-w-[75%] space-y-2 text-right">
+									<Skeleton className="ml-auto h-4 w-56" />
+									<Skeleton className="ml-auto h-4 w-28" />
 								</div>
 							</div>
 
 							<div className="flex items-start gap-3">
 								<Skeleton className="h-8 w-8 rounded-full" />
-								<div className="space-y-2 max-w-[75%]">
+								<div className="max-w-[75%] space-y-2">
 									<Skeleton className="h-4 w-40" />
 									<Skeleton className="h-4 w-64" />
 									<Skeleton className="h-4 w-32" />
 								</div>
 							</div>
 
-							<div className="flex items-start gap-3 justify-end">
-								<div className="space-y-2 max-w-[75%] text-right">
-									<Skeleton className="h-4 w-75 ml-auto" />
-									<Skeleton className="h-4 w-34 ml-auto" />
-									<Skeleton className="h-4 w-53 ml-auto" />
+							<div className="flex items-start justify-end gap-3">
+								<div className="max-w-[75%] space-y-2 text-right">
+									<Skeleton className="ml-auto h-4 w-75" />
+									<Skeleton className="ml-auto h-4 w-34" />
+									<Skeleton className="ml-auto h-4 w-53" />
 								</div>
 							</div>
 
 							<div className="flex items-start gap-3">
 								<Skeleton className="h-8 w-8 rounded-full" />
-								<div className="space-y-2 max-w-[75%]">
+								<div className="max-w-[75%] space-y-2">
 									<Skeleton className="h-4 w-72" />
 									<Skeleton className="h-4 w-52" />
 									<Skeleton className="h-4 w-24" />
@@ -80,7 +80,7 @@ function ThreadContainer() {
 						</div>
 					</div>
 
-					<div className="flex flex-col gap-2 items-center w-full px-4 pb-2 -mt-20 relative z-10 bg-gradient-to-t from-muted dark:from-background/30 from-60% to-transparent pt-8">
+					<div className="relative z-10 -mt-20 flex w-full flex-col items-center gap-2 bg-gradient-to-t from-muted from-60% to-transparent px-4 pt-8 pb-2 dark:from-background/30">
 						<div className="w-full max-w-3xl space-y-2">
 							<Skeleton className="h-20 flex-1" />
 						</div>
@@ -93,9 +93,9 @@ function ThreadContainer() {
 
 	if (mentorChat.threadError) {
 		return (
-			<div className="h-full flex items-center justify-center p-6">
+			<div className="flex h-full items-center justify-center p-6">
 				<div className="text-center">
-					<p className="text-destructive mb-4">
+					<p className="mb-4 text-destructive">
 						Failed to load conversation. Thread may not exist or you don't have access to it.
 					</p>
 					<p className="text-sm text-muted-foreground">
@@ -108,7 +108,7 @@ function ThreadContainer() {
 
 	if (!mentorChat.threadDetail) {
 		return (
-			<div className="h-full flex items-center justify-center p-6">
+			<div className="flex h-full items-center justify-center p-6">
 				<div className="text-center">
 					<p className="text-muted-foreground">Conversation not found.</p>
 				</div>
@@ -117,7 +117,7 @@ function ThreadContainer() {
 	}
 
 	return (
-		<div className="flex flex-col flex-1 min-h-0">
+		<div className="flex min-h-0 flex-1 flex-col">
 			<Chat
 				messages={mentorChat.messages}
 				votes={mentorChat.votes}

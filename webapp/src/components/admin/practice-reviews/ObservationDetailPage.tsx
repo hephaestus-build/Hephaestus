@@ -73,7 +73,7 @@ export function ObservationDetailPage({
 
 	if (isLoading)
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				<div className="flex min-h-64 items-center justify-center">
 					<Spinner className="size-7" />
@@ -82,7 +82,7 @@ export function ObservationDetailPage({
 		);
 	if (error) {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				<QueryErrorAlert error={error} title="Couldn't load this observation" onRetry={onRetry} />
 			</article>
@@ -90,7 +90,7 @@ export function ObservationDetailPage({
 	}
 	if (!observation) {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				<MissingRecordEmpty title="This observation hasn't loaded" onRetry={onRetry} />
 			</article>
@@ -99,7 +99,7 @@ export function ObservationDetailPage({
 	const artifactSlug = reviewArtifactTypeSlug(observation.artifact.type);
 
 	return (
-		<article className="min-w-0 max-w-4xl space-y-8">
+		<article className="max-w-4xl min-w-0 space-y-8">
 			{breadcrumbs}
 			<ReviewDetailHeader
 				chips={
@@ -159,7 +159,7 @@ export function ObservationDetailPage({
 					<h3 id="reasoning-heading" className="text-lg font-semibold">
 						Why this was raised
 					</h3>
-					<p className="whitespace-pre-wrap text-sm leading-relaxed">
+					<p className="text-sm leading-relaxed whitespace-pre-wrap">
 						{observation.evidenceRationale}
 					</p>
 				</section>

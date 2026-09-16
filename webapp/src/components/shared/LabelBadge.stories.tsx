@@ -48,7 +48,7 @@ export const MultipleBadges: Story = {
 		color: "d73a4a",
 	},
 	render: (args) => (
-		<div className="flex flex-wrap gap-2 max-w-[600px]">
+		<div className="flex max-w-[600px] flex-wrap gap-2">
 			<LabelBadge {...args} />
 			<LabelBadge label="enhancement" color="a2eeef" />
 			<LabelBadge label="documentation" color="0075ca" />

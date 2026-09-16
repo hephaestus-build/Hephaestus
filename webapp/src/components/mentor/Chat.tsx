@@ -62,7 +62,7 @@ export function Chat({
 
 	return (
 		<div className={cn("relative h-full", className)}>
-			<div className="flex flex-col h-full">
+			<div className="flex h-full flex-col">
 				<Messages
 					messages={messages}
 					votes={votes}
@@ -79,9 +79,9 @@ export function Chat({
 					partRenderers={partRenderers}
 				/>
 
-				<div className="flex flex-col gap-2 items-center w-full px-4 pb-2 -mt-20 relative z-10 bg-gradient-to-t from-muted dark:from-background/30 from-60% to-transparent pt-8">
+				<div className="relative z-10 -mt-20 flex w-full flex-col items-center gap-2 bg-gradient-to-t from-muted from-60% to-transparent px-4 pt-8 pb-2 dark:from-background/30">
 					{status === "error" && (
-						<div className="w-full max-w-3xl mb-2">
+						<div className="mb-2 w-full max-w-3xl">
 							<Alert variant="destructive">
 								<AlertCircle className="size-4" />
 								<AlertTitle>Something went wrong</AlertTitle>
@@ -122,7 +122,7 @@ export function Chat({
 							/>
 						</div>
 					)}
-					<p className="text-center text-balance text-xs text-muted-foreground px-4">
+					<p className="px-4 text-center text-xs text-balance text-muted-foreground">
 						Heph can make mistakes. Consider verifying important information.
 					</p>
 				</div>

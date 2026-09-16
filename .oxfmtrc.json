@@ -16,6 +16,10 @@
 		"partitionByNewline": true
 	},
 	"sortPackageJson": false,
+	"sortTailwindcss": {
+		"stylesheet": "./webapp/src/styles.css",
+		"functions": ["cn", "cva"]
+	},
 	"ignorePatterns": [
 		"webapp/src/api/**",
 		"webapp/src/routeTree.gen.ts",

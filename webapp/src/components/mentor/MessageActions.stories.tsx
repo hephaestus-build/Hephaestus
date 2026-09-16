@@ -67,7 +67,7 @@ const meta = {
 	},
 	decorators: [
 		(Story) => (
-			<div className="max-w-md p-4 border rounded-lg group/message">
+			<div className="group/message max-w-md rounded-lg border p-4">
 				<div className="mb-2 text-sm text-muted-foreground">
 					Hover or use the keyboard to explore message actions
 				</div>

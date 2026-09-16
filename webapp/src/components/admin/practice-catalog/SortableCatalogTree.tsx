@@ -491,7 +491,7 @@ export function SortableCatalogTree<
 			{(entries.length > 0 || sortedGroups.length > 0) && (
 				<div className="rounded-lg border border-dashed">
 					<div className="flex items-center gap-2 border-b border-dashed px-3 py-2">
-						<span className="font-semibold text-muted-foreground text-sm">{unassignedLabel}</span>
+						<span className="text-sm font-semibold text-muted-foreground">{unassignedLabel}</span>
 						<Badge variant="secondary">{totalByGroup.get(UNASSIGNED_CATALOG_BUCKET) ?? 0}</Badge>
 					</div>
 					<div className="px-2 py-1">
@@ -609,7 +609,7 @@ function SortableGroupSection<
 					type="button"
 					variant="quiet"
 					size="icon"
-					className="touch-none shrink-0 cursor-grab active:cursor-grabbing disabled:cursor-default"
+					className="shrink-0 cursor-grab touch-none active:cursor-grabbing disabled:cursor-default"
 					aria-label={`Reorder ${group.name}`}
 					disabled={reorderDisabled}
 					{...attributes}
@@ -623,7 +623,7 @@ function SortableGroupSection<
 					className="py-2.5 hover:no-underline disabled:opacity-100"
 				>
 					<span className="flex min-w-0 flex-wrap items-center gap-2">
-						<span className="min-w-0 break-words font-medium">{group.name}</span>
+						<span className="min-w-0 font-medium break-words">{group.name}</span>
 						<Badge variant="secondary" className="shrink-0">
 							{total}
 						</Badge>
@@ -729,7 +729,7 @@ function EntryBucket<TEntry extends SortableCatalogEntry>({
 				/>
 			</SortableContext>
 			{entries.length === 0 && (
-				<p className="flex min-h-12 items-center px-2 py-3 text-muted-foreground text-sm">
+				<p className="flex min-h-12 items-center px-2 py-3 text-sm text-muted-foreground">
 					{isOver && isEntryDrag ? "Release to move here." : emptyLabel}
 				</p>
 			)}
@@ -784,7 +784,7 @@ function SortableEntryRow<TEntry extends SortableCatalogEntry>({
 					type="button"
 					variant="quiet"
 					size="icon-sm"
-					className="touch-none shrink-0 cursor-grab active:cursor-grabbing disabled:cursor-default"
+					className="shrink-0 cursor-grab touch-none active:cursor-grabbing disabled:cursor-default"
 					aria-label={`Reorder ${entry.name}`}
 					disabled={reorderDisabled}
 					{...attributes}

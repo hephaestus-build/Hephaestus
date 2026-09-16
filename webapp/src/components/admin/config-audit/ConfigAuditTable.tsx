@@ -151,7 +151,7 @@ export function ConfigAuditTable({
 								entry.workspaceId != null ? resolveWorkspaceName?.(entry.workspaceId) : undefined;
 							return (
 								<TableRow key={entry.id}>
-									<TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+									<TableCell className="text-sm whitespace-nowrap text-muted-foreground">
 										<RelativeTime value={entry.occurredAt} />
 									</TableCell>
 									<TableCell>

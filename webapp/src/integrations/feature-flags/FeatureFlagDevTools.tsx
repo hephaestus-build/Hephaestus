@@ -17,7 +17,7 @@ export function FeatureFlagDevToolsPanel({ flags, isLoading }: FeatureFlagDevToo
 	const [isOpen, setIsOpen] = useState(false);
 
 	return (
-		<div className="fixed bottom-4 right-4 z-[9999]">
+		<div className="fixed right-4 bottom-4 z-[9999]">
 			{isOpen && (
 				<div className="mb-2 w-72 rounded-lg border border-border bg-background shadow-lg">
 					<div className="flex items-center justify-between border-b border-border px-3 py-2">
@@ -25,7 +25,7 @@ export function FeatureFlagDevToolsPanel({ flags, isLoading }: FeatureFlagDevToo
 						<button
 							type="button"
 							onClick={() => setIsOpen(false)}
-							className="text-muted-foreground hover:text-foreground text-xs"
+							className="text-xs text-muted-foreground hover:text-foreground"
 						>
 							Close
 						</button>

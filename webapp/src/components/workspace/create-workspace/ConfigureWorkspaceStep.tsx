@@ -118,7 +118,7 @@ export function ConfigureWorkspaceStep() {
 			<div className="rounded-lg border bg-muted/30 p-3 text-sm">
 				<h2
 					id="workspace-summary-heading"
-					className="font-medium text-xs text-muted-foreground uppercase tracking-wider mb-1.5"
+					className="mb-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase"
 				>
 					Summary
 				</h2>
@@ -137,7 +137,7 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 	return (
 		<div className="flex justify-between">
 			<dt className="text-muted-foreground">{label}</dt>
-			<dd className="font-medium truncate ml-4">{value}</dd>
+			<dd className="ml-4 truncate font-medium">{value}</dd>
 		</div>
 	);
 }

@@ -18,7 +18,7 @@ export function ReviewDetailHeader({ chips, title, provenance, actions }: Review
 			<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 				<div className="min-w-0 space-y-2">
 					{chips && <div className="flex flex-wrap items-center gap-2">{chips}</div>}
-					<h2 className="break-words text-2xl font-semibold tracking-tight">{title}</h2>
+					<h2 className="text-2xl font-semibold tracking-tight break-words">{title}</h2>
 					{provenance}
 				</div>
 				{actions}
@@ -71,7 +71,7 @@ export function ReviewFactGrid({ children }: { children: ReactNode }) {
 export function ReviewFact({ label, children }: { label: string; children: ReactNode }) {
 	return (
 		<div className="min-w-0 space-y-1">
-			<dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
+			<dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</dt>
 			<dd className="min-w-0 text-sm">{children}</dd>
 		</div>
 	);

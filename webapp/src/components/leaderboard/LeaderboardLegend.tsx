@@ -22,7 +22,7 @@ export function LeaderboardLegend({ providerType = "GITHUB" }: { providerType?: 
 			<Card>
 				<CardHeader>
 					<CardTitle>
-						<InfoIcon className="inline mr-2 h-4 w-4" /> Activity Legend
+						<InfoIcon className="mr-2 inline h-4 w-4" /> Activity Legend
 					</CardTitle>
 					<CardDescription>What counts toward score, and what is just shown.</CardDescription>
 				</CardHeader>
@@ -47,7 +47,7 @@ export function LeaderboardLegend({ providerType = "GITHUB" }: { providerType?: 
 							</div>
 						</div>
 
-						<div className="space-y-2 pt-2 border-t">
+						<div className="space-y-2 border-t pt-2">
 							<p className="text-sm font-medium">Also shown</p>
 							<div className="grid grid-cols-1 gap-2">
 								{contextBadges.map((badge) => (
@@ -61,8 +61,8 @@ export function LeaderboardLegend({ providerType = "GITHUB" }: { providerType?: 
 							</div>
 						</div>
 
-						<div className="pt-2 border-t">
-							<p className="text-sm text-provider-muted-foreground mb-2">
+						<div className="border-t pt-2">
+							<p className="mb-2 text-sm text-provider-muted-foreground">
 								Only reviews affect score. Everything else is shown for context.
 							</p>
 							<Button

@@ -46,13 +46,13 @@ export function RepositoryCard({
 			<CardHeader>
 				<div className="flex items-start justify-between">
 					<div className="min-w-0 flex-1">
-						<div className="flex items-center gap-2 min-w-0">
+						<div className="flex min-w-0 items-center gap-2">
 							<a
 								href={repository.htmlUrl}
 								target="_blank"
 								rel="noopener noreferrer"
 								className={cn(
-									"text-sm font-medium hover:underline block truncate",
+									"block truncate text-sm font-medium hover:underline",
 									team.hidden || repository.hiddenFromContributions ? "text-muted-foreground" : "",
 								)}
 								title={repository.nameWithOwner}
@@ -61,19 +61,19 @@ export function RepositoryCard({
 							</a>
 						</div>
 						{repository.hiddenFromContributions && (
-							<div className="flex items-center gap-1 flex-wrap mt-1">
-								<span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
+							<div className="mt-1 flex flex-wrap items-center gap-1">
+								<span className="rounded bg-muted px-1.5 py-0.5 text-2xs tracking-wide text-muted-foreground uppercase">
 									Hidden in contributions
 								</span>
 							</div>
 						)}
 						{repository.description && (
-							<p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+							<p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
 								{repository.description}
 							</p>
 						)}
 					</div>
-					<div className="flex items-center gap-1 ml-2 flex-shrink-0">
+					<div className="ml-2 flex flex-shrink-0 items-center gap-1">
 						{onToggleVisibility && (
 							<Button
 								variant="ghost"

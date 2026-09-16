@@ -22,7 +22,7 @@ interface ProjectManagerCardProps {
 export function ProjectManagerCard({ projectManager }: ProjectManagerCardProps) {
 	return (
 		<div className="mb-16 rounded-lg border border-muted bg-gradient-to-br from-background to-muted/30 p-6 sm:p-8">
-			<div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
+			<div className="flex flex-col items-center gap-8 md:flex-row md:items-start">
 				<Avatar className="h-32 w-32 border-4 border-background">
 					<AvatarImage src={projectManager.avatarUrl} alt={projectManager.name} />
 					<AvatarFallback className="text-2xl">
@@ -38,7 +38,7 @@ export function ProjectManagerCard({ projectManager }: ProjectManagerCardProps) 
 						<p className="text-primary">{projectManager.title}</p>
 					</div>
 					<p className="text-muted-foreground">{projectManager.description}</p>
-					<div className="flex items-center gap-2 pt-2 justify-center md:justify-start">
+					<div className="flex items-center justify-center gap-2 pt-2 md:justify-start">
 						<a
 							href={projectManager.htmlUrl}
 							target="_blank"

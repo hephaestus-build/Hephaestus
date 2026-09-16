@@ -59,7 +59,7 @@ export function ActivateChannelDialog({
 					<DialogDescription>Activating #{label} will:</DialogDescription>
 				</DialogHeader>
 
-				<ul className="text-muted-foreground list-disc space-y-1.5 pl-5 text-sm">
+				<ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
 					<li>
 						<strong>Post a visible announcement</strong> in the channel so everyone knows AI
 						mentoring is on.

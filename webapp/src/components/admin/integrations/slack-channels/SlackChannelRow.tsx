@@ -58,7 +58,7 @@ export function SlackChannelRow({
 		<TableRow>
 			<TableCell>
 				<div className="font-medium">#{label}</div>
-				<div className="text-muted-foreground font-mono text-xs">{channel.slackChannelId}</div>
+				<div className="font-mono text-xs text-muted-foreground">{channel.slackChannelId}</div>
 			</TableCell>
 
 			<TableCell>
@@ -83,7 +83,7 @@ export function SlackChannelRow({
 				)}
 			</TableCell>
 
-			<TableCell className="text-muted-foreground text-sm">
+			<TableCell className="text-sm text-muted-foreground">
 				<RelativeTime value={channel.consentAnnouncedAt} fallback="Never" />
 			</TableCell>
 

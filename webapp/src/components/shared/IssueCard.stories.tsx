@@ -206,7 +206,7 @@ export const WithRightContent: Story = {
 		...OpenPullRequest.args,
 		rightContent: (
 			<Button variant="outline" size="sm" className="ml-4">
-				<RefreshCw className="size-3.5 mr-1" />
+				<RefreshCw className="mr-1 size-3.5" />
 				<span className="text-xs">Refresh</span>
 			</Button>
 		),
@@ -222,7 +222,7 @@ export const WithNoLinkWrapperAndRightContent: Story = {
 		noLinkWrapper: true,
 		rightContent: (
 			<Button variant="outline" size="sm" className="ml-4">
-				<RefreshCw className="size-3.5 mr-1" />
+				<RefreshCw className="mr-1 size-3.5" />
 				<span className="text-xs">Analyze</span>
 			</Button>
 		),

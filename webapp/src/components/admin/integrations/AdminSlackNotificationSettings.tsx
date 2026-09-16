@@ -243,7 +243,7 @@ export function AdminSlackNotificationSettings({
 
 						<div>
 							<h3 className="font-medium">Weekly digest</h3>
-							<p className="text-muted-foreground text-sm">
+							<p className="text-sm text-muted-foreground">
 								Optional leaderboard summary posted to one Slack channel on a schedule.
 							</p>
 						</div>

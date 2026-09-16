@@ -96,7 +96,7 @@ export function ReviewRunDetailPage({
 
 	if (isLoading)
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				{/* The shape the run resolves into, not a centred spinner in a fixed-height box: that box
 				    is a guaranteed jump, because nothing about 16rem matches what arrives. */}
@@ -116,7 +116,7 @@ export function ReviewRunDetailPage({
 		);
 	if (error != null || !job) {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				<QueryErrorAlert error={error} title="Couldn't load this review" onRetry={onRetry} />
 			</article>
@@ -128,7 +128,7 @@ export function ReviewRunDetailPage({
 		reviewEndedEarly && isEmptyResult(observations) && isEmptyResult(feedback);
 
 	return (
-		<article className="min-w-0 max-w-4xl space-y-8">
+		<article className="max-w-4xl min-w-0 space-y-8">
 			{breadcrumbs}
 			<ReviewDetailHeader
 				chips={

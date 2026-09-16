@@ -38,7 +38,7 @@ export function TracedArtifactRow({ workspaceSlug, artifact }: TracedArtifactRow
 					<span className="sr-only">{artifactKindLabel(artifact.artifactKind)}</span>
 				</span>
 				<ItemContent className="min-w-0">
-					<ItemTitle className="w-full min-w-0 line-clamp-none break-words">
+					<ItemTitle className="line-clamp-none w-full min-w-0 break-words">
 						{artifact.title}
 						{artifact.number != null && (
 							<span className="ml-1 font-normal text-muted-foreground tabular-nums">

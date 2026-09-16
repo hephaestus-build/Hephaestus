@@ -79,11 +79,11 @@ export function ReviewsPopover({
 				}
 			/>
 			<PopoverContent
-				className="space-y-2 w-60"
+				className="w-60 space-y-2"
 				sideOffset={5}
 				onClick={(e) => e.stopPropagation()}
 			>
-				<div className="flex flex-wrap justify-between items-center gap-4">
+				<div className="flex flex-wrap items-center justify-between gap-4">
 					<PopoverTitle className="flex items-center gap-2 leading-none">
 						<PrIcon size={20} />
 						Reviewed {terms.pullRequestsShort}
@@ -103,8 +103,8 @@ export function ReviewsPopover({
 					</Button>
 				</div>
 				{hasReviews && (
-					<ScrollArea className="rounded-md -mr-2.5" viewportClassName="max-h-50">
-						<div className="flex flex-col rounded-md text-muted-foreground text-sm pr-2.5">
+					<ScrollArea className="-mr-2.5 rounded-md" viewportClassName="max-h-50">
+						<div className="flex flex-col rounded-md pr-2.5 text-sm text-muted-foreground">
 							{links.map((pullRequest) => (
 								<a
 									key={pullRequest.id}
@@ -112,8 +112,8 @@ export function ReviewsPopover({
 									target="_blank"
 									rel="noopener noreferrer"
 									className={cn(
-										"px-3 py-2 rounded-md justify-start",
-										pullRequest.url && "hover:bg-accent transition-colors duration-200",
+										"justify-start rounded-md px-3 py-2",
+										pullRequest.url && "transition-colors duration-200 hover:bg-accent",
 									)}
 									title={pullRequest.title}
 								>

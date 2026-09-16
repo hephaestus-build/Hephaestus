@@ -30,7 +30,7 @@ export function PracticeEvidenceOutcomeSummary({
 		<div className="space-y-2 rounded-lg border p-4">
 			<div className="flex flex-wrap items-baseline justify-between gap-x-3">
 				<p className="font-medium">On recent reviews</p>
-				<p className="text-sm tabular-nums text-muted-foreground">
+				<p className="text-sm text-muted-foreground tabular-nums">
 					{outcome.reviewedCount} of {reviews(outcome.consideredReviews)} ran
 				</p>
 			</div>

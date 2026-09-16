@@ -110,7 +110,7 @@ export function ReviewArtifactLabel({ artifact, className }: ReviewArtifactProps
 	}
 	const Icon = reviewArtifactIcon(artifact);
 	return (
-		<span className={cn("inline-flex min-w-0 max-w-full items-center gap-1.5", className)}>
+		<span className={cn("inline-flex max-w-full min-w-0 items-center gap-1.5", className)}>
 			<Icon className="size-3.5 shrink-0" aria-hidden />
 			<span className="min-w-0 break-words">{qualifiedLabel(artifact)}</span>
 		</span>
@@ -132,7 +132,7 @@ export function ReviewArtifactLink({ artifact, className }: ReviewArtifactProps)
 			target="_blank"
 			rel="noopener noreferrer"
 			className={cn(
-				"group relative inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm",
+				"group relative inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-sm",
 				className,
 			)}
 		>

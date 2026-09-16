@@ -183,7 +183,7 @@ export function CuratedCatalog({
 					</div>
 				)}
 				{!canReorder && !catalogIsEmpty && (
-					<p className="text-muted-foreground text-sm">
+					<p className="text-sm text-muted-foreground">
 						Clear the search and filters to reorder the catalog.
 					</p>
 				)}
@@ -316,7 +316,7 @@ export function CuratedCatalog({
 					{practicesExcludedWithGroup.length > 0 && (
 						<ul
 							aria-label="Practices this also excludes"
-							className="max-h-40 list-disc overflow-y-auto pl-5 text-muted-foreground text-sm"
+							className="max-h-40 list-disc overflow-y-auto pl-5 text-sm text-muted-foreground"
 						>
 							{practicesExcludedWithGroup.map((practice) => (
 								<li key={practice.slug}>{practice.name}</li>

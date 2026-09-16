@@ -21,7 +21,7 @@ export function SelectGroupStep() {
 
 	if (state.groups.length === 0) {
 		return (
-			<p role="status" className="text-sm text-muted-foreground text-center py-4">
+			<p role="status" className="py-4 text-center text-sm text-muted-foreground">
 				No groups found. Your token may lack the required scopes, or you are not a member of any
 				group.
 			</p>
@@ -48,7 +48,7 @@ export function SelectGroupStep() {
 					const group = state.groups.find((g) => g.fullPath === value);
 					if (group) dispatch({ type: "SELECT_GROUP", group });
 				}}
-				className="max-h-64 overflow-y-auto rounded-lg border divide-y"
+				className="max-h-64 divide-y overflow-y-auto rounded-lg border"
 				aria-label="Available GitLab groups"
 			>
 				{filteredGroups.map((group) => (
@@ -59,7 +59,7 @@ export function SelectGroupStep() {
 					/>
 				))}
 				{filteredGroups.length === 0 && (
-					<p role="status" className="text-sm text-muted-foreground p-4 text-center">
+					<p role="status" className="p-4 text-center text-sm text-muted-foreground">
 						No groups match &ldquo;{search}&rdquo;
 					</p>
 				)}
@@ -74,20 +74,20 @@ function GroupItem({ group, isSelected }: { group: GitLabGroup; isSelected: bool
 		<label
 			htmlFor={inputId}
 			className={cn(
-				"flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors",
+				"flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/50",
 				isSelected && "bg-muted",
 			)}
 		>
 			<RadioGroupItem id={inputId} value={group.fullPath} />
 			<Avatar className="size-7 rounded-md">
 				{group.avatarUrl && <AvatarImage src={group.avatarUrl} alt={group.name} />}
-				<AvatarFallback className="rounded-md text-xs bg-muted">
+				<AvatarFallback className="rounded-md bg-muted text-xs">
 					{group.name.slice(0, 2).toUpperCase()}
 				</AvatarFallback>
 			</Avatar>
-			<div className="flex flex-col min-w-0 flex-1">
-				<span className="text-sm font-medium truncate">{group.name}</span>
-				<span className="text-xs text-muted-foreground truncate">{group.fullPath}</span>
+			<div className="flex min-w-0 flex-1 flex-col">
+				<span className="truncate text-sm font-medium">{group.name}</span>
+				<span className="truncate text-xs text-muted-foreground">{group.fullPath}</span>
 			</div>
 			{group.visibility && (
 				<Badge variant="outline" size="xs" className="shrink-0">

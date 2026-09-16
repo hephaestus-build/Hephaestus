@@ -497,7 +497,7 @@ function StatusCell({ shared, provider, isCurrentMonth }: StatusCellProps) {
 					{badge.label}
 				</Badge>
 			))}
-			{noPriceSet && <span className="text-warning text-xs">Some runs have no price set</span>}
+			{noPriceSet && <span className="text-xs text-warning">Some runs have no price set</span>}
 		</div>
 	);
 }

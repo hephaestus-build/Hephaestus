@@ -8,7 +8,7 @@ export const Greeting = () => {
 			key="overview"
 			className="mx-auto flex size-full max-w-3xl flex-col justify-center px-4 sm:px-8 md:mt-20"
 		>
-			<div className="flex items-center gap-4 mb-4">
+			<div className="mb-4 flex items-center gap-4">
 				<motion.div
 					className="text-muted-foreground"
 					initial={{ opacity: 0, scale: 0.8 }}

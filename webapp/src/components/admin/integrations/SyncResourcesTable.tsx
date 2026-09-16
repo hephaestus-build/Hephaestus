@@ -325,7 +325,7 @@ function ResourceNameCell({
 						<span className="max-w-[26ch] truncate font-medium">{resource.name}</span>
 					</span>
 					{showExternalId && (
-						<span className="block max-w-[26ch] truncate text-muted-foreground font-mono text-xs">
+						<span className="block max-w-[26ch] truncate font-mono text-xs text-muted-foreground">
 							{resource.externalId}
 						</span>
 					)}
@@ -333,7 +333,7 @@ function ResourceNameCell({
 				<HoverCardContent className="w-80 space-y-1.5">
 					<p className="font-medium wrap-anywhere">{resource.name}</p>
 					{showExternalId && (
-						<p className="text-muted-foreground font-mono text-xs wrap-anywhere">
+						<p className="font-mono text-xs wrap-anywhere text-muted-foreground">
 							{resource.externalId}
 						</p>
 					)}
@@ -364,7 +364,7 @@ function ResourceNameCell({
 						)}
 					</dl>
 					{!completedThrough && !isBackfillingRow && (
-						<p className="text-muted-foreground text-xs">
+						<p className="text-xs text-muted-foreground">
 							No backfill has run for this {resourceNoun}.
 						</p>
 					)}
@@ -377,7 +377,7 @@ function ResourceNameCell({
 						className="h-1 w-24"
 						aria-label={`Backfill progress for ${resource.name}`}
 					/>
-					<span className="text-muted-foreground text-xs tabular-nums">
+					<span className="text-xs text-muted-foreground tabular-nums">
 						Backfilling · {percent}%
 					</span>
 				</div>
@@ -468,7 +468,7 @@ function LastSyncedCell({
 						</dl>
 					)}
 					{untracked.length > 0 && (
-						<p className="text-muted-foreground text-xs">
+						<p className="text-xs text-muted-foreground">
 							No separate watermark is kept for {joinLabels(untracked)} — they are written by the
 							same sync pass.
 						</p>
@@ -754,7 +754,7 @@ export function SyncResourcesTable({
 	return (
 		<div className="space-y-3">
 			<div className="flex flex-wrap items-center gap-3">
-				<InputGroup className="min-w-56 max-w-xs flex-1">
+				<InputGroup className="max-w-xs min-w-56 flex-1">
 					<InputGroupAddon>
 						<SearchIcon aria-hidden />
 					</InputGroupAddon>
@@ -790,7 +790,7 @@ export function SyncResourcesTable({
 				<p
 					role="status"
 					aria-live="polite"
-					className="ml-auto text-muted-foreground text-sm tabular-nums"
+					className="ml-auto text-sm text-muted-foreground tabular-nums"
 				>
 					{normalizedQuery ? (
 						<>

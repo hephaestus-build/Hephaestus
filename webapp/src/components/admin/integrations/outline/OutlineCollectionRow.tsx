@@ -73,7 +73,7 @@ export function OutlineCollectionRow({
 				</div>
 				{/* Only the human-facing Outline urlId is worth a subtitle — the raw UUID is noise. */}
 				{collection.urlId && (
-					<div className="text-muted-foreground font-mono text-xs">{collection.urlId}</div>
+					<div className="font-mono text-xs text-muted-foreground">{collection.urlId}</div>
 				)}
 			</TableCell>
 

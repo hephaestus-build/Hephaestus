@@ -269,7 +269,7 @@ function MultilineInput({ type: _type, ...props }: ComponentProps<"input">) {
 			{...(props as ComponentProps<"textarea">)}
 			rows={3}
 			aria-keyshortcuts="Control+Enter Meta+Enter"
-			className={cn(props.className, "h-auto min-h-20 resize-y py-2 field-sizing-content")}
+			className={cn(props.className, "field-sizing-content h-auto min-h-20 resize-y py-2")}
 			onKeyDown={(event) => {
 				if (event.key === "Enter" && !event.metaKey && !event.ctrlKey) event.stopPropagation();
 			}}

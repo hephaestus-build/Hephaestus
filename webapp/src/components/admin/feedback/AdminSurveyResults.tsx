@@ -195,7 +195,7 @@ export function AdminSurveyResults({
 				))}
 
 				<section className="flex flex-col gap-3" aria-labelledby={`${id}-responses`}>
-					<h3 id={`${id}-responses`} className="font-semibold text-lg">
+					<h3 id={`${id}-responses`} className="text-lg font-semibold">
 						Responses
 					</h3>
 					{responses.length === 0 ? (
@@ -353,7 +353,7 @@ function ResponseCard({
 				<dl className="flex flex-col gap-2 text-sm">
 					{(response.answers ?? []).map((answer) => (
 						<div key={answer.questionId}>
-							<dt className="text-muted-foreground break-words">
+							<dt className="break-words text-muted-foreground">
 								{prompts.get(answer.questionId) ?? answer.questionId}
 							</dt>
 							<dd className="break-words whitespace-pre-wrap">{formatAnswer(answer)}</dd>

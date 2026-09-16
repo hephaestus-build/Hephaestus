@@ -22,7 +22,7 @@ export function AboutPage({
 	otherContributors,
 }: AboutPageProps) {
 	return (
-		<div className="max-w-4xl mx-auto space-y-16">
+		<div className="mx-auto max-w-4xl space-y-16">
 			<AboutHeroSection />
 			<AboutMissionSection />
 			<Separator />

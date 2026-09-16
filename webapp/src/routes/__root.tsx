@@ -103,7 +103,7 @@ function RootLayout() {
 			<ProviderColorScope>
 				<SidebarProvider>
 					<AppSidebarContainer />
-					<SidebarInset className="min-w-0 mr-[var(--right-sidebar-width,0)]">
+					<SidebarInset className="mr-[var(--right-sidebar-width,0)] min-w-0">
 						<HeaderContainer />
 						<main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
 							{surface === "standard" ? (
@@ -246,11 +246,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 	component: RootLayout,
 	notFoundComponent: () => (
 		<div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-center py-16 text-center">
-			<h1 className="text-3xl font-bold mb-4">Page Not Found</h1>
-			<p className="text-muted-foreground mb-8">
+			<h1 className="mb-4 text-3xl font-bold">Page Not Found</h1>
+			<p className="mb-8 text-muted-foreground">
 				The page you're looking for doesn't exist or you don't have permission to view it.
 			</p>
-			<Link to="/" className="text-primary hover:underline font-medium">
+			<Link to="/" className="font-medium text-primary hover:underline">
 				Return to Home
 			</Link>
 		</div>

@@ -58,7 +58,7 @@ export function DeleteWorkspaceAlertDialog({
 			<AlertDialogContent initialFocus={titleRef}>
 				<AlertDialogHeader>
 					<AlertDialogTitle ref={titleRef} tabIndex={-1}>
-						Permanently delete <span className="break-all font-mono">{workspaceSlug}</span>?
+						Permanently delete <span className="font-mono break-all">{workspaceSlug}</span>?
 					</AlertDialogTitle>
 					<AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
 					<div className="space-y-3 text-left text-sm text-muted-foreground">
@@ -86,7 +86,7 @@ export function DeleteWorkspaceAlertDialog({
 							</li>
 							<li>security, audit, and accounting records for prior activity;</li>
 							<li>
-								the name <span className="break-all font-mono">{workspaceSlug}</span>, which stays
+								the name <span className="font-mono break-all">{workspaceSlug}</span>, which stays
 								reserved and can never be used for a new workspace.
 							</li>
 						</ul>
@@ -96,7 +96,7 @@ export function DeleteWorkspaceAlertDialog({
 				<form onSubmit={confirm} className="grid gap-4">
 					<Field data-invalid={mismatch}>
 						<FieldLabel htmlFor="delete-workspace-confirm">
-							Type <span className="break-all font-mono font-medium">{workspaceSlug}</span> to
+							Type <span className="font-mono font-medium break-all">{workspaceSlug}</span> to
 							confirm
 						</FieldLabel>
 						<Input

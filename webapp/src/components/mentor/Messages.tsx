@@ -60,17 +60,17 @@ export function Messages({
 	};
 
 	return (
-		<ScrollArea className="flex flex-col w-full flex-1 min-h-0" viewportRef={containerRef}>
+		<ScrollArea className="flex min-h-0 w-full flex-1 flex-col" viewportRef={containerRef}>
 			<div
 				role="log"
 				aria-live="polite"
 				aria-relevant="additions text"
 				aria-busy={status === "streaming" || status === "submitted"}
 				className={cn(
-					"flex flex-col w-full pb-16",
+					"flex w-full flex-col pb-16",
 					{
-						"min-w-0 gap-2 flex-1 pt-4 relative mx-auto md:max-w-3xl": !isArtifact,
-						"gap-2 flex-1 px-0 pt-4": isArtifact,
+						"relative mx-auto min-w-0 flex-1 gap-2 pt-4 md:max-w-3xl": !isArtifact,
+						"flex-1 gap-2 px-0 pt-4": isArtifact,
 						"gap-4": readonly,
 					},
 					className,
@@ -115,7 +115,7 @@ export function Messages({
 						return isUser || !assistantHasVisible ? <ThinkingMessage /> : null;
 					})()}
 
-				<motion.div ref={endRef} className="shrink-0 min-w-[12px] min-h-[12px]" />
+				<motion.div ref={endRef} className="min-h-[12px] min-w-[12px] shrink-0" />
 			</div>
 		</ScrollArea>
 	);

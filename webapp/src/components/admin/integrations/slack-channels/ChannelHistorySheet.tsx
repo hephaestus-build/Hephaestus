@@ -114,7 +114,7 @@ function HistoryEntry({ event }: { event: SlackChannelConsentEvent }) {
 					{event.fromState && (
 						<>
 							<ConsentStateBadge state={event.fromState} />
-							<ArrowRightIcon className="text-muted-foreground size-3.5" aria-hidden />
+							<ArrowRightIcon className="size-3.5 text-muted-foreground" aria-hidden />
 						</>
 					)}
 					<ConsentStateBadge state={event.toState} />

@@ -60,7 +60,7 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 					<nav className="flex flex-wrap justify-center gap-4 sm:gap-6">
 						<Link
 							to="/about"
-							className="text-sm text-muted-foreground hover:text-foreground hover:underline underline-offset-4"
+							className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
 						>
 							About
 						</Link>
@@ -68,19 +68,19 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 							href="https://github.com/hephaestus-build/Hephaestus/releases"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="text-sm text-muted-foreground hover:text-foreground hover:underline underline-offset-4"
+							className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
 						>
 							Releases
 						</a>
 						<Link
 							to="/privacy"
-							className="text-sm text-muted-foreground hover:text-foreground hover:underline underline-offset-4"
+							className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
 						>
 							Privacy
 						</Link>
 						<Link
 							to="/imprint"
-							className="text-sm text-muted-foreground hover:text-foreground hover:underline underline-offset-4"
+							className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
 						>
 							Imprint
 						</Link>
@@ -88,7 +88,7 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 							<button
 								type="button"
 								onClick={() => requestConsentReopen()}
-								className="text-sm text-muted-foreground hover:text-foreground hover:underline underline-offset-4"
+								className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
 							>
 								Cookie preferences
 							</button>
@@ -106,7 +106,7 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 												target="_blank"
 												rel="noopener noreferrer"
 												aria-label={`View branch ${buildInfo.branch}`}
-												className="flex items-center gap-1 hover:text-foreground transition-colors"
+												className="flex items-center gap-1 transition-colors hover:text-foreground"
 											/>
 										}
 									>
@@ -126,7 +126,7 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 												target="_blank"
 												rel="noopener noreferrer"
 												aria-label={`View commit ${buildInfo.commit.substring(0, 7)}`}
-												className="flex items-center gap-1 hover:text-foreground transition-colors"
+												className="flex items-center gap-1 transition-colors hover:text-foreground"
 											/>
 										}
 									>

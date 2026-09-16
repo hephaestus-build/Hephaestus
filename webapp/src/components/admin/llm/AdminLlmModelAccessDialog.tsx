@@ -119,7 +119,7 @@ function AdminLlmModelAccessDialogContent({
 									title="Could not load workspaces"
 									onRetry={onRetryWorkspaces}
 								/>
-								<p className="text-muted-foreground text-xs">
+								<p className="text-xs text-muted-foreground">
 									Saving a workspace list stays disabled until the directory loads.
 								</p>
 							</>
@@ -136,7 +136,7 @@ function AdminLlmModelAccessDialogContent({
 							/>
 						)}
 						{isLoadingWorkspaces && (
-							<p className="text-muted-foreground text-xs">Loading workspaces…</p>
+							<p className="text-xs text-muted-foreground">Loading workspaces…</p>
 						)}
 					</div>
 				)}

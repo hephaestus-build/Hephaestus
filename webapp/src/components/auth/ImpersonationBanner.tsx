@@ -37,7 +37,7 @@ export function ImpersonationBanner({
 			role="status"
 			aria-live="polite"
 			className={cn(
-				"sticky top-0 z-50 flex w-full items-center justify-center gap-x-3 gap-y-1 flex-wrap border-b px-4 py-2 text-sm",
+				"sticky top-0 z-50 flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b px-4 py-2 text-sm",
 				writesEnabled
 					? "border-destructive/40 bg-destructive/10 text-destructive"
 					: "border-warning/40 bg-warning/10 text-warning",

@@ -47,7 +47,7 @@ export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 						<UntrustedMarkdown>{body}</UntrustedMarkdown>
 					</TabsContent>
 					<TabsContent value="source">
-						<pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">
+						<pre className="rounded-md bg-muted p-3 text-xs break-words whitespace-pre-wrap">
 							{body}
 						</pre>
 					</TabsContent>

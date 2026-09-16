@@ -75,7 +75,7 @@ export function FeedbackDetailPage({
 
 	if (state.status === "loading")
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				<div className="flex min-h-64 items-center justify-center">
 					<Spinner className="size-7" />
@@ -84,7 +84,7 @@ export function FeedbackDetailPage({
 		);
 	if (state.status === "error") {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				<QueryErrorAlert
 					error={state.error}
@@ -110,7 +110,7 @@ export function FeedbackDetailPage({
 	const approval = feedback.approval;
 
 	return (
-		<article className="min-w-0 max-w-4xl space-y-8">
+		<article className="max-w-4xl min-w-0 space-y-8">
 			{breadcrumbs}
 			<ReviewDetailHeader
 				title={`Feedback for ${subjectLabel(feedback.recipient)}`}
@@ -319,7 +319,7 @@ function ApprovalAudit({ approval }: { approval: FeedbackApproval }) {
 				{rejected && approval.rejectionNote ? (
 					<>
 						<dt className="font-medium text-foreground">Note</dt>
-						<dd className="min-w-0 whitespace-pre-wrap break-words">{approval.rejectionNote}</dd>
+						<dd className="min-w-0 break-words whitespace-pre-wrap">{approval.rejectionNote}</dd>
 					</>
 				) : null}
 			</dl>

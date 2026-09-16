@@ -38,8 +38,8 @@ export function NavMentor({ workspaceSlug }: { workspaceSlug: string }) {
 								<Sparkles className="h-3.5 w-3.5" /> AI mentor
 							</Badge>
 						</span>
-						<div className="flex justify-end w-full">
-							<ChevronRight className="h-4 w-4 opacity-0 group-hover/mentor:opacity-100 transition-opacity" />
+						<div className="flex w-full justify-end">
+							<ChevronRight className="h-4 w-4 opacity-0 transition-opacity group-hover/mentor:opacity-100" />
 						</div>
 					</SidebarMenuButton>
 				</SidebarMenuItem>

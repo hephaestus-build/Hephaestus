@@ -8,7 +8,7 @@ export function AboutHeroSection() {
 			<h1 id="about-hero-heading" className="text-4xl font-bold tracking-display sm:text-5xl">
 				About <HephaestusWordmark />
 			</h1>
-			<p className="mx-auto max-w-2xl text-pretty text-xl leading-relaxed text-muted-foreground">
+			<p className="mx-auto max-w-2xl text-xl leading-relaxed text-pretty text-muted-foreground">
 				Hephaestus is an open-source AI mentor for software teams. It reads the work developers
 				already do against the practices their project cares about, then says what went well, what
 				could be better, and a way to get there.

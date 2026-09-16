@@ -29,7 +29,7 @@ export function ReviewPracticeLink({
 			to="/w/$workspaceSlug/admin/practices/$practiceSlug"
 			params={{ workspaceSlug, practiceSlug }}
 			className={cn(
-				"relative inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md hover:underline",
+				"relative inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md hover:underline",
 				className,
 			)}
 		>

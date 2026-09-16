@@ -214,7 +214,7 @@ export function AddCollectionDialog({
 											>
 												<span
 													aria-hidden="true"
-													className="border-input flex size-4 shrink-0 items-center justify-center rounded-xs border"
+													className="flex size-4 shrink-0 items-center justify-center rounded-xs border border-input"
 												>
 													{checked && <CheckIcon className="size-3.5" />}
 												</span>
@@ -222,7 +222,7 @@ export function AddCollectionDialog({
 												<span className="min-w-0 flex-1">
 													<span className="block truncate text-sm font-medium">{label}</span>
 													{candidate.urlId && (
-														<span className="text-muted-foreground block truncate font-mono text-xs">
+														<span className="block truncate font-mono text-xs text-muted-foreground">
 															{candidate.urlId}
 														</span>
 													)}

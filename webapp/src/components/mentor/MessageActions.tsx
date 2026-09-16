@@ -46,7 +46,7 @@ export function MessageActions({
 
 	// For user messages, align actions to the right
 	const containerClassName = cn(
-		"flex flex-row gap-0.5 opacity-0 group-hover/message:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity",
+		"flex flex-row gap-0.5 opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100",
 		{
 			"justify-end": isUserMessage,
 			"justify-start": isAssistantMessage,
@@ -105,7 +105,7 @@ export function MessageActions({
 										aria-label="Good response"
 										aria-pressed={vote?.isUpvoted === true}
 										className={cn(
-											"pointer-coarse:w-10 text-muted-foreground hover:text-provider-success-foreground hover:bg-provider-success-foreground/10",
+											"text-muted-foreground hover:bg-provider-success-foreground/10 hover:text-provider-success-foreground pointer-coarse:w-10",
 											{
 												"text-provider-success-foreground": vote?.isUpvoted === true,
 												"opacity-50 hover:opacity-100": vote?.isUpvoted === false,
@@ -129,7 +129,7 @@ export function MessageActions({
 										aria-label="Bad response"
 										aria-pressed={vote?.isUpvoted === false}
 										className={cn(
-											"pointer-coarse:w-10 text-muted-foreground hover:text-provider-danger-foreground hover:bg-provider-danger-foreground/10",
+											"text-muted-foreground hover:bg-provider-danger-foreground/10 hover:text-provider-danger-foreground pointer-coarse:w-10",
 											{
 												"text-provider-danger-foreground": vote?.isUpvoted === false,
 												"opacity-50 hover:opacity-100": vote?.isUpvoted === true,

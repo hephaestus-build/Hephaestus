@@ -30,10 +30,10 @@ export function TeamCard({
 			<CardHeader className="pb-4">
 				<div className="flex flex-wrap items-start justify-between gap-2">
 					<div className="min-w-0 flex-1">
-						<div className="flex items-center gap-2 min-w-0">
+						<div className="flex min-w-0 items-center gap-2">
 							<Heading
 								className={cn(
-									"font-semibold text-lg truncate",
+									"truncate text-lg font-semibold",
 									team.hidden ? "text-muted-foreground" : "",
 								)}
 								title={team.name}
@@ -41,12 +41,12 @@ export function TeamCard({
 								{team.name}
 							</Heading>
 							{team.hidden && (
-								<span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wide">
+								<span className="rounded bg-muted px-1.5 py-0.5 text-2xs tracking-wide text-muted-foreground uppercase">
 									Hidden
 								</span>
 							)}
 						</div>
-						<div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-muted-foreground">
+						<div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground sm:gap-4">
 							<span className="flex items-center gap-1">
 								<Users className="h-3 w-3" /> {memberCount}{" "}
 								{memberCount === 1 ? "member" : "members"}

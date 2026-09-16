@@ -114,10 +114,10 @@ export function PracticeReviewSweepSchedule({
 	return (
 		<section className="space-y-4" aria-labelledby="sweep-heading">
 			<div className="space-y-1">
-				<h2 id="sweep-heading" className="font-semibold text-lg">
+				<h2 id="sweep-heading" className="text-lg font-semibold">
 					Keep checking new work
 				</h2>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					Reviews normally start the moment work happens. When a notification is lost, nothing ever
 					arrives — and there is no record of the review that did not happen. A recurring check
 					looks again over the last few days, so anything missed still gets reviewed.
@@ -275,7 +275,7 @@ function AddScheduleForm({
 		// A named group rather than three loose controls after a list: without it a screen-reader user
 		// arrives at a second "Kind of work" with nothing saying they have left the schedules behind.
 		<section className="space-y-4 border-t pt-4" aria-labelledby="sweep-add-heading">
-			<h3 id="sweep-add-heading" className="font-medium text-sm">
+			<h3 id="sweep-add-heading" className="text-sm font-medium">
 				Add a recurring check
 			</h3>
 			{/* `FieldGroup` is what `responsive` measures: it opens the `@container/field-group` the
@@ -375,7 +375,7 @@ function AddScheduleForm({
 					{isSaving ? <Spinner /> : null}
 					Start checking {chosenKind}
 				</Button>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					Every check can start reviews, so this authorises the AI spend for all of them — not just
 					the first.
 				</p>

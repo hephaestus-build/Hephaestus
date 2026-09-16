@@ -221,12 +221,12 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 					<fieldset disabled={formDisabled} className="contents">
 						{/* See `PracticeDefinitionForm`: the panel is the measure, prose keeps its own. */}
 						<div className="space-y-8">
-							<p className="max-w-2xl text-muted-foreground text-sm">
+							<p className="max-w-2xl text-sm text-muted-foreground">
 								Fields marked <span aria-hidden>*</span> are required.
 							</p>
 
 							<section className="space-y-4">
-								<h2 className="font-semibold text-lg">General</h2>
+								<h2 className="text-lg font-semibold">General</h2>
 								<FieldGroup className="gap-4">
 									<Field data-invalid={nameError ? "true" : undefined}>
 										<FieldLabel htmlFor="group-name">Name *</FieldLabel>
@@ -310,7 +310,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 							</section>
 
 							<section className="space-y-4">
-								<h2 className="font-semibold text-lg">Presentation</h2>
+								<h2 className="text-lg font-semibold">Presentation</h2>
 								<FieldGroup className="gap-4">
 									<Field>
 										<FieldLabel htmlFor="group-appearance">Appearance</FieldLabel>

@@ -86,7 +86,7 @@ function EvidenceSourceSection({
 				</span>
 				<div className="min-w-0 flex-1">
 					<h4 className="text-sm font-medium break-words">{def.label}</h4>
-					<p className="text-xs text-muted-foreground break-words">{def.description}</p>
+					<p className="text-xs break-words text-muted-foreground">{def.description}</p>
 				</div>
 				<span className="shrink-0 text-xs text-muted-foreground">
 					{citations.length === 1 ? "1 passage" : `${citations.length} passages`}
@@ -102,7 +102,7 @@ function EvidenceSourceSection({
 						{citation.quoteRedacted ? (
 							<RedactedQuote fromSecretScanner={fromSecretScanner} />
 						) : (
-							<pre className="overflow-x-auto p-3 text-xs whitespace-pre-wrap break-words">
+							<pre className="overflow-x-auto p-3 text-xs break-words whitespace-pre-wrap">
 								{citation.quote}
 							</pre>
 						)}

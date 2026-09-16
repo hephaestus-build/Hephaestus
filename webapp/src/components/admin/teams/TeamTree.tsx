@@ -66,13 +66,13 @@ export function TeamTree({
 						))}
 				</div>
 			) : (
-				<div className="text-center py-6 text-sm text-muted-foreground">
+				<div className="py-6 text-center text-sm text-muted-foreground">
 					No repositories assigned to this team
 				</div>
 			)}
 
 			{children.length > 0 && (
-				<div className="space-y-4 mt-4">
+				<div className="mt-4 space-y-4">
 					{children.map((child) => (
 						<TeamTree
 							key={child.id}

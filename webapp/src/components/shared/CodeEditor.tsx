@@ -25,13 +25,13 @@ export function CodeEditor({
 	};
 
 	return (
-		<div className={cn("rounded-md border overflow-hidden", className)}>
+		<div className={cn("overflow-hidden rounded-md border", className)}>
 			<MonacoEditor
 				value={value}
 				onChange={handleChange}
 				language={language}
 				loading={
-					<div className="flex items-center justify-center h-full">
+					<div className="flex h-full items-center justify-center">
 						<Spinner className="h-6 w-6" />
 					</div>
 				}

@@ -6,7 +6,7 @@ import type { ReviewSectionId } from "./review-sections";
 import { ReviewPage } from "./ReviewPage";
 
 const sectionBody = (id: ReviewSectionId) => (
-	<p className="rounded-md border border-dashed p-6 text-muted-foreground text-sm">
+	<p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
 		Section body: {id}
 	</p>
 );

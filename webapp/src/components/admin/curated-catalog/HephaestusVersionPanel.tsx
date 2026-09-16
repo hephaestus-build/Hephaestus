@@ -151,10 +151,10 @@ export function HephaestusVersionPanel(props: HephaestusVersionPanelProps) {
 								{Object.entries(kind === "group" ? GROUP_FIELDS : PRACTICE_FIELDS).map(
 									([field, label]) => (
 										<div key={field} className="space-y-1">
-											<dt className="font-medium text-xs">{label}</dt>
+											<dt className="text-xs font-medium">{label}</dt>
 											<dd
 												className={cn(
-													"whitespace-pre-wrap break-words text-muted-foreground text-xs",
+													"text-xs break-words whitespace-pre-wrap text-muted-foreground",
 													field === "precomputeScript" && "font-mono",
 												)}
 											>

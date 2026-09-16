@@ -365,7 +365,7 @@ function AgentPurposeCard({
 					<Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
 						<CollapsibleTrigger
 							render={
-								<Button type="button" variant="ghost" size="sm" className="-ml-2 group/adv">
+								<Button type="button" variant="ghost" size="sm" className="group/adv -ml-2">
 									Advanced
 									<ChevronDown
 										className="transition-transform group-aria-expanded/adv:rotate-180"
