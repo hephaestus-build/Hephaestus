@@ -146,7 +146,7 @@ export const AllPresets: Story = {
 						<ProfileTimeframePicker
 							afterDate={after}
 							beforeDate={before}
-							enableAllActivity={true}
+							enableAllActivity
 							schedule={DEFAULT_SCHEDULE}
 						/>
 					</div>

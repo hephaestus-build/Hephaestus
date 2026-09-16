@@ -13,6 +13,8 @@ import type {
 	WorkspaceMembership,
 } from "@/api/types.gen";
 
+import { hasText } from "@/lib/text";
+
 // The only thing written by hand is REVIEW_FIXTURE: reviews, their observations and the feedback
 // those drove. Every count, preview, truncation flag and summary is computed from it below, so a
 // fixture whose tallies contradict the records they count is not something you can write.
@@ -949,7 +951,7 @@ function toFeedback(run: RunSpec, spec: FeedbackSpec): ReviewFeedback {
 		...preview(spec.body),
 		channel: spec.channel,
 		createdAt: new Date(spec.composedAt),
-		deliveredAt: spec.deliveredAt ? new Date(spec.deliveredAt) : undefined,
+		deliveredAt: hasText(spec.deliveredAt) ? new Date(spec.deliveredAt) : undefined,
 		deliveryState: spec.outcome,
 		observationCount: spec.from.length,
 		recipient: spec.recipient,
@@ -981,15 +983,15 @@ export const reviewRuns: ReviewRunSummary[] = allRuns
 			strengths: run.observations.filter(
 				(o) =>
 					o.assessmentStatus === "ASSESSED" &&
-					o.presence &&
-					o.assessment &&
+					o.presence !== undefined &&
+					o.assessment !== undefined &&
 					(o.presence === "PRESENT") === (o.assessment === "GOOD"),
 			).length,
 			problems: run.observations.filter(
 				(o) =>
 					o.assessmentStatus === "ASSESSED" &&
-					o.presence &&
-					o.assessment &&
+					o.presence !== undefined &&
+					o.assessment !== undefined &&
 					(o.presence === "PRESENT") !== (o.assessment === "GOOD"),
 			).length,
 			notApplicable: run.observations.filter((o) => o.assessmentStatus === "NOT_APPLICABLE").length,
@@ -1067,7 +1069,7 @@ export function observationDetail(observationId: string): ReviewObservationDetai
 			agentJobId: run.id,
 			channel: item.channel,
 			createdAt: new Date(item.composedAt),
-			deliveredAt: item.deliveredAt ? new Date(item.deliveredAt) : undefined,
+			deliveredAt: hasText(item.deliveredAt) ? new Date(item.deliveredAt) : undefined,
 			deliveryState: item.outcome,
 			role: item.from[0] === observationId ? "PRIMARY" : "SUPPORTING",
 			suppressionReason: item.withheldFor,
@@ -1089,7 +1091,7 @@ export function feedbackDetail(feedbackId: string): ReviewFeedbackDetail {
 		body: item.body,
 		channel: item.channel,
 		createdAt: new Date(item.composedAt),
-		deliveredAt: item.deliveredAt ? new Date(item.deliveredAt) : undefined,
+		deliveredAt: hasText(item.deliveredAt) ? new Date(item.deliveredAt) : undefined,
 		deliveryState: item.outcome,
 		observations: item.from.map((observationId, ordinal) => {
 			const source = observationDetail(observationId);
@@ -1175,7 +1177,7 @@ export const reviewObservationDetail: ReviewObservationDetail = observationDetai
 
 function cycled<T>(specs: readonly T[], index: number): T {
 	const spec = specs[index % specs.length];
-	if (!spec) {
+	if (spec === undefined) {
 		throw new Error("A page cannot be filled from an empty list of specs.");
 	}
 	return spec;

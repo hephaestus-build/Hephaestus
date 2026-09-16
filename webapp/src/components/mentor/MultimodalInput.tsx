@@ -170,7 +170,7 @@ export function MultimodalInput({
 								name: filename,
 								contentType: "",
 							}}
-							isUploading={true}
+							isUploading
 						/>
 					))}
 				</div>

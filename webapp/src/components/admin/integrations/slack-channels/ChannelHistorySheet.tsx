@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { asDate } from "@/lib/dates";
+import { hasText } from "@/lib/text";
 
 import { ConsentStateBadge } from "./consent-terms";
 
@@ -120,7 +121,7 @@ function HistoryEntry({ event }: { event: SlackChannelConsentEvent }) {
 					<ConsentStateBadge state={event.toState} />
 				</ItemTitle>
 				{createdAt && <ItemDescription>{format(createdAt, "PPpp")}</ItemDescription>}
-				{event.reason && (
+				{hasText(event.reason) && (
 					<ItemDescription className="text-foreground">{event.reason}</ItemDescription>
 				)}
 			</ItemContent>

@@ -14,6 +14,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
+import { hasText } from "@/lib/text";
 
 import { REVIEW_PAGE_SIZE, type RunsSearch } from "./review-search";
 import { ReviewResultsSkeleton } from "./ReviewResultsSkeleton";
@@ -77,7 +78,7 @@ export function ReviewRunsPage({
 								{/* A range can empty this list too, so "never triggered" is not the only reason and
 							    must not be said to a reader who has just picked a window. */}
 								{hasFilter
-									? search.status && !search.from && !search.to
+									? search.status && !hasText(search.from) && !hasText(search.to)
 										? `No review is ${REVIEW_STATUS_DEFS[search.status].label.toLowerCase()}. Other reviews may exist under another status.`
 										: "No review matches these filters. Other reviews may exist outside them."
 									: "Reviews appear when an enabled practice is triggered or a contributor requests one."}

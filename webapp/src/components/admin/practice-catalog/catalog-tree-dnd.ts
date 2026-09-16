@@ -1,3 +1,5 @@
+import { hasText } from "@/lib/text";
+
 export interface CatalogDropTarget {
 	groupSlug: string | null;
 	position: number;
@@ -16,7 +18,7 @@ export function getCatalogDropTarget(
 	const destination = entries
 		.filter((entry) => entry.slug !== activeSlug && (entry.groupSlug ?? null) === groupSlug)
 		.sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
-	if (!anchorSlug) {
+	if (!hasText(anchorSlug)) {
 		return { groupSlug, position: destination.length };
 	}
 	const anchorIndex = destination.findIndex((entry) => entry.slug === anchorSlug);

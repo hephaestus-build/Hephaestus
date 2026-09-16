@@ -13,6 +13,7 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { hasText } from "@/lib/text";
 
 export interface ChangeRoleDialogProps {
 	/** The user whose role is being changed; `null` keeps the dialog closed. */
@@ -70,7 +71,7 @@ export function ChangeRoleDialog({
 						)}
 					</AlertDialogDescription>
 				</AlertDialogHeader>
-				{errorMessage && (
+				{hasText(errorMessage) && (
 					<p
 						role="alert"
 						className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"

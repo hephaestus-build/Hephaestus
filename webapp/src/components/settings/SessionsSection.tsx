@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { asDate } from "@/lib/dates";
+import { hasText } from "@/lib/text";
 
 function formatTimestamp(value?: Date): string | undefined {
 	const date = asDate(value);
@@ -43,7 +44,7 @@ function formatTimestamp(value?: Date): string | undefined {
  * before Chrome; Chrome before Safari) because UAs nest these tokens.
  */
 function describeUserAgent(ua?: string): string {
-	if (!ua) {
+	if (!hasText(ua)) {
 		return "Unknown device";
 	}
 	const os = /Windows/u.test(ua)
@@ -119,7 +120,7 @@ export function SessionsSection() {
 	});
 
 	const sessions: SessionView[] = sessionsQuery.data ?? [];
-	const otherSessionCount = sessions.filter((s) => !s.current).length;
+	const otherSessionCount = sessions.filter((s) => s.current !== true).length;
 
 	return (
 		<section className="space-y-4" aria-labelledby="sessions-heading">
@@ -211,13 +212,13 @@ export function SessionsSection() {
 											>
 												{deviceLabel}
 											</span>
-											{session.current && <Badge variant="secondary">This device</Badge>}
+											{session.current === true && <Badge variant="secondary">This device</Badge>}
 										</div>
 										<p className="truncate text-xs text-muted-foreground">
 											{[
 												session.ip,
-												signedInAt && `signed in ${signedInAt}`,
-												expiresAt && `expires ${expiresAt}`,
+												hasText(signedInAt) && `signed in ${signedInAt}`,
+												hasText(expiresAt) && `expires ${expiresAt}`,
 											]
 												.filter(Boolean)
 												.join(" · ") || "No session details available"}
@@ -225,7 +226,7 @@ export function SessionsSection() {
 									</div>
 								</div>
 
-								{session.current ? (
+								{session.current === true ? (
 									<Button variant="outline" size="sm" disabled aria-label="Current session">
 										Current
 									</Button>
@@ -233,8 +234,10 @@ export function SessionsSection() {
 									<Button
 										variant="outline"
 										size="sm"
-										disabled={isRevokingThis || !session.jti}
-										onClick={() => session.jti && revokeOne.mutate({ path: { jti: session.jti } })}
+										disabled={isRevokingThis || !hasText(session.jti)}
+										onClick={() =>
+											hasText(session.jti) && revokeOne.mutate({ path: { jti: session.jti } })
+										}
 										aria-label="Revoke this session"
 									>
 										{isRevokingThis ? <Spinner className="mr-1.5" /> : null}

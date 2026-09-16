@@ -5,6 +5,7 @@ import { getAllTeamsOptions } from "@/api/@tanstack/react-query.gen";
 import { TeamsPage } from "@/components/teams/TeamsPage";
 import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/teams/")({
 	component: TeamsContainer,
@@ -17,7 +18,7 @@ function TeamsContainer() {
 		enabled: Boolean(workspaceSlug),
 	});
 
-	if (!workspaceSlug) {
+	if (!hasText(workspaceSlug)) {
 		return <NoWorkspace />;
 	}
 

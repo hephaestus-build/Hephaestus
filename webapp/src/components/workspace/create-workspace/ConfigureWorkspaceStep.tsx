@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { hasText } from "@/lib/text";
 
 import { type WorkspaceDetailsData, workspaceDetailsSchema } from "./schemas";
 import { generateSlug } from "./slug-utils";
@@ -47,14 +48,14 @@ export function ConfigureWorkspaceStep() {
 			dispatch({ type: "SET_SLUG", value: slug, manual: false });
 		}
 		// Only re-validate if user already blurred this field (eager after first blur)
-		if (touched.displayName) {
+		if (touched.displayName === true) {
 			validate({ displayName: value, workspaceSlug: slug });
 		}
 	};
 
 	const handleSlugChange = (value: string) => {
 		dispatch({ type: "SET_SLUG", value, manual: true });
-		if (touched.workspaceSlug) {
+		if (touched.workspaceSlug === true) {
 			validate({ workspaceSlug: value });
 		}
 	};
@@ -66,7 +67,11 @@ export function ConfigureWorkspaceStep() {
 
 	return (
 		<div className="flex flex-col gap-4">
-			<Field data-invalid={fieldErrors.displayName && touched.displayName ? "true" : undefined}>
+			<Field
+				data-invalid={
+					hasText(fieldErrors.displayName) && touched.displayName === true ? "true" : undefined
+				}
+			>
 				<FieldLabel htmlFor="workspace-display-name">Display Name</FieldLabel>
 				<Input
 					id="workspace-display-name"
@@ -75,9 +80,9 @@ export function ConfigureWorkspaceStep() {
 					onChange={(e) => handleDisplayNameChange(e.target.value)}
 					onBlur={() => handleBlur("displayName")}
 					aria-required="true"
-					aria-invalid={!!(fieldErrors.displayName && touched.displayName)}
+					aria-invalid={hasText(fieldErrors.displayName) && touched.displayName === true}
 					aria-describedby={
-						fieldErrors.displayName && touched.displayName
+						hasText(fieldErrors.displayName) && touched.displayName === true
 							? "workspace-display-name-error"
 							: "workspace-display-name-description"
 					}
@@ -85,12 +90,16 @@ export function ConfigureWorkspaceStep() {
 				<FieldDescription id="workspace-display-name-description">
 					The name shown in navigation and headers.
 				</FieldDescription>
-				{fieldErrors.displayName && touched.displayName && (
+				{hasText(fieldErrors.displayName) && touched.displayName === true && (
 					<FieldError id="workspace-display-name-error">{fieldErrors.displayName}</FieldError>
 				)}
 			</Field>
 
-			<Field data-invalid={fieldErrors.workspaceSlug && touched.workspaceSlug ? "true" : undefined}>
+			<Field
+				data-invalid={
+					hasText(fieldErrors.workspaceSlug) && touched.workspaceSlug === true ? "true" : undefined
+				}
+			>
 				<FieldLabel htmlFor="workspace-slug">URL Slug</FieldLabel>
 				<Input
 					id="workspace-slug"
@@ -99,9 +108,9 @@ export function ConfigureWorkspaceStep() {
 					value={state.workspaceSlug}
 					onChange={(e) => handleSlugChange(e.target.value)}
 					onBlur={() => handleBlur("workspaceSlug")}
-					aria-invalid={!!(fieldErrors.workspaceSlug && touched.workspaceSlug)}
+					aria-invalid={hasText(fieldErrors.workspaceSlug) && touched.workspaceSlug === true}
 					aria-describedby={
-						fieldErrors.workspaceSlug && touched.workspaceSlug
+						hasText(fieldErrors.workspaceSlug) && touched.workspaceSlug === true
 							? "workspace-slug-error"
 							: "workspace-slug-description"
 					}
@@ -109,7 +118,7 @@ export function ConfigureWorkspaceStep() {
 				<FieldDescription id="workspace-slug-description">
 					Used in URLs: /w/<strong>{state.workspaceSlug || "my-workspace"}</strong>
 				</FieldDescription>
-				{fieldErrors.workspaceSlug && touched.workspaceSlug && (
+				{hasText(fieldErrors.workspaceSlug) && touched.workspaceSlug === true && (
 					<FieldError id="workspace-slug-error">{fieldErrors.workspaceSlug}</FieldError>
 				)}
 			</Field>

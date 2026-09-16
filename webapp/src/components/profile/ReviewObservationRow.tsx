@@ -21,6 +21,7 @@ import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { hasText } from "@/lib/text";
 import { toEvidenceLocations } from "./evidence";
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
 import { FeedbackComment } from "./FeedbackComment";
@@ -95,7 +96,7 @@ export function ReviewObservationRow({
 	const kind = observationKind(observation);
 	const status = OBSERVATION_KIND_PRESENTATION[kind];
 	const StatusIcon = status.icon;
-	const canRespond = Boolean(observation.feedbackId && onRespond);
+	const canRespond = Boolean(hasText(observation.feedbackId) && onRespond);
 	const canOpen = onToggle !== undefined || canRespond;
 	const detail = detailState?.detail;
 	const evidenceLocations = toEvidenceLocations(detail?.evidence);
@@ -109,7 +110,7 @@ export function ReviewObservationRow({
 	const selectedResolution =
 		pendingResolution === recorded.resolution ? undefined : pendingResolution;
 	const respond = (change: FeedbackResponse) => {
-		if (!observation.feedbackId || !onRespond) {
+		if (!hasText(observation.feedbackId) || !onRespond) {
 			return;
 		}
 		onRespond(observation, { ...recorded, ...change });
@@ -121,7 +122,7 @@ export function ReviewObservationRow({
 			setPendingResolution(undefined);
 			return;
 		}
-		if (resolution === "DISPUTED" && !recorded.comment?.trim()) {
+		if (resolution === "DISPUTED" && !hasText(recorded.comment?.trim())) {
 			setPendingResolution(resolution);
 			return;
 		}
@@ -174,17 +175,15 @@ export function ReviewObservationRow({
 				</CollapsibleTrigger>
 				{canOpen && (
 					<CollapsibleContent className="border-t bg-muted/20 px-4 py-4">
-						{detailState?.isLoading ? (
+						{detailState?.isLoading === true ? (
 							<div className="flex flex-col gap-2">
 								<Skeleton className="h-4 w-3/4" />
 								<Skeleton className="h-4 w-2/3" />
 							</div>
-						) : detailState?.error ? (
-							<QueryErrorAlert error={detailState.error} title="Could not load this observation" />
-						) : (
+						) : detailState?.error == null ? (
 							<div className="flex min-w-0 flex-col gap-4">
 								<div className="grid min-w-0 gap-4 sm:grid-cols-2">
-									{reasoning && (
+									{hasText(reasoning) && (
 										<div className="flex flex-col gap-1">
 											<p className="text-xs font-medium text-muted-foreground">
 												Why this was noted
@@ -192,7 +191,7 @@ export function ReviewObservationRow({
 											<p className="text-sm text-pretty">{reasoning}</p>
 										</div>
 									)}
-									{guidance && (
+									{hasText(guidance) && (
 										<div className="flex flex-col gap-1">
 											<p className="text-xs font-medium text-muted-foreground">What to try next</p>
 											<p className="text-sm text-pretty">{guidance}</p>
@@ -247,6 +246,8 @@ export function ReviewObservationRow({
 									</div>
 								)}
 							</div>
+						) : (
+							<QueryErrorAlert error={detailState.error} title="Could not load this observation" />
 						)}
 					</CollapsibleContent>
 				)}

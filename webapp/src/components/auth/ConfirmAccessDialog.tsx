@@ -50,9 +50,9 @@ export function ConfirmAccessDialog({
 				<DialogHeader>
 					<DialogTitle>Confirm access</DialogTitle>
 					<DialogDescription>
-						{maxAgeSeconds
-							? `This action needs a sign-in from the last ${signInWindow(maxAgeSeconds)}. `
-							: "This action needs a recent sign-in. "}
+						{maxAgeSeconds === undefined
+							? "This action needs a recent sign-in. "
+							: `This action needs a sign-in from the last ${signInWindow(maxAgeSeconds)}. `}
 						Sign in again with an identity already linked to your account, then retry the action.
 						Your provider may sign you straight back in without asking for anything, which is
 						expected: this refreshes when you last signed in, and is not a second factor.

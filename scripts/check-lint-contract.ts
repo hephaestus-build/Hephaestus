@@ -40,50 +40,50 @@ const fixtures: Fixture[] = [
 		path: "src/lint-contract-button-padding.tsx",
 		code: "shadcn(no-restyle)",
 		source:
-			'import { Button as Action } from "@/components/ui/button"; export const bad = <Action className="md:px-4!">Save</Action>;',
+			'import { Button as Action } from "@/components/ui/button";\n\nexport const bad = <Action className="md:px-4!">Save</Action>;',
 	},
 	{
 		path: "src/lint-contract-button-gap.tsx",
 		code: "shadcn(no-restyle)",
 		source:
-			'import { Button } from "@/components/ui/button"; import { cn } from "cn"; export const bad = <Button className={cn("gap-4")}>Save</Button>;',
+			'import { Button } from "@/components/ui/button"; import { cn } from "cn";\n\nexport const bad = <Button className={cn("gap-4")}>Save</Button>;',
 	},
 	{
 		path: "src/lint-contract-button-size.tsx",
 		code: null,
 		source:
-			'import { Button } from "@/components/ui/button"; export const good = <Button size="sm" className="w-full mt-2">Save</Button>;',
+			'import { Button } from "@/components/ui/button";\n\nexport const good = <Button size="sm" className="w-full mt-2">Save</Button>;',
 	},
 	{
 		path: "src/components/ui/lint-contract-owned-padding.tsx",
 		code: null,
 		source:
-			'import { Button } from "@/components/ui/button"; export const good = <Button className="gap-2">Calendar day</Button>;',
+			'import { Button } from "@/components/ui/button";\n\nexport const good = <Button className="gap-2">Calendar day</Button>;',
 	},
 	{
 		path: "src/lint-contract-button-radius.tsx",
 		code: "shadcn(no-restyle)",
 		source:
-			'import { Button } from "@/components/ui/button"; export const bad = <Button className="rounded-full">Send</Button>;',
+			'import { Button } from "@/components/ui/button";\n\nexport const bad = <Button className="rounded-full">Send</Button>;',
 	},
 	{
 		path: "src/lint-contract-button-shape.tsx",
 		code: null,
 		source:
-			'import { Button } from "@/components/ui/button"; export const good = <Button shape="pill" className="rounded-bl-lg">Send</Button>;',
+			'import { Button } from "@/components/ui/button";\n\nexport const good = <Button shape="pill" className="rounded-bl-lg">Send</Button>;',
 	},
 	// Contracts are read: Card's grants no colour, CardContent's grants spacing.
 	{
 		path: "src/lint-contract-card-paint.tsx",
 		code: "shadcn(no-restyle)",
 		source:
-			'import { Card } from "@/components/ui/card"; export const bad = <Card className="bg-muted rounded-none">Plan</Card>;',
+			'import { Card } from "@/components/ui/card";\n\nexport const bad = <Card className="bg-muted rounded-none">Plan</Card>;',
 	},
 	{
 		path: "src/lint-contract-card-variant.tsx",
 		code: null,
 		source:
-			'import { Card, CardContent } from "@/components/ui/card"; export const good = <Card variant="dashed" flush className="mt-4"><CardContent className="p-0">Plan</CardContent></Card>;',
+			'import { Card, CardContent } from "@/components/ui/card";\n\nexport const good = <Card variant="dashed" flush className="mt-4"><CardContent className="p-0">Plan</CardContent></Card>;',
 	},
 	{
 		path: "src/lint-contract-ring.tsx",
@@ -151,7 +151,7 @@ const fixtures: Fixture[] = [
 		path: "src/components/ui/lint-contract-spacing.tsx",
 		code: "shadcn(no-arbitrary-values)",
 		source:
-			'import { cva } from "class-variance-authority"; export const bad = cva("flex", { variants: { space: { bad: "gap-[7px]" } } });',
+			'import { cva } from "class-variance-authority";\n\nexport const bad = cva("flex", { variants: { space: { bad: "gap-[7px]" } } });',
 	},
 	{
 		path: "src/lib/lint-contract-palette.ts",
@@ -173,7 +173,7 @@ const fixtures: Fixture[] = [
 	{
 		path: "src/lint-contract-custom-property.tsx",
 		code: null,
-		source: `import type { CSSProperties } from "react"; export function Good({ width, style }: { width: number; style?: CSSProperties }) { const panelStyle = { ...style, "--panel-width": \`\${width}px\` } satisfies CSSProperties & Record<"--panel-width", string>; return <div className="w-(--panel-width)" style={panelStyle} />; }`,
+		source: `import type { CSSProperties } from "react";\n\nexport function Good({ width, style }: { width: number; style?: CSSProperties }) { const panelStyle = { ...style, "--panel-width": \`\${width}px\` } satisfies CSSProperties & Record<"--panel-width", string>; return <div className="w-(--panel-width)" style={panelStyle} />; }`,
 	},
 	{
 		path: "src/lint-contract-unused-disable.ts",
@@ -209,14 +209,14 @@ const fixtures: Fixture[] = [
 		path: "src/lint-contract-cva.tsx",
 		code: "shadcn(no-raw-colors)",
 		source:
-			'import { cva } from "class-variance-authority"; export const variants = cva("flex", { variants: { tone: { bad: "text-pink-500" } } });',
+			'import { cva } from "class-variance-authority";\n\nexport const variants = cva("flex", { variants: { tone: { bad: "text-pink-500" } } });',
 	},
 	{
 		path: "src/lint-contract-theme.tsx",
 		code: null,
 		// Loads the actual theme and its imports, typography plugin and native variants.
 		source:
-			'import { cn } from "cn"; export const good = <div className={cn("prose text-primary bg-background text-provider-open-foreground pointer-coarse:w-10", "dark:hover:bg-success/10")} />;',
+			'import { cn } from "cn";\n\nexport const good = <div className={cn("prose text-primary bg-background text-provider-open-foreground pointer-coarse:w-10", "dark:hover:bg-success/10")} />;',
 	},
 	{
 		path: "src/components/ui/lint-contract-theme.tsx",

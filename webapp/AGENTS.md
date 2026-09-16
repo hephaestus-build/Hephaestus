@@ -88,6 +88,12 @@ of that is repeated here. What follows is what no diagnostic will ever tell you.
   the build; the same attribute handed to `<Button>` or `<Textarea>` and spread onto the DOM from
   inside does not, so the ban has a hole the size of the component layer. Do not read that hole as
   permission.
+- **A nullable string, number or boolean in a condition names its falsy case.**
+  `typescript/strict-boolean-expressions` reports the truthiness check but not the reading to use:
+  `hasText(s)` (`@/lib/text`) for a string, `n !== undefined && n > 0` for a count, `flag === true`
+  for a boolean, and `rendersContent(node)` (`@/lib/react-node`) for a `ReactNode` slot, where `0`
+  renders and `false` does not. A `ReactNode` slot typed `ReactElement | undefined` needs none of
+  them.
 - **The one exception `jsx-a11y/no-autofocus` earns** is the first field of an overlay the user just
   opened. Suppress that case inline with the reason; everything else is the bug the rule describes.
 - **Re-derive an off rule's findings before trusting or changing the reason beside it** — but run it

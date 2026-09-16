@@ -69,9 +69,7 @@ export function ObservationsListPage({
 				scopedArtifact={rows[0]?.artifact}
 				subjectName={filteredSubject?.name ?? filteredSubject?.login}
 			/>
-			{error ? (
-				<QueryErrorAlert error={error} title="Couldn't load observations" onRetry={onRetry} />
-			) : (
+			{error == null ? (
 				<ObservationResults
 					workspaceSlug={workspaceSlug}
 					practices={practiceRecords}
@@ -85,6 +83,8 @@ export function ObservationsListPage({
 								: { status: "ready", observations: rows }
 					}
 				/>
+			) : (
+				<QueryErrorAlert error={error} title="Couldn't load observations" onRetry={onRetry} />
 			)}
 			<TablePagination
 				page={observations?.page?.number ?? search.page ?? 0}

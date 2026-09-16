@@ -42,7 +42,7 @@ beforeEach(() => {
 });
 
 const clickAsk = async () =>
-	await userEvent.click(
+	userEvent.click(
 		await screen.findByRole("button", { name: "Review this now" }, ROUTE_RENDER_WAIT),
 	);
 

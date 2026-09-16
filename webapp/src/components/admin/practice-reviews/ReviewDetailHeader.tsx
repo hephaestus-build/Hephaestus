@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { rendersContent } from "@/lib/react-node";
 
 export interface ReviewDetailHeaderProps {
 	/** Above the title, because they say what kind of thing the reader is about to read. */
@@ -17,7 +18,9 @@ export function ReviewDetailHeader({ chips, title, provenance, actions }: Review
 		<header className="space-y-3">
 			<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 				<div className="min-w-0 space-y-2">
-					{chips && <div className="flex flex-wrap items-center gap-2">{chips}</div>}
+					{rendersContent(chips) && (
+						<div className="flex flex-wrap items-center gap-2">{chips}</div>
+					)}
 					<h2 className="text-2xl font-semibold tracking-tight break-words">{title}</h2>
 					{provenance}
 				</div>

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { PricingMode } from "@/lib/llm-pricing";
+import { hasText } from "@/lib/text";
 
 /**
  * The LLM forms set `noValidate`, so the native constraint attributes never fire and this is the
@@ -186,7 +187,7 @@ const llmModelFormSchema = z
 				});
 			}
 		}
-		if (value.pricingMode === "NO_CHARGE" && !value.note?.trim()) {
+		if (value.pricingMode === "NO_CHARGE" && !hasText(value.note?.trim())) {
 			ctx.addIssue({
 				code: "custom",
 				path: ["note"],

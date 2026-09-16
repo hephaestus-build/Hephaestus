@@ -1,5 +1,6 @@
 import { cn } from "cn";
 import { Skeleton } from "@/components/ui/skeleton";
+import { rendersContent } from "@/lib/react-node";
 
 import { type Contributor, ContributorCard } from "./ContributorCard";
 
@@ -53,7 +54,7 @@ export function ContributorGrid({
 		);
 	}
 
-	if (contributors.length === 0 && emptyState) {
+	if (contributors.length === 0 && rendersContent(emptyState)) {
 		return emptyState;
 	}
 

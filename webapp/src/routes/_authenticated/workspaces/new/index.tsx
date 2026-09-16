@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/integrations/auth/AuthContext";
+import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/workspaces/new/")({
 	component: ProviderSelectionPage,
@@ -44,7 +45,7 @@ function ProviderSelectionPage() {
 	const providers: Provider[] = [];
 	// The GitHub card leads to a page whose only action is the installation link, so a provider
 	// without a usable URL is a dead end rather than a choice.
-	if (workspaceProviders?.github?.appInstallationUrl) {
+	if (hasText(workspaceProviders?.github?.appInstallationUrl)) {
 		providers.push({
 			id: "github",
 			name: "GitHub",

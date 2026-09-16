@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { ACCOUNT_DELETED_NOTICE_KEY } from "@/integrations/auth/account-deleted-notice";
 import { useAuth } from "@/integrations/auth/AuthContext";
+import { hasText } from "@/lib/text";
 
 const DELETE_CONFIRM_PHRASE = "delete my account";
 
@@ -90,7 +91,7 @@ function DataExportRow() {
 		enabled: exportId !== null,
 		refetchInterval: (query) => {
 			const status = query.state.data?.status?.toUpperCase();
-			const stillWorking = status && EXPORT_IN_PROGRESS.has(status);
+			const stillWorking = hasText(status) && EXPORT_IN_PROGRESS.has(status);
 			if (!stillWorking || requestedAt === null) {
 				return stillWorking ? 2000 : false;
 			}
@@ -99,13 +100,13 @@ function DataExportRow() {
 	});
 
 	const status = statusQuery.data?.status?.toUpperCase();
-	const inProgress = exportId !== null && status && EXPORT_IN_PROGRESS.has(status);
+	const inProgress = exportId !== null && hasText(status) && EXPORT_IN_PROGRESS.has(status);
 	// Polling gave up while the export was still working — let the user retry rather than spin forever.
 	const isStalled =
-		Boolean(inProgress) &&
+		inProgress &&
 		requestedAt !== null &&
 		statusQuery.dataUpdatedAt - requestedAt >= MAX_EXPORT_WAIT_MS;
-	const isPreparing = !isStalled && (requestExport.isPending || Boolean(inProgress));
+	const isPreparing = !isStalled && (requestExport.isPending || inProgress);
 	const isReady = status === "READY";
 	const isFailed = status === "FAILED" || status === "EXPIRED" || isStalled;
 
@@ -217,7 +218,7 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 		// The server requires the confirmation header to equal the caller's own account id
 		// (a deliberate "you know who you are" guard against forged/CSRF-style deletes).
 		const userId = getUserId();
-		if (!confirmed || !userId) {
+		if (!confirmed || !hasText(userId)) {
 			return;
 		}
 		deleteAccount.mutate({ headers: { "X-Confirm-Delete": userId } });
@@ -273,7 +274,7 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={handleConfirm}
-							disabled={!confirmed || !getUserId() || deleteAccount.isPending}
+							disabled={!confirmed || !hasText(getUserId()) || deleteAccount.isPending}
 							variant="destructive"
 						>
 							{deleteAccount.isPending ? "Deleting…" : "Delete account"}

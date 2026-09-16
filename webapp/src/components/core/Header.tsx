@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getInitials } from "@/lib/avatar";
-import { firstNonBlank } from "@/lib/text";
+import { firstNonBlank, hasText } from "@/lib/text";
 import { type EnvironmentTone, resolveHeaderBadge } from "@/lib/version";
 
 const ENV_DOT: Record<EnvironmentTone, string> = {
@@ -124,7 +124,7 @@ export default function Header({
 										variant="muted"
 										className="hidden sm:inline-flex"
 										render={
-											badge.href ? (
+											hasText(badge.href) ? (
 												<a href={badge.href} target="_blank" rel="noopener noreferrer" />
 											) : undefined
 										}

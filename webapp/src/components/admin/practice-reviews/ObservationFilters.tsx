@@ -15,6 +15,7 @@ import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import { statusFacetOptions } from "@/components/practice-vocabulary/status-def";
 import { fromDateRange, toDateRange } from "@/lib/date-range-search";
 import { nonEmpty } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 
 import { AppliedFacetPills, facetPills } from "./AppliedFacetPills";
 import { ObservationSortSelect } from "./ObservationSortSelect";
@@ -215,7 +216,7 @@ export function ObservationFilters({
 					),
 				]}
 			/>
-			{search.agentJobId && (
+			{hasText(search.agentJobId) && (
 				<ReferenceFilterPill
 					label="Review"
 					value={search.agentJobId}

@@ -87,7 +87,7 @@ export function AuthAuditPanel({
 	const exportCsv = useMutation({
 		mutationFn: async () => {
 			const { data, error } = await adminExportAuthEvents({ query: filters });
-			if (error || typeof data !== "string") {
+			if (error !== undefined || typeof data !== "string") {
 				throw new Error("Export failed");
 			}
 			const day = new Date().toISOString().slice(0, 10);

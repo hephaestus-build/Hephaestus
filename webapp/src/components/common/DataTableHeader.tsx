@@ -57,7 +57,7 @@ function ariaSort<TData extends RowData>(
 		return undefined;
 	}
 	const sorted = column.getIsSorted();
-	if (!sorted) {
+	if (sorted === false) {
 		return "none";
 	}
 	return sorted === "asc" ? "ascending" : "descending";

@@ -2,6 +2,7 @@ import { ClockIcon } from "@primer/octicons-react";
 
 import { cn } from "cn";
 import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
+import { hasText } from "@/lib/text";
 
 export interface XpProgressProps {
 	currentXP: number;
@@ -46,7 +47,7 @@ export function XpProgress({
 					</Progress>
 				</div>
 
-				{contributingSince && (
+				{hasText(contributingSince) && (
 					<div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
 						<ClockIcon size={12} className="shrink-0" />
 						<span>Contributing since {contributingSince}</span>

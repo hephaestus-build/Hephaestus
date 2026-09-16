@@ -35,6 +35,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemGroup } from "@/components/ui/item";
+import { hasText } from "@/lib/text";
 
 import { type CatalogDropTarget, getCatalogDropTarget } from "./catalog-tree-dnd";
 
@@ -430,7 +431,7 @@ export function SortableCatalogTree<
 				if (!target) {
 					return;
 				}
-				if (target.groupSlug) {
+				if (hasText(target.groupSlug)) {
 					setCollapsedGroups((collapsed) => collapsed.filter((slug) => slug !== target.groupSlug));
 				}
 				prepareFocus(focusKey);

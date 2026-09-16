@@ -96,7 +96,7 @@ export const handlers = [
 	// --- impersonation -------------------------------------------------------
 	http.post("*/auth/impersonate", () => new HttpResponse(null, { status: 204 })),
 	// `:exit` is a literal colon-suffix on the path, not an MSW path param.
-	http.post("*/auth/impersonate\\:exit", () => new HttpResponse(null, { status: 204 })),
+	http.post(String.raw`*/auth/impersonate\:exit`, () => new HttpResponse(null, { status: 204 })),
 ];
 
 // ---------------------------------------------------------------------------

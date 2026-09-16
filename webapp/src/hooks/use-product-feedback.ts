@@ -15,6 +15,7 @@ import type { Answer, FeedbackRequest, SurveyInvitation } from "@/api/types.gen"
 import { READERS } from "@/components/feedback/feedback-copy";
 import { studyOf } from "@/components/feedback/survey-purpose-defs";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
 
 /**
  * The invitation cache across every workspace. An instance-wide survey is handled once per
@@ -70,7 +71,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 	const slug = workspaceSlug ?? "";
 	const query = useQuery({
 		...listProductSurveyInvitationsOptions({ path: { workspaceSlug: slug } }),
-		enabled: !!workspaceSlug,
+		enabled: hasText(workspaceSlug),
 	});
 	const removeFromCaches = (id: string) => {
 		queryClient.setQueriesData({ queryKey: productSurveyQueryScope() }, (data: typeof query.data) =>
@@ -134,7 +135,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		onError: dropWhenGone,
 	});
 	const deciding = () =>
-		!workspaceSlug || queryClient.isMutating({ mutationKey: SURVEY_DECISION }) > 0;
+		!hasText(workspaceSlug) || queryClient.isMutating({ mutationKey: SURVEY_DECISION }) > 0;
 	return {
 		query,
 		isPending: submit.isPending || decline.isPending || undoDecline.isPending,
@@ -148,7 +149,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			decline.reset();
 		},
 		acknowledge: (surveyId: string) => {
-			if (workspaceSlug) {
+			if (hasText(workspaceSlug)) {
 				acknowledge.mutate({ path: { workspaceSlug: slug, surveyId } });
 			}
 		},
@@ -199,7 +200,7 @@ export function useSubmitProductFeedback(workspaceSlug: string | undefined) {
 	};
 	const workspaceMutation = useMutation({ ...submitWorkspaceProductFeedbackMutation(), ...shared });
 	const instanceMutation = useMutation({ ...submitInstanceProductFeedbackMutation(), ...shared });
-	const mutation = workspaceSlug ? workspaceMutation : instanceMutation;
+	const mutation = hasText(workspaceSlug) ? workspaceMutation : instanceMutation;
 	return {
 		isPending: mutation.isPending,
 		error: mutation.isError ? submissionError(mutation.error, "feedback") : undefined,
@@ -209,7 +210,7 @@ export function useSubmitProductFeedback(workspaceSlug: string | undefined) {
 				return false;
 			}
 			try {
-				await (workspaceSlug
+				await (hasText(workspaceSlug)
 					? workspaceMutation.mutateAsync({ path: { workspaceSlug }, body })
 					: instanceMutation.mutateAsync({ body }));
 				return true;

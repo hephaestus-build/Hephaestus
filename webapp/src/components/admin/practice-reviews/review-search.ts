@@ -15,6 +15,7 @@ import {
 import { ARTIFACT_KIND_VALUES, type KnownArtifactKind } from "@/lib/artifact-kinds";
 import { dayAfterInstant, dayStartInstant, fromDayParam } from "@/lib/date-range-search";
 import { multiValue, narrowToEnum } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 
 /**
  * Read by the query and by the skeleton that stands in for the results, so a skeleton cannot draw a
@@ -60,7 +61,7 @@ const scope = {
 };
 
 function canonicalDateRange<T extends { from?: string; to?: string }>(search: T): T {
-	if (!search.from || (search.to && search.to < search.from)) {
+	if (!hasText(search.from) || (hasText(search.to) && search.to < search.from)) {
 		return { ...search, to: undefined };
 	}
 	return search;
@@ -171,9 +172,10 @@ export function feedbackQuery(search: FeedbackSearch, size: number) {
 		page: search.page ?? 0,
 		size,
 		deliveryState: search.deliveryState,
-		suppressionReason: search.withheldFamily?.length
-			? reasonsInFamilies(search.withheldFamily)
-			: undefined,
+		suppressionReason:
+			search.withheldFamily !== undefined && search.withheldFamily.length > 0
+				? reasonsInFamilies(search.withheldFamily)
+				: undefined,
 		channel: search.channel,
 		recipientUserId: search.recipientUserId,
 	};
@@ -184,8 +186,12 @@ export function observationsQuery(search: ObservationsSearch, size: number) {
 		...scopeQuery(search),
 		page: search.page ?? 0,
 		size,
-		groupSlug: search.groupSlug?.length ? search.groupSlug : undefined,
-		practiceSlug: search.practiceSlug?.length ? search.practiceSlug : undefined,
+		groupSlug:
+			search.groupSlug !== undefined && search.groupSlug.length > 0 ? search.groupSlug : undefined,
+		practiceSlug:
+			search.practiceSlug !== undefined && search.practiceSlug.length > 0
+				? search.practiceSlug
+				: undefined,
 		assessmentStatus: search.assessmentStatus,
 		presence: search.presence,
 		assessment: search.assessment,

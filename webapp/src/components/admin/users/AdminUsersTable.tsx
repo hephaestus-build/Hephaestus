@@ -21,6 +21,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { hasText } from "@/lib/text";
 
 export interface AdminUsersTableProps {
 	users: AdminAccountView[];
@@ -49,7 +50,7 @@ function roleBadgeVariant(appRole: string | undefined) {
 
 // Active is neutral; suspended / being-deleted are non-normal states and read as destructive.
 function statusBadgeVariant(status: string | undefined) {
-	if (!status) {
+	if (!hasText(status)) {
 		return "outline" as const;
 	}
 	const normalized = status.toUpperCase();
@@ -150,7 +151,7 @@ export function AdminUsersTable({
 										<Badge variant={roleBadgeVariant(user.appRole)}>{user.appRole ?? "USER"}</Badge>
 									</TableCell>
 									<TableCell>
-										{user.status ? (
+										{hasText(user.status) ? (
 											<Badge variant={statusBadgeVariant(user.status)}>{user.status}</Badge>
 										) : (
 											<span className="text-muted-foreground">—</span>

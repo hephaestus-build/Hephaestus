@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ARTIFACT_KIND, artifactKindIcon, artifactKindLabel } from "@/lib/artifact-kinds";
 import { asDate } from "@/lib/dates";
 import { getProviderLabel } from "@/lib/provider";
+import { hasText } from "@/lib/text";
 import type { FeedbackResponse, ObservationDetailState } from "./review-runs";
 import { ReviewObservationRow } from "./ReviewObservationRow";
 
@@ -30,7 +31,7 @@ function providerMeta(run: PracticeGroupReviewRun) {
 }
 function workIdentity(run: PracticeGroupReviewRun, providerLabel?: string) {
 	const work = run.reviewedWork;
-	if (work.type === ARTIFACT_KIND.conversationThread && work.channelName) {
+	if (work.type === ARTIFACT_KIND.conversationThread && hasText(work.channelName)) {
 		return `#${work.channelName}`;
 	}
 	const numbered = [work.number !== undefined && `#${work.number}`, work.title]
@@ -40,7 +41,7 @@ function workIdentity(run: PracticeGroupReviewRun, providerLabel?: string) {
 		return numbered;
 	}
 	const kind = artifactKindLabel(work.type);
-	return providerLabel ? `${kind} on ${providerLabel}` : kind;
+	return hasText(providerLabel) ? `${kind} on ${providerLabel}` : kind;
 }
 
 export interface ReviewRunCardProps {
@@ -105,7 +106,7 @@ export function ReviewRunCard({
 						)}
 						<KindIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
 						<div className="min-w-0">
-							{run.reviewedWork.url ? (
+							{hasText(run.reviewedWork.url) ? (
 								<Tooltip>
 									<TooltipTrigger
 										render={
@@ -126,7 +127,7 @@ export function ReviewRunCard({
 							) : (
 								<p className="truncate text-sm font-medium">{identity}</p>
 							)}
-							{run.reviewedWork.repositoryName && (
+							{hasText(run.reviewedWork.repositoryName) && (
 								<p className="truncate text-xs text-muted-foreground">
 									{run.reviewedWork.repositoryName}
 								</p>

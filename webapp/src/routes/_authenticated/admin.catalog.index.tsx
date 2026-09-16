@@ -49,6 +49,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
 
 import { CuratedGroupCreateLevel } from "./-CuratedGroupCreateLevel";
 import { CuratedGroupEditLevel } from "./-CuratedGroupEditLevel";
@@ -299,10 +300,10 @@ function AdminCuratedCatalogPage() {
 						void navigate({ search: (previous) => ({ ...previous, ...next }), replace: true })
 					}
 					onPracticeStatusChange={(practice: CuratedPracticeSummary, offered) => {
-						const parent = practice.groupSlug
+						const parent = hasText(practice.groupSlug)
 							? catalogQuery.data.groups.find((group) => group.slug === practice.groupSlug)
 							: undefined;
-						const availabilityMessage = practice.groupSlug
+						const availabilityMessage = hasText(practice.groupSlug)
 							? parent
 								? parent.status.offered
 									? undefined

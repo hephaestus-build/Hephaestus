@@ -9,6 +9,8 @@ import {
 
 import { cn } from "cn";
 
+import { hasText } from "@/lib/text";
+
 type MarkdownCodeProps = JSX.IntrinsicElements["code"] &
 	ExtraProps & {
 		"data-block"?: string;
@@ -58,8 +60,9 @@ export function MarkdownCode({
 	const startLineDigits = START_LINE_PATTERN.exec(meta ?? "")?.groups?.line;
 	const parsedStartLine =
 		startLineDigits === undefined ? undefined : Number.parseInt(startLineDigits, 10);
-	const startLine = parsedStartLine && parsedStartLine >= 1 ? parsedStartLine : undefined;
-	const lineNumbers = !meta || !NO_LINE_NUMBERS_PATTERN.test(meta);
+	const startLine =
+		parsedStartLine !== undefined && parsedStartLine >= 1 ? parsedStartLine : undefined;
+	const lineNumbers = !hasText(meta) || !NO_LINE_NUMBERS_PATTERN.test(meta);
 
 	return (
 		<CodeBlock

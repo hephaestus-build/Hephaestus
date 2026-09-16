@@ -27,6 +27,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { rendersContent } from "@/lib/react-node";
+import { hasText } from "@/lib/text";
 
 import { BudgetExhaustedAlert } from "./BudgetExhaustedAlert";
 import { ModelPicker, type ModelSelection } from "./ModelPicker";
@@ -201,7 +203,9 @@ export function AgentBindingsPage({
 							))}
 						</section>
 
-						{providerPanel && <section className="space-y-4">{providerPanel}</section>}
+						{rendersContent(providerPanel) && (
+							<section className="space-y-4">{providerPanel}</section>
+						)}
 					</div>
 				)}
 			</div>
@@ -393,11 +397,13 @@ function AgentPurposeCard({
 											max={MAX_TIMEOUT_SECONDS}
 											value={timeoutSeconds}
 											aria-invalid={Boolean(timeoutError)}
-											aria-describedby={timeoutError ? timeoutErrorId : undefined}
+											aria-describedby={hasText(timeoutError) ? timeoutErrorId : undefined}
 											onChange={(e) => setTimeoutSeconds(e.target.value)}
 											disabled={pending}
 										/>
-										{timeoutError && <FieldError id={timeoutErrorId}>{timeoutError}</FieldError>}
+										{hasText(timeoutError) && (
+											<FieldError id={timeoutErrorId}>{timeoutError}</FieldError>
+										)}
 									</Field>
 									<Field data-invalid={Boolean(concurrencyError)}>
 										<FieldLabel htmlFor={`${meta.purpose}-concurrency`}>
@@ -410,11 +416,11 @@ function AgentPurposeCard({
 											min={MIN_CONCURRENT_JOBS}
 											value={maxConcurrentJobs}
 											aria-invalid={Boolean(concurrencyError)}
-											aria-describedby={concurrencyError ? concurrencyErrorId : undefined}
+											aria-describedby={hasText(concurrencyError) ? concurrencyErrorId : undefined}
 											onChange={(e) => setMaxConcurrentJobs(e.target.value)}
 											disabled={pending}
 										/>
-										{concurrencyError && (
+										{hasText(concurrencyError) && (
 											<FieldError id={concurrencyErrorId}>{concurrencyError}</FieldError>
 										)}
 									</Field>

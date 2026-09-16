@@ -123,7 +123,7 @@ export function OutlineConnectCard({
 								)}
 								<span>
 									Outline {connectionState ? CONNECTION_STATE_LABEL[connectionState] : "connected"}
-									{connectionLabel ? ` — ${connectionLabel}` : ""}
+									{hasText(connectionLabel) ? ` — ${connectionLabel}` : ""}
 								</span>
 							</div>
 
@@ -168,7 +168,7 @@ export function OutlineConnectCard({
 								</FieldDescription>
 							</Field>
 
-							{errorMessage && <FieldError>{errorMessage}</FieldError>}
+							{hasText(errorMessage) && <FieldError>{errorMessage}</FieldError>}
 
 							{connectUnavailable && (
 								<Alert variant="warning">
@@ -293,7 +293,7 @@ function OutlineTokenPanel({ tokenStatus, isLoading }: OutlineTokenPanelProps) {
 				{hasMetadata && (hasText(tokenStatus.name) || hasText(tokenStatus.last4)) && (
 					<span>
 						{tokenStatus.name ?? "API key"}
-						{tokenStatus.last4 ? ` (…${tokenStatus.last4})` : ""}
+						{hasText(tokenStatus.last4) ? ` (…${tokenStatus.last4})` : ""}
 					</span>
 				)}
 				{lastActiveAt && (

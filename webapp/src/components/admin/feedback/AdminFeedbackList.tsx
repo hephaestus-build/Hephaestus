@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { hasText } from "@/lib/text";
 
 import { FEEDBACK_KIND_DEFS } from "./feedback-kind-defs";
 
@@ -126,17 +127,17 @@ interface FeedbackCardProps {
 function FeedbackCard({ item, pending, onTriage }: FeedbackCardProps) {
 	const resolved = item.resolvedAt !== undefined;
 	const context = [
-		item.pagePath && (
+		hasText(item.pagePath) && (
 			<code key="page" className="break-all">
 				{item.pagePath}
 			</code>
 		),
-		item.userAgent && (
+		hasText(item.userAgent) && (
 			<span key="agent" className="break-words">
 				{item.userAgent}
 			</span>
 		),
-		item.appVersion && <span key="version">Hephaestus {item.appVersion}</span>,
+		hasText(item.appVersion) && <span key="version">Hephaestus {item.appVersion}</span>,
 	].filter(Boolean);
 	return (
 		<Card>

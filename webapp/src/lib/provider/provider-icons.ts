@@ -55,7 +55,7 @@ export function getPullRequestStateIcon(
 ): PullRequestStateIconResult {
 	const icons = PROVIDER_ICONS[provider];
 
-	if (state === "OPEN" && isDraft) {
+	if (state === "OPEN" && isDraft === true) {
 		return icons.draft;
 	}
 	if (state === "MERGED") {

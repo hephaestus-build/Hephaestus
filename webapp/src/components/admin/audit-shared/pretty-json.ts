@@ -1,5 +1,7 @@
+import { hasText } from "@/lib/text";
+
 export function prettyJson(value: string | undefined): string | null {
-	if (!value) {
+	if (!hasText(value)) {
 		return null;
 	}
 	try {

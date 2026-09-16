@@ -9,6 +9,8 @@ import {
 	SidebarSeparator,
 } from "@/components/ui/sidebar";
 
+import { rendersContent } from "@/lib/react-node";
+
 export interface NavContextHeaderProps {
 	title: string;
 	backLink: ReactElement;
@@ -28,7 +30,9 @@ export function NavContextHeader({ title, backLink, children }: NavContextHeader
 					</SidebarMenuItem>
 				</SidebarMenu>
 			</SidebarGroup>
-			{children && <SidebarSeparator className="data-[orientation=horizontal]:w-auto" />}
+			{rendersContent(children) && (
+				<SidebarSeparator className="data-[orientation=horizontal]:w-auto" />
+			)}
 			{children}
 		</>
 	);

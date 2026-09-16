@@ -29,6 +29,7 @@ import { resolveCurrentUser } from "@/integrations/auth/guard";
 import { loadedPages } from "@/integrations/tanstack-query/spring-page";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { useSearchState } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 
 const ACTIVITY_PAGE_SIZE = 10;
 
@@ -131,7 +132,8 @@ function PracticeGroupDetail() {
 	const activityQuery = useInfiniteQuery({
 		...listPracticeGroupReviewRunsInfiniteOptions(reviewRunsRequest),
 		initialPageParam: 0,
-		getNextPageParam: (lastPage) => (lastPage.hasNext ? (lastPage.page ?? 0) + 1 : undefined),
+		getNextPageParam: (lastPage) =>
+			lastPage.hasNext === true ? (lastPage.page ?? 0) + 1 : undefined,
 	});
 	const invalidateReviewRuns = () =>
 		queryClient.invalidateQueries({
@@ -177,9 +179,10 @@ function PracticeGroupDetail() {
 				nextStep: nextStepOf(practiceStanding),
 			};
 		});
+	const activityFailed = activityQuery.error != null;
 	const reviewRunFeed: ReviewRunFeedState = activityQuery.isPending
 		? { status: "loading" }
-		: activityQuery.error
+		: activityFailed
 			? {
 					status: "error",
 					error: activityQuery.error,
@@ -193,7 +196,7 @@ function PracticeGroupDetail() {
 					onLoadMore: () => void activityQuery.fetchNextPage(),
 				};
 
-	const observationDetail: ObservationDetailState | undefined = openObservationId
+	const observationDetail: ObservationDetailState | undefined = hasText(openObservationId)
 		? {
 				isLoading: observationQuery.isPending,
 				detail: observationQuery.data,
@@ -222,7 +225,7 @@ function PracticeGroupDetail() {
 			}
 			onRespond={(observation, response) => {
 				const { feedbackId } = observation;
-				if (!feedbackId) {
+				if (!hasText(feedbackId)) {
 					return;
 				}
 				if (isEmptyFeedbackResponse(response)) {

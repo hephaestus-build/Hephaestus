@@ -1,3 +1,5 @@
+import { hasText } from "@/lib/text";
+
 const SLACK_CHANNEL_ID = /^[CG][A-Z0-9]{8,}$/u;
 // Anchored to a Slack archive URL path segment so an unrelated all-caps word pasted in prose
 // (e.g. shouting "PLEASE HELP ASAP") can't be mistaken for a channel id.
@@ -21,5 +23,5 @@ export function parseSlackChannelReference(value: string): SlackChannelReference
 	}
 
 	const id = SLACK_CHANNEL_ID_IN_TEXT.exec(trimmed)?.groups?.id;
-	return id ? { channelId: id } : null;
+	return hasText(id) ? { channelId: id } : null;
 }

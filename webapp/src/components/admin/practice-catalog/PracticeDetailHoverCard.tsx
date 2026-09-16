@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import type { Practice } from "@/api/types.gen";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { artifactKindLabel } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 export interface PracticeDetailHoverCardProps {
 	practice: Practice;
@@ -23,7 +24,7 @@ export interface PracticeDetailHoverCardProps {
 export function PracticeDetailHoverCard({ practice, children }: PracticeDetailHoverCardProps) {
 	const why = practice.whyItMatters?.trim();
 	const good = practice.whatGoodLooksLike?.trim();
-	if (!why && !good) {
+	if (!hasText(why) && !hasText(good)) {
 		return children;
 	}
 
@@ -34,8 +35,8 @@ export function PracticeDetailHoverCard({ practice, children }: PracticeDetailHo
 			    start somewhere the eye did not leave. */}
 			<HoverCardContent align="start" className="w-80 space-y-2">
 				<p className="font-medium">{practice.name}</p>
-				{why && <p className="text-muted-foreground">{why}</p>}
-				{good && (
+				{hasText(why) && <p className="text-muted-foreground">{why}</p>}
+				{hasText(good) && (
 					<p className="text-muted-foreground">
 						<span className="text-foreground">What good looks like: </span>
 						{good}

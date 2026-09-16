@@ -58,7 +58,9 @@ export function TracePracticeList({ practices, signals, artifactKind }: TracePra
 						<TracePracticeEntry
 							key={entry.practiceSlug}
 							entry={entry}
-							occurrence={entry.occasionedById ? signalsById.get(entry.occasionedById) : undefined}
+							occurrence={
+								hasText(entry.occasionedById) ? signalsById.get(entry.occasionedById) : undefined
+							}
 						/>
 					))}
 				</ItemGroup>

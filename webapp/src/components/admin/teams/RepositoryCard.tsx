@@ -6,6 +6,7 @@ import { LabelBadge } from "@/components/shared/LabelBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
+import { hasText } from "@/lib/text";
 
 import { RepositoryLabelsToggle } from "./RepositoryLabelsToggle";
 
@@ -71,7 +72,7 @@ export function RepositoryCard({
 								</span>
 							</div>
 						)}
-						{repository.description && (
+						{hasText(repository.description) && (
 							<p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
 								{repository.description}
 							</p>

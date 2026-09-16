@@ -12,6 +12,7 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { hasText } from "@/lib/text";
 import {
 	DELIVERY_AUTONOMY_LABELS,
 	DELIVERY_CHECK_LABELS,
@@ -140,7 +141,7 @@ function PolicyFacts({ facts }: { facts: DeliveryPolicyFactsSnapshot }) {
 
 function scopeSentence(facts: DeliveryPolicyFactsSnapshot): string {
 	const NOT_APPLICABLE = "not applicable";
-	const where = facts.baseBranch
+	const where = hasText(facts.baseBranch)
 		? `${facts.repository ?? "no repository"} / ${facts.baseBranch}`
 		: (facts.repository ?? "no repository");
 	const repositories =

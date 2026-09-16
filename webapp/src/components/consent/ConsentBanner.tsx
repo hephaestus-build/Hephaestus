@@ -2,6 +2,7 @@ import { type ReactNode, type Ref, useId } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { rendersContent } from "@/lib/react-node";
 
 export interface ConsentBannerProps {
 	editing: boolean;
@@ -39,7 +40,7 @@ export function ConsentBanner({
 						Hephaestus uses essential cookies to keep you signed in and secure. With your
 						permission, we'd also like to send error reports so we can fix problems faster. You can
 						change this anytime.
-						{privacyPolicy ? <> {privacyPolicy}</> : null}
+						{rendersContent(privacyPolicy) ? <> {privacyPolicy}</> : null}
 					</CardDescription>
 				</CardHeader>
 				<CardContent>

@@ -1,4 +1,5 @@
 import type { ReviewFeedback } from "@/api/types.gen";
+import { hasText } from "@/lib/text";
 
 /**
  * The opening words of a piece of feedback, as a line of prose a row can be told apart by.
@@ -21,7 +22,7 @@ export function feedbackPreviewText(
 	feedback: Pick<ReviewFeedback, "bodyPreview" | "bodyTruncated">,
 ): string | undefined {
 	const source = feedback.bodyPreview;
-	if (!source) {
+	if (!hasText(source)) {
 		return undefined;
 	}
 
@@ -53,7 +54,7 @@ function flattenMarkdown(source: string): Flattened {
 			// never sees the closing fence, which is why `insideFence` also ends the loop's output.
 			// The line introducing the block goes with it: "You wrote:" followed by the *next* paragraph
 			// instead of the code claims the developer wrote something they did not.
-			if (!insideFence && kept.at(-1)?.endsWith(":")) {
+			if (!insideFence && kept.at(-1)?.endsWith(":") === true) {
 				leadIn = kept.pop();
 			}
 			insideFence = !insideFence;
@@ -80,7 +81,7 @@ function flattenMarkdown(source: string): Flattened {
 	// Dropping the lead-in is right when prose follows the block and wrong when nothing does: where
 	// the cut landed inside the first fence, that one line is every word of prose there is, and
 	// popping it would report a note that has a body as having none.
-	if (kept.length === 0 && leadIn) {
+	if (kept.length === 0 && hasText(leadIn)) {
 		kept.push(leadIn);
 	}
 

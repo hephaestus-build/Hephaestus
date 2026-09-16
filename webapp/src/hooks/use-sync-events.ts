@@ -18,6 +18,7 @@ import type { ConnectionSummary, IntegrationCatalogEntry } from "@/api/types.gen
 import environment from "@/environment";
 import { isRecord } from "@/lib/is-record";
 import { queryOperationId } from "@/lib/query-operation-id";
+import { hasText } from "@/lib/text";
 
 type SyncEventScope = "job" | "resources" | "connection" | "activity";
 
@@ -134,7 +135,7 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 	}
 
 	useEffect(() => {
-		if (!workspaceSlug) {
+		if (!hasText(workspaceSlug)) {
 			return;
 		}
 

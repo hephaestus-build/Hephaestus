@@ -288,7 +288,7 @@ describe("wizardReducer", () => {
 			expect(state.workspaceSlug).toBe("new-group");
 		});
 
-		it("ADVANCE_TO_GROUPS with empty array still advances", () => {
+		it("still advances on ADVANCE_TO_GROUPS with an empty array", () => {
 			const state = initialWizardState;
 			const result = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: [] });
 			expect(result.step).toBe(2);

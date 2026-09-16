@@ -28,7 +28,7 @@ import {
 import { WizardStepIndicator } from "@/components/workspace/create-workspace/WizardStepIndicator";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { isRecord } from "@/lib/is-record";
-import { firstNonBlank } from "@/lib/text";
+import { firstNonBlank, hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/workspaces/new/gitlab")({
 	component: GitLabWizardPage,
@@ -157,7 +157,7 @@ function GitLabWizardPage() {
 		staleTime: 5 * 60 * 1000,
 	});
 	const gitlabProviders: GitLabProvider[] = (identityProviders ?? []).flatMap((p) => {
-		if (p.providerType !== "GITLAB" || !p.registrationId) {
+		if (p.providerType !== "GITLAB" || !hasText(p.registrationId)) {
 			return [];
 		}
 		return [
@@ -169,10 +169,12 @@ function GitLabWizardPage() {
 		];
 	});
 	const linkedGitlabServerUrls = new Set(
-		linkedProviders.flatMap((p) => (p.type === "GITLAB" && p.serverUrl ? [p.serverUrl] : [])),
+		linkedProviders.flatMap((p) =>
+			p.type === "GITLAB" && hasText(p.serverUrl) ? [p.serverUrl] : [],
+		),
 	);
 
-	const gitlabEnabled = !!providers?.gitlab;
+	const gitlabEnabled = Boolean(providers?.gitlab);
 	const defaultServerUrl = providers?.gitlab?.defaultServerUrl;
 
 	const [state, dispatch] = useReducer(wizardReducer, defaultServerUrl, (url) =>

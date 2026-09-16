@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { setTimeout } from "node:timers/promises";
 
-import { type Browser, chromium } from "playwright";
+import { type Browser, chromium, type Page } from "playwright";
 
 const webappDirectory = resolve(import.meta.dirname, "..");
 const sourceDirectory = resolve(webappDirectory, "brand");
@@ -150,13 +151,13 @@ try {
 async function waitForStorybook(storyId: string): Promise<void> {
 	for (let attempt = 0; attempt < 120; attempt += 1) {
 		const response = await fetch(`${storybookUrl}/index.json`).catch(() => {});
-		if (response?.ok) {
+		if (response?.ok === true) {
 			const index: unknown = await response.json();
 			if (
-				!index ||
+				index === null ||
 				typeof index !== "object" ||
 				!("entries" in index) ||
-				!index.entries ||
+				index.entries === null ||
 				typeof index.entries !== "object" ||
 				!(storyId in index.entries)
 			) {
@@ -164,11 +165,38 @@ async function waitForStorybook(storyId: string): Promise<void> {
 			}
 			return;
 		}
-		await new Promise((resolveDelay) => {
-			setTimeout(resolveDelay, 500);
-		});
+		await setTimeout(500);
 	}
 	throw new Error("Storybook did not start within 60 seconds.");
+}
+
+async function captureReadmeImage(
+	page: Page,
+	capture: ReadmeCapture,
+	theme: "light" | "dark",
+): Promise<void> {
+	const globals = encodeURIComponent(`theme:${theme}`);
+	await page.goto(
+		`${storybookUrl}/iframe.html?id=${capture.storyId}&viewMode=story&globals=${globals}`,
+	);
+	await page.waitForLoadState("networkidle");
+	await page.evaluate(() => document.fonts.ready);
+	await page.addStyleTag({
+		content:
+			"*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" +
+			"[data-readme-actions]{display:none!important}",
+	});
+	const surface = page.locator(capture.selector);
+	await surface.waitFor({ state: "visible" });
+	const bounds = await surface.boundingBox();
+	if (!bounds || Math.round(bounds.width) !== capture.expectedWidth) {
+		throw new Error(
+			`${capture.name} export width was ${bounds?.width ?? "missing"}px; expected ${capture.expectedWidth}px.`,
+		);
+	}
+	await surface.screenshot({
+		path: resolve(readmeImageDirectory, `${capture.name}-${theme}.png`),
+	});
 }
 
 async function exportReadmeImages(activeBrowser: Browser): Promise<void> {
@@ -191,28 +219,7 @@ async function exportReadmeImages(activeBrowser: Browser): Promise<void> {
 					reducedMotion: "reduce",
 				});
 				try {
-					const globals = encodeURIComponent(`theme:${theme}`);
-					await page.goto(
-						`${storybookUrl}/iframe.html?id=${capture.storyId}&viewMode=story&globals=${globals}`,
-					);
-					await page.waitForLoadState("networkidle");
-					await page.evaluate(() => document.fonts.ready);
-					await page.addStyleTag({
-						content:
-							"*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" +
-							"[data-readme-actions]{display:none!important}",
-					});
-					const surface = page.locator(capture.selector);
-					await surface.waitFor({ state: "visible" });
-					const bounds = await surface.boundingBox();
-					if (!bounds || Math.round(bounds.width) !== capture.expectedWidth) {
-						throw new Error(
-							`${capture.name} export width was ${bounds?.width ?? "missing"}px; expected ${capture.expectedWidth}px.`,
-						);
-					}
-					await surface.screenshot({
-						path: resolve(readmeImageDirectory, `${capture.name}-${theme}.png`),
-					});
+					await captureReadmeImage(page, capture, theme);
 				} finally {
 					await page.close();
 				}

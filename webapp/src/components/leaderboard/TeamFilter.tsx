@@ -8,6 +8,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { hasText } from "@/lib/text";
 
 export interface TeamFilterOption {
 	value: string;
@@ -29,7 +30,7 @@ export function TeamFilter({ options, onTeamChange, selectedTeam = "all" }: Team
 			</Label>
 			<Select
 				value={selectedTeam}
-				onValueChange={(value) => value && onTeamChange?.(value)}
+				onValueChange={(value) => hasText(value) && onTeamChange?.(value)}
 				items={items}
 			>
 				<SelectTrigger id="team" className="w-full">

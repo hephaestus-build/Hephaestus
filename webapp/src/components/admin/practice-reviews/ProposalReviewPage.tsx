@@ -28,6 +28,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { hasText } from "@/lib/text";
 import {
 	PROPOSAL_REJECTION_REASONS,
 	type ProposalRejectionReason,
@@ -108,10 +109,10 @@ export function ProposalReviewPage({
 			/>
 
 			<ReviewFactGrid>
-				<ReviewFact label={subjectDiffers ? "Addressed to" : "Developer"}>
+				<ReviewFact label={subjectDiffers === true ? "Addressed to" : "Developer"}>
 					<div className="space-y-1">
 						<ReviewPerson person={feedback.recipient} />
-						{subjectDiffers && <ReviewPerson person={feedback.subject} prefix="About" />}
+						{subjectDiffers === true && <ReviewPerson person={feedback.subject} prefix="About" />}
 					</div>
 				</ReviewFact>
 				<ReviewFact label="Reviewed work">
@@ -135,7 +136,7 @@ export function ProposalReviewPage({
 						)}
 					</div>
 				</ReviewFact>
-				{feedback.reviewedRevision && (
+				{hasText(feedback.reviewedRevision) && (
 					<ReviewFact label="Reviewed revision">
 						<code className="text-xs break-all">{feedback.reviewedRevision}</code>
 					</ReviewFact>

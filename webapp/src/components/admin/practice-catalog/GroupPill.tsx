@@ -3,6 +3,7 @@ import { CircleDashed } from "lucide-react";
 
 import { cn } from "cn";
 import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
+import { hasText } from "@/lib/text";
 
 const groupPillVariants = cva("flex shrink-0 items-center justify-center", {
 	variants: {
@@ -33,7 +34,7 @@ export function GroupPill({
 	size,
 	className,
 }: GroupPillProps) {
-	const visual = slug
+	const visual = hasText(slug)
 		? getGroupVisual(icon, color)
 		: // oxlint-disable-next-line shadcn/no-unknown-classes -- The plugin mistakes this destructured record for a cn class map.
 			{ Icon: CircleDashed, pill: "bg-muted text-muted-foreground" };

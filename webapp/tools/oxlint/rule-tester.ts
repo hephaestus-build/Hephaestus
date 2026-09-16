@@ -70,7 +70,7 @@ function interpolate(template: string, data: Record<string, string> = {}): strin
 }
 
 function messagePattern(template: string): RegExp {
-	const escaped = template.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+	const escaped = template.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
 	return new RegExp(`^${escaped.replaceAll(/\\\{\\\{\s*[^}]+\s*\\\}\\\}/gu, ".+?")}$`, "u");
 }
 
@@ -129,13 +129,13 @@ export const ruleTester = {
 		describe(ruleName, () => {
 			for (const value of tests.valid) {
 				const test = asTestCase(value);
-				const run = test.only ? it.only : it;
+				const run = test.only === true ? it.only : it;
 				run("accepts valid code", () => {
 					expect(lint(ruleName, test)).toStrictEqual([]);
 				});
 			}
 			for (const test of tests.invalid) {
-				const run = test.only ? it.only : it;
+				const run = test.only === true ? it.only : it;
 				run("reports invalid code", () => {
 					const diagnostics = lint(ruleName, test);
 					if (typeof test.errors === "number") {

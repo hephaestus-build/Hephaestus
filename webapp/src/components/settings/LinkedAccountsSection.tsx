@@ -42,7 +42,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { asDate } from "@/lib/dates";
 import { getProviderLabel } from "@/lib/provider";
-import { firstNonBlank } from "@/lib/text";
+import { firstNonBlank, hasText } from "@/lib/text";
 
 /** Both types are named because `BrandIcon` is a plain component and `LucideIcon` is not. */
 const PROVIDER_ICONS: Record<string, LucideIcon | BrandIcon> = {
@@ -71,7 +71,7 @@ const LINK_ONLY_RATIONALE: Record<string, string> = {
  * to a generic link icon for unknown providers so new IdPs render gracefully.
  */
 function getProviderIcon(providerType?: string): LucideIcon | BrandIcon {
-	if (!providerType) {
+	if (!hasText(providerType)) {
 		return LinkIcon;
 	}
 	return PROVIDER_ICONS[providerType.toUpperCase()] ?? LinkIcon;
@@ -147,7 +147,7 @@ export function LinkedAccountsSection({
 		if (type === "DEV") {
 			return false;
 		}
-		return !type || !linkedProviderTypes.has(type);
+		return !hasText(type) || !linkedProviderTypes.has(type);
 	});
 
 	// Slack and Outline link an identity but are never a way in, so they cannot be offered among the
@@ -246,13 +246,15 @@ export function LinkedAccountsSection({
 										<ItemContent>
 											<ItemTitle>
 												<span className="truncate">{name}</span>
-												{identity.providerType && (
+												{hasText(identity.providerType) && (
 													<Badge variant="secondary">
 														{getProviderLabel(identity.providerType)}
 													</Badge>
 												)}
 											</ItemTitle>
-											{lastLogin && <ItemDescription>Last sign-in {lastLogin}</ItemDescription>}
+											{hasText(lastLogin) && (
+												<ItemDescription>Last sign-in {lastLogin}</ItemDescription>
+											)}
 										</ItemContent>
 										{identityId != null && (
 											<ItemActions>
@@ -323,8 +325,10 @@ export function LinkedAccountsSection({
 											key={provider.registrationId ?? label}
 											variant="outline"
 											size="sm"
-											onClick={() => provider.registrationId && onLink(provider.registrationId)}
-											disabled={!provider.registrationId}
+											onClick={() =>
+												hasText(provider.registrationId) && onLink(provider.registrationId)
+											}
+											disabled={!hasText(provider.registrationId)}
 											aria-label={`Connect ${label}`}
 										>
 											<Icon className="mr-1.5 size-3.5" aria-hidden="true" />

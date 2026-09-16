@@ -44,7 +44,7 @@ function ReviewRunsRoute() {
 		refetchInterval: (result) =>
 			result.state.data?.content?.some(
 				(review) => review.status === "QUEUED" || review.status === "RUNNING",
-			)
+			) === true
 				? ACTIVE_REVIEW_POLL_MS
 				: false,
 	});

@@ -2,6 +2,8 @@ import { cn } from "cn";
 import type { ReactNode } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { rendersContent } from "@/lib/react-node";
+import { hasText } from "@/lib/text";
 
 export interface EmptyStateProps {
 	icon: ReactNode;
@@ -19,10 +21,10 @@ export function EmptyState({ icon, title, description, action, className }: Empt
 					{icon}
 				</div>
 				<h3 className="mb-1 text-lg font-medium">{title}</h3>
-				{description && (
+				{hasText(description) && (
 					<p className="mb-4 max-w-md text-sm text-muted-foreground">{description}</p>
 				)}
-				{action && <div className="mt-2">{action}</div>}
+				{rendersContent(action) && <div className="mt-2">{action}</div>}
 			</CardContent>
 		</Card>
 	);

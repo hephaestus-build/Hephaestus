@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { hasText } from "@/lib/text";
 
 import type { ExtendedUserTeams } from "./types";
 
@@ -209,7 +210,7 @@ export function UsersTable({
 					</InputGroup>
 					<Select
 						value={view.team}
-						onValueChange={(value) => value && onViewChange({ team: value, page: 0 })}
+						onValueChange={(value) => hasText(value) && onViewChange({ team: value, page: 0 })}
 						items={teamFilterItems}
 					>
 						<SelectTrigger

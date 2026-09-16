@@ -6,6 +6,7 @@ import type { LeaderboardEntry } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getInitials } from "@/lib/avatar";
+import { hasText } from "@/lib/text";
 
 import { LeagueInfoDialog } from "./LeagueInfoDialog";
 import { LeagueProgressCard } from "./LeagueProgressCard";
@@ -20,7 +21,7 @@ export interface LeaderboardOverviewProps {
 
 /** Coarse time left until the leaderboard closes, e.g. "2d 3h", "4h 12m", "58s". */
 function formatTimeRemaining(leaderboardEnd: string | undefined, now: Date): string {
-	if (!leaderboardEnd) {
+	if (!hasText(leaderboardEnd)) {
 		return "N/A";
 	}
 

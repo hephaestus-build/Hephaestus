@@ -28,6 +28,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
+import { hasText } from "@/lib/text";
 
 interface RecentAuthActivityCardProps {
 	events: AuthEventView[];
@@ -43,6 +44,7 @@ export function RecentAuthActivityCard({
 	error,
 	onRetry,
 }: RecentAuthActivityCardProps) {
+	const failed = error != null;
 	return (
 		<Card>
 			<CardHeader>
@@ -60,7 +62,7 @@ export function RecentAuthActivityCard({
 				</CardAction>
 			</CardHeader>
 			<CardContent>
-				{error ? (
+				{failed ? (
 					<QueryErrorAlert error={error} title="Couldn't load recent activity" onRetry={onRetry} />
 				) : isLoading ? (
 					<div className="space-y-3">
@@ -94,9 +96,11 @@ export function RecentAuthActivityCard({
 										className={`size-1.5 shrink-0 rounded-full ${severityDotClass(severity)}`}
 										aria-hidden
 									/>
-									{screenReaderPrefix && <span className="sr-only">{screenReaderPrefix}</span>}
+									{hasText(screenReaderPrefix) && (
+										<span className="sr-only">{screenReaderPrefix}</span>
+									)}
 									<span className="min-w-0 truncate">{eventLabel(event.eventType)}</span>
-									{actor ? (
+									{hasText(actor) ? (
 										<span className="min-w-0 truncate text-muted-foreground">{actor}</span>
 									) : null}
 									<RelativeTime

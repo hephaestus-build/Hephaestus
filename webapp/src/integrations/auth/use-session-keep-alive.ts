@@ -24,7 +24,7 @@ export function useSessionKeepAlive() {
 	const previousExpiryRef = useRef<number | undefined>(undefined);
 
 	useEffect(() => {
-		if (!isAuthenticated || !expiresAtSec) {
+		if (!isAuthenticated || expiresAtSec === undefined) {
 			return;
 		}
 		// Preserve activity through StrictMode effect replays.
@@ -68,7 +68,7 @@ export function useSessionKeepAlive() {
 				return;
 			}
 			const identity = queryClient.getQueryState(currentUserQueryOptions().queryKey);
-			if (identity?.status === "success" && identity.data?.accessTokenExpiresAt) {
+			if (identity?.status === "success" && identity.data?.accessTokenExpiresAt !== undefined) {
 				renewAtMs = Math.min(renewAtMs, identity.data.accessTokenExpiresAt * 1000);
 				schedule();
 			}

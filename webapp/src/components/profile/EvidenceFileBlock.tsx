@@ -7,6 +7,7 @@ import {
 } from "@/components/practice-vocabulary/evidence-source-defs";
 import { Badge } from "@/components/ui/badge";
 import { type EvidenceLocation, evidenceLineRangeLabel, splitPath } from "./evidence";
+
 const SECRET_SCANNER = "secret-diff-scanner";
 
 interface EvidenceFileBlockProps {

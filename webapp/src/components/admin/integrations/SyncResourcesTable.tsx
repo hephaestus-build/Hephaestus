@@ -30,6 +30,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { asDate } from "@/lib/dates";
+import { hasText } from "@/lib/text";
 
 import { freshnessTone, stateLabel } from "./sync-format";
 import { TableRowsSkeleton } from "./TableRowsSkeleton";
@@ -203,7 +204,7 @@ function compareResources(
 		const rankDelta = triageRank(a, syncIntervalSeconds) - triageRank(b, syncIntervalSeconds);
 		return rankDelta === 0 ? a.name.localeCompare(b.name) : rankDelta;
 	}
-	let delta = 0;
+	let delta: number;
 	if (sortState.key === "name") {
 		delta = a.name.localeCompare(b.name);
 	} else if (sortState.key === "lastSynced") {
@@ -556,7 +557,7 @@ function ClassCountCell({
 function ResourceErrorCell({ resource }: { resource: SyncResourceState }) {
 	return (
 		<TableCell className="text-right">
-			{resource.lastError && (
+			{hasText(resource.lastError) && (
 				<HoverCard>
 					<HoverCardTrigger
 						render={

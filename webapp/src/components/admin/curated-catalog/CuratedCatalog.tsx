@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { isKnownArtifactKind } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 import { type CuratedCatalogSearch, curatedPracticeLevel } from "./curated-catalog-search";
 import { CuratedCatalogSummary } from "./CuratedCatalogSummary";
@@ -73,7 +74,7 @@ const STATUS_FILTERS = [
 ] satisfies { value: StatusFilter; label: string }[];
 
 function matches(haystack: (string | undefined)[], needle: string): boolean {
-	return !needle || haystack.some((value) => value?.toLowerCase().includes(needle));
+	return !needle || haystack.some((value) => value?.toLowerCase().includes(needle) === true);
 }
 
 const NO_SLUGS: ReadonlySet<string> = new Set();
@@ -124,14 +125,18 @@ export function CuratedCatalog({
 					practice.name,
 					practice.slug,
 					practice.groupSlug ?? undefined,
-					practice.groupSlug ? groupBySlug.get(practice.groupSlug)?.definition.name : undefined,
+					hasText(practice.groupSlug)
+						? groupBySlug.get(practice.groupSlug)?.definition.name
+						: undefined,
 				],
 				needle,
 			),
 	);
 	const visiblePracticeSlugs = new Set(visiblePractices.map((practice) => practice.slug));
 	const groupsHoldingMatches = new Set(
-		visiblePractices.map((practice) => practice.groupSlug).filter((slug): slug is string => !!slug),
+		visiblePractices
+			.map((practice) => practice.groupSlug)
+			.filter((slug): slug is string => hasText(slug)),
 	);
 	const visibleGroups = groups.filter(
 		(group) =>

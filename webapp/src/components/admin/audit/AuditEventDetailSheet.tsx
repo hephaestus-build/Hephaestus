@@ -15,6 +15,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
+import { hasText } from "@/lib/text";
 
 import { eventLabel, resultLabel } from "./audit-format";
 
@@ -65,16 +66,16 @@ export function AuditEventDetailSheet({
 								{resultLabel(event.result)}
 							</Badge>
 						</DetailRow>
-						{event.failureReason && (
+						{hasText(event.failureReason) && (
 							<DetailRow label="Failure reason">
 								<span className="text-destructive">{event.failureReason}</span>
 							</DetailRow>
 						)}
 						<DetailRow label="Account">
-							{account ? (
+							{hasText(account) ? (
 								<span>
 									{account}
-									{event.account?.email && account !== event.account.email && (
+									{hasText(event.account?.email) && account !== event.account.email && (
 										<span className="ml-1 text-xs text-muted-foreground">
 											{event.account.email}
 										</span>
@@ -91,7 +92,7 @@ export function AuditEventDetailSheet({
 							</DetailRow>
 						)}
 						<DetailRow label="Impersonated by">
-							{actor ? (
+							{hasText(actor) ? (
 								<span>
 									{actor}
 									{event.actingAccountId != null && (
@@ -105,7 +106,7 @@ export function AuditEventDetailSheet({
 						<DetailRow label="Workspace">
 							{event.workspaceId == null
 								? "—"
-								: workspaceName
+								: hasText(workspaceName)
 									? `${workspaceName} (#${event.workspaceId})`
 									: `#${event.workspaceId}`}
 						</DetailRow>
@@ -116,7 +117,7 @@ export function AuditEventDetailSheet({
 							<span className="text-xs">{event.userAgent ?? "—"}</span>
 						</DetailRow>
 						<DetailRow label="Raw data">
-							{pretty ? (
+							{hasText(pretty) ? (
 								<pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs">{pretty}</pre>
 							) : (
 								"—"

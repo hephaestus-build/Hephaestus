@@ -3,6 +3,7 @@ import { ExternalLinkIcon } from "lucide-react";
 import type { ArtifactTrace } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { ARTIFACT_KIND, artifactKindIcon, artifactKindLabel } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 /**
  * The kinds the request endpoint accepts. A conversation thread and a document are reviewed on the
@@ -41,8 +42,8 @@ export function TraceHeader({ trace, onRequestReview, requestPending }: TraceHea
 					)}
 				</h1>
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-					{trace.container && <span className="break-all">{trace.container}</span>}
-					{trace.url && (
+					{hasText(trace.container) && <span className="break-all">{trace.container}</span>}
+					{hasText(trace.url) && (
 						<a
 							href={trace.url}
 							target="_blank"

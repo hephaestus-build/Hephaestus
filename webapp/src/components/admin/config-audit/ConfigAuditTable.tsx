@@ -26,6 +26,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { hasText } from "@/lib/text";
 
 import {
 	ACTION_BADGE,
@@ -251,7 +252,7 @@ function ActorCell({
 					{actor.primary}
 				</span>
 			)}
-			{actor.actingAs && (
+			{hasText(actor.actingAs) && (
 				<span className="truncate text-xs text-muted-foreground">acting as {actor.actingAs}</span>
 			)}
 		</span>

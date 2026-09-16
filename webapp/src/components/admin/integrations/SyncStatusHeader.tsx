@@ -19,6 +19,8 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { asDate } from "@/lib/dates";
+import { rendersContent } from "@/lib/react-node";
+import { hasText } from "@/lib/text";
 
 import { ActiveJobProgress } from "./ActiveJobProgress";
 import { ConnectionHealthBadge } from "./ConnectionHealthBadge";
@@ -156,8 +158,8 @@ function ConnectionDiagnostics({ status }: { status: ConnectionSyncStatus }) {
 	// A snapshot exists only when the vendor was observed, but an observed snapshot can still carry
 	// nothing renderable (a lapsed throttle with no known ceiling), so the row is gated on the reading
 	// itself — not merely on the snapshot's presence — to keep the "Rate limit" label from orphaning.
-	const rateLimit = status.rateLimit ? rateLimitReading(status.rateLimit, now) : null;
-	if (rateLimit) {
+	const rateLimit = status.rateLimit === undefined ? null : rateLimitReading(status.rateLimit, now);
+	if (rendersContent(rateLimit)) {
 		diagnostics.push(
 			<DiagnosticItem key="rateLimit" icon={<GaugeIcon />} label="Rate limit">
 				{rateLimit}
@@ -260,6 +262,7 @@ export function SyncStatusHeader({
 	const activeJob = status?.activeJob;
 	const canBackfill = status?.backfillSupported === true && onBackfill != null;
 	const isTriggerBusy = triggeringType != null || activeJob != null;
+	const failed = error != null;
 
 	return (
 		<Card>
@@ -267,7 +270,7 @@ export function SyncStatusHeader({
 				<IntegrationCardHeading>Connection</IntegrationCardHeading>
 			</CardHeader>
 			<CardContent className="space-y-4">
-				{error ? (
+				{failed ? (
 					<QueryErrorAlert
 						error={error}
 						title={`We couldn't load the ${label} connection`}
@@ -312,7 +315,7 @@ export function SyncStatusHeader({
 											: "Never synced"}
 									</span>
 								)}
-								{nextRunLabel(status.nextScheduledSyncAt) && (
+								{hasText(nextRunLabel(status.nextScheduledSyncAt)) && (
 									<span className="text-muted-foreground">
 										{" · "}
 										{nextRunLabel(status.nextScheduledSyncAt)}
@@ -369,7 +372,7 @@ export function SyncStatusHeader({
 										</Button>
 									)}
 								</ButtonGroup>
-								{actions && <div className="ml-auto">{actions}</div>}
+								{rendersContent(actions) && <div className="ml-auto">{actions}</div>}
 							</div>
 						)}
 					</>

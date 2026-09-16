@@ -24,6 +24,7 @@ import {
 	ItemMedia,
 	ItemTitle,
 } from "@/components/ui/item";
+import { hasText } from "@/lib/text";
 
 export interface AvailablePracticeListProps {
 	practices: CatalogPracticeSummary[];
@@ -89,7 +90,7 @@ export function AvailablePracticeList({
 							</span>
 						}
 						actions={
-							groupSlug && (available > 0 || (groupMissing && restorable > 0)) ? (
+							hasText(groupSlug) && (available > 0 || (groupMissing && restorable > 0)) ? (
 								<DetailStackLink
 									entry={{ kind: "catalog-group", id: groupSlug }}
 									className={buttonVariants({ size: "sm", variant: "outline" })}
@@ -150,7 +151,7 @@ function PracticeRow({ practice }: { practice: CatalogPracticeSummary }) {
 				</ItemDescription>
 				{/* Without this the rows differ only by name: the large majority of the bundled catalogue
 				    reviews a pull request, so the work type above separates almost none of them. */}
-				{practice.whyItMatters && (
+				{hasText(practice.whyItMatters) && (
 					<ItemDescription className="line-clamp-2 text-pretty">
 						{practice.whyItMatters}
 					</ItemDescription>

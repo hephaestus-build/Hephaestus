@@ -16,6 +16,7 @@ import type { UsersTableView } from "@/components/admin/UsersTable";
 import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { workspaceAdminHead } from "@/lib/page-title";
+import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/members")({
 	head: workspaceAdminHead("Members"),
@@ -86,7 +87,7 @@ function AdminMembersContainer() {
 	});
 
 	const handleToggleHidden = (userId: number, hidden: boolean) => {
-		if (!workspaceSlug) {
+		if (!hasText(workspaceSlug)) {
 			return;
 		}
 		toggleHidden.mutate({
@@ -104,7 +105,9 @@ function AdminMembersContainer() {
 	const teams = [...(teamsData ?? [])].sort((a, b) => a.name.localeCompare(b.name));
 	const isLoading = isWorkspaceLoading || usersLoading || teamsLoading;
 	const selectedTeam =
-		search.team && teams.some((team) => team.id.toString() === search.team) ? search.team : "all";
+		hasText(search.team) && teams.some((team) => team.id.toString() === search.team)
+			? search.team
+			: "all";
 	const view: UsersTableView = {
 		q: search.q ?? "",
 		team: selectedTeam,
@@ -115,12 +118,12 @@ function AdminMembersContainer() {
 	};
 
 	useEffect(() => {
-		if (teamsData && !teamsError && search.team && selectedTeam === "all") {
+		if (teamsData && !teamsError && hasText(search.team) && selectedTeam === "all") {
 			void navigate({ search: (previous) => ({ ...previous, team: undefined }), replace: true });
 		}
 	}, [navigate, search.team, selectedTeam, teamsData, teamsError]);
 
-	if (!workspaceSlug && !isWorkspaceLoading) {
+	if (!hasText(workspaceSlug) && !isWorkspaceLoading) {
 		return <NoWorkspace />;
 	}
 
@@ -128,7 +131,7 @@ function AdminMembersContainer() {
 		<AdminMembersPage
 			users={users}
 			teams={teams}
-			isLoading={isLoading || !workspaceSlug}
+			isLoading={isLoading || !hasText(workspaceSlug)}
 			error={workspaceError ?? usersError ?? teamsError}
 			onRetry={() => {
 				void refetchUsers();

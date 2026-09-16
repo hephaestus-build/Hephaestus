@@ -72,7 +72,8 @@ function GroupDetailsForm({
 
 	const saveDetails = async () => {
 		if (unchanged) {
-			return onOpenChange(false);
+			onOpenChange(false);
+			return;
 		}
 		if (await onSubmit({ name: trimmed, icon, color })) {
 			onOpenChange(false);

@@ -100,7 +100,7 @@ function RootLayout() {
 		<>
 			<HeadContent />
 			<SkipToContent />
-			{!loginOpen && <CookieConsentBanner />}
+			{loginOpen !== true && <CookieConsentBanner />}
 			<ImpersonationBannerHost />
 			<ProviderColorScope>
 				<SidebarProvider>

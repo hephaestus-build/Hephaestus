@@ -95,7 +95,7 @@ function ThreadContainer() {
 		);
 	}
 
-	if (mentorChat.threadError) {
+	if (mentorChat.threadError != null) {
 		return (
 			<div className="flex h-full items-center justify-center p-6">
 				<div className="text-center">

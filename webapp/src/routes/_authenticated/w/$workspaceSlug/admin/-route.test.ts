@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { isRecord } from "@/lib/is-record";
+import { hasText } from "@/lib/text";
 import type { WorkspaceRole } from "@/lib/workspace-roles";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
@@ -16,7 +17,7 @@ vi.setConfig({ testTimeout: 15_000 });
 function newRouter(url?: string) {
 	return createRouter({
 		routeTree,
-		...(url ? { history: createMemoryHistory({ initialEntries: [url] }) } : {}),
+		...(hasText(url) ? { history: createMemoryHistory({ initialEntries: [url] }) } : {}),
 		context: {
 			// A fresh client per case: a shared cache would let one role's answer satisfy another's guard.
 			queryClient: new QueryClient(),

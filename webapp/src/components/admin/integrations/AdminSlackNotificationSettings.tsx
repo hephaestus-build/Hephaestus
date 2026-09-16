@@ -53,6 +53,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { parseSlackChannelReference } from "@/lib/slack-channel-reference";
+import { hasText } from "@/lib/text";
 
 import { IntegrationCardHeading } from "./IntegrationCardHeading";
 import { slackErrorMessage } from "./slack-channels/slack-error-copy";
@@ -100,12 +101,14 @@ export function AdminSlackNotificationSettings({
 	channelCandidates = NO_CANDIDATES,
 	onSaved,
 }: AdminSlackNotificationSettingsProps) {
-	const selectableDigestChannels = channelCandidates.filter((candidate) => !candidate.archived);
+	const selectableDigestChannels = channelCandidates.filter(
+		(candidate) => candidate.archived !== true,
+	);
 
 	// The persisted value is a stable Slack id. Anything that does not parse (legacy garbage, a
 	// half-typed value from an older build) is surfaced in the paste escape hatch so an admin can
 	// see and repair it, instead of silently becoming the invisible value of a hidden control.
-	const persisted = channelId ? parseSlackChannelReference(channelId) : null;
+	const persisted = hasText(channelId) ? parseSlackChannelReference(channelId) : null;
 	const persistedIsUnparseable = Boolean(channelId) && persisted == null;
 
 	// The one digest-channel value. Both entry points (combobox, paste) write here; nothing
@@ -126,7 +129,7 @@ export function AdminSlackNotificationSettings({
 	// cannot replay it.
 	useEffect(() => {
 		const result = window.sessionStorage.getItem("slack-connect-result");
-		if (!result) {
+		if (!hasText(result)) {
 			return;
 		}
 		const reason = window.sessionStorage.getItem("slack-connect-reason") ?? undefined;
@@ -171,9 +174,9 @@ export function AdminSlackNotificationSettings({
 	const test = useMutation({
 		...sendSlackTestMessageMutation(),
 		onSuccess: (data) => {
-			if (data.ok) {
+			if (data.ok === true) {
 				toast.success("Test message posted to Slack", {
-					description: data.channelId ? `Channel ${data.channelId}` : undefined,
+					description: hasText(data.channelId) ? `Channel ${data.channelId}` : undefined,
 				});
 				return;
 			}
@@ -193,7 +196,7 @@ export function AdminSlackNotificationSettings({
 	const connect = useMutation({
 		...initiateMutation(),
 		onSuccess: (initiation) => {
-			if (initiation.type === "REDIRECT" && initiation.vendorUrl) {
+			if (initiation.type === "REDIRECT" && hasText(initiation.vendorUrl)) {
 				window.location.assign(initiation.vendorUrl);
 				return; // page is unloading
 			}
@@ -285,7 +288,7 @@ export function AdminSlackNotificationSettings({
 										value={dayInput}
 										disabled={save.isPending}
 										onValueChange={(value) => {
-											if (value) {
+											if (hasText(value)) {
 												setDayInput(value);
 											}
 										}}
@@ -330,7 +333,9 @@ export function AdminSlackNotificationSettings({
 									invalid={channelRequired}
 									selectedChannelId={selectedChannelId}
 									selectedChannelName={parsedReference?.channelName}
-									getDisabledReason={(candidate) => (candidate.member ? undefined : "Needs invite")}
+									getDisabledReason={(candidate) =>
+										candidate.member === true ? undefined : "Needs invite"
+									}
 									onSelect={(candidate) => {
 										setSelectedChannelId(candidate.slackChannelId);
 										setChannelReference("");

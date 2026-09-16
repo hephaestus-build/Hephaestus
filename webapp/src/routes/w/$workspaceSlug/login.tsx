@@ -6,6 +6,7 @@ import { LoginPage } from "@/components/auth/LoginPage";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { resolveCurrentUser } from "@/integrations/auth/guard";
+import { hasText } from "@/lib/text";
 
 interface WorkspaceLoginSearch {
 	error?: string;
@@ -40,7 +41,7 @@ function WorkspaceLoginRoute() {
 		retry: false,
 	});
 
-	const heading = workspace?.displayName
+	const heading = hasText(workspace?.displayName)
 		? `Sign in to ${workspace.displayName}`
 		: "Sign in to your workspace";
 

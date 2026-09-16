@@ -27,6 +27,7 @@ import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { resolveLeaderboardSchedule } from "@/lib/leaderboard-schedule";
+import { hasText } from "@/lib/text";
 import {
 	formatDateRangeForApi,
 	getLeaderboardWeekEnd,
@@ -80,7 +81,7 @@ function LeaderboardContainer() {
 	const now = new Date(useNow());
 
 	const getEffectiveDates = () => {
-		if (after) {
+		if (hasText(after)) {
 			return { after, before };
 		}
 		const weekStart = getLeaderboardWeekStart(now, schedule);
@@ -90,7 +91,7 @@ function LeaderboardContainer() {
 	const effectiveDates = getEffectiveDates();
 
 	const parseDateParam = (value?: string | null) => {
-		if (!value) {
+		if (!hasText(value)) {
 			return;
 		}
 		const parsed = new Date(value);
@@ -135,7 +136,7 @@ function LeaderboardContainer() {
 		placeholderData: (previousData) => previousData,
 		enabled: hasWorkspace && Boolean(username),
 	});
-	const currentUserEntry = username
+	const currentUserEntry = hasText(username)
 		? leaderboardQuery.data?.find(
 				(entry) => entry.user?.login.toLowerCase() === username.toLowerCase(),
 			)
@@ -155,7 +156,7 @@ function LeaderboardContainer() {
 		const names: string[] = [];
 		let cur: MetaTeam | undefined = t;
 		while (cur) {
-			if (!cur.hidden) {
+			if (cur.hidden !== true) {
 				names.push(cur.name);
 			}
 			const parent: MetaTeam | undefined =
@@ -172,13 +173,13 @@ function LeaderboardContainer() {
 	}, {});
 
 	const visibleTeamEntries = teamsList
-		.filter((t) => !t.hidden)
+		.filter((t) => t.hidden !== true)
 		.map((candidate) => ({ team: candidate, label: teamLabelsById[candidate.id] }));
 
 	const visibleTeams = visibleTeamEntries.map((entry) => entry.label);
 
 	const teamOptions = visibleTeamEntries
-		.flatMap(({ label }) => (label ? [{ value: label, label }] : []))
+		.flatMap(({ label }) => (hasText(label) ? [{ value: label, label }] : []))
 		.sort((a, b) => a.label.localeCompare(b.label));
 
 	useEffect(() => {
@@ -235,8 +236,8 @@ function LeaderboardContainer() {
 		!featureState.isLoading &&
 		!featureState.isError &&
 		leaderboardEnabled === false &&
-		workspaceSlug &&
-		username
+		hasText(workspaceSlug) &&
+		hasText(username)
 	) {
 		return (
 			<Navigate
@@ -312,11 +313,7 @@ function LeaderboardContainer() {
 		<LeaderboardPage
 			providerType={providerType}
 			leaderboard={leaderboardQuery.data ?? []}
-			isLoading={
-				isWorkspaceLoading ||
-				teamsQuery.isPending ||
-				(leaderboardQuery.isPending && !leaderboardQuery.data)
-			}
+			isLoading={isWorkspaceLoading || teamsQuery.isPending || leaderboardQuery.isPending}
 			currentUser={userProfileQuery.data?.userInfo}
 			currentUserEntry={currentUserEntry}
 			leaguePoints={userProfileQuery.data?.userInfo.leaguePoints}
@@ -345,7 +342,7 @@ function LeaderboardContainer() {
 			onModeChange={handleModeChange}
 			renderTeamLink={(teamId, children) => {
 				const label = teamLabelsById[teamId];
-				return label ? (
+				return hasText(label) ? (
 					<Link
 						to="."
 						search={(previous) => ({

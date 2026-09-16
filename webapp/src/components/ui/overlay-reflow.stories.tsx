@@ -113,7 +113,7 @@ export const PopoverOverlay = reflowStory(
 	),
 	async () => {
 		await userEvent.click(screen.getByRole("button", { name: "Open popover" }));
-		return await screen.findByText(cardBody);
+		return screen.findByText(cardBody);
 	},
 );
 
@@ -133,7 +133,7 @@ export const HoverCardOverlay = reflowStory(
 	),
 	async () => {
 		await userEvent.hover(screen.getByRole("button", { name: "Show details" }));
-		return await screen.findByText(cardBody);
+		return screen.findByText(cardBody);
 	},
 );
 
@@ -149,7 +149,7 @@ export const TooltipOverlay = reflowStory(
 	),
 	async () => {
 		await userEvent.hover(screen.getByRole("button", { name: "Why is this off?" }));
-		return await screen.findByText(cardBody);
+		return screen.findByText(cardBody);
 	},
 );
 
@@ -167,7 +167,7 @@ export const DropdownMenuOverlay = reflowStory(
 	),
 	async () => {
 		await userEvent.click(screen.getByRole("button", { name: "Open menu" }));
-		return await screen.findByRole("menuitem", { name: menuItemLabel });
+		return screen.findByRole("menuitem", { name: menuItemLabel });
 	},
 );
 
@@ -193,7 +193,7 @@ export const SelectOverlay = reflowStory(
 	),
 	async () => {
 		await userEvent.click(screen.getByRole("combobox", { name: "Autonomy" }));
-		return await screen.findByRole("option", { name: optionLabel });
+		return screen.findByRole("option", { name: optionLabel });
 	},
 );
 
@@ -219,7 +219,7 @@ export const ComboboxOverlay = reflowStory(
 	),
 	async () => {
 		await userEvent.click(screen.getByRole("combobox", { name: "Autonomy" }));
-		return await screen.findByRole("option", { name: optionLabel });
+		return screen.findByRole("option", { name: optionLabel });
 	},
 );
 

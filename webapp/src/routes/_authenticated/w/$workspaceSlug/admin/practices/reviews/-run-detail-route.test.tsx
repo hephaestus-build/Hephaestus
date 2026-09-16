@@ -5,6 +5,7 @@ import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { reviewJob } from "@/components/admin/practice-reviews/story-mock-data";
 import { reviewHandlers } from "@/components/admin/practice-reviews/story-mock-server";
+import { hasText } from "@/lib/text";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
@@ -32,7 +33,7 @@ function stub(...extra: Parameters<typeof server.use>) {
 
 function urlFor(path: string): URL | undefined {
 	const found = requested.find((url) => new URL(url).pathname.endsWith(path));
-	return found ? new URL(found) : undefined;
+	return hasText(found) ? new URL(found) : undefined;
 }
 
 beforeEach(() => {

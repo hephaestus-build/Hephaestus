@@ -15,6 +15,7 @@ import {
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { parseSlackChannelReference } from "@/lib/slack-channel-reference";
+import { hasText } from "@/lib/text";
 
 import { SlackChannelCombobox } from "./SlackChannelCombobox";
 import { SlackChannelPasteField } from "./SlackChannelPasteField";
@@ -129,7 +130,7 @@ export function AddChannelDialog({
 										parsedReference ? channelName.trim() || undefined : undefined
 									}
 									getDisabledReason={(candidate) =>
-										candidate.archived
+										candidate.archived === true
 											? "Archived"
 											: candidate.consentState === "ACTIVE"
 												? "Already listed"
@@ -150,7 +151,7 @@ export function AddChannelDialog({
 								<FieldDescription>
 									Private channels appear here after someone invites Hephaestus to them in Slack.
 								</FieldDescription>
-								{submitError && <FieldError>{submitError}</FieldError>}
+								{hasText(submitError) && <FieldError>{submitError}</FieldError>}
 							</Field>
 						)}
 
@@ -178,7 +179,7 @@ export function AddChannelDialog({
 							</Button>
 						)}
 
-						{!hasCandidates && submitError && <FieldError>{submitError}</FieldError>}
+						{!hasCandidates && hasText(submitError) && <FieldError>{submitError}</FieldError>}
 
 						{parsedReference && !selectedCandidate && (
 							<Field>

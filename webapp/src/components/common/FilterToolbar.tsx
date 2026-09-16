@@ -2,6 +2,7 @@ import { XIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { rendersContent } from "@/lib/react-node";
 
 export interface FilterToolbarProps {
 	children: ReactNode;
@@ -20,7 +21,9 @@ export function FilterToolbar({ children, hasFilter, onReset, actions }: FilterT
 					<XIcon aria-hidden data-icon="inline-end" />
 				</Button>
 			)}
-			{actions && <div className="flex items-center gap-2 sm:ml-auto">{actions}</div>}
+			{rendersContent(actions) && (
+				<div className="flex items-center gap-2 sm:ml-auto">{actions}</div>
+			)}
 		</div>
 	);
 }

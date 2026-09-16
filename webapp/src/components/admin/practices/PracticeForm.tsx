@@ -17,6 +17,7 @@ import {
 import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-catalog/PracticeEvidenceSummary";
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { hasText } from "@/lib/text";
 
 interface PracticeFormCreateProps {
 	mode: "create";
@@ -60,10 +61,12 @@ function asDefinitionValue(practice: Practice): PracticeDefinitionValue {
 		name: practice.name,
 		bindings: [soleBinding(practice.bindings)],
 		criteria: practice.criteria,
-		...(practice.groupSlug ? { groupSlug: practice.groupSlug } : {}),
-		...(practice.whyItMatters ? { whyItMatters: practice.whyItMatters } : {}),
-		...(practice.whatGoodLooksLike ? { whatGoodLooksLike: practice.whatGoodLooksLike } : {}),
-		...(practice.precomputeScript ? { precomputeScript: practice.precomputeScript } : {}),
+		...(hasText(practice.groupSlug) ? { groupSlug: practice.groupSlug } : {}),
+		...(hasText(practice.whyItMatters) ? { whyItMatters: practice.whyItMatters } : {}),
+		...(hasText(practice.whatGoodLooksLike)
+			? { whatGoodLooksLike: practice.whatGoodLooksLike }
+			: {}),
+		...(hasText(practice.precomputeScript) ? { precomputeScript: practice.precomputeScript } : {}),
 		automatedReviewPolicy: practice.automatedReviewPolicy,
 	};
 }
@@ -77,13 +80,13 @@ export function PracticeForm(props: PracticeFormProps) {
 		}
 
 		const clear: NonNullable<UpdatePracticeRequest["clear"]> = [];
-		if (!definition.precomputeScript) {
+		if (!hasText(definition.precomputeScript)) {
 			clear.push("PRECOMPUTE_SCRIPT");
 		}
-		if (!definition.whyItMatters) {
+		if (!hasText(definition.whyItMatters)) {
 			clear.push("WHY_IT_MATTERS");
 		}
-		if (!definition.whatGoodLooksLike) {
+		if (!hasText(definition.whatGoodLooksLike)) {
 			clear.push("WHAT_GOOD_LOOKS_LIKE");
 		}
 		return props.onSubmit(

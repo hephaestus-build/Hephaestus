@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 
 import { cn } from "cn";
 
+import { rendersContent } from "@/lib/react-node";
+
 export interface PageHeaderProps {
 	icon: ReactNode;
 	title: string;
@@ -19,10 +21,12 @@ export function PageHeader({ icon, title, description, actions, className }: Pag
 				</div>
 				<div className="min-w-0 space-y-1">
 					<h1 className="text-2xl font-semibold tracking-tight break-words">{title}</h1>
-					{description && <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>}
+					{rendersContent(description) && (
+						<p className="max-w-2xl text-sm text-muted-foreground">{description}</p>
+					)}
 				</div>
 			</div>
-			{actions && (
+			{rendersContent(actions) && (
 				<div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>
 			)}
 		</header>

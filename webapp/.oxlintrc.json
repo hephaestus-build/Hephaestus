@@ -233,6 +233,26 @@
 		"vitest/prefer-expect-resolves": "error",
 		"vitest/prefer-expect-type-of": "error",
 		"vitest/prefer-spy-on": "error",
+		// `it` everywhere: two spellings of the same call are two things to grep for.
+		"vitest/consistent-test-it": ["error", { "fn": "it", "withinDescribe": "it" }],
+		// A `describe` names the unit under test as written, so only the `it` titles are sentences.
+		"vitest/prefer-lowercase-title": ["error", { "ignore": ["describe"] }],
+		// Truthiness is not a type. A nullable string, number or boolean in a condition says which of
+		// its falsy values it means: `hasText`, `=== 0`, `=== true`. `rendersContent` is the reading
+		// for a `ReactNode` slot, where `0` renders and `false` does not.
+		"typescript/strict-boolean-expressions": "error",
+		// A void expression used as a value is a bug; the arrow shorthand `() => setOpen(false)` is not.
+		"typescript/no-confusing-void-expression": ["error", { "ignoreArrowShorthand": true }],
+		// `return await` inside `try` is the only way the `catch` sees the rejection.
+		"typescript/return-await": ["error", "in-try-catch"],
+		"no-implicit-coercion": "error",
+		"unicorn/explicit-length-check": "error",
+		"unicorn/prefer-string-raw": "error",
+		"react/jsx-boolean-value": "error",
+		"promise/param-names": "error",
+		"no-param-reassign": "error",
+		"max-depth": "error",
+		"import/newline-after-import": "error",
 		"typescript/prefer-for-of": "error",
 		"typescript/no-explicit-any": "error",
 		"typescript/require-await": "error",

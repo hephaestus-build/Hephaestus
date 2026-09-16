@@ -21,7 +21,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { firstNonBlank } from "@/lib/text";
+import { firstNonBlank, hasText } from "@/lib/text";
 
 import { type ConnectionFormData, connectionSchema } from "./schemas";
 import { useWizard } from "./wizard-context";
@@ -47,7 +47,7 @@ export function ConnectGitLabStep({
 	const { state, dispatch } = useWizard();
 	// Only instances with a known base URL can be offered as a pick; a blank one falls back to the
 	// read-only configured field.
-	const selectableInstances = instances.filter((i) => !!i.baseUrl);
+	const selectableInstances = instances.filter((i) => Boolean(i.baseUrl));
 	const multipleInstances = selectableInstances.length > 1;
 
 	// Keep state.serverUrl pinned to a real instance when a picker is shown, so preflight + creation use
@@ -111,7 +111,7 @@ export function ConnectGitLabStep({
 
 	return (
 		<div className="flex flex-col gap-4">
-			<Field data-invalid={fieldErrors.serverUrl ? "true" : undefined}>
+			<Field data-invalid={hasText(fieldErrors.serverUrl) ? "true" : undefined}>
 				<FieldLabel id="gitlab-server-url-label" htmlFor="gitlab-server-url">
 					GitLab Instance
 				</FieldLabel>
@@ -150,7 +150,7 @@ export function ConnectGitLabStep({
 				</FieldDescription>
 			</Field>
 
-			<Field data-invalid={fieldErrors.personalAccessToken ? "true" : undefined}>
+			<Field data-invalid={hasText(fieldErrors.personalAccessToken) ? "true" : undefined}>
 				<FieldLabel htmlFor="gitlab-pat">Access Token</FieldLabel>
 				<InputGroup>
 					<InputGroupInput
@@ -161,9 +161,11 @@ export function ConnectGitLabStep({
 						onChange={(e) => dispatch({ type: "SET_PAT", value: e.target.value })}
 						autoComplete="off"
 						aria-required="true"
-						aria-invalid={!!fieldErrors.personalAccessToken}
+						aria-invalid={hasText(fieldErrors.personalAccessToken)}
 						aria-describedby={
-							fieldErrors.personalAccessToken ? "gitlab-pat-error" : "gitlab-pat-description"
+							hasText(fieldErrors.personalAccessToken)
+								? "gitlab-pat-error"
+								: "gitlab-pat-description"
 						}
 						onKeyDown={(e) => {
 							if (e.key === "Enter") {
@@ -196,7 +198,7 @@ export function ConnectGitLabStep({
 					with <strong>Owner</strong> role and <code className="text-xs">api</code> scope. Owner
 					role is required for webhook registration. Enable token rotation for long-lived setups.
 				</FieldDescription>
-				{fieldErrors.personalAccessToken && (
+				{hasText(fieldErrors.personalAccessToken) && (
 					<FieldError id="gitlab-pat-error">{fieldErrors.personalAccessToken}</FieldError>
 				)}
 			</Field>
@@ -210,7 +212,7 @@ export function ConnectGitLabStep({
 				Validate Token
 			</Button>
 
-			{state.preflightResult?.valid && (
+			{state.preflightResult?.valid === true && (
 				<Alert>
 					<CircleCheckIcon aria-hidden="true" className="text-success" />
 					<AlertTitle>Token valid</AlertTitle>

@@ -60,7 +60,7 @@ function OccasionSummary({ binding, sources, signals }: OccasionSummaryProps) {
 						</Badge>
 					);
 				})}
-				{binding.onDrafts && <Badge variant="outline">Drafts included</Badge>}
+				{binding.onDrafts === true && <Badge variant="outline">Drafts included</Badge>}
 			</div>
 			<dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[6.5rem_1fr]">
 				<dt className="text-muted-foreground">Must have</dt>

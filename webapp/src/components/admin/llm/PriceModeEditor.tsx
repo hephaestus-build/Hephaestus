@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { type PricingMode, priceLabel } from "@/lib/llm-pricing";
+import { hasText } from "@/lib/text";
 
 export interface PriceModeValue {
 	pricingMode: PricingMode;
@@ -80,9 +81,9 @@ export function PriceModeEditor({
 					}}
 					aria-required={required}
 					aria-invalid={Boolean(error)}
-					aria-describedby={error ? errorId : undefined}
+					aria-describedby={hasText(error) ? errorId : undefined}
 				/>
-				{error && <FieldError id={errorId}>{error}</FieldError>}
+				{hasText(error) && <FieldError id={errorId}>{error}</FieldError>}
 			</Field>
 		);
 	};
@@ -142,12 +143,14 @@ export function PriceModeEditor({
 						placeholder="e.g. internal endpoint; infrastructure billed separately"
 						aria-required="true"
 						aria-invalid={Boolean(errors?.note)}
-						aria-describedby={`${idPrefix}-note-hint${errors?.note ? ` ${idPrefix}-note-error` : ""}`}
+						aria-describedby={`${idPrefix}-note-hint${hasText(errors?.note) ? ` ${idPrefix}-note-error` : ""}`}
 					/>
 					<FieldDescription id={`${idPrefix}-note-hint`}>
 						Explain why no per-token API rate applies. Infrastructure cost may still apply.
 					</FieldDescription>
-					{errors?.note && <FieldError id={`${idPrefix}-note-error`}>{errors.note}</FieldError>}
+					{hasText(errors?.note) && (
+						<FieldError id={`${idPrefix}-note-error`}>{errors.note}</FieldError>
+					)}
 				</Field>
 			)}
 		</FieldSet>

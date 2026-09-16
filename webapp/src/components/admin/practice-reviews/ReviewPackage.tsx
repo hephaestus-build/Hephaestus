@@ -47,7 +47,7 @@ export function ReviewPackage({
 									<span className="min-w-0">
 										<span className="block font-mono text-xs break-all">{placement.path}</span>
 										<span className="block text-xs font-normal text-muted-foreground">
-											{placement.endLine && placement.endLine !== placement.startLine
+											{placement.endLine !== undefined && placement.endLine !== placement.startLine
 												? `Lines ${placement.startLine}–${placement.endLine}`
 												: `Line ${placement.startLine}`}
 										</span>

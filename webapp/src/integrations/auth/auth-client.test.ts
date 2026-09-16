@@ -2,9 +2,11 @@ import { HttpResponse, http } from "msw";
 import { afterEach, assert, describe, expect, it } from "vitest";
 
 import type { CurrentUserView } from "@/api/types.gen";
+import { hasText } from "@/lib/text";
 import { server } from "@/mocks/server";
 
 import { applyStateChangingHeaders, authClient, toUserProfile } from "./auth-client";
+
 function makeCurrentUser(overrides: CurrentUserView = {}): CurrentUserView {
 	return {
 		id: 7,
@@ -102,7 +104,7 @@ describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => 
 		authClient.login("gitlab", "/settings/account");
 		expect(assigned).toHaveLength(1);
 		const [target] = assigned;
-		assert(target);
+		assert(hasText(target));
 		const url = new URL(target);
 		expect(`${url.origin}${url.pathname}`).toBe("http://localhost:8080/auth/login");
 		expect(url.searchParams.get("provider")).toBe("gitlab");
@@ -113,7 +115,7 @@ describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => 
 		const { assigned } = stubLocation();
 		authClient.login("github", "//evil.example.com/phish");
 		const [target] = assigned;
-		assert(target);
+		assert(hasText(target));
 		const url = new URL(target);
 		expect(url.searchParams.get("returnTo")).toBe("/");
 	});
@@ -122,7 +124,7 @@ describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => 
 		const { assigned } = stubLocation();
 		authClient.login(undefined, "/dashboard");
 		const [target] = assigned;
-		assert(target);
+		assert(hasText(target));
 		const url = new URL(target);
 		expect(url.searchParams.get("provider")).toBe("github");
 		expect(url.searchParams.get("returnTo")).toBe("/dashboard");

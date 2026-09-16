@@ -191,7 +191,7 @@ export function codeCitationLocator(span: {
 	endLine?: number;
 }): string {
 	const { path, startLine, endLine } = span;
-	return endLine && endLine > startLine
+	return endLine !== undefined && endLine > startLine
 		? `${path}:${startLine}–${endLine}`
 		: `${path}:${startLine}`;
 }

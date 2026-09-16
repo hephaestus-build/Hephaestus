@@ -1,6 +1,7 @@
 import { HttpResponse, http } from "msw";
 
 import type { ReviewFeedback, ReviewObservation } from "@/api/types.gen";
+import { hasText } from "@/lib/text";
 
 import {
 	feedbackDetail,
@@ -45,13 +46,13 @@ function withinScope(
 	const agentJobId = single(url, "agentJobId");
 	const artifactKind = single(url, "artifactKind");
 	const artifactId = single(url, "artifactId");
-	if (agentJobId && row.agentJobId !== agentJobId) {
+	if (hasText(agentJobId) && row.agentJobId !== agentJobId) {
 		return false;
 	}
-	if (artifactKind && row.artifact?.type !== artifactKind) {
+	if (hasText(artifactKind) && row.artifact?.type !== artifactKind) {
 		return false;
 	}
-	if (artifactId && String(row.artifact?.id) !== artifactId) {
+	if (hasText(artifactId) && String(row.artifact?.id) !== artifactId) {
 		return false;
 	}
 	return true;
@@ -60,10 +61,10 @@ function withinScope(
 function withinDates(url: URL, at: Date) {
 	const from = single(url, "from");
 	const to = single(url, "to");
-	if (from && at < new Date(from)) {
+	if (hasText(from) && at < new Date(from)) {
 		return false;
 	}
-	if (to && at >= new Date(to)) {
+	if (hasText(to) && at >= new Date(to)) {
 		return false;
 	}
 	return true;
@@ -95,7 +96,7 @@ function filterObservations(rows: ReviewObservation[], url: URL) {
 			matches(values(url, "presence"), row.presence) &&
 			matches(values(url, "assessment"), row.assessment) &&
 			matches(values(url, "severity"), row.severity) &&
-			(!subjectUserId || String(row.subject?.id) === subjectUserId),
+			(!hasText(subjectUserId) || String(row.subject?.id) === subjectUserId),
 	);
 }
 
@@ -108,7 +109,7 @@ function filterFeedback(rows: ReviewFeedback[], url: URL) {
 			matches(values(url, "deliveryState"), row.deliveryState) &&
 			matches(values(url, "channel"), row.channel) &&
 			matches(values(url, "suppressionReason"), row.suppressionReason) &&
-			(!recipientUserId || String(row.recipient?.id) === recipientUserId),
+			(!hasText(recipientUserId) || String(row.recipient?.id) === recipientUserId),
 	);
 }
 
@@ -166,7 +167,7 @@ export function reviewHandlers({
 	return [
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/observations", ({ request }) => {
 			const url = new URL(request.url);
-			if (requireObservationSort && single(url, "sort") !== requireObservationSort) {
+			if (hasText(requireObservationSort) && single(url, "sort") !== requireObservationSort) {
 				return HttpResponse.json(
 					{ detail: `Expected sort=${requireObservationSort}` },
 					{ status: 400 },
@@ -191,7 +192,7 @@ export function reviewHandlers({
 				// Both filters, intersected, exactly as the endpoint applies them. Honouring only
 				// `status` here would let a story "prove" a date range that the screen never sent.
 				reviewRuns.filter(
-					(run) => (!status || run.status === status) && withinDates(url, run.createdAt),
+					(run) => (!hasText(status) || run.status === status) && withinDates(url, run.createdAt),
 				),
 				url,
 			);

@@ -1,4 +1,5 @@
 import type { CreateSurvey, Question, Survey, SurveyInvitation } from "@/api/types.gen";
+import { hasText } from "@/lib/text";
 
 /**
  * What the composer holds while a survey is written: strings as the fields hold them, so a
@@ -191,7 +192,7 @@ function purposeOf(
 	draft: SurveyDraft,
 	researchOrganization: string | undefined,
 ): Survey["purpose"] {
-	return draft.purpose === "RESEARCH" && researchOrganization ? "RESEARCH" : "PRODUCT";
+	return draft.purpose === "RESEARCH" && hasText(researchOrganization) ? "RESEARCH" : "PRODUCT";
 }
 
 export function toCreateSurvey(

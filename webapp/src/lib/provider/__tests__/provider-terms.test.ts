@@ -31,7 +31,7 @@ describe("getProviderTerms", () => {
 		expect(terms.organization).toBe("Group");
 	});
 
-	it("GitHub and GitLab terms differ for all keys", () => {
+	it("uses different GitHub and GitLab terms for every key", () => {
 		const github = getProviderTerms("GITHUB");
 		const gitlab = new Map(Object.entries(getProviderTerms("GITLAB")));
 		const shared = Object.entries(github).filter(([term, wording]) => gitlab.get(term) === wording);

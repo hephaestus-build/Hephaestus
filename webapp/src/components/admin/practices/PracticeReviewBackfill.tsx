@@ -33,6 +33,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { ARTIFACT_KIND, artifactKindLabel, artifactKindPluralLabel } from "@/lib/artifact-kinds";
 import { asDate } from "@/lib/dates";
 import { formatCostUsd } from "@/lib/money";
+import { hasText } from "@/lib/text";
 
 export interface PracticeReviewBackfillProps {
 	runs: ReviewBackfillRun[];
@@ -281,7 +282,7 @@ function ConfirmationSection({
 				<div>
 					<p className="text-sm text-muted-foreground">Estimated AI spend</p>
 					<p className="text-2xl font-semibold">{cost ?? "Unknown"}</p>
-					{cost ? null : (
+					{hasText(cost) ? null : (
 						<p className="text-sm text-muted-foreground">
 							This workspace has no priced reviews yet, so there is nothing to base an estimate on.
 						</p>

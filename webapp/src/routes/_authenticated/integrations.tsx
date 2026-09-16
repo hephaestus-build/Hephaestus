@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { hasText } from "@/lib/text";
 
 interface Search {
 	status?: "success" | "error";
@@ -22,13 +23,13 @@ export const Route = createFileRoute("/_authenticated/integrations")({
 			return;
 		}
 		const slug = window.sessionStorage.getItem("slack-connect-return-slug");
-		if (!slug) {
+		if (!hasText(slug)) {
 			return;
 		}
 		window.sessionStorage.removeItem("slack-connect-return-slug");
 		if (search.status) {
 			window.sessionStorage.setItem("slack-connect-result", search.status);
-			if (search.reason) {
+			if (hasText(search.reason)) {
 				window.sessionStorage.setItem("slack-connect-reason", search.reason);
 			}
 		}
@@ -75,7 +76,7 @@ function IntegrationsCallback() {
 					<Icon className={iconClass} />
 					<div className="text-center">
 						<h1 className="text-xl font-semibold">{title}</h1>
-						{failed && reason && (
+						{failed && hasText(reason) && (
 							<p className="mt-2 text-sm wrap-anywhere text-muted-foreground">{reason}</p>
 						)}
 					</div>

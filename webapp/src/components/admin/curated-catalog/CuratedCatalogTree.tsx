@@ -28,6 +28,7 @@ import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/i
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { artifactKindLabel } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 import { curatedGroupLevel, curatedPracticeLevel } from "./curated-catalog-search";
 import { CuratedEntryBadges } from "./CuratedEntryBadges";
@@ -83,12 +84,18 @@ export function CuratedCatalogTree({
 	const treePractices: TreePractice[] = practices.map((practice) => ({
 		...practice,
 		groupSlug:
-			practice.groupSlug && knownGroups.has(practice.groupSlug) ? practice.groupSlug : undefined,
+			hasText(practice.groupSlug) && knownGroups.has(practice.groupSlug)
+				? practice.groupSlug
+				: undefined,
 		displayOrder: practice.position,
 		missingGroupSlug:
-			practice.groupSlug && !knownGroups.has(practice.groupSlug) ? practice.groupSlug : undefined,
+			hasText(practice.groupSlug) && !knownGroups.has(practice.groupSlug)
+				? practice.groupSlug
+				: undefined,
 		moveSourceGroupSlug:
-			practice.groupSlug && !knownGroups.has(practice.groupSlug) ? practice.groupSlug : undefined,
+			hasText(practice.groupSlug) && !knownGroups.has(practice.groupSlug)
+				? practice.groupSlug
+				: undefined,
 	}));
 	const blockedBuckets = canReorder
 		? new Set<string>()
@@ -249,7 +256,7 @@ function PracticeDetails({ practice }: { practice: TreePractice }) {
 				{reviewLimitation && <Badge variant="outline">{reviewLimitation}</Badge>}
 				{parentUnavailable && (
 					<Badge variant="outline">
-						{practice.missingGroupSlug
+						{hasText(practice.missingGroupSlug)
 							? "Group no longer exists"
 							: "Excluded because its group is excluded"}
 					</Badge>
@@ -279,23 +286,23 @@ function PracticeActions({
 	onStatusChange: (practice: CuratedPracticeSummary, offered: boolean) => void;
 	onExclude: (practice: CuratedPracticeSummary) => void;
 }) {
-	const group = practice.groupSlug
+	const group = hasText(practice.groupSlug)
 		? groups.find((candidate) => candidate.slug === practice.groupSlug)
 		: undefined;
 	const parentUnavailable = Boolean(practice.missingGroupSlug) || group?.status.offered === false;
-	const includeLabel = practice.missingGroupSlug
+	const includeLabel = hasText(practice.missingGroupSlug)
 		? "Move to Unassigned or an included group first"
 		: parentUnavailable
 			? "Include when its group is included"
 			: "Include for workspaces";
-	const switchLabel = practice.missingGroupSlug
+	const switchLabel = hasText(practice.missingGroupSlug)
 		? `${practice.name} cannot be included until it is moved out of the missing group`
 		: parentUnavailable
 			? practice.status.offered
 				? `${practice.name} is excluded because its group is excluded`
 				: `${practice.name} is not offered to workspaces`
 			: `Offer ${practice.name} to workspaces`;
-	const persistedPractice = practice.missingGroupSlug
+	const persistedPractice = hasText(practice.missingGroupSlug)
 		? { ...practice, groupSlug: practice.missingGroupSlug }
 		: practice;
 	return (

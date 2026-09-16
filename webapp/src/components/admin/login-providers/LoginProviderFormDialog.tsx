@@ -23,6 +23,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { hasText } from "@/lib/text";
 
 type ProviderType = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
 
@@ -165,7 +166,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 				</DialogDescription>
 			</DialogHeader>
 
-			<Field data-invalid={errors.registrationId ? "true" : undefined}>
+			<Field data-invalid={hasText(errors.registrationId) ? "true" : undefined}>
 				<FieldLabel htmlFor="lp-registration-id">Registration ID</FieldLabel>
 				<Input
 					id="lp-registration-id"
@@ -174,7 +175,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 					placeholder="gitlab-acme"
 					disabled={isEdit}
 					required={!isEdit}
-					aria-invalid={errors.registrationId ? "true" : undefined}
+					aria-invalid={hasText(errors.registrationId) ? "true" : undefined}
 					aria-describedby="lp-registration-id-description"
 					autoComplete="off"
 				/>
@@ -182,7 +183,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 					Stable id used in the OAuth callback path. Lowercase letters, digits, hyphens. Immutable
 					once created.
 				</FieldDescription>
-				{errors.registrationId && <FieldError>{errors.registrationId}</FieldError>}
+				{hasText(errors.registrationId) && <FieldError>{errors.registrationId}</FieldError>}
 			</Field>
 
 			<Field>
@@ -233,7 +234,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 			</Field>
 
 			{needsBaseUrl && (
-				<Field data-invalid={errors.baseUrl ? "true" : undefined}>
+				<Field data-invalid={hasText(errors.baseUrl) ? "true" : undefined}>
 					<FieldLabel htmlFor="lp-base-url">Instance base URL</FieldLabel>
 					<Input
 						id="lp-base-url"
@@ -242,14 +243,14 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 						onChange={(e) => setBaseUrl(e.target.value)}
 						placeholder={isOutline ? "https://outline.example.com" : "https://gitlab.example.com"}
 						required={!isEdit}
-						aria-invalid={errors.baseUrl ? "true" : undefined}
+						aria-invalid={hasText(errors.baseUrl) ? "true" : undefined}
 						aria-describedby="lp-base-url-description"
 					/>
 					<FieldDescription id="lp-base-url-description">
 						HTTPS only. GitHub and Slack are always at a fixed host, so this field applies to
 						self-hosted GitLab and Outline instances.
 					</FieldDescription>
-					{errors.baseUrl && <FieldError>{errors.baseUrl}</FieldError>}
+					{hasText(errors.baseUrl) && <FieldError>{errors.baseUrl}</FieldError>}
 				</Field>
 			)}
 

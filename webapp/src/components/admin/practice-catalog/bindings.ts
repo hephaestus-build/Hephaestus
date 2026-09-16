@@ -6,6 +6,7 @@ import type {
 	PracticeWorkTypeDefinitionOptions,
 } from "@/api/types.gen";
 import { ARTIFACT_KIND, ARTIFACT_KIND_VALUES } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 export type EvidenceStance = PracticeEvidenceRequirement["stance"];
 export type EvidenceRole = "NOT_USED" | EvidenceStance;
@@ -17,7 +18,7 @@ export function artifactKindOfSignal(signal: string): string {
 
 export function artifactKindOfBindings(bindings: readonly PracticeBinding[]): string | undefined {
 	const signal = bindings.find((binding) => binding.signals.length > 0)?.signals[0];
-	return signal ? artifactKindOfSignal(signal) : undefined;
+	return hasText(signal) ? artifactKindOfSignal(signal) : undefined;
 }
 
 export const EMPTY_BINDING: PracticeBinding = { signals: [], needs: [] };
@@ -32,7 +33,7 @@ export function normalizeBinding(binding: PracticeBinding): PracticeBinding {
 		needs: [...binding.needs].sort((left, right) =>
 			left.sourceKind.localeCompare(right.sourceKind),
 		),
-		...(binding.onDrafts ? { onDrafts: true } : {}),
+		...(binding.onDrafts === true ? { onDrafts: true } : {}),
 	};
 }
 
@@ -134,7 +135,7 @@ export function bindingsProblem(
 			need.stance === "EXHAUSTIVE" &&
 			options?.allowedSources.some(
 				(source) => source.sourceKind === need.sourceKind && !source.supportsExhaustiveEvidence,
-			),
+			) === true,
 	);
 	if (exhaustiveBlocked) {
 		return {

@@ -27,7 +27,7 @@ export const Route = createFileRoute("/consent")({
 		}
 		// The page owns retry and sign-out on failure; a loader error would bypass both.
 		const consent = await context.queryClient.query(getConsentStatusOptions({})).catch(() => {});
-		if (consent?.completed) {
+		if (consent?.completed === true) {
 			throw redirect({ href: safeReturnTo(search.returnTo) });
 		}
 	},
@@ -55,7 +55,7 @@ function ConsentRoute() {
 	});
 
 	useEffect(() => {
-		if (data?.completed) {
+		if (data?.completed === true) {
 			void navigate({ href: safeReturnTo(returnTo), replace: true });
 		}
 	}, [data?.completed, navigate, returnTo]);

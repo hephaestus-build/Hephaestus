@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/compone
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { getProviderTerms, getPullRequestStateIcon, type ProviderType } from "@/lib/provider";
+import { hasText } from "@/lib/text";
 
 import { copyReviewLinks, reviewLinkUrl } from "./review-links";
 
@@ -43,7 +44,7 @@ export function ReviewsPopover({
 		label: `${pullRequest.repository?.name ?? ""} #${pullRequest.number}`.trim(),
 		url: reviewLinkUrl(pullRequest.htmlUrl),
 	}));
-	const copyableLinks = links.flatMap(({ label, url }) => (url ? [{ label, url }] : []));
+	const copyableLinks = links.flatMap(({ label, url }) => (hasText(url) ? [{ label, url }] : []));
 
 	const copyLinks = async () => {
 		setIsCopying(true);
@@ -112,7 +113,7 @@ export function ReviewsPopover({
 									rel="noopener noreferrer"
 									className={cn(
 										"justify-start rounded-md px-3 py-2",
-										pullRequest.url && "transition-colors duration-200 hover:bg-accent",
+										hasText(pullRequest.url) && "transition-colors duration-200 hover:bg-accent",
 									)}
 									title={pullRequest.title}
 								>

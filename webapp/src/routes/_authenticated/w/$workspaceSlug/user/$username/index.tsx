@@ -25,6 +25,7 @@ import {
 import { resolveLeaderboardSchedule } from "@/lib/leaderboard-schedule";
 import { toScmProviderType } from "@/lib/provider";
 import { useSearchState } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 import { formatDateRangeForApi, getDateRangeForPreset } from "@/lib/timeframe";
 
 const profileSearchSchema = z.object({
@@ -40,7 +41,7 @@ const profileSearchSchema = z.object({
 });
 
 const parseRepositoryIds = (value?: string): number[] => {
-	if (!value) {
+	if (!hasText(value)) {
 		return [];
 	}
 
@@ -90,7 +91,7 @@ function UserProfile() {
 	const nowMs = useNow();
 
 	const getEffectiveDates = () => {
-		if (after) {
+		if (hasText(after)) {
 			return { after, before };
 		}
 		const range = getDateRangeForPreset(new Date(nowMs), "this-week", schedule);
@@ -99,7 +100,7 @@ function UserProfile() {
 	const effectiveDates = getEffectiveDates();
 
 	const parseDateParam = (value?: string) => {
-		if (!value) {
+		if (!hasText(value)) {
 			return;
 		}
 		const parsed = new Date(value);
@@ -137,7 +138,7 @@ function UserProfile() {
 	});
 	const practicesByGroup = (standingsQuery.data ?? []).reduce<Record<string, PracticeStanding[]>>(
 		(grouped, practice) => {
-			if (!practice.groupSlug) {
+			if (!hasText(practice.groupSlug)) {
 				return grouped;
 			}
 			const forGroup = grouped[practice.groupSlug] ?? [];

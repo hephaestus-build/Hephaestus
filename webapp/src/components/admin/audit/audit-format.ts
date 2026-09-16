@@ -1,6 +1,8 @@
 import type { AdminListAuthEventsData } from "@/api/types.gen";
 import { humanizeToken } from "@/lib/humanize";
 import { isRecord } from "@/lib/is-record";
+import { hasText } from "@/lib/text";
+
 export type AuditSeverity = "error" | "warning" | "info";
 
 const HIGH_RISK_EVENTS = new Set([
@@ -58,7 +60,7 @@ export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
 
 export function eventLabel(eventType: string): string {
 	const known = (EVENT_TYPE_LABELS as Record<string, string | undefined>)[eventType];
-	if (known) {
+	if (hasText(known)) {
 		return known;
 	}
 	return humanizeToken(eventType);
@@ -69,7 +71,7 @@ export function resultLabel(result: string): string {
 }
 
 export function humanizeDetails(details: string | undefined): string | null {
-	if (!details) {
+	if (!hasText(details)) {
 		return null;
 	}
 	let parsed: unknown;

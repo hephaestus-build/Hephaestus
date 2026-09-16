@@ -117,7 +117,7 @@ export function Chat({
 								disableAttachments={disableAttachments}
 								isAtBottom={actualIsAtBottom}
 								scrollToBottom={actualScrollToBottom}
-								isCurrentVersion={true}
+								isCurrentVersion
 								className="bg-background dark:bg-muted"
 							/>
 						</div>

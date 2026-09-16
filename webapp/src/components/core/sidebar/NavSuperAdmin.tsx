@@ -117,7 +117,7 @@ export function NavSuperAdmin() {
 					<SidebarMenuItem>
 						<SidebarMenuButton
 							tooltip="Instance overview"
-							isActive={!!matchRoute({ to: "/admin" })}
+							isActive={matchRoute({ to: "/admin" }) !== false}
 							render={<Link to="/admin" />}
 						>
 							<Gauge />
@@ -134,7 +134,7 @@ export function NavSuperAdmin() {
 							<SidebarMenuItem key={item.to}>
 								<SidebarMenuButton
 									tooltip={item.tooltip}
-									isActive={!!matchRoute({ to: item.to, fuzzy: true })}
+									isActive={matchRoute({ to: item.to, fuzzy: true }) !== false}
 									render={<Link to={item.to} />}
 								>
 									<item.icon />

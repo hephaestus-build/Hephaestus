@@ -27,6 +27,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { hasText } from "@/lib/text";
 
 import {
 	eventLabel,
@@ -150,7 +151,9 @@ export function AdminAuditTable({
 												className={`size-1.5 shrink-0 rounded-full ${severityDotClass(severity)}`}
 												aria-hidden
 											/>
-											{screenReaderPrefix && <span className="sr-only">{screenReaderPrefix}</span>}
+											{hasText(screenReaderPrefix) && (
+												<span className="sr-only">{screenReaderPrefix}</span>
+											)}
 											<span className="text-sm">{eventLabel(e.eventType)}</span>
 											<ElevationBadge elevated={e.elevatedViaInstanceAdmin} />
 										</span>
@@ -162,7 +165,7 @@ export function AdminAuditTable({
 									</TableCell>
 									<TableCell className="max-w-[12rem]">
 										<span className="block truncate">
-											{account ? (
+											{hasText(account) ? (
 												onFilterAccount && accountId != null ? (
 													<FilterLink
 														label={account}
@@ -176,7 +179,7 @@ export function AdminAuditTable({
 												"—"
 											)}
 										</span>
-										{actor && (
+										{hasText(actor) && (
 											<span className="block truncate text-xs text-muted-foreground">
 												impersonated by{" "}
 												{onFilterActor && actingAccountId != null ? (
@@ -196,7 +199,7 @@ export function AdminAuditTable({
 											type="button"
 											variant="ghost"
 											size="sm"
-											aria-label={`View details: ${eventLabel(e.eventType)}${account ? ` — ${account}` : ""}`}
+											aria-label={`View details: ${eventLabel(e.eventType)}${hasText(account) ? ` — ${account}` : ""}`}
 											onClick={() => {
 												setDetail(e);
 												setDetailOpen(true);

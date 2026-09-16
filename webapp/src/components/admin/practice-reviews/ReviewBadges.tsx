@@ -19,6 +19,7 @@ import type { StatusDef } from "@/components/practice-vocabulary/status-def";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { hasText } from "@/lib/text";
 
 type NonCurrentClaimCurrentness = Exclude<ReviewObservation["claimCurrentness"], "CURRENT">;
 
@@ -236,7 +237,7 @@ export function FeedbackCountsSummary({
 	}
 	return (
 		<span>
-			{prefix && `${prefix} `}
+			{hasText(prefix) && `${prefix} `}
 			{parts.join(" · ")}
 		</span>
 	);

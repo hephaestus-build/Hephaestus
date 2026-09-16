@@ -1,4 +1,5 @@
 import { firstNonBlank } from "@/lib/text";
+
 export interface AuditRef {
 	id?: number;
 	displayName?: string;

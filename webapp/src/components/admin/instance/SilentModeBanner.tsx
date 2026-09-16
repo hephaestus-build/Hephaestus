@@ -6,6 +6,7 @@ import { RelativeTime } from "@/components/common/RelativeTime";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { asDate } from "@/lib/dates";
+import { hasText } from "@/lib/text";
 
 export interface SilentModeBannerProps {
 	settings: InstanceSettings;
@@ -22,17 +23,17 @@ export function SilentModeBanner({ settings }: SilentModeBannerProps) {
 			</AlertTitle>
 			<AlertDescription className="min-w-0 break-words">
 				Practice feedback and workspace Slack messages are suppressed across this instance.
-				{settings.silentModeChangedBy || engagedAt ? (
+				{hasText(settings.silentModeChangedBy) || engagedAt ? (
 					<>
 						{" Engaged"}
-						{settings.silentModeChangedBy ? ` by ${settings.silentModeChangedBy}` : ""}
+						{hasText(settings.silentModeChangedBy) ? ` by ${settings.silentModeChangedBy}` : ""}
 						{engagedAt ? (
 							<>
 								{" "}
 								<RelativeTime value={settings.silentModeChangedAt} tooltip={false} />
 							</>
 						) : null}
-						{settings.silentModeReason ? ` — “${settings.silentModeReason}”` : ""}.
+						{hasText(settings.silentModeReason) ? ` — “${settings.silentModeReason}”` : ""}.
 					</>
 				) : null}
 			</AlertDescription>

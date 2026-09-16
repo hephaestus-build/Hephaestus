@@ -53,7 +53,7 @@ export const ServerRejection: Story = {
 const rejects =
 	(typed: string, reason: RegExp): Story["play"] =>
 	async ({ args }) =>
-		await expectAmountRejected({
+		expectAmountRejected({
 			fieldLabel: /monthly cap/iu,
 			submitLabel: /save cap/iu,
 			typed,

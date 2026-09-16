@@ -88,7 +88,7 @@ function Calendar({
 				week_number: cn("text-xs text-muted-foreground select-none", defaultClassNames.week_number),
 				day: cn(
 					"group/day relative aspect-square h-full w-full rounded-(--cell-radius) p-0 text-center select-none [&:last-child[data-selected=true]_button]:rounded-r-(--cell-radius)",
-					props.showWeekNumber
+					props.showWeekNumber === true
 						? "[&:nth-child(2)[data-selected=true]_button]:rounded-l-(--cell-radius)"
 						: "[&:first-child[data-selected=true]_button]:rounded-l-(--cell-radius)",
 					defaultClassNames.day,
@@ -159,7 +159,7 @@ function CalendarDayButton({
 
 	const ref = useRef<HTMLButtonElement>(null);
 	useEffect(() => {
-		if (modifiers.focused) {
+		if (modifiers.focused === true) {
 			ref.current?.focus();
 		}
 	}, [modifiers.focused]);
@@ -170,10 +170,10 @@ function CalendarDayButton({
 			size="icon"
 			data-day={day.date.toLocaleDateString(locale?.code)}
 			data-selected-single={
-				modifiers.selected &&
-				!modifiers.range_start &&
-				!modifiers.range_end &&
-				!modifiers.range_middle
+				modifiers.selected === true &&
+				modifiers.range_start !== true &&
+				modifiers.range_end !== true &&
+				modifiers.range_middle !== true
 			}
 			data-range-start={modifiers.range_start}
 			data-range-end={modifiers.range_end}

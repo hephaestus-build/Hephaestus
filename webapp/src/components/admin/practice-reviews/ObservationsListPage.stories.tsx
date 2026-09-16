@@ -71,7 +71,9 @@ function observationPage(
 ): ListPracticeReviewObservationsResponse {
 	const query = observationsQuery(search, REVIEW_PAGE_SIZE);
 	const selects = (selected: string[] | undefined, actual: string | undefined) =>
-		!selected?.length || (actual !== undefined && selected.includes(actual));
+		selected === undefined ||
+		selected.length === 0 ||
+		(actual !== undefined && selected.includes(actual));
 	const rows = candidates.filter(
 		(row) =>
 			(!query.from || row.observedAt >= new Date(query.from)) &&

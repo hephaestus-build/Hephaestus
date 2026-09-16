@@ -22,6 +22,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
+import { hasText } from "@/lib/text";
 import { APPROVAL_DECISION_DEFS } from "./approval-decision-defs";
 import { FeedbackBody } from "./FeedbackBody";
 import { proposalRejectionReasonLabel } from "./proposal-rejection-vocabulary";
@@ -100,10 +101,12 @@ export function FeedbackDetailPage({
 	const artifactSlug = feedback.artifact
 		? reviewArtifactTypeSlug(feedback.artifact.type)
 		: undefined;
-	const anchoredPlacements = feedback.placements.filter((placement) => placement.anchorPath);
+	const anchoredPlacements = feedback.placements.filter((placement) =>
+		hasText(placement.anchorPath),
+	);
 	const packageSize = feedback.proposedPlacements.length;
-	const deliveredPlacements = feedback.placements.filter(
-		(placement) => placement.postedCommentRef,
+	const deliveredPlacements = feedback.placements.filter((placement) =>
+		hasText(placement.postedCommentRef),
 	).length;
 	const deliveryInProgress =
 		feedback.deliveryState === "PREPARED" ||
@@ -126,10 +129,10 @@ export function FeedbackDetailPage({
 			/>
 
 			<ReviewFactGrid>
-				<ReviewFact label={subjectDiffers ? "Addressed to" : "Developer"}>
+				<ReviewFact label={subjectDiffers === true ? "Addressed to" : "Developer"}>
 					<div className="space-y-1">
 						<ReviewPerson person={feedback.recipient} />
-						{subjectDiffers && <ReviewPerson person={feedback.subject} prefix="About" />}
+						{subjectDiffers === true && <ReviewPerson person={feedback.subject} prefix="About" />}
 					</div>
 				</ReviewFact>
 				<ReviewFact label="Reviewed work">
@@ -200,7 +203,7 @@ export function FeedbackDetailPage({
 						</ul>
 					</div>
 				)}
-				{feedback.replacesId && (
+				{hasText(feedback.replacesId) && (
 					<p className="text-sm text-muted-foreground">
 						<Link
 							to="/w/$workspaceSlug/admin/practices/reviews/delivery/$feedbackId"
@@ -319,7 +322,7 @@ function ApprovalAudit({ approval }: { approval: FeedbackApproval }) {
 						<dd>{proposalRejectionReasonLabel(approval.rejectionReason)}</dd>
 					</>
 				) : null}
-				{rejected && approval.rejectionNote ? (
+				{rejected && hasText(approval.rejectionNote) ? (
 					<>
 						<dt className="font-medium text-foreground">Note</dt>
 						<dd className="min-w-0 break-words whitespace-pre-wrap">{approval.rejectionNote}</dd>
@@ -332,7 +335,7 @@ function ApprovalAudit({ approval }: { approval: FeedbackApproval }) {
 
 function anchorLabel(placement: ReviewPlacement): string {
 	const { anchorPath, anchorStartLine, anchorEndLine } = placement;
-	if (!anchorPath || !anchorStartLine) {
+	if (!hasText(anchorPath) || anchorStartLine === undefined) {
 		return anchorPath ?? "";
 	}
 	return codeCitationLocator({

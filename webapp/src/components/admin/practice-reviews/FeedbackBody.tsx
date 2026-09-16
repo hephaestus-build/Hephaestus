@@ -6,6 +6,7 @@ import {
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { hasText } from "@/lib/text";
 
 export type FeedbackBodyFeedback = DeliveryFacts & { body?: string };
 
@@ -18,7 +19,7 @@ export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 	const { body } = feedback;
 	const unsent = feedback.deliveryState !== "DELIVERED";
 
-	if (!body) {
+	if (!hasText(body)) {
 		return (
 			<Card flush className={className}>
 				<CardContent className="py-4">

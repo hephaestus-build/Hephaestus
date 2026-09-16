@@ -50,9 +50,7 @@ export function FeedbackListPage({
 				scopedArtifact={rows[0]?.artifact}
 				recipientName={filteredRecipient?.name ?? filteredRecipient?.login}
 			/>
-			{error ? (
-				<QueryErrorAlert error={error} title="Couldn't load feedback" onRetry={onRetry} />
-			) : (
+			{error == null ? (
 				<FeedbackResults
 					workspaceSlug={workspaceSlug}
 					state={
@@ -65,6 +63,8 @@ export function FeedbackListPage({
 								: { status: "ready", feedback: rows }
 					}
 				/>
+			) : (
+				<QueryErrorAlert error={error} title="Couldn't load feedback" onRetry={onRetry} />
 			)}
 			<TablePagination
 				page={feedback?.page?.number ?? search.page ?? 0}

@@ -1,6 +1,8 @@
 import { cn } from "cn";
 import styles from "./HephIcon.module.css";
 
+import { hasText } from "@/lib/text";
+
 interface HephIconProps {
 	size?: number;
 	strokeWidth?: number;
@@ -31,9 +33,9 @@ export function HephIcon({
 			strokeWidth={strokeWidth}
 			strokeLinecap="round"
 			strokeLinejoin="round"
-			role={label ? "img" : undefined}
+			role={hasText(label) ? "img" : undefined}
 			aria-label={label}
-			aria-hidden={label ? undefined : true}
+			aria-hidden={hasText(label) ? undefined : true}
 		>
 			<ellipse className={styles.shadow} cx="12" cy="23.6" rx="5" ry="1.2" fill="currentColor" />
 			<g className={styles.float}>

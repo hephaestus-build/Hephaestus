@@ -7,6 +7,7 @@ import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { consentIsPending, resolveCurrentUser } from "@/integrations/auth/guard";
+import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/")({
 	staticData: { surface: "bleed" },
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/")({
 		// A failed workspace query must not render the no-workspace state.
 		const workspaces = await context.queryClient.query(listWorkspacesOptions());
 		const workspaceSlug = workspaces[0]?.workspaceSlug;
-		if (workspaceSlug) {
+		if (hasText(workspaceSlug)) {
 			throw redirect({ to: "/w/$workspaceSlug", params: { workspaceSlug }, replace: true });
 		}
 	},

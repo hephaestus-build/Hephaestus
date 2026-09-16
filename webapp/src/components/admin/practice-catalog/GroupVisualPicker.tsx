@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { hasText } from "@/lib/text";
 
 import {
 	COLOR_KEYS,
@@ -50,7 +51,10 @@ export function GroupVisualPicker({
 	const filteredIcons = q ? ICON_NAMES.filter((n) => iconSearchText(n).includes(q)) : ICON_NAMES;
 
 	return (
-		<Popover open={!disabled && open} onOpenChange={(nextOpen) => !disabled && setOpen(nextOpen)}>
+		<Popover
+			open={disabled !== true && open}
+			onOpenChange={(nextOpen) => disabled !== true && setOpen(nextOpen)}
+		>
 			<PopoverTrigger
 				render={
 					<Button
@@ -59,7 +63,9 @@ export function GroupVisualPicker({
 						size="icon-sm"
 						disabled={disabled}
 						aria-describedby={describedBy}
-						aria-label={id ? undefined : `Edit the icon and color for ${name || "practice group"}`}
+						aria-label={
+							hasText(id) ? undefined : `Edit the icon and color for ${name || "practice group"}`
+						}
 					>
 						<span className={cn("flex size-6 items-center justify-center rounded-md", pill)}>
 							<EffectiveIcon className="size-4" aria-hidden="true" />
@@ -67,7 +73,7 @@ export function GroupVisualPicker({
 					</Button>
 				}
 			/>
-			{!disabled && (
+			{disabled !== true && (
 				<PopoverContent className="w-72 space-y-3" aria-label="Icon and color">
 					<div className="space-y-1.5">
 						<p id={colorLabelId} className="text-xs text-muted-foreground">
@@ -77,7 +83,7 @@ export function GroupVisualPicker({
 							variant="chip"
 							disabled={disabled}
 							value={[activeColor]}
-							onValueChange={(value) => value[0] && onChange({ color: value[0] })}
+							onValueChange={(value) => hasText(value[0]) && onChange({ color: value[0] })}
 							spacing={1}
 							role="toolbar"
 							aria-labelledby={colorLabelId}
@@ -123,7 +129,7 @@ export function GroupVisualPicker({
 								variant="filled"
 								disabled={disabled}
 								value={[activeIcon]}
-								onValueChange={(value) => value[0] && onChange({ icon: value[0] })}
+								onValueChange={(value) => hasText(value[0]) && onChange({ icon: value[0] })}
 								spacing={1}
 								role="toolbar"
 								aria-labelledby={iconLabelId}

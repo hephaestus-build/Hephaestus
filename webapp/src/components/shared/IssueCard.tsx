@@ -7,6 +7,7 @@ import { LabelBadge } from "@/components/shared/LabelBadge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getPullRequestStateIcon, type ProviderType } from "@/lib/provider";
+import { hasText } from "@/lib/text";
 
 export interface IssueCardProps {
 	isLoading: boolean;
@@ -57,7 +58,7 @@ export function IssueCard({
 	providerType = "GITHUB",
 }: IssueCardProps) {
 	// Determine the PR state icon and color based on provider
-	const effectiveState = isMerged ? "MERGED" : (state ?? "OPEN");
+	const effectiveState = isMerged === true ? "MERGED" : (state ?? "OPEN");
 	const { icon: StateIcon, colorClass: color } = getPullRequestStateIcon(
 		providerType,
 		effectiveState,
@@ -90,7 +91,7 @@ export function IssueCard({
 							<>
 								<StateIcon className={`mr-2 ${color}`} size={18} />
 								<span className="whitespace-nowrap">
-									{htmlUrl && repositoryName && noLinkWrapper ? (
+									{hasText(htmlUrl) && hasText(repositoryName) && noLinkWrapper ? (
 										<>
 											<a
 												href={htmlUrl}

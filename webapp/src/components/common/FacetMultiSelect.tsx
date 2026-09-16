@@ -17,6 +17,7 @@ import {
 	useComboboxFilter,
 } from "@/components/ui/combobox";
 import { Separator } from "@/components/ui/separator";
+import { hasText } from "@/lib/text";
 
 export interface FacetOption<TValue extends string | number = string> {
 	value: TValue;
@@ -99,7 +100,9 @@ export function FacetMultiSelect<TValue extends string | number>({
 			isItemEqualToValue={(option, value) => option.value === value.value}
 			onValueChange={(next: FacetOption<TValue>[]) => onChange(next.map((option) => option.value))}
 			filter={(option, query) =>
-				contains(option, query, (o) => (o.description ? `${o.label} ${o.description}` : o.label))
+				contains(option, query, (o) =>
+					hasText(o.description) ? `${o.label} ${o.description}` : o.label,
+				)
 			}
 			itemToStringLabel={(option) => option.label}
 			disabled={disabled}
@@ -192,7 +195,7 @@ export function FacetMultiSelect<TValue extends string | number>({
 							)}
 							<span className="min-w-0 truncate">
 								{option.label}
-								{option.description && (
+								{hasText(option.description) && (
 									<span className="ml-1.5 text-xs text-muted-foreground">{option.description}</span>
 								)}
 							</span>

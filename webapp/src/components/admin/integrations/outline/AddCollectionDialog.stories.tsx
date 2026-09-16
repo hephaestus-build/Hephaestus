@@ -68,7 +68,7 @@ type JsonBody = Record<string, unknown> | Record<string, unknown>[];
 
 const candidatesHandler = (body: JsonBody, init?: { status?: number; delayMs?: number }) =>
 	http.get("*/workspaces/:workspaceSlug/outline/collections/candidates", async () => {
-		if (init?.delayMs) {
+		if (init?.delayMs !== undefined) {
 			await delay(init.delayMs);
 		}
 		return HttpResponse.json(body, { status: init?.status ?? 200 });

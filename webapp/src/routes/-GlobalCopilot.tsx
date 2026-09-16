@@ -8,6 +8,7 @@ import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { useFeatureFlag } from "@/integrations/feature-flags";
+import { hasText } from "@/lib/text";
 
 export default function GlobalCopilot() {
 	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
@@ -50,9 +51,9 @@ export default function GlobalCopilot() {
 		isLoading ||
 		featuresLoading ||
 		!isAuthenticated ||
-		!workspaceSlug ||
+		!hasText(workspaceSlug) ||
 		!hasMentorAccess ||
-		!features?.mentorEnabled
+		features?.mentorEnabled !== true
 	) {
 		return null;
 	}

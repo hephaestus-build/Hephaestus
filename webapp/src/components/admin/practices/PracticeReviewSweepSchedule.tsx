@@ -35,6 +35,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { ARTIFACT_KIND, artifactKindPluralLabel } from "@/lib/artifact-kinds";
 import { asDate } from "@/lib/dates";
+import { hasText } from "@/lib/text";
 
 export interface PracticeReviewSweepScheduleProps {
 	schedules: ReviewSweepSchedule[];
@@ -198,11 +199,11 @@ function ScheduleRow({
 	const description = [
 		`${describeCadence(schedule)}.`,
 		schedule.enabled
-			? nextRun
+			? hasText(nextRun)
 				? `Next check ${nextRun}.`
 				: "The first check happens within the hour."
 			: "Paused, so nothing is being checked.",
-		lastRun ? `Last checked ${lastRun}.` : "It has not checked anything yet.",
+		hasText(lastRun) ? `Last checked ${lastRun}.` : "It has not checked anything yet.",
 	].join(" ");
 
 	return (

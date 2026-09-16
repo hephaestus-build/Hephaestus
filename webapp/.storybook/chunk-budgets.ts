@@ -40,7 +40,7 @@ export function storybookChunkBudgets(): Plugin {
 					continue;
 				}
 				const report = checkChunkBudget(output.code, Object.keys(output.modules));
-				if (report) {
+				if (report !== undefined) {
 					this.info(report);
 				}
 			}

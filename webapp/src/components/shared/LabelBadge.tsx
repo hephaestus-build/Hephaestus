@@ -1,5 +1,6 @@
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
+import { hasText } from "@/lib/text";
 
 interface LabelBadgeProps extends React.ComponentPropsWithoutRef<typeof Badge> {
 	label: string;
@@ -18,7 +19,7 @@ function relativeLuminance(hex: string): number {
 
 function labelPaint(color?: string): { label: string; foreground: string } | undefined {
 	const hex = color?.replace(/^#/u, "");
-	if (!hex || !HEX_COLOR.test(hex)) {
+	if (!hasText(hex) || !HEX_COLOR.test(hex)) {
 		return undefined;
 	}
 

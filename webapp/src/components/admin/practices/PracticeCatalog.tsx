@@ -63,6 +63,7 @@ import { Switch } from "@/components/ui/switch";
 import { Toggle } from "@/components/ui/toggle";
 import { artifactKindPluralLabel, type KnownArtifactKind } from "@/lib/artifact-kinds";
 import { autonomySourceOf } from "@/lib/practice-autonomy";
+import { hasText } from "@/lib/text";
 
 import { CatalogOriginBadge } from "./CatalogOriginBadge";
 
@@ -148,7 +149,7 @@ export function PracticeCatalog({
 			?.supportedAutomatedReviewModes ?? [];
 	const groupNames = new Map(groups.map((group) => [group.slug, group.name]));
 	const inheritedFromFor = (practice: Practice) =>
-		(practice.groupSlug ? groupNames.get(practice.groupSlug) : null) ?? null;
+		(hasText(practice.groupSlug) ? groupNames.get(practice.groupSlug) : null) ?? null;
 
 	return (
 		<div className="space-y-4">
@@ -160,7 +161,7 @@ export function PracticeCatalog({
 				groupStructurePending={pending.groupStructure}
 				library={library}
 			/>
-			{library?.open && (
+			{library?.open === true && (
 				<Section
 					size="sm"
 					title="Instance catalog"

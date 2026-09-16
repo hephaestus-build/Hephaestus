@@ -111,8 +111,8 @@ interface AdminRepositoriesSettingsProps {
 	repositories: RepositoryItem[];
 	providerLabel?: string;
 	isLoading: boolean;
-	error: Error | null;
-	addRepositoryError: Error | null;
+	error: unknown;
+	addRepositoryError: unknown;
 	isAddingRepository: boolean;
 	isRemovingRepository: boolean;
 	onAddRepository: (nameWithOwner: string) => void;
@@ -143,6 +143,7 @@ export function AdminRepositoriesSettings({
 	};
 
 	const hasRepositories = repositories.length > 0;
+	const failed = error != null;
 
 	return (
 		<div className="space-y-6">
@@ -169,7 +170,7 @@ export function AdminRepositoriesSettings({
 								</Item>
 							))}
 						</ItemGroup>
-					) : error ? (
+					) : failed ? (
 						<QueryErrorAlert
 							error={error}
 							title="We couldn't load the monitored repositories"
@@ -203,7 +204,7 @@ export function AdminRepositoriesSettings({
 						</Empty>
 					)}
 
-					<Field data-invalid={!!addRepositoryError}>
+					<Field data-invalid={Boolean(addRepositoryError)}>
 						<FieldLabel htmlFor="add-repository">Add a repository</FieldLabel>
 						<InputGroup>
 							<InputGroupInput
@@ -212,7 +213,7 @@ export function AdminRepositoriesSettings({
 								onChange={(e) => setRepositoryInput(e.target.value)}
 								disabled={isAddingRepository}
 								autoComplete="off"
-								aria-invalid={!!addRepositoryError}
+								aria-invalid={Boolean(addRepositoryError)}
 							/>
 							<InputGroupAddon align="inline-end">
 								<InputGroupButton
@@ -227,7 +228,9 @@ export function AdminRepositoriesSettings({
 						<FieldDescription>
 							Enter the repository as <code>owner/name</code>.
 						</FieldDescription>
-						{addRepositoryError && <FieldError>{problemDetailOf(addRepositoryError)}</FieldError>}
+						{addRepositoryError != null && (
+							<FieldError>{problemDetailOf(addRepositoryError)}</FieldError>
+						)}
 					</Field>
 				</CardContent>
 			</Card>

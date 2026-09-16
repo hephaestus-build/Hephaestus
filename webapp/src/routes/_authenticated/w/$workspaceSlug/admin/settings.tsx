@@ -20,6 +20,7 @@ import { useUpdateWorkspaceFeatures } from "@/hooks/use-update-workspace-feature
 import { isRecord } from "@/lib/is-record";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { queryOperationId } from "@/lib/query-operation-id";
+import { hasText } from "@/lib/text";
 
 /**
  * The reads a league reset moves: the board itself, and the standing computed per user beside it.
@@ -86,14 +87,14 @@ function AdminSettings() {
 		error: "Failed to update feature settings",
 	});
 
-	if (!workspaceSlug && !isWorkspaceLoading) {
+	if (!hasText(workspaceSlug) && !isWorkspaceLoading) {
 		return <NoWorkspace />;
 	}
 
 	const workspaceData = workspaceQuery.data;
 
 	const handleToggleFeature = (feature: FeatureKey, enabled: boolean) => {
-		if (!workspaceSlug) {
+		if (!hasText(workspaceSlug)) {
 			return;
 		}
 		updateFeatures.mutate({
@@ -109,7 +110,7 @@ function AdminSettings() {
 				title="Workspace settings"
 				description="Configure workspace features, leagues, and lifecycle."
 			/>
-			{!workspaceSlug || workspaceQuery.isLoading ? (
+			{!hasText(workspaceSlug) || workspaceQuery.isLoading ? (
 				<div className="flex h-40 max-w-4xl items-center justify-center">
 					<Spinner className="size-6" />
 				</div>

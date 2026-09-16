@@ -44,7 +44,7 @@ function AdminWorkspacesPage() {
 					ws.providerType,
 				]
 					.filter(Boolean)
-					.some((field) => field?.toLowerCase().includes(term)),
+					.some((field) => field?.toLowerCase().includes(term) === true),
 			)
 		: all;
 

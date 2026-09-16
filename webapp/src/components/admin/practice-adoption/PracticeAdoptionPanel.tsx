@@ -33,6 +33,7 @@ import {
 	ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { hasText } from "@/lib/text";
 
 export type PracticeAdoptionState = PanelState<{
 	preview: CatalogPracticePreview;
@@ -198,7 +199,7 @@ function GroupOutcome({ preview }: { preview: CatalogPracticePreview }) {
 			</ItemMedia>
 			<ItemContent>
 				<ItemTitle>{groupTitle(preview)}</ItemTitle>
-				{preview.group.definition?.description && (
+				{hasText(preview.group.definition?.description) && (
 					<ItemDescription className="line-clamp-none">
 						{preview.group.definition.description}
 					</ItemDescription>

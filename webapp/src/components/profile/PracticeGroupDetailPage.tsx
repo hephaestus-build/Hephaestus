@@ -26,6 +26,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
+import { hasText } from "@/lib/text";
 import { PracticeNextStepCallout } from "./PracticeNextStepCallout";
 import { PracticeTrendChip } from "./PracticeTrendChip";
 import type { FeedbackResponse, ObservationDetailState } from "./review-runs";
@@ -134,7 +135,7 @@ export function PracticeGroupDetailPage({
 		);
 	}
 
-	if (error) {
+	if (error != null) {
 		return (
 			<QueryErrorAlert
 				error={error}
@@ -172,10 +173,10 @@ export function PracticeGroupDetailPage({
 
 	const nextStepFor = (practice: ContributingPractice, practiceStanding: PracticeStandingKey) => {
 		const deliveredStep = practice.nextStep?.trim();
-		if (deliveredStep) {
+		if (hasText(deliveredStep)) {
 			return deliveredStep;
 		}
-		if (practiceStanding === "STRENGTH" && practice.whatGoodLooksLike) {
+		if (practiceStanding === "STRENGTH" && hasText(practice.whatGoodLooksLike)) {
 			return `Keep doing this: ${practice.whatGoodLooksLike}`;
 		}
 		if (practiceStanding === "NO_OPPORTUNITY") {
@@ -218,12 +219,12 @@ export function PracticeGroupDetailPage({
 						/>
 					)}
 				</div>
-				{standing?.guidance && (
+				{hasText(standing?.guidance) && (
 					<PracticeNextStepCallout label="Suggested next step">
 						{standing.guidance}
 					</PracticeNextStepCallout>
 				)}
-				{group.description && (
+				{hasText(group.description) && (
 					<div className="flex w-full flex-col items-start gap-2">
 						<Button
 							type="button"
@@ -349,7 +350,7 @@ export function PracticeGroupDetailPage({
 									)}
 									{isInfoOpen && (
 										<div id={infoId} className="grid gap-4 border-t bg-background/70 p-4 text-sm">
-											{practice.whyItMatters && (
+											{hasText(practice.whyItMatters) && (
 												<div className="flex flex-col gap-1">
 													<h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
 														Why it matters
@@ -357,7 +358,7 @@ export function PracticeGroupDetailPage({
 													<p className="leading-relaxed text-pretty">{practice.whyItMatters}</p>
 												</div>
 											)}
-											{practice.whatGoodLooksLike && (
+											{hasText(practice.whatGoodLooksLike) && (
 												<div className="flex flex-col gap-1">
 													<h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
 														What good looks like
@@ -367,7 +368,7 @@ export function PracticeGroupDetailPage({
 													</p>
 												</div>
 											)}
-											{!practice.whyItMatters && !practice.whatGoodLooksLike && (
+											{!hasText(practice.whyItMatters) && !hasText(practice.whatGoodLooksLike) && (
 												<p className="text-muted-foreground">
 													No additional explanation is available for this practice yet.
 												</p>

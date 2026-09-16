@@ -10,7 +10,7 @@ export interface SpringPage<T> {
 export const springPageParams = {
 	initialPageParam: 0,
 	getNextPageParam: <T>(lastPage: SpringPage<T>) =>
-		lastPage.last ? undefined : (lastPage.number ?? 0) + 1,
+		lastPage.last === true ? undefined : (lastPage.number ?? 0) + 1,
 };
 
 /**

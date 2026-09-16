@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/integrations/auth/auth-client";
+import { hasText } from "@/lib/text";
 
 /**
  * Passwordless dev/test sign-in, shown only when the server advertises the `dev` provider. It mints a
@@ -32,7 +33,7 @@ export function DevSignInForm({ returnTo }: { returnTo?: string }) {
 			<p className="text-xs font-medium text-muted-foreground">Dev sign-in (non-production)</p>
 			{/* aria-live: the error arrives after the button is pressed, so nothing announces it. */}
 			<div aria-live="assertive" aria-atomic="true">
-				{signInError ? (
+				{hasText(signInError) ? (
 					<Alert variant="destructive">
 						<AlertDescription>{signInError}</AlertDescription>
 					</Alert>

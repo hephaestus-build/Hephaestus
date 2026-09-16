@@ -3,6 +3,7 @@ import { assert, describe, expect, it, vi } from "vitest";
 
 import type { LlmConnection } from "@/api/types.gen";
 import { validateLlmConnectionForm } from "@/lib/llm-form-validation";
+import { hasText } from "@/lib/text";
 
 import {
 	AdminLlmConnectionFormDialog,
@@ -99,7 +100,7 @@ describe("AdminLlmConnectionFormDialog", () => {
 			displayName: "Gateway",
 			baseUrl: "https://gw.example.com/v1?api-key=SECRET",
 		}).baseUrl;
-		assert(rejection, "A base URL carrying a secret must be rejected");
+		assert(hasText(rejection), "A base URL carrying a secret must be rejected");
 		screen.getByText(rejection);
 		expect(onCreate).not.toHaveBeenCalled();
 	});

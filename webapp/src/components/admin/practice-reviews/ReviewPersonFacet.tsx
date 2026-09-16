@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/combobox";
 import { Separator } from "@/components/ui/separator";
 import { getInitials } from "@/lib/avatar";
+import { hasText } from "@/lib/text";
 
 export const MEMBER_PAGE_SIZE = 100;
 
@@ -61,7 +62,9 @@ export function ReviewPersonFacet({
 			}
 			onValueChange={(next: PersonOption | null) => onChange(next?.userId)}
 			filter={(option: PersonOption, query) =>
-				contains(option, query, (o) => (o.secondary ? `${o.label} ${o.secondary}` : o.label))
+				contains(option, query, (o) =>
+					hasText(o.secondary) ? `${o.label} ${o.secondary}` : o.label,
+				)
 			}
 			itemToStringLabel={(option: PersonOption) => option.label}
 			disabled={people.isLoading}
@@ -105,7 +108,7 @@ export function ReviewPersonFacet({
 							</Avatar>
 							<span className="min-w-0 truncate">
 								{option.label}
-								{option.secondary && (
+								{hasText(option.secondary) && (
 									<span className="ml-1.5 text-xs text-muted-foreground">{option.secondary}</span>
 								)}
 							</span>

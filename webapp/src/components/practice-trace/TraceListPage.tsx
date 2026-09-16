@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/empty";
 import { ItemGroup } from "@/components/ui/item";
 import { ARTIFACT_KIND_VALUES, artifactKindPluralLabel } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 import type { TraceSearch } from "./trace-search";
 import { TracedArtifactRow } from "./TracedArtifactRow";
@@ -56,10 +57,11 @@ export function TraceListPage({
 		...new Set([
 			...ARTIFACT_KIND_VALUES,
 			...rows.map((artifact) => artifact.artifactKind),
-			...(search.kind ? [search.kind] : []),
+			...(hasText(search.kind) ? [search.kind] : []),
 		]),
 	];
 	const hasFilter = Boolean(search.kind);
+	const failed = error != null;
 
 	return (
 		<div className="min-w-0 space-y-6">
@@ -87,7 +89,7 @@ export function TraceListPage({
 					/>
 				</FilterToolbar>
 
-				{error ? (
+				{failed ? (
 					<QueryErrorAlert error={error} title="Couldn't load review activity" onRetry={onRetry} />
 				) : isLoading ? (
 					<ReviewResultsSkeleton label="Loading review activity" rows={TRACE_PAGE_SIZE} />

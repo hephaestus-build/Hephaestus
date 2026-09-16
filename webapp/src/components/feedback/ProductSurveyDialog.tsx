@@ -16,6 +16,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { hasText } from "@/lib/text";
 
 import { READERS } from "./feedback-copy";
 import { studyOf, SURVEY_PURPOSE_DEFS } from "./survey-purpose-defs";
@@ -85,7 +86,7 @@ export function ProductSurveyDialog({
 							{research && <StatusBadge def={SURVEY_PURPOSE_DEFS.RESEARCH} />}
 							<span>
 								{surveyEstimate(survey.questions)}
-								{closes ? ` · ${closes}` : ""}
+								{hasText(closes) ? ` · ${closes}` : ""}
 							</span>
 						</p>
 						<p className="text-xs text-muted-foreground">

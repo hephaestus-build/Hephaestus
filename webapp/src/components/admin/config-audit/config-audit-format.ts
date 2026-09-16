@@ -1,6 +1,7 @@
 import type { ConfigAuditEntryView } from "@/api/types.gen";
 import { refLabel } from "@/components/admin/audit-shared/ref-label";
 import { isRecord } from "@/lib/is-record";
+import { hasText } from "@/lib/text";
 
 type EntityType = NonNullable<ConfigAuditEntryView["entityType"]>;
 type Action = NonNullable<ConfigAuditEntryView["action"]>;
@@ -55,14 +56,14 @@ const ENTITY_TYPE_LOOKUP: Record<string, string | undefined> = ENTITY_TYPE_LABEL
 const ACTION_LOOKUP: Record<string, string | undefined> = ACTION_LABELS;
 
 export function entityTypeLabel(entityType: string | undefined): string {
-	if (!entityType) {
+	if (!hasText(entityType)) {
 		return "Unknown";
 	}
 	return ENTITY_TYPE_LOOKUP[entityType] ?? entityType;
 }
 
 export function actionLabel(action: string | undefined): string {
-	if (!action) {
+	if (!hasText(action)) {
 		return "—";
 	}
 	return ACTION_LOOKUP[action] ?? action;
@@ -117,7 +118,11 @@ export function formatLeaf(value: unknown, path?: string): string {
 	if (value === undefined || value === null) {
 		return "not set";
 	}
-	if (typeof value === "boolean" && path && /(?:key|secret|token|password)set$/iu.test(path)) {
+	if (
+		typeof value === "boolean" &&
+		hasText(path) &&
+		/(?:key|secret|token|password)set$/iu.test(path)
+	) {
 		return value ? "••••••" : "not set";
 	}
 	if (typeof value === "boolean" || typeof value === "number") {
@@ -145,10 +150,13 @@ export function subjectLabel(entry: ConfigAuditEntryView): { label: string; hint
 	const name =
 		snapshot && typeof snapshot.name === "string" && snapshot.name ? snapshot.name : undefined;
 	const id = entry.entityId;
-	if (name) {
-		return { label: `${type} "${name}"`, hint: id ? `${type} ${identifier(id)}` : undefined };
+	if (hasText(name)) {
+		return {
+			label: `${type} "${name}"`,
+			hint: hasText(id) ? `${type} ${identifier(id)}` : undefined,
+		};
 	}
-	return { label: id ? `${type} ${identifier(id)}` : type };
+	return { label: hasText(id) ? `${type} ${identifier(id)}` : type };
 }
 
 export function changeSummary(entry: ConfigAuditEntryView): string {
@@ -170,7 +178,7 @@ function identifier(entityId: string): string {
 }
 
 function parseSnapshot(value: string | undefined): Record<string, unknown> | null {
-	if (!value) {
+	if (!hasText(value)) {
 		return null;
 	}
 	try {

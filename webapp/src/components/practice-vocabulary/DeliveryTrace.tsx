@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { cn } from "cn";
 import type { ReviewFeedback, ReviewPlacement } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { hasText } from "@/lib/text";
 
 import { type DeliveryFacts, deliveryOutcome, isWithheld } from "./delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "./delivery-place-defs";
@@ -45,13 +46,16 @@ export function DeliveryTrace({ feedback, className, ...props }: DeliveryTracePr
 	const placements = feedback.placements ?? [];
 	// The server writes one placement per inline note, so the distinct shapes are what this step
 	// names; how many there were, and where each landed, is the anchor list the detail page renders.
-	const where = placements.length
-		? [
-				...new Set(
-					placements.map((placement) => placementLabel(feedback.channel, placement.placementType)),
-				),
-			]
-		: [place.label];
+	const where =
+		placements.length > 0
+			? [
+					...new Set(
+						placements.map((placement) =>
+							placementLabel(feedback.channel, placement.placementType),
+						),
+					),
+				]
+			: [place.label];
 
 	return (
 		<ol className={cn("min-w-0", className)} {...props}>
@@ -109,7 +113,7 @@ function TraceStep({ icon: Icon, iconClassName, title, last = false, children }:
 				{!last && <span className="w-px flex-1 bg-border" aria-hidden />}
 			</div>
 			<div className={cn("min-w-0", last ? "pb-0" : "pb-4")}>
-				{title && <p className="text-sm leading-6 font-medium">{title}</p>}
+				{hasText(title) && <p className="text-sm leading-6 font-medium">{title}</p>}
 				<div className="min-w-0 text-sm text-muted-foreground">{children}</div>
 			</div>
 		</li>

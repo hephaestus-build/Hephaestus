@@ -138,7 +138,7 @@ export function AdminTeamsTable({
 		/>
 	);
 
-	if (error) {
+	if (error != null) {
 		return (
 			<PageLayout>
 				{header}

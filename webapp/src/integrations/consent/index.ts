@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { z } from "zod";
 
 import { isSentryConfigured } from "@/integrations/sentry/config";
+import { hasText } from "@/lib/text";
 
 export const CONSENT_STORAGE_KEY = "hephaestus-cookie-consent";
 
@@ -75,7 +76,7 @@ export function getStoredConsent(): CookieConsent | null {
 	}
 	cacheInitialized = true;
 	cachedRaw = raw;
-	cachedConsent = raw ? parseConsent(raw) : null;
+	cachedConsent = hasText(raw) ? parseConsent(raw) : null;
 	return cachedConsent;
 }
 

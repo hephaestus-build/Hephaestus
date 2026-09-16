@@ -63,8 +63,8 @@ const viteConfig = {
 			disable: !sentryUploadConfigured,
 			telemetry: false,
 		}),
-		...Terminal({ output: ["terminal", "console"] }).map(
-			(plugin) => plugin && { ...plugin, apply: "serve" as const },
+		...Terminal({ output: ["terminal", "console"] }).map((plugin) =>
+			plugin === false ? false : { ...plugin, apply: "serve" as const },
 		),
 	],
 	build: {

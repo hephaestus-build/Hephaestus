@@ -13,6 +13,7 @@ import { statusFacetOptions } from "@/components/practice-vocabulary/status-def"
 import { WITHHOLDING_FAMILY_DEFS } from "@/components/practice-vocabulary/withholding-defs";
 import { fromDateRange, toDateRange } from "@/lib/date-range-search";
 import { nonEmpty } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 
 import { AppliedFacetPills, facetPills } from "./AppliedFacetPills";
 import type { FeedbackSearch } from "./review-search";
@@ -150,7 +151,7 @@ export function FeedbackFilters({
 					),
 				]}
 			/>
-			{search.agentJobId && (
+			{hasText(search.agentJobId) && (
 				<ReferenceFilterPill
 					label="Review"
 					value={search.agentJobId}

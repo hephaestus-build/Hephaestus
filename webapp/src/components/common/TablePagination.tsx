@@ -73,18 +73,18 @@ function PageControl({
 }: PageControlProps) {
 	if (renderPageLink) {
 		return renderPageLink(page, {
-			"aria-current": current ? "page" : undefined,
+			"aria-current": current === true ? "page" : undefined,
 			"aria-label": label,
-			className: buttonVariants({ variant: current ? "outline" : "ghost", size }),
+			className: buttonVariants({ variant: current === true ? "outline" : "ghost", size }),
 			children,
 		});
 	}
 	return (
 		<Button
-			variant={current ? "outline" : "ghost"}
+			variant={current === true ? "outline" : "ghost"}
 			size={size}
 			aria-label={label}
-			aria-current={current ? "page" : undefined}
+			aria-current={current === true ? "page" : undefined}
 			onClick={() => onPageChange?.(page)}
 		>
 			{children}

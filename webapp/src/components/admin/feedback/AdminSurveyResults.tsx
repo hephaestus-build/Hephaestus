@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { DrawerBody, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { hasText } from "@/lib/text";
 
 import { surveyAudience } from "./AdminSurveysTable";
 import {
@@ -254,12 +255,14 @@ function QuestionResults({ headingId, number, question, summary }: QuestionResul
 						other={summary?.other}
 						label={`Answers to question ${number}`}
 					/>
-					{question.type === "RATING" && question.lowLabel && question.highLabel && (
-						<p className="flex justify-between gap-4 text-xs text-muted-foreground">
-							<span>1 · {question.lowLabel}</span>
-							<span>5 · {question.highLabel}</span>
-						</p>
-					)}
+					{question.type === "RATING" &&
+						hasText(question.lowLabel) &&
+						hasText(question.highLabel) && (
+							<p className="flex justify-between gap-4 text-xs text-muted-foreground">
+								<span>1 · {question.lowLabel}</span>
+								<span>5 · {question.highLabel}</span>
+							</p>
+						)}
 					{question.type === "NPS" && <NpsBreakdown counts={counts} />}
 				</>
 			)}

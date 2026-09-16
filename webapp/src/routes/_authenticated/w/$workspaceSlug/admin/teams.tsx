@@ -20,6 +20,7 @@ import { AdminTeamsTable } from "@/components/admin/AdminTeamsTable";
 import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { workspaceAdminHead } from "@/lib/page-title";
+import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/teams")({
 	head: workspaceAdminHead("Teams"),
@@ -173,7 +174,7 @@ function AdminTeamsContainer() {
 	return (
 		<AdminTeamsTable
 			teams={teamsQuery.data ?? []}
-			isLoading={isWorkspaceLoading || teamsQuery.isLoading || !workspaceSlug}
+			isLoading={isWorkspaceLoading || teamsQuery.isLoading || !hasText(workspaceSlug)}
 			error={teamsQuery.error}
 			search={search.q ?? ""}
 			onSearchChange={(q) => {

@@ -232,7 +232,6 @@ describe("CuratedPracticeForm", () => {
 		assert(submitted);
 		expect(submitted.bindings).toHaveLength(1);
 		const [occasionSubmitted] = submitted.bindings;
-		assert(occasionSubmitted);
 		// Sorted the way the server stores them, so an untouched practice is not dirty on the way back.
 		expect(occasionSubmitted.signals).toStrictEqual(
 			["scm.pull_request.merged", ...mockPullRequestBinding.signals].sort(),
@@ -348,7 +347,6 @@ describe("CuratedPracticeForm", () => {
 		const submitted = onSubmit.mock.calls[0]?.[0];
 		assert(submitted);
 		const [resumed] = submitted.bindings;
-		assert(resumed);
 		expect(
 			bindingsProblem(resumed, submitted.automatedReviewPolicy, mockPullRequestWorkType),
 		).toBeUndefined();

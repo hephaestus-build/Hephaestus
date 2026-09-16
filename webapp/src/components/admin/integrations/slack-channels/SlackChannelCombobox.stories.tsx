@@ -149,7 +149,7 @@ export const PastedIdNoName: Story = {
 
 export const WithDisabledReasons: Story = {
 	args: {
-		getDisabledReason: (candidate) => (candidate.archived ? "Archived" : undefined),
+		getDisabledReason: (candidate) => (candidate.archived === true ? "Archived" : undefined),
 		renderBadges: (candidate) =>
 			candidate.consentState === "ACTIVE" ? <Badge variant="success">Monitoring</Badge> : null,
 	},

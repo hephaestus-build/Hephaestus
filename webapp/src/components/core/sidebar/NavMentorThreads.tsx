@@ -10,6 +10,7 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { hasText } from "@/lib/text";
 
 export interface NavMentorThreadsProps {
 	threads: ChatThreadSummary[];
@@ -79,7 +80,7 @@ export function NavMentorThreads({
 	const now = useNow();
 	const threadGroups = bucketThreads(threads, now);
 
-	if (isLoading) {
+	if (isLoading === true) {
 		return (
 			<SidebarGroup>
 				<SidebarGroupLabel>Chat history</SidebarGroupLabel>
@@ -90,7 +91,7 @@ export function NavMentorThreads({
 		);
 	}
 
-	if (error) {
+	if (hasText(error)) {
 		return (
 			<SidebarGroup>
 				<SidebarGroupLabel>Chat history</SidebarGroupLabel>

@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
 import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
+import { hasText } from "@/lib/text";
 
 /** Workspace gate: a directory layout, so every route under `w/$workspaceSlug/` inherits it. */
 // The gate answers on navigation only. A workspace revoked while a reader sits on one of its pages
@@ -19,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 		}
 
 		const fallbackSlug = workspaces[0]?.workspaceSlug;
-		if (!fallbackSlug) {
+		if (!hasText(fallbackSlug)) {
 			throw redirect({ to: "/", replace: true });
 		}
 		throw redirect({

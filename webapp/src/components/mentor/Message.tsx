@@ -30,7 +30,9 @@ export interface MessageProps {
 }
 
 function MarkdownTaskCheckbox(props: InputHTMLAttributes<HTMLInputElement>) {
-	return <input {...props} aria-label={props.checked ? "Completed task" : "Incomplete task"} />;
+	return (
+		<input {...props} aria-label={props.checked === true ? "Completed task" : "Incomplete task"} />
+	);
 }
 
 const MESSAGE_MARKDOWN_COMPONENTS = {
@@ -197,7 +199,7 @@ export function ThinkingMessage() {
 					},
 				)}
 			>
-				<MentorAvatar streaming={true} />
+				<MentorAvatar streaming />
 
 				<div className="flex w-full flex-col gap-2">
 					<div className="flex flex-col gap-4 text-muted-foreground">Hmm...</div>

@@ -83,6 +83,7 @@ export function OutlineCollectionsSection({
 	const [removeCollection, setRemoveCollection] = useState<OutlineCollection | null>(null);
 
 	const hasCollections = collections.length > 0;
+	const failed = error != null;
 
 	return (
 		<div className="space-y-6">
@@ -108,7 +109,7 @@ export function OutlineCollectionsSection({
 							<CollectionsTableHeader />
 							<TableRowsSkeleton columns={["w-36", "w-16", "w-20", null]} rows={3} />
 						</Table>
-					) : error ? (
+					) : failed ? (
 						<QueryErrorAlert
 							error={error}
 							title="We couldn't load the mirrored collections"

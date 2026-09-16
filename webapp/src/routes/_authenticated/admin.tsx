@@ -26,17 +26,18 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminLayout() {
 	const settingsQuery = useQuery(adminGetInstanceSettingsOptions());
 	// The settings page owns this query's error; a second alert here would just stack on it.
-	const onSettingsPage = !!useMatchRoute()({ to: "/admin/settings" });
-	const topStrip = settingsQuery.data?.silentModeEngaged ? (
-		<SilentModeBanner settings={settingsQuery.data} />
-	) : settingsQuery.isError && !onSettingsPage ? (
-		// Unknown delivery state is not "delivering": say so rather than silently showing nothing.
-		<QueryErrorAlert
-			error={settingsQuery.error}
-			title="Couldn't load the instance delivery state"
-			onRetry={() => void settingsQuery.refetch()}
-		/>
-	) : null;
+	const onSettingsPage = useMatchRoute()({ to: "/admin/settings" }) !== false;
+	const topStrip =
+		settingsQuery.data?.silentModeEngaged === true ? (
+			<SilentModeBanner settings={settingsQuery.data} />
+		) : settingsQuery.isError && !onSettingsPage ? (
+			// Unknown delivery state is not "delivering": say so rather than silently showing nothing.
+			<QueryErrorAlert
+				error={settingsQuery.error}
+				title="Couldn't load the instance delivery state"
+				onRetry={() => void settingsQuery.refetch()}
+			/>
+		) : null;
 	return (
 		<>
 			{topStrip ? <div className="mx-auto mb-6 w-full max-w-6xl">{topStrip}</div> : null}

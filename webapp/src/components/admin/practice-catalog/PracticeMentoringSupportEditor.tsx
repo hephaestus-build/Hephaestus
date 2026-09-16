@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { hasText } from "@/lib/text";
 
 type MentoringSupport = "AI_SUPPORTED" | "HUMAN_CONTEXT_REQUIRED" | "GUIDANCE_ONLY";
 
@@ -167,7 +168,7 @@ export function PracticeMentoringSupportEditor({
 		<section
 			className="space-y-4"
 			aria-labelledby="practice-support-heading"
-			aria-describedby={error ? "practice-support-error" : undefined}
+			aria-describedby={hasText(error) ? "practice-support-error" : undefined}
 		>
 			<div>
 				<h2 id="practice-support-heading" className="text-lg font-semibold" tabIndex={-1}>
@@ -363,7 +364,7 @@ export function PracticeMentoringSupportEditor({
 					</Button>
 				</div>
 			)}
-			{error && <FieldError id="practice-support-error">{error}</FieldError>}
+			{hasText(error) && <FieldError id="practice-support-error">{error}</FieldError>}
 		</section>
 	);
 }

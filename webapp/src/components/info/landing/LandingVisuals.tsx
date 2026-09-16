@@ -7,6 +7,7 @@ import { getGroupVisual } from "@/components/admin/practice-catalog/group-visual
 import { HephIcon } from "@/components/brand/HephIcon";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { Badge } from "@/components/ui/badge";
+import { hasText } from "@/lib/text";
 import styles from "./LandingVisuals.module.css";
 
 type StyleWithCustomProperties = CSSProperties & Record<`--${string}`, string>;
@@ -112,7 +113,7 @@ export function LandingWorkCard({
 			<div className="flex flex-col gap-1.5 p-3">
 				<div className="flex items-center gap-1.5">
 					{state ? <LandingStatePill state={state} /> : undefined}
-					{reference ? (
+					{hasText(reference) ? (
 						<span className="font-mono text-2xs text-muted-foreground">{reference}</span>
 					) : undefined}
 				</div>

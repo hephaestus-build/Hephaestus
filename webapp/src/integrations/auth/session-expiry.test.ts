@@ -3,6 +3,9 @@ import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { __resetSessionRecoveryForTests, handlePossibleSessionExpiry } from "./session-expiry";
 import { refreshAccessToken } from "./session-refresh";
+
+import { hasText } from "@/lib/text";
+
 vi.mock("./session-refresh", () => ({ refreshAccessToken: vi.fn() }));
 const refreshMock = vi.mocked(refreshAccessToken);
 vi.mock("@/environment", () => ({ default: { serverUrl: "http://localhost/api" } }));
@@ -76,7 +79,7 @@ describe("handlePossibleSessionExpiry", () => {
 		expect(refreshMock).toHaveBeenCalledOnce();
 		expect(assigned).toHaveLength(1);
 		const [target] = assigned;
-		assert(target);
+		assert(hasText(target));
 		const url = new URL(target);
 		expect(url.pathname).toBe("/login");
 		expect(url.searchParams.get("returnTo")).toBe("/w/acme/overview?tab=prs");
@@ -186,7 +189,7 @@ describe("handlePossibleSessionExpiry", () => {
 		);
 		await flush();
 		const [target] = assigned;
-		assert(target);
+		assert(hasText(target));
 		const url = new URL(target);
 		expect(url.searchParams.get("returnTo")).toBe("/");
 	});

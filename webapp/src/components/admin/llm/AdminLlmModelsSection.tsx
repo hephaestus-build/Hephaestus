@@ -23,6 +23,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { priceFieldsOf, priceLabel } from "@/lib/llm-pricing";
+import { hasText } from "@/lib/text";
 
 import type { WorkspaceOption } from "./workspace-options";
 
@@ -64,7 +65,7 @@ function shareLabel(model: LlmModel, workspaces: WorkspaceOption[]): string {
 	const firstName = workspaces.find(
 		(workspace) => workspace.id === model.grantedWorkspaceIds[0],
 	)?.displayName;
-	if (!firstName) {
+	if (!hasText(firstName)) {
 		return `${model.grantedWorkspaceIds.length} workspaces`;
 	}
 	return model.grantedWorkspaceIds.length === 1

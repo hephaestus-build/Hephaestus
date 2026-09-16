@@ -9,6 +9,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { priceLabel } from "@/lib/llm-pricing";
+import { hasText } from "@/lib/text";
 
 export interface ModelSelection {
 	scope: "SHARED" | "WORKSPACE";
@@ -85,7 +86,7 @@ export function ModelPicker({
 			}))}
 			value={value ? encode(value.scope, value.id) : null}
 			onValueChange={(next) => {
-				const selection = next ? decode(next) : null;
+				const selection = hasText(next) ? decode(next) : null;
 				if (selection) {
 					onChange(selection);
 				}

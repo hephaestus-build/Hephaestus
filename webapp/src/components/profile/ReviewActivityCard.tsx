@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getPullRequestStateIcon, type IconComponent, type ProviderType } from "@/lib/provider";
+import { hasText } from "@/lib/text";
 
 const UNKNOWN_STATE_STYLE = {
 	icon: null,
@@ -102,8 +103,8 @@ export function ReviewActivityCard({
 	const card = (
 		<Card
 			flush
-			variant={htmlUrl && !isLoading ? "interactive" : "default"}
-			className={cn(htmlUrl && !isLoading && "cursor-pointer")}
+			variant={hasText(htmlUrl) && !isLoading ? "interactive" : "default"}
+			className={cn(hasText(htmlUrl) && !isLoading && "cursor-pointer")}
 		>
 			<div className="flex flex-col gap-1 p-4">
 				<div className="flex items-center justify-between gap-2 text-sm text-provider-muted-foreground">
@@ -149,7 +150,7 @@ export function ReviewActivityCard({
 		</Card>
 	);
 
-	if (htmlUrl && !isLoading) {
+	if (hasText(htmlUrl) && !isLoading) {
 		return (
 			<a href={htmlUrl} target="_blank" rel="noopener noreferrer" className="block w-full">
 				{card}

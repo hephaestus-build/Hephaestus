@@ -31,6 +31,7 @@ import {
 } from "@/hooks/practice-catalog-cache";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { problemStatusOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
 
 const UNASSIGNED = "__unassigned__";
 
@@ -149,7 +150,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 				removeGroup(groups, slug),
 			);
 			const practices = queryClient.getQueryData<Practice[]>(practicesQueryKey) ?? [];
-			if (variables.query?.deletePractices) {
+			if (variables.query?.deletePractices === true) {
 				const deleted = practices.filter((practice) => practice.groupSlug === slug);
 				queryClient.setQueryData<Practice[]>(
 					practicesQueryKey,
@@ -316,7 +317,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 		blockedPracticeOrderBuckets.add(UNASSIGNED);
 		blockedMoveDestinationSlugs.add(UNASSIGNED);
 		for (const practice of practices) {
-			if (practice.groupSlug) {
+			if (hasText(practice.groupSlug)) {
 				blockedPracticeOrderBuckets.add(practice.groupSlug);
 				blockedMoveDestinationSlugs.add(practice.groupSlug);
 			}

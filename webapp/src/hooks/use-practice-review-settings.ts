@@ -9,6 +9,7 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type { PracticeReviewSettings, UpdatePracticeReviewSettingsRequest } from "@/api/types.gen";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
 
 export type PracticeReviewSettingsField = NonNullable<
 	UpdatePracticeReviewSettingsRequest["reset"]
@@ -29,15 +30,15 @@ export function usePracticeReviewSettingsMutation(
 		onMutate: async (variables) => {
 			await queryClient.cancelQueries({ queryKey: settingsQueryKey });
 			const previous = queryClient.getQueryData<PracticeReviewSettings>(settingsQueryKey);
-			if (previous && !variables.headers?.["If-Match"]) {
+			if (previous && !hasText(variables.headers?.["If-Match"])) {
 				variables.headers = { "If-Match": previous.etag };
 			}
-			if (previous && !variables.body.reset?.some((field) => field !== "REVIEW_SCOPE")) {
+			if (previous && variables.body.reset?.some((field) => field !== "REVIEW_SCOPE") !== true) {
 				const patch = variables.body;
 				const { reset } = patch;
 				queryClient.setQueryData<PracticeReviewSettings>(settingsQueryKey, {
 					...previous,
-					...(reset?.includes("REVIEW_SCOPE")
+					...(reset?.includes("REVIEW_SCOPE") === true
 						? {
 								reviewScope: {
 									repositoryMode: "ALL_MONITORED" as const,

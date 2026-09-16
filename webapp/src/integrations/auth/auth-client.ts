@@ -2,6 +2,7 @@ import { logout } from "@/api/sdk.gen";
 import type { CurrentUserView } from "@/api/types.gen";
 import environment from "@/environment";
 import { safeReturnTo } from "@/integrations/auth/guard";
+import { hasText } from "@/lib/text";
 import { withSessionLock } from "./session-lock";
 
 export interface UserProfile {
@@ -28,7 +29,7 @@ function readCookie(name: string): string | undefined {
 
 export function csrfHeaders(): Record<string, string> {
 	const token = readCookie(environment.xsrfCookieName);
-	return token ? { "X-XSRF-TOKEN": token } : {};
+	return hasText(token) ? { "X-XSRF-TOKEN": token } : {};
 }
 
 export function applyStateChangingHeaders(request: Request, writesEnabled: boolean): Request {
@@ -46,7 +47,7 @@ export function applyStateChangingHeaders(request: Request, writesEnabled: boole
 
 export const authClient = {
 	login(idpHint?: string, returnTo?: string): void {
-		const provider = idpHint && idpHint.length > 0 ? idpHint : "github";
+		const provider = hasText(idpHint) && idpHint.length > 0 ? idpHint : "github";
 		const url = new URL(`${serverUrl()}/auth/login`);
 		url.searchParams.set("provider", provider);
 		url.searchParams.set("returnTo", safeReturnTo(returnTo));
@@ -78,7 +79,7 @@ export const authClient = {
 	async logout(): Promise<void> {
 		await withSessionLock(async () => {
 			const { response, error } = await logout();
-			if (!response?.ok && response?.status !== 401) {
+			if (response?.ok !== true && response?.status !== 401) {
 				throw new Error("Could not sign out.", { cause: response ?? error });
 			}
 		});

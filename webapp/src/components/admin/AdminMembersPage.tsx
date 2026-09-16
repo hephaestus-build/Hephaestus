@@ -38,9 +38,7 @@ export function AdminMembersPage({
 				title="Members"
 				description="Browse workspace members and filter by team."
 			/>
-			{error ? (
-				<QueryErrorAlert error={error} title="Couldn't load members" onRetry={onRetry} />
-			) : (
+			{error == null ? (
 				<UsersTable
 					users={users}
 					teams={teams}
@@ -50,6 +48,8 @@ export function AdminMembersPage({
 					onViewChange={onViewChange}
 					renderPageLink={renderPageLink}
 				/>
+			) : (
+				<QueryErrorAlert error={error} title="Couldn't load members" onRetry={onRetry} />
 			)}
 		</PageLayout>
 	);

@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/api/sdk.gen";
 import type { CurrentUserView, WorkspaceMembership } from "@/api/types.gen";
 import { QUERY_STALE_TIME_MS } from "@/integrations/tanstack-query/query-defaults";
 import { isRecord } from "@/lib/is-record";
+import { hasText } from "@/lib/text";
 
 export function currentUserQueryOptions() {
 	return queryOptions({
@@ -19,7 +20,7 @@ export function currentUserQueryOptions() {
 		// its lifetime is deliberately independent of observer unmounts — hence no `signal`.
 		queryFn: async () => {
 			const { data, error, response } = await getCurrentUser();
-			if (data !== undefined && response?.ok) {
+			if (data !== undefined && response?.ok === true) {
 				return data;
 			}
 			// The generated client's error body need not contain the actual HTTP status.
@@ -100,7 +101,7 @@ function fullyDecode(value: string): string {
 
 /** Accept only local absolute paths, preserving valid percent-encoded segments. */
 export function safeReturnTo(value: string | undefined): string {
-	if (!value) {
+	if (!hasText(value)) {
 		return "/";
 	}
 	const decoded = fullyDecode(value);

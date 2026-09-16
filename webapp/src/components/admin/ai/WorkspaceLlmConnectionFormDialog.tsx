@@ -147,7 +147,7 @@ function WorkspaceLlmConnectionFormDialogContent({
 							onCheckedChange={setEnabled}
 						/>
 					</Field>
-					{editing?.enabled && !enabled && (
+					{editing?.enabled === true && !enabled && (
 						<Alert variant="warning">
 							<AlertTriangle aria-hidden />
 							<AlertTitle>All workspace models will stop immediately</AlertTitle>

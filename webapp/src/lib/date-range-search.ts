@@ -1,6 +1,8 @@
 import { addDays, format, parse, startOfDay } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
+import { hasText } from "@/lib/text";
+
 const DAY = "yyyy-MM-dd";
 
 /**
@@ -14,7 +16,7 @@ export function toDayParam(date: Date): string {
 }
 
 export function fromDayParam(value: string | undefined): Date | undefined {
-	if (!value) {
+	if (!hasText(value)) {
 		return undefined;
 	}
 	const parsed = parse(value, DAY, DAY_PARSE_REFERENCE);

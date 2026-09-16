@@ -23,6 +23,7 @@ import {
 	ItemMedia,
 	ItemTitle,
 } from "@/components/ui/item";
+import { hasText } from "@/lib/text";
 
 export type GroupAdoptionState = PanelState<{
 	preview: CatalogGroupAdoptionPreview;
@@ -93,7 +94,7 @@ export function GroupAdoptionPanel({
 				)}
 				{state.status === "ready" && (
 					<>
-						{state.preview.definition.description && (
+						{hasText(state.preview.definition.description) && (
 							<p className="text-sm text-muted-foreground">
 								{state.preview.definition.description}
 							</p>

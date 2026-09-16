@@ -16,6 +16,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
+import { hasText } from "@/lib/text";
 
 import { feedbackPreviewText } from "./feedback-preview";
 import { REVIEW_PAGE_SIZE, type ReviewScopeSearch } from "./review-search";
@@ -107,7 +108,7 @@ export function FeedbackRow({ workspaceSlug, feedback, scope }: FeedbackRowProps
 					{/* Feedback whose preview is nothing but a code quote has a body and no prose to show
 					    for it, which is not the same state as feedback nobody has composed yet. */}
 					{feedbackPreviewText(feedback) ??
-						(feedback.bodyPreview
+						(hasText(feedback.bodyPreview)
 							? "Opens with a quote from the work…"
 							: "No feedback text was composed")}
 				</Link>

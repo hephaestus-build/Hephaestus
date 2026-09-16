@@ -19,7 +19,7 @@ export interface FooterProps {
 
 export default function Footer({ className, isProduction, buildInfo }: FooterProps) {
 	const showBuildInfo =
-		!isProduction &&
+		isProduction !== true &&
 		(hasText(buildInfo?.branch) || hasText(buildInfo?.commit) || hasText(buildInfo?.deployedAt));
 
 	return (
@@ -97,7 +97,7 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 
 					{showBuildInfo && (
 						<div className="hidden items-center gap-2 border-l border-sidebar-border pl-4 font-mono text-xs text-muted-foreground xl:flex">
-							{buildInfo.branch && (
+							{hasText(buildInfo.branch) && (
 								<Tooltip>
 									<TooltipTrigger
 										render={
@@ -117,7 +117,7 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 								</Tooltip>
 							)}
 
-							{buildInfo.commit && (
+							{hasText(buildInfo.commit) && (
 								<Tooltip>
 									<TooltipTrigger
 										render={
@@ -137,7 +137,7 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 								</Tooltip>
 							)}
 
-							{buildInfo.deployedAt && (
+							{hasText(buildInfo.deployedAt) && (
 								<span className="flex items-center gap-1">
 									<ClockIcon size={12} aria-hidden />
 									<RelativeTime value={buildInfo.deployedAt} />

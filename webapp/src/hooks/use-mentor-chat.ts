@@ -17,6 +17,7 @@ import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { csrfHeaders } from "@/integrations/auth";
 import { extractVotesFromThreadDetail, parseThreadMessages } from "@/lib/chat-validation";
+import { hasText } from "@/lib/text";
 import type { ChatMessage } from "@/lib/types";
 
 interface UseMentorChatOptions {
@@ -34,7 +35,7 @@ interface UseMentorChatReturn extends Omit<
 	sendMessage: (text: string) => void;
 	threadDetail: ChatThreadDetail | undefined;
 	isThreadLoading: boolean;
-	threadError: Error | null;
+	threadError: unknown;
 	threads: ChatThreadSummary[] | undefined;
 	isThreadsLoading: boolean;
 	isLoading: boolean;
@@ -103,7 +104,7 @@ export function useMentorChat({
 
 	const voteState: Record<string, boolean | undefined> = {};
 	for (const vote of extractVotesFromThreadDetail(threadDetail)) {
-		if (vote.messageId) {
+		if (hasText(vote.messageId)) {
 			voteState[vote.messageId] = vote.isUpvoted;
 		}
 	}
@@ -143,7 +144,7 @@ export function useMentorChat({
 				queryKey: listThreadsQueryKey({ path: { workspaceSlug: slug } }),
 			});
 		}
-		if (threadId || stableThreadId) {
+		if (hasText(threadId) || stableThreadId) {
 			void queryClient.invalidateQueries({
 				queryKey: getThreadQueryKey({
 					path: { workspaceSlug: slug, threadId: threadId ?? stableThreadId },
@@ -185,7 +186,7 @@ export function useMentorChat({
 
 	const hydratedRef = useRef<string | null>(null);
 	useEffect(() => {
-		if (!threadId) {
+		if (!hasText(threadId)) {
 			return;
 		}
 		if (hydratedRef.current === threadId) {
@@ -263,7 +264,7 @@ export function useMentorChat({
 		isWorkspaceLoading ||
 		status === "submitted" ||
 		(status === "streaming" && messages.length === 0) ||
-		(!!threadId && isThreadLoading);
+		(hasText(threadId) && isThreadLoading);
 
 	const result: UseMentorChatReturn = {
 		messages,

@@ -26,6 +26,7 @@ import {
 	FieldSet,
 } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { hasText } from "@/lib/text";
 
 /**
  * EXHAUSTIVE is deliberately not a segment here: it is REQUIRED plus one further claim, and it is
@@ -220,7 +221,9 @@ function SourceRow({ source, role, idPrefix, disabled, onRoleChange }: SourceRow
 				<p className="text-sm font-medium">{source.displayName}</p>
 				{/* Clamped: the list is one line per source, and a source's own prose is not. */}
 				<p className="line-clamp-2 text-xs text-muted-foreground">{source.description}</p>
-				{inUse && quality && <p className="mt-0.5 text-xs text-muted-foreground">{quality}</p>}
+				{inUse && hasText(quality) && (
+					<p className="mt-0.5 text-xs text-muted-foreground">{quality}</p>
+				)}
 				<AbsenceClaim
 					source={source}
 					role={role}

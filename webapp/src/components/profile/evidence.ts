@@ -1,4 +1,5 @@
 import type { ObservationDetail } from "@/api/types.gen";
+
 export interface EvidenceLocation {
 	path: string;
 	startLine: number;

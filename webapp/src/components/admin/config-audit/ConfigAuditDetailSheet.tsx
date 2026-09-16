@@ -85,7 +85,7 @@ export function ConfigAuditDetailSheet({
 							</DetailRow>
 							<DetailRow label="Setting">
 								<span>{entityTypeLabel(entry.entityType)}</span>
-								{entry.entityId && (
+								{hasText(entry.entityId) && (
 									<span className="ml-2 font-mono text-xs text-muted-foreground">
 										{entry.entityId}
 									</span>
@@ -97,7 +97,7 @@ export function ConfigAuditDetailSheet({
 								) : (
 									<span>
 										{actor.primary}
-										{actor.primaryEmail && actor.primaryEmail !== actor.primary && (
+										{hasText(actor.primaryEmail) && actor.primaryEmail !== actor.primary && (
 											<span className="ml-1 text-xs text-muted-foreground">
 												{actor.primaryEmail}
 											</span>
@@ -113,11 +113,13 @@ export function ConfigAuditDetailSheet({
 									</span>
 								</DetailRow>
 							)}
-							{actor.actingAs && <DetailRow label="Impersonating">{actor.actingAs}</DetailRow>}
+							{hasText(actor.actingAs) && (
+								<DetailRow label="Impersonating">{actor.actingAs}</DetailRow>
+							)}
 							<DetailRow label="Workspace">
 								{entry.workspaceId == null
 									? "Instance-wide"
-									: workspaceName
+									: hasText(workspaceName)
 										? `${workspaceName} (#${entry.workspaceId})`
 										: `#${entry.workspaceId}`}
 							</DetailRow>
@@ -168,7 +170,7 @@ export function ConfigAuditDetailSheet({
 									Show raw snapshots
 								</CollapsibleTrigger>
 								<CollapsibleContent className="mt-2 space-y-2">
-									{oldRaw && (
+									{hasText(oldRaw) && (
 										<div>
 											<p className="mb-1 text-xs text-muted-foreground">Before</p>
 											<pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
@@ -176,7 +178,7 @@ export function ConfigAuditDetailSheet({
 											</pre>
 										</div>
 									)}
-									{newRaw && (
+									{hasText(newRaw) && (
 										<div>
 											<p className="mb-1 text-xs text-muted-foreground">After</p>
 											<pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs">

@@ -52,6 +52,7 @@ import { useUpdateWorkspaceFeatures } from "@/hooks/use-update-workspace-feature
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { useSearchState } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/practices/review")({
 	head: workspaceAdminHead("Review"),
@@ -288,7 +289,7 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 							await updatePracticeReviewSettings.mutateAsync({
 								path: { workspaceSlug },
 								body: settings,
-								headers: sourceEtag ? { "If-Match": sourceEtag } : undefined,
+								headers: hasText(sourceEtag) ? { "If-Match": sourceEtag } : undefined,
 							});
 						},
 						onReset: (field: PracticeReviewField) =>
@@ -326,7 +327,7 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 								: {
 										status: "ready",
 										options: membersQuery.data.flatMap((member) =>
-											member.userId == null || !member.eligibleForPracticeReview
+											member.userId == null || member.eligibleForPracticeReview !== true
 												? []
 												: [
 														{
@@ -335,7 +336,9 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 																[member.userName, member.userLogin].find(
 																	(name) => name != null && name.trim() !== "",
 																) ?? `Member ${member.userId}`,
-															description: member.userLogin ? `@${member.userLogin}` : undefined,
+															description: hasText(member.userLogin)
+																? `@${member.userLogin}`
+																: undefined,
 														},
 													],
 										),
@@ -365,7 +368,7 @@ function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 	const runsQuery = useQuery({
 		...listBackfillRunsOptions({ path: { workspaceSlug } }),
 		refetchInterval: (query) =>
-			query.state.data?.some((run) => run.status === "RUNNING" || run.status === "PAUSED")
+			query.state.data?.some((run) => run.status === "RUNNING" || run.status === "PAUSED") === true
 				? ACTIVE_BACKFILL_POLL_MS
 				: false,
 	});

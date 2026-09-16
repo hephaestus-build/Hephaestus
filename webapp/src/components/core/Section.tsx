@@ -3,6 +3,8 @@ import { type ComponentProps, type ReactNode, useId } from "react";
 
 import { cn } from "cn";
 
+import { rendersContent } from "@/lib/react-node";
+
 const sectionTitleVariants = cva("text-foreground", {
 	variants: {
 		size: {
@@ -63,7 +65,7 @@ export function Section({
 					>
 						{title}
 					</Heading>
-					{description && (
+					{rendersContent(description) && (
 						<p id={`${base}-description`} className="max-w-2xl text-sm text-muted-foreground">
 							{description}
 						</p>

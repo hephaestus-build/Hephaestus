@@ -16,6 +16,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
+import { hasText } from "@/lib/text";
 
 import { ObservationEvidence } from "./ObservationEvidence";
 import { type ObservationsSearch, reviewScopeSearch } from "./review-search";
@@ -81,7 +82,7 @@ export function ObservationDetailPage({
 			</article>
 		);
 	}
-	if (error) {
+	if (error != null) {
 		return (
 			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
@@ -155,7 +156,7 @@ export function ObservationDetailPage({
 				</ReviewFact>
 			</ReviewFactGrid>
 
-			{observation.evidenceRationale && (
+			{hasText(observation.evidenceRationale) && (
 				<section aria-labelledby="reasoning-heading" className="space-y-2">
 					<h3 id="reasoning-heading" className="text-lg font-semibold">
 						Why this was raised

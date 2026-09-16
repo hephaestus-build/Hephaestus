@@ -34,6 +34,7 @@ import {
 	presetForConnection,
 	usesResponsesApi,
 } from "@/lib/llm-provider-type";
+import { hasText } from "@/lib/text";
 
 export interface LlmConnectionFieldsValue {
 	displayName: string;
@@ -129,9 +130,9 @@ export function LlmConnectionFields({
 					// Inert under `noValidate`, but it is what announces the field as required (SC 3.3.2).
 					required
 					aria-invalid={Boolean(errors.displayName)}
-					aria-describedby={errors.displayName ? displayNameErrorId : undefined}
+					aria-describedby={hasText(errors.displayName) ? displayNameErrorId : undefined}
 				/>
-				{errors.displayName && (
+				{hasText(errors.displayName) && (
 					<FieldError id={displayNameErrorId}>{errors.displayName}</FieldError>
 				)}
 			</Field>
@@ -193,14 +194,14 @@ export function LlmConnectionFields({
 					required={!isEdit}
 					autoComplete="off"
 					aria-invalid={Boolean(errors.baseUrl)}
-					aria-describedby={errors.baseUrl ? baseUrlErrorId : undefined}
+					aria-describedby={hasText(errors.baseUrl) ? baseUrlErrorId : undefined}
 				/>
 				{isEdit && (
 					<FieldDescription>
 						Endpoint, API shape and authentication can't change. Add a connection instead.
 					</FieldDescription>
 				)}
-				{errors.baseUrl && <FieldError id={baseUrlErrorId}>{errors.baseUrl}</FieldError>}
+				{hasText(errors.baseUrl) && <FieldError id={baseUrlErrorId}>{errors.baseUrl}</FieldError>}
 			</Field>
 
 			{!isEdit && value.preset === "OTHER" && (

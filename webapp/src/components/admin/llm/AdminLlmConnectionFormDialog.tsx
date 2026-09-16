@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import type { FieldErrors, LlmConnectionFormField } from "@/lib/llm-form-validation";
 import { defaultProtocolFor, type LlmAuthMode } from "@/lib/llm-provider-type";
+import { hasText } from "@/lib/text";
 
 import {
 	connectionFieldsValueOf,
@@ -246,7 +247,7 @@ function AdminLlmConnectionFormDialogContent({
 						</Button>
 						{/* The outcome of a button the admin just pressed, not a failure: `role="alert"` is
 						    assertive and would cut across whatever is being read (SC 4.1.3). */}
-						{probeResult?.reachable && (
+						{probeResult?.reachable === true && (
 							<Alert variant="success" role="status">
 								<AlertDescription>
 									Reachable. Found {probeResult.models.length} model
@@ -271,7 +272,7 @@ function AdminLlmConnectionFormDialogContent({
 								</AlertDescription>
 							</Alert>
 						)}
-						{probeError && (
+						{hasText(probeError) && (
 							<Alert variant="warning">
 								<AlertDescription>
 									Discovery unsupported. {probeError} You can still save the connection and enter a

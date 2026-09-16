@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { TableCell, TableRow } from "@/components/ui/table";
+import { hasText } from "@/lib/text";
 
 /** The mirror lifecycle states, sourced from the generated DTO so they never drift. */
 export type OutlineMirrorState = OutlineCollection["state"];
@@ -72,7 +73,7 @@ export function OutlineCollectionRow({
 					<span className="font-medium">{label}</span>
 				</div>
 				{/* Only the human-facing Outline urlId is worth a subtitle — the raw UUID is noise. */}
-				{collection.urlId && (
+				{hasText(collection.urlId) && (
 					<div className="font-mono text-xs text-muted-foreground">{collection.urlId}</div>
 				)}
 			</TableCell>
@@ -107,7 +108,7 @@ export function OutlineCollectionRow({
 							Up to date
 						</Badge>
 					)}
-					{collection.lastSyncError && (
+					{hasText(collection.lastSyncError) && (
 						<Popover>
 							<PopoverTrigger
 								render={
@@ -129,33 +130,34 @@ export function OutlineCollectionRow({
 							</PopoverContent>
 						</Popover>
 					)}
-					{!!collection.exportsSkippedForBudget && (
-						<Popover>
-							{/* A property of the last pass, so it sits with the pass's other outcome (the sync
+					{collection.exportsSkippedForBudget !== undefined &&
+						collection.exportsSkippedForBudget > 0 && (
+							<Popover>
+								{/* A property of the last pass, so it sits with the pass's other outcome (the sync
 							error) rather than beside a count. Warning, not destructive — this is expected budget
 							throttling, and the next reconcile catches these up. */}
-							<PopoverTrigger
-								render={
-									<Button
-										variant="ghost"
-										size="icon-xs"
-										className="text-warning"
-										aria-label={`${collection.exportsSkippedForBudget} exports skipped for budget for ${label}`}
-									>
-										<TriangleAlertIcon aria-hidden />
-									</Button>
-								}
-							/>
-							<PopoverContent align="start" className="max-w-sm">
-								<PopoverTitle>Exports skipped for budget</PopoverTitle>
-								<PopoverDescription className="break-words">
-									{collection.exportsSkippedForBudget} export
-									{collection.exportsSkippedForBudget === 1 ? "" : "s"} skipped for the shared
-									budget in the last pass — they catch up on the next reconcile.
-								</PopoverDescription>
-							</PopoverContent>
-						</Popover>
-					)}
+								<PopoverTrigger
+									render={
+										<Button
+											variant="ghost"
+											size="icon-xs"
+											className="text-warning"
+											aria-label={`${collection.exportsSkippedForBudget} exports skipped for budget for ${label}`}
+										>
+											<TriangleAlertIcon aria-hidden />
+										</Button>
+									}
+								/>
+								<PopoverContent align="start" className="max-w-sm">
+									<PopoverTitle>Exports skipped for budget</PopoverTitle>
+									<PopoverDescription className="break-words">
+										{collection.exportsSkippedForBudget} export
+										{collection.exportsSkippedForBudget === 1 ? "" : "s"} skipped for the shared
+										budget in the last pass — they catch up on the next reconcile.
+									</PopoverDescription>
+								</PopoverContent>
+							</Popover>
+						)}
 				</div>
 			</TableCell>
 

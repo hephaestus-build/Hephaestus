@@ -11,6 +11,7 @@ import {
 import type { Assessment } from "@/components/practice-vocabulary/assessment-defs";
 import type { AssessmentStatus } from "@/components/practice-vocabulary/assessment-status-defs";
 import type { Presence } from "@/components/practice-vocabulary/presence-defs";
+
 export interface ObservationKindInput {
 	assessmentStatus: AssessmentStatus;
 	presence?: Presence | null;

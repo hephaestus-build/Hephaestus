@@ -6,6 +6,7 @@ import { formatTokens, modelLabel } from "@/components/admin/ai/job-utils";
 import { JOB_TYPE_LABELS } from "@/components/admin/usage/usage-utils";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { Button } from "@/components/ui/button";
+import { hasText } from "@/lib/text";
 
 import { ReviewFact, ReviewFactGrid } from "./ReviewDetailHeader";
 
@@ -58,7 +59,7 @@ export function ReviewRunCard({ job }: ReviewRunCardProps) {
 					)}
 				</ReviewFact>
 			</ReviewFactGrid>
-			{job.errorMessage && (
+			{hasText(job.errorMessage) && (
 				<div className="space-y-1 rounded-lg border border-destructive/40 p-3">
 					<p className="text-sm font-medium">What went wrong</p>
 					<pre className="max-h-48 overflow-auto text-xs break-words whitespace-pre-wrap text-muted-foreground">

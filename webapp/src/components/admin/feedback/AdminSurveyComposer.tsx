@@ -39,6 +39,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { hasText } from "@/lib/text";
 
 import {
 	ALL_WORKSPACES,
@@ -195,25 +196,25 @@ export function AdminSurveyComposer({
 	const questionFieldId = (index: number, name: string) => `${id}-q${index}-${name}`;
 
 	const summary: FormError[] = [
-		errors.title && { fieldId: fieldId("title"), message: errors.title },
-		errors.description && { fieldId: fieldId("description"), message: errors.description },
-		errors.endsAt && { fieldId: fieldId("end"), message: errors.endsAt },
-		errors.questions && { fieldId: fieldId("add-question"), message: errors.questions },
+		hasText(errors.title) && { fieldId: fieldId("title"), message: errors.title },
+		hasText(errors.description) && { fieldId: fieldId("description"), message: errors.description },
+		hasText(errors.endsAt) && { fieldId: fieldId("end"), message: errors.endsAt },
+		hasText(errors.questions) && { fieldId: fieldId("add-question"), message: errors.questions },
 		...errors.questionErrors.flatMap((question, index) =>
 			[
-				question.prompt && {
+				hasText(question.prompt) && {
 					fieldId: questionFieldId(index, "prompt"),
 					message: `Question ${index + 1}: ${question.prompt}`,
 				},
-				question.choices && {
+				hasText(question.choices) && {
 					fieldId: questionFieldId(index, "choices"),
 					message: `Question ${index + 1}: ${question.choices}`,
 				},
-				question.lowLabel && {
+				hasText(question.lowLabel) && {
 					fieldId: questionFieldId(index, "low"),
 					message: `Question ${index + 1}: ${question.lowLabel}`,
 				},
-				question.highLabel && {
+				hasText(question.highLabel) && {
 					fieldId: questionFieldId(index, "high"),
 					message: `Question ${index + 1}: ${question.highLabel}`,
 				},
@@ -270,7 +271,7 @@ export function AdminSurveyComposer({
 						<FormErrorSummary key={refusedAt} errors={summary} />
 						<fieldset disabled={isPending} className="contents">
 							<FieldGroup className="gap-5">
-								<Field data-invalid={errors.title ? "true" : undefined}>
+								<Field data-invalid={hasText(errors.title) ? "true" : undefined}>
 									<FieldLabel htmlFor={fieldId("title")}>Title</FieldLabel>
 									<Input
 										id={fieldId("title")}
@@ -278,15 +279,15 @@ export function AdminSurveyComposer({
 										maxLength={TITLE_MAX_LENGTH}
 										required
 										aria-invalid={Boolean(errors.title)}
-										aria-describedby={describedBy(errors.title && fieldId("title-error"))}
+										aria-describedby={describedBy(hasText(errors.title) && fieldId("title-error"))}
 										onChange={(event) => patch({ title: event.target.value })}
 									/>
-									{errors.title && (
+									{hasText(errors.title) && (
 										<FieldError id={fieldId("title-error")}>{errors.title}</FieldError>
 									)}
 								</Field>
 
-								<Field data-invalid={errors.description ? "true" : undefined}>
+								<Field data-invalid={hasText(errors.description) ? "true" : undefined}>
 									<FieldLabel htmlFor={fieldId("description")}>Introduction</FieldLabel>
 									<Textarea
 										id={fieldId("description")}
@@ -297,7 +298,7 @@ export function AdminSurveyComposer({
 										aria-invalid={Boolean(errors.description)}
 										aria-describedby={describedBy(
 											fieldId("description-help"),
-											errors.description && fieldId("description-error"),
+											hasText(errors.description) && fieldId("description-error"),
 										)}
 										onChange={(event) => patch({ description: event.target.value })}
 									/>
@@ -305,12 +306,12 @@ export function AdminSurveyComposer({
 										Members read this before the first question. Say why you're asking and what the
 										answers will change.
 									</FieldDescription>
-									{errors.description && (
+									{hasText(errors.description) && (
 										<FieldError id={fieldId("description-error")}>{errors.description}</FieldError>
 									)}
 								</Field>
 
-								{researchOrganization && (
+								{hasText(researchOrganization) && (
 									<FieldSet>
 										<FieldLegend variant="label" id={fieldId("purpose-label")}>
 											Purpose
@@ -362,7 +363,7 @@ export function AdminSurveyComposer({
 										items={audiences}
 										value={draft.audience}
 										disabled={isPending}
-										onValueChange={(value) => value && patch({ audience: value })}
+										onValueChange={(value) => hasText(value) && patch({ audience: value })}
 									>
 										<SelectTrigger id={fieldId("audience")} className="w-full @md/field-group:w-56">
 											<SelectValue />
@@ -399,7 +400,7 @@ export function AdminSurveyComposer({
 												Leave blank to open when published.
 											</FieldDescription>
 										</Field>
-										<Field data-invalid={errors.endsAt ? "true" : undefined}>
+										<Field data-invalid={hasText(errors.endsAt) ? "true" : undefined}>
 											<FieldLabel htmlFor={fieldId("end")}>End</FieldLabel>
 											<Input
 												id={fieldId("end")}
@@ -409,14 +410,14 @@ export function AdminSurveyComposer({
 												aria-describedby={describedBy(
 													fieldId("schedule-help"),
 													fieldId("end-help"),
-													errors.endsAt && fieldId("end-error"),
+													hasText(errors.endsAt) && fieldId("end-error"),
 												)}
 												onChange={(event) => patch({ endsAt: event.target.value })}
 											/>
 											<FieldDescription id={fieldId("end-help")}>
 												Set an end so invitations do not go stale.
 											</FieldDescription>
-											{errors.endsAt && (
+											{hasText(errors.endsAt) && (
 												<FieldError id={fieldId("end-error")}>{errors.endsAt}</FieldError>
 											)}
 										</Field>
@@ -455,7 +456,7 @@ export function AdminSurveyComposer({
 										beyond {RECOMMENDED_MAX_QUESTIONS}.
 									</FieldDescription>
 								)}
-								{errors.questions && <FieldError>{errors.questions}</FieldError>}
+								{hasText(errors.questions) && <FieldError>{errors.questions}</FieldError>}
 								<Button
 									id={fieldId("add-question")}
 									type="button"
@@ -520,7 +521,7 @@ function QuestionCard({
 		<FieldSet className="rounded-lg border p-4">
 			<FieldLegend className="px-1">Question {number}</FieldLegend>
 			<FieldGroup className="gap-4">
-				<Field data-invalid={errors.prompt ? "true" : undefined}>
+				<Field data-invalid={hasText(errors.prompt) ? "true" : undefined}>
 					<FieldLabel htmlFor={fieldId("prompt")}>Question</FieldLabel>
 					<Textarea
 						id={fieldId("prompt")}
@@ -529,10 +530,12 @@ function QuestionCard({
 						maxLength={PROMPT_MAX_LENGTH}
 						required
 						aria-invalid={Boolean(errors.prompt)}
-						aria-describedby={describedBy(errors.prompt && fieldId("prompt-error"))}
+						aria-describedby={describedBy(hasText(errors.prompt) && fieldId("prompt-error"))}
 						onChange={(event) => onChange({ prompt: event.target.value })}
 					/>
-					{errors.prompt && <FieldError id={fieldId("prompt-error")}>{errors.prompt}</FieldError>}
+					{hasText(errors.prompt) && (
+						<FieldError id={fieldId("prompt-error")}>{errors.prompt}</FieldError>
+					)}
 				</Field>
 
 				<Field orientation="responsive">
@@ -561,7 +564,7 @@ function QuestionCard({
 				</Field>
 
 				{isChoiceType(question.type) && (
-					<Field data-invalid={errors.choices ? "true" : undefined}>
+					<Field data-invalid={hasText(errors.choices) ? "true" : undefined}>
 						<FieldLabel htmlFor={fieldId("choices")}>Choices (one per line)</FieldLabel>
 						<Textarea
 							id={fieldId("choices")}
@@ -570,10 +573,10 @@ function QuestionCard({
 							maxLength={CHOICES_TEXT_MAX_LENGTH}
 							required
 							aria-invalid={Boolean(errors.choices)}
-							aria-describedby={describedBy(errors.choices && fieldId("choices-error"))}
+							aria-describedby={describedBy(hasText(errors.choices) && fieldId("choices-error"))}
 							onChange={(event) => onChange({ choices: event.target.value })}
 						/>
-						{errors.choices && (
+						{hasText(errors.choices) && (
 							<FieldError id={fieldId("choices-error")}>{errors.choices}</FieldError>
 						)}
 					</Field>
@@ -599,7 +602,7 @@ function QuestionCard({
 				{question.type === "RATING" && (
 					<div className="flex flex-col gap-2">
 						<div className="grid gap-4 sm:grid-cols-2">
-							<Field data-invalid={errors.lowLabel ? "true" : undefined}>
+							<Field data-invalid={hasText(errors.lowLabel) ? "true" : undefined}>
 								<FieldLabel htmlFor={fieldId("low")}>Label for 1</FieldLabel>
 								<Input
 									id={fieldId("low")}
@@ -609,15 +612,15 @@ function QuestionCard({
 									aria-invalid={Boolean(errors.lowLabel)}
 									aria-describedby={describedBy(
 										fieldId("scale-help"),
-										errors.lowLabel && fieldId("low-error"),
+										hasText(errors.lowLabel) && fieldId("low-error"),
 									)}
 									onChange={(event) => onChange({ lowLabel: event.target.value })}
 								/>
-								{errors.lowLabel && (
+								{hasText(errors.lowLabel) && (
 									<FieldError id={fieldId("low-error")}>{errors.lowLabel}</FieldError>
 								)}
 							</Field>
-							<Field data-invalid={errors.highLabel ? "true" : undefined}>
+							<Field data-invalid={hasText(errors.highLabel) ? "true" : undefined}>
 								<FieldLabel htmlFor={fieldId("high")}>Label for 5</FieldLabel>
 								<Input
 									id={fieldId("high")}
@@ -627,11 +630,11 @@ function QuestionCard({
 									aria-invalid={Boolean(errors.highLabel)}
 									aria-describedby={describedBy(
 										fieldId("scale-help"),
-										errors.highLabel && fieldId("high-error"),
+										hasText(errors.highLabel) && fieldId("high-error"),
 									)}
 									onChange={(event) => onChange({ highLabel: event.target.value })}
 								/>
-								{errors.highLabel && (
+								{hasText(errors.highLabel) && (
 									<FieldError id={fieldId("high-error")}>{errors.highLabel}</FieldError>
 								)}
 							</Field>

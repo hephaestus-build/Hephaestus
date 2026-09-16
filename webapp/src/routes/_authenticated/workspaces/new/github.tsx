@@ -7,6 +7,7 @@ import { GithubIcon } from "@/components/icons/brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/workspaces/new/github")({
 	component: GitHubSetupPage,
@@ -57,7 +58,7 @@ function GitHubSetupPage() {
 					<div className="flex justify-center py-4">
 						<Spinner />
 					</div>
-				) : appUrl ? (
+				) : hasText(appUrl) ? (
 					<a
 						href={appUrl}
 						target="_blank"

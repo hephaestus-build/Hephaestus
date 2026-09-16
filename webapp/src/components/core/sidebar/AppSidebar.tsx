@@ -77,7 +77,7 @@ export function AppSidebar({
 		}
 	};
 	let contextHeader: ReactNode = null;
-	let sidebarContent: ReactNode = null;
+	let sidebarContent: ReactNode;
 
 	if (context === "admin") {
 		sidebarContent = <NavSuperAdmin />;

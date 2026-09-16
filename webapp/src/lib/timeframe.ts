@@ -16,6 +16,8 @@ import {
 	subWeeks,
 } from "date-fns";
 
+import { hasText } from "@/lib/text";
+
 export type TimeframePreset =
 	| "all-activity"
 	| "this-week"
@@ -215,12 +217,12 @@ export function detectPresetFromDates(
 	schedule: LeaderboardSchedule = DEFAULT_SCHEDULE,
 	enableAllActivity = false,
 ): TimeframePreset {
-	if (!afterStr) {
-		return beforeStr ? "custom" : enableAllActivity ? "all-activity" : "this-week";
+	if (!hasText(afterStr)) {
+		return hasText(beforeStr) ? "custom" : enableAllActivity ? "all-activity" : "this-week";
 	}
 
 	const after = parseISO(afterStr);
-	const before = beforeStr ? parseISO(beforeStr) : undefined;
+	const before = hasText(beforeStr) ? parseISO(beforeStr) : undefined;
 
 	// All time is open-ended; a bounded epoch range is still a custom selection.
 	if (enableAllActivity && !before && isEqual(after, new Date(0))) {

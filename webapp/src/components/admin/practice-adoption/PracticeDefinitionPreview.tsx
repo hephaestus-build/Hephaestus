@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
 import { artifactKindLabel } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 export interface PracticeDefinitionPreviewProps {
 	definition: CuratedPracticeDefinition;
@@ -31,11 +32,11 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 
 	return (
 		<div className="space-y-6">
-			{definition.whyItMatters && (
+			{hasText(definition.whyItMatters) && (
 				<p className="max-w-2xl text-lg leading-relaxed text-pretty">{definition.whyItMatters}</p>
 			)}
 
-			{definition.whatGoodLooksLike && (
+			{hasText(definition.whatGoodLooksLike) && (
 				<Section size="sm" level={3} title="What good looks like">
 					<p className="max-w-2xl text-pretty text-muted-foreground">
 						{definition.whatGoodLooksLike}
@@ -70,7 +71,7 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 						</div>
 					</AccordionContent>
 				</AccordionItem>
-				{definition.precomputeScript && (
+				{hasText(definition.precomputeScript) && (
 					<AccordionItem value="static-analysis">
 						<AccordionTrigger>What it measures first</AccordionTrigger>
 						<AccordionContent>

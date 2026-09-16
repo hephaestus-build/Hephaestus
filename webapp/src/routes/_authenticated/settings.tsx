@@ -186,7 +186,7 @@ function RouteComponent() {
 			});
 			void queryClient.invalidateQueries({ queryKey: slackPreferencesQueryKey });
 			toast.success(
-				updatedWorkspace.channelMessagesAllowed
+				updatedWorkspace.channelMessagesAllowed === true
 					? "Slack channel-message use is on."
 					: "Slack channel-message use is off.",
 			);
@@ -237,7 +237,7 @@ function RouteComponent() {
 		isSlackLinked: Boolean(slackIdentity),
 		canConnectSlack: Boolean(slackProvider?.registrationId),
 		onConnectSlack: () => {
-			if (slackProvider?.registrationId) {
+			if (hasText(slackProvider?.registrationId)) {
 				linkAccount(slackProvider.registrationId, "/settings");
 			}
 		},

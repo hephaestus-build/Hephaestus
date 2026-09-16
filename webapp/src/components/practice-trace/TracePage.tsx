@@ -64,7 +64,7 @@ export function TracePage({
 			</article>
 		);
 	}
-	if (error) {
+	if (error != null) {
 		return (
 			<article className="max-w-4xl min-w-0 space-y-8">
 				{backLink}

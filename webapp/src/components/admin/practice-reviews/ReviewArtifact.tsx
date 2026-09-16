@@ -13,6 +13,7 @@ import {
 	isKnownArtifactKind,
 	type KnownArtifactKind,
 } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 export type ReviewArtifactDisplay = ReviewArtifactData | ReviewRunTarget;
 
@@ -67,7 +68,7 @@ export function reviewArtifactLabel(artifact: ReviewArtifactDisplay): string {
 			return artifact.number == null ? "Issue" : `Issue #${artifact.number}`;
 		}
 		case ARTIFACT_KIND.conversationThread: {
-			return artifact.channelName ? `#${artifact.channelName}` : "Conversation";
+			return hasText(artifact.channelName) ? `#${artifact.channelName}` : "Conversation";
 		}
 		case ARTIFACT_KIND.document: {
 			return "Document";
@@ -128,7 +129,7 @@ export function ReviewArtifactLabel({ artifact, className }: ReviewArtifactProps
  * not the link's name. A caller that wants the work's title renders it outside.
  */
 export function ReviewArtifactLink({ artifact, className }: ReviewArtifactProps) {
-	if (!artifact?.url) {
+	if (!hasText(artifact?.url)) {
 		return <ReviewArtifactLabel artifact={artifact} className={className} />;
 	}
 	const Icon = reviewArtifactIcon(artifact);

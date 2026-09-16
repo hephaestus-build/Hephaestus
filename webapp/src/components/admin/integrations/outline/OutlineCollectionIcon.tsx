@@ -49,6 +49,8 @@ import {
 	Zap,
 } from "lucide-react";
 
+import { hasText } from "@/lib/text";
+
 /**
  * Outline stores a collection icon as ONE string that is either a named icon from its own registry,
  * a raw emoji character, or the UUID of a custom uploaded emoji. There is no type discriminator on
@@ -127,7 +129,7 @@ export interface OutlineCollectionIconProps {
 export function OutlineCollectionIcon({ icon, color, className }: OutlineCollectionIconProps) {
 	const tint = color ?? "var(--muted-foreground)";
 
-	if (icon) {
+	if (hasText(icon)) {
 		const NamedIcon = NAMED_ICONS[icon];
 		if (NamedIcon) {
 			return (

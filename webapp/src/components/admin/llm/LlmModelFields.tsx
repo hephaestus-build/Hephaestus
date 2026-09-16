@@ -18,6 +18,7 @@ import {
 	validateLlmModelForm,
 } from "@/lib/llm-form-validation";
 import type { LlmAudience } from "@/lib/llm-pricing";
+import { hasText } from "@/lib/text";
 
 import { PriceModeEditor, type PriceModeValue } from "./PriceModeEditor";
 
@@ -143,9 +144,9 @@ export function LlmModelFields({
 					// Inert under `noValidate`, but it is what announces the field as required (SC 3.3.2).
 					required
 					aria-invalid={Boolean(errors.displayName)}
-					aria-describedby={errors.displayName ? displayNameErrorId : undefined}
+					aria-describedby={hasText(errors.displayName) ? displayNameErrorId : undefined}
 				/>
-				{errors.displayName && (
+				{hasText(errors.displayName) && (
 					<FieldError id={displayNameErrorId}>{errors.displayName}</FieldError>
 				)}
 			</Field>
@@ -162,7 +163,7 @@ export function LlmModelFields({
 					autoComplete="off"
 					list={suggestionsId}
 					aria-invalid={Boolean(errors.upstreamModelId)}
-					aria-describedby={errors.upstreamModelId ? upstreamModelIdErrorId : undefined}
+					aria-describedby={hasText(errors.upstreamModelId) ? upstreamModelIdErrorId : undefined}
 				/>
 				{upstreamIdSuggestions && upstreamIdSuggestions.length > 0 && (
 					<datalist id={suggestionsId}>
@@ -174,7 +175,7 @@ export function LlmModelFields({
 				<FieldDescription>
 					{isEdit ? "Create a new model to use a different upstream id." : copy.upstreamIdHint}
 				</FieldDescription>
-				{errors.upstreamModelId && (
+				{hasText(errors.upstreamModelId) && (
 					<FieldError id={upstreamModelIdErrorId}>{errors.upstreamModelId}</FieldError>
 				)}
 			</Field>
@@ -192,9 +193,9 @@ export function LlmModelFields({
 						value={value.contextWindow}
 						onChange={(e) => update({ contextWindow: e.target.value })}
 						aria-invalid={Boolean(errors.contextWindow)}
-						aria-describedby={errors.contextWindow ? contextWindowErrorId : undefined}
+						aria-describedby={hasText(errors.contextWindow) ? contextWindowErrorId : undefined}
 					/>
-					{errors.contextWindow && (
+					{hasText(errors.contextWindow) && (
 						<FieldError id={contextWindowErrorId}>{errors.contextWindow}</FieldError>
 					)}
 				</Field>
@@ -210,9 +211,9 @@ export function LlmModelFields({
 						value={value.maxOutputTokens}
 						onChange={(e) => update({ maxOutputTokens: e.target.value })}
 						aria-invalid={Boolean(errors.maxOutputTokens)}
-						aria-describedby={errors.maxOutputTokens ? maxOutputTokensErrorId : undefined}
+						aria-describedby={hasText(errors.maxOutputTokens) ? maxOutputTokensErrorId : undefined}
 					/>
-					{errors.maxOutputTokens && (
+					{hasText(errors.maxOutputTokens) && (
 						<FieldError id={maxOutputTokensErrorId}>{errors.maxOutputTokens}</FieldError>
 					)}
 				</Field>

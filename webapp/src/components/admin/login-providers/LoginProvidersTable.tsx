@@ -149,7 +149,7 @@ export function LoginProvidersTable({
 									<div className="font-medium">{provider.displayName}</div>
 									<div className="text-xs text-muted-foreground">
 										{provider.registrationId}
-										{provider.seededFromEnv && (
+										{provider.seededFromEnv === true && (
 											<Badge variant="outline" className="ml-2 align-middle">
 												seeded
 											</Badge>
@@ -191,7 +191,7 @@ export function LoginProvidersTable({
 											checked={provider.enabled}
 											disabled={busy}
 											aria-busy={busy}
-											aria-label={`${provider.enabled ? "Disable" : "Enable"} ${provider.displayName}`}
+											aria-label={`${provider.enabled === true ? "Disable" : "Enable"} ${provider.displayName}`}
 											onCheckedChange={(checked) => onToggleEnabled(provider, checked)}
 										/>
 										{busy && <Spinner className="size-3.5 text-muted-foreground" />}

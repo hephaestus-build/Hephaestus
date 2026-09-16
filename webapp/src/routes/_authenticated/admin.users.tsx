@@ -83,7 +83,7 @@ function AdminUsersPage() {
 		? allUsers.filter((u) =>
 				[u.displayName, u.primaryEmail, u.appRole, u.status, String(u.id ?? "")]
 					.filter(Boolean)
-					.some((field) => field?.toLowerCase().includes(term)),
+					.some((field) => field?.toLowerCase().includes(term) === true),
 			)
 		: allUsers;
 

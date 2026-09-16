@@ -7,7 +7,7 @@ import { WorkspaceLlmModelsTable } from "./WorkspaceLlmModelsTable";
 
 async function openDeleteConfirm(canvas: StoryContext["canvas"], name: RegExp) {
 	await userEvent.click(canvas.getByRole("button", { name }));
-	return await screen.findByRole("alertdialog");
+	return screen.findByRole("alertdialog");
 }
 
 const mockModels: WorkspaceLlmModel[] = [

@@ -47,7 +47,7 @@ export const ServerRejectionSitsAtTheField: Story = {
 
 export const PassesItsFieldAndButtonCopyThrough: Story = {
 	play: async ({ args }) =>
-		await expectAmountRejected({
+		expectAmountRejected({
 			fieldLabel: /monthly cap/iu,
 			submitLabel: /save cap/iu,
 			typed: "",

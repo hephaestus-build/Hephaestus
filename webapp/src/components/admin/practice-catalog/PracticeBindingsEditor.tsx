@@ -16,6 +16,7 @@ import { PracticeEvidenceEditor } from "@/components/admin/practice-catalog/Prac
 import { PracticeEvidenceOutcomeSummary } from "@/components/admin/practice-catalog/PracticeEvidenceOutcomeSummary";
 import { FieldError } from "@/components/ui/field";
 import { artifactKindIcon, artifactKindLabel } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 /** Also the `aria-describedby` target: focus lands on the control, not on the rendered message. */
 const BINDINGS_ERROR_ID = "practice-bindings-error";
@@ -109,7 +110,7 @@ export function PracticeBindingsEditor({
 				onIncludeDraftsChange={(includeDrafts) =>
 					onChange(normalizeBinding({ ...binding, onDrafts: includeDrafts }))
 				}
-				errorId={signalsInvalid && error ? BINDINGS_ERROR_ID : undefined}
+				errorId={signalsInvalid && hasText(error) ? BINDINGS_ERROR_ID : undefined}
 				disabled={disabled}
 			/>
 
@@ -124,7 +125,7 @@ export function PracticeBindingsEditor({
 					idPrefix={OCCASION_ID_PREFIX}
 					disabled={disabled}
 					invalid={evidenceInvalid}
-					errorId={evidenceInvalid && error ? BINDINGS_ERROR_ID : undefined}
+					errorId={evidenceInvalid && hasText(error) ? BINDINGS_ERROR_ID : undefined}
 					onChange={(needs) => onChange({ ...binding, needs })}
 				/>
 			)}
@@ -142,7 +143,7 @@ export function PracticeBindingsEditor({
 				</p>
 			)}
 
-			{error && <FieldError id={BINDINGS_ERROR_ID}>{error}</FieldError>}
+			{hasText(error) && <FieldError id={BINDINGS_ERROR_ID}>{error}</FieldError>}
 		</div>
 	);
 }

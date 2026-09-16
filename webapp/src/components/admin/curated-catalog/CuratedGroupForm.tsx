@@ -202,7 +202,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 						/>
 					)}
 
-					{conflict && (
+					{conflict === true && (
 						<div className="space-y-2">
 							<Alert variant="warning">
 								<RotateCcw />

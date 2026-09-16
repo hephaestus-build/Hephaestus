@@ -8,6 +8,7 @@ import type { ChatThreadSummary } from "@/api/types.gen";
 import { Greeting } from "@/components/mentor/Greeting";
 import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/")({
 	component: MentorContainer,
@@ -27,7 +28,7 @@ function MentorContainer() {
 	// Once per mount, guarded by a ref rather than by the dependency list, which cannot promise it:
 	// a second run would mint a second id and strand an empty "New chat" in the list.
 	useEffect(() => {
-		if (!workspaceSlug || hasStartedRef.current) {
+		if (!hasText(workspaceSlug) || hasStartedRef.current) {
 			return;
 		}
 		hasStartedRef.current = true;
@@ -65,7 +66,7 @@ function MentorContainer() {
 		});
 	}, [workspaceSlug, slug, queryClient, navigate]);
 
-	if (!workspaceSlug) {
+	if (!hasText(workspaceSlug)) {
 		return <NoWorkspace />;
 	}
 

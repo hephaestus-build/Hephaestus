@@ -6,6 +6,7 @@ import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 
 import { currentUserQueryOptions, isAppAdmin, resolveCurrentUser, safeReturnTo } from "./guard";
+
 describe("safeReturnTo", () => {
 	describe("accepts same-origin absolute paths", () => {
 		it.each(["/", "/dashboard", "/w/acme/overview", "/a/b?x=1&y=2", "/path#frag", "/with-dash_x"])(
@@ -24,7 +25,7 @@ describe("safeReturnTo", () => {
 			["protocol-relative ///evil", "///evil.com"],
 			["absolute https URL", "https://evil.com"],
 			["absolute http URL", "http://evil.com/path"],
-			["backslash escape /\\evil", "/\\evil.com"],
+			[String.raw`backslash escape /\evil`, String.raw`/\evil.com`],
 			["scheme after slash /javascript:", "/javascript:alert(1)"],
 			["scheme after slashes //javascript:", "//javascript:alert(1)"],
 			["bare relative (no leading slash)", "dashboard"],

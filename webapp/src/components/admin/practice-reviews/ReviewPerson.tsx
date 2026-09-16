@@ -2,6 +2,7 @@ import { cn } from "cn";
 import type { ReviewSubject } from "@/api/types.gen";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/avatar";
+import { hasText } from "@/lib/text";
 
 import { subjectLabel } from "./review-format";
 
@@ -32,7 +33,7 @@ export function ReviewPerson({ person, prefix, className }: ReviewPersonProps) {
 				</AvatarFallback>
 			</Avatar>
 			<span className="min-w-0 break-words">
-				{prefix && <span className="text-muted-foreground">{prefix} </span>}
+				{hasText(prefix) && <span className="text-muted-foreground">{prefix} </span>}
 				{subjectLabel(person)}
 			</span>
 		</span>

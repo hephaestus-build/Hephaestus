@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import { hasText } from "@/lib/text";
 
 export interface DateRangeFacetProps {
 	/**
@@ -42,11 +43,11 @@ export function DateRangeFacet({ title, value, onChange }: DateRangeFacetProps) 
 						variant="outline"
 						size="sm"
 						className="h-8 border-dashed font-normal"
-						aria-label={applied ? `${title}: ${applied}` : title}
+						aria-label={hasText(applied) ? `${title}: ${applied}` : title}
 					>
 						<CalendarIcon aria-hidden />
 						{title}
-						{applied && (
+						{hasText(applied) && (
 							<>
 								<Separator
 									orientation="vertical"
@@ -73,7 +74,7 @@ export function DateRangeFacet({ title, value, onChange }: DateRangeFacetProps) 
 				/>
 				{/* The way out every other facet in the toolbar has: without it a picked range can only be
 				    replaced by picking another, never removed. */}
-				{applied && (
+				{hasText(applied) && (
 					<>
 						<Separator />
 						<Button

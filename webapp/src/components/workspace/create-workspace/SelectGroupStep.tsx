@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { hasText } from "@/lib/text";
 
 import { useWizard } from "./wizard-context";
 
@@ -82,7 +83,7 @@ function GroupItem({ group, isSelected }: { group: GitLabGroup; isSelected: bool
 		>
 			<RadioGroupItem id={inputId} value={group.fullPath} />
 			<Avatar className="size-7 rounded-md">
-				{group.avatarUrl && <AvatarImage src={group.avatarUrl} alt={group.name} />}
+				{hasText(group.avatarUrl) && <AvatarImage src={group.avatarUrl} alt={group.name} />}
 				<AvatarFallback className="rounded-md bg-muted text-xs">
 					{group.name.slice(0, 2).toUpperCase()}
 				</AvatarFallback>
@@ -91,7 +92,7 @@ function GroupItem({ group, isSelected }: { group: GitLabGroup; isSelected: bool
 				<span className="truncate text-sm font-medium">{group.name}</span>
 				<span className="truncate text-xs text-muted-foreground">{group.fullPath}</span>
 			</div>
-			{group.visibility && (
+			{hasText(group.visibility) && (
 				<Badge variant="outline" size="xs" className="shrink-0">
 					{group.visibility}
 				</Badge>

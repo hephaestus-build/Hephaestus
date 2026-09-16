@@ -19,6 +19,7 @@ import {
 	QuestionnaireSubmit,
 	QuestionnaireTitle,
 } from "@/components/ui/questionnaire";
+import { hasText } from "@/lib/text";
 
 import {
 	ANSWER_TEXT_MAX_LENGTH,
@@ -174,7 +175,7 @@ function Items({ className, ...props }: ComponentProps<"div">) {
 								<span className="font-normal text-muted-foreground"> (optional)</span>
 							)}
 						</QuestionnaireTitle>
-						{scale?.low && scale.high && (
+						{hasText(scale?.low) && hasText(scale.high) && (
 							<QuestionnaireDescription>
 								{scale.points[0]} = {scale.low} · {scale.points.at(-1)} = {scale.high}
 							</QuestionnaireDescription>

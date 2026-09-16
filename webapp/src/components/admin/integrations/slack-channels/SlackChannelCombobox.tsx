@@ -16,6 +16,7 @@ import {
 	ComboboxTrigger,
 	useComboboxFilter,
 } from "@/components/ui/combobox";
+import { hasText } from "@/lib/text";
 
 export interface SlackChannelComboboxProps {
 	id?: string;
@@ -70,13 +71,13 @@ export function SlackChannelCombobox({
 		>
 			<ComboboxTrigger
 				id={id}
-				aria-label={id ? undefined : "Slack channel"}
+				aria-label={hasText(id) ? undefined : "Slack channel"}
 				aria-invalid={invalid}
 				className={cn("w-full justify-between font-normal", className)}
 			>
-				{selectedLabel ? (
+				{hasText(selectedLabel) ? (
 					<span className="truncate">#{selectedLabel}</span>
-				) : selectedChannelId ? (
+				) : hasText(selectedChannelId) ? (
 					<span className="truncate text-muted-foreground">
 						Channel <span className="font-mono">{selectedChannelId}</span>
 					</span>
@@ -101,11 +102,11 @@ export function SlackChannelCombobox({
 								<div className="min-w-0 flex-1">
 									<div className="flex flex-wrap items-center gap-2">
 										<span className="truncate font-medium">#{candidate.channelName}</span>
-										{candidate.privateChannel && (
+										{candidate.privateChannel === true && (
 											<LockIcon className="size-3.5" role="img" aria-label="Private" />
 										)}
 										{renderBadges?.(candidate)}
-										{disabledReason && <Badge variant="outline">{disabledReason}</Badge>}
+										{hasText(disabledReason) && <Badge variant="outline">{disabledReason}</Badge>}
 									</div>
 									<div className="font-mono text-xs text-muted-foreground">
 										{candidate.slackChannelId}

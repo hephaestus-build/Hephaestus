@@ -249,7 +249,7 @@ export function iconSearchText(name: string): string {
 }
 
 function resolveIcon(name?: string | null): LucideIcon | undefined {
-	return name ? ICON_COMPONENTS[name] : undefined;
+	return hasText(name) ? ICON_COMPONENTS[name] : undefined;
 }
 
 export function iconComponent(name: string): LucideIcon {

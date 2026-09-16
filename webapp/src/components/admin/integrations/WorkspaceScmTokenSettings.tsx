@@ -60,7 +60,7 @@ export function WorkspaceScmTokenSettings({
 							onChange={(event) => setToken(event.target.value)}
 							disabled={isSaving}
 							required
-							aria-describedby={`${id}-description${error ? ` ${id}-error` : ""}`}
+							aria-describedby={`${id}-description${error == null ? "" : ` ${id}-error`}`}
 						/>
 						<FieldDescription id={`${id}-description`}>
 							Use a token with access to the same repositories and the permissions required by your

@@ -54,7 +54,9 @@ function feedbackPage(
 ): ListPracticeReviewFeedbackResponse {
 	const query = feedbackQuery(search, REVIEW_PAGE_SIZE);
 	const selects = (selected: string[] | undefined, actual: string | undefined) =>
-		!selected?.length || (actual !== undefined && selected.includes(actual));
+		selected === undefined ||
+		selected.length === 0 ||
+		(actual !== undefined && selected.includes(actual));
 	const rows = candidates.filter(
 		(row) =>
 			(!query.from || row.createdAt >= new Date(query.from)) &&

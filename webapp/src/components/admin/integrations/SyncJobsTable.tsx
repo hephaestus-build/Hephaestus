@@ -19,6 +19,7 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { asDate } from "@/lib/dates";
+import { hasText } from "@/lib/text";
 
 import {
 	JOB_STATUS_LABEL,
@@ -105,7 +106,7 @@ function JobProgressPanel({ progress }: { progress: SyncJobProgress }) {
 
 	return (
 		<dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1 bg-muted/30 px-2 py-2 text-sm">
-			{phase && (
+			{hasText(phase) && (
 				<>
 					<dt className="text-muted-foreground">Phase</dt>
 					<dd>
@@ -113,7 +114,7 @@ function JobProgressPanel({ progress }: { progress: SyncJobProgress }) {
 					</dd>
 				</>
 			)}
-			{currentStep && (
+			{hasText(currentStep) && (
 				<>
 					<dt className="text-muted-foreground">Step</dt>
 					{/* The step is a whole sentence and the point of the panel, so it wraps here rather than
@@ -121,7 +122,7 @@ function JobProgressPanel({ progress }: { progress: SyncJobProgress }) {
 					<dd className="wrap-anywhere">{currentStep}</dd>
 				</>
 			)}
-			{currentRepository && (
+			{hasText(currentRepository) && (
 				<>
 					<dt className="text-muted-foreground">Resource</dt>
 					<dd className="font-mono text-xs">{currentRepository}</dd>
@@ -215,7 +216,7 @@ function JobRow({ job }: { job: SyncJob }) {
 				{formatItems(job)}
 			</TableCell>
 			<TableCell className="text-right">
-				{job.errorSummary && (
+				{hasText(job.errorSummary) && (
 					<HoverCard>
 						<HoverCardTrigger
 							render={

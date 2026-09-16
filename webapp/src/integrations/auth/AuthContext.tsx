@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { authClient, toUserProfile, type UserProfile } from "./auth-client";
 import { isAppAdmin as computeIsAppAdmin, currentUserQueryOptions } from "./guard";
 
+import { hasText } from "@/lib/text";
+
 export type { UserProfile } from "./auth-client";
 
 export interface AuthContextType {
@@ -75,18 +77,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 	const hasRole = (role: string) => (user?.roles ?? []).includes(role);
 
 	const isCurrentUser = (candidateLogin?: string) =>
-		!!candidateLogin &&
-		!!user?.username &&
+		hasText(candidateLogin) &&
+		hasText(user?.username) &&
 		user.username.toLowerCase() === candidateLogin.toLowerCase();
 	const getUserId = () => (user?.id == null ? undefined : String(user.id));
 
 	const getGitProviderId = () => user?.gitProviderId ?? undefined;
 
 	const getUserProfilePictureUrl = () => {
-		if (user?.avatarUrl) {
+		if (hasText(user?.avatarUrl)) {
 			return user.avatarUrl;
 		}
-		if (user?.identityProvider === "GITHUB" && user.gitProviderId) {
+		if (user?.identityProvider === "GITHUB" && hasText(user.gitProviderId)) {
 			return `https://avatars.githubusercontent.com/u/${user.gitProviderId}`;
 		}
 		return "";

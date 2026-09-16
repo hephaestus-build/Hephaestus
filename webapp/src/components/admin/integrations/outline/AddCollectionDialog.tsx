@@ -35,6 +35,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { problemDetailOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
 
 export interface AddCollectionDialogProps {
 	workspaceSlug: string;
@@ -222,7 +223,7 @@ export function AddCollectionDialog({
 												<OutlineCollectionIcon icon={candidate.icon} color={candidate.color} />
 												<span className="min-w-0 flex-1">
 													<span className="block truncate text-sm font-medium">{label}</span>
-													{candidate.urlId && (
+													{hasText(candidate.urlId) && (
 														<span className="block truncate font-mono text-xs text-muted-foreground">
 															{candidate.urlId}
 														</span>
@@ -245,7 +246,9 @@ export function AddCollectionDialog({
 								Adding {Math.min(registered + 1, total)} of {total}…
 							</p>
 						)}
-						{!submitting && submitError && <p className="text-destructive">{submitError}</p>}
+						{!submitting && hasText(submitError) && (
+							<p className="text-destructive">{submitError}</p>
+						)}
 					</div>
 
 					<DialogFooter className="mt-3">

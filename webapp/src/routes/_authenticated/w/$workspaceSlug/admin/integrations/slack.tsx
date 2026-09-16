@@ -40,6 +40,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/slack")({
 	head: workspaceAdminHead("Slack"),
@@ -391,7 +392,10 @@ function SlackIntegrationPage() {
 					}) => {
 						await updateSlackChannelConsent.mutateAsync({
 							path: { workspaceSlug: slug, slackChannelId },
-							body: { consentState: "REVOKED", reason: reason?.trim() ? reason : undefined },
+							body: {
+								consentState: "REVOKED",
+								reason: hasText(reason?.trim()) ? reason : undefined,
+							},
 						});
 					}}
 				/>

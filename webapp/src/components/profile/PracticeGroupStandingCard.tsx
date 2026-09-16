@@ -45,7 +45,7 @@ export function PracticeGroupStandingCard({
 	if (isLoading) {
 		return <Skeleton className="h-40 w-full" data-testid="practice-group-standing-loading" />;
 	}
-	if (error) {
+	if (error != null) {
 		return (
 			<QueryErrorAlert
 				error={error}
@@ -65,7 +65,9 @@ export function PracticeGroupStandingCard({
 	});
 	const collapsible = orderedGroups.length > COLLAPSED_GROUP_COUNT;
 	const visibleGroups = showAll ? orderedGroups : orderedGroups.slice(0, COLLAPSED_GROUP_COUNT);
-	const showsRing = Object.values(practicesByGroup ?? {}).some((practices) => practices?.length);
+	const showsRing = Object.values(practicesByGroup ?? {}).some(
+		(practices) => practices !== undefined && practices.length > 0,
+	);
 
 	return (
 		<section className="flex flex-col gap-3" aria-labelledby="practice-groups-heading">

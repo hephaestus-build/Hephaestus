@@ -3,6 +3,7 @@ import { assert, describe, expect, it, vi } from "vitest";
 
 import type { LlmModel } from "@/api/types.gen";
 import { validateLlmModelForm } from "@/lib/llm-form-validation";
+import { hasText } from "@/lib/text";
 import { expectUnavailable } from "@/test/controls";
 
 import {
@@ -95,7 +96,7 @@ describe("AdminLlmModelFormDialog", () => {
 			per1mInputUsd: 0,
 			per1mOutputUsd: 0,
 		}).per1mInputUsd;
-		assert(rejection, "A priced model without a price must be rejected");
+		assert(hasText(rejection), "A priced model without a price must be rejected");
 		screen.getByText(rejection);
 		expect(onSave).not.toHaveBeenCalled();
 	});

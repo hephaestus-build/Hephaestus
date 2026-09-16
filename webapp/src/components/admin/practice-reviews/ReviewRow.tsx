@@ -2,6 +2,8 @@ import { Fragment, type ReactNode } from "react";
 
 import { cn } from "cn";
 import { type StatusDef, statusToneClass } from "@/components/practice-vocabulary/status-def";
+import { rendersContent } from "@/lib/react-node";
+import { hasText } from "@/lib/text";
 
 export interface ReviewRowProps {
 	status: StatusDef;
@@ -31,7 +33,9 @@ export function ReviewRow({ status, title, meta, chips }: ReviewRowProps) {
 					<div className="text-sm font-medium [&_a]:after:absolute [&_a]:after:inset-0 [&_a:hover]:underline">
 						{title}
 					</div>
-					{meta && <div className="min-w-0 space-y-0.5 text-xs text-muted-foreground">{meta}</div>}
+					{rendersContent(meta) && (
+						<div className="min-w-0 space-y-0.5 text-xs text-muted-foreground">{meta}</div>
+					)}
 				</div>
 				{chips && chips.length > 0 && (
 					<div className="relative flex flex-wrap items-start gap-1.5 lg:flex-nowrap">
@@ -40,7 +44,7 @@ export function ReviewRow({ status, title, meta, chips }: ReviewRowProps) {
 								key={chip.key}
 								className={cn(
 									"flex min-w-0 flex-wrap items-center gap-1.5 empty:hidden",
-									chip.width && "lg:shrink-0 lg:empty:flex",
+									hasText(chip.width) && "lg:shrink-0 lg:empty:flex",
 									chip.width,
 								)}
 							>

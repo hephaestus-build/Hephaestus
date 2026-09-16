@@ -1,6 +1,7 @@
 import type { AgentJob } from "@/api/types.gen";
 import { asDate } from "@/lib/dates";
 import { humanizeToken } from "@/lib/humanize";
+import { hasText } from "@/lib/text";
 
 export type JobWait = { kind: "hold"; reason: string } | { kind: "backoff" };
 
@@ -16,7 +17,7 @@ export function jobWait(
 	if (job.status !== "QUEUED") {
 		return null;
 	}
-	if (job.holdReason) {
+	if (hasText(job.holdReason)) {
 		return { kind: "hold", reason: job.holdReason };
 	}
 	const availableAt = asDate(job.availableAt);

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { getInitials } from "@/lib/avatar";
 import { getTeamAvatarUrl, type ProviderType } from "@/lib/provider";
+import { hasText } from "@/lib/text";
 
 import { LeagueIcon } from "./LeagueIcon";
 
@@ -135,7 +136,9 @@ export function LeaderboardTable({
 						return null;
 					}
 
-					const currentUserLogin = currentUser?.login ? currentUser.login.toLowerCase() : undefined;
+					const currentUserLogin = hasText(currentUser?.login)
+						? currentUser.login.toLowerCase()
+						: undefined;
 					const isCurrentUser = currentUserLogin === user.login.toLowerCase();
 					const userIdentity = (
 						<div className="flex items-center gap-2 font-medium">

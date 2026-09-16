@@ -43,7 +43,7 @@ const votesArraySchema = z.array(voteSchema);
 export function extractVotesFromThreadDetail(
 	threadDetail: unknown,
 ): { messageId?: string; isUpvoted?: boolean }[] {
-	if (!threadDetail || typeof threadDetail !== "object") {
+	if (threadDetail === null || typeof threadDetail !== "object") {
 		return [];
 	}
 

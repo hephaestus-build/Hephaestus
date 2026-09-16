@@ -84,7 +84,9 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 	} = props;
 	const [resetOpen, setResetOpen] = useState(false);
 	const canReset =
-		mode === "edit" && canUseHephaestusVersion(initialData.status) && onUseHephaestusVersion;
+		mode === "edit" &&
+		canUseHephaestusVersion(initialData.status) &&
+		onUseHephaestusVersion !== undefined;
 	const updateAvailable = mode === "edit" && initialData.status.state === "UPDATE_WAITING";
 	const formDisabled = isResetPending || isKeepPending;
 	/** The host's own banners, handed to the form so they land inside its padded, scrolling body. */
@@ -105,7 +107,7 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 				/>
 			)}
 
-			{conflict && (
+			{conflict === true && (
 				<div className="space-y-2">
 					<Alert variant="warning" role="alert">
 						<RotateCcw />
