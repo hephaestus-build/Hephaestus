@@ -13,8 +13,8 @@ import {
 	mockPullRequestBinding,
 	mockPullRequestWorkType,
 } from "@/mocks/fixtures/practice";
+import { expectNoOverflowingElement } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
-import { expectNoOverflowingElement } from "@/test/reflow";
 
 import { OccasionLifecycle } from "./OccasionLifecycle";
 

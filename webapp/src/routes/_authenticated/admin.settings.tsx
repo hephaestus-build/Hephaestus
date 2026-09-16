@@ -18,10 +18,10 @@ import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({
 	head: instanceAdminHead("Instance settings"),
-	component: AdminSettingsPage,
+	component: WorkspaceSettingsPage,
 });
 
-function AdminSettingsPage() {
+function WorkspaceSettingsPage() {
 	const queryClient = useQueryClient();
 	const settingsQuery = useQuery(adminGetInstanceSettingsOptions());
 

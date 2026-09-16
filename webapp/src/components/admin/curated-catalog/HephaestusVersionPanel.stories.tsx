@@ -8,7 +8,7 @@ import {
 	mockPracticeDefinitionOptions,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
-import { expectNoOverflowingElement } from "@/test/reflow";
+import { expectNoOverflowingElement } from "@/stories/reflow";
 
 import { HephaestusVersionPanel } from "./HephaestusVersionPanel";
 

@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, waitFor } from "storybook/test";
 
-import { mockGroups } from "@/components/admin/practices/story-mock-data";
+import { mockGroups } from "@/components/admin/practices/fixtures";
+import { expectSettledVisible } from "@/stories/overlay";
 import { expectGenuinelyDisabled } from "@/test/controls";
-import { expectSettledVisible } from "@/test/overlay";
 
 import { GroupDetailsDialog } from "./GroupDetailsDialog";
 

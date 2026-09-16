@@ -37,7 +37,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { getProviderLabel } from "@/lib/provider";
+import { getProviderLabel } from "@/lib/provider/provider-labels";
 
 interface LoginProvidersTableProps {
 	providers: LoginProviderView[];

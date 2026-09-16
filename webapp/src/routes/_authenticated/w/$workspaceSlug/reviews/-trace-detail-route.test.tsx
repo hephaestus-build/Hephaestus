@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getArtifactTraceQueryKey } from "@/api/@tanstack/react-query.gen";
-import { artifactTrace } from "@/components/practice-trace/story-mock-data";
+import { artifactTrace } from "@/components/practice-trace/fixtures";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";

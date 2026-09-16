@@ -34,8 +34,8 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { settledPopup } from "@/test/overlay";
-import { expectNoPageOverflow, expectOverlayFollowsTrigger } from "@/test/reflow";
+import { settledPopup } from "@/stories/overlay";
+import { expectNoPageOverflow, expectOverlayFollowsTrigger } from "@/stories/reflow";
 
 /**
  * A cross-cutting regression suite, not a component's own stories: six primitives in this kit hang

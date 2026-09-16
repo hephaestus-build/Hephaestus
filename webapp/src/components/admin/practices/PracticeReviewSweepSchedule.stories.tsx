@@ -1,11 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen } from "storybook/test";
 
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { expectClosedSelectShows } from "@/test/controls";
-import { expectNoPageOverflow } from "@/test/reflow";
 
+import { sweepSchedule as schedule } from "./fixtures";
 import { PracticeReviewSweepSchedule } from "./PracticeReviewSweepSchedule";
-import { sweepSchedule as schedule } from "./story-mock-data";
 
 const meta = {
 	component: PracticeReviewSweepSchedule,

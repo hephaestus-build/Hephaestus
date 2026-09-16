@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { SlackChannelCandidate } from "@/components/admin/integrations/AdminSlackChannelsSettings";
+import type { SlackChannelCandidate } from "@/components/admin/integrations/WorkspaceSlackChannelsSettings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

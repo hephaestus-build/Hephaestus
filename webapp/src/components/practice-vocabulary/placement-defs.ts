@@ -2,8 +2,8 @@ import { BotMessageSquareIcon, MapPinIcon, MessageSquareTextIcon } from "lucide-
 
 import type { ReviewPlacement } from "@/api/types.gen";
 
+import type { StatusDefs } from "@/components/common/status-def";
 import { DELIVERY_PLACE_DEFS, type DeliveryPlace } from "./delivery-place-defs";
-import type { StatusDefs } from "./status-def";
 
 export type PlacementType = ReviewPlacement["placementType"];
 

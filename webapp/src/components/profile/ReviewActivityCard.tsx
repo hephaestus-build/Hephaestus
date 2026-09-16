@@ -1,13 +1,15 @@
 import { CheckIcon, CommentIcon, FileDiffIcon } from "@primer/octicons-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistance } from "date-fns";
 import { AwardIcon } from "lucide-react";
 
 import { cn } from "cn";
 import { FormattedTitle } from "@/components/common/FormattedTitle";
+import { useNow } from "@/components/common/use-now";
+import { getPullRequestStateIcon, type IconComponent } from "@/components/icons/provider-icons";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { getPullRequestStateIcon, type IconComponent, type ProviderType } from "@/lib/provider";
+import type { ProviderType } from "@/lib/provider/provider-terms";
 import { hasText } from "@/lib/text";
 
 const UNKNOWN_STATE_STYLE = {
@@ -96,8 +98,9 @@ export function ReviewActivityCard({
 	const stateStyle = REVIEW_STATE_STYLES[state] ?? UNKNOWN_STATE_STYLE;
 	const StateIcon = stateStyle.icon ?? getPullRequestStateIcon(providerType, "OPEN").icon;
 
+	const now = useNow();
 	const relativeTime = submittedAt
-		? formatDistanceToNow(submittedAt, { addSuffix: true })
+		? formatDistance(submittedAt, now, { addSuffix: true })
 		: undefined;
 
 	const card = (

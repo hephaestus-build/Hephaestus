@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
+import { expectDismissed } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
-import { expectDismissed } from "@/test/overlay";
 
 import { LoginDialog } from "./LoginDialog";
 

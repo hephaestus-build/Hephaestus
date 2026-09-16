@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { delay, HttpResponse, http } from "msw";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
-import { expectSettledVisible } from "@/test/overlay";
+import { expectSettledVisible } from "@/stories/overlay";
 
 import { AddCollectionDialog } from "./AddCollectionDialog";
 

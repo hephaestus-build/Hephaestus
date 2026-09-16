@@ -7,6 +7,7 @@ import type { SyncResourceCount, SyncResourceState } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { SortButton } from "@/components/common/SortButton";
+import { useNow } from "@/components/common/use-now";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -127,11 +128,12 @@ function joinLabels(labels: string[]): string {
 function hasWatermarkDivergence(
 	resource: SyncResourceState,
 	syncIntervalSeconds: number | undefined,
+	now: number,
 ): boolean {
 	if (syncIntervalSeconds == null || syncIntervalSeconds <= 0) {
 		return false;
 	}
-	const tones = watermarksOf(resource).map((w) => freshnessTone(w.date, syncIntervalSeconds));
+	const tones = watermarksOf(resource).map((w) => freshnessTone(w.date, syncIntervalSeconds, now));
 	const healthy = tones.some((tone) => tone === "fresh");
 	const atRisk = tones.some((tone) => tone === "stale" || tone === "veryStale");
 	return healthy && atRisk;
@@ -149,11 +151,12 @@ function isBackfilling(resource: SyncResourceState): boolean {
 function isAttention(
 	resource: SyncResourceState,
 	syncIntervalSeconds: number | undefined,
+	now: number,
 ): boolean {
 	if (isErrorState(resource)) {
 		return true;
 	}
-	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds);
+	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds, now);
 	return tone === "stale" || tone === "veryStale" || tone === "never";
 }
 
@@ -161,11 +164,15 @@ function isAttention(
  * The triage tier that puts the one broken repository among seventy at the top by default:
  * error → veryStale → stale → never → backfilling → fresh/unknown. A user-clicked column sort overrides.
  */
-function triageRank(resource: SyncResourceState, syncIntervalSeconds: number | undefined): number {
+function triageRank(
+	resource: SyncResourceState,
+	syncIntervalSeconds: number | undefined,
+	now: number,
+): number {
 	if (isErrorState(resource)) {
 		return 0;
 	}
-	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds);
+	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds, now);
 	if (tone === "veryStale") {
 		return 1;
 	}
@@ -199,9 +206,11 @@ function compareResources(
 	sortState: SortState | null,
 	columns: ClassColumn[],
 	syncIntervalSeconds: number | undefined,
+	now: number,
 ): number {
 	if (!sortState) {
-		const rankDelta = triageRank(a, syncIntervalSeconds) - triageRank(b, syncIntervalSeconds);
+		const rankDelta =
+			triageRank(a, syncIntervalSeconds, now) - triageRank(b, syncIntervalSeconds, now);
 		return rankDelta === 0 ? a.name.localeCompare(b.name) : rankDelta;
 	}
 	let delta: number;
@@ -440,15 +449,17 @@ function LastSyncedCell({
 	resource,
 	resourceNoun,
 	syncIntervalSeconds,
+	now,
 }: {
 	resource: SyncResourceState;
 	resourceNoun: string;
 	syncIntervalSeconds?: number;
+	now: number;
 }) {
-	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds);
+	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds, now);
 	const watermarks = watermarksOf(resource);
 	const untracked = untrackedLabelsOf(resource);
-	const divergent = hasWatermarkDivergence(resource, syncIntervalSeconds);
+	const divergent = hasWatermarkDivergence(resource, syncIntervalSeconds, now);
 
 	return (
 		<TableCell>
@@ -685,6 +696,7 @@ export function SyncResourcesTable({
 	syncIntervalSeconds,
 	expectedClassKeys,
 }: SyncResourcesTableProps) {
+	const now = useNow();
 	const [query, setQuery] = useState("");
 	const [facet, setFacet] = useState<"all" | "attention" | "fresh">("all");
 	const [sortState, setSortState] = useState<SortState | null>(null);
@@ -731,7 +743,7 @@ export function SyncResourcesTable({
 	const columns = columnsFor([...(expectedClassKeys ?? []), ...classKeysOf(resources)]);
 	const colSpan = columns.length + 3;
 
-	const attentionCount = resources.filter((r) => isAttention(r, syncIntervalSeconds)).length;
+	const attentionCount = resources.filter((r) => isAttention(r, syncIntervalSeconds, now)).length;
 	const freshCount = resources.length - attentionCount;
 	const totalItems = resources.reduce((sum, r) => sum + (r.itemCount ?? 0), 0);
 
@@ -751,12 +763,12 @@ export function SyncResourcesTable({
 		: resources;
 	const faceted =
 		effectiveFacet === "attention"
-			? searched.filter((r) => isAttention(r, syncIntervalSeconds))
+			? searched.filter((r) => isAttention(r, syncIntervalSeconds, now))
 			: effectiveFacet === "fresh"
-				? searched.filter((r) => !isAttention(r, syncIntervalSeconds))
+				? searched.filter((r) => !isAttention(r, syncIntervalSeconds, now))
 				: searched;
 	const visible = [...faceted].sort((a, b) =>
-		compareResources(a, b, sortState, columns, syncIntervalSeconds),
+		compareResources(a, b, sortState, columns, syncIntervalSeconds, now),
 	);
 
 	const clearFilters = () => {
@@ -862,6 +874,7 @@ export function SyncResourcesTable({
 									resource={resource}
 									resourceNoun={resourceNoun}
 									syncIntervalSeconds={syncIntervalSeconds}
+									now={now}
 								/>
 								{columns.map((column) => (
 									<ClassCountCell key={column.key} resource={resource} column={column} />

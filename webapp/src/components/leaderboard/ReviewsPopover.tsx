@@ -1,18 +1,21 @@
 import { CopyIcon } from "@primer/octicons-react";
-import { useState } from "react";
+import { useRef } from "react";
 import { toast } from "sonner";
 
 import { cn } from "cn";
 import type { PullRequestBaseInfo, PullRequestInfo } from "@/api/types.gen";
+import { getPullRequestStateIcon } from "@/components/icons/provider-icons";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getProviderTerms, getPullRequestStateIcon, type ProviderType } from "@/lib/provider";
+import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 import { hasText } from "@/lib/text";
 
 import { copyReviewLinks, reviewLinkUrl } from "./review-links";
 
 export type ReviewedPullRequest = PullRequestInfo | PullRequestBaseInfo;
+
+const LINK_CLASS_NAME = "rounded-md px-3 py-2";
 
 export interface ReviewsPopoverProps {
 	reviewedPullRequests: readonly ReviewedPullRequest[];
@@ -25,7 +28,7 @@ export function ReviewsPopover({
 	highlight = false,
 	providerType = "GITHUB",
 }: ReviewsPopoverProps) {
-	const [isCopying, setIsCopying] = useState(false);
+	const isCopyingRef = useRef(false);
 	const hasReviews = reviewedPullRequests.length > 0;
 	const terms = getProviderTerms(providerType);
 	const { icon: PrIcon } = getPullRequestStateIcon(providerType, "OPEN");
@@ -45,17 +48,18 @@ export function ReviewsPopover({
 	}));
 	const copyableLinks = links.flatMap(({ label, url }) => (hasText(url) ? [{ label, url }] : []));
 
-	// The pending flag only guards against a second press; the write is far under a second, so the
-	// toast is the whole of the feedback.
 	const copyLinks = async () => {
-		setIsCopying(true);
+		if (isCopyingRef.current) {
+			return;
+		}
+		isCopyingRef.current = true;
 		try {
 			await copyReviewLinks(copyableLinks);
 			toast.success("Review links copied");
 		} catch {
 			toast.error("Could not copy review links");
 		}
-		setIsCopying(false);
+		isCopyingRef.current = false;
 	};
 
 	return (
@@ -93,7 +97,7 @@ export function ReviewsPopover({
 						variant="outline"
 						size="icon"
 						aria-label={`Copy links to reviewed ${terms.pullRequests.toLowerCase()}`}
-						disabled={isCopying || copyableLinks.length === 0}
+						disabled={copyableLinks.length === 0}
 						onClick={() => void copyLinks()}
 					>
 						<CopyIcon className="size-4" />
@@ -109,17 +113,16 @@ export function ReviewsPopover({
 										href={pullRequest.url}
 										target="_blank"
 										rel="noopener noreferrer"
-										className="justify-start rounded-md px-3 py-2 transition-colors duration-200 hover:bg-accent"
+										className={cn(
+											LINK_CLASS_NAME,
+											"transition-colors duration-200 hover:bg-accent",
+										)}
 										title={pullRequest.title}
 									>
 										{pullRequest.label}
 									</a>
 								) : (
-									<span
-										key={pullRequest.id}
-										className="justify-start rounded-md px-3 py-2"
-										title={pullRequest.title}
-									>
+									<span key={pullRequest.id} className={LINK_CLASS_NAME} title={pullRequest.title}>
 										{pullRequest.label}
 									</span>
 								),

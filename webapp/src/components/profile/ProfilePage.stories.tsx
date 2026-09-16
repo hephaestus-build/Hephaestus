@@ -4,8 +4,8 @@ import { fn } from "storybook/test";
 
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
 import { withStandardPage } from "@/stories/decorators";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { STORY_NOW } from "@/stories/story-clock";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import { PracticeGroupStandingCard } from "./PracticeGroupStandingCard";
 import { ProfilePage } from "./ProfilePage";

@@ -3,9 +3,9 @@ import { MessageSquareTextIcon } from "lucide-react";
 
 import type { ReviewFeedback } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { deliveryOutcome } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { withholdingReasonSentence } from "@/components/practice-vocabulary/withholding-defs";
 import { Button } from "@/components/ui/button";
 import {

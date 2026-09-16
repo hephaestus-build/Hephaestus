@@ -6,8 +6,8 @@ import type {
 	PracticeGroupReviewRun,
 	PracticeGroupStanding,
 } from "@/api/types.gen";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { daysBefore } from "@/stories/story-clock";
-import { expectNoPageOverflow } from "@/test/reflow";
 import { PracticeGroupDetailPage, type ReviewRunFeedState } from "./PracticeGroupDetailPage";
 
 const group: PracticeGroup = {

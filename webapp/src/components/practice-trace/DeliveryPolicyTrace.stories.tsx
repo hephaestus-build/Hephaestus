@@ -1,9 +1,9 @@
 import type { Meta, StoryContext, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent } from "storybook/test";
 import type { DeliveryPolicyTrace as DeliveryPolicyTraceData } from "@/api/types.gen";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { DeliveryPolicyTrace } from "./DeliveryPolicyTrace";
-import { deniedDeliveryPolicyEvaluation } from "./story-mock-data";
+import { deniedDeliveryPolicyEvaluation } from "./fixtures";
 
 const allowedEvaluation: DeliveryPolicyTraceData = {
 	...deniedDeliveryPolicyEvaluation,

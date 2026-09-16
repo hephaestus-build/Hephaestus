@@ -3,8 +3,8 @@ import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { OutlineCollection } from "@/api/types.gen";
 import { Table, TableBody } from "@/components/ui/table";
+import { expectSettledVisible } from "@/stories/overlay";
 import { daysBefore, minutesBefore } from "@/stories/story-clock";
-import { expectSettledVisible } from "@/test/overlay";
 
 import { OutlineCollectionRow } from "./OutlineCollectionRow";
 

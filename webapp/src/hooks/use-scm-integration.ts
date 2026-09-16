@@ -11,8 +11,8 @@ import {
 	updateTokenMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { Workspace } from "@/api/types.gen";
-import type { AdminRepositoriesSettings } from "@/components/admin/integrations/AdminRepositoriesSettings";
 import { SCM_CLASS_KEYS } from "@/components/admin/integrations/SyncResourcesTable";
+import type { WorkspaceRepositoriesSettings } from "@/components/admin/integrations/WorkspaceRepositoriesSettings";
 import type { WorkspaceScmTokenSettings } from "@/components/admin/integrations/WorkspaceScmTokenSettings";
 import { useConnectionSync } from "@/hooks/use-connection-sync";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -147,6 +147,6 @@ export function useScmIntegration(workspaceSlug: string) {
 				removeRepository.mutate({ path: { workspaceSlug }, query: { nameWithOwner } });
 			},
 			onRetry: () => void refetchRepositories(),
-		} satisfies ComponentProps<typeof AdminRepositoriesSettings>,
+		} satisfies ComponentProps<typeof WorkspaceRepositoriesSettings>,
 	};
 }

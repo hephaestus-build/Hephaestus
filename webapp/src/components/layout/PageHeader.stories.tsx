@@ -3,7 +3,7 @@ import { Settings2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { withStandardPage } from "@/stories/decorators";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { PageHeader } from "./PageHeader";
 

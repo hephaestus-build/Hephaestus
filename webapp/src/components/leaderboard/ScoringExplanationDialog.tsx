@@ -7,7 +7,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { getProviderTerms, type ProviderType } from "@/lib/provider";
+import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 
 interface ScoringExplanationDialogProps {
 	open: boolean;

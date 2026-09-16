@@ -4,8 +4,8 @@ import { expect, fn } from "storybook/test";
 
 import { STORY_NOW } from "@/stories/story-clock";
 
+import { authoredPullRequests, filledMonitor, reviewActivity } from "./fixtures";
 import { ProfileContent, ZERO_ACTIVITY_STATS } from "./ProfileContent";
-import { authoredPullRequests, filledMonitor, reviewActivity } from "./story-mock-data";
 
 const now = new Date(STORY_NOW);
 const defaultAfter = formatISO(startOfISOWeek(now));

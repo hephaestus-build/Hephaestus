@@ -13,7 +13,7 @@ import {
 	AdminFeedbackList,
 	type AdminFeedbackListState,
 	type FeedbackStatusFilter,
-} from "@/components/admin/feedback/AdminFeedbackList";
+} from "@/components/admin/product-feedback/AdminFeedbackList";
 import { FilterToggle } from "@/components/common/FilterToggle";
 import { ResultCount } from "@/components/common/ResultCount";
 import { PageHeader } from "@/components/layout/PageHeader";

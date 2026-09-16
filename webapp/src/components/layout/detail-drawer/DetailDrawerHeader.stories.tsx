@@ -5,8 +5,8 @@ import { GroupPill } from "@/components/admin/practice-catalog/GroupPill";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { DrawerBody, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { withPageBehind } from "@/stories/decorators";
+import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
-import { expectSettledVisible } from "@/test/overlay";
 
 import { DetailDrawerHeader } from "./DetailDrawerHeader";
 

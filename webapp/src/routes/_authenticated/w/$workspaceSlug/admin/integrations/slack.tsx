@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { AdminSlackChannelsSettings } from "@/components/admin/integrations/AdminSlackChannelsSettings";
-import { AdminSlackNotificationSettings } from "@/components/admin/integrations/AdminSlackNotificationSettings";
 import { ConnectionStateNotice } from "@/components/admin/integrations/ConnectionStateNotice";
 import { IntegrationCardHeading } from "@/components/admin/integrations/IntegrationCardHeading";
 import { JobHistoryCard } from "@/components/admin/integrations/JobHistoryCard";
 import { SyncResourcesTable } from "@/components/admin/integrations/SyncResourcesTable";
 import { SyncStatusHeader } from "@/components/admin/integrations/SyncStatusHeader";
+import { WorkspaceSlackChannelsSettings } from "@/components/admin/integrations/WorkspaceSlackChannelsSettings";
+import { WorkspaceSlackNotificationSettings } from "@/components/admin/integrations/WorkspaceSlackNotificationSettings";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { SlackIcon } from "@/components/icons/brand";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -71,13 +71,13 @@ function SlackIntegrationPage() {
 			)}
 
 			{ready && (
-				<AdminSlackNotificationSettings
+				<WorkspaceSlackNotificationSettings
 					key={slack.notificationSettingsKey}
 					{...slack.notificationSettingsProps}
 				/>
 			)}
 
-			{ready && <AdminSlackChannelsSettings {...slack.channelsSettingsProps} />}
+			{ready && <WorkspaceSlackChannelsSettings {...slack.channelsSettingsProps} />}
 
 			{hasConnection && <JobHistoryCard {...slack.jobHistoryProps} />}
 		</PageLayout>

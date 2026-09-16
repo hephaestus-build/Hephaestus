@@ -7,6 +7,8 @@ import type {
 	ReviewObservation,
 	ReviewObservationCounts,
 } from "@/api/types.gen";
+import type { StatusDef } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import {
@@ -15,8 +17,6 @@ import {
 } from "@/components/practice-vocabulary/observation-result";
 import { derivedOutcome } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import type { StatusDef } from "@/components/practice-vocabulary/status-def";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { hasText } from "@/lib/text";

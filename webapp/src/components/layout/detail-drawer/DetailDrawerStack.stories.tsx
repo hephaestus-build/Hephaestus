@@ -5,8 +5,8 @@ import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDraw
 import { Button } from "@/components/ui/button";
 import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/components/ui/drawer";
 import { withPageBehind } from "@/stories/decorators";
+import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
-import { expectSettledVisible } from "@/test/overlay";
 
 import { DetailDrawerStack } from "./DetailDrawerStack";
 

@@ -13,7 +13,7 @@ import {
 	reviewRuns,
 	workspaceMembers,
 	workspacePractices,
-} from "./story-mock-data";
+} from "./fixtures";
 
 // These handlers filter, sort and paginate the fixture the way the server does. A mock that answers
 // every URL with the same array leaves a story that clicks a facet testing nothing.

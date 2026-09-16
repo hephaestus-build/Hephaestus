@@ -2,7 +2,6 @@ import { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Chat } from "@/components/mentor/Chat";
 import { Copilot } from "@/components/mentor/Copilot";
-import { defaultPartRenderers } from "@/components/mentor/renderers";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
@@ -90,7 +89,6 @@ export default function GlobalCopilot() {
 				inputPlaceholder="Ask me anything..."
 				disableAttachments
 				className="h-full max-h-none"
-				partRenderers={defaultPartRenderers}
 			/>
 		</Copilot>
 	);

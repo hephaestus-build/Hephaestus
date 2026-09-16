@@ -7,11 +7,11 @@ import type { ReviewFeedback, ReviewPlacement } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { hasText } from "@/lib/text";
 
+import { statusToneClass } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { type DeliveryFacts, deliveryOutcome, isWithheld } from "./delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "./delivery-place-defs";
 import { placementLabel } from "./placement-defs";
-import { statusToneClass } from "./status-def";
-import { StatusBadge } from "./StatusBadge";
 import {
 	WITHHOLDING_FAMILY_DEFS,
 	type WithholdingReason,

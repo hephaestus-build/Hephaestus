@@ -3,7 +3,7 @@ import { expect } from "storybook/test";
 
 import { minutesBefore } from "@/stories/story-clock";
 
-import { tracedSignals } from "./story-mock-data";
+import { tracedSignals } from "./fixtures";
 import { SIGNAL_STATE_REASON_LABELS } from "./trace-format";
 import { TraceSignalTimeline } from "./TraceSignalTimeline";
 

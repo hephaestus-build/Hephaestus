@@ -4,7 +4,7 @@ import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import type { CatalogEntryStatus, CuratedGroup, CuratedPracticeSummary } from "@/api/types.gen";
 import { withStandardPage } from "@/stories/decorators";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import type { CuratedCatalogSearch } from "./curated-catalog-search";
 import { CuratedCatalog } from "./CuratedCatalog";

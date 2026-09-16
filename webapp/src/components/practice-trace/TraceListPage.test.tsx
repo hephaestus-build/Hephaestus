@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { renderWithRouter } from "@/test/router-harness";
 
-import { tracedArtifacts } from "./story-mock-data";
+import { tracedArtifacts } from "./fixtures";
 import { TraceListPage } from "./TraceListPage";
 
 /**

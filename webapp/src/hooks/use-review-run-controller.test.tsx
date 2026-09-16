@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { AgentJob } from "@/api/types.gen";
-import { reviewJob } from "@/components/admin/practice-reviews/story-mock-data";
+import { reviewJob } from "@/components/admin/practice-reviews/fixtures";
 import { server } from "@/mocks/server";
 
 import { useReviewRunController } from "./use-review-run-controller";

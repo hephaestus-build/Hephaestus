@@ -4,7 +4,7 @@ import type { Profile, ProfileActivityMonitor } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Separator } from "@/components/ui/separator";
 import type { ActivityMonitorFilters } from "@/lib/activity-monitor";
-import type { ProviderType } from "@/lib/provider";
+import type { ProviderType } from "@/lib/provider/provider-terms";
 import { rendersContent } from "@/lib/react-node";
 import type { LeaderboardSchedule } from "@/lib/timeframe";
 

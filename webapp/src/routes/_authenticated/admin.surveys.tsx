@@ -8,11 +8,11 @@ import {
 	GUARDED_SURVEY_LEVEL_KINDS,
 	SURVEY_LEVEL_KINDS,
 	surveyLevel,
-} from "@/components/admin/feedback/admin-surveys-search";
+} from "@/components/admin/product-feedback/admin-surveys-search";
 import {
 	AdminSurveysTable,
 	type AdminSurveysTableState,
-} from "@/components/admin/feedback/AdminSurveysTable";
+} from "@/components/admin/product-feedback/AdminSurveysTable";
 import { useNow } from "@/components/common/use-now";
 import {
 	encodeDetailStack,

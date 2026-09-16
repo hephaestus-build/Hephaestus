@@ -8,7 +8,7 @@
  * that share it.
  */
 import { readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 
 /** Resolved from this file, so the gate answers the same from the repo root or from webapp/. */
 const REPO_ROOT = resolve(import.meta.dirname, "..");
@@ -33,17 +33,38 @@ if (files.length === 0) {
  * stem that is also a sibling directory's name, are one sidebar node for two things.
  */
 const sidebarKey = (name: string) => name.replaceAll(/[^a-z0-9]/giu, "").toLowerCase();
+/**
+ * Storybook's auto-title also folds a story into its parent directory when the stem repeats the
+ * directory's name, case-insensitively, or is `index` (`autoTitle.ts` → `sanitize`): `Dir/Dir.stories.tsx`
+ * is titled `…/Dir`, not `…/Dir/Dir`. That is fine for a directory holding one story file, and a
+ * folder and a leaf under one name for a directory holding anything else. A story directly under a
+ * root never folds, because the root segment is stripped before the title is built.
+ */
+const foldsIntoParent = (stem: string, parentPath: string) =>
+	dirname(parentPath) !== STORIES &&
+	(stem.toLowerCase() === basename(parentPath).toLowerCase() || /^index$/iu.test(stem));
 const collisions: string[] = [];
 const nodes = new Map<string, Map<string, string>>();
 for (const entry of entries) {
 	if (!entry.isDirectory() && !entry.name.endsWith(".stories.tsx")) continue;
 	const siblings = nodes.get(entry.parentPath) ?? new Map<string, string>();
 	nodes.set(entry.parentPath, siblings);
-	const key = sidebarKey(entry.name.replace(/\.stories\.tsx$/u, ""));
-	const path = relative(REPO_ROOT, join(entry.parentPath, entry.name));
+	const stem = entry.name.replace(/\.stories\.tsx$/u, "");
+	const key = sidebarKey(stem);
+	const file = relative(STORIES, join(entry.parentPath, entry.name));
+	const path = `webapp/src/${file}`;
 	const taken = siblings.get(key);
 	if (taken === undefined) siblings.set(key, path);
 	else collisions.push(`${path} shares a sidebar node with ${taken}`);
+	if (entry.isFile() && foldsIntoParent(stem, entry.parentPath)) {
+		const directory = `${relative(STORIES, entry.parentPath)}/`;
+		const shadowed = files.find((other) => other !== file && other.startsWith(directory));
+		if (shadowed !== undefined) {
+			collisions.push(
+				`${path} is titled as its directory, which also holds webapp/src/${shadowed}`,
+			);
+		}
+	}
 }
 if (collisions.length > 0) {
 	console.error("Storybook files a story by its path; these would share one sidebar node:\n");

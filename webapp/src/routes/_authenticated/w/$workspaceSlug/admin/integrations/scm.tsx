@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ExternalLinkIcon, WebhookIcon } from "lucide-react";
 
-import { AdminRepositoriesSettings } from "@/components/admin/integrations/AdminRepositoriesSettings";
 import { ConnectionStateNotice } from "@/components/admin/integrations/ConnectionStateNotice";
 import { IntegrationCardHeading } from "@/components/admin/integrations/IntegrationCardHeading";
 import { JobHistoryCard } from "@/components/admin/integrations/JobHistoryCard";
 import { SyncResourcesTable } from "@/components/admin/integrations/SyncResourcesTable";
 import { SyncStatusHeader } from "@/components/admin/integrations/SyncStatusHeader";
+import { WorkspaceRepositoriesSettings } from "@/components/admin/integrations/WorkspaceRepositoriesSettings";
 import { WorkspaceScmTokenSettings } from "@/components/admin/integrations/WorkspaceScmTokenSettings";
 import { GithubIcon, GitlabIcon } from "@/components/icons/brand";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -92,7 +92,7 @@ function ScmIntegrationPage() {
 			)}
 
 			{isConnectionActive && !isAppInstallationWorkspace && (
-				<AdminRepositoriesSettings {...scm.repositoriesSettingsProps} />
+				<WorkspaceRepositoriesSettings {...scm.repositoriesSettingsProps} />
 			)}
 
 			{hasConnection && <JobHistoryCard {...scm.jobHistoryProps} />}

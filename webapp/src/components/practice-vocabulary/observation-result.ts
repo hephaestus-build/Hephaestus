@@ -1,8 +1,8 @@
 import type { ReviewObservation } from "@/api/types.gen";
 
+import type { StatusDef } from "@/components/common/status-def";
 import { ASSESSMENT_STATUS_DEFS } from "./assessment-status-defs";
 import { OUTCOME_DEFS, derivedOutcome } from "./outcome-defs";
-import type { StatusDef } from "./status-def";
 
 export type ObservationResultFacts = Pick<
 	ReviewObservation,

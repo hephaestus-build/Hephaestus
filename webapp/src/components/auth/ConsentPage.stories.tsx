@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 import { expectGenuinelyDisabled } from "@/test/controls";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import {
 	ConsentPage,

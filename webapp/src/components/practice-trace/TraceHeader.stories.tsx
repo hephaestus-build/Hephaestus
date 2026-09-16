@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
 
-import { artifactTrace, documentArtifactTrace, untouchedArtifactTrace } from "./story-mock-data";
+import { artifactTrace, documentArtifactTrace, untouchedArtifactTrace } from "./fixtures";
 import { TraceHeader } from "./TraceHeader";
 
 /**

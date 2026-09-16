@@ -3,7 +3,7 @@ import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CatalogPracticePreview } from "@/api/types.gen";
-import { mockPractices } from "@/components/admin/practices/story-mock-data";
+import { mockPractices } from "@/components/admin/practices/fixtures";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,

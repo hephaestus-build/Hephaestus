@@ -1,4 +1,4 @@
-import { differenceInHours, differenceInMinutes, differenceInSeconds, isPast } from "date-fns";
+import { differenceInHours, differenceInMinutes, differenceInSeconds, isBefore } from "date-fns";
 import { CalendarClock, MoveRight, TrendingDown, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -27,7 +27,7 @@ function formatTimeRemaining(leaderboardEnd: string | undefined, now: Date): str
 
 	const endDate = new Date(leaderboardEnd);
 
-	if (isPast(endDate)) {
+	if (!isBefore(now, endDate)) {
 		return "Ended";
 	}
 
@@ -65,7 +65,7 @@ export function LeaderboardOverview({
 	// The per-second interval runs only while the label can still change; the render that first sees
 	// the deadline pass clears it.
 	const [now, setNow] = useState(() => new Date());
-	const counting = leaderboardEnd !== undefined && !isPast(new Date(leaderboardEnd));
+	const counting = leaderboardEnd !== undefined && isBefore(now, new Date(leaderboardEnd));
 
 	useEffect(() => {
 		if (!counting) {

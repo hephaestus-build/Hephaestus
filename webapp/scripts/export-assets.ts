@@ -70,14 +70,14 @@ interface ReadmeCapture {
 const readmeCaptures: ReadmeCapture[] = [
 	{
 		name: "landing-hero",
-		storyId: "components-info-landing-landingherosection--readme-export",
+		storyId: "info-landing-landingherosection--readme-export",
 		selector: '[data-readme-export="landing-hero"]',
 		viewportWidth: 1440,
 		expectedWidth: 1280,
 	},
 	{
 		name: "feedback-scene",
-		storyId: "components-info-landing-landingherosection--scene-export",
+		storyId: "info-landing-landingherosection--scene-export",
 		selector: '[data-readme-export="feedback-scene"]',
 		viewportWidth: 1024,
 		expectedWidth: 896,

@@ -20,7 +20,7 @@ import {
 	useSidebar,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getWorkspaceAvatarUrl } from "@/lib/provider";
+import { getWorkspaceAvatarUrl } from "@/lib/provider/avatar";
 import { firstNonBlank } from "@/lib/text";
 
 export function WorkspaceSwitcher({

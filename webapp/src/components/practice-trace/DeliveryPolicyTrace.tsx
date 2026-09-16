@@ -4,7 +4,7 @@ import type {
 	DeliveryPolicyTrace as DeliveryPolicyTraceData,
 } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	Accordion,
 	AccordionContent,

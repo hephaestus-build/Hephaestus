@@ -16,10 +16,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { listProductSurveyInvitationsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { SurveyInvitation } from "@/api/types.gen";
-import {
-	researchInvitation,
-	surveyInvitation,
-} from "@/components/feedback/product-survey-fixtures";
+import { researchInvitation, surveyInvitation } from "@/components/product-feedback/fixtures";
 import { server } from "@/mocks/server";
 import { useProductSurveys, useSubmitProductFeedback } from "./use-product-feedback";
 

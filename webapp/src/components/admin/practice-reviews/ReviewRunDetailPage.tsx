@@ -4,11 +4,11 @@ import { WorkflowIcon } from "lucide-react";
 import type { AgentJob, Practice, ReviewFeedback, ReviewObservation } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	REVIEW_STATUS_DEFS,
 	RESULT_PROCESSING_DEFS,
 } from "@/components/practice-vocabulary/review-status-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import {
 	Empty,
 	EmptyDescription,

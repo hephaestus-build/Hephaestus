@@ -3,8 +3,8 @@ import { expect } from "storybook/test";
 
 import { mockDocumentWorkType, mockPullRequestWorkType } from "@/mocks/fixtures/practice";
 
+import { outcome } from "./fixtures";
 import { PracticeEvidenceOutcomeSummary } from "./PracticeEvidenceOutcomeSummary";
-import { outcome } from "./story-mock-data";
 
 const meta = {
 	component: PracticeEvidenceOutcomeSummary,

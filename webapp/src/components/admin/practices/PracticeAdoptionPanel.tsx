@@ -8,12 +8,12 @@ import { PracticeDefinitionSkeleton } from "@/components/admin/practices/Practic
 import { DetailRow } from "@/components/common/DetailRow";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Section } from "@/components/layout/Section";
 import { AUTONOMY_DEFS } from "@/components/practice-vocabulary/autonomy-defs";
 import { CATALOG_AVAILABILITY_DEFS } from "@/components/practice-vocabulary/catalog-availability-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
 import {
 	Accordion,

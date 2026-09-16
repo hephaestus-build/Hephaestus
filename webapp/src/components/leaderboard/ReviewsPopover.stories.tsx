@@ -3,7 +3,7 @@ import { expect, screen, userEvent } from "storybook/test";
 
 import type { PullRequestInfo } from "@/api/types.gen";
 import { withProvider } from "@/stories/decorators";
-import { expectSettledVisible } from "@/test/overlay";
+import { expectSettledVisible } from "@/stories/overlay";
 
 import { ReviewsPopover } from "./ReviewsPopover";
 

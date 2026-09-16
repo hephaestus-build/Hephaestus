@@ -36,9 +36,9 @@ export const WithAction: Story = {
 		description: "There are no pull requests to display.",
 		action: <Button>Create pull request</Button>,
 	},
-	play: async ({ canvas, userEvent }) => {
-		await userEvent.tab();
-		await expect(canvas.getByRole("button", { name: "Create pull request" })).toHaveFocus();
+	play: async ({ canvas }) => {
+		const action = canvas.getByRole("button", { name: "Create pull request" });
+		await expect(action.closest('[data-slot="empty-content"]')).not.toBeNull();
 	},
 };
 

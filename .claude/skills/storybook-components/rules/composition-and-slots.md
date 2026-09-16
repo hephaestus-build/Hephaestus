@@ -100,7 +100,7 @@ with external consumers, so its stability argument (*"Consumers rely on the plac
 the DOM"*) has no force for a component with one in-repo caller.
 <https://github.com/carbon-design-system/carbon/blob/main/docs/style.md>
 
-Copy `webapp/src/components/practice-vocabulary/StatusBadge.tsx`.
+Copy `webapp/src/components/common/StatusBadge.tsx`.
 
 ## 7. Before you build anything, read `webapp/src/components/ui/`
 

@@ -5,12 +5,12 @@ import { GroupPill } from "@/components/admin/practice-catalog/GroupPill";
 import { PracticeListSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import {
 	CATALOG_GROUP_ACTION_DEFS,
 	CATALOG_GROUP_CHANGE_ACTIONS,
 } from "@/components/practice-vocabulary/catalog-group-action-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/components/ui/drawer";

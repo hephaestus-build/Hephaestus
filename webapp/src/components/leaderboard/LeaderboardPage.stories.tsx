@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 
 import type { LeaderboardEntry } from "@/api/types.gen";
 import { withStandardPage } from "@/stories/decorators";
-import { expectNoPageOverflow, expectTablesScrollInPlace } from "@/test/reflow";
+import { expectNoPageOverflow, expectTablesScrollInPlace } from "@/stories/reflow";
 
 import { LeaderboardPage } from "./LeaderboardPage";
 

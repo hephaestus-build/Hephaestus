@@ -1,9 +1,9 @@
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import {
 	type DeliveryFacts,
 	deliveryOutcome,
 } from "@/components/practice-vocabulary/delivery-outcome-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";

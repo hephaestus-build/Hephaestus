@@ -1,4 +1,4 @@
-import { formatDistanceToNow } from "date-fns";
+import { formatDistance } from "date-fns";
 
 import type { ConnectionSyncStatus, IntegrationCatalogEntry, SyncJob } from "@/api/types.gen";
 import type { FreshnessTone } from "@/components/common/RelativeTime";
@@ -28,12 +28,17 @@ export function syncPollInterval(
 }
 
 /**
- * Human "5 minutes ago" phrasing for a timestamp. A missing/invalid value renders the {@link fallback}
- * dash — never "now" — so an absent timestamp can't masquerade as a fresh one.
+ * Human "5 minutes ago" phrasing for a timestamp against the caller's `now`. A missing/invalid value
+ * renders the {@link fallback} dash — never "now" — so an absent timestamp can't masquerade as a
+ * fresh one.
  */
-export function relativeTime(value: Date | string | undefined | null, fallback = "–"): string {
+export function relativeTime(
+	value: Date | string | undefined | null,
+	now: number,
+	fallback = "–",
+): string {
 	const date = asDate(value);
-	return date ? formatDistanceToNow(date, { addSuffix: true }) : fallback;
+	return date ? formatDistance(date, now, { addSuffix: true }) : fallback;
 }
 
 export type ConnectionHealth = ConnectionSyncStatus["health"];
@@ -180,7 +185,7 @@ const VERY_STALE_CADENCE_MULTIPLE = 6;
 export function freshnessTone(
 	lastSyncedAt: Date | string | undefined | null,
 	syncIntervalSeconds: number | undefined | null,
-	now: Date = new Date(),
+	now: number,
 ): FreshnessTone {
 	const date = asDate(lastSyncedAt);
 	if (!date) {
@@ -189,7 +194,7 @@ export function freshnessTone(
 	if (syncIntervalSeconds == null || syncIntervalSeconds <= 0) {
 		return "unknown";
 	}
-	const ageSeconds = (now.getTime() - date.getTime()) / 1000;
+	const ageSeconds = (now - date.getTime()) / 1000;
 	if (ageSeconds > syncIntervalSeconds * VERY_STALE_CADENCE_MULTIPLE) {
 		return "veryStale";
 	}
@@ -205,7 +210,7 @@ export function freshnessTone(
  */
 export function nextRunLabel(
 	nextScheduledSyncAt: Date | string | undefined | null,
-	now: Date = new Date(),
+	now: number,
 ): string | undefined {
 	const date = asDate(nextScheduledSyncAt);
 	if (!date) {
@@ -213,8 +218,8 @@ export function nextRunLabel(
 	}
 	// A schedule that is already due (or overdue — the worker may be busy or down) must not render as
 	// "next run 5 minutes ago", which reads as a past event rather than a pending one.
-	if (date.getTime() <= now.getTime()) {
+	if (date.getTime() <= now) {
 		return "next run due";
 	}
-	return `next run ${formatDistanceToNow(date, { addSuffix: true })}`;
+	return `next run ${formatDistance(date, now, { addSuffix: true })}`;
 }

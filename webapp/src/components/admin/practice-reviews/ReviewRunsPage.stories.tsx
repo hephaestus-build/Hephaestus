@@ -3,12 +3,12 @@ import { expect, fn, screen, within } from "storybook/test";
 
 import type { ListPracticeReviewsResponse } from "@/api/types.gen";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
-import { expectNoPageOverflow } from "@/test/reflow";
 
+import { reviewRuns } from "./fixtures";
 import { REVIEW_PAGE_SIZE, type RunsSearch, runsQuery } from "./review-search";
 import { ReviewRunsPage } from "./ReviewRunsPage";
-import { reviewRuns } from "./story-mock-data";
 
 /**
  * The page of reviews the endpoint would return for a search, computed from the fixture instead of

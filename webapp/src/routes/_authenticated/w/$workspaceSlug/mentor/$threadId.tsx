@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import { Chat } from "@/components/mentor/Chat";
-import { defaultPartRenderers } from "@/components/mentor/renderers";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
 
@@ -142,7 +141,6 @@ function ThreadContainer() {
 				inputPlaceholder="Continue the conversation..."
 				disableAttachments
 				className="h-full"
-				partRenderers={defaultPartRenderers}
 			/>
 		</div>
 	);

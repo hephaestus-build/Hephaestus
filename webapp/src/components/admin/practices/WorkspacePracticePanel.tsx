@@ -9,11 +9,11 @@ import { PracticeDefinitionPreview } from "@/components/admin/practices/Practice
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { AUTONOMY_DEFS } from "@/components/practice-vocabulary/autonomy-defs";
 import { AutonomySourceNote } from "@/components/practice-vocabulary/AutonomySourceNote";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
 import { buttonVariants } from "@/components/ui/button";
 import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/components/ui/drawer";

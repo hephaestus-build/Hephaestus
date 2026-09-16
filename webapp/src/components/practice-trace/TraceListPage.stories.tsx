@@ -2,11 +2,11 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import { withStandardPage, withWidePage } from "@/stories/decorators";
+import { expectSettledVisible } from "@/stories/overlay";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
-import { expectSettledVisible } from "@/test/overlay";
-import { expectNoPageOverflow } from "@/test/reflow";
 
-import { tracedArtifact, tracedArtifactPage } from "./story-mock-data";
+import { tracedArtifact, tracedArtifactPage } from "./fixtures";
 import { TRACE_PAGE_SIZE, TraceListPage } from "./TraceListPage";
 
 /**

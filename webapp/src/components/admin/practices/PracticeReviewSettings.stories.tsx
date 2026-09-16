@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 import type { AgentBinding, PracticeReviewCoveragePreview } from "@/api/types.gen";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { expectGenuinelyDisabled, expectUnavailable } from "@/test/controls";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { mockReviewSettings } from "./fixtures";
 import { PracticeReviewSettings } from "./PracticeReviewSettings";
-import { mockReviewSettings } from "./story-mock-data";
 
 const settings = mockReviewSettings({ deliverToMerged: false });
 const readyBinding: AgentBinding = {

@@ -8,13 +8,13 @@ import {
 	getWorkspaceOptions,
 	resetAndRecalculateLeaguesMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { FeatureKey } from "@/components/admin/AdminFeaturesSettings";
-import { AdminSettingsPage } from "@/components/admin/AdminSettingsPage";
+import type { FeatureKey } from "@/components/admin/WorkspaceFeaturesSettings";
+import { WorkspaceSettingsPage } from "@/components/admin/WorkspaceSettingsPage";
+import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Spinner } from "@/components/ui/spinner";
-import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useUpdateWorkspaceFeatures } from "@/hooks/use-update-workspace-features";
 import { isRecord } from "@/lib/is-record";
@@ -123,7 +123,7 @@ function AdminSettings() {
 					/>
 				</div>
 			) : (
-				<AdminSettingsPage
+				<WorkspaceSettingsPage
 					isResettingLeagues={resetLeagues.isPending}
 					onResetLeagues={() => {
 						resetLeagues.mutate({ path: { workspaceSlug } });

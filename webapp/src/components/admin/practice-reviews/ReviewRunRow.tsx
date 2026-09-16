@@ -2,8 +2,8 @@ import { Link } from "@tanstack/react-router";
 
 import type { ReviewRunSummary } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 
 import type { RunsSearch } from "./review-search";
 import { ReviewArtifactLabel } from "./ReviewArtifact";

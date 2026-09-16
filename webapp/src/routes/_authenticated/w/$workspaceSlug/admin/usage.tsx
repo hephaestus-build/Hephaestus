@@ -8,7 +8,6 @@ import {
 	getLlmUsageReportQueryKey,
 	updateWorkspaceLlmBudgetMutation,
 } from "@/api/@tanstack/react-query.gen";
-import { AdminLlmUsagePage } from "@/components/admin/usage/AdminLlmUsagePage";
 import { SetOwnProviderBudgetDialog } from "@/components/admin/usage/SetOwnProviderBudgetDialog";
 import {
 	monthOf,
@@ -16,6 +15,10 @@ import {
 	usageSearchSchema,
 } from "@/components/admin/usage/usage-search";
 import { canStepForwardFrom, isCurrentMonthUtc } from "@/components/admin/usage/usage-utils";
+import {
+	type UsageView,
+	WorkspaceLlmUsagePage,
+} from "@/components/admin/usage/WorkspaceLlmUsagePage";
 import { useNow } from "@/components/common/use-now";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -38,15 +41,16 @@ function AdminUsageContainer() {
 		setIsEditingOwnProviderCap(isEditing);
 	};
 
-	const {
-		data: report,
-		isLoading,
-		error,
-		refetch,
-	} = useQuery({
+	const reportQuery = useQuery({
 		...getLlmUsageReportOptions({ path: { workspaceSlug }, query: { month } }),
 		placeholderData: keepPreviousData,
 	});
+	const report = reportQuery.data;
+	const view: UsageView = reportQuery.isError
+		? { status: "error", error: reportQuery.error, onRetry: () => void reportQuery.refetch() }
+		: report === undefined
+			? { status: "loading" }
+			: { status: "ready", report };
 
 	const updateOwnProviderCap = useMutation({
 		...updateWorkspaceLlmBudgetMutation(),
@@ -74,16 +78,13 @@ function AdminUsageContainer() {
 
 	return (
 		<>
-			<AdminLlmUsagePage
+			<WorkspaceLlmUsagePage
 				month={month}
 				now={now}
 				isCurrentMonth={isCurrentMonth}
 				canGoNext={canGoNext}
 				workspaceSlug={workspaceSlug}
-				report={report}
-				isLoading={isLoading}
-				error={error}
-				onRetry={() => void refetch()}
+				view={view}
 				onEditOwnProviderCap={() => editOwnProviderCap(true)}
 			/>
 			<SetOwnProviderBudgetDialog

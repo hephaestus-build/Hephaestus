@@ -1,11 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
 import { withWidePage } from "@/stories/decorators";
+import { expectSettledVisible } from "@/stories/overlay";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { expectSettledVisible } from "@/test/overlay";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { type AutonomyFixture, buildAutonomyFixture, scaleFixture } from "./fixtures";
 import { PracticeAutonomyPage } from "./PracticeAutonomyPage";
-import { type AutonomyFixture, buildAutonomyFixture, scaleFixture } from "./story-mock-data";
 
 const from = ({ settings, rollup, practices }: AutonomyFixture) => ({
 	settings,

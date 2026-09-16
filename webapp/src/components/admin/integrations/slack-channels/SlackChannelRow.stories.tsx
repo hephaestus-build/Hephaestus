@@ -3,8 +3,8 @@ import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { SlackMonitoredChannel } from "@/api/types.gen";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { expectSettledVisible } from "@/stories/overlay";
 import { daysBefore } from "@/stories/story-clock";
-import { expectSettledVisible } from "@/test/overlay";
 
 import { SlackChannelRow } from "./SlackChannelRow";
 

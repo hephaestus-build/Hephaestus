@@ -7,7 +7,7 @@ import {
 	artifactTrace,
 	tracedArtifactPage,
 	tracedArtifacts,
-} from "@/components/practice-trace/story-mock-data";
+} from "@/components/practice-trace/fixtures";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";

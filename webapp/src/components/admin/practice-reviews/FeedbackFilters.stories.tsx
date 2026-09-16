@@ -5,9 +5,9 @@ import { withStandardPage } from "@/stories/decorators";
 import { StatefulPatch } from "@/stories/stateful";
 
 import { FeedbackFilters } from "./FeedbackFilters";
+import { reviewArtifact, workspaceMembers } from "./fixtures";
 import type { FeedbackSearch } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
-import { reviewArtifact, workspaceMembers } from "./story-mock-data";
 
 const PEOPLE: ReviewPeople = {
 	options: workspaceMembers

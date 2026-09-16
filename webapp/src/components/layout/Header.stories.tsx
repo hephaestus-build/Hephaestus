@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn } from "storybook/test";
 
-import { surveyInvitation } from "@/components/feedback/product-survey-fixtures";
-import { ProductFeedbackMenu } from "@/components/feedback/ProductFeedbackMenu";
+import { surveyInvitation } from "@/components/product-feedback/fixtures";
+import { ProductFeedbackMenu } from "@/components/product-feedback/ProductFeedbackMenu";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import Header from "./Header";
 

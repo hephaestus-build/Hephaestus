@@ -20,7 +20,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getInitials } from "@/lib/avatar";
 import { firstNonBlank, hasText } from "@/lib/text";
-import { type EnvironmentTone, resolveHeaderBadge } from "@/lib/version";
+import { type EnvironmentTone, resolveHeaderBadge } from "./version";
 
 const ENV_DOT: Record<EnvironmentTone, string> = {
 	staging: "bg-warning",

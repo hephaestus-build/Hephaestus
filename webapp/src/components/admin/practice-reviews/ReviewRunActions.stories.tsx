@@ -1,10 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
 
-import {
-	mockJobFailedResultProcessing,
-	mockJobRunning,
-} from "@/components/admin/ai/story-mock-data";
+import { mockJobFailedResultProcessing, mockJobRunning } from "@/components/admin/ai/fixtures";
 
 import { ReviewRunActions } from "./ReviewRunActions";
 

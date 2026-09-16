@@ -4,9 +4,10 @@ import { cn } from "cn";
 import type { LabelInfo } from "@/api/types.gen";
 import { FormattedTitle } from "@/components/common/FormattedTitle";
 import { LabelBadge } from "@/components/common/LabelBadge";
+import { getPullRequestStateIcon } from "@/components/icons/provider-icons";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getPullRequestStateIcon, type ProviderType } from "@/lib/provider";
+import type { ProviderType } from "@/lib/provider/provider-terms";
 import { hasText } from "@/lib/text";
 
 export interface IssueCardProps {

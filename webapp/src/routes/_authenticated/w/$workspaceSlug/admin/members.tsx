@@ -10,10 +10,10 @@ import {
 	getUsersWithTeamsQueryKey,
 	updateMemberVisibilityMutation,
 } from "@/api/@tanstack/react-query.gen";
-import { AdminMembersPage } from "@/components/admin/AdminMembersPage";
-import { adaptApiUserTeams } from "@/components/admin/types";
+import { adaptApiUserTeams } from "@/components/admin/user-teams";
 import type { UsersTableView } from "@/components/admin/UsersTable";
-import { NoWorkspace } from "@/components/workspace/NoWorkspace";
+import { WorkspaceMembersPage } from "@/components/admin/WorkspaceMembersPage";
+import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
@@ -128,7 +128,7 @@ function AdminMembersContainer() {
 	}
 
 	return (
-		<AdminMembersPage
+		<WorkspaceMembersPage
 			users={users}
 			teams={teams}
 			isLoading={isLoading || !hasText(workspaceSlug)}

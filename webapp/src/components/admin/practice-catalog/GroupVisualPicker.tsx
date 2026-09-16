@@ -18,7 +18,7 @@ import {
 	iconLabel,
 	iconSearchText,
 	PILL,
-} from "./group-visuals";
+} from "@/components/practice-vocabulary/group-visuals";
 
 export interface GroupVisualPickerProps {
 	id?: string;

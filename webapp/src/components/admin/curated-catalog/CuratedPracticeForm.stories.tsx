@@ -10,9 +10,9 @@ import {
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
+import { settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow, expectPanelContentInset } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { settledDrawerPanel } from "@/test/overlay";
-import { expectNoPanelOverflow, expectPanelContentInset } from "@/test/reflow";
 
 import { curatedPracticeLevel, GUARDED_CURATED_LEVEL_KINDS } from "./curated-catalog-search";
 import { CuratedFormLevel } from "./CuratedFormLevel";

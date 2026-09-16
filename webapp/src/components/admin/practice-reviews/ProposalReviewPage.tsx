@@ -2,11 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { CheckIcon, CircleXIcon, ScanSearchIcon } from "lucide-react";
 import { useId, useState } from "react";
 import type { GetPracticeReviewFeedbackResponse, Practice } from "@/api/types.gen";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
 import { placementLabel } from "@/components/practice-vocabulary/placement-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

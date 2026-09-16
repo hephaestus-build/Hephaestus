@@ -3,7 +3,7 @@ import { expect } from "storybook/test";
 
 import type { EvidenceCitation } from "@/api/types.gen";
 import { knownEvidenceSourceKinds } from "@/components/practice-vocabulary/evidence-source-defs";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { ObservationEvidence } from "./ObservationEvidence";
 

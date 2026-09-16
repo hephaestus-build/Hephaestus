@@ -8,11 +8,11 @@ import {
 import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
+import { statusFacetOptions } from "@/components/common/status-def";
 import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import { statusFacetOptions } from "@/components/practice-vocabulary/status-def";
 import { fromDateRange, toDateRange } from "@/lib/date-range-search";
 import { nonEmpty } from "@/lib/search-params";
 import { hasText } from "@/lib/text";

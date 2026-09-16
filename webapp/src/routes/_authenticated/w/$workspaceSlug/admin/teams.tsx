@@ -16,8 +16,8 @@ import type {
 	UpdateRepositoryVisibilityData,
 	UpdateTeamVisibilityData,
 } from "@/api/types.gen";
-import { AdminTeamsTable } from "@/components/admin/AdminTeamsTable";
-import { NoWorkspace } from "@/components/workspace/NoWorkspace";
+import { WorkspaceTeamsTable } from "@/components/admin/WorkspaceTeamsTable";
+import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
@@ -172,7 +172,7 @@ function AdminTeamsContainer() {
 	}
 
 	return (
-		<AdminTeamsTable
+		<WorkspaceTeamsTable
 			teams={teamsQuery.data ?? []}
 			isLoading={isWorkspaceLoading || teamsQuery.isLoading || !hasText(workspaceSlug)}
 			error={teamsQuery.error}

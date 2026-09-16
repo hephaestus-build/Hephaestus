@@ -12,7 +12,16 @@ function getAbsolutePath(value: string): string {
 }
 
 const config: StorybookConfig = {
-	stories: ["../src/**/*.stories.@(js|jsx|mjs|ts|tsx)"],
+	// Two roots, so a title starts at the segment that says something: `admin/ai/ModelPicker`, not
+	// `components/admin/ai/ModelPicker`, and the runtime seams stand apart under `App runtime`.
+	stories: [
+		{ directory: "../src/components", files: "**/*.stories.@(ts|tsx)" },
+		{
+			directory: "../src/integrations",
+			titlePrefix: "App runtime",
+			files: "**/*.stories.@(ts|tsx)",
+		},
+	],
 	addons: [
 		getAbsolutePath("@storybook/addon-docs"),
 		getAbsolutePath("@storybook/addon-onboarding"),

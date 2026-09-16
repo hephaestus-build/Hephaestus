@@ -4,8 +4,8 @@ import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { ConnectionSyncStatus, SyncJob } from "@/api/types.gen";
 import { buttonVariants } from "@/components/ui/button";
+import { expectSettledVisible } from "@/stories/overlay";
 import { minutesAfter, minutesBefore } from "@/stories/story-clock";
-import { expectSettledVisible } from "@/test/overlay";
 
 import { SyncStatusHeader } from "./SyncStatusHeader";
 
@@ -384,10 +384,23 @@ export const Loading: Story = { args: { status: undefined, isLoading: true } };
 export const Missing: Story = { args: { status: undefined, isConnectionActive: false } };
 
 export const LoadError: Story = {
-	args: { status: undefined, error: new Error("503 Service Unavailable") },
+	args: {
+		status: undefined,
+		error: { failedQuery: "connection", cause: new Error("503 Service Unavailable") },
+	},
 	play: async ({ args, canvas }) => {
 		canvas.getByText(/couldn't load the github connection/iu);
 		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalledTimes(1);
+	},
+};
+
+export const StatusLoadError: Story = {
+	args: {
+		status: undefined,
+		error: { failedQuery: "status", cause: new Error("503 Service Unavailable") },
+	},
+	play: async ({ canvas }) => {
+		canvas.getByText(/couldn't load github sync status/iu);
 	},
 };

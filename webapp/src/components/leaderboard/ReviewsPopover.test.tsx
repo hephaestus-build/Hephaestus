@@ -47,7 +47,7 @@ async function openCopyAction() {
 	});
 }
 
-it("announces success only after the clipboard write completes", async () => {
+it("announces success only after the clipboard write completes, and writes once however often it is pressed meanwhile", async () => {
 	const finishWrite = vi.fn<() => void>();
 	const pending = new Promise<void>((resolve) => {
 		finishWrite.mockImplementation(resolve);
@@ -55,13 +55,14 @@ it("announces success only after the clipboard write completes", async () => {
 	writeText.mockReturnValue(pending);
 	const copy = await openCopyAction();
 	fireEvent.click(copy);
-	expect(copy.disabled).toBe(true);
+	fireEvent.click(copy);
+	expect(writeText).toHaveBeenCalledOnce();
+	expect(copy.disabled).toBe(false);
 	expect(screen.queryByText("Review links copied")).toBeNull();
 	await act(async () => {
 		finishWrite();
 	});
 	await screen.findByText("Review links copied");
-	expect(copy.disabled).toBe(false);
 });
 
 it("reports denied access without success and permits retry", async () => {
@@ -70,7 +71,6 @@ it("reports denied access without success and permits retry", async () => {
 	fireEvent.click(copy);
 	await screen.findByText("Could not copy review links");
 	expect(screen.queryByText("Review links copied")).toBeNull();
-	await waitFor(() => expect(copy.disabled).toBe(false));
 	fireEvent.click(copy);
 	await screen.findByText("Review links copied");
 });

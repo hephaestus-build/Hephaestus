@@ -3,14 +3,13 @@ import { AlertCircle, RotateCcw } from "lucide-react";
 
 import { cn } from "cn";
 import type { ChatMessageVote } from "@/api/types.gen";
+import { useScrollToBottom } from "@/components/mentor/use-scroll-to-bottom";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import type { Attachment, ChatMessage } from "@/lib/types";
 
 import { Messages } from "./Messages";
 import { MultimodalInput } from "./MultimodalInput";
-import type { PartRendererMap } from "./renderers/types";
 
 export interface ChatProps {
 	messages: ChatMessage[];
@@ -31,7 +30,6 @@ export interface ChatProps {
 	inputPlaceholder?: string;
 	disableAttachments?: boolean;
 	className?: string;
-	partRenderers?: PartRendererMap;
 }
 
 export function Chat({
@@ -53,7 +51,6 @@ export function Chat({
 	inputPlaceholder = "Send a message...",
 	disableAttachments = false,
 	className,
-	partRenderers,
 }: ChatProps) {
 	const { containerRef, endRef, isAtBottom, scrollToBottom } = useScrollToBottom();
 
@@ -76,7 +73,6 @@ export function Chat({
 					onMessageEdit={onMessageEdit}
 					onCopy={onCopy}
 					onVote={onVote}
-					partRenderers={partRenderers}
 				/>
 
 				<div className="relative z-10 -mt-20 flex w-full flex-col items-center gap-2 bg-gradient-to-t from-muted from-60% to-transparent px-4 pt-8 pb-2 dark:from-background/30">

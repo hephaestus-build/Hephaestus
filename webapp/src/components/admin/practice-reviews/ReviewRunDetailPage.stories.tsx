@@ -2,17 +2,17 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, waitFor } from "storybook/test";
 
 import type { ReviewFeedback, ReviewObservation } from "@/api/types.gen";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
-import { REVIEW_PREVIEW_SIZE, type ReviewSectionState } from "./ReviewOutputSections";
-import { ReviewRunDetailPage } from "./ReviewRunDetailPage";
 import {
 	manyObservations,
 	reviewFeedback,
 	reviewJob,
 	reviewObservations,
 	workspacePractices,
-} from "./story-mock-data";
+} from "./fixtures";
+import { REVIEW_PREVIEW_SIZE, type ReviewSectionState } from "./ReviewOutputSections";
+import { ReviewRunDetailPage } from "./ReviewRunDetailPage";
 
 const COMPLETED_RUN = "11111111-1111-1111-1111-111111111111";
 const CONVERSATION_RUN = "33333333-3333-3333-3333-333333333333";

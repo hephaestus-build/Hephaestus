@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, screen, within } from "storybook/test";
 
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
+import { observationDetail, reviewObservationDetail, workspacePractices } from "./fixtures";
 import { ObservationDetailPage } from "./ObservationDetailPage";
-import { observationDetail, reviewObservationDetail, workspacePractices } from "./story-mock-data";
 
 /**
  * The route fetches the record and the workspace's practice list; this screen only draws what it is

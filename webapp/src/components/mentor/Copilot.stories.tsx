@@ -3,8 +3,8 @@ import { expect, fn, screen } from "storybook/test";
 
 import type { ChatMessageVote } from "@/api/types.gen";
 import type { ChatMessage } from "@/lib/types";
+import { expectDismissed, expectSettledVisible } from "@/stories/overlay";
 import { STORY_NOW } from "@/stories/story-clock";
-import { expectDismissed, expectSettledVisible } from "@/test/overlay";
 
 import { Chat } from "./Chat";
 import { Copilot } from "./Copilot";

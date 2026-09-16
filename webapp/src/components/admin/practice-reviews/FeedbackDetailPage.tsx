@@ -8,12 +8,12 @@ import type {
 } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { DeliveryPolicyTrace } from "@/components/practice-trace/DeliveryPolicyTrace";
 import { DeliveryTrace } from "@/components/practice-vocabulary/DeliveryTrace";
 import { codeCitationLocator } from "@/components/practice-vocabulary/evidence-source-defs";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
 import { PLACEMENT_DEFS } from "@/components/practice-vocabulary/placement-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import {
 	Empty,
 	EmptyDescription,

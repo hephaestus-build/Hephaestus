@@ -17,12 +17,12 @@ import {
 	getUserProfileOptions,
 	getWorkspaceOptions,
 } from "@/api/@tanstack/react-query.gen";
+import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { useNow } from "@/components/common/use-now";
 import { LeaderboardPage } from "@/components/leaderboard/LeaderboardPage";
 import type { LeaderboardSortType } from "@/components/leaderboard/SortFilter";
 import { Spinner } from "@/components/ui/spinner";
-import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { useAuth } from "@/integrations/auth/AuthContext";

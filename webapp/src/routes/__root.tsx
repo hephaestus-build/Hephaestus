@@ -16,25 +16,25 @@ import { toast } from "sonner";
 import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstack/react-query.gen";
 import type { SurveyInvitation } from "@/api/types.gen";
 import { LoginDialog } from "@/components/auth/LoginDialog";
-import { CookieConsentBanner } from "@/components/consent/CookieConsentBanner";
-import type { FeedbackKind } from "@/components/feedback/feedback-copy";
-import {
-	PAGE_PATH_MAX_LENGTH,
-	ProductFeedbackDialog,
-	USER_AGENT_MAX_LENGTH,
-} from "@/components/feedback/ProductFeedbackDialog";
-import { ProductFeedbackMenu } from "@/components/feedback/ProductFeedbackMenu";
-import { ProductSurveyDialog } from "@/components/feedback/ProductSurveyDialog";
-import {
-	EMPTY_SURVEY_RESPONSE_DRAFT,
-	type SurveyResponseDraft,
-	surveyEstimate,
-} from "@/components/feedback/survey-questions";
+import { CookieConsentBanner } from "@/components/layout/CookieConsentBanner";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
 import { AppSidebar, type SidebarContext } from "@/components/layout/sidebar/AppSidebar";
 import { SkipToContent } from "@/components/layout/SkipToContent";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
+import type { FeedbackKind } from "@/components/product-feedback/feedback-copy";
+import {
+	PAGE_PATH_MAX_LENGTH,
+	ProductFeedbackDialog,
+	USER_AGENT_MAX_LENGTH,
+} from "@/components/product-feedback/ProductFeedbackDialog";
+import { ProductFeedbackMenu } from "@/components/product-feedback/ProductFeedbackMenu";
+import { ProductSurveyDialog } from "@/components/product-feedback/ProductSurveyDialog";
+import {
+	EMPTY_SURVEY_RESPONSE_DRAFT,
+	type SurveyResponseDraft,
+	surveyEstimate,
+} from "@/components/product-feedback/survey-questions";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
@@ -47,8 +47,8 @@ import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
 import { type AuthContextType, useAuth } from "@/integrations/auth/AuthContext";
 import { safeReturnTo } from "@/integrations/auth/guard";
 import { FeatureFlagDevTools, useFeatureFlag } from "@/integrations/feature-flags";
-import { isCopilotExcludedRoute } from "@/lib/copilot-route";
-import { getProviderSlug } from "@/lib/provider";
+import { getProviderSlug } from "@/lib/provider/provider-terms";
+import { isCopilotExcludedRoute } from "./-copilot-route";
 import { ImpersonationBannerHost } from "./-ImpersonationBannerHost";
 
 const GlobalCopilot = lazy(() => import("./-GlobalCopilot"));

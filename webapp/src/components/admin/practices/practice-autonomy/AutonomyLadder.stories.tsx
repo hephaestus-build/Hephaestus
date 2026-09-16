@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
 import { PRACTICE_AUTONOMY_ADDS } from "@/lib/practice-autonomy";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import { AutonomyLadder } from "./AutonomyLadder";
 

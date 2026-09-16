@@ -12,11 +12,11 @@ import {
 	mockPullRequestBinding,
 	mockPullRequestWorkType,
 } from "@/mocks/fixtures/practice";
+import { expectNoOverflowingElement } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { expectNoOverflowingElement } from "@/test/reflow";
 
+import { outcome } from "./fixtures";
 import { PracticeBindingsEditor, type PracticeOccasionMode } from "./PracticeBindingsEditor";
-import { outcome } from "./story-mock-data";
 
 const meta = {
 	component: PracticeBindingsEditor,

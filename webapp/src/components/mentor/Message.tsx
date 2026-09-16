@@ -1,4 +1,3 @@
-import { isStaticToolUIPart } from "ai";
 import { AnimatePresence, motion } from "motion/react";
 import { type InputHTMLAttributes, useState } from "react";
 import { Streamdown } from "streamdown";
@@ -6,13 +5,12 @@ import { Streamdown } from "streamdown";
 import { cn } from "cn";
 import type { ChatMessageVote } from "@/api/types.gen";
 import { MarkdownCode } from "@/components/common/MarkdownCode";
-import type { ChatMessage, ChatTools } from "@/lib/types";
+import type { ChatMessage } from "@/lib/types";
 
 import { MentorAvatar } from "./MentorAvatar";
 import { MessageActions } from "./MessageActions";
 import { MessageEditor } from "./MessageEditor";
 import { PreviewAttachment } from "./PreviewAttachment";
-import type { PartRendererMap } from "./renderers/types";
 import { sanitizeMessageText } from "./sanitize-message-text";
 
 export interface MessageProps {
@@ -26,7 +24,6 @@ export interface MessageProps {
 	onVote?: (messageId: string, isUpvote: boolean) => void;
 	className?: string;
 	initialEditMode?: boolean;
-	partRenderers?: PartRendererMap;
 }
 
 function MarkdownTaskCheckbox(props: InputHTMLAttributes<HTMLInputElement>) {
@@ -51,7 +48,6 @@ export function PreviewMessage({
 	onVote,
 	className,
 	initialEditMode = false,
-	partRenderers,
 }: MessageProps) {
 	const [mode, setMode] = useState<"view" | "edit">(initialEditMode ? "edit" : "view");
 
@@ -136,18 +132,6 @@ export function PreviewMessage({
 										/>
 									</div>
 								);
-							}
-
-							if (isStaticToolUIPart<ChatTools>(part)) {
-								const Renderer = partRenderers?.[part.type];
-								return Renderer ? (
-									<Renderer
-										key={part.toolCallId || key}
-										message={message}
-										part={part}
-										variant={variant}
-									/>
-								) : null;
 							}
 
 							return null;

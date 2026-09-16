@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn } from "storybook/test";
 
+import { authoredPullRequests } from "./fixtures";
 import { OpenPullRequestsSection } from "./OpenPullRequestsSection";
-import { authoredPullRequests } from "./story-mock-data";
 
 const meta = {
 	component: OpenPullRequestsSection,

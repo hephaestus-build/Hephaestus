@@ -3,8 +3,8 @@ import { expect, fn, screen, within } from "storybook/test";
 
 import { Stateful } from "@/stories/stateful";
 
+import { manyMembers, workspaceMembers } from "./fixtures";
 import { MEMBER_PAGE_SIZE, type ReviewPeople, ReviewPersonFacet } from "./ReviewPersonFacet";
-import { manyMembers, workspaceMembers } from "./story-mock-data";
 
 function peopleFrom(
 	members: typeof workspaceMembers,

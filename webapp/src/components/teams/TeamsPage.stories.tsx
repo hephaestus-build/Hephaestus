@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 
 import type { TeamInfo } from "@/api/types.gen";
 import { withStandardPage } from "@/stories/decorators";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { TeamsPage } from "./TeamsPage";
 

@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { expectGenuinelyDisabled } from "@/test/controls";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { reviewFeedbackDetail, workspacePractices } from "./fixtures";
 import { ProposalReviewPage } from "./ProposalReviewPage";
-import { reviewFeedbackDetail, workspacePractices } from "./story-mock-data";
 
 const feedback = {
 	...reviewFeedbackDetail,

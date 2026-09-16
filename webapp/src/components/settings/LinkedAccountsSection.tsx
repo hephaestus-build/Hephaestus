@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
 import { asDate } from "@/lib/dates";
-import { getProviderLabel } from "@/lib/provider";
+import { getProviderLabel } from "@/lib/provider/provider-labels";
 import { firstNonBlank, hasText } from "@/lib/text";
 
 /** Both types are named because `BrandIcon` is a plain component and `LucideIcon` is not. */

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { fn, screen, userEvent } from "storybook/test";
 
 import type { LlmModel } from "@/api/types.gen";
-import { expectDialogFitsViewport } from "@/test/reflow";
+import { expectDialogFitsViewport } from "@/stories/reflow";
 
 import { AdminLlmModelAccessDialog } from "./AdminLlmModelAccessDialog";
 

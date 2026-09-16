@@ -11,7 +11,7 @@ import {
 	mockPullRequestBinding,
 	mockPullRequestWorkType,
 } from "@/mocks/fixtures/practice";
-import { expectNoOverflowingElement } from "@/test/reflow";
+import { expectNoOverflowingElement } from "@/stories/reflow";
 
 import { PracticeEvidenceEditor } from "./PracticeEvidenceEditor";
 

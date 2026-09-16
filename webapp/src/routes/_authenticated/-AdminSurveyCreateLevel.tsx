@@ -11,7 +11,7 @@ import {
 import {
 	AdminSurveyComposer,
 	AdminSurveyComposerHeader,
-} from "@/components/admin/feedback/AdminSurveyComposer";
+} from "@/components/admin/product-feedback/AdminSurveyComposer";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { DrawerBody } from "@/components/ui/drawer";

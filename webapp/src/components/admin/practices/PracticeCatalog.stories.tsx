@@ -6,10 +6,9 @@ import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
 } from "@/mocks/fixtures/practice";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
-import { expectNoPageOverflow } from "@/test/reflow";
 
-import { PracticeCatalog } from "./PracticeCatalog";
 import {
 	chosenAutonomy,
 	groupAutonomy,
@@ -18,7 +17,8 @@ import {
 	mockPracticeLongText,
 	mockPractices,
 	mockUnassignedPractice,
-} from "./story-mock-data";
+} from "./fixtures";
+import { PracticeCatalog } from "./PracticeCatalog";
 
 const [reviewReadyGroup, issueAuthoringGroup] = mockGroups;
 const [prDescriptionPractice, reviewThoroughnessPractice, testCoveragePractice] = mockPractices;

@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ARTIFACT_KIND, artifactKindIcon, artifactKindLabel } from "@/lib/artifact-kinds";
 import { asDate } from "@/lib/dates";
-import { getProviderLabel } from "@/lib/provider";
+import { getProviderLabel } from "@/lib/provider/provider-labels";
 import { hasText } from "@/lib/text";
 import type { FeedbackResponse, ObservationDetailState } from "./review-runs";
 import { ReviewObservationRow } from "./ReviewObservationRow";

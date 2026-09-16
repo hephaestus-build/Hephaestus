@@ -6,7 +6,7 @@ import type {
 import { ActivityBadges } from "@/components/leaderboard/ActivityBadges";
 import type { ReviewedPullRequest } from "@/components/leaderboard/ReviewsPopover";
 import { type ActivityMonitorFilters, MAX_ACTIVITY_MONITOR_LIMIT } from "@/lib/activity-monitor";
-import { getProviderTerms, type ProviderType } from "@/lib/provider";
+import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 import { firstNonBlank } from "@/lib/text";
 import type { LeaderboardSchedule } from "@/lib/timeframe";
 

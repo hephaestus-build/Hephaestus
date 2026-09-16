@@ -3,7 +3,7 @@ import { expect, fn, userEvent } from "storybook/test";
 
 import type { TeamInfo } from "@/api/types.gen";
 
-import type { ExtendedUserTeams } from "./types";
+import type { ExtendedUserTeams } from "./user-teams";
 import { UsersTable } from "./UsersTable";
 
 const frontendTeam: TeamInfo = {

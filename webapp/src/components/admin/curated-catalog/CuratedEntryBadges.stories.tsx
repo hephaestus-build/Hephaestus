@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 
 import type { CatalogEntryStatus } from "@/api/types.gen";
-import { expectNoOverflowingElement } from "@/test/reflow";
+import { expectNoOverflowingElement } from "@/stories/reflow";
 
 import { CuratedEntryBadges } from "./CuratedEntryBadges";
 

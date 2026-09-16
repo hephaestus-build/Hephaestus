@@ -12,7 +12,7 @@ import {
 	XCircleIcon,
 } from "lucide-react";
 import type { ReviewFeedback } from "@/api/types.gen";
-import type { StatusDef, StatusDefs } from "./status-def";
+import type { StatusDef, StatusDefs } from "@/components/common/status-def";
 
 export type DeliveryState = ReviewFeedback["deliveryState"];
 

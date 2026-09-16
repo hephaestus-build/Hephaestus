@@ -5,8 +5,8 @@ import { v4 as uuidv4 } from "uuid";
 
 import { getThreadQueryKey, listThreadsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { ChatThreadSummary } from "@/api/types.gen";
+import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { Greeting } from "@/components/mentor/Greeting";
-import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { hasText } from "@/lib/text";
 

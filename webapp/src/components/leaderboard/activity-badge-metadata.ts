@@ -8,12 +8,8 @@ import {
 } from "@primer/octicons-react";
 import { MessageSquareReply } from "lucide-react";
 
-import {
-	getProviderTerms,
-	getPullRequestStateIcon,
-	type IconComponent,
-	type ProviderType,
-} from "@/lib/provider";
+import { getPullRequestStateIcon, type IconComponent } from "@/components/icons/provider-icons";
+import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 
 export interface ActivityBadgeMetadata {
 	key: ActivityBadgeKey;

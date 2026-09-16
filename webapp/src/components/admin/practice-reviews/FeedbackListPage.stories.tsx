@@ -3,13 +3,13 @@ import { expect, fn, screen, within } from "storybook/test";
 
 import type { ListPracticeReviewFeedbackResponse, ReviewFeedback } from "@/api/types.gen";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import { FeedbackListPage } from "./FeedbackListPage";
+import { manyFeedback, reviewFeedback, workspaceMembers } from "./fixtures";
 import { type FeedbackSearch, feedbackQuery, REVIEW_PAGE_SIZE } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
-import { manyFeedback, reviewFeedback, workspaceMembers } from "./story-mock-data";
 
 const PEOPLE: ReviewPeople = {
 	options: workspaceMembers

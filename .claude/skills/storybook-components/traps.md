@@ -8,13 +8,13 @@ Base UI mounts the panel with `data-starting-style` and clears it a frame later,
 to `opacity: 0` and a bare `toBeVisible()` fails on a perfectly mounted element. It is **not** a
 duration problem: the Playwright context already requests `reducedMotion: "reduce"`, the media query
 matches, and forcing every duration to 1ms does not fix it. Use `expectSettledVisible` /
-`settledPopup()` from `webapp/src/test/overlay.ts`.
+`settledPopup()` from `webapp/src/stories/overlay.ts`.
 
 ## 2. `animation.finished` **rejects** when the animation is cancelled
 
 `AbortError`, not a resolution — and a popup that re-positions while opening replaces its own enter
 animation routinely. Any settle helper must `.catch()` the rejection and treat it as an outcome
-(`webapp/src/test/overlay.ts`). Without the catch the helper throws on the ordinary path.
+(`webapp/src/stories/overlay.ts`). Without the catch the helper throws on the ordinary path.
 
 ## 3. A hook suppression aimed at the `useEffect` line suppresses nothing
 

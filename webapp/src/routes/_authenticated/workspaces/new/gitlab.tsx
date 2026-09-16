@@ -12,20 +12,20 @@ import {
 	listWorkspacesQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceListItem } from "@/api/types.gen";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
-import { ConfigureWorkspaceStep } from "@/components/workspace/create-workspace/ConfigureWorkspaceStep";
-import { ConnectGitLabStep } from "@/components/workspace/create-workspace/ConnectGitLabStep";
-import { workspaceDetailsSchema } from "@/components/workspace/create-workspace/schemas";
-import { SelectGroupStep } from "@/components/workspace/create-workspace/SelectGroupStep";
+import { ConfigureWorkspaceStep } from "@/components/create-workspace/ConfigureWorkspaceStep";
+import { ConnectGitLabStep } from "@/components/create-workspace/ConnectGitLabStep";
+import { workspaceDetailsSchema } from "@/components/create-workspace/schemas";
+import { SelectGroupStep } from "@/components/create-workspace/SelectGroupStep";
 import {
 	createInitialWizardState,
 	WizardContext,
 	type WizardStep,
 	wizardReducer,
-} from "@/components/workspace/create-workspace/wizard-context";
-import { WizardStepIndicator } from "@/components/workspace/create-workspace/WizardStepIndicator";
+} from "@/components/create-workspace/wizard-context";
+import { WizardStepIndicator } from "@/components/create-workspace/WizardStepIndicator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { isRecord } from "@/lib/is-record";
 import { firstNonBlank, hasText } from "@/lib/text";

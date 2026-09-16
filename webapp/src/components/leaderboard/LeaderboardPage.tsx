@@ -5,7 +5,7 @@ import type { LeaderboardSchedule } from "@/lib/timeframe";
 import type { LeaderboardEntry, UserInfo } from "@/api/types.gen";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
-import type { ProviderType } from "@/lib/provider";
+import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import { LeaderboardFilter } from "./LeaderboardFilter";
 import { LeaderboardLegend } from "./LeaderboardLegend";

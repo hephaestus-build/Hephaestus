@@ -12,8 +12,8 @@ import {
 	submitWorkspaceProductFeedbackMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { Answer, FeedbackRequest, SurveyInvitation } from "@/api/types.gen";
-import { READERS } from "@/components/feedback/feedback-copy";
-import { studyOf } from "@/components/feedback/survey-purpose-defs";
+import { READERS } from "@/components/product-feedback/feedback-copy";
+import { studyOf } from "@/components/product-feedback/survey-purpose-defs";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 

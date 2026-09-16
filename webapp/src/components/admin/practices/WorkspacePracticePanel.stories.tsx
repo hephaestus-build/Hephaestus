@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
-import { mockPractices } from "@/components/admin/practices/story-mock-data";
+import { mockPractices } from "@/components/admin/practices/fixtures";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { mockPracticeDefinitionOptions } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
+import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { expectSettledVisible, settledDrawerPanel } from "@/test/overlay";
-import { expectNoPanelOverflow } from "@/test/reflow";
 
 import { WorkspacePracticePanel, type WorkspacePracticeState } from "./WorkspacePracticePanel";
 

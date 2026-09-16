@@ -10,8 +10,8 @@ import type { ReactNode } from "react";
 import type { ReleaseStatus } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { useNow } from "@/components/common/use-now";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {

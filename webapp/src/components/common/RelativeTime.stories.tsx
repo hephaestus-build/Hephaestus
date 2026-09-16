@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, screen, userEvent } from "storybook/test";
 
-import { expectSettledVisible } from "@/test/overlay";
+import { expectSettledVisible } from "@/stories/overlay";
 
 import { minutesBefore } from "@/stories/story-clock";
 import { RelativeTime } from "./RelativeTime";

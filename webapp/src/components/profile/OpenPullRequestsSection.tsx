@@ -3,8 +3,9 @@ import { ArrowRightIcon } from "lucide-react";
 import type { PullRequestInfo } from "@/api/types.gen";
 import { EmptyState } from "@/components/common/EmptyState";
 import { IssueCard } from "@/components/common/IssueCard";
+import { getPullRequestStateIcon } from "@/components/icons/provider-icons";
 import { Button } from "@/components/ui/button";
-import { getProviderTerms, getPullRequestStateIcon, type ProviderType } from "@/lib/provider";
+import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 
 export interface OpenPullRequestsSectionProps {
 	providerType: ProviderType;

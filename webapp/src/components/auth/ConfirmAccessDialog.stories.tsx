@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
+import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
-import { expectSettledVisible } from "@/test/overlay";
 import { ConfirmAccessDialog } from "./ConfirmAccessDialog";
 
 const gitlab = {

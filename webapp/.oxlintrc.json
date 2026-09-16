@@ -167,9 +167,9 @@
 			"error",
 			{ "namedComponents": "function-declaration", "unnamedComponents": "function-expression" }
 		],
-		// Hoisting is what the declaration style buys; a variable or class read before its
-		// declaration in the same scope is a temporal dead zone crash that type-checks clean. A read
-		// from inside a function declared above the variable runs later, so it is not one.
+		// Hoisting is what the declaration style buys; a variable read before its declaration in the
+		// same scope is a temporal dead zone crash that type-checks clean. A read from inside a
+		// function declared above the variable runs later, so it is not one.
 		"no-use-before-define": ["error", { "functions": false, "classes": false, "variables": false }],
 		// Braces on every branch: the one-line `if` is where a second statement gets added under the
 		// wrong indentation and runs unconditionally.

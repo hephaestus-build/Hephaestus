@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, waitFor, within } from "storybook/test";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
-import { expectNoPageOverflow } from "@/test/reflow";
 import type { ReviewSectionId } from "./review-sections";
 import { ReviewPage } from "./ReviewPage";
 

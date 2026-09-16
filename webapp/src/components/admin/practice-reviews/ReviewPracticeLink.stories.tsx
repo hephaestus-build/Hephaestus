@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, screen } from "storybook/test";
 
+import { workspacePractices } from "./fixtures";
 import { ReviewPracticeLink } from "./ReviewPracticeLink";
-import { workspacePractices } from "./story-mock-data";
 
 const thinControllers = workspacePractices.find((p) => p.slug === "thin-controllers");
 if (!thinControllers) {

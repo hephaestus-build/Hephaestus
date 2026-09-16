@@ -9,14 +9,14 @@ import {
 	mockPullRequestWorkType,
 } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
+import { settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { settledDrawerPanel } from "@/test/overlay";
-import { expectNoPanelOverflow } from "@/test/reflow";
 
+import { mockGroups, mockPracticeWithAllTriggers } from "./fixtures";
 import { GUARDED_LEVEL_KINDS, practiceFormLevel } from "./practice-search";
 import { PracticeForm } from "./PracticeForm";
 import { PracticeFormLevel } from "./PracticeFormLevel";
-import { mockGroups, mockPracticeWithAllTriggers } from "./story-mock-data";
 
 const createSubmit = fn();
 const editSubmit = fn();

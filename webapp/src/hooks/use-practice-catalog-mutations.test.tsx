@@ -15,11 +15,7 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type * as ReactQueryGen from "@/api/@tanstack/react-query.gen";
 import type { Practice } from "@/api/types.gen";
-import {
-	mockGroups,
-	mockPractice,
-	mockPractices,
-} from "@/components/admin/practices/story-mock-data";
+import { mockGroups, mockPractice, mockPractices } from "@/components/admin/practices/fixtures";
 
 import { usePracticeCatalogMutations } from "./use-practice-catalog-mutations";
 

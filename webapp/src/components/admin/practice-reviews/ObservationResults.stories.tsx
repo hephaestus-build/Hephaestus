@@ -2,10 +2,10 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen } from "storybook/test";
 
 import type { ReviewObservation } from "@/api/types.gen";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
+import { reviewObservations, workspacePractices } from "./fixtures";
 import { ObservationResults } from "./ObservationResults";
-import { reviewObservations, workspacePractices } from "./story-mock-data";
 
 const [firstObservation] = reviewObservations;
 if (!firstObservation) {

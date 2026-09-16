@@ -2,12 +2,12 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { LlmModel } from "@/api/types.gen";
-import { expectSettledVisible } from "@/test/overlay";
+import { expectSettledVisible } from "@/stories/overlay";
 import {
 	expectControlOnScreen,
 	expectDialogBodyScrolls,
 	expectDialogFitsViewport,
-} from "@/test/reflow";
+} from "@/stories/reflow";
 
 import { AdminLlmModelFormDialog } from "./AdminLlmModelFormDialog";
 import type { WorkspaceOption } from "./workspace-options";

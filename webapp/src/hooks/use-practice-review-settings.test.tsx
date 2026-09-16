@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { getPracticeReviewSettingsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { PracticeReviewSettings } from "@/api/types.gen";
-import { mockReviewSettings } from "@/components/admin/practices/story-mock-data";
+import { mockReviewSettings } from "@/components/admin/practices/fixtures";
 import { server } from "@/mocks/server";
 import { usePracticeReviewSettingsMutation } from "./use-practice-review-settings";
 

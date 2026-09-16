@@ -2,7 +2,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { CircleDashed } from "lucide-react";
 
 import { cn } from "cn";
-import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
+import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { hasText } from "@/lib/text";
 
 const groupPillVariants = cva("flex shrink-0 items-center justify-center", {

@@ -4,20 +4,20 @@ import { expect, fn, screen, within } from "storybook/test";
 import type { ListPracticeReviewObservationsResponse, ReviewObservation } from "@/api/types.gen";
 import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
-import { expectNoPageOverflow } from "@/test/reflow";
 
-import { groupFacetOptions, practiceFacetOptions } from "./ObservationFilters";
-import { ObservationsListPage } from "./ObservationsListPage";
-import { type ObservationsSearch, observationsQuery, REVIEW_PAGE_SIZE } from "./review-search";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 import {
 	manyObservations,
 	practiceGroups,
 	reviewObservations,
 	workspaceMembers,
 	workspacePractices,
-} from "./story-mock-data";
+} from "./fixtures";
+import { groupFacetOptions, practiceFacetOptions } from "./ObservationFilters";
+import { ObservationsListPage } from "./ObservationsListPage";
+import { type ObservationsSearch, observationsQuery, REVIEW_PAGE_SIZE } from "./review-search";
+import type { ReviewPeople } from "./ReviewPersonFacet";
 
 const PEOPLE: ReviewPeople = {
 	options: workspaceMembers

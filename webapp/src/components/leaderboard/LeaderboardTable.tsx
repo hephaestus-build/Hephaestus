@@ -16,7 +16,8 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { getInitials } from "@/lib/avatar";
-import { getTeamAvatarUrl, type ProviderType } from "@/lib/provider";
+import { getTeamAvatarUrl } from "@/lib/provider/avatar";
+import type { ProviderType } from "@/lib/provider/provider-terms";
 import { hasText } from "@/lib/text";
 
 import { LeagueIcon } from "./LeagueIcon";

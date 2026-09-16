@@ -9,7 +9,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { expectNoOverflowingElement } from "@/test/reflow";
+import { expectNoOverflowingElement } from "@/stories/reflow";
 
 import {
 	type SortableCatalogEntry,

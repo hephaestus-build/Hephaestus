@@ -3,6 +3,8 @@ import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 import type { PracticeGroupReviewObservation } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { type StatusDefs, statusToneClass, statusValues } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	FEEDBACK_RESOLUTION_DEFS,
 	type FeedbackResolution,
@@ -12,12 +14,6 @@ import {
 	type FeedbackUsefulness,
 } from "@/components/practice-vocabulary/feedback-usefulness-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import {
-	type StatusDefs,
-	statusToneClass,
-	statusValues,
-} from "@/components/practice-vocabulary/status-def";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";

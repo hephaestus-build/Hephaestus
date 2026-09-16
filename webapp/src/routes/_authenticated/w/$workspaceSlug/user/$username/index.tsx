@@ -23,7 +23,7 @@ import {
 	MAX_ACTIVITY_MONITOR_LIMIT,
 } from "@/lib/activity-monitor";
 import { resolveLeaderboardSchedule } from "@/lib/leaderboard-schedule";
-import { toScmProviderType } from "@/lib/provider";
+import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 import { formatDateRangeForApi, getDateRangeForPreset } from "@/lib/timeframe";

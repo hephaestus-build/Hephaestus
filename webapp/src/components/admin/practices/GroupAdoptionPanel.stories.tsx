@@ -9,10 +9,10 @@ import {
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
+import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 import { expectGenuinelyDisabled } from "@/test/controls";
-import { expectSettledVisible, settledDrawerPanel } from "@/test/overlay";
-import { expectNoPanelOverflow } from "@/test/reflow";
 
 import { GroupAdoptionPanel } from "./GroupAdoptionPanel";
 

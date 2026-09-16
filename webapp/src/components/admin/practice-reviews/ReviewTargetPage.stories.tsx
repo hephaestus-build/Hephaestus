@@ -3,10 +3,8 @@ import { expect, fn, screen } from "storybook/test";
 
 import type { ReviewArtifact } from "@/api/types.gen";
 import { isKnownArtifactKind } from "@/lib/artifact-kinds";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
-import { REVIEW_PREVIEW_SIZE, type ReviewSectionState } from "./ReviewOutputSections";
-import { ReviewTargetPage } from "./ReviewTargetPage";
 import {
 	gitlabMergeRequest,
 	outlineDocument,
@@ -15,7 +13,9 @@ import {
 	reviewObservations,
 	slackConversation,
 	workspacePractices,
-} from "./story-mock-data";
+} from "./fixtures";
+import { REVIEW_PREVIEW_SIZE, type ReviewSectionState } from "./ReviewOutputSections";
+import { ReviewTargetPage } from "./ReviewTargetPage";
 
 /**
  * The page shows one work's review output, so a story names the work and takes the rows the

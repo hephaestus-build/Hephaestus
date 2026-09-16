@@ -9,7 +9,7 @@ import {
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { realPracticeDefinition } from "@/mocks/fixtures/practice-catalog";
-import { expectNoOverflowingElement } from "@/test/reflow";
+import { expectNoOverflowingElement } from "@/stories/reflow";
 
 import { PracticeDefinitionPreview } from "./PracticeDefinitionPreview";
 

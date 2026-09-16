@@ -3,10 +3,10 @@ import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { AgentBinding } from "@/api/types.gen";
 import { withStandardPage } from "@/stories/decorators";
-import { expectControlOnScreen, expectNoPageOverflow } from "@/test/reflow";
+import { expectControlOnScreen, expectNoPageOverflow } from "@/stories/reflow";
 
 import { AgentBindingsPage } from "./AgentBindingsPage";
-import { mockAvailableModels } from "./story-mock-data";
+import { mockAvailableModels } from "./fixtures";
 
 function purposeCard(canvas: StoryContext["canvas"], name: string) {
 	return within(canvas.getByRole("region", { name }));

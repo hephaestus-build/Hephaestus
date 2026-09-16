@@ -4,7 +4,7 @@ import { ArrowRightIcon } from "lucide-react";
 import type { ProfileReviewActivity } from "@/api/types.gen";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
-import type { ProviderType } from "@/lib/provider";
+import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import { ReviewActivityCard } from "./ReviewActivityCard";
 

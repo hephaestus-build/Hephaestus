@@ -3,7 +3,7 @@ import { expect } from "storybook/test";
 
 import { ItemGroup } from "@/components/ui/item";
 
-import { tracedArtifact } from "./story-mock-data";
+import { tracedArtifact } from "./fixtures";
 import { TracedArtifactRow } from "./TracedArtifactRow";
 
 const pullRequestRow = tracedArtifact(1423);

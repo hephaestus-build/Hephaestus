@@ -12,7 +12,10 @@ import {
 	triggerSyncJobMutation,
 	updateConnectionSyncJobMutation,
 } from "@/api/@tanstack/react-query.gen";
-import { syncPollInterval } from "@/components/admin/integrations/sync-format";
+import {
+	type SyncTriggerType,
+	syncPollInterval,
+} from "@/components/admin/integrations/sync-format";
 import type { SyncJobsTableProps } from "@/components/admin/integrations/SyncJobsTable";
 import type { SyncResourcesTableProps } from "@/components/admin/integrations/SyncResourcesTable";
 import type { SyncStatusHeaderProps } from "@/components/admin/integrations/SyncStatusHeader";
@@ -123,14 +126,15 @@ export function useConnectionSync({
 	});
 
 	// Sync and Backfill share one mutation, so the header learns which one is in flight from the
-	// variables rather than from a bare `isPending`.
+	// variables rather than from a bare `isPending`. The wire type also admits `INITIAL`, which
+	// `triggerSyncOfType` never sends, so the in-flight value is narrowed back to what it can be.
 	const pendingTriggerType = triggerSync.isPending ? triggerSync.variables.body.type : undefined;
-	const triggeringType =
+	const triggeringType: SyncTriggerType | null =
 		pendingTriggerType === "RECONCILIATION" || pendingTriggerType === "BACKFILL"
 			? pendingTriggerType
 			: null;
 
-	const triggerSyncOfType = (type: "RECONCILIATION" | "BACKFILL") => {
+	const triggerSyncOfType = (type: SyncTriggerType) => {
 		if (connectionId == null) {
 			return;
 		}
@@ -142,7 +146,12 @@ export function useConnectionSync({
 	const syncStatusHeaderProps: Omit<SyncStatusHeaderProps, "label" | "actions"> = {
 		status,
 		isLoading: isConnectionLoading || statusQuery.isLoading,
-		error: connectionError ?? statusQuery.error,
+		error:
+			connectionError == null
+				? statusQuery.isError
+					? { failedQuery: "status", cause: statusQuery.error }
+					: undefined
+				: { failedQuery: "connection", cause: connectionError },
 		isConnectionActive,
 		credentialsUnreadableSince,
 		triggeringType,
@@ -178,8 +187,6 @@ export function useConnectionSync({
 			onRetry: () => void resourcesQuery.refetch(),
 			resourceNoun,
 			resourceNounPlural,
-			// The freshness cadence comes from the server so the client doesn't hard-code one; without it
-			// the ledger can't judge staleness.
 			syncIntervalSeconds: status?.syncIntervalSeconds,
 			expectedClassKeys,
 		} satisfies SyncResourcesTableProps,

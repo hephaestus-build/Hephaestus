@@ -12,7 +12,7 @@ import type { Survey } from "@/api/types.gen";
 import {
 	AdminSurveyResults,
 	type AdminSurveyResultsState,
-} from "@/components/admin/feedback/AdminSurveyResults";
+} from "@/components/admin/product-feedback/AdminSurveyResults";
 import { saveTextFile } from "@/lib/download";
 
 const RESPONSES_PAGE_SIZE = 20;

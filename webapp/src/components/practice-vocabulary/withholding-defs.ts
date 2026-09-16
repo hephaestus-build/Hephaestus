@@ -1,6 +1,6 @@
 import { ArchiveIcon, BrushCleaningIcon, UserRoundXIcon, VolumeOffIcon } from "lucide-react";
 import type { ReviewFeedback } from "@/api/types.gen";
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type WithholdingReason = NonNullable<ReviewFeedback["suppressionReason"]>;
 export type WithholdingFamily = "WORK_MOVED_ON" | "POLICY" | "DEVELOPER_CHOICE" | "HOUSEKEEPING";

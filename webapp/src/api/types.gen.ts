@@ -24,7 +24,7 @@ export type AdminAccountView = {
 /**
  * Instance-admin per-workspace month rollup (metadata only, no tenant content)
  */
-export type AdminLlmUsageReport = {
+export type WorkspaceUsageReport = {
   /**
    * Display-only conversion when the instance has a display currency. Absent = show USD only. Applies to every USD amount in this response.
    */
@@ -7287,7 +7287,7 @@ export type AdminGetLlmUsageReportResponses = {
   /**
    * OK
    */
-  200: AdminLlmUsageReport;
+  200: WorkspaceUsageReport;
 };
 
 export type AdminGetLlmUsageReportResponse = AdminGetLlmUsageReportResponses[keyof AdminGetLlmUsageReportResponses];

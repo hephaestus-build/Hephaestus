@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { statusValues } from "@/components/common/status-def";
 import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
@@ -7,7 +8,6 @@ import { FILTERABLE_PLACES } from "@/components/practice-vocabulary/delivery-pla
 import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
 import { REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import { statusValues } from "@/components/practice-vocabulary/status-def";
 import {
 	reasonsInFamilies,
 	WITHHOLDING_FAMILY_DEFS,

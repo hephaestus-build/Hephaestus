@@ -11,12 +11,12 @@ import {
 	updateSlackChannelConsentMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { Workspace } from "@/api/types.gen";
-import type {
-	AdminSlackChannelsSettingsProps,
-	SlackConsentState,
-} from "@/components/admin/integrations/AdminSlackChannelsSettings";
-import type { AdminSlackNotificationSettingsProps } from "@/components/admin/integrations/AdminSlackNotificationSettings";
 import { syncPollInterval } from "@/components/admin/integrations/sync-format";
+import type {
+	WorkspaceSlackChannelsSettingsProps,
+	SlackConsentState,
+} from "@/components/admin/integrations/WorkspaceSlackChannelsSettings";
+import type { WorkspaceSlackNotificationSettingsProps } from "@/components/admin/integrations/WorkspaceSlackNotificationSettings";
 import { useConnectionSync } from "@/hooks/use-connection-sync";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -215,7 +215,7 @@ export function useSlackIntegration(workspaceSlug: string) {
 				void queryClient.invalidateQueries({ queryKey: catalogQueryOptions.queryKey });
 				invalidateSlackChannels();
 			},
-		} satisfies AdminSlackNotificationSettingsProps,
+		} satisfies WorkspaceSlackNotificationSettingsProps,
 		channelsSettingsProps: {
 			workspaceSlug,
 			hasSlackConnection: isConnectionActive,
@@ -230,6 +230,6 @@ export function useSlackIntegration(workspaceSlug: string) {
 			onRegisterChannel: handleRegisterChannel,
 			onUpdateConsent: handleUpdateConsent,
 			onRemoveChannel: handleRemoveChannel,
-		} satisfies AdminSlackChannelsSettingsProps,
+		} satisfies WorkspaceSlackChannelsSettingsProps,
 	};
 }

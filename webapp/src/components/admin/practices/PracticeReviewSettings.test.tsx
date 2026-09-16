@@ -3,8 +3,8 @@ import { useState } from "react";
 import { assert, describe, expect, it, vi } from "vitest";
 import type { AgentBinding, PracticeReviewSettings as Settings } from "@/api/types.gen";
 import { renderWithRouter } from "@/test/router-harness";
+import { mockReviewSettings } from "./fixtures";
 import { PracticeReviewSettings } from "./PracticeReviewSettings";
-import { mockReviewSettings } from "./story-mock-data";
 
 const readyBinding: AgentBinding = {
 	purpose: "PRACTICE_REVIEW",

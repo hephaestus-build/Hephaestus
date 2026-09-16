@@ -2,11 +2,11 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 
 import type { ReviewRunSummary } from "@/api/types.gen";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
+import { reviewRuns } from "./fixtures";
 import { ReviewRowList } from "./ReviewRow";
 import { ReviewRunRow } from "./ReviewRunRow";
-import { reviewRuns } from "./story-mock-data";
 
 function run(id: string): ReviewRunSummary {
 	const found = reviewRuns.find((review) => review.id === id);

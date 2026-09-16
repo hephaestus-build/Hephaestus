@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import { ARTIFACT_KIND_VALUES } from "@/lib/artifact-kinds";
+import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
-import { expectSettledVisible } from "@/test/overlay";
 
 import { TraceKindFilter } from "./TraceKindFilter";
 

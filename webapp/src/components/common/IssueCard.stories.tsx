@@ -7,7 +7,7 @@ import {
 	draftPullRequest,
 	mergedPullRequest,
 	openPullRequest,
-} from "@/components/profile/story-mock-data";
+} from "@/components/profile/fixtures";
 import { Button } from "@/components/ui/button";
 import { withProvider } from "@/stories/decorators";
 

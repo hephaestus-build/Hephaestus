@@ -35,7 +35,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { hasText } from "@/lib/text";
 
-import type { ExtendedUserTeams } from "./types";
+import type { ExtendedUserTeams } from "./user-teams";
 
 const columnHelper = createColumnHelper<DataTableFeatures, ExtendedUserTeams>();
 

@@ -83,12 +83,14 @@ function DiagnosticItem({
  *     remaining, and never `— / N` which reads as a gauge.
  *  4. Nothing renderable → `null`.
  *
- * `now` decides only whether branch 1 is still live.
+ * `now` decides whether branch 1 is still live and anchors the relative phrases.
  */
 function rateLimitReading(rateLimit: RateLimitSnapshot, now: number): ReactNode {
 	const throttledUntil = asDate(rateLimit.throttledUntil);
 	if (throttledUntil && throttledUntil.getTime() > now) {
-		return <span className="text-warning">Throttled · retry {relativeTime(throttledUntil)}</span>;
+		return (
+			<span className="text-warning">Throttled · retry {relativeTime(throttledUntil, now)}</span>
+		);
 	}
 
 	if (rateLimit.limit != null && rateLimit.remaining != null) {
@@ -106,7 +108,7 @@ function rateLimitReading(rateLimit: RateLimitSnapshot, now: number): ReactNode 
 		return (
 			<Tooltip>
 				<TooltipTrigger className="cursor-help">{value}</TooltipTrigger>
-				<TooltipContent>Resets {relativeTime(rateLimit.resetAt)}</TooltipContent>
+				<TooltipContent>Resets {relativeTime(rateLimit.resetAt, now)}</TooltipContent>
 			</Tooltip>
 		);
 	}
@@ -205,12 +207,18 @@ function ConnectionDiagnostics({ status }: { status: ConnectionSyncStatus }) {
 	);
 }
 
+/** Which lookup failed, since the alert names it: the connection itself, or its sync status. */
+export interface SyncStatusHeaderError {
+	failedQuery: "connection" | "status";
+	cause: unknown;
+}
+
 export interface SyncStatusHeaderProps {
 	/** The integration's name, for copy that has to name it ("No GitHub connection found"). */
 	label: string;
 	status?: ConnectionSyncStatus;
 	isLoading?: boolean;
-	error?: unknown;
+	error?: SyncStatusHeaderError;
 	isConnectionActive: boolean;
 	/**
 	 * When the stored credential was first found unreadable. Health is what sync reports and a trigger
@@ -259,10 +267,11 @@ export function SyncStatusHeader({
 	onCancel,
 	actions,
 }: SyncStatusHeaderProps) {
+	const now = useNow();
 	const activeJob = status?.activeJob;
 	const canBackfill = status?.backfillSupported === true && onBackfill != null;
 	const isTriggerBusy = triggeringType != null || activeJob != null;
-	const failed = error != null;
+	const nextRun = nextRunLabel(status?.nextScheduledSyncAt, now);
 
 	return (
 		<Card>
@@ -270,10 +279,14 @@ export function SyncStatusHeader({
 				<IntegrationCardHeading>Connection</IntegrationCardHeading>
 			</CardHeader>
 			<CardContent className="space-y-4">
-				{failed ? (
+				{error ? (
 					<QueryErrorAlert
-						error={error}
-						title={`We couldn't load the ${label} connection`}
+						error={error.cause}
+						title={
+							error.failedQuery === "connection"
+								? `We couldn't load the ${label} connection`
+								: `We couldn't load ${label} sync status`
+						}
 						onRetry={onRetry}
 					/>
 				) : isLoading ? (
@@ -303,7 +316,11 @@ export function SyncStatusHeader({
 										Last synced{" "}
 										<RelativeTime
 											value={status.lastSuccessfulSyncAt}
-											tone={freshnessTone(status.lastSuccessfulSyncAt, status.syncIntervalSeconds)}
+											tone={freshnessTone(
+												status.lastSuccessfulSyncAt,
+												status.syncIntervalSeconds,
+												now,
+											)}
 										/>
 									</>
 								) : (
@@ -315,10 +332,10 @@ export function SyncStatusHeader({
 											: "Never synced"}
 									</span>
 								)}
-								{hasText(nextRunLabel(status.nextScheduledSyncAt)) && (
+								{hasText(nextRun) && (
 									<span className="text-muted-foreground">
 										{" · "}
-										{nextRunLabel(status.nextScheduledSyncAt)}
+										{nextRun}
 									</span>
 								)}
 							</p>

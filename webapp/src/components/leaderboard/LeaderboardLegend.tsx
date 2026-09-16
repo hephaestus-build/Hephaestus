@@ -2,9 +2,10 @@ import { InfoIcon } from "@primer/octicons-react";
 import { useState } from "react";
 
 import { cn } from "cn";
+import { getPullRequestStateIcon } from "@/components/icons/provider-icons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getProviderTerms, getPullRequestStateIcon, type ProviderType } from "@/lib/provider";
+import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 
 import { type ActivityBadgeMetadata, getActivityBadgeMetadata } from "./activity-badge-metadata";
 import { ScoringExplanationDialog } from "./ScoringExplanationDialog";

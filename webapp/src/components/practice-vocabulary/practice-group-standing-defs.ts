@@ -8,7 +8,7 @@ import {
 
 import type { PracticeGroupStanding } from "@/api/types.gen";
 
-import type { StatusDef } from "./status-def";
+import type { StatusDef } from "@/components/common/status-def";
 
 export type PracticeGroupStandingValue = PracticeGroupStanding["standing"];
 

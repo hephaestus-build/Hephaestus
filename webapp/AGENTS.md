@@ -51,7 +51,7 @@ here it is `shape="pill"` and `variant="outlined"`: one home for each axis, not 
 what the file exports:
 
 - **`PascalCase.tsx`** — a file whose export is a React component. The filename is the component
-  name, so `AdminLlmUsagePage.tsx` exports `AdminLlmUsagePage`. Its `.test.tsx` and `.stories.tsx`
+  name, so `WorkspaceLlmUsagePage.tsx` exports `WorkspaceLlmUsagePage`. Its `.test.tsx` and `.stories.tsx`
   siblings inherit the name. An acronym is a word, not a run of capitals: `LandingFaqSection`, not
   `LandingFAQSection`.
 - **`kebab-case.ts`** — everything else: helpers, schemas, formatters, hooks, fixtures. A `.tsx` that

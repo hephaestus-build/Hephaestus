@@ -3,8 +3,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import type { ProfileReviewActivity } from "@/api/types.gen";
 import { withProvider } from "@/stories/decorators";
 
+import { approvedReview, changesRequestedReview, commentedReview } from "./fixtures";
 import { ReviewActivityCard, type ReviewActivityCardProps } from "./ReviewActivityCard";
-import { approvedReview, changesRequestedReview, commentedReview } from "./story-mock-data";
 
 /** The same projection `ReviewActivitySection` makes for each of its rows. */
 function cardArgs(activity: ProfileReviewActivity): ReviewActivityCardProps {

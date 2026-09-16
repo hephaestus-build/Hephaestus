@@ -8,7 +8,7 @@ import type {
 	UpdatePracticeReviewSettingsRequest,
 	UpdateWorkspaceFeaturesRequest,
 } from "@/api/types.gen";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { WORKSPACE_DELIVERY_STATUS_DEFS } from "@/components/practice-vocabulary/workspace-delivery-status-defs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";

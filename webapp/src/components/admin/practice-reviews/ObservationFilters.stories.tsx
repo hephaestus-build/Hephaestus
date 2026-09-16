@@ -5,15 +5,10 @@ import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import { withStandardPage } from "@/stories/decorators";
 import { StatefulPatch } from "@/stories/stateful";
 
+import { practiceGroups, reviewArtifact, workspaceMembers, workspacePractices } from "./fixtures";
 import { groupFacetOptions, ObservationFilters, practiceFacetOptions } from "./ObservationFilters";
 import type { ObservationsSearch } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
-import {
-	practiceGroups,
-	reviewArtifact,
-	workspaceMembers,
-	workspacePractices,
-} from "./story-mock-data";
 
 const PEOPLE: ReviewPeople = {
 	options: workspaceMembers

@@ -4,6 +4,7 @@ import { ArrowRightIcon, PlugZapIcon } from "lucide-react";
 import type { ConnectionSyncStatus, IntegrationCatalogEntry } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { useNow } from "@/components/common/use-now";
 import { GithubIcon, GitlabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
@@ -81,6 +82,7 @@ export function IntegrationOverviewCard({
 	isTriggering = false,
 	onSync,
 }: IntegrationOverviewCardProps) {
+	const now = useNow();
 	const detailTo = DETAIL_ROUTE[entry.kind];
 	const isConnectionActive = entry.connectionState === "ACTIVE";
 	const isScm = entry.kind === "GITHUB" || entry.kind === "GITLAB";
@@ -137,6 +139,7 @@ export function IntegrationOverviewCard({
 													tone={freshnessTone(
 														status.lastSuccessfulSyncAt,
 														status.syncIntervalSeconds,
+														now,
 													)}
 												/>
 											</>

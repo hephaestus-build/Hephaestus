@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { FeedbackDetailPage } from "./FeedbackDetailPage";
 import {
 	feedbackDetail,
 	longFeedbackDetail,
 	reviewFeedbackDetail,
 	workspacePractices,
-} from "./story-mock-data";
+} from "./fixtures";
 
 const partiallyDeliveredFeedback = {
 	...feedbackDetail("99999999-6666-6666-6666-666666666666"),

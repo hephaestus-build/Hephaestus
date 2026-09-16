@@ -28,7 +28,7 @@ const SKIPPED_EXTENSIONS = new Set([
 ]);
 
 // Sample repository names in stories and test fixtures are not the shipped rename (#1599).
-const SAMPLE_DATA = /(\.stories\.tsx|\.test\.tsx?|story-mock-data\.ts)$/;
+const SAMPLE_DATA = /(\.stories\.tsx|\.test\.tsx?|fixtures\.ts)$/;
 
 // Historical records of where a past release's images actually live, or a sample-format doc
 // comment — #1599 explicitly excludes both from the rename.

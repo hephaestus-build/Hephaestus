@@ -4,9 +4,9 @@ import { MessageSquareTextIcon } from "lucide-react";
 import type { GetPracticeReviewObservationResponse, Practice } from "@/api/types.gen";
 import { MissingRecordEmpty } from "@/components/common/MissingRecordEmpty";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { deliveryOutcome } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { withholdingReasonSentence } from "@/components/practice-vocabulary/withholding-defs";
 import {
 	Empty,

@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { FeedbackResults } from "./FeedbackResults";
-import { reviewFeedback } from "./story-mock-data";
+import { reviewFeedback } from "./fixtures";
 
 const [firstFeedback] = reviewFeedback;
 if (!firstFeedback) {

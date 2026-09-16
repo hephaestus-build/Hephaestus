@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { LlmConnection } from "@/api/types.gen";
-import { expectSettledVisible } from "@/test/overlay";
-import { expectDialogFitsViewport } from "@/test/reflow";
+import { expectSettledVisible } from "@/stories/overlay";
+import { expectDialogFitsViewport } from "@/stories/reflow";
 
 import {
 	AdminLlmConnectionFormDialog,

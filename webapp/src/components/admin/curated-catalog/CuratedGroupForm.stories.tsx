@@ -5,9 +5,9 @@ import type { CatalogEntryStatus } from "@/api/types.gen";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { withPageBehind } from "@/stories/decorators";
+import { settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow, expectPanelContentInset } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { settledDrawerPanel } from "@/test/overlay";
-import { expectNoPanelOverflow, expectPanelContentInset } from "@/test/reflow";
 
 import { curatedGroupLevel, GUARDED_CURATED_LEVEL_KINDS } from "./curated-catalog-search";
 import { CuratedFormLevel } from "./CuratedFormLevel";

@@ -7,6 +7,7 @@ import type {
 	IntegrationCatalogEntry,
 	WorkspaceListItem,
 } from "@/api/types.gen";
+import { NoWorkspace } from "@/components/common/NoWorkspace";
 import {
 	Sidebar,
 	SidebarContent,
@@ -21,7 +22,6 @@ import {
 	SidebarTrigger,
 	useSidebar,
 } from "@/components/ui/sidebar";
-import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 
 import { NavAdmin } from "./NavAdmin";
 import { NavContextHeader } from "./NavContextHeader";

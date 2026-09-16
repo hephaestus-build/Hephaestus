@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { assert, describe, expect, it, vi } from "vitest";
-import { reviewFeedbackDetail } from "@/components/admin/practice-reviews/story-mock-data";
+import { reviewFeedbackDetail } from "@/components/admin/practice-reviews/fixtures";
 import { reviewHandlers } from "@/components/admin/practice-reviews/story-mock-server";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";

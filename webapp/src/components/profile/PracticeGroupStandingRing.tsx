@@ -1,6 +1,6 @@
 import type { PracticeStanding } from "@/api/types.gen";
+import { statusToneClass, statusValues } from "@/components/common/status-def";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
-import { statusToneClass, statusValues } from "@/components/practice-vocabulary/status-def";
 
 type Standing = PracticeStanding["standing"];
 const RING_OPACITY: Partial<Record<Standing, string>> = {

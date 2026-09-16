@@ -1,16 +1,14 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
-import { isStaticToolUIPart } from "ai";
 import { motion } from "motion/react";
 import type { RefObject } from "react";
 
 import { cn } from "cn";
 import type { ChatMessageVote } from "@/api/types.gen";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { ChatMessage, ChatTools } from "@/lib/types";
+import type { ChatMessage } from "@/lib/types";
 
 import { Greeting } from "./Greeting";
 import { PreviewMessage, ThinkingMessage } from "./Message";
-import type { PartRendererMap } from "./renderers/types";
 
 export interface MessagesProps {
 	messages: ChatMessage[];
@@ -26,7 +24,6 @@ export interface MessagesProps {
 	onCopy?: (content: string) => void;
 	onVote?: (messageId: string, isUpvote: boolean) => void;
 	className?: string;
-	partRenderers?: PartRendererMap;
 }
 
 export function Messages({
@@ -43,7 +40,6 @@ export function Messages({
 	onCopy,
 	onVote,
 	className,
-	partRenderers,
 }: MessagesProps) {
 	const isArtifact = variant === "artifact";
 
@@ -57,10 +53,6 @@ export function Messages({
 				return true;
 			}
 			if (p.type === "file") {
-				return true;
-			}
-			// Every state a tool part can be in renders something, so reaching one is visible content.
-			if (isStaticToolUIPart<ChatTools>(p)) {
 				return true;
 			}
 		}
@@ -110,7 +102,6 @@ export function Messages({
 							onMessageEdit={onMessageEdit}
 							onCopy={onCopy}
 							onVote={onVote}
-							partRenderers={partRenderers}
 						/>
 					);
 				})}

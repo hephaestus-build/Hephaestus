@@ -10,12 +10,12 @@ import type {
 	PracticeStanding,
 	PracticeTrend,
 } from "@/api/types.gen";
-import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { type StatusDef, statusToneClass } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
-import { type StatusDef, statusToneClass } from "@/components/practice-vocabulary/status-def";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,

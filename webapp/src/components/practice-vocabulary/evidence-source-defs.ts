@@ -19,7 +19,7 @@ import {
 
 import type { EvidenceCitation } from "@/api/types.gen";
 
-import type { StatusDef } from "./status-def";
+import type { StatusDef } from "@/components/common/status-def";
 
 /**
  * Where a citation's line numbers point, which decides whether a surface may show them.
