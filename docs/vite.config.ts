@@ -8,7 +8,7 @@ import { defineConfig } from "vite-plus";
 const lintConfig = parse(
 	readFileSync(new URL(".oxlintrc.json", import.meta.url), "utf8"),
 ) as OxlintConfig;
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- jsonc-parser's `parse` returns `any`.
 const rootLintConfig = parse(
 	readFileSync(new URL("../.oxlintrc.json", import.meta.url), "utf8"),
 ) as OxlintConfig;

@@ -14,7 +14,6 @@ function Tabs({ className, orientation = "horizontal", ...props }: TabsPrimitive
 	);
 }
 
-// Diverges from the registry: equivalent scale spacing replaces its hardcoded 3px inset.
 const tabsListVariants = cva(
 	"group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-0.75 text-muted-foreground group-data-[orientation=horizontal]/tabs:h-8 group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col data-[variant=line]:rounded-none",
 	{

@@ -38,8 +38,8 @@ export interface CopilotProps {
 }
 
 /**
- * The mentor's launcher and panel. The panel is a `Drawer`, so the page behind stays legible and
- * scroll, focus, Escape, an outside press and a swipe all behave as they do in every other panel.
+ * The mentor's launcher and its panel. A `Drawer` rather than a `Popover`: the panel holds a
+ * conversation, so it is a dialog, and scroll lock, focus and every dismissal come with it.
  */
 export function Copilot({
 	children,

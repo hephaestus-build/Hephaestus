@@ -6,10 +6,10 @@ import { cn } from "cn";
 /**
  * ⚠️ Diverges from the shadcn registry — `shadcn add card` drops the following; re-apply them.
  *
- * 1. `variant` and `flush`. The edge is a ring, not a border, so a caller's `border-dashed` or
- *    `hover:border-*` painted nothing; the variants own those treatments, and `flush` drops the
- *    vertical padding and gap for a card whose content — a table, a list — draws its own edges.
- * 2. `CardHeader` takes `band`: a tinted strip flush to the top edge, which the card makes room for.
+ * 1. `variant` and `flush`. The edge is a ring, so a caller's `border-*` paints nothing; a variant
+ *    that needs a border owns its width and style itself. `flush` drops the vertical padding and gap
+ *    for content — a table, a list — that draws its own edges.
+ * 2. `CardHeader` takes `band`.
  */
 const cardVariants = cva(
 	"ring-foreground/10 bg-card text-card-foreground gap-4 overflow-hidden rounded-xl py-4 text-sm ring-1 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 has-[>[data-band]]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl group/card flex flex-col",
@@ -18,7 +18,6 @@ const cardVariants = cva(
 			variant: {
 				default: "",
 				muted: "bg-muted/40",
-				// Wrapped in a link or given an onClick: the surface answers the pointer.
 				interactive: "transition-colors hover:bg-accent/50 in-[a:hover]:bg-accent/50",
 				destructive: "ring-destructive/50",
 				// The dashed edge says the space is meant to hold something.

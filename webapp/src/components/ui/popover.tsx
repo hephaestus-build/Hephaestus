@@ -19,9 +19,7 @@ function PopoverContent({
 	sideOffset = 4,
 	...props
 }: PopoverPrimitive.Popup.Props &
-	Pick<PopoverPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset"> & {
-		variant?: "default" | "panel";
-	}) {
+	Pick<PopoverPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
 	return (
 		<PopoverPrimitive.Portal>
 			{/* Viewport-relative, not `absolute` — see `overlay-reflow.stories.tsx`. */}

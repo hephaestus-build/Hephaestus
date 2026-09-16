@@ -5,8 +5,8 @@ import { cn } from "cn";
 /**
  * ⚠️ Diverges from the shadcn registry — `shadcn add textarea` drops the following; re-apply it.
  *
- * `variant="bare"` strips the field chrome for a textarea that sits inside a frame drawing its own
- * edge and focus ring — the message composer and editor — and keeps body-size type at every width.
+ * `variant="bare"` strips the field chrome for a textarea inside a frame that draws its own edge and
+ * focus ring, and keeps body-size type at every width.
  */
 function Textarea({
 	className,

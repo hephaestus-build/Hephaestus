@@ -4,14 +4,15 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
 
 import { cn } from "cn";
+import { Separator } from "@/components/ui/separator";
 
 /**
  * ⚠️ Diverges from the shadcn registry — `shadcn add item` drops the following; re-apply them.
  *
- * `Item` gains `interactive`, `overlay` and `row` variants: a sortable row that answers hover, the
- * row while dragged, and one row of a divided list.
+ * `Item` gains `interactive` (answers hover without being a link; the base styles only `[a]:hover`),
+ * `overlay` (the row while dragged, lifted on the popover surface) and `row` (one row of a divided
+ * list: no radius, an edge below, none on the last).
  */
-import { Separator } from "@/components/ui/separator";
 
 function ItemGroup({ className, ...props }: React.ComponentProps<"div">) {
 	return (
@@ -46,12 +47,9 @@ const itemVariants = cva(
 				default: "border-transparent",
 				outline: "border-border",
 				muted: "bg-muted/50 border-transparent",
-				// A row that answers the pointer without being a link: sortable rows take this.
 				interactive: "border-transparent hover:bg-muted/60",
-				// The row while it is being dragged: lifted off the list on the popover surface.
 				overlay:
 					"border-transparent bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/10",
-				// One row of a divided list — no radius, an edge only below, none on the last.
 				row: "rounded-none border-x-0 border-t-0 border-b border-border last:border-b-0",
 			},
 			size: {

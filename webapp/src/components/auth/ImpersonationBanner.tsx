@@ -1,10 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { toast } from "sonner";
-import { withSessionMutationLock } from "@/integrations/auth/session-mutation";
-
 import { cn } from "cn";
-import { exitImpersonationMutation } from "@/api/@tanstack/react-query.gen";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -18,45 +12,26 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { useImpersonationStore } from "@/stores/impersonation-store";
 
-export function ImpersonationBanner() {
-	const { isImpersonating, impersonatedDisplayName } = useAuth();
-	const writesEnabled = useImpersonationStore((s) => s.writesEnabled);
-	const setWritesEnabled = useImpersonationStore((s) => s.setWritesEnabled);
+export interface ImpersonationBannerProps {
+	/** Whose account the operator is acting as. */
+	displayName: string;
+	writesEnabled: boolean;
+	/** The exit request is in flight. */
+	isExiting?: boolean;
+	onEnableWrites: () => void;
+	onDisableWrites: () => void;
+	onExit: () => void;
+}
 
-	const exit = useMutation({
-		...withSessionMutationLock(exitImpersonationMutation()),
-		onSuccess: () => {
-			// Discard impersonated account data before loading the operator session.
-			window.location.assign("/");
-		},
-		onError: () => {
-			// The impersonated session may still be active; disable writes until explicitly re-enabled.
-			setWritesEnabled(false);
-			toast.error("Could not stop impersonating. Please try again.");
-		},
-	});
-
-	useEffect(() => {
-		if (!isImpersonating) {
-			setWritesEnabled(false);
-			return;
-		}
-		document.body.setAttribute("data-impersonating", "true");
-		return () => {
-			document.body.removeAttribute("data-impersonating");
-			setWritesEnabled(false);
-		};
-	}, [isImpersonating, setWritesEnabled]);
-
-	if (!isImpersonating) {
-		return null;
-	}
-
-	const displayName = impersonatedDisplayName ?? "another account";
-
+export function ImpersonationBanner({
+	displayName,
+	writesEnabled,
+	isExiting = false,
+	onEnableWrites,
+	onDisableWrites,
+	onExit,
+}: ImpersonationBannerProps) {
 	return (
 		<div
 			role="status"
@@ -75,12 +50,7 @@ export function ImpersonationBanner() {
 			</span>
 
 			{writesEnabled ? (
-				<Button
-					variant="outline"
-					size="sm"
-					onClick={() => setWritesEnabled(false)}
-					className="h-7 border-destructive/50 bg-transparent text-destructive hover:bg-destructive/20 hover:text-destructive"
-				>
+				<Button variant="destructive-outline" size="sm" className="h-7" onClick={onDisableWrites}>
 					Disable writes
 				</Button>
 			) : (
@@ -101,7 +71,7 @@ export function ImpersonationBanner() {
 						</AlertDialogHeader>
 						<AlertDialogFooter>
 							<AlertDialogCancel>Cancel</AlertDialogCancel>
-							<AlertDialogAction variant="destructive" onClick={() => setWritesEnabled(true)}>
+							<AlertDialogAction variant="destructive" onClick={onEnableWrites}>
 								Enable writes
 							</AlertDialogAction>
 						</AlertDialogFooter>
@@ -112,12 +82,12 @@ export function ImpersonationBanner() {
 			<Button
 				variant={writesEnabled ? "destructive-outline" : "warning-outline"}
 				size="sm"
-				disabled={exit.isPending}
-				onClick={() => exit.mutate({})}
+				disabled={isExiting}
+				onClick={onExit}
 				aria-label="Stop impersonating and restore your account"
 				className="h-7"
 			>
-				{exit.isPending ? <Spinner className="mr-2 size-3.5" /> : null}
+				{isExiting ? <Spinner className="mr-2 size-3.5" /> : null}
 				Stop impersonating
 			</Button>
 		</div>

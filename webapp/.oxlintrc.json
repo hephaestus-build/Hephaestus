@@ -36,16 +36,17 @@
 	],
 
 	"rules": {
-		// components.json supplies the real Tailwind v4 theme and its imports.
-		// Both checks also cover registry internals, stories and cn/cva definitions.
+		// No `settings.shadcn`: `components.json` names the theme CSS and the registry path.
+		// `shadcn/require-static-classes` stays off: it cannot resolve an imported vocabulary map or a
+		// CVA result without duplicating their owners.
 		"shadcn/no-unknown-classes": "error",
 		"shadcn/no-raw-colors": "error",
 		"shadcn/no-inline-styles": "error",
-		// Default-deny: every arbitrary value is reported unless it is listed here. A deny list would
-		// invert that and exempt everything it forgets, which is how hardcoded hex colours and nine
-		// hand-written font sizes survived. Layout keeps measured tracks, viewport maths and the
-		// component sizes a library asks for; the rest are formulas over theme variables, CSS
-		// keywords, property lists rather than values, and the drawer's swipe physics.
+		// Allow-listed, so a value not named here is reported and each addition argues for itself.
+		// `layout` keeps measured tracks, viewport maths and the sizes a library asks for; the rest are
+		// formulas over theme variables, CSS keywords, transition property lists and the drawer's swipe
+		// physics. A one-off elsewhere is a call-site suppression with its reason, and the registry's
+		// own arbitrary sizes and radii snap to the nearest step of the scale.
 		"shadcn/no-arbitrary-values": [
 			"error",
 			{
@@ -57,31 +58,26 @@
 					"rounded-[min(var(--radius-md),12px)]",
 					"rounded-[calc(var(--radius)-3px)]",
 					"rounded-[calc(var(--radius)-5px)]",
-					"rounded-[22%]",
 					"text-[length:inherit]",
-					"bg-size-[100%_24rem]",
 					"opacity-[0.9999]",
 					"opacity-[max(var(--drawer-overlay-min-opacity,0),calc(1-var(--drawer-swipe-progress)))]",
 					"duration-[calc(var(--drawer-swipe-strength)*400ms)]"
 				]
 			}
 		],
-		// Deny on Button exactly what Button gives an API for: `size` owns the padding box and `shape`
-		// owns the radius scale, so a caller that writes either is working around the component. The
-		// `rounded` group is the scale itself; squaring one corner to join an adjacent edge is
-		// composition and stays legal. The rest is deliberately the caller's — tone comes from
-		// vocabularies Button does not own (status tones, the provider palette, a placeholder state),
-		// `size="inline"` takes its type from the prose around it, and Button has no elevation axis.
-		// Other primitives deliberately expose composition; registry internals own their controls.
 		"shadcn/no-restyle": [
 			"error",
 			{
-				// A caller styles a component only where the component's role makes that property the
-				// caller's; everywhere else it picks a variant. Each contract below names that role.
+				// A caller styles a component only where its role makes that property the caller's;
+				// everywhere else it picks a variant. Each contract names that role, and restates
+				// `layout` because a contract's `allow` replaces the global one.
 				"allow": ["layout"],
 				"contracts": [
-					// Button: `size` owns the padding box and `shape` the radius scale; tone, type and
-					// elevation come from the context, and squaring one corner to meet an edge is composition.
+					// Button: `size` owns the padding box and `shape` the radius scale, so `rounded` is
+					// denied while squaring one corner to meet an edge stays composition. Tone comes from
+					// vocabularies Button does not own (status tones, the provider palette, a placeholder
+					// state), `size="inline"` takes its type from the prose around it, and a floating
+					// button carries its own lift and transition because Button has no elevation axis.
 					{
 						"pattern": "^Button$",
 						"allow": ["layout", "typography", "color", "shape", "effects", "motion"],
@@ -89,65 +85,63 @@
 					},
 					// Badge: monospace is a content decision for an identifier, not a restyle.
 					{ "pattern": "^Badge$", "allow": ["layout", "font-mono"] },
-					// Card: elevation and its transition depend on where the card sits; `outline-none` is
-					// for a region focused by script, which must not ring.
-					{ "pattern": "^Card$", "allow": ["layout", "effects", "motion", "outline-none"] },
-					// A box the caller fills: its padding, gap and inset are the caller's.
+					// Card: elevation depends on where the card sits; `outline-none` is for a region focused
+					// by script, which must not ring.
+					{ "pattern": "^Card$", "allow": ["layout", "effects", "outline-none"] },
+					// A box the caller fills: its padding and gap are the caller's.
 					{
-						"pattern": "^(AlertDescription|CardContent|CardHeader|CardFooter|DialogBody|DialogHeader|DrawerBody|DrawerHeader|DropdownMenuContent|FieldGroup|HoverCardContent|ItemActions|ItemContent|ItemGroup|PaginationContent|PopoverContent|QuestionnaireChoices|SidebarGroup|Tabs|TabsList|ToggleGroup)$",
+						"pattern": "^(AlertDescription|CardContent|CardHeader|CardFooter|DialogBody|DialogHeader|DrawerBody|DrawerHeader|FieldGroup|HoverCardContent|ItemActions|ItemContent|ItemGroup|PaginationContent|PopoverContent|QuestionnaireChoices|SidebarGroup|Tabs|TabsList|ToggleGroup)$",
 						"allow": ["layout", "spacing"]
 					},
-					// A layout root with no look of its own — a grid, a flex column, a bare trigger — cannot
-					// be restyled; whatever edge, surface or type is written on it is the caller composing.
+					// A layout root — a grid, a flex column, a bare trigger — has nothing to restyle;
+					// whatever is written on it is the caller composing.
 					{
 						"pattern": "^(Accordion|CollapsibleContent|CollapsibleTrigger|Field|FieldSet|RadioGroup)$",
-						"allow": ["layout", "spacing", "shape", "color", "typography", "effects", "motion"]
+						"allow": ["*"]
 					},
-					// A text container: what it holds is typeset and toned by the caller.
+					// A text slot: its type, tone, and the padding or gap around what it holds follow the
+					// text around it.
 					{
-						"pattern": "^(AccordionContent|TooltipContent)$",
-						"allow": ["layout", "spacing", "typography", "color"]
-					},
-					// A text slot: its type, tone and the gap to an icon inside it follow the text around it.
-					{
-						"pattern": "^(ButtonGroupText|CardDescription|CardTitle|DialogTitle|DrawerDescription|DrawerTitle|DropdownMenuLabel|FieldDescription|FieldLegend|ItemDescription|ItemTitle|Label|PopoverTitle|TableCell|TableHead)$",
+						"pattern": "^(AccordionContent|ButtonGroupText|CardTitle|DialogTitle|DrawerTitle|DropdownMenuLabel|FieldDescription|FieldLegend|ItemDescription|ItemTitle|Label|PopoverTitle|TableCell|TableHead)$",
 						"allow": ["layout", "typography", "color", "spacing"]
 					},
-					// A label that wraps its control follows that control's state, dimming and easing with it.
+					// A label that wraps its control takes that control's surface, dimming and easing, and
+					// its weight and tone from the field's place in the form.
 					{
 						"pattern": "^FieldLabel$",
 						"allow": ["layout", "typography", "color", "spacing", "effects", "motion"]
 					},
-					// A trigger that renders the caller's content: what is inside it is typeset by the caller.
+					// Renders the caller's content: what is inside is typeset and spaced by the caller.
 					{
-						"pattern": "^(AlertDialogAction|ComboboxItem|DropdownMenuCheckboxItem|DropdownMenuItem|TabsTrigger|TooltipTrigger)$",
+						"pattern": "^(ComboboxItem|DropdownMenuCheckboxItem|DropdownMenuItem|TabsTrigger|TooltipContent|TooltipTrigger)$",
 						"allow": ["layout", "typography", "spacing"]
 					},
-					// An accordion trigger that is disabled to pin an item open is not unavailable, and
+					// The contract above, and a trigger disabled to pin an item open is not unavailable and
 					// must not look it.
 					{
 						"pattern": "^AccordionTrigger$",
 						"allow": ["layout", "typography", "spacing", "effects"]
 					},
-					// The faceted-filter idiom: a dashed edge says the filter is not yet set.
-					{
-						"pattern": "^ComboboxTrigger$",
-						"allow": ["layout", "typography", "spacing", "border-dashed"]
-					},
-					// A row or item being dragged fades; that state is the drag's, not the component's.
+					// The contract above, plus the faceted-filter idiom: a dashed edge says the filter is not
+					// yet set.
+					{ "pattern": "^ComboboxTrigger$", "allow": ["layout", "typography", "border-dashed"] },
+					// A row being dragged fades — the drag's state, not the component's — and its padding
+					// and gap are the list's.
 					{ "pattern": "^(AccordionItem|Item)$", "allow": ["layout", "spacing", "effects"] },
 					// The leading icon's tone follows the row's meaning.
 					{ "pattern": "^ItemMedia$", "allow": ["layout", "color"] },
-					// A stand-in takes the shape of what it stands for.
+					// A stand-in takes the shape, and for a toned badge the tint, of what it stands for.
 					{ "pattern": "^Skeleton$", "allow": ["layout", "shape", "color"] },
+					// An avatar's corner says what it depicts — round for a person, squared for a workspace —
+					// and its ring, lift and the fallback's type and tone follow the surface it sits on.
 					{
 						"pattern": "^(Avatar|AvatarFallback)$",
 						"allow": ["layout", "shape", "typography", "color", "effects"]
 					},
-					// A scroll region clips to the radius of whatever it sits in.
+					// A scroll region clips to the radius of what it sits in and pads what it scrolls.
 					{ "pattern": "^ScrollArea$", "allow": ["layout", "spacing", "shape"] },
 					// A meter's fill carries the meter's meaning — severity, league, level — in its tone,
-					// shape and pace; the primitive draws it and does not decide it.
+					// gradient, shape and pace; the primitive draws it and does not decide it.
 					{
 						"pattern": "^(ProgressTrack|ProgressIndicator)$",
 						"allow": ["layout", "color", "shape", "motion", "effects"]
@@ -159,8 +153,6 @@
 				]
 			}
 		],
-		// require-static-classes cannot resolve imported vocabulary maps and CVA results without
-		// duplicating their owners.
 		// -- On, despite their category being off ---------------------------------------------------
 		"no-else-return": "error",
 		"prefer-const": "error",
@@ -647,6 +639,7 @@
 		{
 			"files": ["src/components/ui/**"],
 			"rules": {
+				// A registry file styles the primitives it composes; the contract is with callers outside it.
 				"shadcn/no-restyle": "off",
 				"no-restricted-imports": [
 					"error",

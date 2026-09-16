@@ -15,7 +15,6 @@ import { toast } from "sonner";
 
 import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstack/react-query.gen";
 import type { SurveyInvitation } from "@/api/types.gen";
-import { ImpersonationBanner } from "@/components/auth/ImpersonationBanner";
 import { LoginDialog } from "@/components/auth/LoginDialog";
 import { CookieConsentBanner } from "@/components/consent/CookieConsentBanner";
 import Footer from "@/components/core/Footer";
@@ -50,6 +49,7 @@ import { safeReturnTo } from "@/integrations/auth/guard";
 import { FeatureFlagDevTools, useFeatureFlag } from "@/integrations/feature-flags";
 import { isCopilotExcludedRoute } from "@/lib/copilot-route";
 import { getProviderSlug } from "@/lib/provider";
+import { ImpersonationBannerHost } from "./-ImpersonationBannerHost";
 
 const GlobalCopilot = lazy(() => import("./-GlobalCopilot"));
 
@@ -99,7 +99,7 @@ function RootLayout() {
 			<HeadContent />
 			<SkipToContent />
 			{!loginOpen && <CookieConsentBanner />}
-			<ImpersonationBanner />
+			<ImpersonationBannerHost />
 			<ProviderColorScope>
 				<SidebarProvider>
 					<AppSidebarContainer />

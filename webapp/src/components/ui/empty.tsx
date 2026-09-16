@@ -5,19 +5,16 @@ import { cn } from "cn";
 /**
  * ⚠️ Diverges from the shadcn registry — `shadcn add empty` drops the following; re-apply it.
  *
- * `Empty` takes a `variant`. Upstream's base carries `border-dashed` with no border width, so the
- * dashed edge it describes never renders and every caller that wanted one added `border` itself;
- * `outlined` owns both, and `plain` is for an empty state nested in a card that already has an edge.
+ * `Empty` takes a `variant`. Upstream's base sets `border-dashed` with no border width, so its
+ * dashed edge never renders; `outlined` owns both, and `plain` (default) is for an empty state inside
+ * a card or panel that already draws the boundary.
  */
-
 const emptyVariants = cva(
 	"gap-4 rounded-lg p-6 flex w-full min-w-0 flex-1 flex-col items-center justify-center text-center text-balance",
 	{
 		variants: {
 			variant: {
-				// Nested in a card or panel that already draws the boundary.
 				plain: "",
-				// Standing on its own, where the dashed outline says the space is meant to hold something.
 				outlined: "border border-dashed",
 			},
 		},

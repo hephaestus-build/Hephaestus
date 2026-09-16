@@ -294,8 +294,10 @@ function Distribution({
 						</span>
 					</span>
 					<span aria-hidden className="block h-1.5 w-full rounded bg-muted">
-						{/* oxlint-disable-next-line shadcn/no-inline-styles -- The bar encodes the runtime share of survey answers, not a design size. */}
-						<span className="block h-full rounded bg-primary" style={{ width: `${row.width}%` }} />
+						<span
+							className="block h-full w-(--share) rounded bg-primary"
+							style={{ "--share": `${row.width}%` }}
+						/>
 					</span>
 				</li>
 			))}

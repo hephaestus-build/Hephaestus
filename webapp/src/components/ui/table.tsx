@@ -3,17 +3,15 @@ import type * as React from "react";
 import { cn } from "cn";
 
 /**
- * ⚠️ Diverges from the shadcn registry — `shadcn add table` drops the following; re-apply it.
+ * ⚠️ Diverges from the shadcn registry — `shadcn add table` drops the following; re-apply them.
  *
- * 1. `TableHead` and `TableCell` take `numeric`: figures share one advance width, so a column of
- *    numbers lines up and a changing value does not shift its neighbours.
- * 2. `Table` takes `bordered`, the rounded edge every standalone data table here draws.
+ * 1. `TableHead` and `TableCell` take `numeric`.
+ * 2. `Table` takes `bordered`.
  * 3. `TableRow` takes `variant`: `static` for a total or detail row that is not a hover target,
  *    `highlighted` for the reader's own row.
  * 4. `TableHeader` and `TableFooter` take `sticky`, pinned over the scrolling rows on an opaque
  *    surface.
  */
-
 function Table({
 	className,
 	containerClassName,
@@ -78,7 +76,6 @@ function TableFooter({
 			data-slot="table-footer"
 			className={cn(
 				"bg-muted/50 border-t font-medium [&>tr]:last:border-b-0",
-				// Pinned over scrolling rows, so it needs an opaque surface and a firmer rule.
 				sticky && "sticky bottom-0 z-10 border-t-2 bg-muted",
 				className,
 			)}
@@ -98,9 +95,7 @@ function TableRow({
 			data-variant={variant}
 			className={cn(
 				"hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors",
-				// A total or detail row is not a target, so it does not answer hover.
 				variant === "static" && "hover:bg-transparent",
-				// The reader's own row, kept apart from the hover wash.
 				variant === "highlighted" && "bg-accent dark:bg-accent/30 dark:hover:bg-accent/50",
 				className,
 			)}
@@ -109,7 +104,7 @@ function TableRow({
 	);
 }
 
-/** Marks a cell that holds a number; alignment stays the caller's layout. */
+/** Tabular figures, so a column lines up and a changing value does not shift its neighbours; alignment stays the caller's layout. */
 type NumericCell = { numeric?: boolean };
 
 function TableHead({ className, numeric, ...props }: React.ComponentProps<"th"> & NumericCell) {

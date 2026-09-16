@@ -16,8 +16,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
 	return (
 		<Sonner
 			theme={theme}
-			// Diverges from the registry: Sonner uses data attributes; no stylesheet consumes .toaster.
-			className="group"
 			icons={{
 				success: <CircleCheckIcon className="size-4" />,
 				info: <InfoIcon className="size-4" />,

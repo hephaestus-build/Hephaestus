@@ -6,14 +6,14 @@ import { cn } from "cn";
 /**
  * ⚠️ Diverges from the shadcn registry — `shadcn add button` drops the following; re-apply them.
  *
- * 1. `quiet`, the ghost that rests at muted contrast: toolbar and row actions that sit beside the
- *    content they act on, and come up to full contrast on hover and focus.
- * 2. `warning-outline`, `destructive-outline` in the warning tone, so the two tones come as a pair.
- * 3. The `shape` axis. `pill` is applied after `size`, so it overrides whatever radius the size chose.
- * 4. `aria-pressed` is styled wherever `aria-expanded` already was: a toggle that is on has to look
- *    it, and upstream styles only the expanded case.
+ * 1. `quiet`, the ghost that rests at muted contrast for an action beside the content it acts on,
+ *    and comes up to full contrast on hover.
+ * 2. `destructive-outline` and `warning-outline`, one outlined shape in each status tone.
+ * 3. `size="inline"`, a button that sits inside a sentence.
+ * 4. The `shape` axis.
+ * 5. `aria-pressed` is styled wherever `aria-expanded` is: a pressed toggle rendered as a Button has
+ *    to look pressed, and upstream styles only the expanded case.
  */
-
 const buttonVariants = cva(
 	"focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-lg border border-transparent bg-clip-padding text-sm font-medium focus-visible:ring-3 aria-invalid:ring-3 [&_svg:not([class*='size-'])]:size-4 inline-flex items-center justify-center whitespace-nowrap transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none shrink-0 [&_svg]:shrink-0 outline-none group/button select-none",
 	{
@@ -28,15 +28,12 @@ const buttonVariants = cva(
 					"bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground aria-pressed:bg-secondary aria-pressed:text-secondary-foreground",
 				ghost:
 					"hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 aria-expanded:bg-muted aria-expanded:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground",
-				// Ghost, but quiet until it is wanted: toolbar and row actions that sit beside content
-				// they must not compete with, and come up to full contrast on hover and focus.
 				quiet:
 					"text-muted-foreground hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 aria-expanded:bg-muted aria-expanded:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground",
 				destructive:
 					"bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/70",
 				"destructive-outline":
 					"border-destructive/30 text-destructive bg-background hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-input/30 dark:hover:bg-destructive/20",
-				// `destructive-outline` in the warning tone, so a warning surface has the same pair.
 				"warning-outline":
 					"border-warning/30 text-warning bg-background hover:bg-warning/10 hover:text-warning focus-visible:ring-warning/20 dark:focus-visible:ring-warning/40 dark:bg-input/30 dark:hover:bg-warning/20",
 				link: "text-primary underline-offset-4 hover:underline",

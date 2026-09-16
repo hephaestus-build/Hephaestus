@@ -5,9 +5,9 @@ import { cn } from "cn";
 /**
  * ⚠️ Diverges from the shadcn registry — `shadcn add progress` drops the following; re-apply it.
  *
- * The default track renders only when the caller gives no children. Upstream appends it after
- * whatever is passed, so a meter that needs its own fill tone could not compose a `ProgressTrack`
- * without getting two, and reached for the Base UI primitive or a descendant selector instead.
+ * The default track renders only when the caller passes no children. Upstream appends it after
+ * whatever is passed, so a caller composing its own `ProgressTrack` would get two. The cost: a
+ * caller passing only `ProgressLabel` or `ProgressValue` must pass the track too.
  */
 function Progress({ className, children, value, ...props }: ProgressPrimitive.Root.Props) {
 	return (

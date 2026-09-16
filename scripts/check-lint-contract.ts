@@ -1,5 +1,6 @@
 /**
- * Exercise the configured rules through the pinned Vite+ with known-good and known-bad fixtures.
+ * A rule that stops firing after a Vite+ or oxlint bump fails nothing on its own, so this lints one
+ * known-bad fixture per rule through the pinned Vite+, and known-good ones the theme must accept.
  * The scratch project stays outside the repo so it cannot invalidate webapp task fingerprints.
  */
 import assert from "node:assert/strict";
@@ -71,8 +72,7 @@ const fixtures: Fixture[] = [
 		source:
 			'import { Button } from "@/components/ui/button"; export const good = <Button shape="pill" className="rounded-bl-lg">Send</Button>;',
 	},
-	// no-restyle is on for every registry component, with contracts only where a role makes a
-	// property the caller's. A repainted Card is the plain case; a padded CardContent is a contract.
+	// Contracts are read: Card's grants no colour, CardContent's grants spacing.
 	{
 		path: "src/lint-contract-card-paint.tsx",
 		code: "shadcn(no-restyle)",
@@ -90,8 +90,7 @@ const fixtures: Fixture[] = [
 		code: "shadcn(no-arbitrary-values)",
 		source: 'export const bad = <button className="focus-visible:ring-[3px]">Save</button>;',
 	},
-	// The arbitrary-value policy is an allow list. A deny list exempts everything it forgets, which is
-	// how a hardcoded hex and nine hand-written font sizes went unreported.
+	// Off-theme colour and size are the two arbitrary values a deny list would be likeliest to forget.
 	{
 		path: "src/lint-contract-hex.tsx",
 		code: "shadcn(no-arbitrary-values)",
@@ -110,7 +109,8 @@ const fixtures: Fixture[] = [
 	{
 		path: "src/lint-contract-scale-steps.tsx",
 		code: null,
-		// Every step these replace is a declaration in the real theme, not a Tailwind default.
+		// `text-2xs`, `tracking-display` and `ease-drawer` exist only in `styles.css`; the fixture fails
+		// if the plugin lints against Tailwind's defaults alone.
 		source:
 			'export const good = <span className="text-2xs rounded-xs tracking-display ease-drawer" />;',
 	},
@@ -327,7 +327,8 @@ function writeScratchProject(project: string) {
 	);
 	// Test the options Vite+ actually uses, not a reconstruction of the root policy.
 	lint.options = effectiveLintOptions("webapp");
-	// Preserve every configured plugin; replacing this list would silently drop third-party checks.
+	// Resolved from the webapp, since the scratch project cannot reach `./tools` or the webapp's
+	// dependencies by name; the list stays the config's so a plugin added there is exercised here.
 	assert.ok(Array.isArray(lint.jsPlugins), "jsPlugins must list the webapp plugins");
 	const require = createRequire(join(WEBAPP, "package.json"));
 	lint.jsPlugins = lint.jsPlugins.map((plugin: unknown) => {

@@ -27,8 +27,7 @@ function DropdownMenuContent({
 	Pick<MenuPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
 	return (
 		<MenuPrimitive.Portal>
-			{/* Position against the viewport and cap the popup to Base UI’s collision-aware available
-			    width. Fixed positioning alone prevents page scrolling, not clipped menu content. */}
+			{/* Viewport-relative, not `absolute`, and capped to `--available-width` — see `overlay-reflow.stories.tsx`. */}
 			<MenuPrimitive.Positioner
 				className="isolate z-50 outline-none"
 				align={align}

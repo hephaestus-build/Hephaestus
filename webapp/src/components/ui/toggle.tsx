@@ -3,13 +3,20 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "cn";
 
-// One state, one channel, so no two of them can look alike: hover owns the background, selection owns
-// the border colour and the type weight, focus-visible owns the ring, disabled owns the opacity.
-// Selection must never move back onto `bg-*` — `--muted`, `--accent` and `--secondary` are the same
-// colour in this theme, so a pressed background is a hovered background. The weight is what carries
-// selection without colour, which is what WCAG 2.2 SC 1.4.1 requires of a state a hue would otherwise
-// be the only sign of. `aria-disabled` as well as `disabled`: a standalone toggle carries only the
-// native attribute, while one inside a group carries both, so neither variant covers the pair alone.
+/**
+ * ⚠️ Diverges from the shadcn registry — `shadcn add toggle` drops the following; re-apply them.
+ *
+ * 1. One state, one channel, so no two of them can look alike: hover owns the background, selection
+ *    owns the border colour and the type weight, focus-visible owns the ring, disabled owns the
+ *    opacity. Selection never moves onto a muted-family `bg-*` — `--muted`, `--accent` and
+ *    `--secondary` are the same colour in this theme, so a pressed background is a hovered background.
+ *    The weight carries selection without colour, which WCAG 2.2 SC 1.4.1 requires of a state a hue
+ *    would otherwise be the only sign of. `aria-disabled` as well as `disabled`: a standalone toggle
+ *    carries only the native attribute, one inside a group carries both.
+ * 2. `chip` and `filled`, two icon-only picker cells where a fill or ring cannot be mistaken for
+ *    hover as it would on a label: `chip` is round, unpadded and rings when chosen; `filled` takes
+ *    the primary fill when chosen.
+ */
 const toggleVariants = cva(
 	"group/toggle inline-flex items-center justify-center gap-1 rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap outline-none transition-all hover:bg-muted hover:text-foreground aria-pressed:z-10 aria-pressed:border-primary aria-pressed:font-semibold aria-pressed:text-foreground focus-visible:ring-ring/50 focus-visible:ring-3 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 	{
@@ -17,9 +24,6 @@ const toggleVariants = cva(
 			variant: {
 				default: "bg-transparent",
 				outline: "border-input bg-transparent",
-				// ⚠️ Diverges from the shadcn registry: two icon-only picker cells, where a fill or ring
-				// cannot be mistaken for hover as it would on a label. `chip` is round, sized by what it
-				// wraps, and rings when chosen; `filled` takes the primary fill when chosen.
 				chip: "rounded-full p-0 aria-pressed:ring-2 aria-pressed:ring-primary aria-pressed:ring-offset-1",
 				filled:
 					"p-0 text-muted-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary aria-pressed:hover:text-primary-foreground",

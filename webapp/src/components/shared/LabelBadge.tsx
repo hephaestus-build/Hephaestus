@@ -16,28 +16,27 @@ function relativeLuminance(hex: string): number {
 	return linearise(0) * 0.2126 + linearise(2) * 0.7152 + linearise(4) * 0.0722;
 }
 
-function labelColors(color?: string): React.CSSProperties | undefined {
+function labelPaint(color?: string): { label: string; foreground: string } | undefined {
 	const hex = color?.replace(/^#/, "");
 	if (!hex || !HEX_COLOR.test(hex)) return undefined;
 
 	const luminance = relativeLuminance(hex);
 	const foreground = (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05) ? "#000" : "#fff";
-	const background = `#${hex}`;
-
-	return {
-		backgroundColor: background,
-		borderColor: background,
-		color: foreground,
-	};
+	return { label: `#${hex}`, foreground };
 }
 
 export function LabelBadge({ label, color, className, style, ...props }: LabelBadgeProps) {
+	const paint = labelPaint(color);
+	const labelStyle = {
+		...style,
+		"--label": paint?.label,
+		"--label-foreground": paint?.foreground,
+	} satisfies React.CSSProperties & Record<"--label" | "--label-foreground", string | undefined>;
 	return (
 		<Badge
-			variant="outline"
+			variant={paint ? "label" : "outline"}
 			className={cn("max-w-full", className)}
-			// oxlint-disable-next-line shadcn/no-inline-styles -- Provider label colors and their contrast foreground are computed at runtime.
-			style={{ ...labelColors(color), ...style }}
+			style={labelStyle}
 			{...props}
 		>
 			<span className="truncate">{label}</span>

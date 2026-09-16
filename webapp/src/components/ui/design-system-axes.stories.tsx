@@ -1,16 +1,23 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
+import {
+	SidebarMenu,
+	SidebarMenuButton,
+	SidebarMenuItem,
+	SidebarProvider,
+} from "@/components/ui/sidebar";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 
 /**
- * The axes the design system added to the registry primitives, each pinned on what it does rather
- * than on the class that does it — so the assertions still hold if the implementation moves.
+ * Every `⚠️ Diverges` axis under `ui/`, pinned on the rendered result so a re-vendor that drops one
+ * fails here rather than in a page.
  */
 const meta = {
 	title: "Tests/Design system axes",
@@ -20,7 +27,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Figures share one advance width, so a column of numbers cannot jog as its values change. */
+const style = (element: Element) => getComputedStyle(element);
+const px = (value: string) => Number.parseFloat(value);
+
 export const NumericCellsAlign: Story = {
 	render: () => (
 		<Table>
@@ -35,16 +44,13 @@ export const NumericCellsAlign: Story = {
 		</Table>
 	),
 	play: async ({ canvas }) => {
-		// The resolved property, not the rendered width: the suite's fallback face carries no tabular
-		// figures, so digits measure the same either way here and only the style tells them apart.
-		const numeric = canvas.getByText("1,204,118");
-		const plain = canvas.getByText("Ad hoc");
-		await expect(getComputedStyle(numeric).fontVariantNumeric).toBe("tabular-nums");
-		await expect(getComputedStyle(plain).fontVariantNumeric).toBe("normal");
+		// Asserted on the resolved property: whether `tabular-nums` changes a digit's advance depends
+		// on which face the runner falls back to, so a width comparison would pass or fail on the font.
+		await expect(style(canvas.getByText("1,204,118")).fontVariantNumeric).toBe("tabular-nums");
+		await expect(style(canvas.getByText("Ad hoc")).fontVariantNumeric).toBe("normal");
 	},
 };
 
-/** The outlined empty state draws an edge. Upstream's dashed style had no width to draw one with. */
 export const OutlinedEmptyDrawsItsEdge: Story = {
 	render: () => (
 		<div className="flex flex-col gap-4">
@@ -65,36 +71,29 @@ export const OutlinedEmptyDrawsItsEdge: Story = {
 		const panelOf = (title: string) => {
 			const panel = canvas.getByText(title).closest('[data-slot="empty"]');
 			if (!panel) throw new Error(`No empty panel around ${title}`);
-			return panel;
+			return style(panel);
 		};
-		const outlined = getComputedStyle(panelOf("Connect a repository to start reviewing work."));
+		const outlined = panelOf("Connect a repository to start reviewing work.");
 		await expect(outlined.borderStyle).toBe("dashed");
-		await expect(Number.parseFloat(outlined.borderTopWidth)).toBeGreaterThan(0);
-		const plain = getComputedStyle(panelOf("Nothing here yet"));
-		await expect(Number.parseFloat(plain.borderTopWidth)).toBe(0);
+		await expect(px(outlined.borderTopWidth)).toBeGreaterThan(0);
+		await expect(px(panelOf("Nothing here yet").borderTopWidth)).toBe(0);
 	},
 };
 
-/** A pill is round-ended whatever the size chose, because `shape` is applied after `size`. */
 export const PillOverridesTheSizeRadius: Story = {
 	render: () => (
-		<div className="flex items-center gap-2">
-			<Button size="sm">Default radius</Button>
-			<Button size="sm" shape="pill">
-				Pill
-			</Button>
-		</div>
+		<Button size="sm" shape="pill">
+			Pill
+		</Button>
 	),
 	play: async ({ canvas }) => {
-		const box = canvas.getByRole("button", { name: "Pill" });
-		const { borderTopLeftRadius } = getComputedStyle(box);
-		await expect(Number.parseFloat(borderTopLeftRadius)).toBeGreaterThanOrEqual(
-			box.getBoundingClientRect().height / 2,
+		const pill = canvas.getByRole("button", { name: "Pill" });
+		await expect(px(style(pill).borderTopLeftRadius)).toBeGreaterThanOrEqual(
+			pill.getBoundingClientRect().height / 2,
 		);
 	},
 };
 
-/** A toggle that is on looks on: `aria-pressed` paints, the way `aria-expanded` already did. */
 export const PressedTogglesLookSelected: Story = {
 	render: () => (
 		<div className="flex items-center gap-2">
@@ -107,13 +106,12 @@ export const PressedTogglesLookSelected: Story = {
 		</div>
 	),
 	play: async ({ canvas }) => {
-		const off = getComputedStyle(canvas.getByRole("button", { name: "Off" })).backgroundColor;
-		const on = getComputedStyle(canvas.getByRole("button", { name: "On" })).backgroundColor;
+		const off = style(canvas.getByRole("button", { name: "Off" })).backgroundColor;
+		const on = style(canvas.getByRole("button", { name: "On" })).backgroundColor;
 		await expect(on).not.toBe(off);
 	},
 };
 
-/** The quiet ghost rests below body contrast and comes up to it, so it never competes. */
 export const QuietRestsBelowFullContrast: Story = {
 	render: () => (
 		<div className="flex items-center gap-2 text-foreground">
@@ -122,13 +120,42 @@ export const QuietRestsBelowFullContrast: Story = {
 		</div>
 	),
 	play: async ({ canvas }) => {
-		const ghost = getComputedStyle(canvas.getByRole("button", { name: "Ghost" })).color;
-		const quiet = getComputedStyle(canvas.getByRole("button", { name: "Quiet" })).color;
-		await expect(quiet).not.toBe(ghost);
+		const ghost = canvas.getByRole("button", { name: "Ghost" });
+		const quiet = canvas.getByRole("button", { name: "Quiet" });
+		await expect(style(quiet).color).not.toBe(style(ghost).color);
 	},
 };
 
-/** A dashed Card draws its edge. The edge is a ring, so a caller's `border-dashed` never did. */
+export const OutlinedTonesShareOneSurface: Story = {
+	render: () => (
+		<div className="flex items-center gap-2">
+			<Button variant="warning-outline">Enable writes</Button>
+			<Button variant="destructive-outline">Stop impersonating</Button>
+		</div>
+	),
+	play: async ({ canvas }) => {
+		const warning = style(canvas.getByRole("button", { name: "Enable writes" }));
+		const destructive = style(canvas.getByRole("button", { name: "Stop impersonating" }));
+		await expect(warning.backgroundColor).toBe(destructive.backgroundColor);
+		await expect(warning.borderTopWidth).toBe(destructive.borderTopWidth);
+	},
+};
+
+export const BadgeSizesStep: Story = {
+	render: () => (
+		<div className="flex items-center gap-2">
+			<Badge size="xs">12</Badge>
+			<Badge>Open</Badge>
+			<Badge size="lg">Works with GitHub and GitLab</Badge>
+		</div>
+	),
+	play: async ({ canvas }) => {
+		const height = (text: string) => canvas.getByText(text).getBoundingClientRect().height;
+		await expect(height("12")).toBeLessThan(height("Open"));
+		await expect(height("Open")).toBeLessThan(height("Works with GitHub and GitLab"));
+	},
+};
+
 export const DashedCardDrawsItsEdge: Story = {
 	render: () => (
 		<Card variant="dashed">
@@ -138,12 +165,24 @@ export const DashedCardDrawsItsEdge: Story = {
 	play: async ({ canvas }) => {
 		const card = canvas.getByText("Drop a repository here").closest('[data-slot="card"]');
 		if (!card) throw new Error("No card");
-		await expect(getComputedStyle(card).borderStyle).toBe("dashed");
-		await expect(Number.parseFloat(getComputedStyle(card).borderTopWidth)).toBeGreaterThan(0);
+		await expect(style(card).borderStyle).toBe("dashed");
+		await expect(px(style(card).borderTopWidth)).toBeGreaterThan(0);
 	},
 };
 
-/** A banded header sits flush to the card's top edge: the card gives up its own top padding. */
+export const FlushCardDropsItsPadding: Story = {
+	render: () => (
+		<Card flush>
+			<CardContent>Rows</CardContent>
+		</Card>
+	),
+	play: async ({ canvas }) => {
+		const card = canvas.getByText("Rows").closest('[data-slot="card"]');
+		if (!card) throw new Error("No card");
+		await expect(style(card).paddingTop).toBe("0px");
+	},
+};
+
 export const BandedHeaderIsFlush: Story = {
 	render: () => (
 		<Card>
@@ -164,7 +203,6 @@ export const BandedHeaderIsFlush: Story = {
 	},
 };
 
-/** Composing a track renders that track and no default one behind it. */
 export const ComposedProgressHasOneTrack: Story = {
 	render: () => (
 		<Progress value={40} aria-label="Budget used">
@@ -179,7 +217,6 @@ export const ComposedProgressHasOneTrack: Story = {
 	},
 };
 
-/** The edge belongs to the scroll container, and the reader's own row is set apart from the rest. */
 export const BorderedTableWithOwnRow: Story = {
 	render: () => (
 		<Table bordered aria-label="Spend">
@@ -196,58 +233,50 @@ export const BorderedTableWithOwnRow: Story = {
 		</Table>
 	),
 	play: async ({ canvas }) => {
+		// The edge is on the scroll container, not the <table>.
 		const container = canvas.getByRole("table", { name: "Spend" }).parentElement;
 		if (!container) throw new Error("No container");
-		await expect(Number.parseFloat(getComputedStyle(container).borderTopWidth)).toBeGreaterThan(0);
+		await expect(px(style(container).borderTopWidth)).toBeGreaterThan(0);
 		const own = canvas.getByText("You").closest("tr");
 		const other = canvas.getByText("Team").closest("tr");
 		if (!own || !other) throw new Error("No rows");
-		await expect(getComputedStyle(own).backgroundColor).not.toBe(
-			getComputedStyle(other).backgroundColor,
-		);
+		await expect(style(own).backgroundColor).not.toBe(style(other).backgroundColor);
 	},
 };
 
-/** A bare textarea has no edge of its own; the frame around it draws one. */
-export const BareTextareaHasNoEdge: Story = {
+export const BareTextareaHasNoEdgeOrRing: Story = {
 	render: () => (
 		<div className="rounded-xl border p-3">
 			<Textarea variant="bare" aria-label="Message" defaultValue="Hello" />
 		</div>
 	),
-	play: async ({ canvas }) => {
+	play: async ({ canvas, userEvent }) => {
 		const field = canvas.getByRole("textbox", { name: "Message" });
-		await expect(Number.parseFloat(getComputedStyle(field).borderTopWidth)).toBe(0);
+		await expect(px(style(field).borderTopWidth)).toBe(0);
+		await userEvent.tab();
+		await expect(field).toHaveFocus();
+		// A zero-width ring still serialises as a shadow layer; what matters is that no layer has extent.
+		const extents = style(field).boxShadow.match(/-?\d*\.?\d+px/g) ?? [];
+		await expect(extents.every((length) => px(length) === 0)).toBe(true);
 	},
 };
 
-/**
- * The two outlined tones are one pair: same surface, same edge weight, only the hue differs. The
- * strips are the impersonation banner's, which has no story of its own, so axe checks its contrast here.
- */
-export const OutlinedTonesShareOneSurface: Story = {
+export const OutlineMenuButtonRingsOnFocus: Story = {
 	render: () => (
-		<div className="flex flex-col gap-2">
-			<div className="flex items-center gap-3 rounded-lg border-warning/40 bg-warning/10 p-2 text-sm text-warning">
-				Impersonating a member
-				<Button variant="warning-outline" size="sm">
-					Enable writes
-				</Button>
-			</div>
-			<div className="flex items-center gap-3 rounded-lg border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive">
-				Writes are enabled
-				<Button variant="destructive-outline" size="sm">
-					Stop impersonating
-				</Button>
-			</div>
-		</div>
+		<SidebarProvider className="min-h-0 w-64">
+			<SidebarMenu>
+				<SidebarMenuItem>
+					<SidebarMenuButton variant="outline">Workspace overview</SidebarMenuButton>
+				</SidebarMenuItem>
+			</SidebarMenu>
+		</SidebarProvider>
 	),
-	play: async ({ canvas }) => {
-		const warning = getComputedStyle(canvas.getByRole("button", { name: "Enable writes" }));
-		const destructive = getComputedStyle(
-			canvas.getByRole("button", { name: "Stop impersonating" }),
-		);
-		await expect(warning.backgroundColor).toBe(destructive.backgroundColor);
-		await expect(warning.borderTopWidth).toBe(destructive.borderTopWidth);
+	play: async ({ canvas, userEvent }) => {
+		const button = canvas.getByRole("button", { name: "Workspace overview" });
+		const rest = style(button).boxShadow;
+		await expect(rest).not.toBe("none");
+		await userEvent.tab();
+		await expect(button).toHaveFocus();
+		await expect(style(button).boxShadow).not.toBe(rest);
 	},
 };

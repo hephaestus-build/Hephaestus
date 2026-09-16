@@ -30,10 +30,12 @@ const fmt = {
 const lintConfig = parse(
 	fs.readFileSync(new URL(".oxlintrc.json", import.meta.url), "utf8"),
 ) as OxlintConfig;
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- jsonc-parser's `parse` returns `any`.
 const rootLintConfig = parse(
 	fs.readFileSync(new URL("../.oxlintrc.json", import.meta.url), "utf8"),
 ) as OxlintConfig;
+// oxlint reads `options` only from the config it treats as the root, so this tree's config
+// carries the root's; Vite+ hands it the `lint` object alone.
 const lint = { ...lintConfig, options: rootLintConfig.options };
 
 const sentryUploadValues = [

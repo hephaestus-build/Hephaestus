@@ -15,7 +15,7 @@ function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
 
 /**
  * ⚠️ Diverges from the shadcn registry: `AccordionItem` takes `variant="card"`, each item its own
- * bounded card rather than a row divided from the next — the shape a sortable catalogue takes.
+ * bounded card rather than a row divided from the next.
  */
 function AccordionItem({
 	className,

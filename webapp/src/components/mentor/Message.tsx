@@ -163,7 +163,6 @@ export function PreviewMessage({
 								vote={vote}
 								isLoading={isLoading}
 								isInEditMode={mode === "edit"}
-								variant={variant}
 								onCopy={(text) => onCopy?.(text)}
 								onVote={
 									message.role === "assistant"

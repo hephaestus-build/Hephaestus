@@ -350,7 +350,6 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
 		<div
 			data-slot="sidebar-content"
 			data-sidebar="content"
-			// Diverges from the registry: omit no-scrollbar; this app keeps native scrollbars visible.
 			className={cn(
 				"gap-2 flex min-h-0 flex-1 flex-col overflow-auto group-data-[collapsible=icon]:overflow-hidden",
 				className,
@@ -452,14 +451,16 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 	);
 }
 
+// ⚠️ Diverges from the shadcn registry: `data-popup-open` is styled beside `data-open`, since that is
+// the state Base UI's menu trigger reports and upstream styles only `data-open`.
 const sidebarMenuButtonVariants = cva(
 	"ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground gap-2 rounded-md p-2 text-left text-sm transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 data-active:font-medium peer/menu-button flex w-full items-center overflow-hidden outline-hidden group/menu-button disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&_svg]:size-4 [&_svg]:shrink-0",
 	{
 		variants: {
 			variant: {
 				default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-				// Theme variables contain complete colors, not HSL channels. Native rings also retain
-				// the keyboard focus width instead of hiding it behind a separate arbitrary shadow.
+				// ⚠️ Diverges from the shadcn registry: the 1px edge is a ring, not upstream's arbitrary
+				// `shadow-[0_0_0_1px_…]`, so `focus-visible:ring-2` replaces it instead of stacking on it.
 				outline:
 					"bg-background hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ring-1 ring-sidebar-border hover:ring-sidebar-accent focus-visible:ring-sidebar-ring",
 			},

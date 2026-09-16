@@ -18,8 +18,6 @@ interface MessageActionsProps {
 	isLoading?: boolean;
 	/** Whether the message is in edit mode */
 	isInEditMode?: boolean;
-	/** Layout variant for different contexts */
-	variant?: "default" | "artifact";
 	/** Callback when copy action is triggered */
 	onCopy: (text: string) => void;
 	/** Callback when vote action is triggered (assistant messages only) */
@@ -35,7 +33,6 @@ export function MessageActions({
 	vote,
 	isLoading = false,
 	isInEditMode = false,
-	variant = "default",
 	onCopy,
 	onVote,
 	onEdit,
@@ -46,9 +43,6 @@ export function MessageActions({
 
 	const isUserMessage = messageRole === "user";
 	const isAssistantMessage = messageRole === "assistant";
-
-	// An artifact's actions sit over its content, so they take the wider touch target.
-	const buttonClasses = variant === "artifact" ? "pointer-coarse:w-10" : undefined;
 
 	// For user messages, align actions to the right
 	const containerClassName = cn(
@@ -69,7 +63,7 @@ export function MessageActions({
 						render={
 							<Button
 								aria-label="Copy message"
-								className={buttonClasses}
+								className="pointer-coarse:w-10"
 								variant="quiet"
 								size="icon"
 								onClick={() => onCopy(messageContentToCopy)}
@@ -88,7 +82,7 @@ export function MessageActions({
 							render={
 								<Button
 									aria-label="Edit message"
-									className={buttonClasses}
+									className="pointer-coarse:w-10"
 									variant="quiet"
 									size="icon"
 									onClick={onEdit}

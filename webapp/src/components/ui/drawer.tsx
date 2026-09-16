@@ -104,7 +104,7 @@ const drawerContentVariants = cva("", {
 			 */
 			detail:
 				"[--peek:6rem] data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:min(44rem,92vw)] data-[swipe-axis=x]:xl:[--drawer-content-width:min(62rem,75vw)]",
-			/** A tool beside the page — the mentor. Full width on a phone, one column from `sm`. */
+			/** A tool beside the page rather than a page over it: one fixed column, the page keeps the rest. */
 			panel:
 				"[--peek:1rem] data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:28rem]",
 		},
@@ -113,8 +113,8 @@ const drawerContentVariants = cva("", {
 });
 
 /**
- * `dimWhenNested` is the one deliberate departure from the upstream shadcn drawer, which fades a
- * covered drawer's content to nothing. That reads correctly for a bottom sheet, where only a sliver
+ * `dimWhenNested` is a deliberate departure from the upstream shadcn drawer, which fades a covered
+ * drawer's content to nothing. That reads correctly for a bottom sheet, where only a sliver
  * of the parent shows; a wide side panel leaves a real column of the parent on screen, and an empty
  * column is worse than a readable one.
  */
@@ -161,6 +161,8 @@ function DrawerContent({
 						// Stack — each nested drawer steps the ones behind it back by `--stack-step`.
 						"[--bleed:3rem] [--stack-height:var(--drawer-frontmost-height,var(--drawer-height,0px))] [--stack-peek-offset:max(0px,calc((var(--nested-drawers)-var(--stack-progress))*var(--peek)))] [--stack-progress:clamp(0,var(--drawer-swipe-progress),1)] [--stack-scale-base:max(0,calc(1-(var(--nested-drawers)*var(--stack-step))))] [--stack-scale:clamp(0,calc(var(--stack-scale-base)+(var(--stack-step)*var(--stack-progress))),1)] [--stack-shrink:calc(1-var(--stack-scale))] [--stack-step:0.05]",
 						"[--drawer-ease:cubic-bezier(0.05,0.7,0.1,1)] [--drawer-enter:280ms] [--drawer-exit:calc(var(--drawer-swipe-strength)*200ms)] duration-(--drawer-enter)",
+						// `opacity-[0.9999]`: Base UI waits for `element.getAnimations()` before unmounting, and a
+						// transform-only exit is not in that list, so the exit also animates opacity to just under 1.
 						"data-ending-style:transform-(--closed-transform) data-ending-style:opacity-[0.9999] data-ending-style:duration-(--drawer-exit) data-ending-style:[--drawer-ease:cubic-bezier(0.2,0,0.38,0.9)] data-nested-drawer-swiping:duration-0 data-ending-style:data-nested-drawer-swiping:duration-(--drawer-exit) data-starting-style:transform-(--closed-transform) data-swiping:duration-0 data-ending-style:data-swiping:duration-(--drawer-exit)",
 						"data-[swipe-axis=y]:inset-x-0 data-[swipe-axis=y]:data-nested-drawer-open:h-(--stack-height)",
 						"data-[swipe-axis=x]:inset-y-0 data-[swipe-axis=x]:flex-row",

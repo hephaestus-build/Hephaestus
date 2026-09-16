@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, waitFor } from "storybook/test";
+import { expect, fn, screen } from "storybook/test";
 
 import type { ChatMessageVote } from "@/api/types.gen";
 import { STORY_NOW } from "@/components/common/story-clock";
 import type { ChatMessage } from "@/lib/types";
+import { expectDismissed, expectSettledVisible } from "@/test/overlay";
 
 import { Chat } from "./Chat";
 import { Copilot } from "./Copilot";
@@ -154,25 +155,18 @@ export const WithConversation: Story = {
 	),
 };
 
-/**
- * The panel is a drawer, so it is a dialog the page can be read behind, it takes focus, and every
- * way out is the same way out. The scroll lock is the drawer's own, not the launcher's.
- */
 export const Opened: Story = {
-	render: () => (
-		<CopilotPreview
-			messages={CONVERSATION_MESSAGES}
-			votes={CONVERSATION_VOTES}
-			inputPlaceholder="Continue the conversation…"
-		/>
-	),
+	render: WithConversation.render,
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Open Heph, AI mentor" }));
+		const launcher = canvas.getByRole("button", { name: "Open Heph, AI mentor" });
+		await userEvent.click(launcher);
 		const panel = await screen.findByRole("dialog", { name: /Heph/ });
-		await waitFor(() => expect(panel).toBeVisible());
+		await expectSettledVisible(panel);
+		await expect(panel.contains(document.activeElement)).toBe(true);
 		await expect(getComputedStyle(document.body).overflow).toBe("hidden");
 		await userEvent.keyboard("{Escape}");
-		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		await expectDismissed();
 		await expect(getComputedStyle(document.body).overflow).not.toBe("hidden");
+		await expect(launcher).toHaveFocus();
 	},
 };

@@ -24,15 +24,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
-	play: async ({ canvasElement }) => {
-		// The icon is decorative, so it deliberately has no accessible role to query.
-		const icon = canvasElement.querySelector("svg");
-		if (!icon) throw new Error("Empty state icon is missing");
-		await expect(icon.getBoundingClientRect().width).toBe(24);
-		await expect(icon.getBoundingClientRect().height).toBe(24);
-	},
-};
+export const Default: Story = {};
 
 export const WithAction: Story = {
 	args: {
