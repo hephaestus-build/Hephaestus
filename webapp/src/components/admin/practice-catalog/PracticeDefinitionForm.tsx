@@ -11,6 +11,7 @@ import type {
 } from "@/api/types.gen";
 import {
 	artifactKindOfBindings,
+	type BindingsProblem,
 	bindingsProblem,
 	EMPTY_BINDING,
 	normalizeBinding,
@@ -66,6 +67,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { artifactKindLabel } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 const NO_GROUP = "__none__";
 
@@ -153,26 +155,126 @@ function initialState(
 	initialData?: PracticeDefinitionValue,
 ): FormState {
 	const fallback = orderedWorkTypes(definitionOptions)[0];
+	return initialData ? stateOf(initialData, fallback) : blankState(fallback);
+}
+
+function blankState(fallback: PracticeWorkTypeDefinitionOptions | undefined): FormState {
 	return {
-		name: initialData?.name ?? "",
-		slug: initialData?.slug ?? "",
-		groupSlug: initialData?.groupSlug ?? NO_GROUP,
-		artifactKind:
-			artifactKindOfBindings(initialData?.bindings ?? []) ?? fallback?.artifactKind ?? "",
-		bindings: [
-			initialData
-				? normalizeBinding(soleBinding(initialData.bindings))
-				: fallback
-					? recommendedBinding(fallback)
-					: EMPTY_BINDING,
-		],
-		criteria: initialData?.criteria ?? "",
-		whyItMatters: initialData?.whyItMatters ?? "",
-		whatGoodLooksLike: initialData?.whatGoodLooksLike ?? "",
-		precomputeScript: initialData?.precomputeScript ?? "",
-		automatedReviewPolicy:
-			initialData?.automatedReviewPolicy ?? fallback?.recommendedPolicy ?? EMPTY_POLICY,
+		name: "",
+		slug: "",
+		groupSlug: NO_GROUP,
+		artifactKind: fallback?.artifactKind ?? "",
+		bindings: [fallback ? recommendedBinding(fallback) : EMPTY_BINDING],
+		criteria: "",
+		whyItMatters: "",
+		whatGoodLooksLike: "",
+		precomputeScript: "",
+		automatedReviewPolicy: fallback?.recommendedPolicy ?? EMPTY_POLICY,
 	};
+}
+
+function stateOf(
+	initialData: PracticeDefinitionValue,
+	fallback: PracticeWorkTypeDefinitionOptions | undefined,
+): FormState {
+	return {
+		name: initialData.name,
+		slug: initialData.slug,
+		groupSlug: initialData.groupSlug ?? NO_GROUP,
+		artifactKind: artifactKindOfBindings(initialData.bindings) ?? fallback?.artifactKind ?? "",
+		bindings: [normalizeBinding(soleBinding(initialData.bindings))],
+		criteria: initialData.criteria,
+		whyItMatters: initialData.whyItMatters ?? "",
+		whatGoodLooksLike: initialData.whatGoodLooksLike ?? "",
+		precomputeScript: initialData.precomputeScript ?? "",
+		automatedReviewPolicy: initialData.automatedReviewPolicy,
+	};
+}
+
+function draftOf(form: FormState): WorkTypeDraft {
+	return {
+		bindings: form.bindings,
+		precomputeScript: form.precomputeScript,
+		automatedReviewPolicy: form.automatedReviewPolicy,
+	};
+}
+
+/**
+ * Guidance-only leads, because it is the only one of the three that forbids evidence outright — and
+ * `canAttemptAutomatedReview` can still say yes to a policy whose mode is NONE.
+ */
+function occasionModeOf(
+	policy: PracticeAutomatedReviewPolicy,
+	canRunMentoring: boolean,
+): PracticeOccasionMode {
+	if (policy.automatedReview.mode === "NONE") {
+		return "guidance-only";
+	}
+	return canRunMentoring ? "reviewed" : "human-review";
+}
+
+interface FormErrors {
+	name?: string;
+	slug?: string;
+	criteria?: string;
+	policy?: string;
+	bindings?: BindingsProblem;
+	/**
+	 * One list, in the order the fields appear, so the summary reads down the form and the first
+	 * entry is also the field to focus. Deriving both from it keeps them from disagreeing.
+	 */
+	summary: FormError[];
+}
+
+const NO_ERRORS: FormErrors = { summary: [] };
+
+function formErrors(
+	form: FormState,
+	mode: PracticeDefinitionFormProps["mode"],
+	selectedWorkType: PracticeWorkTypeDefinitionOptions | undefined,
+	revealSlug: () => void,
+): FormErrors {
+	const nameTooShort = form.name.trim().length < 3;
+	const criteriaTooShort = form.criteria.trim().length < 3;
+	const slugInvalid = mode === "create" && !isValidSlug(form.slug);
+	const policy = practicePolicyError(form.automatedReviewPolicy);
+	const bindings = bindingsProblem(form.bindings[0], form.automatedReviewPolicy, selectedWorkType);
+	const summary = [
+		nameTooShort && {
+			fieldId: "practice-name",
+			message: "Give the practice a name of at least three characters.",
+		},
+		criteriaTooShort && {
+			fieldId: "practice-criteria",
+			message: "Say what this practice checks, in at least three characters.",
+		},
+		policy && {
+			fieldId: practicePolicyErrorTarget(form.automatedReviewPolicy),
+			message: policy,
+		},
+		bindings && { fieldId: bindings.focusId, message: bindings.message },
+		slugInvalid && {
+			fieldId: "practice-slug",
+			message: "The identifier must be lowercase letters, numbers and hyphens.",
+			// Lives inside the collapsed Technical settings panel, which unmounts its contents.
+			reveal: revealSlug,
+		},
+	].filter((entry): entry is FormError => Boolean(entry));
+	return {
+		name: nameTooShort ? "Name must be at least 3 characters" : undefined,
+		slug: slugInvalid ? "Use 3–64 lowercase letters, numbers, and single hyphens." : undefined,
+		criteria: criteriaTooShort ? "Criteria must be at least 3 characters" : undefined,
+		policy,
+		bindings,
+		summary,
+	};
+}
+
+function submitLabel(mode: PracticeDefinitionFormProps["mode"], isPending: boolean): string {
+	if (mode === "create") {
+		return isPending ? "Creating…" : "Create practice";
+	}
+	return isPending ? "Saving…" : "Save changes";
 }
 
 /** Only reachable on an instance that offers no reviewable work type at all. */
@@ -247,34 +349,15 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 	// https://react.dev/reference/react/useRef#avoiding-recreating-the-ref-contents
 	const draftsRef = useRef<Map<string, WorkTypeDraft>>(null);
 	if (draftsRef.current === null) {
-		draftsRef.current = new Map(
-			artifactKind
-				? [
-						[
-							artifactKind,
-							{
-								bindings: form.bindings,
-								precomputeScript: form.precomputeScript,
-								automatedReviewPolicy: form.automatedReviewPolicy,
-							},
-						],
-					]
-				: [],
-		);
+		draftsRef.current = new Map(artifactKind ? [[artifactKind, draftOf(form)]] : []);
 	}
 	const workTypeDrafts = draftsRef.current;
+	const supportedAutomatedReviewModes = selectedWorkType?.supportedAutomatedReviewModes ?? [];
 	const canRunMentoring = canAttemptAutomatedReview(
 		form.automatedReviewPolicy,
-		selectedWorkType?.supportedAutomatedReviewModes ?? [],
+		supportedAutomatedReviewModes,
 	);
-	// Guidance-only leads, because it is the only one of the three that forbids evidence outright —
-	// and `canAttemptAutomatedReview` can still say yes to a policy whose mode is NONE.
-	const occasionMode: PracticeOccasionMode =
-		form.automatedReviewPolicy.automatedReview.mode === "NONE"
-			? "guidance-only"
-			: canRunMentoring
-				? "reviewed"
-				: "human-review";
+	const occasionMode = occasionModeOf(form.automatedReviewPolicy, canRunMentoring);
 	const unsavedChanges = useUnsavedChanges({
 		isDirty: !deepEqual(form, initialState(definitionOptions, initialData)),
 		disabled: formDisabled,
@@ -298,11 +381,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 				return previous;
 			}
 			if (previousKind) {
-				workTypeDrafts.set(previousKind, {
-					bindings: previous.bindings,
-					precomputeScript: previous.precomputeScript,
-					automatedReviewPolicy: previous.automatedReviewPolicy,
-				});
+				workTypeDrafts.set(previousKind, draftOf(previous));
 			}
 			const draft = workTypeDrafts.get(next.artifactKind);
 			const automatedReviewPolicy =
@@ -343,54 +422,15 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		});
 	};
 
-	const nameError =
-		refusals > 0 && form.name.trim().length < 3 ? "Name must be at least 3 characters" : undefined;
-	const slugError =
-		refusals > 0 && mode === "create" && !isValidSlug(form.slug)
-			? "Use 3–64 lowercase letters, numbers, and single hyphens."
-			: undefined;
-	const criteriaError =
-		refusals > 0 && form.criteria.trim().length < 3
-			? "Criteria must be at least 3 characters"
-			: undefined;
-	const policyError = practicePolicyError(form.automatedReviewPolicy);
-	const bindingsError = bindingsProblem(
-		form.bindings[0],
-		form.automatedReviewPolicy,
-		selectedWorkType,
-	);
-
-	// One list, in the order the fields appear, so the summary reads down the form and the first
-	// entry is also the field to focus. Deriving both from it keeps them from disagreeing.
-	const errorSummary: FormError[] = [
-		form.name.trim().length < 3 && {
-			fieldId: "practice-name",
-			message: "Give the practice a name of at least three characters.",
-		},
-		form.criteria.trim().length < 3 && {
-			fieldId: "practice-criteria",
-			message: "Say what this practice checks, in at least three characters.",
-		},
-		policyError && {
-			fieldId: practicePolicyErrorTarget(form.automatedReviewPolicy),
-			message: policyError,
-		},
-		bindingsError && { fieldId: bindingsError.focusId, message: bindingsError.message },
-		mode === "create" &&
-			!isValidSlug(form.slug) && {
-				fieldId: "practice-slug",
-				message: "The identifier must be lowercase letters, numbers and hyphens.",
-				// Lives inside the collapsed Technical settings panel, which unmounts its contents.
-				reveal: () => setShowAdvanced(true),
-			},
-	].filter((entry): entry is FormError => Boolean(entry));
-	const valid = errorSummary.length === 0;
+	const errors = formErrors(form, mode, selectedWorkType, () => setShowAdvanced(true));
+	const valid = errors.summary.length === 0;
+	const shownErrors = refusals > 0 ? errors : NO_ERRORS;
 
 	const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		if (!valid) {
 			setRefusals((count) => count + 1);
-			const [first] = errorSummary;
+			const [first] = errors.summary;
 			if (first) {
 				first.reveal?.();
 				requestAnimationFrame(() => document.getElementById(first.fieldId)?.focus());
@@ -417,13 +457,12 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		unsavedChanges.track(submission);
 	};
 
-	const slugWasEdited = mode === "create" && form.slug !== generateSlug(form.name);
 	return (
 		<form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
 			{unsavedChanges.dialog}
 			<DrawerBody className="flex flex-col gap-8">
 				{beforeFields}
-				<FormErrorSummary key={refusals} errors={refusals > 0 ? errorSummary : []} />
+				<FormErrorSummary key={refusals} errors={shownErrors.summary} />
 				<fieldset disabled={formDisabled} className="contents">
 					{/* The panel is the measure. Capping the controls narrower than the panel they sit in
 					    strands the footer's buttons to their right, and the drawer is already sized for
@@ -444,7 +483,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 								</p>
 							</div>
 							<FieldGroup className="gap-4">
-								<Field data-invalid={nameError ? "true" : undefined}>
+								<Field data-invalid={hasText(shownErrors.name) ? "true" : undefined}>
 									<FieldLabel htmlFor="practice-name">Name *</FieldLabel>
 									<Input
 										id="practice-name"
@@ -454,11 +493,13 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 										required
 										minLength={3}
 										maxLength={128}
-										aria-invalid={Boolean(nameError)}
-										aria-describedby={nameError ? "practice-name-error" : undefined}
+										aria-invalid={Boolean(shownErrors.name)}
+										aria-describedby={hasText(shownErrors.name) ? "practice-name-error" : undefined}
 									/>
 									<FieldDescription>Use a short, action-oriented name.</FieldDescription>
-									{nameError && <FieldError id="practice-name-error">{nameError}</FieldError>}
+									{hasText(shownErrors.name) && (
+										<FieldError id="practice-name-error">{shownErrors.name}</FieldError>
+									)}
 								</Field>
 
 								<Field>
@@ -502,7 +543,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									Explain the habit in plain language before configuring how it is reviewed.
 								</p>
 							</div>
-							<Field data-invalid={criteriaError ? "true" : undefined}>
+							<Field data-invalid={hasText(shownErrors.criteria) ? "true" : undefined}>
 								<FieldLabel htmlFor="practice-criteria">What to look for *</FieldLabel>
 								<FieldDescription id="practice-criteria-description">
 									Describe one observable habit, what demonstrates it, and when a reviewer should
@@ -521,13 +562,13 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									required
 									minLength={3}
 									maxLength={50_000}
-									aria-invalid={Boolean(criteriaError)}
+									aria-invalid={Boolean(shownErrors.criteria)}
 									aria-describedby={`practice-criteria-description${
-										criteriaError ? " practice-criteria-error" : ""
+										hasText(shownErrors.criteria) ? " practice-criteria-error" : ""
 									}`}
 								/>
-								{criteriaError && (
-									<FieldError id="practice-criteria-error">{criteriaError}</FieldError>
+								{hasText(shownErrors.criteria) && (
+									<FieldError id="practice-criteria-error">{shownErrors.criteria}</FieldError>
 								)}
 							</Field>
 
@@ -570,10 +611,10 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 						<PracticeMentoringSupportEditor
 							value={form.automatedReviewPolicy}
 							recommended={selectedWorkType?.recommendedPolicy ?? form.automatedReviewPolicy}
-							supportedAutomatedReviewModes={selectedWorkType?.supportedAutomatedReviewModes ?? []}
+							supportedAutomatedReviewModes={supportedAutomatedReviewModes}
 							disabled={formDisabled}
 							onChange={updatePolicy}
-							error={refusals > 0 ? policyError : undefined}
+							error={shownErrors.policy}
 						/>
 
 						<Separator />
@@ -635,8 +676,8 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									mode={occasionMode}
 									outcome={workTypeUnchanged ? evidenceOutcome : undefined}
 									disabled={formDisabled}
-									error={refusals > 0 ? bindingsError?.message : undefined}
-									errorFocusId={refusals > 0 ? bindingsError?.focusId : undefined}
+									error={shownErrors.bindings?.message}
+									errorFocusId={shownErrors.bindings?.focusId}
 									onChange={(binding) =>
 										setForm((previous) => ({ ...previous, bindings: [binding] }))
 									}
@@ -673,48 +714,13 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 								</span>
 							</CollapsibleTrigger>
 							<CollapsibleContent className="mt-4 space-y-6 rounded-lg border p-4">
-								<Field data-invalid={slugError ? "true" : undefined}>
-									<FieldLabel htmlFor="practice-slug">Identifier</FieldLabel>
-									<div className="flex items-center gap-2">
-										<Input
-											id="practice-slug"
-											value={form.slug}
-											onChange={(event) =>
-												setForm((previous) => ({ ...previous, slug: event.target.value }))
-											}
-											disabled={mode === "edit"}
-											required={mode === "create"}
-											minLength={3}
-											maxLength={64}
-											aria-invalid={Boolean(slugError)}
-											aria-describedby={
-												["practice-slug-description", slugError ? "practice-slug-error" : undefined]
-													.filter(Boolean)
-													.join(" ") || undefined
-											}
-										/>
-										{slugWasEdited && (
-											<Button
-												type="button"
-												variant="ghost"
-												size="icon-sm"
-												onClick={() =>
-													setForm((previous) => ({
-														...previous,
-														slug: generateSlug(previous.name),
-													}))
-												}
-												aria-label="Reset to generated identifier"
-											>
-												<RotateCcw className="size-3.5" aria-hidden />
-											</Button>
-										)}
-									</div>
-									<FieldDescription id="practice-slug-description">
-										Generated from the name for URLs and integrations. It cannot be changed later.
-									</FieldDescription>
-									{slugError && <FieldError id="practice-slug-error">{slugError}</FieldError>}
-								</Field>
+								<PracticeIdentifierField
+									mode={mode}
+									name={form.name}
+									slug={form.slug}
+									error={shownErrors.slug}
+									onChange={(slug) => setForm((previous) => ({ ...previous, slug }))}
+								/>
 
 								{canRunMentoring && (
 									<div className="space-y-3">
@@ -747,15 +753,65 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 				{cancelAction}
 				<Button type="submit" disabled={formDisabled || isSubmitDisabled}>
 					{isPending && <Spinner className="size-4" />}
-					{isPending
-						? mode === "create"
-							? "Creating…"
-							: "Saving…"
-						: mode === "create"
-							? "Create practice"
-							: "Save changes"}
+					{submitLabel(mode, isPending)}
 				</Button>
 			</DrawerFooter>
 		</form>
+	);
+}
+
+interface PracticeIdentifierFieldProps {
+	mode: PracticeDefinitionFormProps["mode"];
+	/** What the identifier is generated from, so one an author took over can be handed back. */
+	name: string;
+	slug: string;
+	error?: string;
+	onChange: (slug: string) => void;
+}
+
+function PracticeIdentifierField({
+	mode,
+	name,
+	slug,
+	error,
+	onChange,
+}: PracticeIdentifierFieldProps) {
+	const wasEdited = mode === "create" && slug !== generateSlug(name);
+	return (
+		<Field data-invalid={hasText(error) ? "true" : undefined}>
+			<FieldLabel htmlFor="practice-slug">Identifier</FieldLabel>
+			<div className="flex items-center gap-2">
+				<Input
+					id="practice-slug"
+					value={slug}
+					onChange={(event) => onChange(event.target.value)}
+					disabled={mode === "edit"}
+					required={mode === "create"}
+					minLength={3}
+					maxLength={64}
+					aria-invalid={Boolean(error)}
+					aria-describedby={
+						["practice-slug-description", hasText(error) ? "practice-slug-error" : undefined]
+							.filter(Boolean)
+							.join(" ") || undefined
+					}
+				/>
+				{wasEdited && (
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon-sm"
+						onClick={() => onChange(generateSlug(name))}
+						aria-label="Reset to generated identifier"
+					>
+						<RotateCcw className="size-3.5" aria-hidden />
+					</Button>
+				)}
+			</div>
+			<FieldDescription id="practice-slug-description">
+				Generated from the name for URLs and integrations. It cannot be changed later.
+			</FieldDescription>
+			{hasText(error) && <FieldError id="practice-slug-error">{error}</FieldError>}
+		</Field>
 	);
 }

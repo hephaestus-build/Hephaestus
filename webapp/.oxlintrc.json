@@ -253,6 +253,10 @@
 		"no-param-reassign": "error",
 		"max-depth": "error",
 		"import/newline-after-import": "error",
+		// Cyclomatic complexity counts every `&&`, `??` and `?.` in JSX, so at the usual 20 it grades
+		// how many optional props a page has. Forty is where a function has been doing several
+		// components' work: each one that stood above it split cleanly into a hook and a section.
+		"complexity": ["error", { "max": 40 }],
 		"typescript/prefer-for-of": "error",
 		"typescript/no-explicit-any": "error",
 		"typescript/require-await": "error",
