@@ -36,7 +36,7 @@ function OutlineIntegrationPage() {
 	const [jobsPage, setJobsPage] = useState(0);
 	const livePushUnavailable = useLivePushUnavailable();
 	const outline = useOutlineIntegration(slug);
-	const connectionId = outline.connectionId;
+	const { connectionId } = outline;
 
 	const {
 		data: jobsPageData,

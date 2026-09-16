@@ -160,7 +160,7 @@ export const Opened: Story = {
 	play: async ({ canvas, userEvent }) => {
 		const launcher = canvas.getByRole("button", { name: "Open Heph, AI mentor" });
 		await userEvent.click(launcher);
-		const panel = await screen.findByRole("dialog", { name: /Heph/ });
+		const panel = await screen.findByRole("dialog", { name: /Heph/u });
 		await expectSettledVisible(panel);
 		await expect(panel.contains(document.activeElement)).toBe(true);
 		await expect(getComputedStyle(document.body).overflow).toBe("hidden");

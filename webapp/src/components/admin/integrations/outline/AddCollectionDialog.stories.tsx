@@ -68,7 +68,9 @@ type JsonBody = Record<string, unknown> | Record<string, unknown>[];
 
 const candidatesHandler = (body: JsonBody, init?: { status?: number; delayMs?: number }) =>
 	http.get("*/workspaces/:workspaceSlug/outline/collections/candidates", async () => {
-		if (init?.delayMs) await delay(init.delayMs);
+		if (init?.delayMs) {
+			await delay(init.delayMs);
+		}
 		return HttpResponse.json(body, { status: init?.status ?? 200 });
 	});
 
@@ -94,8 +96,8 @@ export const ProbeFailed: Story = {
 	},
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
-		await expectSettledVisible(await within(dialog).findByText(/outline did not respond/i));
-		within(dialog).getByRole("button", { name: /^retry$/i });
+		await expectSettledVisible(await within(dialog).findByText(/outline did not respond/iu));
+		within(dialog).getByRole("button", { name: /^retry$/iu });
 	},
 };
 
@@ -104,9 +106,9 @@ export const NoVisibleCollections: Story = {
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
 		await expectSettledVisible(
-			await within(dialog).findByText(/this token cannot see any collections/i),
+			await within(dialog).findByText(/this token cannot see any collections/iu),
 		);
-		within(dialog).getByText(/add the bot user/i);
+		within(dialog).getByText(/add the bot user/iu);
 	},
 };
 
@@ -115,16 +117,16 @@ export const PopulatedSearchable: Story = {
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
 
-		const mirrored = await within(dialog).findByRole("option", { name: /engineering/i });
+		const mirrored = await within(dialog).findByRole("option", { name: /engineering/iu });
 		await expect(mirrored).toHaveAttribute("data-disabled");
-		within(dialog).getByText(/already mirrored/i);
+		within(dialog).getByText(/already mirrored/iu);
 
 		await userEvent.type(within(dialog).getByRole("combobox"), "design");
 		within(dialog).getByText("Design System");
 		await expect(within(dialog).queryByText("Research Notes")).not.toBeInTheDocument();
 
-		await userEvent.click(within(dialog).getByRole("option", { name: /design system/i }));
-		await expect(within(dialog).getByRole("button", { name: /add 1 collection/i })).toBeEnabled();
+		await userEvent.click(within(dialog).getByRole("option", { name: /design system/iu }));
+		await expect(within(dialog).getByRole("button", { name: /add 1 collection/iu })).toBeEnabled();
 	},
 };
 
@@ -137,21 +139,21 @@ export const MultiSelect: Story = {
 			"true",
 		);
 
-		await userEvent.click(await within(dialog).findByRole("option", { name: /product/i }));
-		await userEvent.click(within(dialog).getByRole("option", { name: /design system/i }));
+		await userEvent.click(await within(dialog).findByRole("option", { name: /product/iu }));
+		await userEvent.click(within(dialog).getByRole("option", { name: /design system/iu }));
 
-		await expect(within(dialog).getByRole("option", { name: /product/i })).toHaveAttribute(
+		await expect(within(dialog).getByRole("option", { name: /product/iu })).toHaveAttribute(
 			"aria-selected",
 			"true",
 		);
-		await expect(within(dialog).getByRole("button", { name: /add 2 collections/i })).toBeEnabled();
+		await expect(within(dialog).getByRole("button", { name: /add 2 collections/iu })).toBeEnabled();
 
 		await userEvent.type(within(dialog).getByRole("combobox"), "research");
-		await expect(within(dialog).getByRole("button", { name: /add 2 collections/i })).toBeEnabled();
+		await expect(within(dialog).getByRole("button", { name: /add 2 collections/iu })).toBeEnabled();
 
 		await userEvent.clear(within(dialog).getByRole("combobox"));
-		await userEvent.click(await within(dialog).findByRole("option", { name: /product/i }));
-		await expect(within(dialog).getByRole("button", { name: /add 1 collection/i })).toBeEnabled();
+		await userEvent.click(await within(dialog).findByRole("option", { name: /product/iu }));
+		await expect(within(dialog).getByRole("button", { name: /add 1 collection/iu })).toBeEnabled();
 	},
 };
 
@@ -164,10 +166,10 @@ export const KeyboardNavigation: Story = {
 		await waitFor(() => expect(search).toHaveFocus());
 
 		await userEvent.keyboard("{ArrowDown}");
-		const engineering = within(dialog).getByRole("option", { name: /engineering/i });
+		const engineering = within(dialog).getByRole("option", { name: /engineering/iu });
 		await waitFor(() => expect(search).toHaveAttribute("aria-activedescendant", engineering.id));
 
-		const product = within(dialog).getByRole("option", { name: /product/i });
+		const product = within(dialog).getByRole("option", { name: /product/iu });
 		await userEvent.keyboard("{ArrowDown}");
 		await waitFor(() => expect(search).toHaveAttribute("aria-activedescendant", product.id));
 
@@ -175,7 +177,9 @@ export const KeyboardNavigation: Story = {
 		await waitFor(() => expect(search).toHaveAttribute("aria-activedescendant", engineering.id));
 
 		await userEvent.keyboard("{Enter}");
-		await expect(within(dialog).getByRole("button", { name: /^add collections$/i })).toBeDisabled();
+		await expect(
+			within(dialog).getByRole("button", { name: /^add collections$/iu }),
+		).toBeDisabled();
 
 		await userEvent.keyboard("{ArrowDown}{Enter}");
 		await waitFor(() => expect(product).toHaveAttribute("aria-selected", "true"));
@@ -191,7 +195,7 @@ export const EmptySearchResult: Story = {
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
 		await userEvent.type(await within(dialog).findByRole("combobox"), "nothing-matches-this");
-		await waitFor(() => expect(within(dialog).getByText(/no collections match your search/i)));
+		await waitFor(() => expect(within(dialog).getByText(/no collections match your search/iu)));
 		await expect(within(dialog).queryByRole("option")).not.toBeInTheDocument();
 	},
 };
@@ -205,7 +209,7 @@ export const AllAlreadyMirrored: Story = {
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
 		await expectSettledVisible(
-			await within(dialog).findByText(/every visible collection is already mirrored/i),
+			await within(dialog).findByText(/every visible collection is already mirrored/iu),
 		);
 		await expect(within(dialog).queryByRole("listbox")).not.toBeInTheDocument();
 	},
@@ -222,11 +226,11 @@ export const RegisteringSequentially: Story = {
 	},
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
-		await userEvent.click(await within(dialog).findByRole("option", { name: /product/i }));
-		await userEvent.click(within(dialog).getByRole("option", { name: /design system/i }));
-		await userEvent.click(within(dialog).getByRole("button", { name: /add 2 collections/i }));
+		await userEvent.click(await within(dialog).findByRole("option", { name: /product/iu }));
+		await userEvent.click(within(dialog).getByRole("option", { name: /design system/iu }));
+		await userEvent.click(within(dialog).getByRole("button", { name: /add 2 collections/iu }));
 
-		await expectSettledVisible(await within(dialog).findByText(/adding 1 of 2…/i));
-		await expectSettledVisible(await within(dialog).findByText(/adding 2 of 2…/i));
+		await expectSettledVisible(await within(dialog).findByText(/adding 1 of 2…/iu));
+		await expectSettledVisible(await within(dialog).findByText(/adding 2 of 2…/iu));
 	},
 };

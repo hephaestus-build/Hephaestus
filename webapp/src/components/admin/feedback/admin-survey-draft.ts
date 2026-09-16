@@ -122,7 +122,9 @@ export interface SurveyDraftErrors {
 
 function validateQuestion(draft: QuestionDraft): QuestionDraftErrors {
 	const errors: QuestionDraftErrors = {};
-	if (!draft.prompt.trim()) errors.prompt = "Write the question.";
+	if (!draft.prompt.trim()) {
+		errors.prompt = "Write the question.";
+	}
 	if (isChoiceType(draft.type)) {
 		const choices = parseChoices(draft.choices);
 		if (choices.length < MIN_CHOICES || choices.length > MAX_CHOICES) {
@@ -134,8 +136,12 @@ function validateQuestion(draft: QuestionDraft): QuestionDraftErrors {
 		}
 	}
 	if (draft.type === "RATING") {
-		if (!draft.lowLabel.trim()) errors.lowLabel = "Label the low end of the scale.";
-		if (!draft.highLabel.trim()) errors.highLabel = "Label the high end of the scale.";
+		if (!draft.lowLabel.trim()) {
+			errors.lowLabel = "Label the low end of the scale.";
+		}
+		if (!draft.highLabel.trim()) {
+			errors.highLabel = "Label the high end of the scale.";
+		}
 	}
 	return errors;
 }
@@ -152,13 +158,19 @@ function localDateTime(value: string): Date | undefined {
  */
 export function validateSurveyDraft(draft: SurveyDraft, now: number): SurveyDraftErrors {
 	const errors: SurveyDraftErrors = { questionErrors: draft.questions.map(validateQuestion) };
-	if (!draft.title.trim()) errors.title = "Give the survey a title.";
-	if (!draft.description.trim()) errors.description = "Tell members why you're asking.";
+	if (!draft.title.trim()) {
+		errors.title = "Give the survey a title.";
+	}
+	if (!draft.description.trim()) {
+		errors.description = "Tell members why you're asking.";
+	}
 	const endsAt = localDateTime(draft.endsAt);
 	if (endsAt && endsAt.getTime() <= (localDateTime(draft.startsAt)?.getTime() ?? now)) {
 		errors.endsAt = "The end must be after the start.";
 	}
-	if (draft.questions.length === 0) errors.questions = "Add at least one question.";
+	if (draft.questions.length === 0) {
+		errors.questions = "Add at least one question.";
+	}
 	return errors;
 }
 

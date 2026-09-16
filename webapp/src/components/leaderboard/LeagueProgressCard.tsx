@@ -20,7 +20,9 @@ export function LeagueProgressCard({ leaguePoints, onInfoClick }: LeagueProgress
 			(currentLeague.maxPoints - currentLeague.minPoints)
 		: 0;
 
-	if (!currentLeague) return null;
+	if (!currentLeague) {
+		return null;
+	}
 
 	return (
 		<div className="flex items-center gap-2 2xl:gap-4">

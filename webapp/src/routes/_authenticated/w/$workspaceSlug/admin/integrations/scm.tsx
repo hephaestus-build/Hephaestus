@@ -126,7 +126,9 @@ function ScmIntegrationPage() {
 	});
 
 	const invalidateSyncState = () => {
-		if (connectionId == null) return;
+		if (connectionId == null) {
+			return;
+		}
 		void queryClient.invalidateQueries({
 			queryKey: getConnectionSyncStatusQueryKey({
 				path: { workspaceSlug: slug, connectionId },
@@ -266,21 +268,27 @@ function ScmIntegrationPage() {
 					void statusQuery.refetch();
 				}}
 				onSync={() => {
-					if (connectionId == null) return;
+					if (connectionId == null) {
+						return;
+					}
 					triggerSync.mutate({
 						path: { workspaceSlug: slug, connectionId },
 						body: { type: "RECONCILIATION" },
 					});
 				}}
 				onBackfill={() => {
-					if (connectionId == null) return;
+					if (connectionId == null) {
+						return;
+					}
 					triggerSync.mutate({
 						path: { workspaceSlug: slug, connectionId },
 						body: { type: "BACKFILL" },
 					});
 				}}
 				onCancel={() => {
-					if (connectionId == null || activeJob == null) return;
+					if (connectionId == null || activeJob == null) {
+						return;
+					}
 					cancelJob.mutate({
 						path: { workspaceSlug: slug, connectionId, jobId: activeJob.id },
 						body: { cancelRequested: true },

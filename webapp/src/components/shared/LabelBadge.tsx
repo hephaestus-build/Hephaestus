@@ -6,7 +6,7 @@ interface LabelBadgeProps extends React.ComponentPropsWithoutRef<typeof Badge> {
 	color?: string;
 }
 
-const HEX_COLOR = /^[0-9a-f]{6}$/i;
+const HEX_COLOR = /^[0-9a-f]{6}$/iu;
 
 function relativeLuminance(hex: string): number {
 	const linearise = (offset: number) => {
@@ -17,8 +17,10 @@ function relativeLuminance(hex: string): number {
 }
 
 function labelPaint(color?: string): { label: string; foreground: string } | undefined {
-	const hex = color?.replace(/^#/, "");
-	if (!hex || !HEX_COLOR.test(hex)) return undefined;
+	const hex = color?.replace(/^#/u, "");
+	if (!hex || !HEX_COLOR.test(hex)) {
+		return undefined;
+	}
 
 	const luminance = relativeLuminance(hex);
 	const foreground = (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05) ? "#000" : "#fff";

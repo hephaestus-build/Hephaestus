@@ -88,7 +88,8 @@ const fixtures: Fixture[] = [
 	{
 		path: "src/lint-contract-ring.tsx",
 		code: "shadcn(no-arbitrary-values)",
-		source: 'export const bad = <button className="focus-visible:ring-[3px]">Save</button>;',
+		source:
+			'export const bad = <button type="button" className="focus-visible:ring-[3px]">Save</button>;',
 	},
 	// Off-theme colour and size are the two arbitrary values a deny list would be likeliest to forget.
 	{
@@ -118,13 +119,13 @@ const fixtures: Fixture[] = [
 		path: "src/components/ui/lint-contract-shadow.tsx",
 		code: "shadcn(no-arbitrary-values)",
 		source:
-			'export const bad = <button className="shadow-[0_0_0_1px_hsl(var(--sidebar-border))]">Save</button>;',
+			'export const bad = <button type="button" className="shadow-[0_0_0_1px_hsl(var(--sidebar-border))]">Save</button>;',
 	},
 	{
 		path: "src/lint-contract-ring-scale.tsx",
 		code: null,
 		source:
-			'export const good = <button className="ring-1 ring-sidebar-border focus-visible:ring-3 shadow-sm">Save</button>;',
+			'export const good = <button type="button" className="ring-1 ring-sidebar-border focus-visible:ring-3 shadow-sm">Save</button>;',
 	},
 	{
 		path: "src/lint-contract-inline.tsx",

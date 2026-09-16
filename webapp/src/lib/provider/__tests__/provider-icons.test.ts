@@ -102,6 +102,6 @@ describe("getPullRequestStateIcon", () => {
 	it("returns a valid icon component and a Tailwind color class", () => {
 		const result = getPullRequestStateIcon("GITHUB", "OPEN");
 		expect(result.icon).toBeDefined();
-		expect(result.colorClass).toMatch(/^text-provider-/);
+		expect(result.colorClass).toMatch(/^text-provider-/u);
 	});
 });

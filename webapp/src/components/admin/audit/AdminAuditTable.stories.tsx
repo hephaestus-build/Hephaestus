@@ -109,8 +109,10 @@ export const DeletedAccountFallback: Story = {
 
 export const RowDetail: Story = {
 	play: async ({ canvas }) => {
-		const [firstDetails] = canvas.getAllByRole("button", { name: /View details/i });
-		if (!firstDetails) throw new Error("The table rendered no rows to open");
+		const [firstDetails] = canvas.getAllByRole("button", { name: /View details/iu });
+		if (!firstDetails) {
+			throw new Error("The table rendered no rows to open");
+		}
 		await userEvent.click(firstDetails);
 		await expectSettledVisible(await screen.findByText("User agent"));
 		screen.getByText("Workspace");
@@ -128,11 +130,13 @@ export const ElevatedWorkspaceAccess: Story = {
 export const ElevatedRowDetail: Story = {
 	args: { events: [elevatedAccess] },
 	play: async ({ canvas }) => {
-		const [details] = canvas.getAllByRole("button", { name: /View details/i });
-		if (!details) throw new Error("The table rendered no rows to open");
+		const [details] = canvas.getAllByRole("button", { name: /View details/iu });
+		if (!details) {
+			throw new Error("The table rendered no rows to open");
+		}
 		await userEvent.click(details);
 		await expectSettledVisible(await screen.findByText("Access"));
-		screen.getByText(/not a member of/i);
+		screen.getByText(/not a member of/iu);
 	},
 };
 
@@ -147,7 +151,7 @@ export const EmptyInitial: Story = {
 	args: { events: [], hasFilter: false },
 	play: async ({ canvas }) => {
 		canvas.getByText("No events yet");
-		canvas.getByText(/Sign-ins, impersonation, role changes/i);
+		canvas.getByText(/Sign-ins, impersonation, role changes/iu);
 	},
 };
 
@@ -161,7 +165,7 @@ export const EmptyWithFilter: Story = {
 export const ErrorState: Story = {
 	args: { events: [], isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/Couldn’t load the audit log/i);
+		canvas.getByText(/Couldn’t load the audit log/iu);
 	},
 };
 
@@ -177,7 +181,9 @@ export const ColumnCountMatchesHeader: Story = {
 	play: async ({ canvas }) => {
 		const headers = canvas.getAllByRole("columnheader");
 		const [, firstBodyRow] = canvas.getAllByRole("row");
-		if (!firstBodyRow) throw new Error("The table rendered no body rows");
+		if (!firstBodyRow) {
+			throw new Error("The table rendered no body rows");
+		}
 		const cells = within(firstBodyRow).getAllByRole("cell");
 		await expect(headers).toHaveLength(cells.length);
 	},

@@ -22,19 +22,19 @@ export const test = base.extend({
 	},
 });
 
-export { expect };
+export { expect } from "@playwright/test";
 
 export async function loginAsDevAdmin(page: Page, username = "e2e"): Promise<void> {
 	await page.goto("/login");
 	const consent = page.getByRole("region", { name: "Your privacy" });
 	if (await consent.isVisible()) {
-		await consent.getByRole("button", { name: /^(Decline|Reject all)$/ }).click();
+		await consent.getByRole("button", { name: /^(?:Decline|Reject all)$/u }).click();
 	}
 	await page.getByPlaceholder("username").fill(username);
-	await page.getByRole("button", { name: /continue as dev admin/i }).click();
+	await page.getByRole("button", { name: /continue as dev admin/iu }).click();
 	await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 	await page.goto("/consent");
-	const terms = page.getByRole("checkbox", { name: /terms/i });
+	const terms = page.getByRole("checkbox", { name: /terms/iu });
 	await Promise.race([
 		terms.waitFor({ state: "visible" }),
 		page.waitForURL((url) => url.pathname !== "/consent"),
@@ -42,8 +42,10 @@ export async function loginAsDevAdmin(page: Page, username = "e2e"): Promise<voi
 	if (await terms.isVisible()) {
 		await terms.check();
 		// The research question is only asked where an organisation is configured to run one.
-		const decline = page.getByRole("radio", { name: /don't take part/ });
-		if (await decline.isVisible()) await decline.click();
+		const decline = page.getByRole("radio", { name: /don't take part/u });
+		if (await decline.isVisible()) {
+			await decline.click();
+		}
 		await page.getByRole("button", { name: "Continue" }).click();
 		// The consent route can mask its URL, so URL changes do not prove submission finished.
 		await expect(page.getByRole("heading", { name: "Let's get you set up" })).toBeHidden();

@@ -42,15 +42,15 @@ function FocusStory(args: ComponentProps<typeof DeleteWorkspaceAlertDialog>) {
 export const TypeToConfirm: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("alertdialog"));
-		const gate = dialog.getByLabelText(/to confirm/i);
-		const submit = dialog.getByRole("button", { name: /delete workspace/i });
+		const gate = dialog.getByLabelText(/to confirm/iu);
+		const submit = dialog.getByRole("button", { name: /delete workspace/iu });
 
 		await userEvent.type(gate, " acme-corp");
 		await userEvent.click(submit);
 		await expect(args.onConfirm).not.toHaveBeenCalled();
 		await waitFor(() => expect(gate).toHaveAttribute("aria-invalid", "true"));
-		await expect(gate).toHaveAccessibleDescription(/does not match/i);
-		dialog.getByText(/that does not match/i);
+		await expect(gate).toHaveAccessibleDescription(/does not match/iu);
+		dialog.getByText(/that does not match/iu);
 
 		await userEvent.clear(gate);
 		await userEvent.type(gate, "acme-corp");
@@ -62,10 +62,10 @@ export const TypeToConfirm: Story = {
 export const ComplexContentStartsFocused: Story = {
 	render: (args) => <FocusStory {...args} />,
 	play: async () => {
-		await userEvent.click(screen.getByRole("button", { name: /open deletion dialog/i }));
+		await userEvent.click(screen.getByRole("button", { name: /open deletion dialog/iu }));
 		await screen.findByRole("alertdialog");
 		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: /permanently delete/i })).toHaveFocus(),
+			expect(screen.getByRole("heading", { name: /permanently delete/iu })).toHaveFocus(),
 		);
 	},
 };
@@ -74,8 +74,8 @@ export const Deleting: Story = {
 	args: { isDeleting: true },
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("alertdialog"));
-		await expect(dialog.getByRole("button", { name: /deleting/i })).toBeDisabled();
-		await expect(dialog.getByLabelText(/to confirm/i)).toBeDisabled();
+		await expect(dialog.getByRole("button", { name: /deleting/iu })).toBeDisabled();
+		await expect(dialog.getByLabelText(/to confirm/iu)).toBeDisabled();
 		await userEvent.keyboard("{Escape}");
 		await expect(args.onOpenChange).not.toHaveBeenCalled();
 	},

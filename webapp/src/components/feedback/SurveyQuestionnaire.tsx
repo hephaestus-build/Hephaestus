@@ -44,7 +44,9 @@ const Context = createContext<SurveyQuestionnaireContextValue | null>(null);
 
 function useSurveyQuestionnaire(part: string) {
 	const value = useContext(Context);
-	if (!value) throw new Error(`${part} must be rendered inside SurveyQuestionnaire`);
+	if (!value) {
+		throw new Error(`${part} must be rendered inside SurveyQuestionnaire`);
+	}
 	return value;
 }
 
@@ -97,8 +99,9 @@ export function SurveyQuestionnaire({
 				shortcuts={surveyShortcuts(questions)}
 				onSubmit={(event) => {
 					event.preventDefault();
-					if (!disabled)
+					if (!disabled) {
 						onSubmit(answersFromFormData(questions, new FormData(event.currentTarget)));
+					}
 				}}
 				{...props}
 			>
@@ -118,8 +121,12 @@ const ANSWER_VERB: Record<Question["type"], string> = {
 };
 
 function choiceValues(question: Question): readonly string[] {
-	if (question.type === "RATING") return RATING_SCALE.map(String);
-	if (question.type === "NPS") return NPS_SCALE.map(String);
+	if (question.type === "RATING") {
+		return RATING_SCALE.map(String);
+	}
+	if (question.type === "NPS") {
+		return NPS_SCALE.map(String);
+	}
 	return question.options;
 }
 
@@ -156,7 +163,9 @@ function Items({ className, ...props }: ComponentProps<"div">) {
 						// A skip unchecks the answers without a change event; the draft has to follow, or the
 						// answer comes back on reopen.
 						onStatusChange={(status) => {
-							if (status === "skipped") answer(question.id, undefined);
+							if (status === "skipped") {
+								answer(question.id, undefined);
+							}
 						}}
 					>
 						<QuestionnaireTitle>
@@ -167,8 +176,7 @@ function Items({ className, ...props }: ComponentProps<"div">) {
 						</QuestionnaireTitle>
 						{scale?.low && scale.high && (
 							<QuestionnaireDescription>
-								{scale.points[0]} = {scale.low} · {scale.points[scale.points.length - 1]} ={" "}
-								{scale.high}
+								{scale.points[0]} = {scale.low} · {scale.points.at(-1)} = {scale.high}
 							</QuestionnaireDescription>
 						)}
 						{question.type === "TEXT" ? (
@@ -198,7 +206,9 @@ function Items({ className, ...props }: ComponentProps<"div">) {
 											if (multiple) {
 												const kept = chosen.filter((entry) => entry !== option);
 												answer(question.id, event.target.checked ? [...kept, option] : kept);
-											} else if (event.target.checked) answer(question.id, option);
+											} else if (event.target.checked) {
+												answer(question.id, option);
+											}
 										}}
 									>
 										{option}
@@ -213,8 +223,11 @@ function Items({ className, ...props }: ComponentProps<"div">) {
 										onChange={(event) => {
 											const text = event.target.value;
 											const options = chosen.filter((entry) => question.options.includes(entry));
-											if (multiple) answer(question.id, text.trim() ? [...options, text] : options);
-											else answer(question.id, text.trim() ? text : options[0]);
+											if (multiple) {
+												answer(question.id, text.trim() ? [...options, text] : options);
+											} else {
+												answer(question.id, text.trim() ? text : options[0]);
+											}
 										}}
 									/>
 								)}
@@ -271,7 +284,9 @@ function MultilineInput({ type: _type, ...props }: ComponentProps<"input">) {
 			aria-keyshortcuts="Control+Enter Meta+Enter"
 			className={cn(props.className, "field-sizing-content h-auto min-h-20 resize-y py-2")}
 			onKeyDown={(event) => {
-				if (event.key === "Enter" && !event.metaKey && !event.ctrlKey) event.stopPropagation();
+				if (event.key === "Enter" && !event.metaKey && !event.ctrlKey) {
+					event.stopPropagation();
+				}
 			}}
 		/>
 	);

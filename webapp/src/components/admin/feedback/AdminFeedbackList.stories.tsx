@@ -53,7 +53,7 @@ export const Open: Story = {
 export const Resolved: Story = {
 	args: { state: ready(resolvedFeedback, "RESOLVED") },
 	play: async ({ canvas, args }) => {
-		await expect(canvas.getByText(/Resolved by Ada Lovelace/)).toBeVisible();
+		await expect(canvas.getByText(/Resolved by Ada Lovelace/u)).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Reopen" }));
 		await expect(args.onTriage).toHaveBeenCalledWith(resolvedBugReport, false);
 	},

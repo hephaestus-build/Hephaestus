@@ -11,7 +11,7 @@ import { defineRule } from "@oxlint/plugins";
 const OUTSIDE_ASCII = /[^ -~]/u;
 
 /** Both separators, so the rule reads a Windows path the same way it reads a POSIX one. */
-const PATH_SEPARATOR = /[\\/]/;
+const PATH_SEPARATOR = /[\\/]/u;
 
 /**
  * The part of the path this repo owns. `context.filename` is absolute, so it carries the checkout
@@ -55,7 +55,9 @@ export const noNonAsciiFilename = defineRule({
 				const offending = ownedSegments(context.filename, context.cwd).find((segment) =>
 					OUTSIDE_ASCII.test(segment),
 				);
-				if (offending === undefined) return;
+				if (offending === undefined) {
+					return;
+				}
 				context.report({
 					messageId: "nonAscii",
 					data: { segment: offending },

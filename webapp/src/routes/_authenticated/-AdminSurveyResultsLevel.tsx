@@ -50,7 +50,9 @@ export function AdminSurveyResultsLevel({
 	const exportResponses = useMutation({
 		mutationFn: async () => {
 			const { data, error } = await adminExportProductSurveyResponses({ path });
-			if (error || typeof data !== "string") throw new Error("Export failed");
+			if (error || typeof data !== "string") {
+				throw new Error("Export failed");
+			}
 			saveTextFile(data, `survey-${surveyId}-responses.csv`, "text/csv;charset=utf-8;");
 		},
 		onError: () => toast.error("Couldn't export the responses. Please try again."),

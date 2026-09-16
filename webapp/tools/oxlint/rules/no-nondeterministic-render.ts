@@ -19,7 +19,7 @@ const isFunction = (node: ESTree.Node): node is EnclosingFunction =>
  * A component or a hook, by the only signal available without type information: React's own naming
  * convention, which `react/rules-of-hooks` already relies on to decide the same question.
  */
-const RENDERS = /^(?:[A-Z]|use[A-Z])/;
+const RENDERS = /^(?:[A-Z]|use[A-Z])/u;
 
 /**
  * The expression this rule is looking for, spelled as the message should quote it back.
@@ -39,10 +39,16 @@ function reading(node: ESTree.NewExpression | ESTree.CallExpression): string | u
 		return isBareDate ? "new Date()" : undefined;
 	}
 	const { callee } = node;
-	if (callee.type !== "MemberExpression" || callee.object.type !== "Identifier") return undefined;
+	if (callee.type !== "MemberExpression" || callee.object.type !== "Identifier") {
+		return undefined;
+	}
 	const member = memberName(callee);
-	if (callee.object.name === "Date" && member === "now") return "Date.now()";
-	if (callee.object.name === "Math" && member === "random") return "Math.random()";
+	if (callee.object.name === "Date" && member === "now") {
+		return "Date.now()";
+	}
+	if (callee.object.name === "Math" && member === "random") {
+		return "Math.random()";
+	}
 	return undefined;
 }
 
@@ -66,7 +72,9 @@ type Timing = "module" | "render" | "elsewhere";
 function timingOf(node: ESTree.Node): Timing {
 	let current: ESTree.Node | null = node.parent;
 	while (current !== null) {
-		if (isFunction(current)) return renders(current) ? "render" : "elsewhere";
+		if (isFunction(current)) {
+			return renders(current) ? "render" : "elsewhere";
+		}
 		// A class field initializer runs per instance, which is neither of the two moments here.
 		if (current.type === "PropertyDefinition" || current.type === "AccessorProperty") {
 			return "elsewhere";
@@ -78,7 +86,9 @@ function timingOf(node: ESTree.Node): Timing {
 
 /** The name a function is declared or bound under — the only two places a rule can read one. */
 function renders(fn: EnclosingFunction): boolean {
-	if (fn.type !== "ArrowFunctionExpression" && fn.id !== null) return RENDERS.test(fn.id.name);
+	if (fn.type !== "ArrowFunctionExpression" && fn.id !== null) {
+		return RENDERS.test(fn.id.name);
+	}
 	const { parent } = fn;
 	if (parent.type === "VariableDeclarator" && parent.id.type === "Identifier") {
 		return RENDERS.test(parent.id.name);
@@ -103,9 +113,13 @@ export const noNondeterministicRender = defineRule({
 	create(context) {
 		const check = (node: ESTree.NewExpression | ESTree.CallExpression) => {
 			const read = reading(node);
-			if (read === undefined) return;
+			if (read === undefined) {
+				return;
+			}
 			const timing = timingOf(node);
-			if (timing === "elsewhere") return;
+			if (timing === "elsewhere") {
+				return;
+			}
 			// Two readings are two edits, so each is reported where it stands.
 			context.report({
 				node,

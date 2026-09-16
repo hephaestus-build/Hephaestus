@@ -104,11 +104,12 @@ export function getDateRangeForPreset(
 	now.setSeconds(0, 0);
 
 	switch (preset) {
-		case "all-activity":
+		case "all-activity": {
 			return {
 				after: new Date(0),
 				before: undefined,
 			};
+		}
 
 		case "this-week": {
 			const weekStart = getLeaderboardWeekStart(now, schedule);
@@ -183,18 +184,24 @@ export function formatDateRangeForApi(range: { after: Date; before: Date | undef
  */
 export function formatDropdownLabel(preset: TimeframePreset): string {
 	switch (preset) {
-		case "all-activity":
+		case "all-activity": {
 			return "All time";
-		case "this-week":
+		}
+		case "this-week": {
 			return "This week";
-		case "last-week":
+		}
+		case "last-week": {
 			return "Last week";
-		case "this-month":
+		}
+		case "this-month": {
 			return "This month";
-		case "last-month":
+		}
+		case "last-month": {
 			return "Last month";
-		case "custom":
+		}
+		case "custom": {
 			return "Custom range";
+		}
 	}
 }
 

@@ -33,10 +33,11 @@ const latest = {
 } satisfies NonNullable<ReleaseStatus["latest"]>;
 
 const onCheck = fn();
+const IDLE_CHECK: ReleaseCheckRequest = { status: "idle" };
 
 function ready(
 	release: Partial<ReleaseStatus>,
-	check: ReleaseCheckRequest = { status: "idle" },
+	check: ReleaseCheckRequest = IDLE_CHECK,
 ): InstanceReleaseCardState {
 	return {
 		status: "ready",
@@ -76,7 +77,7 @@ export const UpToDate: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Up to date")).toBeVisible();
-		await expect(canvas.queryByRole("link", { name: /release notes/i })).toBeNull();
+		await expect(canvas.queryByRole("link", { name: /release notes/iu })).toBeNull();
 	},
 };
 
@@ -92,11 +93,11 @@ export const UpdateAvailable: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Update available")).toBeVisible();
-		await expect(canvas.getByRole("link", { name: /release notes/i })).toHaveAttribute(
+		await expect(canvas.getByRole("link", { name: /release notes/iu })).toHaveAttribute(
 			"href",
 			latest.notesUrl,
 		);
-		await expect(canvas.getByText(/includes schema migrations/i)).toBeVisible();
+		await expect(canvas.getByText(/includes schema migrations/iu)).toBeVisible();
 	},
 };
 
@@ -119,7 +120,7 @@ export const UpdateAvailableMigrationsUnknown: Story = {
 		}),
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/read the release notes/i)).toBeVisible();
+		await expect(canvas.getByText(/read the release notes/iu)).toBeVisible();
 	},
 };
 
@@ -136,7 +137,7 @@ export const CheckFailedAfterASuccess: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Check failed")).toBeVisible();
-		await expect(canvas.getByText(/found v1\.3\.0/)).toBeVisible();
+		await expect(canvas.getByText(/found v1\.3\.0/u)).toBeVisible();
 		await expect(canvas.queryByText("Update available")).toBeNull();
 		await expect(canvas.getByRole("button", { name: "Check now" })).toBeEnabled();
 	},
@@ -153,7 +154,7 @@ export const RateLimited: Story = {
 		}),
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/rate-limited/)).toBeVisible();
+		await expect(canvas.getByText(/rate-limited/u)).toBeVisible();
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Check now" }));
 	},
 };

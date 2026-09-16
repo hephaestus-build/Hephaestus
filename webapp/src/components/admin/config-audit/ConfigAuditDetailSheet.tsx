@@ -45,7 +45,7 @@ export function ConfigAuditDetailSheet({
 	const actor = entry ? actorDisplay(entry) : null;
 	const subject = entry ? subjectLabel(entry) : null;
 	const workspaceName =
-		entry?.workspaceId != null ? resolveWorkspaceName?.(entry.workspaceId) : undefined;
+		entry?.workspaceId == null ? undefined : resolveWorkspaceName?.(entry.workspaceId);
 	const oldRaw = prettyJson(entry?.oldValue);
 	const newRaw = prettyJson(entry?.newValue);
 	const valuesHeading =

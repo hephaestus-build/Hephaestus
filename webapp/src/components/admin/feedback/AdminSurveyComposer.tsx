@@ -132,7 +132,7 @@ export function AdminSurveyComposer({
 }: AdminSurveyComposerProps) {
 	const id = useId();
 	// The server accepts `[A-Za-z0-9_-]` in a question id; `useId` wraps its token in punctuation.
-	const questionIdPrefix = `q-${id.replace(/[^A-Za-z0-9_-]/g, "")}`;
+	const questionIdPrefix = `q-${id.replaceAll(/[^A-Za-z0-9_-]/gu, "")}`;
 	const issuedQuestionIds = useRef(1);
 	const [initial] = useState(() => emptySurveyDraft(`${questionIdPrefix}-0`));
 	const [draft, setDraft] = useState(initial);
@@ -171,7 +171,9 @@ export function AdminSurveyComposer({
 		setDraft((previous) => {
 			const questions = [...previous.questions];
 			const [moved] = questions.splice(index, 1);
-			if (moved) questions.splice(index + direction, 0, moved);
+			if (moved) {
+				questions.splice(index + direction, 0, moved);
+			}
 			return { ...previous, questions };
 		});
 	const removeQuestion = (index: number) =>
@@ -222,20 +224,28 @@ export function AdminSurveyComposer({
 	/** Publish and Preview refuse the same drafts: a preview of a survey that cannot ship misleads. */
 	const refuse = (at: Date): boolean => {
 		const refused = hasDraftErrors(validateSurveyDraft(draft, at.getTime()));
-		if (refused) setRefusedAt(at.getTime());
+		if (refused) {
+			setRefusedAt(at.getTime());
+		}
 		return refused;
 	};
 
 	const submit = (event: React.SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (isPending) return;
+		if (isPending) {
+			return;
+		}
 		const publishedAt = new Date();
-		if (refuse(publishedAt)) return;
+		if (refuse(publishedAt)) {
+			return;
+		}
 		unsavedChanges.track(onSubmit(toCreateSurvey(draft, publishedAt, researchOrganization)));
 	};
 
 	const preview = () => {
-		if (refuse(new Date())) return;
+		if (refuse(new Date())) {
+			return;
+		}
 		setPreviewDraft(EMPTY_SURVEY_RESPONSE_DRAFT);
 		setPreviewOpen(true);
 	};

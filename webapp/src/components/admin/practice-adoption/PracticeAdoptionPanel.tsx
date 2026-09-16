@@ -225,8 +225,12 @@ function AutonomyOutcome({ preview }: { preview: CatalogPracticePreview }) {
 }
 
 function groupTitle(preview: CatalogPracticePreview): string {
-	if (preview.group.disposition === "UNASSIGNED") return "Stay unassigned";
+	if (preview.group.disposition === "UNASSIGNED") {
+		return "Stay unassigned";
+	}
 	const name = preview.group.definition?.name ?? preview.group.slug ?? "catalog group";
-	if (preview.group.disposition === "REUSE_EXISTING_GROUP") return `Join “${name}”`;
+	if (preview.group.disposition === "REUSE_EXISTING_GROUP") {
+		return `Join “${name}”`;
+	}
 	return `Create “${name}”`;
 }

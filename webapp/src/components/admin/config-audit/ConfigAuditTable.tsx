@@ -148,7 +148,7 @@ export function ConfigAuditTable({
 							const subject = subjectLabel(entry);
 							const summary = changeSummary(entry);
 							const workspaceName =
-								entry.workspaceId != null ? resolveWorkspaceName?.(entry.workspaceId) : undefined;
+								entry.workspaceId == null ? undefined : resolveWorkspaceName?.(entry.workspaceId);
 							return (
 								<TableRow key={entry.id}>
 									<TableCell className="text-sm whitespace-nowrap text-muted-foreground">
@@ -167,9 +167,9 @@ export function ConfigAuditTable({
 									</TableCell>
 									{showWorkspace && (
 										<TableCell className="max-w-[10rem] truncate text-sm text-muted-foreground">
-											{entry.workspaceId != null
-												? (workspaceName ?? `#${entry.workspaceId}`)
-												: "Instance-wide"}
+											{entry.workspaceId == null
+												? "Instance-wide"
+												: (workspaceName ?? `#${entry.workspaceId}`)}
 										</TableCell>
 									)}
 									<TableCell className="max-w-[14rem]">

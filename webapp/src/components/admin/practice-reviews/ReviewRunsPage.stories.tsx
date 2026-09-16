@@ -83,7 +83,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	parameters: { viewport: { defaultViewport: "desktop" } },
 	play: async ({ canvas }) => {
-		const list = await canvas.findByRole("list", { name: /Practice reviews/ });
+		const list = await canvas.findByRole("list", { name: /Practice reviews/u });
 		within(list).getByRole("link", {
 			name: "Cache the workspace member lookup on the review path",
 		});
@@ -102,7 +102,7 @@ export const Default: Story = {
 export const WhatEachReviewProduced: Story = {
 	parameters: { viewport: { defaultViewport: "desktop" }, chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByRole("list", { name: /Practice reviews/ });
+		await canvas.findByRole("list", { name: /Practice reviews/u });
 		// A still-running review has no tally, so index 0 is the first review with output rather than
 		// the first row.
 		const observations = canvas.getAllByRole("list", { name: "Observations" })[0];
@@ -135,16 +135,16 @@ export const WhatEachReviewProduced: Story = {
 export const StatusFilter: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
-		await canvas.findByRole("list", { name: /Practice reviews/ });
+		await canvas.findByRole("list", { name: /Practice reviews/u });
 		await userEvent.click(canvas.getByRole("combobox"));
 		const listbox = await screen.findByRole("listbox");
-		await userEvent.click(within(listbox).getByRole("option", { name: /Failed/ }));
+		await userEvent.click(within(listbox).getByRole("option", { name: /Failed/u }));
 		await expect(canvas.getByRole("combobox")).toHaveTextContent("Failed");
 		await canvas.findByText("1 review matches your filters.");
 
 		await userEvent.click(canvas.getByRole("combobox"));
 		await userEvent.click(
-			within(await screen.findByRole("listbox")).getByRole("option", { name: /Cancelled/ }),
+			within(await screen.findByRole("listbox")).getByRole("option", { name: /Cancelled/u }),
 		);
 		await canvas.findByText("No reviews found");
 		await userEvent.click(canvas.getByRole("button", { name: "Clear all filters" }));
@@ -162,14 +162,14 @@ export const FilterByRequestedDate: Story = {
 	parameters: { viewport: { defaultViewport: "desktop" }, chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
 		await canvas.findByText("3 reviews match your filters.");
-		const list = canvas.getByRole("list", { name: /Practice reviews/ });
-		within(list).getByRole("link", { name: /Retry webhook deliveries with backoff/ });
+		const list = canvas.getByRole("list", { name: /Practice reviews/u });
+		within(list).getByRole("link", { name: /Retry webhook deliveries with backoff/u });
 		within(list).getByRole("link", {
 			name: "Cache the workspace member lookup on the review path",
 		});
 		await expect(
 			within(list).queryByRole("link", {
-				name: /Move invoice numbering behind the billing boundary/,
+				name: /Move invoice numbering behind the billing boundary/u,
 			}),
 		).not.toBeInTheDocument();
 
@@ -178,14 +178,14 @@ export const FilterByRequestedDate: Story = {
 		// Adding a status intersects with the range rather than replacing it.
 		await userEvent.click(canvas.getByRole("combobox"));
 		await userEvent.click(
-			within(await screen.findByRole("listbox")).getByRole("option", { name: /Completed/ }),
+			within(await screen.findByRole("listbox")).getByRole("option", { name: /Completed/u }),
 		);
 		await canvas.findByText("2 reviews match your filters.");
 
 		// The failed review was requested outside the window, so this intersection is empty.
 		await userEvent.click(canvas.getByRole("combobox"));
 		await userEvent.click(
-			within(await screen.findByRole("listbox")).getByRole("option", { name: /Failed/ }),
+			within(await screen.findByRole("listbox")).getByRole("option", { name: /Failed/u }),
 		);
 		await canvas.findByText("No reviews found");
 		canvas.getByText("No review matches these filters. Other reviews may exist outside them.");
@@ -202,8 +202,8 @@ export const Mobile: Story = {
 		viewport: { defaultViewport: "reflow" },
 	},
 	play: async ({ canvas }) => {
-		const list = await canvas.findByRole("list", { name: /Practice reviews/ });
-		await within(list).findByRole("link", { name: /Retry webhook deliveries with backoff/ });
+		const list = await canvas.findByRole("list", { name: /Practice reviews/u });
+		await within(list).findByRole("link", { name: /Retry webhook deliveries with backoff/u });
 		await expectNoPageOverflow();
 	},
 };
@@ -230,7 +230,7 @@ export const Loading: Story = {
 	render: (args) => <ReviewRunsPage {...args} />,
 	play: async ({ canvas }) => {
 		await canvas.findByText("Loading reviews");
-		await expect(canvas.queryByRole("list", { name: /Practice reviews/ })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("list", { name: /Practice reviews/u })).not.toBeInTheDocument();
 	},
 };
 

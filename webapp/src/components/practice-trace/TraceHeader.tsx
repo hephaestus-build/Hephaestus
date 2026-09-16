@@ -10,7 +10,10 @@ import { ARTIFACT_KIND, artifactKindIcon, artifactKindLabel } from "@/lib/artifa
  * on the wire says which kinds have a front door; being wrong in this direction costs a missing
  * button rather than a broken one.
  */
-const REVIEWABLE_ON_DEMAND: readonly string[] = [ARTIFACT_KIND.pullRequest, ARTIFACT_KIND.issue];
+const REVIEWABLE_ON_DEMAND: ReadonlySet<string> = new Set([
+	ARTIFACT_KIND.pullRequest,
+	ARTIFACT_KIND.issue,
+]);
 
 export interface TraceHeaderProps {
 	trace: ArtifactTrace;
@@ -53,7 +56,7 @@ export function TraceHeader({ trace, onRequestReview, requestPending }: TraceHea
 					)}
 				</div>
 			</div>
-			{REVIEWABLE_ON_DEMAND.includes(trace.artifactKind) && (
+			{REVIEWABLE_ON_DEMAND.has(trace.artifactKind) && (
 				<Button
 					variant="outline"
 					className="shrink-0 sm:self-start"

@@ -47,7 +47,7 @@ export const Loading: Story = {
 export const EditedButUnsaved: Story = {
 	play: async ({ canvas }) => {
 		const ownProvider = canvas.getByRole("switch", {
-			name: /let workspaces add providers and models/i,
+			name: /let workspaces add providers and models/iu,
 		});
 		await userEvent.click(ownProvider);
 		await expect(ownProvider).toHaveAttribute("aria-checked", "false");

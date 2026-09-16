@@ -43,7 +43,7 @@ describe("AdminLlmConnectionFormDialog", () => {
 	it("offers the three OpenAI-compatible create-time presets", () => {
 		renderDialog();
 		expect(screen.queryByRole("switch", { name: "Active" })).toBeNull();
-		screen.getByText(/new connections start inactive/i);
+		screen.getByText(/new connections start inactive/iu);
 		expect(screen.queryByLabelText("Slug")).toBeNull();
 		fireEvent.click(screen.getByRole("combobox", { name: "Endpoint preset" }));
 		expect(screen.queryByRole("option", { name: "Anthropic" })).toBeNull();

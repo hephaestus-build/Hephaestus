@@ -22,6 +22,7 @@ function SwitchWorkspace() {
 	return (
 		<>
 			<button
+				type="button"
 				onClick={() =>
 					void switchWorkspace({ displayName: "Beta workspace", workspaceSlug: "beta" })
 				}
@@ -29,6 +30,7 @@ function SwitchWorkspace() {
 				Switch workspace
 			</button>
 			<button
+				type="button"
 				onClick={() =>
 					void switchWorkspace({ displayName: "Alpha workspace", workspaceSlug: "alpha" })
 				}

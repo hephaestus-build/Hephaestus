@@ -33,6 +33,8 @@ export function DetailStackLink({ entry, ...props }: DetailStackLinkProps) {
 }
 
 function toStack(detail: unknown): string[] {
-	if (Array.isArray(detail)) return detail.filter((value) => typeof value === "string");
+	if (Array.isArray(detail)) {
+		return detail.filter((value) => typeof value === "string");
+	}
 	return typeof detail === "string" ? [detail] : [];
 }

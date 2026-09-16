@@ -14,10 +14,10 @@ import { PreviewAttachment } from "./PreviewAttachment";
 export interface MultimodalInputProps {
 	status: "ready" | "submitted" | "error";
 	onStop: () => void;
-	attachments: Array<Attachment>;
-	onAttachmentsChange: (attachments: Array<Attachment>) => void;
-	onFileUpload: (files: File[]) => Promise<Array<Attachment | undefined>>;
-	onSubmit: (data: { text: string; attachments: Array<Attachment> }) => void;
+	attachments: Attachment[];
+	onAttachmentsChange: (attachments: Attachment[]) => void;
+	onFileUpload: (files: File[]) => Promise<(Attachment | undefined)[]>;
+	onSubmit: (data: { text: string; attachments: Attachment[] }) => void;
 	className?: string;
 	placeholder?: string;
 	initialInput?: string;
@@ -47,7 +47,7 @@ export function MultimodalInput({
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const { width } = useWindowSize();
-	const [uploadQueue, setUploadQueue] = useState<Array<string>>([]);
+	const [uploadQueue, setUploadQueue] = useState<string[]>([]);
 
 	const [input, setInput] = useState(initialInput);
 
@@ -59,7 +59,9 @@ export function MultimodalInput({
 
 	useEffect(() => {
 		const textarea = textareaRef.current;
-		if (!textarea) return;
+		if (!textarea) {
+			return;
+		}
 		textarea.style.height = "auto";
 		textarea.style.height = `${textarea.scrollHeight + 2}px`;
 	}, []);
@@ -85,8 +87,10 @@ export function MultimodalInput({
 	};
 
 	const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-		const files = Array.from(event.target.files ?? []);
-		if (files.length === 0) return;
+		const files = [...(event.target.files ?? [])];
+		if (files.length === 0) {
+			return;
+		}
 
 		setUploadQueue(files.map((file) => file.name));
 
@@ -98,11 +102,10 @@ export function MultimodalInput({
 
 			onAttachmentsChange([...attachments, ...successfullyUploadedAttachments]);
 		} catch {
-			// `finally` empties the queue either way, so without this the files vanish with no symptom.
+			// The queue empties either way, so without this the files vanish with no symptom.
 			toast.error("Could not attach those files. Please try again.");
-		} finally {
-			setUploadQueue([]);
 		}
+		setUploadQueue([]);
 	};
 
 	useEffect(() => {

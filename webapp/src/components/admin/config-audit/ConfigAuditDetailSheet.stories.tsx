@@ -41,7 +41,7 @@ export const Default: Story = {
 	play: async () => {
 		const body = within(document.body);
 		await expectSettledVisible(await body.findByText("Acme (#3)"));
-		await expectSettledVisible(await body.findByText(/timeoutSeconds/));
+		await expectSettledVisible(await body.findByText(/timeoutSeconds/u));
 	},
 };
 
@@ -85,7 +85,7 @@ export const ElevatedAccess: Story = {
 	play: async () => {
 		const body = within(document.body);
 		await expectSettledVisible(await body.findByText("Access"));
-		await expectSettledVisible(await body.findByText(/not a member of/i));
+		await expectSettledVisible(await body.findByText(/not a member of/iu));
 	},
 };
 

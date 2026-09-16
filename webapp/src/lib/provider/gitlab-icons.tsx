@@ -19,7 +19,7 @@ export interface GitLabIconProps extends Omit<SVGProps<SVGSVGElement>, "children
 }
 
 function createGitLabIcon(pathData: string, displayName: string) {
-	const Icon = ({ size = 16, ...rest }: GitLabIconProps) => {
+	function Icon({ size = 16, ...rest }: GitLabIconProps) {
 		const labelled = hasText(rest["aria-label"]) || hasText(rest["aria-labelledby"]);
 		return (
 			<svg
@@ -35,7 +35,7 @@ function createGitLabIcon(pathData: string, displayName: string) {
 				<path fillRule="evenodd" clipRule="evenodd" d={pathData} />
 			</svg>
 		);
-	};
+	}
 	Icon.displayName = displayName;
 	return Icon;
 }

@@ -14,7 +14,9 @@ export function toDayParam(date: Date): string {
 }
 
 export function fromDayParam(value: string | undefined): Date | undefined {
-	if (!value) return undefined;
+	if (!value) {
+		return undefined;
+	}
 	const parsed = parse(value, DAY, DAY_PARSE_REFERENCE);
 	return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }

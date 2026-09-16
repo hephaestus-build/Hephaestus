@@ -4,12 +4,12 @@ import { defineRule, type ESTree } from "@oxlint/plugins";
 
 import { propertyName } from "../property.ts";
 
-const STORY_SUFFIX = /\.stories\.[cm]?[jt]sx?$/;
-const PATH_SEPARATOR = /[\\/]/;
+const STORY_SUFFIX = /\.stories\.[cm]?[jt]sx?$/u;
+const PATH_SEPARATOR = /[\\/]/u;
 
 /** Storybook ignores case and punctuation when it turns a path or title into an id. */
 const normalizedSegments = (segments: string[]) =>
-	segments.map((segment) => segment.replaceAll(/[^a-zA-Z0-9]/g, "").toLowerCase());
+	segments.map((segment) => segment.replaceAll(/[^a-zA-Z0-9]/gu, "").toLowerCase());
 
 /** The title Storybook derives from this file when `meta.title` is absent. */
 function automaticTitle(filename: string, cwd: string): string[] | undefined {
@@ -17,10 +17,14 @@ function automaticTitle(filename: string, cwd: string): string[] | undefined {
 	const src = segments.findIndex(
 		(segment, index) => segment === "src" && (index === 0 || segments[index - 1] === "webapp"),
 	);
-	if (src === -1) return undefined;
+	if (src === -1) {
+		return undefined;
+	}
 	const owned = segments.slice(src + 1);
 	const file = owned.at(-1);
-	if (file === undefined || !STORY_SUFFIX.test(file)) return undefined;
+	if (file === undefined || !STORY_SUFFIX.test(file)) {
+		return undefined;
+	}
 	owned[owned.length - 1] = file.replace(STORY_SUFFIX, "");
 	return owned;
 }
@@ -51,12 +55,18 @@ export const preferAutoStoryTitle = defineRule({
 	},
 	create(context) {
 		const automatic = automaticTitle(context.filename, context.cwd);
-		if (automatic === undefined) return {};
+		if (automatic === undefined) {
+			return {};
+		}
 		return {
 			VariableDeclarator(node) {
-				if (node.id.type !== "Identifier" || node.id.name !== "meta") return;
+				if (node.id.type !== "Identifier" || node.id.name !== "meta") {
+					return;
+				}
 				const meta = objectExpression(node.init);
-				if (meta === undefined) return;
+				if (meta === undefined) {
+					return;
+				}
 				const title = meta.properties.find(
 					(property) => property.type === "Property" && propertyName(property) === "title",
 				);

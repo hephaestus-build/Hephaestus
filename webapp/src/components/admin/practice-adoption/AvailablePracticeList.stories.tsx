@@ -65,9 +65,9 @@ export const Default: Story = {
 		await expect(canvas.getByText("Name unavailable")).toBeVisible();
 		await expect(canvas.queryByText("Keep pull requests focused")).not.toBeInTheDocument();
 		await expect(
-			detailParamOf(canvas.getByRole("link", { name: /Describe what changed and why/ })),
+			detailParamOf(canvas.getByRole("link", { name: /Describe what changed and why/u })),
 		).toBe('["catalog-practice:describe-what-and-why"]');
-		await expect(detailParamOf(canvas.getByRole("link", { name: /Review 1 practice/ }))).toBe(
+		await expect(detailParamOf(canvas.getByRole("link", { name: /Review 1 practice/u }))).toBe(
 			'["catalog-group:review-ready-work"]',
 		);
 	},
@@ -76,9 +76,9 @@ export const Default: Story = {
 export const DeletedGroupStillHasSomethingToAdd: Story = {
 	args: { existingGroupSlugs: new Set() },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("link", { name: /Review group · 1 practice/ })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /Review group · 1 practice/u })).toBeVisible();
 		await expect(
-			detailParamOf(canvas.getByRole("link", { name: /Keep pull requests focused/ })),
+			detailParamOf(canvas.getByRole("link", { name: /Keep pull requests focused/u })),
 		).toBe('["practice:review-scope"]');
 	},
 };
@@ -86,7 +86,7 @@ export const DeletedGroupStillHasSomethingToAdd: Story = {
 export const DeletedGroupCanOnlyBeRestored: Story = {
 	args: { practices: [reviewScope], existingGroupSlugs: new Set() },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("link", { name: /Restore group · 1 practice/ })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /Restore group · 1 practice/u })).toBeVisible();
 	},
 };
 

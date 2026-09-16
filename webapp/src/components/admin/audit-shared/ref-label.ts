@@ -7,7 +7,11 @@ export interface AuditRef {
 
 /** Falls back to `#id`: audit rows outlive the accounts they name. */
 export function refLabel(ref: AuditRef | undefined, id: number | undefined): string | null {
-	if (ref) return firstNonBlank(ref.displayName, ref.email) ?? `#${ref.id}`;
-	if (id != null) return `#${id}`;
+	if (ref) {
+		return firstNonBlank(ref.displayName, ref.email) ?? `#${ref.id}`;
+	}
+	if (id != null) {
+		return `#${id}`;
+	}
 	return null;
 }

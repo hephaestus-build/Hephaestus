@@ -72,9 +72,9 @@ export const EditKeepsAccessSeparate: Story = {
 
 export const ValidationError: Story = {
 	play: async () => {
-		await userEvent.click(await screen.findByRole("button", { name: /add model/i }));
-		await expectSettledVisible(await screen.findByText(/display name is required/i));
-		await expectSettledVisible(await screen.findByText(/upstream model id is required/i));
+		await userEvent.click(await screen.findByRole("button", { name: /add model/iu }));
+		await expectSettledVisible(await screen.findByText(/display name is required/iu));
+		await expectSettledVisible(await screen.findByText(/upstream model id is required/iu));
 	},
 };
 
@@ -88,10 +88,10 @@ export const MobileReflow: Story = {
 		chromatic: { viewports: [320, 375, 768] },
 	},
 	play: async () => {
-		const submit = await screen.findByRole("button", { name: /^add model$/i });
+		const submit = await screen.findByRole("button", { name: /^add model$/iu });
 		await expectDialogFitsViewport();
 		await expectDialogBodyScrolls();
 		await expectControlOnScreen(submit);
-		await expectControlOnScreen(screen.getByRole("button", { name: /^close$/i }));
+		await expectControlOnScreen(screen.getByRole("button", { name: /^close$/iu }));
 	},
 };

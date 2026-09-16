@@ -3,11 +3,13 @@ import type { ReactNode } from "react";
 import { cn } from "cn";
 
 export interface MetaRowProps {
-	captions?: ReactNode[];
+	captions?: readonly ReactNode[];
 	/** Chips reporting a state. Rendered after the captions, at their own rhythm. */
 	badges?: ReactNode;
 	className?: string;
 }
+
+const NO_CAPTIONS: readonly ReactNode[] = [];
 
 /**
  * The line of facts under a row's title.
@@ -16,7 +18,7 @@ export interface MetaRowProps {
  * Separators between the captions and a wider gap before the chips say which is which without
  * adding a word.
  */
-export function MetaRow({ captions = [], badges, className }: MetaRowProps) {
+export function MetaRow({ captions = NO_CAPTIONS, badges, className }: MetaRowProps) {
 	const shown = captions.filter(Boolean);
 	return (
 		<span className={cn("flex flex-wrap items-center gap-x-3 gap-y-1.5", className)}>

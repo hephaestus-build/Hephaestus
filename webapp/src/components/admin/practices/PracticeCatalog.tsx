@@ -266,7 +266,9 @@ export function PracticeCatalog({
 					/>
 				)}
 				getEmptyLabel={(groupSlug, total) => {
-					if (total > 0) return "No matching practices.";
+					if (total > 0) {
+						return "No matching practices.";
+					}
 					return groupSlug === null ? "Nothing unassigned." : "No practices here.";
 				}}
 			/>
@@ -319,7 +321,9 @@ export function PracticeCatalog({
 				open={namingGroup !== undefined}
 				pending={namingGroup ? pending.groupSlugs.has(namingGroup.slug) : pending.creatingGroup}
 				onOpenChange={(open) => {
-					if (!open) setNamingGroup(undefined);
+					if (!open) {
+						setNamingGroup(undefined);
+					}
 				}}
 				onSubmit={(details) =>
 					namingGroup ? onUpdateGroup(namingGroup.slug, details) : onCreateGroup(details)

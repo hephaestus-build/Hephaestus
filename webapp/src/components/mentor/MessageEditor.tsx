@@ -33,7 +33,9 @@ export function MessageEditor({
 
 	useEffect(() => {
 		const textarea = textareaRef.current;
-		if (!textarea) return;
+		if (!textarea) {
+			return;
+		}
 		textarea.style.height = "auto";
 		textarea.style.height = `${textarea.scrollHeight + 2}px`;
 	}, []);

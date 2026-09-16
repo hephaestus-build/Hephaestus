@@ -199,9 +199,9 @@ export function useOutlineIntegration(workspaceSlug: string) {
 	});
 
 	// The catalog does not expose deployment availability, so translate the server's missing-strategy error.
-	const connectErrorMessage = connect.error != null ? problemDetailOf(connect.error) : undefined;
+	const connectErrorMessage = connect.error == null ? undefined : problemDetailOf(connect.error);
 	const connectUnavailable =
-		connectErrorMessage != null && /no connectionstrategy registered/i.test(connectErrorMessage);
+		connectErrorMessage != null && /no connectionstrategy registered/iu.test(connectErrorMessage);
 
 	const handleConnect = (input: OutlineConnectInput) => {
 		connect.mutate({
@@ -262,7 +262,9 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		isCancelling: cancelJob.isPending,
 		onRetry: () => void refetchStatus(),
 		onSync: () => {
-			if (connectionId == null) return;
+			if (connectionId == null) {
+				return;
+			}
 			syncNow.mutate({
 				path: { workspaceSlug, connectionId },
 				body: { type: "RECONCILIATION" },
@@ -270,7 +272,9 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		},
 		onCancel: () => {
 			const jobId = connectionStatus?.activeJob?.id;
-			if (connectionId == null || jobId == null) return;
+			if (connectionId == null || jobId == null) {
+				return;
+			}
 			cancelJob.mutate({
 				path: { workspaceSlug, connectionId, jobId },
 				body: { cancelRequested: true },

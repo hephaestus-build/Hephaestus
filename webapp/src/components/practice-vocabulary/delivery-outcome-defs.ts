@@ -145,9 +145,15 @@ const IN_CONTEXT_OVERRIDES = {
 export function deliveryOutcome(feedback: DeliveryFacts): StatusDef {
 	const { channel, deliveryState, suppressionReason } = feedback;
 	if (channel === "IN_CHAT") {
-		if (deliveryState === "PREPARED") return IN_CHAT_OVERRIDES.PREPARED;
-		if (deliveryState === "DELIVERED") return IN_CHAT_OVERRIDES.RAISED;
-		if (suppressionReason === "CONVERSATION_EXPIRED") return IN_CHAT_OVERRIDES.EXPIRED;
+		if (deliveryState === "PREPARED") {
+			return IN_CHAT_OVERRIDES.PREPARED;
+		}
+		if (deliveryState === "DELIVERED") {
+			return IN_CHAT_OVERRIDES.RAISED;
+		}
+		if (suppressionReason === "CONVERSATION_EXPIRED") {
+			return IN_CHAT_OVERRIDES.EXPIRED;
+		}
 	}
 	if (channel === "IN_APP" && deliveryState === "PREPARED") {
 		return IN_APP_OVERRIDES.PREPARED;

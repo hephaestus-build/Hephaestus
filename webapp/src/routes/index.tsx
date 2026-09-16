@@ -12,7 +12,9 @@ export const Route = createFileRoute("/")({
 	staticData: { surface: "bleed" },
 	beforeLoad: async ({ context }) => {
 		const user = await resolveCurrentUser(context.queryClient);
-		if (!user) return;
+		if (!user) {
+			return;
+		}
 		if (await consentIsPending(context.queryClient)) {
 			throw redirect({
 				to: "/consent",

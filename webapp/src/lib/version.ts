@@ -1,5 +1,5 @@
 const REPO_URL = "https://github.com/hephaestus-build/Hephaestus";
-const SEMVER = /^\d+\.\d+\.\d+$/;
+const SEMVER = /^\d+\.\d+\.\d+$/u;
 
 export type EnvironmentTone = "staging" | "preview" | "local";
 
@@ -21,8 +21,12 @@ export type HeaderBadge =
 
 function toneFor(environmentName: string): EnvironmentTone {
 	const name = environmentName.toLowerCase();
-	if (name === "staging") return "staging";
-	if (name === "preview") return "preview";
+	if (name === "staging") {
+		return "staging";
+	}
+	if (name === "preview") {
+		return "preview";
+	}
 	return "local";
 }
 

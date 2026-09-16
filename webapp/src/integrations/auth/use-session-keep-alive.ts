@@ -51,7 +51,9 @@ export function useSessionKeepAlive() {
 		};
 		const renew = async () => {
 			const result = await refreshAccessToken();
-			if (disposed || result === "unavailable") return;
+			if (disposed || result === "unavailable") {
+				return;
+			}
 			if (result === "expired") {
 				redirectToLogin();
 				return;
@@ -62,7 +64,9 @@ export function useSessionKeepAlive() {
 			schedule();
 			await queryClient.invalidateQueries({ queryKey: getCurrentUserQueryKey() });
 			// oxlint-disable-next-line typescript/no-unnecessary-condition -- Cleanup can run while identity revalidation is pending.
-			if (disposed) return;
+			if (disposed) {
+				return;
+			}
 			const identity = queryClient.getQueryState(currentUserQueryOptions().queryKey);
 			if (identity?.status === "success" && identity.data?.accessTokenExpiresAt) {
 				renewAtMs = Math.min(renewAtMs, identity.data.accessTokenExpiresAt * 1000);
@@ -77,7 +81,9 @@ export function useSessionKeepAlive() {
 				lastMark = now;
 				activeThisCycleRef.current = true;
 				// The scheduled check may already have skipped this idle cycle.
-				if (now >= renewAtMs) void renew();
+				if (now >= renewAtMs) {
+					void renew();
+				}
 			}
 		};
 		for (const ev of ACTIVITY_EVENTS) {

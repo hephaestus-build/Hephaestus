@@ -106,7 +106,7 @@ describe("WorkspaceLlmProviderPanel", () => {
 		);
 		fireEvent.click(within(gpuCard).getByRole("button", { name: "Test connection to Local GPU" }));
 
-		await within(gpuCard).findByText(/1 model available/);
+		await within(gpuCard).findByText(/1 model available/u);
 
 		const slowButton = within(openAiCard).getByRole<HTMLButtonElement>("button", {
 			name: "Testing… OpenAI production",
@@ -114,7 +114,7 @@ describe("WorkspaceLlmProviderPanel", () => {
 		expect(slowButton.disabled).toBe(true);
 
 		releaseSlowProbe?.();
-		await within(openAiCard).findByText(/3 models available/);
+		await within(openAiCard).findByText(/3 models available/u);
 	});
 
 	it("keeps each model's delete pending independently when two run at once", async () => {

@@ -54,7 +54,7 @@ const EMPTY_FEED: ReviewRunFeedState = {
 	runs: [],
 	hasMore: false,
 	isLoadingMore: false,
-	onLoadMore: () => undefined,
+	onLoadMore: () => {},
 };
 export interface ContributingPractice {
 	slug: string;
@@ -172,7 +172,9 @@ export function PracticeGroupDetailPage({
 
 	const nextStepFor = (practice: ContributingPractice, practiceStanding: PracticeStandingKey) => {
 		const deliveredStep = practice.nextStep?.trim();
-		if (deliveredStep) return deliveredStep;
+		if (deliveredStep) {
+			return deliveredStep;
+		}
 		if (practiceStanding === "STRENGTH" && practice.whatGoodLooksLike) {
 			return `Keep doing this: ${practice.whatGoodLooksLike}`;
 		}

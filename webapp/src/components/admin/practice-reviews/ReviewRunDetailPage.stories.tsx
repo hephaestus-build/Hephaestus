@@ -41,7 +41,9 @@ const NOT_YET: ReviewSectionState<never> = { status: "pending" };
 
 /** The practice one of the completed run's observations names, and the one the card is read on. */
 const THIN_CONTROLLERS = workspacePractices.find((p) => p.slug === "thin-controllers");
-if (!THIN_CONTROLLERS) throw new Error("The practice fixtures no longer cover thin-controllers");
+if (!THIN_CONTROLLERS) {
+	throw new Error("The practice fixtures no longer cover thin-controllers");
+}
 
 /**
  * One review, end to end: what it looked at, what it concluded, what it said, and how it ran.
@@ -89,7 +91,7 @@ export const CompletedWithMixedOutput: Story = {
 		});
 		canvas.getByText("Results processed");
 		await canvas.findByText("A cache miss and a permission failure come back as the same 404");
-		await canvas.findByText(/2 issues to tighten in this change/);
+		await canvas.findByText(/2 issues to tighten in this change/u);
 		await canvas.findByRole("heading", { name: "How this review ran", level: 3 });
 		canvas.getByRole("button", { name: "Copy configuration" });
 		canvas.getByText("Tokens read");
@@ -126,7 +128,7 @@ export const ProcessedWithFeedbackAwaitingApproval: Story = {
 export const PracticeOpensItsDefinition: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ canvas, userEvent }) => {
-		const link = await canvas.findByRole("link", { name: /Thin controllers/ });
+		const link = await canvas.findByRole("link", { name: /Thin controllers/u });
 		await expect(link).toHaveAttribute("href", "/w/demo/admin/practices/thin-controllers");
 		// The card is a portal, so it is looked for on the whole screen rather than in the canvas.
 		await userEvent.hover(link);
@@ -172,7 +174,7 @@ export const DeclinedForInsufficientEvidence: Story = {
 		await expect(canvas.queryByText("No observations were recorded")).toBeNull();
 		await expect(canvas.queryByText("No feedback")).toBeNull();
 		await expect(
-			await canvas.findAllByText(/the material it needed was missing, unreadable, out of date/),
+			await canvas.findAllByText(/the material it needed was missing, unreadable, out of date/u),
 		).not.toHaveLength(0);
 	},
 };
@@ -217,7 +219,7 @@ export const FailedWithoutOutput: Story = {
 		).toBeVisible();
 		// The failure text is on the page rather than behind a disclosure: this is the only screen that
 		// can say why a review produced nothing.
-		await canvas.findByText(/Cannot compute diff/);
+		await canvas.findByText(/Cannot compute diff/u);
 		await expect(canvas.queryByText("Technical details")).not.toBeInTheDocument();
 	},
 };
@@ -308,6 +310,6 @@ export const OneSectionFailed: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("Couldn't load observations");
 		// The other section is unaffected, which is the whole point of two states rather than one.
-		await canvas.findByText(/2 issues to tighten in this change/);
+		await canvas.findByText(/2 issues to tighten in this change/u);
 	},
 };

@@ -34,7 +34,9 @@ function encode(scope: ModelSelection["scope"], id: number): string {
 function decode(value: string): ModelSelection | null {
 	const [scope, rawId] = value.split(":");
 	const id = Number(rawId);
-	if ((scope !== "SHARED" && scope !== "WORKSPACE") || !Number.isInteger(id)) return null;
+	if ((scope !== "SHARED" && scope !== "WORKSPACE") || !Number.isInteger(id)) {
+		return null;
+	}
 	return { scope, id };
 }
 
@@ -84,7 +86,9 @@ export function ModelPicker({
 			value={value ? encode(value.scope, value.id) : null}
 			onValueChange={(next) => {
 				const selection = next ? decode(next) : null;
-				if (selection) onChange(selection);
+				if (selection) {
+					onChange(selection);
+				}
 			}}
 			disabled={disabled}
 		>

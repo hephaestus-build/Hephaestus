@@ -179,7 +179,7 @@ export function PreviewMessage({
 	);
 }
 
-export const ThinkingMessage = () => {
+export function ThinkingMessage() {
 	const role = "assistant";
 
 	return (
@@ -205,4 +205,4 @@ export const ThinkingMessage = () => {
 			</div>
 		</motion.div>
 	);
-};
+}

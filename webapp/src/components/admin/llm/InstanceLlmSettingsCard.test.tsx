@@ -12,7 +12,7 @@ const saved: InstanceLlmSettings = {
 
 const hostsField = () => screen.getByLabelText<HTMLTextAreaElement>("Allowed provider hosts");
 const ownProviderSwitch = () =>
-	screen.getByRole("switch", { name: /Let workspaces add providers and models/ });
+	screen.getByRole("switch", { name: /Let workspaces add providers and models/u });
 const saveButton = () => screen.getByRole<HTMLButtonElement>("button", { name: "Save settings" });
 
 function renderCard(settings: InstanceLlmSettings = saved) {

@@ -13,16 +13,16 @@ import { authClient } from "@/integrations/auth/auth-client";
 export function DevSignInForm({ returnTo }: { returnTo?: string }) {
 	const [username, setUsername] = useState("dev-admin");
 	const [pending, setPending] = useState(false);
-	const [error, setError] = useState<string>();
+	const [signInError, setSignInError] = useState<string>();
 
 	const submit = async () => {
 		const name = username.trim() || "dev-admin";
 		setPending(true);
-		setError(undefined);
+		setSignInError(undefined);
 		try {
 			await authClient.devLogin(name, true, returnTo);
-		} catch (e) {
-			setError(e instanceof Error ? e.message : "Dev sign-in failed");
+		} catch (error) {
+			setSignInError(error instanceof Error ? error.message : "Dev sign-in failed");
 			setPending(false);
 		}
 	};
@@ -32,9 +32,9 @@ export function DevSignInForm({ returnTo }: { returnTo?: string }) {
 			<p className="text-xs font-medium text-muted-foreground">Dev sign-in (non-production)</p>
 			{/* aria-live: the error arrives after the button is pressed, so nothing announces it. */}
 			<div aria-live="assertive" aria-atomic="true">
-				{error ? (
+				{signInError ? (
 					<Alert variant="destructive">
-						<AlertDescription>{error}</AlertDescription>
+						<AlertDescription>{signInError}</AlertDescription>
 					</Alert>
 				) : null}
 			</div>

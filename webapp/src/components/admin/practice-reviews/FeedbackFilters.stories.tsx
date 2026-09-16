@@ -107,7 +107,7 @@ export const ReportsAChosenOutcome: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Outcome" }));
 		const listbox = await screen.findByRole("listbox", { name: "Outcome options" });
-		await userEvent.click(await within(listbox).findByRole("option", { name: /Delivered/ }));
+		await userEvent.click(await within(listbox).findByRole("option", { name: /Delivered/u }));
 		await expect(args.onPatch).toHaveBeenCalledWith({ deliveryState: ["DELIVERED"] });
 	},
 };
@@ -129,8 +129,8 @@ export const ScopedToOnePieceOfWork: Story = {
 		total: 4,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/Reviewed work/);
-		canvas.getByText(/PR #1423/);
+		canvas.getByText(/Reviewed work/u);
+		canvas.getByText(/PR #1423/u);
 	},
 };
 
@@ -145,7 +145,7 @@ export const ScopedToOneReview: Story = {
 		total: 4,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/Review/);
+		canvas.getByText(/Review/u);
 	},
 };
 

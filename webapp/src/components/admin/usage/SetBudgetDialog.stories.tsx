@@ -58,10 +58,10 @@ export const PassesItsFieldAndButtonCopyThrough: Story = {
 	// The dialog is portalled, so {@link expectAmountRejected} queries the document, not the canvas.
 	play: async ({ args }) =>
 		await expectAmountRejected({
-			fieldLabel: /monthly budget/i,
-			submitLabel: /save budget/i,
+			fieldLabel: /monthly budget/iu,
+			submitLabel: /save budget/iu,
 			typed: "",
-			reason: /enter an amount/i,
+			reason: /enter an amount/iu,
 			onSubmit: args.onSubmit,
 		}),
 };

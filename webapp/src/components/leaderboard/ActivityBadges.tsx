@@ -30,8 +30,10 @@ export interface ActivityBadgesProps {
 	providerType?: ProviderType;
 }
 
+const NO_PULL_REQUESTS: readonly ReviewedPullRequest[] = [];
+
 export function ActivityBadges({
-	reviewedPullRequests = [],
+	reviewedPullRequests = NO_PULL_REQUESTS,
 	changeRequests,
 	approvals,
 	comments,
@@ -68,7 +70,9 @@ export function ActivityBadges({
 
 	const hasActivity = hasScoredActivity || hasVisibleOnlyActivity;
 
-	if (!hasActivity && !isLoading) return null;
+	if (!hasActivity && !isLoading) {
+		return null;
+	}
 
 	if (isLoading) {
 		return (
@@ -116,7 +120,9 @@ interface ActivityBadgeItemProps {
 }
 
 function ActivityBadgeItem({ item, count }: ActivityBadgeItemProps) {
-	if (count <= 0) return null;
+	if (count <= 0) {
+		return null;
+	}
 
 	const Icon = item.icon;
 

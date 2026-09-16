@@ -70,21 +70,21 @@ describe("workspace-admin route gate", () => {
 
 	it.each(adminUrls)("redirects a MEMBER away from %s", async (url) => {
 		mockMembership("MEMBER");
-		expect(await land(url)).toBe(WORKSPACE_HOME);
+		await expect(land(url)).resolves.toBe(WORKSPACE_HOME);
 	});
 
 	it("admits an ADMIN", async () => {
 		mockMembership("ADMIN");
-		expect(await land("/w/acme/admin/settings")).toBe("/w/acme/admin/settings");
+		await expect(land("/w/acme/admin/settings")).resolves.toBe("/w/acme/admin/settings");
 	});
 
 	it("redirects a non-member", async () => {
 		mockMembership(null);
-		expect(await land("/w/acme/admin/settings")).toBe(WORKSPACE_HOME);
+		await expect(land("/w/acme/admin/settings")).resolves.toBe(WORKSPACE_HOME);
 	});
 
 	it("redirects when the membership cannot be resolved", async () => {
 		server.use(http.get("*/workspaces/:workspaceSlug/members/me", () => HttpResponse.error()));
-		expect(await land("/w/acme/admin/settings")).toBe(WORKSPACE_HOME);
+		await expect(land("/w/acme/admin/settings")).resolves.toBe(WORKSPACE_HOME);
 	});
 });

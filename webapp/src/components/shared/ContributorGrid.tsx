@@ -54,7 +54,7 @@ export function ContributorGrid({
 	}
 
 	if (contributors.length === 0 && emptyState) {
-		return <>{emptyState}</>;
+		return emptyState;
 	}
 
 	return (

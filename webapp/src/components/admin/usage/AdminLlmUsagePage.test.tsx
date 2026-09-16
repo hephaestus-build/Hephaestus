@@ -23,7 +23,7 @@ const baseReport: WorkspaceLlmUsageReport = {
 			instanceTotalCostUsd: 4.25,
 			ownProviderTotalCostUsd: 1.75,
 			unpricedEventCount: 2,
-			inputTokens: 1_000,
+			inputTokens: 1000,
 			outputTokens: 250,
 			cacheReadTokens: 0,
 			cacheWriteTokens: 0,
@@ -111,7 +111,7 @@ describe("AdminLlmUsagePage", () => {
 		await renderPage();
 
 		screen.getByText("2 runs aren't counted in these totals");
-		screen.getByText(/Add prices for your own models in .*; for shared models, ask your host\./);
+		screen.getByText(/Add prices for your own models in .*; for shared models, ask your host\./u);
 	});
 
 	it("averages each purse over the run count on its own, never the two summed", async () => {
@@ -189,7 +189,7 @@ describe("AdminLlmUsagePage", () => {
 
 			fireEvent.click(adjust);
 
-			expect(onEditOwnProviderCap).toHaveBeenCalledTimes(1);
+			expect(onEditOwnProviderCap).toHaveBeenCalledOnce();
 			expect(adjust.tagName).toBe("BUTTON");
 		});
 
@@ -240,7 +240,7 @@ describe("AdminLlmUsagePage", () => {
 			[
 				"nothing has run on it",
 				{ ownProviderTotalCostUsd: 0, byJobType: [], byDay: [] },
-				/Connect your own provider in/,
+				/Connect your own provider in/u,
 			],
 			["there is uncapped spend", {}, "No provider cap set · billed to you by your provider"],
 		])("offers a cap when %s", async (_name, patch, copy) => {
@@ -252,7 +252,7 @@ describe("AdminLlmUsagePage", () => {
 
 			screen.getByText(copy);
 			fireEvent.click(screen.getByRole("button", { name: "Set cap" }));
-			expect(onEditOwnProviderCap).toHaveBeenCalled();
+			expect(onEditOwnProviderCap).toHaveBeenCalledOnce();
 		});
 
 		it.each<[string, Partial<WorkspaceLlmUsageReport>, string]>([
@@ -314,14 +314,14 @@ describe("AdminLlmUsagePage", () => {
 			await renderPage({ ...uncapped, byDay: twoDaysWithATotalRow, instanceTotalCostUsd: 12.4 });
 
 			const table = screen.getByRole("table", { name: "AI spend by day" });
-			expect(within(table).getByRole("row", { name: /^Total/ }).textContent).toContain("≈ €10.90");
-			screen.getByText(/reference rate published on/);
+			expect(within(table).getByRole("row", { name: /^Total/u }).textContent).toContain("≈ €10.90");
+			screen.getByText(/reference rate published on/u);
 		});
 
 		it("says nothing about the rate when nothing on the page converted", async () => {
 			await renderPage({ ...uncapped, byDay: [], instanceTotalCostUsd: 0 });
 
-			expect(screen.queryByText(/reference rate published on/)).toBeNull();
+			expect(screen.queryByText(/reference rate published on/u)).toBeNull();
 		});
 
 		it("stays silent under a cap that is set but converted nowhere on the page", async () => {
@@ -337,8 +337,8 @@ describe("AdminLlmUsagePage", () => {
 				fx: eur,
 			});
 
-			expect(screen.queryByText(/≈ €/)).toBeNull();
-			expect(screen.queryByText(/reference rate published on/)).toBeNull();
+			expect(screen.queryByText(/≈ €/u)).toBeNull();
+			expect(screen.queryByText(/reference rate published on/u)).toBeNull();
 		});
 
 		it("converts the projected month-end figure in the same breath as the spend it follows", async () => {
@@ -355,9 +355,9 @@ describe("AdminLlmUsagePage", () => {
 				{ now: new Date("2026-07-28T12:00:00.000Z") },
 			);
 
-			const alert = screen.getByText(/At this pace/);
+			const alert = screen.getByText(/At this pace/u);
 			expect(alert.textContent).toContain("≈ €38.59 of €44");
-			expect(alert.textContent).toMatch(/the month finishes around \$[\d.]+ \(≈ €[\d.]+\)\./);
+			expect(alert.textContent).toMatch(/the month finishes around \$[\d.]+ \(≈ €[\d.]+\)\./u);
 		});
 	});
 });

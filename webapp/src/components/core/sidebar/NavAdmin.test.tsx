@@ -79,7 +79,7 @@ describe("NavAdmin", () => {
 		fireEvent.click(practices);
 
 		await waitFor(() => expect(screen.queryByRole("link", { name: "Review" })).toBeNull());
-		expect(practices.hasAttribute("data-active")).toBe(true);
+		expect(Object.hasOwn(practices.dataset, "active")).toBe(true);
 	});
 
 	it("offers three destinations under Practices, not five", async () => {

@@ -10,12 +10,18 @@ export function getCatalogDropTarget(
 	anchorSlug?: string,
 	afterAnchor = false,
 ): CatalogDropTarget | null {
-	if (anchorSlug === activeSlug) return null;
+	if (anchorSlug === activeSlug) {
+		return null;
+	}
 	const destination = entries
 		.filter((entry) => entry.slug !== activeSlug && (entry.groupSlug ?? null) === groupSlug)
 		.sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
-	if (!anchorSlug) return { groupSlug, position: destination.length };
+	if (!anchorSlug) {
+		return { groupSlug, position: destination.length };
+	}
 	const anchorIndex = destination.findIndex((entry) => entry.slug === anchorSlug);
-	if (anchorIndex < 0) return null;
+	if (anchorIndex === -1) {
+		return null;
+	}
 	return { groupSlug, position: anchorIndex + (afterAnchor ? 1 : 0) };
 }

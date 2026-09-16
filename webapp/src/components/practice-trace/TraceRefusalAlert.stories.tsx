@@ -71,7 +71,7 @@ export const NoFixExists: Story = {
 	},
 	play: async ({ canvas }) => {
 		const alert = within(canvas.getByRole("alert"));
-		await expect(alert.getByText(/the allowance refills/)).toBeVisible();
+		await expect(alert.getByText(/the allowance refills/u)).toBeVisible();
 		await expect(alert.queryByRole("link")).not.toBeInTheDocument();
 	},
 };

@@ -87,8 +87,8 @@ function AdminTeamsContainer() {
 		onMutate: async (vars: Options<UpdateRepositoryVisibilityData>) => {
 			await queryClient.cancelQueries({ queryKey: teamsQueryKey });
 			const prev = queryClient.getQueryData<TeamInfo[]>(teamsQueryKey);
-			const teamId = vars.path.teamId;
-			const repositoryId = vars.path.repositoryId;
+			const { teamId } = vars.path;
+			const { repositoryId } = vars.path;
 			const hidden =
 				typeof vars.body === "boolean" ? vars.body : vars.query?.hiddenFromContributions;
 			if (
@@ -98,7 +98,9 @@ function AdminTeamsContainer() {
 				typeof hidden === "boolean"
 			) {
 				const next = prev.map((team) => {
-					if (team.id !== teamId) return team;
+					if (team.id !== teamId) {
+						return team;
+					}
 					return {
 						...team,
 						repositories: team.repositories.map((repo) =>

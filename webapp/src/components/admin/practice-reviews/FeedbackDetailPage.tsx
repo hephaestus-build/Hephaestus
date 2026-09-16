@@ -73,7 +73,7 @@ export function FeedbackDetailPage({
 		/>
 	);
 
-	if (state.status === "loading")
+	if (state.status === "loading") {
 		return (
 			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
@@ -82,6 +82,7 @@ export function FeedbackDetailPage({
 				</div>
 			</article>
 		);
+	}
 	if (state.status === "error") {
 		return (
 			<article className="max-w-4xl min-w-0 space-y-8">
@@ -94,7 +95,7 @@ export function FeedbackDetailPage({
 			</article>
 		);
 	}
-	const feedback = state.feedback;
+	const { feedback } = state;
 	const subjectDiffers = feedback.subject && feedback.subject.id !== feedback.recipient?.id;
 	const artifactSlug = feedback.artifact
 		? reviewArtifactTypeSlug(feedback.artifact.type)
@@ -107,7 +108,7 @@ export function FeedbackDetailPage({
 	const deliveryInProgress =
 		feedback.deliveryState === "PREPARED" ||
 		(feedback.deliveryState === "PARTIALLY_DELIVERED" && !feedback.suppressionReason);
-	const approval = feedback.approval;
+	const { approval } = feedback;
 
 	return (
 		<article className="max-w-4xl min-w-0 space-y-8">
@@ -286,7 +287,9 @@ export function FeedbackDetailPage({
 }
 
 function ApprovalAudit({ approval }: { approval: FeedbackApproval }) {
-	if (!approval.decision) return null;
+	if (!approval.decision) {
+		return null;
+	}
 	const rejected = approval.decision === "REJECTED";
 	return (
 		<div className="rounded-lg border p-3 text-sm">
@@ -304,12 +307,12 @@ function ApprovalAudit({ approval }: { approval: FeedbackApproval }) {
 						</dd>
 					</>
 				) : null}
-				{approval.actorAccountId != null ? (
+				{approval.actorAccountId == null ? null : (
 					<>
 						<dt className="font-medium text-foreground">Reviewer</dt>
 						<dd>Account {approval.actorAccountId}</dd>
 					</>
-				) : null}
+				)}
 				{rejected && approval.rejectionReason ? (
 					<>
 						<dt className="font-medium text-foreground">Reason</dt>
@@ -329,7 +332,9 @@ function ApprovalAudit({ approval }: { approval: FeedbackApproval }) {
 
 function anchorLabel(placement: ReviewPlacement): string {
 	const { anchorPath, anchorStartLine, anchorEndLine } = placement;
-	if (!anchorPath || !anchorStartLine) return anchorPath ?? "";
+	if (!anchorPath || !anchorStartLine) {
+		return anchorPath ?? "";
+	}
 	return codeCitationLocator({
 		path: anchorPath,
 		startLine: anchorStartLine,

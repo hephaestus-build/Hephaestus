@@ -37,7 +37,13 @@ const CONNECTION_FIELDS = [
 	"personalAccessToken",
 ] as const satisfies readonly (keyof ConnectionFormData)[];
 
-export function ConnectGitLabStep({ instances = [] }: { instances?: GitLabInstanceOption[] }) {
+const NO_INSTANCES: readonly GitLabInstanceOption[] = [];
+
+export function ConnectGitLabStep({
+	instances = NO_INSTANCES,
+}: {
+	instances?: readonly GitLabInstanceOption[];
+}) {
 	const { state, dispatch } = useWizard();
 	// Only instances with a known base URL can be offered as a pick; a blank one falls back to the
 	// read-only configured field.
@@ -47,7 +53,9 @@ export function ConnectGitLabStep({ instances = [] }: { instances?: GitLabInstan
 	// Keep state.serverUrl pinned to a real instance when a picker is shown, so preflight + creation use
 	// the selected instance even before the user touches the dropdown.
 	useEffect(() => {
-		if (!multipleInstances) return;
+		if (!multipleInstances) {
+			return;
+		}
 		const matches = selectableInstances.some((i) => i.baseUrl === state.serverUrl);
 		const [firstInstance] = selectableInstances;
 		if (!matches && firstInstance) {
@@ -67,7 +75,9 @@ export function ConnectGitLabStep({ instances = [] }: { instances?: GitLabInstan
 	});
 
 	const handleValidate = () => {
-		if (preflight.isPending) return;
+		if (preflight.isPending) {
+			return;
+		}
 		const result = connectionSchema.safeParse({
 			serverUrl: state.serverUrl,
 			personalAccessToken: state.personalAccessToken,

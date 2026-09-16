@@ -24,7 +24,7 @@ export interface AuthContextType {
 	getGitProviderId: () => string | undefined;
 	getUserProfilePictureUrl: () => string;
 	hasGitLabIdentity: boolean;
-	linkedProviders: Array<{ type: string; serverUrl?: string }>;
+	linkedProviders: { type: string; serverUrl?: string }[];
 	isImpersonating: boolean;
 	impersonatedDisplayName: string | undefined;
 }
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 	const user = userQuery.data ?? null;
 	const isLoading = userQuery.isPending;
-	const isError = userQuery.isError;
+	const { isError } = userQuery;
 
 	const userProfile = user ? toUserProfile(user) : undefined;
 
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 	const linkAccount = (providerAlias: string, returnTo?: string) => {
 		const destination =
-			returnTo ?? (typeof window !== "undefined" ? window.location.pathname : undefined);
+			returnTo ?? (typeof window === "undefined" ? undefined : window.location.pathname);
 		authClient.linkAccount(providerAlias, destination);
 	};
 
@@ -78,7 +78,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		!!candidateLogin &&
 		!!user?.username &&
 		user.username.toLowerCase() === candidateLogin.toLowerCase();
-	const getUserId = () => (user?.id != null ? String(user.id) : undefined);
+	const getUserId = () => (user?.id == null ? undefined : String(user.id));
 
 	const getGitProviderId = () => user?.gitProviderId ?? undefined;
 

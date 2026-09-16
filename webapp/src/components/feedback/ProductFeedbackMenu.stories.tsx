@@ -10,7 +10,13 @@ const meta = {
 	title: "Product feedback/Header menu",
 	component: ProductFeedbackMenu,
 	args: { invitations: [surveyInvitation], onSendFeedback: fn(), onOpenSurvey: fn() },
-	decorators: [(Story) => <div className="flex justify-end p-4">{<Story />}</div>],
+	decorators: [
+		(Story) => (
+			<div className="flex justify-end p-4">
+				<Story />
+			</div>
+		),
+	],
 	tags: ["autodocs"],
 } satisfies Meta<typeof ProductFeedbackMenu>;
 export default meta;
@@ -21,8 +27,8 @@ export const WithInvitation: Story = {
 	play: async ({ canvas, args }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Feedback, 1 survey waiting" }));
 		const menu = within(await screen.findByRole("menu"));
-		await expectSettledVisible(menu.getByText(/4 questions · about 2 minutes/));
-		await userEvent.click(menu.getByRole("menuitem", { name: /Help improve practice feedback/ }));
+		await expectSettledVisible(menu.getByText(/4 questions · about 2 minutes/u));
+		await userEvent.click(menu.getByRole("menuitem", { name: /Help improve practice feedback/u }));
 		await expect(args.onOpenSurvey).toHaveBeenCalledWith(surveyInvitation.id);
 	},
 };
@@ -38,8 +44,8 @@ export const NoSurveys: Story = {
 		await expect(idea).toHaveAccessibleDescription("A feature or change that would help.");
 		await expect(menu.getByText("Help make Hephaestus better")).toBeVisible();
 		// No survey, no survey section: an empty list in a menu is noise.
-		await expect(menu.queryByText(/Surveys/)).toBeNull();
-		await expect(menu.getByRole("menuitem", { name: /Open an issue on GitHub/ })).toHaveAttribute(
+		await expect(menu.queryByText(/Surveys/u)).toBeNull();
+		await expect(menu.getByRole("menuitem", { name: /Open an issue on GitHub/u })).toHaveAttribute(
 			"href",
 			"https://github.com/hephaestus-build/Hephaestus/issues/new/choose",
 		);
@@ -62,7 +68,7 @@ export const WithResearchInvitation: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Feedback, 2 surveys waiting" }));
 		const menu = within(await screen.findByRole("menu"));
-		await expectSettledVisible(menu.getByText(/Research · 3 questions · about 2 minutes/));
+		await expectSettledVisible(menu.getByText(/Research · 3 questions · about 2 minutes/u));
 	},
 };
 

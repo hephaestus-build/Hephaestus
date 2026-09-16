@@ -37,9 +37,13 @@ export function FeatureGateDisplay({
 	fallback = null,
 	loading: loadingContent = null,
 }: FeatureGateDisplayProps) {
-	if (isLoading) return <>{loadingContent}</>;
-	if (!enabled) return <>{fallback}</>;
-	return <>{children}</>;
+	if (isLoading) {
+		return loadingContent;
+	}
+	if (!enabled) {
+		return fallback;
+	}
+	return children;
 }
 
 /**
@@ -63,7 +67,11 @@ export function FeatureGateDisplay({
 export function FeatureGate({ flag, children, fallback = null, loading = null }: FeatureGateProps) {
 	const { enabled, isLoading } = useFeatureFlag(flag);
 
-	if (isLoading) return <>{loading}</>;
-	if (!enabled) return <>{fallback}</>;
-	return <>{children}</>;
+	if (isLoading) {
+		return loading;
+	}
+	if (!enabled) {
+		return fallback;
+	}
+	return children;
 }

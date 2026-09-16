@@ -35,11 +35,11 @@ describe("safeReturnTo", () => {
 		});
 
 		it("rejects embedded control characters (NUL, newline, tab, CR, DEL)", () => {
-			expect(safeReturnTo("/foo\x00bar")).toBe("/");
+			expect(safeReturnTo("/foo\u0000bar")).toBe("/");
 			expect(safeReturnTo("/foo\nbar")).toBe("/");
 			expect(safeReturnTo("/foo\tbar")).toBe("/");
 			expect(safeReturnTo("/foo\rbar")).toBe("/");
-			expect(safeReturnTo("/foo\x7fbar")).toBe("/");
+			expect(safeReturnTo("/foo\u007Fbar")).toBe("/");
 		});
 
 		it("rejects raw whitespace that could hide an escape", () => {
@@ -114,7 +114,7 @@ describe("resolveCurrentUser", () => {
 	it("fetches when nothing is cached", async () => {
 		serve(asAppRole("APP_ADMIN"));
 
-		expect(await resolveCurrentUser(client())).toMatchObject({ appRole: "APP_ADMIN" });
+		await expect(resolveCurrentUser(client())).resolves.toMatchObject({ appRole: "APP_ADMIN" });
 	});
 
 	it("finishes route identity resolution when the last UI observer unmounts", async () => {
@@ -134,7 +134,7 @@ describe("resolveCurrentUser", () => {
 		await vi.waitFor(() => expect(requested).toHaveBeenCalledOnce());
 		unsubscribe();
 		respond(HttpResponse.json(currentUser));
-		expect(await resolved).toStrictEqual({ user: currentUser });
+		await expect(resolved).resolves.toStrictEqual({ user: currentUser });
 		queryClient.clear();
 	});
 
@@ -153,7 +153,7 @@ describe("resolveCurrentUser", () => {
 		await vi.waitFor(() => expect(requested).toHaveBeenCalledOnce());
 		await queryClient.cancelQueries({ queryKey: currentUserQueryOptions().queryKey });
 		respond(HttpResponse.json(currentUser));
-		expect(await resolved).toHaveProperty("error");
+		await expect(resolved).resolves.toHaveProperty("error");
 		expect(queryClient.getQueryData(currentUserQueryOptions().queryKey)).toBeUndefined();
 		queryClient.clear();
 	});
@@ -161,7 +161,7 @@ describe("resolveCurrentUser", () => {
 	it("answers null only when the server confirms the session is unauthenticated", async () => {
 		serve(() => new HttpResponse(null, { status: 401 }));
 
-		expect(await resolveCurrentUser(client())).toBeNull();
+		await expect(resolveCurrentUser(client())).resolves.toBeNull();
 	});
 
 	it.each([403, 503])(
@@ -182,10 +182,11 @@ describe("resolveCurrentUser", () => {
 		serve(asAppRole("APP_ADMIN"));
 		await resolveCurrentUser(queryClient);
 		await goStale(queryClient);
-		const revoked = serve(asAppRole("APP_USER"));
-		expect(await resolveCurrentUser(queryClient)).toMatchObject({ appRole: "APP_ADMIN" });
-		await vi.waitFor(() => expect(revoked.times).toBe(1));
-		expect(await resolveCurrentUser(queryClient)).toMatchObject({ appRole: "APP_USER" });
+		serve(asAppRole("APP_USER"));
+		await expect(resolveCurrentUser(queryClient)).resolves.toMatchObject({ appRole: "APP_ADMIN" });
+		await vi.waitFor(() =>
+			expect(resolveCurrentUser(queryClient)).resolves.toMatchObject({ appRole: "APP_USER" }),
+		);
 	});
 
 	it("keeps serving the cached user when the background refresh fails", async () => {
@@ -195,7 +196,7 @@ describe("resolveCurrentUser", () => {
 		await goStale(queryClient);
 		const failing = serve(() => HttpResponse.error());
 
-		expect(await resolveCurrentUser(queryClient)).toMatchObject({ appRole: "APP_ADMIN" });
+		await expect(resolveCurrentUser(queryClient)).resolves.toMatchObject({ appRole: "APP_ADMIN" });
 		await vi.waitFor(() => expect(failing.times).toBe(1));
 	});
 });

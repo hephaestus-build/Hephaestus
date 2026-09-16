@@ -69,8 +69,8 @@ export const MobileReflow: Story = {
 		chromatic: { viewports: [320, 375, 768] },
 	},
 	play: async () => {
-		await userEvent.click(await screen.findByRole("radio", { name: /^Selected workspaces/i }));
-		await screen.findByRole("button", { name: /save access/i });
+		await userEvent.click(await screen.findByRole("radio", { name: /^Selected workspaces/iu }));
+		await screen.findByRole("button", { name: /save access/iu });
 		await expectDialogFitsViewport();
 	},
 };

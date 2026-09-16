@@ -35,8 +35,8 @@ describe("refreshAccessToken", () => {
 		]);
 		settle?.();
 
-		expect(await overlapping).toStrictEqual(["refreshed", "refreshed", "refreshed"]);
-		expect(refreshMock).toHaveBeenCalledTimes(1);
+		await expect(overlapping).resolves.toStrictEqual(["refreshed", "refreshed", "refreshed"]);
+		expect(refreshMock).toHaveBeenCalledOnce();
 	});
 
 	it("rotates again once the previous rotation has settled", async () => {

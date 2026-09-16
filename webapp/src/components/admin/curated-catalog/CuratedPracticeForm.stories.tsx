@@ -153,7 +153,7 @@ export const HephaestusUpdateAvailable: Story = {
 		await expectPanelContentInset(popup);
 		// The full label, since colour alone cannot carry which kind of update it is.
 		await expect(screen.getByText("Hephaestus update available: review rules")).toBeVisible();
-		await expect(screen.getByText(/would change review rules/)).toBeVisible();
+		await expect(screen.getByText(/would change review rules/u)).toBeVisible();
 		await expect(screen.getByRole("button", { name: "Review Hephaestus update" })).toBeVisible();
 		await expect(screen.getByRole("button", { name: "Apply Hephaestus update" })).toBeVisible();
 		await expect(screen.getByRole("button", { name: "Keep saved version" })).toBeVisible();
@@ -176,7 +176,7 @@ export const ValidationErrors: Story = {
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
 		await expect(screen.getByText("Name must be at least 3 characters")).toBeVisible();
 		await expect(screen.queryByText("Select at least one trigger event")).not.toBeInTheDocument();
-		await expect(screen.getByRole("textbox", { name: /Name/ })).toHaveAttribute(
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toHaveAttribute(
 			"aria-describedby",
 			"practice-name-error",
 		);
@@ -193,6 +193,6 @@ export const Submitting: Story = {
 	},
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByRole("textbox", { name: /Name/ })).toBeDisabled();
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toBeDisabled();
 	},
 };

@@ -14,7 +14,7 @@ function purposeCard(canvas: StoryContext["canvas"], name: string) {
 
 async function openPracticeReviewAdvanced(canvas: StoryContext["canvas"]) {
 	await userEvent.click(
-		purposeCard(canvas, "Practice reviews").getByRole("button", { name: /Advanced/ }),
+		purposeCard(canvas, "Practice reviews").getByRole("button", { name: /Advanced/u }),
 	);
 }
 
@@ -61,7 +61,7 @@ export const Loading: Story = {
 export const NoModelsAvailable: Story = {
 	args: { bindings: [], availableModels: [] },
 	play: async ({ canvas }) => {
-		await canvas.findAllByText(/No models are available yet/);
+		await canvas.findAllByText(/No models are available yet/u);
 	},
 };
 

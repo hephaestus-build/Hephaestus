@@ -158,6 +158,81 @@
 		"prefer-const": "error",
 		"prefer-template": "error",
 		"operator-assignment": "error",
+		// One way to write a function. Declarations, because they hoist — a helper can sit below its
+		// first use — and because that is the form the shadcn registry ships, so a re-vendored file
+		// arrives in house style. Arrow functions stay for callbacks and handlers. A component a
+		// factory returns is a named function expression, so it keeps a display name.
+		"func-style": ["error", "declaration", { "allowArrowFunctions": true }],
+		"react/function-component-definition": [
+			"error",
+			{ "namedComponents": "function-declaration", "unnamedComponents": "function-expression" }
+		],
+		// Hoisting is what the declaration style buys; a variable or class read before its
+		// declaration in the same scope is a temporal dead zone crash that type-checks clean. A read
+		// from inside a function declared above the variable runs later, so it is not one.
+		"no-use-before-define": ["error", { "functions": false, "classes": true, "variables": false }],
+		// Braces on every branch: the one-line `if` is where a second statement gets added under the
+		// wrong indentation and runs unconditionally.
+		"curly": ["error", "all"],
+		// `/u` makes a regex reject its own syntax errors and match astral characters as one.
+		"require-unicode-regexp": "error",
+		// A named group says what a capture is for at the match site, not at the pattern.
+		"prefer-named-capture-group": "error",
+		// The compiler bails out of a component it cannot lower, and that component runs unmemoised
+		// with no diagnostic of its own; this surfaces the bailout where it happens.
+		"react/todo": "error",
+		// A `{}` default prop is a new object every render, so an effect keyed on it re-runs every
+		// render; a module-level constant is the same default with one identity.
+		"react/no-object-type-as-default-prop": "error",
+		// A form button without a type submits the form on Enter from any field.
+		"react/button-has-type": "error",
+		"react/jsx-no-useless-fragment": "error",
+		"react/jsx-curly-brace-presence": ["error", { "props": "never", "children": "never" }],
+		// One import statement per module, with the erased part marked: a module imported for a value
+		// and a type carries the type inline, and a type-only module is `import type` — an all-inline
+		// `import { type A }` still emits a runtime import of the module.
+		"typescript/consistent-type-imports": ["error", { "fixStyle": "inline-type-imports" }],
+		"typescript/no-import-type-side-effects": "error",
+		"import/first": "error",
+		// An object shape is an `interface`; a `type` alias is for a union or a computed type.
+		"typescript/consistent-type-definitions": ["error", "interface"],
+		"typescript/array-type": "error",
+		"typescript/no-dynamic-delete": "error",
+		// Not arguments: `.catch(undefined)` on a zod schema and `.mockReturnValue(undefined)` mean
+		// what they say, and dropping the argument changes the call.
+		"unicorn/no-useless-undefined": ["error", { "checkArguments": false }],
+		"unicorn/no-negated-condition": "error",
+		"unicorn/numeric-separators-style": "error",
+		"unicorn/switch-case-braces": "error",
+		"unicorn/prefer-string-replace-all": "error",
+		"unicorn/no-await-expression-member": "error",
+		"unicorn/prefer-export-from": "error",
+		"unicorn/prefer-spread": "error",
+		"unicorn/prefer-dom-node-dataset": "error",
+		"unicorn/prefer-dom-node-append": "error",
+		"unicorn/prefer-native-coercion-functions": "error",
+		"unicorn/prefer-at": "error",
+		"unicorn/prefer-set-has": "error",
+		"unicorn/prefer-string-slice": "error",
+		"unicorn/prefer-code-point": "error",
+		"unicorn/prefer-default-parameters": "error",
+		"unicorn/prefer-ternary": "error",
+		"unicorn/catch-error-name": "error",
+		"unicorn/escape-case": "error",
+		"unicorn/consistent-existence-index-check": "error",
+		"unicorn/no-array-for-each": "error",
+		"unicorn/no-zero-fractions": "error",
+		"unicorn/no-hex-escape": "error",
+		"unicorn/no-typeof-undefined": "error",
+		"unicorn/no-object-as-default-parameter": "error",
+		"prefer-destructuring": ["error", { "object": true, "array": false }],
+		"arrow-body-style": ["error", "as-needed"],
+		"object-shorthand": "error",
+		"vitest/prefer-called-once": "error",
+		"vitest/prefer-called-with": "error",
+		"vitest/prefer-expect-resolves": "error",
+		"vitest/prefer-expect-type-of": "error",
+		"vitest/prefer-spy-on": "error",
 		"typescript/prefer-for-of": "error",
 		"typescript/no-explicit-any": "error",
 		"typescript/require-await": "error",
@@ -381,8 +456,10 @@
 		"typescript/no-deprecated": "error",
 		"typescript/no-misused-spread": "error",
 		// Where a blank string should fall through, the question is asked by name (`hasText` /
-		// `firstNonBlank` in `@/lib/text`), so `ignorePrimitives` stays off.
-		"typescript/prefer-nullish-coalescing": "error",
+		// `firstNonBlank` in `@/lib/text`), so `ignorePrimitives` stays off. `if` statements are
+		// ignored because the `??=` they would become is one the React Compiler cannot lower yet
+		// (`react/todo`), and a ref initialiser is exactly where that `if` sits.
+		"typescript/prefer-nullish-coalescing": ["error", { "ignoreIfStatements": true }],
 		"typescript/require-array-sort-compare": "error",
 		"typescript/prefer-promise-reject-errors": "error",
 		"typescript/no-meaningless-void-operator": "error",

@@ -11,7 +11,9 @@ export function formatTrendProvenance(
 ): string {
 	const current = support.currentOpportunities;
 	const previous = support.previousOpportunities;
-	if (current + previous === 0) return "No reviewed work is available yet.";
+	if (current + previous === 0) {
+		return "No reviewed work is available yet.";
+	}
 
 	const span = support.calendarSpanDays;
 	const spanSentence = span ? ` Evidence spans ${span} ${span === 1 ? "day" : "days"}.` : "";

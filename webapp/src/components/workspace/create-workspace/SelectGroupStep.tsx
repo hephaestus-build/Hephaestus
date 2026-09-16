@@ -46,7 +46,9 @@ export function SelectGroupStep() {
 				value={state.selectedGroup?.fullPath ?? ""}
 				onValueChange={(value) => {
 					const group = state.groups.find((g) => g.fullPath === value);
-					if (group) dispatch({ type: "SELECT_GROUP", group });
+					if (group) {
+						dispatch({ type: "SELECT_GROUP", group });
+					}
 				}}
 				className="max-h-64 divide-y overflow-y-auto rounded-lg border"
 				aria-label="Available GitLab groups"

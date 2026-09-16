@@ -30,7 +30,9 @@ export function stripRequestUserAndBreadcrumbs(event: Sentry.ErrorEvent): Sentry
 }
 
 export function captureException(error: unknown) {
-	if (initialized) Sentry.captureException(error);
+	if (initialized) {
+		Sentry.captureException(error);
+	}
 }
 
 export function initSentry() {

@@ -27,7 +27,9 @@ import { asDate } from "@/lib/dates";
 
 function formatTimestamp(value?: Date): string | undefined {
 	const date = asDate(value);
-	if (!date) return undefined;
+	if (!date) {
+		return undefined;
+	}
 	return date.toLocaleString(undefined, {
 		dateStyle: "medium",
 		timeStyle: "short",
@@ -41,34 +43,42 @@ function formatTimestamp(value?: Date): string | undefined {
  * before Chrome; Chrome before Safari) because UAs nest these tokens.
  */
 function describeUserAgent(ua?: string): string {
-	if (!ua) return "Unknown device";
-	const os = /Windows/.test(ua)
+	if (!ua) {
+		return "Unknown device";
+	}
+	const os = /Windows/u.test(ua)
 		? "Windows"
-		: /iPhone|iPad|iPod/.test(ua)
+		: /iPhone|iPad|iPod/u.test(ua)
 			? "iOS"
-			: /Mac OS X|Macintosh/.test(ua)
+			: /Mac OS X|Macintosh/u.test(ua)
 				? "macOS"
-				: /Android/.test(ua)
+				: /Android/u.test(ua)
 					? "Android"
-					: /CrOS/.test(ua)
+					: /CrOS/u.test(ua)
 						? "ChromeOS"
-						: /Linux/.test(ua)
+						: /Linux/u.test(ua)
 							? "Linux"
 							: undefined;
-	const browser = /Edg\//.test(ua)
+	const browser = /Edg\//u.test(ua)
 		? "Edge"
-		: /OPR\/|Opera/.test(ua)
+		: /OPR\/|Opera/u.test(ua)
 			? "Opera"
-			: /Firefox\//.test(ua)
+			: /Firefox\//u.test(ua)
 				? "Firefox"
-				: /Chrome\//.test(ua)
+				: /Chrome\//u.test(ua)
 					? "Chrome"
-					: /Safari\//.test(ua)
+					: /Safari\//u.test(ua)
 						? "Safari"
 						: undefined;
-	if (browser && os) return `${browser} on ${os}`;
-	if (browser) return browser;
-	if (os) return os;
+	if (browser && os) {
+		return `${browser} on ${os}`;
+	}
+	if (browser) {
+		return browser;
+	}
+	if (os) {
+		return os;
+	}
 	return ua;
 }
 

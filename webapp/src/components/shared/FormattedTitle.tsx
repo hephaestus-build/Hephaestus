@@ -13,11 +13,11 @@ export function FormattedTitle({ title, className = "" }: FormattedTitleProps) {
 	// Parse title with code highlighting by splitting on backticks
 	// and converting the code segments into proper elements
 	const titleParts = title
-		.split(/(`[^`]+`)/)
+		.split(/(?<code>`[^`]+`)/u)
 		.filter(Boolean)
 		.map((part, index) => {
 			// Create a stable key using the content and position
-			const stableKey = `${part.slice(0, 10).replace(/\s+/g, "-")}-${index}`;
+			const stableKey = `${part.slice(0, 10).replaceAll(/\s+/gu, "-")}-${index}`;
 
 			if (part.startsWith("`") && part.endsWith("`")) {
 				// This is a code segment (remove the backticks)

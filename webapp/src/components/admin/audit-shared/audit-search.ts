@@ -1,13 +1,5 @@
 import { z } from "zod";
 
-import {
-	dayAfterInstant,
-	dayStartInstant,
-	fromDateRange,
-	fromDayParam,
-	toDateRange,
-	toDayParam,
-} from "@/lib/date-range-search";
 import { multiValue } from "@/lib/search-params";
 
 /**
@@ -38,4 +30,11 @@ export const workspaceAuditSearchSchema = auditSearchSchema.omit({
 
 export type ConfigAuditSearch = z.infer<typeof workspaceAuditSearchSchema>;
 
-export { dayAfterInstant, dayStartInstant, fromDateRange, fromDayParam, toDateRange, toDayParam };
+export {
+	dayAfterInstant,
+	dayStartInstant,
+	fromDateRange,
+	fromDayParam,
+	toDateRange,
+	toDayParam,
+} from "@/lib/date-range-search";

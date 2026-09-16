@@ -26,7 +26,7 @@ export const REVIEW_PAGE_SIZE = 25;
  * How often a queued or running review is re-asked for, on every screen that watches one. Applied
  * through TanStack Query's `refetchInterval`, which stops on its own at a terminal status.
  */
-export const ACTIVE_REVIEW_POLL_MS = 5_000;
+export const ACTIVE_REVIEW_POLL_MS = 5000;
 
 /**
  * Ordering names the server understands. `ACTIONABILITY` puts shortfalls first, worst severity down
@@ -116,13 +116,13 @@ export type FeedbackSearch = z.infer<typeof feedbackSearchSchema>;
 export type ObservationsSearch = z.infer<typeof observationsSearchSchema>;
 export type RunsSearch = z.infer<typeof runsSearchSchema>;
 
-export type ReviewScopeSearch = {
+export interface ReviewScopeSearch {
 	agentJobId?: string;
 	artifactKind?: KnownArtifactKind;
 	artifactId?: number;
 	from?: string;
 	to?: string;
-};
+}
 
 export function reviewScopeSearch(search: ReviewScopeSearch): ReviewScopeSearch {
 	return {

@@ -35,7 +35,7 @@ function FeedbackDetailRoute() {
 			const feedback = query.state.data;
 			return feedback?.deliveryState === "PREPARED" ||
 				(feedback?.deliveryState === "PARTIALLY_DELIVERED" && !feedback.suppressionReason)
-				? 2_000
+				? 2000
 				: false;
 		},
 	});

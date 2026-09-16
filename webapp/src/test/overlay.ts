@@ -25,7 +25,9 @@ export const POSITIONED_POPUPS = [
  */
 function enteringAnimationsOf(element: Element): Animation[] {
 	return document.getAnimations().filter(({ effect }) => {
-		if (!(effect instanceof KeyframeEffect)) return false;
+		if (!(effect instanceof KeyframeEffect)) {
+			return false;
+		}
 		return effect.target instanceof Element && effect.target.contains(element);
 	});
 }

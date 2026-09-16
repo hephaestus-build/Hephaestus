@@ -36,7 +36,7 @@ export function AuditEventDetailSheet({
 	const actor = event ? refLabel(event.actor, event.actingAccountId) : null;
 	const pretty = event ? prettyJson(event.details) : null;
 	const workspaceName =
-		event?.workspaceId != null ? resolveWorkspaceName?.(event.workspaceId) : undefined;
+		event?.workspaceId == null ? undefined : resolveWorkspaceName?.(event.workspaceId);
 
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
@@ -103,11 +103,11 @@ export function AuditEventDetailSheet({
 							)}
 						</DetailRow>
 						<DetailRow label="Workspace">
-							{event.workspaceId != null
-								? workspaceName
+							{event.workspaceId == null
+								? "—"
+								: workspaceName
 									? `${workspaceName} (#${event.workspaceId})`
-									: `#${event.workspaceId}`
-								: "—"}
+									: `#${event.workspaceId}`}
 						</DetailRow>
 						<DetailRow label="IP address">
 							<span className="font-mono text-xs">{event.ipAddress ?? "—"}</span>

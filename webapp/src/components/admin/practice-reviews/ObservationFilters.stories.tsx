@@ -111,7 +111,7 @@ export const ReportsAChosenSeverity: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Severity" }));
 		const listbox = await screen.findByRole("listbox", { name: "Severity options" });
-		await userEvent.click(await within(listbox).findByRole("option", { name: /Major/ }));
+		await userEvent.click(await within(listbox).findByRole("option", { name: /Major/u }));
 		await expect(args.onPatch).toHaveBeenCalledWith({ severity: ["MAJOR"] });
 	},
 };
@@ -123,12 +123,12 @@ export const ReportsAChosenSeverity: Story = {
 export const SortIsNotAFilter: Story = {
 	args: { search: { presence: undefined, assessment: undefined, severity: ["MAJOR"] }, total: 2 },
 	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("combobox", { name: /Sort/ }));
+		await userEvent.click(canvas.getByRole("combobox", { name: /Sort/u }));
 		await userEvent.click(await screen.findByRole("option", { name: "Most actionable first" }));
 		await expect(args.onPatch).toHaveBeenCalledWith({ order: "ACTIONABILITY" });
 
 		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
-		await expect(canvas.getByRole("combobox", { name: /Sort/ })).toHaveTextContent(
+		await expect(canvas.getByRole("combobox", { name: /Sort/u })).toHaveTextContent(
 			"Most actionable first",
 		);
 	},
@@ -174,8 +174,8 @@ export const ScopedToOnePieceOfWork: Story = {
 		total: 5,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/Reviewed work/);
-		canvas.getByText(/PR #1423/);
+		canvas.getByText(/Reviewed work/u);
+		canvas.getByText(/PR #1423/u);
 	},
 };
 
@@ -201,7 +201,7 @@ export const UnassessedStatuses: Story = {
 		},
 	},
 	play: async ({ canvas, userEvent }) => {
-		await expect(canvas.getByRole("combobox", { name: /Assessment status/ })).toHaveTextContent(
+		await expect(canvas.getByRole("combobox", { name: /Assessment status/u })).toHaveTextContent(
 			"2",
 		);
 		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));

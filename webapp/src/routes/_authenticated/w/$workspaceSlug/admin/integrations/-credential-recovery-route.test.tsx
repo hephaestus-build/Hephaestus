@@ -240,7 +240,7 @@ describe("integration job history", () => {
 			const response = new Promise<void>((resolve) => {
 				releaseResponse = resolve;
 			});
-			const requestedPages: Array<string | null> = [];
+			const requestedPages: (string | null)[] = [];
 			const job = {
 				id: 1,
 				createdAt: "2026-09-07T12:00:00Z",
@@ -248,7 +248,7 @@ describe("integration job history", () => {
 				type: "RECONCILIATION",
 				trigger: "MANUAL",
 				cancelRequested: false,
-				itemsProcessed: 123456,
+				itemsProcessed: 123_456,
 			} satisfies Wire<SyncJob>;
 			server.use(
 				http.get("*/workspaces", () =>

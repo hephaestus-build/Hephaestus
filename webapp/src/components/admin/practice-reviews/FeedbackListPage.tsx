@@ -34,7 +34,7 @@ export function FeedbackListPage({
 	const rows = feedback?.content ?? [];
 	// Guarded on the filter being set: see `ObservationsListPage`. Unfiltered, row zero is whoever
 	// sorts first, and their name would be shown against a different person's id.
-	const filteredRecipient = search.recipientUserId != null ? rows[0]?.recipient : undefined;
+	const filteredRecipient = search.recipientUserId == null ? undefined : rows[0]?.recipient;
 	const hasFilter = hasFeedbackFilter(search);
 	const reset = () => onSearchChange(clearedFeedbackFilters());
 	const patchFilter = (patch: Partial<FeedbackSearch>) => onSearchChange({ ...patch, page: 0 });

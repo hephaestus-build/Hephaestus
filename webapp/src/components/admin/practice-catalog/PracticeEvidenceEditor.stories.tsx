@@ -65,10 +65,10 @@ export const EveryChoiceIsVisible: Story = {
 		// Offered only where the contract can promise a whole capture. Linked work items never can, so
 		// the control is absent rather than present-and-refused on save.
 		await expect(
-			canvas.getByRole("checkbox", { name: /absent from Code changes/ }),
+			canvas.getByRole("checkbox", { name: /absent from Code changes/u }),
 		).not.toBeChecked();
 		await expect(
-			canvas.queryByRole("checkbox", { name: /absent from Linked work items/ }),
+			canvas.queryByRole("checkbox", { name: /absent from Linked work items/u }),
 		).toBeNull();
 	},
 };
@@ -81,13 +81,13 @@ export const AbsenceClaimNeedsARequiredSource: Story = {
 			canvas.getByRole("radiogroup", { name: "How Inline review comments is used" }),
 		);
 		await expect(
-			canvas.getByRole("checkbox", { name: /absent from Inline review comments/ }),
+			canvas.getByRole("checkbox", { name: /absent from Inline review comments/u }),
 		).toBeVisible();
 
 		await userEvent.click(comments.getByRole("radio", { name: "Context" }));
 
 		await expect(
-			canvas.queryByRole("checkbox", { name: /absent from Inline review comments/ }),
+			canvas.queryByRole("checkbox", { name: /absent from Inline review comments/u }),
 		).toBeNull();
 	},
 };
@@ -121,13 +121,13 @@ export const TheAbsenceClaimStatesItsBound: Story = {
 		const claim = canvas.getByRole("checkbox", {
 			name: "May claim something is absent from Inline review comments",
 		});
-		await expect(claim).toHaveAccessibleDescription(/Up to the 500 most recent inline comments/);
-		await expect(claim).not.toHaveAccessibleDescription(/refuses the review/);
+		await expect(claim).toHaveAccessibleDescription(/Up to the 500 most recent inline comments/u);
+		await expect(claim).not.toHaveAccessibleDescription(/refuses the review/u);
 
 		await userEvent.click(claim);
 
-		await expect(claim).toHaveAccessibleDescription(/A partial capture then refuses the review/);
-		await expect(claim).toHaveAccessibleDescription(/Up to the 500 most recent inline comments/);
+		await expect(claim).toHaveAccessibleDescription(/A partial capture then refuses the review/u);
+		await expect(claim).toHaveAccessibleDescription(/Up to the 500 most recent inline comments/u);
 	},
 };
 

@@ -12,7 +12,9 @@ import { expectNoPanelOverflow } from "@/test/reflow";
 import { WorkspacePracticePanel, type WorkspacePracticeState } from "./WorkspacePracticePanel";
 
 const [practice] = mockPractices;
-if (!practice) throw new Error("The shared practice fixtures no longer hold a practice to show");
+if (!practice) {
+	throw new Error("The shared practice fixtures no longer hold a practice to show");
+}
 
 type ReadyState = Extract<WorkspacePracticeState, { status: "ready" }>;
 
@@ -75,7 +77,7 @@ export const InheritedAutonomy: Story = {
 	},
 	play: async () => {
 		// An inherited value says where it came from, so the reader knows where to go to change it.
-		await expectSettledVisible(await screen.findByText(/Follows Review-ready work/));
+		await expectSettledVisible(await screen.findByText(/Follows Review-ready work/u));
 	},
 };
 
@@ -102,7 +104,7 @@ export const FailedToLoad: Story = {
 		const retry = await screen.findByRole("button", { name: "Retry" });
 		await expectSettledVisible(retry);
 		await userEvent.click(retry);
-		const state = args.state;
+		const { state } = args;
 		await expect(state.status === "error" && state.onRetry).toHaveBeenCalledOnce();
 	},
 };

@@ -74,7 +74,9 @@ export function ImpersonateDialog({
 				<form
 					onSubmit={(event) => {
 						event.preventDefault();
-						if (user && canSubmit) onConfirm(user, trimmed);
+						if (user && canSubmit) {
+							onConfirm(user, trimmed);
+						}
 					}}
 					className="space-y-4"
 				>

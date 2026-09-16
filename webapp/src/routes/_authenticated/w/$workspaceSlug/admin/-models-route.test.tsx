@@ -108,7 +108,9 @@ async function renderModelsRoute(bindings: () => AgentBinding[]) {
 function card(purposeLabel: string): HTMLElement {
 	const field = screen.getByLabelText(purposeLabel);
 	const cardElement = field.closest("[data-slot='card']");
-	if (!(cardElement instanceof HTMLElement)) throw new Error(`No card for ${purposeLabel}`);
+	if (!(cardElement instanceof HTMLElement)) {
+		throw new Error(`No card for ${purposeLabel}`);
+	}
 	return cardElement;
 }
 

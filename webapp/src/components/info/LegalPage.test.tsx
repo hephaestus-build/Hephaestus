@@ -1,10 +1,6 @@
 import { render, waitFor } from "@testing-library/react";
 import { assert, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/environment", () => ({
-	default: { legal: { profile: "" } },
-}));
-
 import {
 	isSafeLegalHref,
 	isSafeLegalImageSrc,
@@ -13,6 +9,10 @@ import {
 } from "@/lib/legal";
 
 import { LegalPage } from "./LegalPage";
+
+vi.mock("@/environment", () => ({
+	default: { legal: { profile: "" } },
+}));
 
 declare global {
 	interface Window {
@@ -87,7 +87,7 @@ describe("LegalPage — XSS guardrail", () => {
 			}
 		}
 
-		const anchors = Array.from(article.querySelectorAll("a"));
+		const anchors = [...article.querySelectorAll("a")];
 		expect(anchors.length).toBeGreaterThan(0);
 		// The raw attribute, with no `?? ""` stand-in: a link with no href at all has to fail too.
 		for (const anchor of anchors) {
@@ -95,7 +95,7 @@ describe("LegalPage — XSS guardrail", () => {
 			expect({ href, safe: isSafeLegalHref(href) }).toStrictEqual({ href, safe: true });
 		}
 
-		const images = Array.from(article.querySelectorAll("img"));
+		const images = [...article.querySelectorAll("img")];
 		for (const image of images) {
 			const src = image.getAttribute("src");
 			expect({ src, safe: isSafeLegalImageSrc(src) }).toStrictEqual({ src, safe: true });
@@ -125,7 +125,7 @@ describe("LegalPage — XSS guardrail", () => {
 			assert(el, "article not rendered");
 			return el;
 		});
-		const [ext, int] = Array.from(article.querySelectorAll("a"));
+		const [ext, int] = [...article.querySelectorAll("a")];
 		assert(ext);
 		assert(int);
 		expect(ext.getAttribute("target")).toBe("_blank");
@@ -148,18 +148,16 @@ describe("LegalPage — XSS guardrail", () => {
 				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={resolver} />,
 			);
 			// The load-error alert says the opposite about the deployment; assert the disclaimer copy.
-			expect((await first.findByRole("alert")).textContent).toMatch(
-				/has not been configured with a legal profile/i,
-			);
+			const alert = await first.findByRole("alert");
+			expect(alert.textContent).toMatch(/has not been configured with a legal profile/iu);
 			expect(warn).toHaveBeenCalledExactlyOnceWith(expected);
 			first.unmount();
 
 			const remounted = render(
 				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={resolver} />,
 			);
-			expect((await remounted.findByRole("alert")).textContent).toMatch(
-				/has not been configured with a legal profile/i,
-			);
+			const remountedAlert = await remounted.findByRole("alert");
+			expect(remountedAlert.textContent).toMatch(/has not been configured with a legal profile/iu);
 			expect(warn).toHaveBeenCalledExactlyOnceWith(expected);
 		},
 	);

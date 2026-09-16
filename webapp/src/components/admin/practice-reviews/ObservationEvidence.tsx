@@ -65,7 +65,9 @@ export function ObservationEvidence({ evidence, detector }: ObservationEvidenceP
 
 function summaryLine(citations: number, sources: number): string {
 	const passages = citations === 1 ? "One passage" : `${citations} passages`;
-	if (sources === 1) return `${passages} from one source.`;
+	if (sources === 1) {
+		return `${passages} from one source.`;
+	}
 	return `${passages} from ${sources} sources.`;
 }
 

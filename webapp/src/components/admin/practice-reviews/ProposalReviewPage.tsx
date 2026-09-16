@@ -62,18 +62,18 @@ export function ProposalReviewPage({
 	onReject,
 }: ProposalReviewPageProps) {
 	const place = DELIVERY_PLACE_DEFS[feedback.channel];
-	const proposedPlacements = feedback.proposedPlacements;
+	const { proposedPlacements } = feedback;
 	const packageUnavailable = proposedPlacements.length === 0;
 	const summary = proposedPlacements.find((placement) => placement.type === "SUMMARY");
 	const inline = proposedPlacements.filter((placement) => placement.type === "INLINE");
 	const packageSummary = `${summary ? "1 summary" : "No summary"} and ${inline.length} ${
 		inline.length === 1 ? "line comment" : "line comments"
 	}`;
-	const placements = Array.from(
-		new Set(
+	const placements = [
+		...new Set(
 			proposedPlacements.map((placement) => placementLabel(feedback.channel, placement.type)),
 		),
-	);
+	];
 	const subjectDiffers = feedback.subject && feedback.subject.id !== feedback.recipient?.id;
 
 	return (

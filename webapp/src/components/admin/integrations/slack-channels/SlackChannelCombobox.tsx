@@ -19,7 +19,7 @@ import {
 
 export interface SlackChannelComboboxProps {
 	id?: string;
-	candidates: SlackChannelCandidate[];
+	candidates: readonly SlackChannelCandidate[];
 	selectedChannelId?: string;
 	selectedChannelName?: string;
 	onSelect: (candidate: SlackChannelCandidate) => void;
@@ -60,7 +60,9 @@ export function SlackChannelCombobox({
 			items={candidates}
 			value={selected ?? null}
 			onValueChange={(candidate) => {
-				if (candidate) onSelect(candidate);
+				if (candidate) {
+					onSelect(candidate);
+				}
 			}}
 			disabled={disabled}
 			filter={(candidate, query) => contains(candidate, query, searchTextOf)}

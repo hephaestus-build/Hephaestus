@@ -81,15 +81,21 @@ function WorkspaceLlmConnectionFormDialogContent({
 		event.preventDefault();
 		const found = validateConnectionFields(fields, isEdit);
 		setErrors(found);
-		if (Object.keys(found).length > 0) return;
+		if (Object.keys(found).length > 0) {
+			return;
+		}
 
 		if (editing) {
 			const body: UpdateWorkspaceLlmConnectionRequest = {
 				displayName: fields.displayName.trim(),
 				enabled,
 			};
-			if (fields.apiKey.trim()) body.apiKey = fields.apiKey.trim();
-			if (fields.clearApiKey) body.clearApiKey = true;
+			if (fields.apiKey.trim()) {
+				body.apiKey = fields.apiKey.trim();
+			}
+			if (fields.clearApiKey) {
+				body.clearApiKey = true;
+			}
 			onUpdate(editing.id, body);
 			return;
 		}

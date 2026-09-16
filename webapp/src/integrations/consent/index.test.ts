@@ -30,7 +30,7 @@ describe("cookie consent", () => {
 		setStoredConsent({ errorMonitoring: true });
 		const stored = getStoredConsent();
 		expect(stored).toMatchObject({ errorMonitoring: true, version: CONSENT_VERSION });
-		expect(typeof stored?.decidedAt).toBe("string");
+		expect(stored?.decidedAt).toBeTypeOf("string");
 		expect(hasErrorMonitoringConsent()).toBe(true);
 	});
 

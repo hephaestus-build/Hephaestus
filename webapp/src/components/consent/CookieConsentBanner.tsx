@@ -14,14 +14,18 @@ import {
 export function CookieConsentBanner() {
 	const consent = useCookieConsent();
 	const reopen = useConsentReopenRequested();
-	if (!optionalIntegrationsAvailable || (consent !== null && !reopen)) return null;
+	if (!optionalIntegrationsAvailable || (consent !== null && !reopen)) {
+		return null;
+	}
 	return <ConsentForm editing={consent !== null} reopened={reopen} />;
 }
 
 function ConsentForm({ editing, reopened }: { editing: boolean; reopened: boolean }) {
 	const cardRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
-		if (reopened) cardRef.current?.focus();
+		if (reopened) {
+			cardRef.current?.focus();
+		}
 	}, [reopened]);
 
 	const restoreFocus = () => document.querySelector<HTMLElement>("main")?.focus();

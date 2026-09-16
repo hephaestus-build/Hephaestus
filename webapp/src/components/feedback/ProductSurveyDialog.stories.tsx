@@ -44,8 +44,8 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expectSettledVisible(dialog.getByText(/4 questions · about 2 minutes/));
-		await expect(dialog.getByText(/closes in 6 days/)).toBeVisible();
+		await expectSettledVisible(dialog.getByText(/4 questions · about 2 minutes/u));
+		await expect(dialog.getByText(/closes in 6 days/u)).toBeVisible();
 		await expect(dialog.getByRole("progressbar")).toHaveTextContent("Question 1 of 4");
 		await expect(dialog.getByRole("button", { name: "Decline survey" })).toBeVisible();
 	},
@@ -88,14 +88,14 @@ export const Research: Story = {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(dialog.getByText("Research"));
 		await expect(
-			dialog.getByText(/study run by Technical University of Munich, which you agreed to join/),
+			dialog.getByText(/study run by Technical University of Munich, which you agreed to join/u),
 		).toBeVisible();
 		await expect(dialog.getByRole("link", { name: "User settings" })).toHaveAttribute(
 			"href",
 			"/settings",
 		);
-		await expect(dialog.getByText(/answers already sent stay with the study/)).toBeVisible();
-		await expect(dialog.getByRole("group", { name: /\(optional\)/ })).toBeVisible();
+		await expect(dialog.getByText(/answers already sent stay with the study/u)).toBeVisible();
+		await expect(dialog.getByRole("group", { name: /\(optional\)/u })).toBeVisible();
 	},
 };
 
@@ -103,8 +103,8 @@ export const Research: Story = {
 export const ProductFraming: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expectSettledVisible(dialog.getByText(/Read by the Hephaestus team/));
-		await expect(dialog.getByText(/Not research/)).toBeVisible();
+		await expectSettledVisible(dialog.getByText(/Read by the Hephaestus team/u));
+		await expect(dialog.getByText(/Not research/u)).toBeVisible();
 		await expect(dialog.queryByText("Research")).toBeNull();
 	},
 };
@@ -152,8 +152,8 @@ export const NoClosingDate: Story = {
 	args: { survey: { ...surveyInvitation, endsAt: undefined } },
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expectSettledVisible(dialog.getByText(/4 questions · about 2 minutes/));
-		await expect(dialog.queryByText(/Closes/)).toBeNull();
+		await expectSettledVisible(dialog.getByText(/4 questions · about 2 minutes/u));
+		await expect(dialog.queryByText(/Closes/u)).toBeNull();
 	},
 };
 

@@ -40,8 +40,9 @@ export interface ObservationResultsProps {
 }
 
 export function ObservationResults({ workspaceSlug, state, practices }: ObservationResultsProps) {
-	if (state.status === "loading")
+	if (state.status === "loading") {
 		return <ReviewResultsSkeleton label="Loading observations" rows={REVIEW_PAGE_SIZE} />;
+	}
 	if (state.status === "empty") {
 		return (
 			<Empty variant="outlined">

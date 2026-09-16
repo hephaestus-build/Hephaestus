@@ -49,9 +49,9 @@ describe("product feedback wire contract", () => {
 		const { wrapper } = setup();
 		const { result } = renderHook(() => useSubmitProductFeedback(undefined), { wrapper });
 		await act(async () => {
-			expect(await result.current.submit({ kind: "BUG", message: "Cannot open reviews" })).toBe(
-				true,
-			);
+			await expect(
+				result.current.submit({ kind: "BUG", message: "Cannot open reviews" }),
+			).resolves.toBe(true);
 		});
 		expect(received).toStrictEqual({ kind: "BUG", message: "Cannot open reviews" });
 	});
@@ -67,7 +67,9 @@ describe("product feedback wire contract", () => {
 		const { wrapper } = setup();
 		const { result } = renderHook(() => useSubmitProductFeedback("acme"), { wrapper });
 		await act(async () => {
-			expect(await result.current.submit({ kind: "FEEDBACK", message: "A draft" })).toBe(false);
+			await expect(result.current.submit({ kind: "FEEDBACK", message: "A draft" })).resolves.toBe(
+				false,
+			);
 		});
 		await waitFor(() => expect(result.current.error).toContain("wait a minute"));
 		expect(requests).toBe(1);
@@ -91,9 +93,9 @@ describe("product feedback wire contract", () => {
 		await waitFor(() => expect(result.current.query.data).toHaveLength(1));
 		server.use(http.get("*/workspaces/acme/product-feedback/surveys", () => HttpResponse.error()));
 		await act(async () => {
-			expect(
-				await result.current.submit(surveyInvitation, [{ questionId: "useful", rating: 4 }]),
-			).toBe(true);
+			await expect(
+				result.current.submit(surveyInvitation, [{ questionId: "useful", rating: 4 }]),
+			).resolves.toBe(true);
 		});
 		expect(received).toStrictEqual({ answers: [{ questionId: "useful", rating: 4 }] });
 		expect(client.getQueryData(otherKey)).toStrictEqual([]);
@@ -114,7 +116,7 @@ describe("product feedback wire contract", () => {
 		await waitFor(() => expect(result.current.query.data).toHaveLength(1));
 		server.use(http.get("*/workspaces/acme/product-feedback/surveys", () => HttpResponse.json([])));
 		await act(async () => {
-			expect(await result.current.submit(surveyInvitation, [])).toBe(false);
+			await expect(result.current.submit(surveyInvitation, [])).resolves.toBe(false);
 		});
 		await waitFor(() => expect(result.current.error).toContain("already answered or declined"));
 		await waitFor(() => expect(result.current.query.data).toStrictEqual([]));
@@ -135,13 +137,13 @@ describe("product feedback wire contract", () => {
 		const { wrapper } = setup();
 		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
 		await act(async () => {
-			expect(
-				await result.current.submit(surveyInvitation, [{ questionId: "useful", rating: 4 }]),
-			).toBe(false);
+			await expect(
+				result.current.submit(surveyInvitation, [{ questionId: "useful", rating: 4 }]),
+			).resolves.toBe(false);
 		});
 		await waitFor(() => expect(result.current.error).toContain("already answered or declined"));
 		await act(async () => {
-			expect(await result.current.decline(surveyInvitation.id)).toBe(false);
+			await expect(result.current.decline(surveyInvitation.id)).resolves.toBe(false);
 		});
 		await waitFor(() => expect(result.current.error).toContain("Check your connection"));
 	});
@@ -161,7 +163,7 @@ describe("product feedback wire contract", () => {
 		const { wrapper } = setup();
 		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
 		await act(async () => {
-			expect(await result.current.submit(surveyInvitation, [])).toBe(false);
+			await expect(result.current.submit(surveyInvitation, [])).resolves.toBe(false);
 		});
 		await waitFor(() =>
 			expect(result.current.error).toBe(
@@ -189,19 +191,21 @@ describe("product feedback wire contract", () => {
 		const surveys = renderHook(() => useProductSurveys("acme"), { wrapper });
 		await waitFor(() => expect(surveys.result.current.query.data).toHaveLength(2));
 		await act(async () => {
-			expect(await surveys.result.current.submit(researchInvitation, [])).toBe(true);
+			await expect(surveys.result.current.submit(researchInvitation, [])).resolves.toBe(true);
 		});
 		await screen.findByText(
 			"Thank you — your answers were recorded for a study run by Technical University of Munich.",
 		);
 		await act(async () => {
-			expect(await surveys.result.current.submit(surveyInvitation, [])).toBe(true);
+			await expect(surveys.result.current.submit(surveyInvitation, [])).resolves.toBe(true);
 		});
 		await screen.findByText("Thank you — your answers are on their way to the Hephaestus team.");
 
 		const feedback = renderHook(() => useSubmitProductFeedback("acme"), { wrapper });
 		await act(async () => {
-			expect(await feedback.result.current.submit({ kind: "IDEA", message: "Pin it" })).toBe(true);
+			await expect(
+				feedback.result.current.submit({ kind: "IDEA", message: "Pin it" }),
+			).resolves.toBe(true);
 		});
 		await screen.findByText("Thanks — your idea is on its way to the Hephaestus team.");
 	});
@@ -228,7 +232,7 @@ describe("product feedback wire contract", () => {
 		const { result } = renderHook(() => useProductSurveys("acme"), { wrapper });
 		await waitFor(() => expect(result.current.query.data).toHaveLength(1));
 		await act(async () => {
-			expect(await result.current.decline(surveyInvitation.id)).toBe(true);
+			await expect(result.current.decline(surveyInvitation.id)).resolves.toBe(true);
 		});
 		const undo = await screen.findByRole("button", { name: "Undo" });
 		await userEvent.click(undo);
@@ -270,8 +274,10 @@ describe("product feedback wire contract", () => {
 		const { result } = renderHook(() => useSubmitProductFeedback(undefined), { wrapper });
 		await act(async () => {
 			const first = result.current.submit({ kind: "FEEDBACK", message: "One submission" });
-			expect(await result.current.submit({ kind: "FEEDBACK", message: "Duplicate" })).toBe(false);
-			expect(await first).toBe(true);
+			await expect(result.current.submit({ kind: "FEEDBACK", message: "Duplicate" })).resolves.toBe(
+				false,
+			);
+			await expect(first).resolves.toBe(true);
 		});
 		expect(requests).toBe(1);
 	});
@@ -279,7 +285,7 @@ describe("product feedback wire contract", () => {
 	it("does not send a survey without workspace context", async () => {
 		const { wrapper } = setup();
 		const { result } = renderHook(() => useProductSurveys(undefined), { wrapper });
-		expect(await result.current.submit(surveyInvitation, [])).toBe(false);
-		expect(await result.current.decline(surveyInvitation.id)).toBe(false);
+		await expect(result.current.submit(surveyInvitation, [])).resolves.toBe(false);
+		await expect(result.current.decline(surveyInvitation.id)).resolves.toBe(false);
 	});
 });

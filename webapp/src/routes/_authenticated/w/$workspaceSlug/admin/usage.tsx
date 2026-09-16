@@ -93,9 +93,9 @@ function AdminUsageContainer() {
 				isCurrentMonth={isCurrentMonth}
 				isPending={updateOwnProviderCap.isPending}
 				serverError={
-					updateOwnProviderCap.error != null
-						? problemDetailOf(updateOwnProviderCap.error, "Couldn't save the cap")
-						: null
+					updateOwnProviderCap.error == null
+						? null
+						: problemDetailOf(updateOwnProviderCap.error, "Couldn't save the cap")
 				}
 				onOpenChange={(open) => {
 					if (!open) {

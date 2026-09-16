@@ -32,7 +32,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
 		const input = canvas.getByLabelText("Add a repository");
-		const addButton = canvas.getByRole("button", { name: /^add$/i });
+		const addButton = canvas.getByRole("button", { name: /^add$/iu });
 
 		await expect(addButton).toBeDisabled();
 		await userEvent.type(input, "not-a-repo");
@@ -55,7 +55,9 @@ export const ManyRepositories: Story = {
 	play: async ({ canvas, canvasElement }) => {
 		const viewport = canvasElement.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
 		await expect(viewport).not.toBeNull();
-		if (!viewport) return;
+		if (!viewport) {
+			return;
+		}
 
 		await expect(viewport.clientHeight).toBeLessThanOrEqual(320);
 		await expect(viewport.scrollHeight).toBeGreaterThan(viewport.clientHeight);
@@ -66,14 +68,14 @@ export const ManyRepositories: Story = {
 
 export const RemoveConfirm: Story = {
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /remove octocat\/Hello-World/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /remove octocat\/Hello-World/iu }));
 
 		const dialog = await screen.findByRole("alertdialog");
-		within(dialog).getByText(/stop monitoring octocat\/Hello-World/i);
-		within(dialog).getByText(/permanently erases everything Hephaestus has mirrored/i);
-		within(dialog).getByText(/repository on GitHub itself is not affected/i);
-		within(dialog).getByText(/monitoring it again later/i);
-		await expect(within(dialog).getByRole("button", { name: /stop monitoring/i })).toBeEnabled();
+		within(dialog).getByText(/stop monitoring octocat\/Hello-World/iu);
+		within(dialog).getByText(/permanently erases everything Hephaestus has mirrored/iu);
+		within(dialog).getByText(/repository on GitHub itself is not affected/iu);
+		within(dialog).getByText(/monitoring it again later/iu);
+		await expect(within(dialog).getByRole("button", { name: /stop monitoring/iu })).toBeEnabled();
 	},
 };
 
@@ -82,21 +84,21 @@ export const RemoveInProgress: Story = {
 		isRemovingRepository: true,
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /remove microsoft\/vscode/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /remove microsoft\/vscode/iu }));
 
 		const dialog = await screen.findByRole("alertdialog");
-		const confirm = within(dialog).getByRole("button", { name: /stopping/i });
+		const confirm = within(dialog).getByRole("button", { name: /stopping/iu });
 		await expect(confirm).toBeDisabled();
-		await expect(within(dialog).getByRole("button", { name: /cancel/i })).toBeDisabled();
+		await expect(within(dialog).getByRole("button", { name: /cancel/iu })).toBeDisabled();
 	},
 };
 
 export const RemoveHoldsDialogOpen: Story = {
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /remove facebook\/react/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /remove facebook\/react/iu }));
 
 		const dialog = await screen.findByRole("alertdialog");
-		await userEvent.click(within(dialog).getByRole("button", { name: /stop monitoring/i }));
+		await userEvent.click(within(dialog).getByRole("button", { name: /stop monitoring/iu }));
 
 		await expect(args.onRemoveRepository).toHaveBeenCalledWith("facebook/react");
 		await expectSettledVisible(await screen.findByRole("alertdialog"));
@@ -115,7 +117,7 @@ export const Empty: Story = {
 		repositories: [],
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/no repositories monitored yet/i);
+		canvas.getByText(/no repositories monitored yet/iu);
 	},
 };
 
@@ -130,9 +132,9 @@ export const LoadError: Story = {
 		onRetry: fn(),
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/couldn't load the monitored repositories/i);
-		canvas.getByText(/repositories service is unavailable/i);
-		await userEvent.click(canvas.getByRole("button", { name: /retry/i }));
+		canvas.getByText(/couldn't load the monitored repositories/iu);
+		canvas.getByText(/repositories service is unavailable/iu);
+		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalledTimes(1);
 	},
 };
@@ -145,9 +147,9 @@ export const AddValidationError: Story = {
 		}),
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/was not found, or the token cannot see it/i);
+		canvas.getByText(/was not found, or the token cannot see it/iu);
 		await expect(
-			canvas.queryByText(/an error occurred while adding the repository/i),
+			canvas.queryByText(/an error occurred while adding the repository/iu),
 		).not.toBeInTheDocument();
 	},
 };

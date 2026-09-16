@@ -54,7 +54,7 @@ function AdminUsersPage() {
 	const navigate = useNavigate({ from: Route.fullPath });
 	const search = Route.useSearch().q ?? "";
 	const userId = getUserId();
-	const currentUserId = userId != null ? Number(userId) : undefined;
+	const currentUserId = userId == null ? undefined : Number(userId);
 
 	const deferredSearch = useDeferredValue(search);
 
@@ -98,7 +98,9 @@ function AdminUsersPage() {
 	// Close the initiating dialog before step-up to avoid stacking modal focus traps.
 	const openConfirmAccess = (error: unknown): boolean => {
 		const stepUp = stepUpChallengeOf(error);
-		if (!stepUp) return false;
+		if (!stepUp) {
+			return false;
+		}
 		setRoleTarget(null);
 		setImpersonateTarget(null);
 		setSignOutTarget(null);
@@ -133,7 +135,9 @@ function AdminUsersPage() {
 			setSignOutTarget(null);
 		},
 		onError: (error) => {
-			if (openConfirmAccess(error)) return;
+			if (openConfirmAccess(error)) {
+				return;
+			}
 			toast.error(problemDetailOf(error, "Couldn't sign the user out."));
 			setSignOutTarget(null);
 		},
@@ -141,17 +145,23 @@ function AdminUsersPage() {
 
 	const handleConfirmSignOut = () => {
 		const id = signOutTarget?.user.id;
-		if (id == null) return;
+		if (id == null) {
+			return;
+		}
 		forceSignOut.mutate({ path: { id } });
 	};
 
 	const handleConfirmRole = (user: AdminAccountView, nextRole: string) => {
-		if (user.id == null) return;
+		if (user.id == null) {
+			return;
+		}
 		updateRole.mutate({ path: { id: user.id }, body: { appRole: nextRole } });
 	};
 
 	const handleConfirmImpersonate = (user: AdminAccountView, reason: string) => {
-		if (user.id == null) return;
+		if (user.id == null) {
+			return;
+		}
 		impersonate.mutate(
 			{ body: { targetAccountId: user.id, reason } },
 			{
@@ -251,7 +261,9 @@ function AdminUsersPage() {
 			<ConfirmAccessDialog
 				open={challenge !== undefined}
 				onOpenChange={(open) => {
-					if (!open) setChallenge(undefined);
+					if (!open) {
+						setChallenge(undefined);
+					}
 				}}
 				maxAgeSeconds={challenge?.maxAgeSeconds}
 				providers={confirmAccess.providers}

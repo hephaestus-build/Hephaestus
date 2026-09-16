@@ -48,24 +48,30 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const EnabledContent = () => (
-	<div className="rounded-lg border border-success/30 bg-success/10 p-4 text-sm text-success">
-		Feature is enabled — this content is visible.
-	</div>
-);
+function EnabledContent() {
+	return (
+		<div className="rounded-lg border border-success/30 bg-success/10 p-4 text-sm text-success">
+			Feature is enabled — this content is visible.
+		</div>
+	);
+}
 
-const DisabledContent = () => (
-	<div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
-		Feature is disabled — showing fallback content.
-	</div>
-);
+function DisabledContent() {
+	return (
+		<div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+			Feature is disabled — showing fallback content.
+		</div>
+	);
+}
 
-const LoadingContent = () => (
-	<div className="flex items-center gap-2 rounded-lg border border-border bg-muted p-4 text-sm text-muted-foreground">
-		<div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-		Loading feature flags...
-	</div>
-);
+function LoadingContent() {
+	return (
+		<div className="flex items-center gap-2 rounded-lg border border-border bg-muted p-4 text-sm text-muted-foreground">
+			<div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+			Loading feature flags...
+		</div>
+	);
+}
 
 /**
  * Flag is enabled — children are rendered.

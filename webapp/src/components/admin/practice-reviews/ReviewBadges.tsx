@@ -86,7 +86,9 @@ export function observationSeverity(
  * LIVE renders nothing: badging the ordinary case buries the exceptions.
  */
 export function ObservationOriginBadge({ origin }: { origin: ReviewObservation["origin"] }) {
-	if (origin === "LIVE") return null;
+	if (origin === "LIVE") {
+		return null;
+	}
 	return (
 		<Badge variant="outline">
 			{origin === "BACKFILL" ? "From a review of past work" : "Requested by hand"}
@@ -99,7 +101,9 @@ export function ClaimCurrentnessBadge({
 }: {
 	currentness: ReviewObservation["claimCurrentness"];
 }) {
-	if (currentness === "CURRENT") return null;
+	if (currentness === "CURRENT") {
+		return null;
+	}
 	const config = CLAIM_CURRENTNESS_CONFIG[currentness];
 	return <Badge variant={config.badgeVariant}>{config.badge}</Badge>;
 }
@@ -109,7 +113,9 @@ export function ClaimCurrentnessAlert({
 }: {
 	currentness: ReviewObservation["claimCurrentness"];
 }) {
-	if (currentness === "CURRENT") return null;
+	if (currentness === "CURRENT") {
+		return null;
+	}
 	const { Icon, title, description } = CLAIM_CURRENTNESS_CONFIG[currentness];
 	return (
 		<Alert variant="warning">
@@ -225,7 +231,9 @@ export function FeedbackCountsSummary({
 	const parts = feedbackCountSlots(counts)
 		.filter((slot) => slot.count > 0)
 		.map((slot) => `${slot.count} ${slot.label}`);
-	if (parts.length === 0) return <span>No feedback composed</span>;
+	if (parts.length === 0) {
+		return <span>No feedback composed</span>;
+	}
 	return (
 		<span>
 			{prefix && `${prefix} `}

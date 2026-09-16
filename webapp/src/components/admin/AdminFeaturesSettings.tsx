@@ -36,7 +36,7 @@ const FEATURES = [
 		label: "Leagues",
 		description: "Show league tiers on leaderboards and contributor profiles.",
 	},
-] as const satisfies ReadonlyArray<FeatureDefinition>;
+] as const satisfies readonly FeatureDefinition[];
 
 export type FeatureKey = (typeof FEATURES)[number]["key"];
 export type FeatureValues = Record<FeatureKey, boolean>;

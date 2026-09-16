@@ -42,7 +42,9 @@ const KIND_ICON: Record<IntegrationCatalogEntry["kind"], React.ReactNode> = {
  * two more would out-shout it.
  */
 function ResourceHealthLine({ counts }: { counts: ConnectionSyncStatus["resourceCounts"] }) {
-	if (counts.errored === 0 && counts.stale === 0) return null;
+	if (counts.errored === 0 && counts.stale === 0) {
+		return null;
+	}
 
 	return (
 		<p className="flex flex-wrap items-center gap-x-1.5">
@@ -100,7 +102,64 @@ export function IntegrationOverviewCard({
 				)}
 			</CardHeader>
 			<CardContent className="space-y-3">
-				{!entry.connected ? (
+				{entry.connected ? (
+					!isConnectionActive || entry.credentialsUnreadableSince ? (
+						<ConnectionStateNotice
+							connectionState={entry.connectionState}
+							credentialsUnreadableSince={entry.credentialsUnreadableSince}
+							displayName={entry.displayName}
+						/>
+					) : isStatusLoading ? (
+						/* Two text lines, matching the status strip this resolves into, so the card holds its
+					   height across the load. */
+						<div className="space-y-2">
+							<Skeleton className="h-4 w-56" />
+							<Skeleton className="h-4 w-32" />
+						</div>
+					) : isStatusError ? (
+						<QueryErrorAlert
+							error={statusError}
+							title="We couldn't load sync status"
+							onRetry={onRetryStatus}
+						/>
+					) : (
+						status && (
+							<div className="space-y-2 text-sm">
+								<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
+									{/* Tinted against this connection's own cadence, so a card is picked out of the
+								    triage grid by colour rather than by reading four dates. */}
+									<span>
+										{status.lastSuccessfulSyncAt ? (
+											<>
+												Last synced{" "}
+												<RelativeTime
+													value={status.lastSuccessfulSyncAt}
+													tone={freshnessTone(
+														status.lastSuccessfulSyncAt,
+														status.syncIntervalSeconds,
+													)}
+												/>
+											</>
+										) : (
+											"Never synced"
+										)}
+									</span>
+									<span>
+										{status.lastEventProcessedAt ? (
+											<>
+												Last event <RelativeTime value={status.lastEventProcessedAt} />
+											</>
+										) : (
+											"No events received yet"
+										)}
+									</span>
+								</div>
+								<ResourceHealthLine counts={status.resourceCounts} />
+								<ActiveJobProgress job={status.activeJob} />
+							</div>
+						)
+					)
+				) : (
 					<div className="space-y-3">
 						<p className="flex items-center gap-1.5 text-sm text-muted-foreground">
 							<PlugZapIcon className="size-4" />
@@ -121,61 +180,6 @@ export function IntegrationOverviewCard({
 							</Link>
 						)}
 					</div>
-				) : !isConnectionActive || entry.credentialsUnreadableSince ? (
-					<ConnectionStateNotice
-						connectionState={entry.connectionState}
-						credentialsUnreadableSince={entry.credentialsUnreadableSince}
-						displayName={entry.displayName}
-					/>
-				) : isStatusLoading ? (
-					/* Two text lines, matching the status strip this resolves into, so the card holds its
-					   height across the load. */
-					<div className="space-y-2">
-						<Skeleton className="h-4 w-56" />
-						<Skeleton className="h-4 w-32" />
-					</div>
-				) : isStatusError ? (
-					<QueryErrorAlert
-						error={statusError}
-						title="We couldn't load sync status"
-						onRetry={onRetryStatus}
-					/>
-				) : (
-					status && (
-						<div className="space-y-2 text-sm">
-							<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
-								{/* Tinted against this connection's own cadence, so a card is picked out of the
-								    triage grid by colour rather than by reading four dates. */}
-								<span>
-									{status.lastSuccessfulSyncAt ? (
-										<>
-											Last synced{" "}
-											<RelativeTime
-												value={status.lastSuccessfulSyncAt}
-												tone={freshnessTone(
-													status.lastSuccessfulSyncAt,
-													status.syncIntervalSeconds,
-												)}
-											/>
-										</>
-									) : (
-										"Never synced"
-									)}
-								</span>
-								<span>
-									{status.lastEventProcessedAt ? (
-										<>
-											Last event <RelativeTime value={status.lastEventProcessedAt} />
-										</>
-									) : (
-										"No events received yet"
-									)}
-								</span>
-							</div>
-							<ResourceHealthLine counts={status.resourceCounts} />
-							<ActiveJobProgress job={status.activeJob} />
-						</div>
-					)
 				)}
 			</CardContent>
 			{isConnectionActive && (

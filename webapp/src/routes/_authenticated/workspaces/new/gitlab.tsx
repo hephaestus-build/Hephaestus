@@ -157,7 +157,9 @@ function GitLabWizardPage() {
 		staleTime: 5 * 60 * 1000,
 	});
 	const gitlabProviders: GitLabProvider[] = (identityProviders ?? []).flatMap((p) => {
-		if (p.providerType !== "GITLAB" || !p.registrationId) return [];
+		if (p.providerType !== "GITLAB" || !p.registrationId) {
+			return [];
+		}
 		return [
 			{
 				registrationId: p.registrationId,
@@ -227,7 +229,9 @@ function GitLabWizardPage() {
 
 	const handleNext = () => {
 		if (state.step === 1 && canAdvanceFromStep1) {
-			if (listGroups.isPending) return;
+			if (listGroups.isPending) {
+				return;
+			}
 			listGroups.mutate(
 				{
 					body: {
@@ -248,12 +252,16 @@ function GitLabWizardPage() {
 
 	const handleBack = () => {
 		// Reset stale mutation state so old errors don't persist after back-navigation
-		if (state.step === 2) listGroups.reset();
+		if (state.step === 2) {
+			listGroups.reset();
+		}
 		dispatch({ type: "GO_BACK" });
 	};
 
 	const handleSubmit = () => {
-		if (!canSubmit || !state.selectedGroup || createWorkspace.isPending) return;
+		if (!canSubmit || !state.selectedGroup || createWorkspace.isPending) {
+			return;
+		}
 		createWorkspace.mutate({
 			body: {
 				workspaceSlug: state.workspaceSlug,

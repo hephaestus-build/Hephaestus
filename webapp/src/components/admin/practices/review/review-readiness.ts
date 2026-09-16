@@ -59,9 +59,17 @@ export const REVIEW_RUNNING_DEFS: StatusDefs<ReviewRunningTone> = {
 };
 
 export function reviewRunningTone({ enabled, model }: ReviewRunningState): ReviewRunningTone {
-	if (!enabled) return "off";
-	if (model.status === "loading") return "checking";
-	if (model.status === "error") return "unconfirmed";
-	if (!reviewModelRunnable(model)) return "blocked";
+	if (!enabled) {
+		return "off";
+	}
+	if (model.status === "loading") {
+		return "checking";
+	}
+	if (model.status === "error") {
+		return "unconfirmed";
+	}
+	if (!reviewModelRunnable(model)) {
+		return "blocked";
+	}
 	return "running";
 }

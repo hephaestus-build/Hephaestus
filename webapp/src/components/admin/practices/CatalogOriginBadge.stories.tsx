@@ -20,7 +20,7 @@ type Story = StoryObj<typeof meta>;
 export const MatchesCatalog: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByRole("button", { name: "Same as the catalog" }).focus();
-		const tooltip = await within(document.body).findByText(/the catalog never edits your copy/);
+		const tooltip = await within(document.body).findByText(/the catalog never edits your copy/u);
 		await waitFor(() => expect(tooltip).toBeVisible());
 	},
 };
@@ -45,7 +45,7 @@ export const CatalogChanged: Story = {
 		canvas.getByRole("button", { name: "Catalog changed, yours did not" }).focus();
 		// The label carries the outcome, not just the event: nothing applies a catalog update to a
 		// workspace copy, so "the catalog changed" on its own invites the opposite reading.
-		const tooltip = await within(document.body).findByText(/Your copy is untouched/);
+		const tooltip = await within(document.body).findByText(/Your copy is untouched/u);
 		await waitFor(() => expect(tooltip).toBeVisible());
 	},
 };
@@ -71,7 +71,7 @@ export const NoLongerIncluded: Story = {
 	play: async ({ canvas }) => {
 		const status = canvas.getByRole("button", { name: "No longer in the catalog" });
 		status.focus();
-		const tooltip = await within(document.body).findByText(/Yours keeps working exactly as it is/);
+		const tooltip = await within(document.body).findByText(/Yours keeps working exactly as it is/u);
 		await waitFor(() => expect(tooltip).toBeVisible());
 	},
 };
@@ -88,7 +88,7 @@ export const GroupChanged: Story = {
 	play: async ({ canvas }) => {
 		const status = canvas.getByRole("button", { name: "Catalog changed, yours did not" });
 		status.focus();
-		const tooltip = await within(document.body).findByText(/different group details/);
+		const tooltip = await within(document.body).findByText(/different group details/u);
 		await waitFor(() => expect(tooltip).toBeVisible());
 	},
 };

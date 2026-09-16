@@ -115,9 +115,9 @@ export const NearTheLimit: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
 		const field = dialog.getByRole("textbox", { name: "Your feedback" });
-		await expect(dialog.queryByText(/left$/)).toBeNull();
+		await expect(dialog.queryByText(/left$/u)).toBeNull();
 		await userEvent.click(field);
-		await userEvent.paste("x".repeat(4_600));
+		await userEvent.paste("x".repeat(4600));
 		await expectSettledVisible(dialog.getByText("400 characters left"));
 	},
 };

@@ -25,17 +25,17 @@ function renderCreateForm(onSubmit: (value: PracticeDefinitionValue) => void | P
 	);
 }
 
-const nameField = () => screen.getByRole<HTMLInputElement>("textbox", { name: /Name/ });
+const nameField = () => screen.getByRole<HTMLInputElement>("textbox", { name: /Name/u });
 const slugField = () => screen.getByRole<HTMLInputElement>("textbox", { name: "Identifier" });
 
 async function openTechnicalSettings() {
-	fireEvent.click(screen.getByRole("button", { name: /Technical settings/ }));
+	fireEvent.click(screen.getByRole("button", { name: /Technical settings/u }));
 	return screen.findByRole("textbox", { name: "Identifier" });
 }
 
 function fillValidDraft() {
 	fireEvent.change(nameField(), { target: { value: "Explain what changed and why" } });
-	fireEvent.change(screen.getByRole("textbox", { name: /What to look for/ }), {
+	fireEvent.change(screen.getByRole("textbox", { name: /What to look for/u }), {
 		target: { value: "Look for a description that explains the behaviour change." },
 	});
 }
@@ -108,7 +108,7 @@ describe("the unsaved-changes guard around a save", () => {
 		// React to have processed it.
 		await act(async () => {
 			refuse?.();
-			await failed.catch(() => undefined);
+			await failed.catch(() => {});
 		});
 		fireEvent.click(screen.getByRole("link", { name: "Cancel" }));
 

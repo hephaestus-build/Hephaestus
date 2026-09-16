@@ -72,7 +72,7 @@ describe("contextual sign-in", () => {
 		renderRouteAtWithRouter("/");
 		await screen.findAllByRole("button", { name: "Sign in" }, ROUTE_RENDER_WAIT);
 		await userEvent.click(
-			within(screen.getByRole("region", { name: /Learn from the work/ })).getByRole("button", {
+			within(screen.getByRole("region", { name: /Learn from the work/u })).getByRole("button", {
 				name: "Sign in",
 			}),
 		);

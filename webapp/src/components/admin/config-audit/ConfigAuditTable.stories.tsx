@@ -110,16 +110,16 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		canvas.getByText(/cooldownMinutes: 30 → 10/);
-		await expect(canvas.getAllByText(/GPT reviewer/).length).toBeGreaterThan(0);
+		canvas.getByText(/cooldownMinutes: 30 → 10/u);
+		await expect(canvas.getAllByText(/GPT reviewer/u).length).toBeGreaterThan(0);
 	},
 };
 
 export const Impersonation: Story = {
 	args: { entries: [impersonatedUpdate] },
 	play: async ({ canvas }) => {
-		canvas.getByText(/acting as Ada Lovelace/);
-		canvas.getByText(/not set → ••••••/);
+		canvas.getByText(/acting as Ada Lovelace/u);
+		canvas.getByText(/not set → ••••••/u);
 	},
 };
 
@@ -142,8 +142,10 @@ export const WithWorkspaceColumn: Story = {
 
 export const RowDetail: Story = {
 	play: async ({ canvas }) => {
-		const [firstDetails] = canvas.getAllByRole("button", { name: /View details/i });
-		if (!firstDetails) throw new Error("The table rendered no rows to open");
+		const [firstDetails] = canvas.getAllByRole("button", { name: /View details/iu });
+		if (!firstDetails) {
+			throw new Error("The table rendered no rows to open");
+		}
 		await userEvent.click(firstDetails);
 		const dialog = within(await screen.findByRole("dialog"));
 		dialog.getByText("cooldownMinutes");
@@ -169,14 +171,14 @@ export const EmptyInitial: Story = {
 export const ErrorState: Story = {
 	args: { entries: [], isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/Couldn’t load the audit log/i);
+		canvas.getByText(/Couldn’t load the audit log/iu);
 	},
 };
 
 export const LoadMore: Story = {
 	args: { hasNextPage: true, isFetchingNextPage: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /Load more/i })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /Load more/iu })).toBeDisabled();
 	},
 };
 
@@ -199,12 +201,14 @@ export const MemberChangeIsNotBadged: Story = {
 export const ElevatedRowDetail: Story = {
 	args: { entries: [elevatedUpdate] },
 	play: async ({ canvas }) => {
-		const [details] = canvas.getAllByRole("button", { name: /View details/i });
-		if (!details) throw new Error("The table rendered no rows to open");
+		const [details] = canvas.getAllByRole("button", { name: /View details/iu });
+		if (!details) {
+			throw new Error("The table rendered no rows to open");
+		}
 		await userEvent.click(details);
 		const dialog = within(await screen.findByRole("dialog"));
 		dialog.getByText("Access");
-		await expectSettledVisible(dialog.getByText(/not a member of/i));
+		await expectSettledVisible(dialog.getByText(/not a member of/iu));
 	},
 };
 
@@ -213,7 +217,9 @@ export const ColumnCountMatchesHeader: Story = {
 	play: async ({ canvas }) => {
 		const headers = canvas.getAllByRole("columnheader");
 		const [, firstBodyRow] = canvas.getAllByRole("row");
-		if (!firstBodyRow) throw new Error("The table rendered no body rows");
+		if (!firstBodyRow) {
+			throw new Error("The table rendered no body rows");
+		}
 		const cells = within(firstBodyRow).getAllByRole("cell");
 		await expect(headers).toHaveLength(cells.length);
 	},

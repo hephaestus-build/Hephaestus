@@ -77,10 +77,10 @@ export const Conversation: Story = {
 	},
 };
 
-const ALL_WORK_TYPES: Array<{
+const ALL_WORK_TYPES: {
 	workType: PracticeWorkTypeDefinitionOptions;
 	selected: readonly string[];
-}> = [
+}[] = [
 	{ workType: mockPullRequestWorkType, selected: mockPullRequestBinding.signals },
 	{ workType: mockIssueWorkType, selected: mockIssueBinding.signals },
 	{ workType: mockDocumentWorkType, selected: mockDocumentBinding.signals },
@@ -108,7 +108,7 @@ export const EveryWorkType: Story = {
 export const TheHandAskedReviewIsNotOnTheStrip: Story = {
 	play: async ({ canvas }) => {
 		const strip = within(canvas.getByRole("group", { name: "Reviews when" }));
-		await expect(strip.queryByRole("checkbox", { name: /by hand/ })).toBeNull();
+		await expect(strip.queryByRole("checkbox", { name: /by hand/u })).toBeNull();
 		await expect(strip.getAllByRole("checkbox")).toHaveLength(6);
 	},
 };
@@ -122,12 +122,12 @@ export const AMomentTheWorkTypeNoLongerOffers: Story = {
 		selected: [...mockPullRequestBinding.signals, "scm.pull_request.manual_review"],
 	},
 	play: async ({ args, canvas, userEvent }) => {
-		const stray = canvas.getByRole("checkbox", { name: /^Review requested by hand/ });
+		const stray = canvas.getByRole("checkbox", { name: /^Review requested by hand/u });
 		await expect(stray).toBeChecked();
 
 		await userEvent.click(stray);
 		await expect(args.onToggle).toHaveBeenCalledWith("scm.pull_request.manual_review", false);
-		await expect(canvas.queryByRole("checkbox", { name: /^Review requested by hand/ })).toBeNull();
+		await expect(canvas.queryByRole("checkbox", { name: /^Review requested by hand/u })).toBeNull();
 	},
 };
 
@@ -148,16 +148,16 @@ export const Disabled: Story = {
  */
 export const TogglingMoments: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		const merged = canvas.getByRole("checkbox", { name: /^Merged/ });
+		const merged = canvas.getByRole("checkbox", { name: /^Merged/u });
 		await expect(merged).not.toBeChecked();
 
 		await userEvent.click(canvas.getByText("Merged"));
-		await expect(canvas.getByRole("checkbox", { name: /^Merged/ })).toBeChecked();
+		await expect(canvas.getByRole("checkbox", { name: /^Merged/u })).toBeChecked();
 		await expect(args.onToggle).toHaveBeenCalledWith("scm.pull_request.merged", true);
 
-		const drafts = canvas.getByRole("switch", { name: /^Include drafts/ });
+		const drafts = canvas.getByRole("switch", { name: /^Include drafts/u });
 		await userEvent.click(drafts);
-		await expect(canvas.getByRole("switch", { name: /^Include drafts/ })).toBeChecked();
+		await expect(canvas.getByRole("switch", { name: /^Include drafts/u })).toBeChecked();
 		await expect(args.onIncludeDraftsChange).toHaveBeenCalledWith(true);
 	},
 };
@@ -170,7 +170,7 @@ export const DraftsSwitchIsNamedByItsLabelAlone: Story = {
 	play: async ({ canvas }) => {
 		// Exact string: a prefix match would pass against a name the description had run on to.
 		const drafts = canvas.getByRole("switch", { name: "Include drafts" });
-		const hint = canvas.getByText(/Off by default/);
+		const hint = canvas.getByText(/Off by default/u);
 		await expect(drafts).toHaveAccessibleName("Include drafts");
 		await expect(drafts).toHaveAccessibleDescription(
 			"Off by default: read the work once it is offered as finished.",

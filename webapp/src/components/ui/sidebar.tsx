@@ -27,7 +27,7 @@ const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
-type SidebarContextProps = {
+interface SidebarContextProps {
 	state: "expanded" | "collapsed";
 	open: boolean;
 	setOpen: (open: boolean) => void;
@@ -35,7 +35,7 @@ type SidebarContextProps = {
 	setOpenMobile: (open: boolean) => void;
 	isMobile: boolean;
 	toggleSidebar: () => void;
-};
+}
 
 const SidebarContext = createContext<SidebarContextProps | null>(null);
 
@@ -79,9 +79,8 @@ function SidebarProvider({
 		document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
 	};
 
-	const toggleSidebar = () => {
-		return isMobile ? setOpenMobile((wasOpen) => !wasOpen) : setOpen((wasOpen) => !wasOpen);
-	};
+	const toggleSidebar = () =>
+		isMobile ? setOpenMobile((wasOpen) => !wasOpen) : setOpen((wasOpen) => !wasOpen);
 
 	// Keeps the effect below off `toggleSidebar`, so the `window` listener is bound once rather than
 	// re-subscribed on every open and close.
@@ -264,6 +263,8 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
 
 	return (
 		<button
+			// ⚠️ Diverges from the shadcn registry: `type="button"`, so a rail inside a form does not submit it.
+			type="button"
 			data-sidebar="rail"
 			data-slot="sidebar-rail"
 			aria-label="Toggle Sidebar"
@@ -586,9 +587,7 @@ function SidebarMenuSkeleton({
 	showIcon?: boolean;
 }) {
 	// Random width between 50 to 90%.
-	const [width] = useState(() => {
-		return `${Math.floor(Math.random() * 40) + 50}%`;
-	});
+	const [width] = useState(() => `${Math.floor(Math.random() * 40) + 50}%`);
 
 	return (
 		<div

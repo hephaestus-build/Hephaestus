@@ -178,7 +178,7 @@ export const FailedToLoad: Story = {
 		const retry = await screen.findByRole("button", { name: "Retry" });
 		await expectSettledVisible(retry);
 		await userEvent.click(retry);
-		const state = args.state;
+		const { state } = args;
 		await expect(state.status === "error" && state.onRetry).toHaveBeenCalledOnce();
 	},
 };

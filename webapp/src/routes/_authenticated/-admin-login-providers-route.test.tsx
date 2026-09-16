@@ -96,9 +96,8 @@ describe("instance login providers route", () => {
 		);
 
 		await screen.findByRole("dialog", { name: "Confirm access" });
-		expect((await screen.findByRole("alert")).textContent).toContain(
-			"Could not load sign-in options",
-		);
+		const alert = await screen.findByRole("alert");
+		expect(alert.textContent).toContain("Could not load sign-in options");
 
 		server.use(
 			http.get("*/identity-providers", () =>
@@ -108,7 +107,9 @@ describe("instance login providers route", () => {
 			),
 		);
 		fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-		expect(await screen.findByRole("button", { name: "Continue with Team GitLab" })).not.toBeNull();
+		await expect(
+			screen.findByRole("button", { name: "Continue with Team GitLab" }),
+		).resolves.not.toBeNull();
 
 		fireEvent.click(screen.getByRole("button", { name: "Close" }));
 		await waitFor(() =>

@@ -39,7 +39,9 @@ export function AutonomyLadder({
 			value={value}
 			disabled={disabled}
 			onValueChange={(next) => {
-				if (next !== value) onChange(next);
+				if (next !== value) {
+					onChange(next);
+				}
 			}}
 			className={cn(
 				"grid min-w-0 grid-cols-1 gap-px overflow-hidden rounded-lg border bg-border",

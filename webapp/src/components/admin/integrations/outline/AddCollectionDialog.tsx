@@ -68,7 +68,7 @@ export function AddCollectionDialog({
 	const {
 		data: candidates,
 		isLoading,
-		error,
+		error: candidatesError,
 		refetch,
 	} = useQuery({
 		...listOutlineCollectionCandidatesOptions({ path: { workspaceSlug } }),
@@ -95,7 +95,9 @@ export function AddCollectionDialog({
 	}
 
 	async function submit() {
-		if (!canSubmit) return;
+		if (!canSubmit) {
+			return;
+		}
 		setSubmitting(true);
 		setSubmitError(null);
 		setRegistered(0);
@@ -107,12 +109,11 @@ export function AddCollectionDialog({
 				setRegistered((done) => done + 1);
 			}
 			handleOpenChange(false);
-		} catch (e) {
+		} catch (error) {
 			setSelectedIds(remaining);
-			setSubmitError(problemDetailOf(e));
-		} finally {
-			setSubmitting(false);
+			setSubmitError(problemDetailOf(error));
 		}
+		setSubmitting(false);
 	}
 
 	const total = selectedIds.length;
@@ -145,9 +146,9 @@ export function AddCollectionDialog({
 							<Skeleton className="h-9 w-full" />
 							<Skeleton className="h-9 w-full" />
 						</div>
-					) : error ? (
+					) : candidatesError ? (
 						<QueryErrorAlert
-							error={error}
+							error={candidatesError}
 							title="Could not reach Outline"
 							onRetry={() => {
 								void refetch();

@@ -33,11 +33,7 @@ export function FeatureFlagDevToolsPanel({ flags, isLoading }: FeatureFlagDevToo
 					<div className="max-h-80 overflow-y-auto p-2">
 						{isLoading ? (
 							<div className="px-2 py-3 text-center text-xs text-muted-foreground">Loading...</div>
-						) : !flags ? (
-							<div className="px-2 py-3 text-center text-xs text-muted-foreground">
-								Not authenticated
-							</div>
-						) : (
+						) : flags ? (
 							<div className="space-y-1">
 								{Object.entries(flags)
 									.sort(([a], [b]) => a.localeCompare(b))
@@ -58,6 +54,10 @@ export function FeatureFlagDevToolsPanel({ flags, isLoading }: FeatureFlagDevToo
 											</span>
 										</div>
 									))}
+							</div>
+						) : (
+							<div className="px-2 py-3 text-center text-xs text-muted-foreground">
+								Not authenticated
 							</div>
 						)}
 					</div>
@@ -100,7 +100,9 @@ export function FeatureFlagDevToolsPanel({ flags, isLoading }: FeatureFlagDevToo
 export function FeatureFlagDevTools() {
 	const { flags, isLoading } = useFeatureFlags();
 
-	if (!import.meta.env.DEV) return null;
+	if (!import.meta.env.DEV) {
+		return null;
+	}
 
 	return <FeatureFlagDevToolsPanel flags={flags} isLoading={isLoading} />;
 }

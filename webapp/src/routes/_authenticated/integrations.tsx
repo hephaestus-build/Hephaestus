@@ -6,10 +6,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-type Search = {
+interface Search {
 	status?: "success" | "error";
 	reason?: string;
-};
+}
 
 export const Route = createFileRoute("/_authenticated/integrations")({
 	component: IntegrationsCallback,
@@ -18,13 +18,19 @@ export const Route = createFileRoute("/_authenticated/integrations")({
 		reason: typeof search.reason === "string" ? search.reason : undefined,
 	}),
 	beforeLoad: ({ search }) => {
-		if (typeof window === "undefined") return;
+		if (typeof window === "undefined") {
+			return;
+		}
 		const slug = window.sessionStorage.getItem("slack-connect-return-slug");
-		if (!slug) return;
+		if (!slug) {
+			return;
+		}
 		window.sessionStorage.removeItem("slack-connect-return-slug");
 		if (search.status) {
 			window.sessionStorage.setItem("slack-connect-result", search.status);
-			if (search.reason) window.sessionStorage.setItem("slack-connect-reason", search.reason);
+			if (search.reason) {
+				window.sessionStorage.setItem("slack-connect-reason", search.reason);
+			}
 		}
 		throw redirect({
 			to: "/w/$workspaceSlug/admin/integrations/slack",
@@ -38,11 +44,15 @@ function IntegrationsCallback() {
 	const toasted = useRef(false);
 
 	useEffect(() => {
-		if (toasted.current) return;
+		if (toasted.current) {
+			return;
+		}
 		toasted.current = true;
-		if (status === "success") toast.success("Integration connected");
-		else if (status === "error")
+		if (status === "success") {
+			toast.success("Integration connected");
+		} else if (status === "error") {
 			toast.error("Integration connection failed", { description: reason });
+		}
 	}, [status, reason]);
 
 	const failed = status === "error";

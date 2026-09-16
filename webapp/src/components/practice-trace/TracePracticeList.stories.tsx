@@ -45,7 +45,9 @@ export const SameSignalTwice: Story = {
 	play: async ({ canvas }) => {
 		const jumpFrom = (practiceName: string) => {
 			const row = canvas.getByText(practiceName).closest('[role="listitem"]');
-			if (!(row instanceof HTMLElement)) throw new Error(`No row for ${practiceName}`);
+			if (!(row instanceof HTMLElement)) {
+				throw new Error(`No row for ${practiceName}`);
+			}
 			return within(row).getByRole("link", { name: "Jump to: New commits pushed" });
 		};
 
@@ -71,18 +73,24 @@ export const OccurrenceMissingFromTheTimeline: Story = {
 	},
 	play: async ({ canvas }) => {
 		const row = canvas.getByText("Small, reviewable changes").closest('[role="listitem"]');
-		if (!(row instanceof HTMLElement)) throw new Error("No row for the skipped practice");
+		if (!(row instanceof HTMLElement)) {
+			throw new Error("No row for the skipped practice");
+		}
 
 		// Scoped to "Rests on": the same signal name also appears in the row's "Starts a review on"
 		// list, and a row-wide query cannot say which of the two is the fallback under test.
 		const restsOn = within(row).getByText("Rests on").closest("div");
-		if (!(restsOn instanceof HTMLElement)) throw new Error("No 'Rests on' entry on the row");
+		if (!(restsOn instanceof HTMLElement)) {
+			throw new Error("No 'Rests on' entry on the row");
+		}
 		await expect(within(restsOn).getByText("scm.pull_request.synchronized")).toBeVisible();
-		await expect(within(row).queryByRole("link", { name: /^Jump to:/ })).toBeNull();
+		await expect(within(row).queryByRole("link", { name: /^Jump to:/u })).toBeNull();
 
 		// The rows whose occurrence does resolve are untouched, so this is a fallback and not a mode.
 		const resolved = canvas.getByText("Drafts are not left open").closest('[role="listitem"]');
-		if (!(resolved instanceof HTMLElement)) throw new Error("No row for the lapsed practice");
+		if (!(resolved instanceof HTMLElement)) {
+			throw new Error("No row for the lapsed practice");
+		}
 		await expect(
 			within(resolved).getByRole("link", { name: "Jump to: New commits pushed" }),
 		).toBeVisible();
@@ -94,6 +102,6 @@ export const NoPracticeCoversThisKind: Story = {
 	args: { practices: [], artifactKind: "scm.issue" },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No practice covers this kind of work")).toBeVisible();
-		await expect(canvas.getByText(/runs no practice against issue/)).toBeVisible();
+		await expect(canvas.getByText(/runs no practice against issue/u)).toBeVisible();
 	},
 };

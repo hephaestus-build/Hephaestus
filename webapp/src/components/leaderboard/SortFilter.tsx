@@ -9,7 +9,7 @@ import {
 
 export type LeaderboardSortType = "SCORE" | "LEAGUE_POINTS";
 
-const SORT_OPTIONS: Array<{ value: LeaderboardSortType; label: string }> = [
+const SORT_OPTIONS: { value: LeaderboardSortType; label: string }[] = [
 	{ value: "SCORE", label: "Score" },
 	{ value: "LEAGUE_POINTS", label: "League Points" },
 ];

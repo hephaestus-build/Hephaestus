@@ -23,8 +23,12 @@ export interface DateRangeFacetProps {
 }
 
 function rangeLabel(range: DateRange): string | undefined {
-	if (!range.from) return undefined;
-	if (!range.to) return `From ${format(range.from, "MMM d, yyyy")}`;
+	if (!range.from) {
+		return undefined;
+	}
+	if (!range.to) {
+		return `From ${format(range.from, "MMM d, yyyy")}`;
+	}
 	return `${format(range.from, "MMM d")} – ${format(range.to, "MMM d, yyyy")}`;
 }
 

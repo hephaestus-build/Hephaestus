@@ -26,7 +26,9 @@ export function ConfigureWorkspaceStep() {
 			displayName: overrides.displayName ?? state.displayName,
 			workspaceSlug: overrides.workspaceSlug ?? state.workspaceSlug,
 		});
-		if (!result.success) {
+		if (result.success) {
+			setFieldErrors({});
+		} else {
 			const errors: Partial<Record<keyof WorkspaceDetailsData, string>> = {};
 			for (const issue of result.error.issues) {
 				const field = DETAIL_FIELDS.find((candidate) => candidate === issue.path[0]);
@@ -35,14 +37,12 @@ export function ConfigureWorkspaceStep() {
 				}
 			}
 			setFieldErrors(errors);
-		} else {
-			setFieldErrors({});
 		}
 	};
 
 	const handleDisplayNameChange = (value: string) => {
 		dispatch({ type: "SET_DISPLAY_NAME", value });
-		const slug = !state.slugManuallyEdited ? generateSlug(value) : state.workspaceSlug;
+		const slug = state.slugManuallyEdited ? state.workspaceSlug : generateSlug(value);
 		if (!state.slugManuallyEdited) {
 			dispatch({ type: "SET_SLUG", value: slug, manual: false });
 		}

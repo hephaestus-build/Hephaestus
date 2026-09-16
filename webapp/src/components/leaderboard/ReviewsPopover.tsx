@@ -52,9 +52,8 @@ export function ReviewsPopover({
 			toast.success("Review links copied");
 		} catch {
 			toast.error("Could not copy review links");
-		} finally {
-			setIsCopying(false);
 		}
+		setIsCopying(false);
 	};
 
 	return (
@@ -67,9 +66,9 @@ export function ReviewsPopover({
 						disabled={!hasReviews}
 						aria-label={`Show ${reviewedPullRequests.length} reviewed ${(reviewedPullRequests.length === 1 ? terms.pullRequest : terms.pullRequests).toLowerCase()}`}
 						className={cn(
-							!highlight
-								? "text-provider-muted-foreground"
-								: "border-primary bg-accent hover:bg-foreground hover:text-background",
+							highlight
+								? "border-primary bg-accent hover:bg-foreground hover:text-background"
+								: "text-provider-muted-foreground",
 						)}
 						onClick={(e) => e.stopPropagation()}
 					>

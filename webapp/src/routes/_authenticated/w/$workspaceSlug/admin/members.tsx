@@ -86,7 +86,9 @@ function AdminMembersContainer() {
 	});
 
 	const handleToggleHidden = (userId: number, hidden: boolean) => {
-		if (!workspaceSlug) return;
+		if (!workspaceSlug) {
+			return;
+		}
 		toggleHidden.mutate({
 			path: { workspaceSlug, userId },
 			query: { hidden },

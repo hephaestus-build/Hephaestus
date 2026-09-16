@@ -105,7 +105,9 @@ function TableRow({
 }
 
 /** Tabular figures, so a column lines up and a changing value does not shift its neighbours; alignment stays the caller's layout. */
-type NumericCell = { numeric?: boolean };
+interface NumericCell {
+	numeric?: boolean;
+}
 
 function TableHead({ className, numeric, ...props }: React.ComponentProps<"th"> & NumericCell) {
 	return (

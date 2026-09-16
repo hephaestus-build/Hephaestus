@@ -73,15 +73,17 @@ class FakeEventSource extends EventTarget {
 }
 
 function wrapper(queryClient: QueryClient) {
-	return ({ children }: { children: ReactNode }) => (
-		<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-	);
+	return function QueryWrapper({ children }: { children: ReactNode }) {
+		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+	};
 }
 
 /** Latest source the hook opened — reconnects push a new instance. */
 function latestSource(): FakeEventSource {
 	const source = FakeEventSource.instances.at(-1);
-	if (!source) throw new Error("Expected the hook to have opened a stream");
+	if (!source) {
+		throw new Error("Expected the hook to have opened a stream");
+	}
 	return source;
 }
 
@@ -93,7 +95,7 @@ function latestSource(): FakeEventSource {
  */
 function runReconnectBackoff() {
 	act(() => {
-		vi.advanceTimersByTime(5_000);
+		vi.advanceTimersByTime(5000);
 	});
 }
 
@@ -159,7 +161,9 @@ describe("useSyncEvents", () => {
 		});
 		// Not an integration query: a workspace-wide predicate would sweep this in; the scoped predicate must not.
 		const unrelated = getUserProfileQueryKey({ path: { workspaceSlug: WORKSPACE, login: "ada" } });
-		for (const key of [included, otherWorkspace, unrelated]) queryClient.setQueryData(key, []);
+		for (const key of [included, otherWorkspace, unrelated]) {
+			queryClient.setQueryData(key, []);
+		}
 
 		const find = (key: readonly unknown[]) => {
 			const query = queryClient.getQueryCache().find({ queryKey: key, exact: true });
@@ -303,7 +307,9 @@ describe("useSyncEvents", () => {
 		renderHook(() => useSyncEvents(WORKSPACE), { wrapper: wrapper(queryClient) });
 
 		act(() => {
-			for (let i = 0; i < 5; i += 1) latestSource().emit("job");
+			for (let i = 0; i < 5; i += 1) {
+				latestSource().emit("job");
+			}
 		});
 		flushHintDebounce();
 

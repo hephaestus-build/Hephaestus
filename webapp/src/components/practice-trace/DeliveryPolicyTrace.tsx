@@ -31,7 +31,9 @@ export interface DeliveryPolicyTraceProps {
 }
 
 export function DeliveryPolicyTrace({ evaluations }: DeliveryPolicyTraceProps) {
-	if (evaluations.length === 0) return null;
+	if (evaluations.length === 0) {
+		return null;
+	}
 	const denied = evaluations.some((evaluation) => !evaluation.allowed);
 
 	return (

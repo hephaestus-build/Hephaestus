@@ -20,7 +20,9 @@ export interface LeaderboardOverviewProps {
 
 /** Coarse time left until the leaderboard closes, e.g. "2d 3h", "4h 12m", "58s". */
 function formatTimeRemaining(leaderboardEnd: string | undefined, now: Date): string {
-	if (!leaderboardEnd) return "N/A";
+	if (!leaderboardEnd) {
+		return "N/A";
+	}
 
 	const endDate = new Date(leaderboardEnd);
 
@@ -57,7 +59,7 @@ export function LeaderboardOverview({
 	leaguesEnabled = true,
 }: LeaderboardOverviewProps) {
 	const [leagueInfoOpen, setLeagueInfoOpen] = useState(false);
-	const user = leaderboardEntry.user;
+	const { user } = leaderboardEntry;
 
 	// The per-second interval runs only while the label can still change; the render that first sees
 	// the deadline pass clears it.
@@ -65,7 +67,9 @@ export function LeaderboardOverview({
 	const counting = leaderboardEnd !== undefined && !isPast(new Date(leaderboardEnd));
 
 	useEffect(() => {
-		if (!counting) return;
+		if (!counting) {
+			return;
+		}
 		const timer = setInterval(() => setNow(new Date()), 1000);
 		return () => clearInterval(timer);
 	}, [counting]);

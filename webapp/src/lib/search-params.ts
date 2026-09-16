@@ -20,7 +20,9 @@ export function narrowToEnum<T extends string>(
 	values: string[] | undefined,
 	allowed: readonly T[],
 ): T[] | undefined {
-	if (!values?.length) return undefined;
+	if (!values?.length) {
+		return undefined;
+	}
 	const kept = values.filter((value): value is T => (allowed as readonly string[]).includes(value));
 	return kept.length > 0 ? kept : undefined;
 }

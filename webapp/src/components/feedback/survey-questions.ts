@@ -32,7 +32,9 @@ export const EMPTY_SURVEY_RESPONSE_DRAFT: SurveyResponseDraft = { answers: {} };
 export function surveyEstimate(questions: readonly Pick<Question, "type">[]): string {
 	const seconds = questions.reduce((sum, q) => sum + (q.type === "TEXT" ? 45 : 15), 0);
 	const count = `${questions.length} ${questions.length === 1 ? "question" : "questions"}`;
-	if (seconds < 60) return `${count} · under a minute`;
+	if (seconds < 60) {
+		return `${count} · under a minute`;
+	}
 	const minutes = Math.ceil(seconds / 60);
 	return `${count} · about ${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
 }
@@ -45,7 +47,9 @@ export function surveyEstimate(questions: readonly Pick<Question, "type">[]): st
 export function surveyShortcuts(
 	questions: readonly Pick<Question, "type">[],
 ): "letters" | "numbers" | undefined {
-	if (questions.some((q) => q.type === "NPS")) return undefined;
+	if (questions.some((q) => q.type === "NPS")) {
+		return undefined;
+	}
 	return questions.some((q) => q.type === "RATING") ? "numbers" : "letters";
 }
 
@@ -65,17 +69,26 @@ export function answersFromFormData(questions: readonly Question[], data: FormDa
 			.filter((entry): entry is string => typeof entry === "string");
 		// A textarea submits CRLF line breaks; the stored answer keeps the LF the member typed.
 		const trimmed = values.map((entry) => entry.replaceAll("\r\n", "\n").trim()).filter(Boolean);
-		if (trimmed.length === 0) continue;
-		if (question.type === "TEXT") answers.push({ questionId: question.id, text: trimmed[0] });
-		else if (question.type === "RATING" || question.type === "NPS")
+		if (trimmed.length === 0) {
+			continue;
+		}
+		if (question.type === "TEXT") {
+			answers.push({ questionId: question.id, text: trimmed[0] });
+		} else if (question.type === "RATING" || question.type === "NPS") {
 			answers.push({ questionId: question.id, rating: Number(trimmed[0]) });
-		else answers.push({ questionId: question.id, choices: trimmed });
+		} else {
+			answers.push({ questionId: question.id, choices: trimmed });
+		}
 	}
 	return answers;
 }
 
 export function formatAnswer(answer: Answer): string {
-	if (answer.text !== undefined) return answer.text;
-	if (answer.rating !== undefined) return String(answer.rating);
+	if (answer.text !== undefined) {
+		return answer.text;
+	}
+	if (answer.rating !== undefined) {
+		return String(answer.rating);
+	}
 	return (answer.choices ?? []).join(", ");
 }

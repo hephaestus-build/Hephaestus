@@ -43,7 +43,9 @@ export function formatMonthLabel(month: string): string {
 /** A day bucket as `Jul 22`. An unparseable day renders a dash rather than `Invalid Date`. */
 export function formatUsageDay(value: DateLike): string {
 	const date = asDate(value);
-	if (!date) return "–";
+	if (!date) {
+		return "–";
+	}
 	return date.toLocaleDateString(undefined, {
 		month: "short",
 		day: "numeric",

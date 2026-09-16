@@ -63,46 +63,48 @@ export function ReviewRunsPage({
 				onReset={reset}
 				total={reviews?.page?.totalElements}
 			/>
-			{error != null ? (
-				<QueryErrorAlert error={error} title="Couldn't load reviews" onRetry={onRetry} />
-			) : isLoading ? (
-				<ReviewResultsSkeleton label="Loading reviews" rows={REVIEW_PAGE_SIZE} />
-			) : rows.length === 0 ? (
-				<Empty variant="outlined">
-					<EmptyHeader>
-						<EmptyMedia variant="icon">
-							<WorkflowIcon />
-						</EmptyMedia>
-						<EmptyTitle>No reviews found</EmptyTitle>
-						<EmptyDescription>
-							{/* A range can empty this list too, so "never triggered" is not the only reason and
+			{error == null ? (
+				isLoading ? (
+					<ReviewResultsSkeleton label="Loading reviews" rows={REVIEW_PAGE_SIZE} />
+				) : rows.length === 0 ? (
+					<Empty variant="outlined">
+						<EmptyHeader>
+							<EmptyMedia variant="icon">
+								<WorkflowIcon />
+							</EmptyMedia>
+							<EmptyTitle>No reviews found</EmptyTitle>
+							<EmptyDescription>
+								{/* A range can empty this list too, so "never triggered" is not the only reason and
 							    must not be said to a reader who has just picked a window. */}
-							{!hasFilter
-								? "Reviews appear when an enabled practice is triggered or a contributor requests one."
-								: search.status && !search.from && !search.to
-									? `No review is ${REVIEW_STATUS_DEFS[search.status].label.toLowerCase()}. Other reviews may exist under another status.`
-									: "No review matches these filters. Other reviews may exist outside them."}
-						</EmptyDescription>
-					</EmptyHeader>
-					{hasFilter && (
-						<EmptyContent>
-							<Button variant="outline" size="sm" onClick={reset}>
-								Clear all filters
-							</Button>
-						</EmptyContent>
-					)}
-				</Empty>
+								{hasFilter
+									? search.status && !search.from && !search.to
+										? `No review is ${REVIEW_STATUS_DEFS[search.status].label.toLowerCase()}. Other reviews may exist under another status.`
+										: "No review matches these filters. Other reviews may exist outside them."
+									: "Reviews appear when an enabled practice is triggered or a contributor requests one."}
+							</EmptyDescription>
+						</EmptyHeader>
+						{hasFilter && (
+							<EmptyContent>
+								<Button variant="outline" size="sm" onClick={reset}>
+									Clear all filters
+								</Button>
+							</EmptyContent>
+						)}
+					</Empty>
+				) : (
+					<ReviewRowList label="Practice reviews, newest first">
+						{rows.map((review) => (
+							<ReviewRunRow
+								key={review.id}
+								workspaceSlug={workspaceSlug}
+								review={review}
+								search={search}
+							/>
+						))}
+					</ReviewRowList>
+				)
 			) : (
-				<ReviewRowList label="Practice reviews, newest first">
-					{rows.map((review) => (
-						<ReviewRunRow
-							key={review.id}
-							workspaceSlug={workspaceSlug}
-							review={review}
-							search={search}
-						/>
-					))}
-				</ReviewRowList>
+				<QueryErrorAlert error={error} title="Couldn't load reviews" onRetry={onRetry} />
 			)}
 			<TablePagination
 				page={reviews?.page?.number ?? search.page ?? 0}

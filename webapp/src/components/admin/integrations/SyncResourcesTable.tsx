@@ -110,8 +110,10 @@ function untrackedLabelsOf(resource: SyncResourceState): string[] {
 
 function joinLabels(labels: string[]): string {
 	const lower = labels.map((label) => label.toLowerCase());
-	if (lower.length <= 1) return lower[0] ?? "";
-	return `${lower.slice(0, -1).join(", ")} and ${lower[lower.length - 1]}`;
+	if (lower.length <= 1) {
+		return lower[0] ?? "";
+	}
+	return `${lower.slice(0, -1).join(", ")} and ${lower.at(-1)}`;
 }
 
 /**
@@ -125,7 +127,9 @@ function hasWatermarkDivergence(
 	resource: SyncResourceState,
 	syncIntervalSeconds: number | undefined,
 ): boolean {
-	if (syncIntervalSeconds == null || syncIntervalSeconds <= 0) return false;
+	if (syncIntervalSeconds == null || syncIntervalSeconds <= 0) {
+		return false;
+	}
 	const tones = watermarksOf(resource).map((w) => freshnessTone(w.date, syncIntervalSeconds));
 	const healthy = tones.some((tone) => tone === "fresh");
 	const atRisk = tones.some((tone) => tone === "stale" || tone === "veryStale");
@@ -145,7 +149,9 @@ function isAttention(
 	resource: SyncResourceState,
 	syncIntervalSeconds: number | undefined,
 ): boolean {
-	if (isErrorState(resource)) return true;
+	if (isErrorState(resource)) {
+		return true;
+	}
 	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds);
 	return tone === "stale" || tone === "veryStale" || tone === "never";
 }
@@ -155,12 +161,22 @@ function isAttention(
  * error → veryStale → stale → never → backfilling → fresh/unknown. A user-clicked column sort overrides.
  */
 function triageRank(resource: SyncResourceState, syncIntervalSeconds: number | undefined): number {
-	if (isErrorState(resource)) return 0;
+	if (isErrorState(resource)) {
+		return 0;
+	}
 	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds);
-	if (tone === "veryStale") return 1;
-	if (tone === "stale") return 2;
-	if (tone === "never") return 3;
-	if (isBackfilling(resource)) return 4;
+	if (tone === "veryStale") {
+		return 1;
+	}
+	if (tone === "stale") {
+		return 2;
+	}
+	if (tone === "never") {
+		return 3;
+	}
+	if (isBackfilling(resource)) {
+		return 4;
+	}
 	return 5;
 }
 
@@ -185,7 +201,7 @@ function compareResources(
 ): number {
 	if (!sortState) {
 		const rankDelta = triageRank(a, syncIntervalSeconds) - triageRank(b, syncIntervalSeconds);
-		return rankDelta !== 0 ? rankDelta : a.name.localeCompare(b.name);
+		return rankDelta === 0 ? a.name.localeCompare(b.name) : rankDelta;
 	}
 	let delta = 0;
 	if (sortState.key === "name") {
@@ -199,7 +215,9 @@ function compareResources(
 		const column = columns.find((c) => c.key === sortState.key);
 		delta = column ? columnTotal(a, column) - columnTotal(b, column) : 0;
 	}
-	if (delta === 0) delta = a.name.localeCompare(b.name);
+	if (delta === 0) {
+		delta = a.name.localeCompare(b.name);
+	}
 	return sortState.dir === "asc" ? delta : -delta;
 }
 
@@ -398,7 +416,9 @@ function StatusDot({ state }: { state: string }) {
 			: normalized === "PENDING"
 				? "bg-muted-foreground"
 				: undefined;
-	if (!tone) return null;
+	if (!tone) {
+		return null;
+	}
 	return (
 		<>
 			<span className={cn("size-1.5 shrink-0 rounded-full", tone)} aria-hidden />
@@ -745,8 +765,12 @@ export function SyncResourcesTable({
 
 	const onSort = (key: SortKey) => {
 		setSortState((prev) => {
-			if (!prev || prev.key !== key) return { key, dir: defaultDir(key) };
-			if (prev.dir === defaultDir(key)) return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+			if (!prev || prev.key !== key) {
+				return { key, dir: defaultDir(key) };
+			}
+			if (prev.dir === defaultDir(key)) {
+				return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+			}
 			return null;
 		});
 	};
@@ -771,7 +795,7 @@ export function SyncResourcesTable({
 					<ToggleGroup
 						value={[facet]}
 						onValueChange={(value) => {
-							const next = value.length > 0 ? value[value.length - 1] : "all";
+							const next = value.length > 0 ? value.at(-1) : "all";
 							setFacet(next === "attention" || next === "fresh" ? next : "all");
 						}}
 						variant="outline"

@@ -34,7 +34,7 @@ client.setConfig({
 	manifestLink.rel = "manifest";
 	manifestLink.href =
 		window.location.hostname === "localhost" ? "/manifest-dev.json" : "/manifest.json";
-	document.head.appendChild(manifestLink);
+	document.head.append(manifestLink);
 }
 
 client.interceptors.request.use((request) =>
@@ -98,7 +98,7 @@ function Root() {
 	);
 }
 
-const rootElement = document.getElementById("app");
+const rootElement = document.querySelector("#app");
 if (rootElement && !rootElement.innerHTML) {
 	const root = ReactDOM.createRoot(rootElement, {
 		onUncaughtError: Sentry.reactErrorHandler((error, errorInfo) => {

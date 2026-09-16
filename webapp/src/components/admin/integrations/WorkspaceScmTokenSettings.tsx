@@ -25,8 +25,12 @@ export function WorkspaceScmTokenSettings({
 	const id = useId();
 	const [token, setToken] = useState("");
 	const handleSave = async () => {
-		if (!token.trim() || isSaving) return;
-		if (await onSave(token.trim())) setToken("");
+		if (!token.trim() || isSaving) {
+			return;
+		}
+		if (await onSave(token.trim())) {
+			setToken("");
+		}
 	};
 
 	return (

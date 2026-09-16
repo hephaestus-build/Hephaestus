@@ -42,9 +42,9 @@ type Story = StoryObj<typeof meta>;
 export const Open: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("alertdialog"));
-		dialog.getByText(/all 42 mirrored documents/i);
+		dialog.getByText(/all 42 mirrored documents/iu);
 
-		await userEvent.click(dialog.getByRole("button", { name: /remove & erase/i }));
+		await userEvent.click(dialog.getByRole("button", { name: /remove & erase/iu }));
 		await expect(args.onConfirm).toHaveBeenCalledWith({ collectionId: collection.collectionId });
 	},
 };
@@ -54,7 +54,7 @@ export const SingleDoc: Story = {
 	args: { collection: { ...collection, documentCount: 1 } },
 	play: async () => {
 		const dialog = within(await screen.findByRole("alertdialog"));
-		dialog.getByText(/its 1 mirrored document/i);
+		dialog.getByText(/its 1 mirrored document/iu);
 	},
 };
 
@@ -67,7 +67,7 @@ export const Rejected: Story = {
 	},
 	play: async () => {
 		const dialog = within(await screen.findByRole("alertdialog"));
-		await userEvent.click(dialog.getByRole("button", { name: /remove & erase/i }));
+		await userEvent.click(dialog.getByRole("button", { name: /remove & erase/iu }));
 		await expectSettledVisible(await screen.findByRole("alertdialog"));
 	},
 };

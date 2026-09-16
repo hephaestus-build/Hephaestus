@@ -79,11 +79,18 @@ function displayValue(
 	if (field === "groupSlug" && typeof value === "string") {
 		return groupNames[value] ?? "Group no longer exists";
 	}
-	if ((field === "icon" || field === "color") && typeof value === "string")
+	if ((field === "icon" || field === "color") && typeof value === "string") {
 		return humanizeToken(value);
-	if (Array.isArray(value)) return value.join("\n");
-	if (typeof value === "string") return value;
-	if (typeof value === "number" || typeof value === "boolean") return String(value);
+	}
+	if (Array.isArray(value)) {
+		return value.join("\n");
+	}
+	if (typeof value === "string") {
+		return value;
+	}
+	if (typeof value === "number" || typeof value === "boolean") {
+		return String(value);
+	}
 	// A nested object has no readable `toString`; show its shape rather than "[object Object]".
 	return JSON.stringify(value);
 }

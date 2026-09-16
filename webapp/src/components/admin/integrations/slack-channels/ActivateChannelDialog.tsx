@@ -35,7 +35,9 @@ export function ActivateChannelDialog({
 	const label = channel ? (channel.channelName ?? channel.slackChannelId) : "";
 
 	async function confirm() {
-		if (!channel) return;
+		if (!channel) {
+			return;
+		}
 		setSubmitting(true);
 		try {
 			await onConfirm(channel);
@@ -43,9 +45,8 @@ export function ActivateChannelDialog({
 		} catch {
 			// Rejection = keep the dialog open. The mutation's onError already surfaced the
 			// toast, so swallow here rather than let it escape as an unhandled rejection.
-		} finally {
-			setSubmitting(false);
 		}
+		setSubmitting(false);
 	}
 
 	return (

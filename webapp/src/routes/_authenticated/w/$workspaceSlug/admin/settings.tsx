@@ -71,7 +71,9 @@ function AdminSettings() {
 			void queryClient.invalidateQueries({
 				predicate: ({ queryKey }) => {
 					const id = queryOperationId(queryKey);
-					if (id === undefined || !RESET_QUERY_FAMILY_IDS.has(id)) return false;
+					if (id === undefined || !RESET_QUERY_FAMILY_IDS.has(id)) {
+						return false;
+					}
 					const [key] = queryKey;
 					return isRecord(key) && isRecord(key.path) && key.path.workspaceSlug === resetSlug;
 				},
@@ -91,7 +93,9 @@ function AdminSettings() {
 	const workspaceData = workspaceQuery.data;
 
 	const handleToggleFeature = (feature: FeatureKey, enabled: boolean) => {
-		if (!workspaceSlug) return;
+		if (!workspaceSlug) {
+			return;
+		}
 		updateFeatures.mutate({
 			path: { workspaceSlug },
 			body: { [feature]: enabled },

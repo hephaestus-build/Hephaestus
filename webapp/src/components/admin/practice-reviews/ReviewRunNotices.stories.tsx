@@ -57,7 +57,7 @@ export const HeldForBudget: Story = {
 	args: { job: { ...completed, status: "QUEUED", holdReason: "BUDGET" } },
 	play: async ({ canvas }) => {
 		canvas.getByText("Over the AI budget");
-		canvas.getByText(/parked rather than failed/);
+		canvas.getByText(/parked rather than failed/u);
 	},
 };
 

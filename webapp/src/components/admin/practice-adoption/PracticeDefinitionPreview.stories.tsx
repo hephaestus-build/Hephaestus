@@ -42,11 +42,11 @@ export const Complete: Story = {
 	args: { definition },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("Pull request details")).not.toBeInTheDocument();
-		await expect(canvas.queryByText(/hasDescription/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/hasDescription/u)).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: "What it reads" }));
 		await expect(canvas.getByText("Pull request details")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "What it measures first" }));
-		await expect(canvas.getByText(/hasDescription/)).toBeVisible();
+		await expect(canvas.getByText(/hasDescription/u)).toBeVisible();
 	},
 };
 
@@ -99,7 +99,7 @@ export const CriteriaIsMarkdown: Story = {
 		await expect(canvas.getByRole("list")).toBeVisible();
 		await expect(canvas.getAllByRole("listitem")).toHaveLength(2);
 		await expect(canvas.getByText("end to end").tagName).toBe("EM");
-		await expect(canvas.queryByText(/^## /)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/^## /u)).not.toBeInTheDocument();
 	},
 };
 

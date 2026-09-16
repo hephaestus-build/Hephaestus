@@ -10,7 +10,9 @@ import { reviewRuns } from "./story-mock-data";
 
 function run(id: string): ReviewRunSummary {
 	const found = reviewRuns.find((review) => review.id === id);
-	if (!found) throw new Error(`No review ${id} in the fixture`);
+	if (!found) {
+		throw new Error(`No review ${id} in the fixture`);
+	}
 	return found;
 }
 
@@ -62,7 +64,7 @@ export const AConversation: Story = {
 	args: { review: conversation },
 	play: async ({ canvas }) => {
 		canvas.getByRole("link", { name: "How should we roll back the pricing migration?" });
-		canvas.getByText(/engineering/);
+		canvas.getByText(/engineering/u);
 	},
 };
 

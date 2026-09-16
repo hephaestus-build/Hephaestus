@@ -63,23 +63,23 @@ function mountSession(expiresInSec = 61) {
 describe("useSessionKeepAlive", () => {
 	it("renews once on mount even when Strict Mode replays the effect", async () => {
 		const session = mountSession();
-		await advance(1_000);
+		await advance(1000);
 		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
 		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
 	});
 
 	it("leaves a renewed session idle until activity resumes", async () => {
 		const session = mountSession();
-		await advance(1_000);
+		await advance(1000);
 		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
-		await advance(5_000);
+		await advance(5000);
 		expect(session.refreshCalls()).toBe(1);
 		act(() => {
 			window.dispatchEvent(new Event("pointerdown"));
 		});
 		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(2)));
 		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(2)));
-		await advance(5_000);
+		await advance(5000);
 		expect(session.refreshCalls()).toBe(2);
 	});
 
@@ -88,8 +88,8 @@ describe("useSessionKeepAlive", () => {
 		server.use(
 			http.post("*/auth/refresh", () => new HttpResponse(null, { status: 503 }), { once: true }),
 		);
-		await advance(1_000);
-		await advance(5_000);
+		await advance(1000);
+		await advance(5000);
 		expect(session.userCalls()).toBe(0);
 		expect(session.refreshCalls()).toBe(0);
 		act(() => {
@@ -97,7 +97,7 @@ describe("useSessionKeepAlive", () => {
 		});
 		await act(() => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
 		expect(session.refreshCalls()).toBe(1);
-		await advance(5_000);
+		await advance(5000);
 		expect(session.refreshCalls()).toBe(1);
 	});
 
@@ -136,7 +136,7 @@ describe("useSessionKeepAlive", () => {
 		const session = mountSession();
 		const fixedIdentity = userPayload(61);
 		server.use(http.get("*/user", () => HttpResponse.json(fixedIdentity)));
-		await advance(1_000);
+		await advance(1000);
 		await act(() => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
 		await advance(11_000);
 		act(() => {
@@ -169,7 +169,7 @@ describe("useSessionKeepAlive", () => {
 	it("does not renew a hidden tab until it becomes visible", async () => {
 		const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
 		const session = mountSession();
-		await advance(2_000);
+		await advance(2000);
 		expect(session.refreshCalls()).toBe(0);
 		visibility.mockReturnValue("visible");
 		act(() => {

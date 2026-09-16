@@ -6,7 +6,7 @@ import { generateSlug } from "./slug-utils";
 
 export type WizardStep = 1 | 2 | 3;
 
-export type WizardState = {
+export interface WizardState {
 	step: WizardStep;
 	// Step 1
 	serverUrl: string;
@@ -19,7 +19,7 @@ export type WizardState = {
 	displayName: string;
 	workspaceSlug: string;
 	slugManuallyEdited: boolean;
-};
+}
 
 export type WizardAction =
 	| { type: "SET_SERVER_URL"; value: string }
@@ -51,24 +51,35 @@ export const initialWizardState: WizardState = createInitialWizardState();
 
 export function wizardReducer(state: WizardState, action: WizardAction): WizardState {
 	switch (action.type) {
-		case "SET_SERVER_URL":
+		case "SET_SERVER_URL": {
 			// Changing server URL invalidates preflight result
 			return { ...state, serverUrl: action.value, preflightResult: null };
-		case "SET_PAT":
+		}
+		case "SET_PAT": {
 			// Changing PAT invalidates preflight result
 			return { ...state, personalAccessToken: action.value, preflightResult: null };
-		case "SET_PREFLIGHT_RESULT":
+		}
+		case "SET_PREFLIGHT_RESULT": {
 			return { ...state, preflightResult: action.result };
-		case "ADVANCE_TO_GROUPS":
-			if (state.step !== 1) return state;
+		}
+		case "ADVANCE_TO_GROUPS": {
+			if (state.step !== 1) {
+				return state;
+			}
 			return { ...state, step: 2, groups: action.groups };
-		case "SELECT_GROUP":
-			if (state.step !== 2) return state;
+		}
+		case "SELECT_GROUP": {
+			if (state.step !== 2) {
+				return state;
+			}
 			return { ...state, selectedGroup: action.group };
+		}
 		case "ADVANCE_TO_CONFIGURE": {
-			if (state.step !== 2 || !state.selectedGroup) return state;
+			if (state.step !== 2 || !state.selectedGroup) {
+				return state;
+			}
 			// Auto-populate display name and slug from group name on first entry
-			const name = state.selectedGroup.name;
+			const { name } = state.selectedGroup;
 			return {
 				...state,
 				step: 3,
@@ -76,16 +87,20 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
 				workspaceSlug: state.workspaceSlug || generateSlug(name),
 			};
 		}
-		case "SET_DISPLAY_NAME":
+		case "SET_DISPLAY_NAME": {
 			return { ...state, displayName: action.value };
-		case "SET_SLUG":
+		}
+		case "SET_SLUG": {
 			return {
 				...state,
 				workspaceSlug: action.value,
 				slugManuallyEdited: action.manual,
 			};
+		}
 		case "GO_BACK": {
-			if (state.step === 1) return state;
+			if (state.step === 1) {
+				return state;
+			}
 			// Clear downstream state so stale values don't persist when user changes selection
 			if (state.step === 2) {
 				return {
@@ -106,8 +121,9 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
 				slugManuallyEdited: false,
 			};
 		}
-		case "RESET":
+		case "RESET": {
 			return initialWizardState;
+		}
 		default: {
 			const _exhaustive: never = action;
 			return _exhaustive;
@@ -115,10 +131,10 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
 	}
 }
 
-type WizardContextValue = {
+interface WizardContextValue {
 	state: WizardState;
 	dispatch: React.Dispatch<WizardAction>;
-};
+}
 
 export const WizardContext = createContext<WizardContextValue | null>(null);
 

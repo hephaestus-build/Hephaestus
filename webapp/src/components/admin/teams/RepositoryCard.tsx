@@ -29,9 +29,13 @@ export function RepositoryCard({
 	// Keyed by lower-cased name so two labels differing only in case read as the one label they are.
 	const repoLabelsByName = new Map<string, LabelInfo>();
 	for (const label of team.labels) {
-		if (label.repository?.id !== repository.id) continue;
+		if (label.repository?.id !== repository.id) {
+			continue;
+		}
 		const key = label.name.toLowerCase();
-		if (key && !repoLabelsByName.has(key)) repoLabelsByName.set(key, label);
+		if (key && !repoLabelsByName.has(key)) {
+			repoLabelsByName.set(key, label);
+		}
 	}
 
 	const filteredRepoLabels = [...repoLabelsByName.values()].sort((a, b) =>

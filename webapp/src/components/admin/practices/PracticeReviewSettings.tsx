@@ -272,7 +272,9 @@ function CooldownField({
 				disabled={policy.isSaving}
 				onChange={(event) => setDraft(event.currentTarget.value)}
 				onBlur={() => {
-					if (!invalid && parsed !== value) void policy.onUpdate({ cooldownMinutes: parsed });
+					if (!invalid && parsed !== value) {
+						void policy.onUpdate({ cooldownMinutes: parsed });
+					}
 				}}
 				className="max-w-32"
 			/>
@@ -294,7 +296,7 @@ function CooldownField({
 }
 
 function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "policy">) {
-	const settings = policy.settings;
+	const { settings } = policy;
 	const paused = settings.deliveryStatus === "PAUSED";
 
 	return (

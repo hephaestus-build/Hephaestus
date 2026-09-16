@@ -42,7 +42,9 @@ export function AdminLlmModelAccessDialog({
 	model,
 	...contentProps
 }: AdminLlmModelAccessDialogProps) {
-	if (!model) return null;
+	if (!model) {
+		return null;
+	}
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>

@@ -55,12 +55,16 @@ const ENTITY_TYPE_LOOKUP: Record<string, string | undefined> = ENTITY_TYPE_LABEL
 const ACTION_LOOKUP: Record<string, string | undefined> = ACTION_LABELS;
 
 export function entityTypeLabel(entityType: string | undefined): string {
-	if (!entityType) return "Unknown";
+	if (!entityType) {
+		return "Unknown";
+	}
 	return ENTITY_TYPE_LOOKUP[entityType] ?? entityType;
 }
 
 export function actionLabel(action: string | undefined): string {
-	if (!action) return "—";
+	if (!action) {
+		return "—";
+	}
 	return ACTION_LOOKUP[action] ?? action;
 }
 
@@ -110,12 +114,18 @@ export interface FieldChange {
  * masked so the boolean is never read as the secret; the suffix anchor keeps `publicKey` out of it.
  */
 export function formatLeaf(value: unknown, path?: string): string {
-	if (value === undefined || value === null) return "not set";
-	if (typeof value === "boolean" && path && /(key|secret|token|password)set$/i.test(path)) {
+	if (value === undefined || value === null) {
+		return "not set";
+	}
+	if (typeof value === "boolean" && path && /(?:key|secret|token|password)set$/iu.test(path)) {
 		return value ? "••••••" : "not set";
 	}
-	if (typeof value === "boolean" || typeof value === "number") return String(value);
-	if (typeof value === "string") return value.length === 0 ? '""' : value;
+	if (typeof value === "boolean" || typeof value === "number") {
+		return String(value);
+	}
+	if (typeof value === "string") {
+		return value.length === 0 ? '""' : value;
+	}
 	return JSON.stringify(value);
 }
 
@@ -142,9 +152,13 @@ export function subjectLabel(entry: ConfigAuditEntryView): { label: string; hint
 }
 
 export function changeSummary(entry: ConfigAuditEntryView): string {
-	if (entry.action === "CREATED" || entry.action === "DELETED") return "";
+	if (entry.action === "CREATED" || entry.action === "DELETED") {
+		return "";
+	}
 	const changes = fieldChanges(entry);
-	if (changes.length === 0) return "";
+	if (changes.length === 0) {
+		return "";
+	}
 	if (changes.length <= 2) {
 		return changes.map((c) => `${c.path}: ${c.before ?? "—"} → ${c.after ?? "—"}`).join(" · ");
 	}
@@ -152,11 +166,13 @@ export function changeSummary(entry: ConfigAuditEntryView): string {
 }
 
 function identifier(entityId: string): string {
-	return /^\d+$/.test(entityId) ? `#${entityId}` : entityId;
+	return /^\d+$/u.test(entityId) ? `#${entityId}` : entityId;
 }
 
 function parseSnapshot(value: string | undefined): Record<string, unknown> | null {
-	if (!value) return null;
+	if (!value) {
+		return null;
+	}
 	try {
 		const parsed: unknown = JSON.parse(value);
 		return isRecord(parsed) ? parsed : null;
@@ -170,6 +186,6 @@ function leafAt(obj: Record<string, unknown>, path: string): unknown {
 		if (isRecord(acc)) {
 			return acc[segment];
 		}
-		return undefined;
+		return;
 	}, obj);
 }

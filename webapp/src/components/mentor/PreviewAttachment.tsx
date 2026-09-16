@@ -1,13 +1,13 @@
 import { Spinner } from "@/components/ui/spinner";
 import type { Attachment } from "@/lib/types";
 
-export const PreviewAttachment = ({
+export function PreviewAttachment({
 	attachment,
 	isUploading = false,
 }: {
 	attachment: Attachment;
 	isUploading?: boolean;
-}) => {
+}) {
 	const { name, url, contentType } = attachment;
 
 	return (
@@ -37,4 +37,4 @@ export const PreviewAttachment = ({
 			<div className="max-w-16 truncate text-xs text-muted-foreground">{name}</div>
 		</div>
 	);
-};
+}

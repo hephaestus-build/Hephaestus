@@ -96,7 +96,9 @@ export function OccasionLifecycle({
 					);
 					// A single band has nothing to tell apart, so no heading — and so nothing to name a
 					// group by.
-					if (bands.length === 1) return <div key={band.phase}>{rail}</div>;
+					if (bands.length === 1) {
+						return <div key={band.phase}>{rail}</div>;
+					}
 					// Named groups rather than loose headings: a reader who cannot see the bands would meet
 					// one run of checkboxes with stray words between them.
 					const headingId = `${OCCASION_ID_PREFIX}-band-${band.phase}`;

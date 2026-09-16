@@ -37,8 +37,9 @@ export interface FeedbackResultsProps {
 }
 
 export function FeedbackResults({ workspaceSlug, state }: FeedbackResultsProps) {
-	if (state.status === "loading")
+	if (state.status === "loading") {
 		return <ReviewResultsSkeleton label="Loading feedback" rows={REVIEW_PAGE_SIZE} />;
+	}
 	if (state.status === "empty") {
 		return (
 			<Empty variant="outlined">

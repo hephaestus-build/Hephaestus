@@ -34,13 +34,13 @@ export function SetBudgetDialog({
 			open={workspace !== null}
 			title="Set shared-model budget"
 			description={
-				workspace !== null ? (
+				workspace === null ? null : (
 					<>
 						What <strong>{workspace.displayName}</strong> ({workspace.workspaceSlug}) can spend on
 						shared models each month. When the budget is reached, shared-model work pauses until the
 						month resets; the workspace's own provider is not affected. $0 pauses now.
 					</>
-				) : null
+				)
 			}
 			fieldLabel="Monthly budget (USD)"
 			submitLabel="Save budget"

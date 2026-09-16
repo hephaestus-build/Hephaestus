@@ -334,7 +334,7 @@ const diff = (
 
 const cited = (sourceKind: string, path: string, quote: string, line = 1): EvidenceCitation => ({
 	sourceKind,
-	artifactPath: `inputs/context/${sourceKind.replace(/\./g, "-")}.json`,
+	artifactPath: `inputs/context/${sourceKind.replaceAll(".", "-")}.json`,
 	path,
 	startLine: line,
 	endLine: line,
@@ -918,7 +918,9 @@ function disposition(observationId: string): Record<Disposition, number> {
 
 function toObservation(run: RunSpec, spec: ObservationSpec): ReviewObservation {
 	const practice = workspacePractices.find((entry) => entry.slug === spec.practiceSlug);
-	if (!practice) throw new Error(`No practice named ${spec.practiceSlug} in the fixture catalogue`);
+	if (!practice) {
+		throw new Error(`No practice named ${spec.practiceSlug} in the fixture catalogue`);
+	}
 	return {
 		id: spec.id,
 		agentJobId: run.id,
@@ -1017,7 +1019,9 @@ const JOB_TYPE_BY_ARTIFACT: Record<string, AgentJob["jobType"]> = {
  */
 export function reviewJob(runId: string): AgentJob {
 	const run = allRuns.find((entry) => entry.id === runId);
-	if (!run) throw new Error(`No review ${runId} in the fixture`);
+	if (!run) {
+		throw new Error(`No review ${runId} in the fixture`);
+	}
 	const started = new Date(run.startedAt);
 	const finished = run.status === "RUNNING" ? undefined : new Date(started.getTime() + 5 * 60_000);
 	return {
@@ -1049,7 +1053,9 @@ export function reviewJob(runId: string): AgentJob {
 
 export function observationDetail(observationId: string): ReviewObservationDetail {
 	const found = allObservationSpecs.find(({ observation }) => observation.id === observationId);
-	if (!found) throw new Error(`No observation ${observationId} in the fixture`);
+	if (!found) {
+		throw new Error(`No observation ${observationId} in the fixture`);
+	}
 	const { run, observation } = found;
 	// The detail replaces the tally with the feedback records the tally was counting.
 	const { feedbackDisposition: _tally, ...shared } = toObservation(run, observation);
@@ -1072,7 +1078,9 @@ export function observationDetail(observationId: string): ReviewObservationDetai
 
 export function feedbackDetail(feedbackId: string): ReviewFeedbackDetail {
 	const found = allFeedbackSpecs.find(({ item }) => item.id === feedbackId);
-	if (!found) throw new Error(`No feedback ${feedbackId} in the fixture`);
+	if (!found) {
+		throw new Error(`No feedback ${feedbackId} in the fixture`);
+	}
 	const { run, item } = found;
 	return {
 		id: item.id,
@@ -1167,7 +1175,9 @@ export const reviewObservationDetail: ReviewObservationDetail = observationDetai
 
 function cycled<T>(specs: readonly T[], index: number): T {
 	const spec = specs[index % specs.length];
-	if (!spec) throw new Error("A page cannot be filled from an empty list of specs.");
+	if (!spec) {
+		throw new Error("A page cannot be filled from an empty list of specs.");
+	}
 	return spec;
 }
 
@@ -1181,7 +1191,9 @@ export function manyObservations(count: number): ReviewObservation[] {
 	return Array.from({ length: count }, (_, index) => {
 		const source = cycled(base, index);
 		const cycle = Math.floor(index / base.length);
-		if (cycle === 0) return source;
+		if (cycle === 0) {
+			return source;
+		}
 		return {
 			...source,
 			id: `${source.id.slice(0, -2)}${(10 + cycle).toString(36)}`,
@@ -1198,7 +1210,9 @@ export function manyMembers(count: number): WorkspaceMembership[] {
 	return Array.from({ length: count }, (_, index) => {
 		const source = cycled(workspaceMembers, index);
 		const cycle = Math.floor(index / workspaceMembers.length);
-		if (cycle === 0) return source;
+		if (cycle === 0) {
+			return source;
+		}
 		return {
 			...source,
 			userId: (source.userId ?? 0) + cycle * 100,
@@ -1213,7 +1227,9 @@ export function manyFeedback(count: number): ReviewFeedback[] {
 	return Array.from({ length: count }, (_, index) => {
 		const source = cycled(base, index);
 		const cycle = Math.floor(index / base.length);
-		if (cycle === 0) return source;
+		if (cycle === 0) {
+			return source;
+		}
 		return {
 			...source,
 			id: `${source.id.slice(0, -2)}${(10 + cycle).toString(36)}`,

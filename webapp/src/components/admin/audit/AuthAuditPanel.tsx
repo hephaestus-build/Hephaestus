@@ -87,7 +87,9 @@ export function AuthAuditPanel({
 	const exportCsv = useMutation({
 		mutationFn: async () => {
 			const { data, error } = await adminExportAuthEvents({ query: filters });
-			if (error || typeof data !== "string") throw new Error("Export failed");
+			if (error || typeof data !== "string") {
+				throw new Error("Export failed");
+			}
 			const day = new Date().toISOString().slice(0, 10);
 			saveTextFile(data, `audit-log-${day}.csv`, "text/csv;charset=utf-8;");
 		},

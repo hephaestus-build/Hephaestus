@@ -45,7 +45,7 @@ function setup(candidates: SlackChannelCandidate[] = [], enabled = false) {
 
 /** The combobox keeps its options in a popover — open it before querying them. */
 function openChannelCombobox() {
-	fireEvent.click(screen.getByRole("combobox", { name: /digest channel/i }));
+	fireEvent.click(screen.getByRole("combobox", { name: /digest channel/iu }));
 }
 
 describe("AdminSlackNotificationSettings — digest channel combobox", () => {
@@ -53,9 +53,9 @@ describe("AdminSlackNotificationSettings — digest channel combobox", () => {
 		setup([general]);
 		openChannelCombobox();
 
-		fireEvent.click(screen.getByRole("option", { name: /#general/i }));
+		fireEvent.click(screen.getByRole("option", { name: /#general/iu }));
 
-		expect(screen.getByRole("combobox", { name: /digest channel/i }).textContent).toContain(
+		expect(screen.getByRole("combobox", { name: /digest channel/iu }).textContent).toContain(
 			"#general",
 		);
 		expect(screen.queryByDisplayValue("C01GENERAL01")).toBeNull();
@@ -64,8 +64,8 @@ describe("AdminSlackNotificationSettings — digest channel combobox", () => {
 	it("requires a channel before enabling the digest", () => {
 		setup([], true);
 
-		screen.getByText(/choose a channel before enabling/i);
-		expect(screen.getByRole<HTMLButtonElement>("button", { name: /^save$/i }).disabled).toBe(true);
+		screen.getByText(/choose a channel before enabling/iu);
+		expect(screen.getByRole<HTMLButtonElement>("button", { name: /^save$/iu }).disabled).toBe(true);
 	});
 
 	it("does not let admins pick a digest channel before the bot is a member", () => {
@@ -73,22 +73,22 @@ describe("AdminSlackNotificationSettings — digest channel combobox", () => {
 		openChannelCombobox();
 
 		expect(
-			screen.getByRole("option", { name: /#private-team/i }).getAttribute("aria-disabled"),
+			screen.getByRole("option", { name: /#private-team/iu }).getAttribute("aria-disabled"),
 		).toBe("true");
-		screen.getByText(/needs invite/i);
+		screen.getByText(/needs invite/iu);
 	});
 
 	it("resolves a pasted channel link through the escape hatch into the same single value", () => {
 		setup([general]);
 
 		// The paste escape hatch writes the same value the combobox does — the one Send-test reads.
-		fireEvent.click(screen.getByRole("button", { name: /paste a channel link or id instead/i }));
-		fireEvent.change(screen.getByLabelText(/paste a channel link or id/i), {
+		fireEvent.click(screen.getByRole("button", { name: /paste a channel link or id instead/iu }));
+		fireEvent.change(screen.getByLabelText(/paste a channel link or id/iu), {
 			target: { value: "https://acme.slack.com/archives/C0974LJBPBK" },
 		});
 
 		expect(
-			screen.getByRole<HTMLButtonElement>("button", { name: /send test message/i }).disabled,
+			screen.getByRole<HTMLButtonElement>("button", { name: /send test message/iu }).disabled,
 		).toBe(false);
 	});
 });

@@ -19,7 +19,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	args: {
 		projectManager: {
-			id: 5898705,
+			id: 5_898_705,
 			login: "felixtjdietrich",
 			name: "Felix T.J. Dietrich",
 			title: "Project lead",
@@ -35,7 +35,7 @@ export const Default: Story = {
 export const Placeholder: Story = {
 	args: {
 		projectManager: {
-			id: 12345,
+			id: 12_345,
 			login: "techleader",
 			name: "Alex Johnson",
 			title: "Engineering manager",
@@ -51,7 +51,7 @@ export const Placeholder: Story = {
 export const LongDescription: Story = {
 	args: {
 		projectManager: {
-			id: 67890,
+			id: 67_890,
 			login: "innovator",
 			name: "Dr. Sarah Chen",
 			title: "Research director",

@@ -7,21 +7,21 @@ export type ToolType<T extends ToolKey = ToolKey> = `tool-${T}`;
 
 export type ToolPartState = ToolUIPart<ChatTools>["state"];
 
-export type ToolPart<T extends ToolKey = ToolKey> = {
+export interface ToolPart<T extends ToolKey = ToolKey> {
 	type: ToolType<T>;
 	toolCallId: string;
 	state: ToolPartState;
 	input?: ChatTools[T]["input"];
 	output?: ChatTools[T]["output"];
 	errorText?: string;
-};
+}
 
-export type PartRendererProps<T extends ToolKey = ToolKey> = {
+export interface PartRendererProps<T extends ToolKey = ToolKey> {
 	message: ChatMessage;
 	part: ToolPart<T>;
 	/** Layout variant for different contexts */
 	variant?: "default" | "artifact";
-};
+}
 
 export type PartRenderer<T extends ToolKey = ToolKey> = (
 	props: PartRendererProps<T>,

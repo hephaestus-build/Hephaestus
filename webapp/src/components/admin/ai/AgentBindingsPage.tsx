@@ -62,7 +62,7 @@ const PURPOSES: PurposeMeta[] = [
 ];
 
 const MIN_TIMEOUT_SECONDS = 30;
-const MAX_TIMEOUT_SECONDS = 10800;
+const MAX_TIMEOUT_SECONDS = 10_800;
 const MIN_CONCURRENT_JOBS = 1;
 
 const TIMEOUT_CEILING = {
@@ -71,9 +71,12 @@ const TIMEOUT_CEILING = {
 };
 
 function bindingToSelection(binding?: AgentBinding): ModelSelection | null {
-	if (binding?.instanceModelId != null) return { scope: "SHARED", id: binding.instanceModelId };
-	if (binding?.workspaceModelId != null)
+	if (binding?.instanceModelId != null) {
+		return { scope: "SHARED", id: binding.instanceModelId };
+	}
+	if (binding?.workspaceModelId != null) {
 		return { scope: "WORKSPACE", id: binding.workspaceModelId };
+	}
 	return null;
 }
 
@@ -268,7 +271,9 @@ function AgentPurposeCard({
 		event.preventDefault();
 		if (!selection || timeout.value == null || concurrency.value == null) {
 			setSubmitAttempt((attempt) => attempt + 1);
-			if (timeout.value == null || concurrency.value == null) setShowAdvanced(true);
+			if (timeout.value == null || concurrency.value == null) {
+				setShowAdvanced(true);
+			}
 			return;
 		}
 		onSave(meta.purpose, {

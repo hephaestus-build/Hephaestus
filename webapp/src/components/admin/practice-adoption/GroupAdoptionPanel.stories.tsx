@@ -105,7 +105,7 @@ export const MixedOutcomes: Story = {
 		await expect(screen.getByText("Adds")).toBeVisible();
 		await expect(screen.getByText("Already here")).toBeVisible();
 		await expect(screen.getByText("Blocked")).toBeVisible();
-		await userEvent.click(screen.getByRole("button", { name: /Describe what changed and why/ }));
+		await userEvent.click(screen.getByRole("button", { name: /Describe what changed and why/u }));
 		await expect(args.onOpenPractice).toHaveBeenCalledWith("describe-what-and-why");
 	},
 };
@@ -156,7 +156,7 @@ export const FailedToLoad: Story = {
 		const retry = await screen.findByRole("button", { name: "Retry" });
 		await expectSettledVisible(retry);
 		await userEvent.click(retry);
-		const state = args.state;
+		const { state } = args;
 		await expect(state.status === "error" && state.onRetry).toHaveBeenCalledOnce();
 	},
 };

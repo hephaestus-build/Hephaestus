@@ -33,16 +33,16 @@ describe("AdminSettingsPage — non-integration content", () => {
 
 	it("hides the league reset card when leagues are disabled", () => {
 		setup({ features: { ...features, leaguesEnabled: false } });
-		expect(screen.queryByText(/reset and recalculate leagues/i)).toBeNull();
+		expect(screen.queryByText(/reset and recalculate leagues/iu)).toBeNull();
 	});
 
 	it("shows the league reset card when leagues are enabled", () => {
 		setup({ features: { ...features, leaguesEnabled: true } });
-		screen.getByText(/reset and recalculate leagues/i);
+		screen.getByText(/reset and recalculate leagues/iu);
 	});
 
 	it("leaves the danger zone out until the active workspace has resolved", () => {
 		setup({ workspaceSlug: undefined });
-		expect(screen.queryByRole("heading", { name: /danger zone/i })).toBeNull();
+		expect(screen.queryByRole("heading", { name: /danger zone/iu })).toBeNull();
 	});
 });

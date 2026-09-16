@@ -70,11 +70,13 @@ const STATUS_FILTERS = [
 	{ value: "ALL", label: "All" },
 	{ value: "OFFERED", label: "Included" },
 	{ value: "NOT_OFFERED", label: "Excluded" },
-] satisfies Array<{ value: StatusFilter; label: string }>;
+] satisfies { value: StatusFilter; label: string }[];
 
 function matches(haystack: (string | undefined)[], needle: string): boolean {
 	return !needle || haystack.some((value) => value?.toLowerCase().includes(needle));
 }
+
+const NO_SLUGS: ReadonlySet<string> = new Set();
 
 export function CuratedCatalog({
 	groups,
@@ -83,8 +85,8 @@ export function CuratedCatalog({
 	search,
 	customOrder,
 	writePending = false,
-	pendingPracticeSlugs = new Set(),
-	pendingGroupSlugs = new Set(),
+	pendingPracticeSlugs = NO_SLUGS,
+	pendingGroupSlugs = NO_SLUGS,
 	onSearchChange,
 	onPracticeStatusChange,
 	onGroupStatusChange,
@@ -270,7 +272,9 @@ export function CuratedCatalog({
 			<AlertDialog
 				open={excludingPractice !== null}
 				onOpenChange={(open) => {
-					if (!open) setExcludingPractice(null);
+					if (!open) {
+						setExcludingPractice(null);
+					}
 				}}
 			>
 				<AlertDialogContent>
@@ -286,7 +290,9 @@ export function CuratedCatalog({
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={() => {
-								if (excludingPractice) onPracticeStatusChange(excludingPractice, false);
+								if (excludingPractice) {
+									onPracticeStatusChange(excludingPractice, false);
+								}
 								setExcludingPractice(null);
 							}}
 						>
@@ -299,7 +305,9 @@ export function CuratedCatalog({
 			<AlertDialog
 				open={excludingGroup !== null}
 				onOpenChange={(open) => {
-					if (!open) setExcludingGroup(null);
+					if (!open) {
+						setExcludingGroup(null);
+					}
 				}}
 			>
 				<AlertDialogContent>
@@ -327,7 +335,9 @@ export function CuratedCatalog({
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={() => {
-								if (excludingGroup) onGroupStatusChange(excludingGroup, false);
+								if (excludingGroup) {
+									onGroupStatusChange(excludingGroup, false);
+								}
 								setExcludingGroup(null);
 							}}
 						>

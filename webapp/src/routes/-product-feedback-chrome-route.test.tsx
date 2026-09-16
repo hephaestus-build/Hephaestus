@@ -70,9 +70,9 @@ describe("survey invitations in the app chrome", () => {
 			await screen.findByRole("button", { name: "Feedback, 1 survey waiting" }, ROUTE_RENDER_WAIT),
 		);
 
-		const item = await screen.findByRole("menuitem", { name: /Help improve practice feedback/ });
+		const item = await screen.findByRole("menuitem", { name: /Help improve practice feedback/u });
 		expect(item.textContent).toContain("4 questions · about 2 minutes");
-		expect(screen.queryByText(/New survey:/)).toBeNull();
+		expect(screen.queryByText(/New survey:/u)).toBeNull();
 		expect(acknowledgements).toStrictEqual([]);
 	});
 });

@@ -94,7 +94,7 @@ export function ReviewRunDetailPage({
 		/>
 	);
 
-	if (isLoading)
+	if (isLoading) {
 		return (
 			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
@@ -114,6 +114,7 @@ export function ReviewRunDetailPage({
 				</div>
 			</article>
 		);
+	}
 	if (error != null || !job) {
 		return (
 			<article className="max-w-4xl min-w-0 space-y-8">

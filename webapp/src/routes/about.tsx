@@ -10,7 +10,7 @@ export const Route = createFileRoute("/about")({
 });
 
 const PROJECT_MANAGER_DATA: ProjectManager = {
-	id: 5898705,
+	id: 5_898_705,
 	login: "felixtjdietrich",
 	name: "Felix T.J. Dietrich",
 	title: "Project lead",

@@ -121,10 +121,12 @@ export function PracticeReviewsLayout({ workspaceSlug, children }: PracticeRevie
 	);
 }
 
+const NO_SCOPE: ReviewScopeSearch = {};
+
 export function PracticeReviewsHeader({
 	workspaceSlug,
 	activeSection,
-	scope = {},
+	scope = NO_SCOPE,
 }: PracticeReviewsHeaderProps) {
 	const activeView = VIEWS.find((view) => view.id === activeSection);
 	const title = activeView?.title ?? "Reviewed work";

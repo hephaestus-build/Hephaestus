@@ -102,7 +102,9 @@ function AdminLlmModelFormDialogContent({
 		event.preventDefault();
 		const found = validateModelFields(fields, isEdit);
 		setErrors(found);
-		if (Object.keys(found).length > 0) return;
+		if (Object.keys(found).length > 0) {
+			return;
+		}
 
 		const { price } = fields;
 		const metadataShared = {

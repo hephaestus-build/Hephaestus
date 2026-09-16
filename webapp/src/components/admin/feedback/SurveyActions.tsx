@@ -104,7 +104,9 @@ export function SurveyActions({
 			<AlertDialog
 				open={confirmation === "end"}
 				onOpenChange={(open) => {
-					if (!open) setConfirmation(null);
+					if (!open) {
+						setConfirmation(null);
+					}
 				}}
 			>
 				<AlertDialogContent>
@@ -131,7 +133,9 @@ export function SurveyActions({
 			<AlertDialog
 				open={confirmation === "delete"}
 				onOpenChange={(open) => {
-					if (!open) setConfirmation(null);
+					if (!open) {
+						setConfirmation(null);
+					}
 				}}
 			>
 				<AlertDialogContent>

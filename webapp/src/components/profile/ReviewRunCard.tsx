@@ -23,7 +23,7 @@ const PROVIDER_ICONS = {
 	typeof GithubIcon
 >;
 function providerMeta(run: PracticeGroupReviewRun) {
-	const provider = run.reviewedWork.provider;
+	const { provider } = run.reviewedWork;
 	return provider
 		? { label: getProviderLabel(provider), Icon: PROVIDER_ICONS[provider] }
 		: undefined;
@@ -36,7 +36,9 @@ function workIdentity(run: PracticeGroupReviewRun, providerLabel?: string) {
 	const numbered = [work.number !== undefined && `#${work.number}`, work.title]
 		.filter(Boolean)
 		.join(" · ");
-	if (numbered) return numbered;
+	if (numbered) {
+		return numbered;
+	}
 	const kind = artifactKindLabel(work.type);
 	return providerLabel ? `${kind} on ${providerLabel}` : kind;
 }

@@ -21,7 +21,9 @@ export function syncPollInterval(
 	hasActiveJob: boolean,
 	livePushUnavailable: boolean,
 ): number | false {
-	if (livePushUnavailable) return hasActiveJob ? 5_000 : 60_000;
+	if (livePushUnavailable) {
+		return hasActiveJob ? 5000 : 60_000;
+	}
 	return hasActiveJob ? 30_000 : false;
 }
 
@@ -77,7 +79,7 @@ export const JOB_STATUS_LABEL: Record<SyncJob["status"], string> = {
 export function stateLabel(state: string): string {
 	return state
 		.toLowerCase()
-		.split(/[\s_]+/)
+		.split(/[\s_]+/u)
 		.filter(Boolean)
 		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
 		.join(" ");
@@ -128,8 +130,10 @@ function asFiniteNumber(value: unknown): number | undefined {
 }
 
 export function jobProgress(job: Pick<SyncJob, "progress">): SyncJobProgress {
-	const progress = job.progress;
-	if (progress == null) return {};
+	const { progress } = job;
+	if (progress == null) {
+		return {};
+	}
 	return {
 		phase: asNonEmptyString(progress.phase),
 		currentStep: asNonEmptyString(progress.currentStep),
@@ -179,11 +183,19 @@ export function freshnessTone(
 	now: Date = new Date(),
 ): FreshnessTone {
 	const date = asDate(lastSyncedAt);
-	if (!date) return "never";
-	if (syncIntervalSeconds == null || syncIntervalSeconds <= 0) return "unknown";
-	const ageSeconds = (now.getTime() - date.getTime()) / 1_000;
-	if (ageSeconds > syncIntervalSeconds * VERY_STALE_CADENCE_MULTIPLE) return "veryStale";
-	if (ageSeconds > syncIntervalSeconds * STALE_CADENCE_MULTIPLE) return "stale";
+	if (!date) {
+		return "never";
+	}
+	if (syncIntervalSeconds == null || syncIntervalSeconds <= 0) {
+		return "unknown";
+	}
+	const ageSeconds = (now.getTime() - date.getTime()) / 1000;
+	if (ageSeconds > syncIntervalSeconds * VERY_STALE_CADENCE_MULTIPLE) {
+		return "veryStale";
+	}
+	if (ageSeconds > syncIntervalSeconds * STALE_CADENCE_MULTIPLE) {
+		return "stale";
+	}
 	return "fresh";
 }
 
@@ -196,9 +208,13 @@ export function nextRunLabel(
 	now: Date = new Date(),
 ): string | undefined {
 	const date = asDate(nextScheduledSyncAt);
-	if (!date) return undefined;
+	if (!date) {
+		return undefined;
+	}
 	// A schedule that is already due (or overdue — the worker may be busy or down) must not render as
 	// "next run 5 minutes ago", which reads as a past event rather than a pending one.
-	if (date.getTime() <= now.getTime()) return "next run due";
+	if (date.getTime() <= now.getTime()) {
+		return "next run due";
+	}
 	return `next run ${formatDistanceToNow(date, { addSuffix: true })}`;
 }

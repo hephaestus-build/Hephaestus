@@ -38,11 +38,13 @@ const practiceGroupDetailSearchSchema = z.object({
 });
 function nextStepOf(practiceStanding?: PracticeStanding): string | undefined {
 	const firstAction = practiceStanding?.toWorkOn[0];
-	if (!firstAction) return undefined;
+	if (!firstAction) {
+		return undefined;
+	}
 	const deliveredGuidance = firstAction.deliveredFeedback?.trim();
 	const observationTitle = firstAction.title.trim();
 	const distinctTitle =
-		observationTitle !== practiceStanding.name.trim() ? observationTitle : undefined;
+		observationTitle === practiceStanding.name.trim() ? undefined : observationTitle;
 	return [deliveredGuidance, distinctTitle].find((value) => value !== undefined && value !== "");
 }
 
@@ -219,8 +221,10 @@ function PracticeGroupDetail() {
 				})
 			}
 			onRespond={(observation, response) => {
-				const feedbackId = observation.feedbackId;
-				if (!feedbackId) return;
+				const { feedbackId } = observation;
+				if (!feedbackId) {
+					return;
+				}
 				if (isEmptyFeedbackResponse(response)) {
 					deleteResponseMutation.mutate({ path: { workspaceSlug, feedbackId } });
 					return;
@@ -253,11 +257,21 @@ function PracticeGroupDetail() {
 				undefined
 			}
 			onRetry={() => {
-				if (groupsQuery.isError) void groupsQuery.refetch();
-				if (statusesQuery.isError) void statusesQuery.refetch();
-				if (practicesQuery.isError) void practicesQuery.refetch();
-				if (standingsQuery.isError) void standingsQuery.refetch();
-				if (trendQuery.isError) void trendQuery.refetch();
+				if (groupsQuery.isError) {
+					void groupsQuery.refetch();
+				}
+				if (statusesQuery.isError) {
+					void statusesQuery.refetch();
+				}
+				if (practicesQuery.isError) {
+					void practicesQuery.refetch();
+				}
+				if (standingsQuery.isError) {
+					void standingsQuery.refetch();
+				}
+				if (trendQuery.isError) {
+					void trendQuery.refetch();
+				}
 			}}
 			onBack={() =>
 				void navigate({

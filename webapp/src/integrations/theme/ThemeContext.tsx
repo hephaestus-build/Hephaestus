@@ -9,16 +9,16 @@ function isTheme(value: string | null): value is Theme {
 	return THEMES.some((theme) => theme === value);
 }
 
-type ThemeProviderProps = {
+interface ThemeProviderProps {
 	children?: React.ReactNode;
 	defaultTheme?: Theme;
 	storageKey?: string;
-};
+}
 
-type ThemeProviderState = {
+interface ThemeProviderState {
 	theme: Theme;
 	setTheme: (theme: Theme) => void;
-};
+}
 
 /**
  * A working default rather than a sentinel `useTheme` would throw on: a theme-aware component has to
@@ -55,7 +55,7 @@ export function ThemeProvider({
 		}
 
 		root.classList.add(appliedTheme);
-		root.setAttribute("data-color-mode", appliedTheme);
+		root.dataset.colorMode = appliedTheme;
 
 		const metaThemeColor = document.querySelector('meta[name="theme-color"]');
 		if (metaThemeColor) {

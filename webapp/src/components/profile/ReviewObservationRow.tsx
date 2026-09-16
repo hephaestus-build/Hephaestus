@@ -109,7 +109,9 @@ export function ReviewObservationRow({
 	const selectedResolution =
 		pendingResolution === recorded.resolution ? undefined : pendingResolution;
 	const respond = (change: FeedbackResponse) => {
-		if (!observation.feedbackId || !onRespond) return;
+		if (!observation.feedbackId || !onRespond) {
+			return;
+		}
 		onRespond(observation, { ...recorded, ...change });
 	};
 	const toggleUsefulness = (usefulness: FeedbackUsefulness) =>
@@ -135,7 +137,9 @@ export function ReviewObservationRow({
 				onOpenChange={
 					onToggle
 						? (open) => {
-								if (open !== Boolean(isOpen)) onToggle(observation.observationId);
+								if (open !== Boolean(isOpen)) {
+									onToggle(observation.observationId);
+								}
 							}
 						: undefined
 				}

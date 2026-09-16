@@ -52,11 +52,11 @@ export function generateSlug(name: string): string {
 	return name
 		.toLowerCase()
 		.trim()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "")
+		.replaceAll(/[^a-z0-9]+/gu, "-")
+		.replaceAll(/^-+|-+$/gu, "")
 		.slice(0, 64);
 }
 
 export function isValidSlug(slug: string): boolean {
-	return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) && slug.length >= 3 && slug.length <= 64;
+	return /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(slug) && slug.length >= 3 && slug.length <= 64;
 }

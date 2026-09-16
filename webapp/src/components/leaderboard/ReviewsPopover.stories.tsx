@@ -142,7 +142,7 @@ export const HighlightedMergeRequest: Story = {
 		providerType: "GITLAB",
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Show 2 reviewed/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Show 2 reviewed/u }));
 		await expectSettledVisible(await screen.findByRole("dialog", { name: "Reviewed MRs" }));
 		await expect(
 			screen.getByRole("button", { name: "Copy links to reviewed merge requests" }),
@@ -161,7 +161,7 @@ export const WrappedRepositoryNames: Story = {
 		})),
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Show 2 reviewed/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Show 2 reviewed/u }));
 		await expectSettledVisible(await screen.findByRole("dialog", { name: "Reviewed PRs" }));
 		await expect(
 			screen.getByRole("button", { name: "Copy links to reviewed pull requests" }),
@@ -171,7 +171,9 @@ export const WrappedRepositoryNames: Story = {
 		});
 		await expectSettledVisible(lastLink);
 		const viewport = lastLink.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
-		if (!viewport) throw new Error("The reviewed-work list must have a scroll viewport");
+		if (!viewport) {
+			throw new Error("The reviewed-work list must have a scroll viewport");
+		}
 		await expect(viewport.scrollHeight).toBeLessThanOrEqual(viewport.clientHeight + 1);
 		await expect(lastLink.getBoundingClientRect().bottom).toBeLessThanOrEqual(
 			viewport.getBoundingClientRect().bottom + 1,
@@ -199,7 +201,9 @@ export const LongReviewList: Story = {
 		await expectSettledVisible(await screen.findByRole("dialog", { name: "Reviewed PRs" }));
 		const lastLink = screen.getByRole("link", { name: "Hephaestus #106" });
 		const viewport = lastLink.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
-		if (!viewport) throw new Error("The reviewed-work list must have a scroll viewport");
+		if (!viewport) {
+			throw new Error("The reviewed-work list must have a scroll viewport");
+		}
 		await expect(viewport.clientHeight).toBeLessThanOrEqual(200);
 		await expect(viewport.scrollHeight).toBeGreaterThan(viewport.clientHeight);
 		for (let tab = 0; tab < 16 && document.activeElement !== lastLink; tab++) {

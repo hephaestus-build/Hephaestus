@@ -64,17 +64,20 @@ interface HarnessProps {
 	onReorderGroups: (orderedSlugs: string[]) => void;
 }
 
+const NONE: readonly string[] = [];
+
 /**
  * Applies the moves the tree asks for, so focus restoration and the badge counts are observable.
  *
  * Its menu items are `aria-disabled` and still clickable rather than natively `disabled` — the
  * a11y-preferred shape for a menu item, and what lets a story click a refused item at all.
  */
+
 function CatalogTreeHarness({
-	blockedOrderBuckets = [],
-	blockedDestinations = [],
-	disabledGroups = [],
-	disabledEntries = [],
+	blockedOrderBuckets = NONE,
+	blockedDestinations = NONE,
+	disabledGroups = NONE,
+	disabledEntries = NONE,
 	visible,
 	onPlaceEntry,
 	onReorderGroups,
@@ -85,7 +88,9 @@ function CatalogTreeHarness({
 		onPlaceEntry(entrySlug, groupSlug, position);
 		setRows((previous) => {
 			const moved = previous.find((row) => row.slug === entrySlug);
-			if (!moved) return previous;
+			if (!moved) {
+				return previous;
+			}
 			const rest = previous.filter((row) => row.slug !== entrySlug);
 			const destination = rest
 				.filter((row) => (row.groupSlug ?? null) === groupSlug)
@@ -197,7 +202,9 @@ const announcement = () =>
 
 const rowOf = (canvas: StoryContext["canvas"], name: string) => {
 	const row = canvas.getByRole("button", { name: `Reorder ${name}` }).closest('[role="listitem"]');
-	if (!(row instanceof HTMLElement)) throw new Error(`No row for ${name}`);
+	if (!(row instanceof HTMLElement)) {
+		throw new Error(`No row for ${name}`);
+	}
 	return row;
 };
 
@@ -225,11 +232,11 @@ const dragTo = async (handle: HTMLElement, clientY: number) => {
 
 	send("pointerdown", startY, handle);
 	send("pointermove", startY + (clientY < startY ? -12 : 12));
-	await waitFor(() => expect(announcement()).toMatch(/^Picked up/));
+	await waitFor(() => expect(announcement()).toMatch(/^Picked up/u));
 	send("pointermove", clientY);
-	await waitFor(() => expect(announcement()).toMatch(/^Moving/));
+	await waitFor(() => expect(announcement()).toMatch(/^Moving/u));
 	send("pointerup", clientY);
-	await waitFor(() => expect(announcement()).toMatch(/^(Moved|Move cancelled)/));
+	await waitFor(() => expect(announcement()).toMatch(/^(?:Moved|Move cancelled)/u));
 };
 
 export const Default: Story = {};
@@ -370,7 +377,7 @@ export const ARowWithItsOwnMoveInFlightCannotLeaveEither: Story = {
 export const FilteringHidesRowsWithoutShrinkingTheCounts: Story = {
 	args: { visible: ["explain-why", "tests-with-changes"] },
 	play: async ({ canvas }) => {
-		const delivery = canvas.getByRole("button", { name: /^Delivery/ });
+		const delivery = canvas.getByRole("button", { name: /^Delivery/u });
 		await expect(delivery).toHaveTextContent("3");
 		await expect(canvas.getByText("Explain what changed and why")).toBeVisible();
 		await expect(canvas.queryByText("Small, reviewable changes")).toBeNull();

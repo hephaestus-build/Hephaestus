@@ -155,7 +155,9 @@ function AdminLoginProvidersPage() {
 			<ConfirmAccessDialog
 				open={challenge !== undefined}
 				onOpenChange={(open) => {
-					if (!open) setChallenge(undefined);
+					if (!open) {
+						setChallenge(undefined);
+					}
 				}}
 				maxAgeSeconds={challenge?.maxAgeSeconds}
 				providers={confirmAccess.providers}

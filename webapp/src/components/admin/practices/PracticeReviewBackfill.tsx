@@ -87,7 +87,9 @@ const countOf = (count: number, artifactKind: string) =>
 const formatWindow = (run: ReviewBackfillRun) => {
 	const from = asDate(run.fromAt);
 	const to = asDate(run.toAt);
-	if (!from || !to) return "Dates unavailable";
+	if (!from || !to) {
+		return "Dates unavailable";
+	}
 	return `${format(from, "d MMM yyyy")} – ${format(to, "d MMM yyyy")}`;
 };
 

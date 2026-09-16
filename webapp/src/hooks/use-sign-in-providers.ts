@@ -12,7 +12,11 @@ export function useSignInProviders(enabled = true): SignInOptions {
 		staleTime: PROVIDER_STALE_TIME_MS,
 		enabled,
 	});
-	if (query.isLoadingError) return { status: "error", onRetry: () => void query.refetch() };
-	if (query.data) return { status: "ready", providers: query.data };
+	if (query.isLoadingError) {
+		return { status: "error", onRetry: () => void query.refetch() };
+	}
+	if (query.data) {
+		return { status: "ready", providers: query.data };
+	}
 	return { status: "loading" };
 }

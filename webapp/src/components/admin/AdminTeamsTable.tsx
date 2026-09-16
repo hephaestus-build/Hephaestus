@@ -37,13 +37,17 @@ function teamsMatchingSearch(
 	childrenMap: Map<number, TeamInfo[]>,
 ): Set<number> {
 	const normalizedSearch = search.trim().toLowerCase();
-	if (!normalizedSearch) return new Set(teams.map((t) => t.id));
+	if (!normalizedSearch) {
+		return new Set(teams.map((t) => t.id));
+	}
 
 	const result = new Set<number>();
 	const memo = new Map<number, boolean>();
 	const hasMatchInSubtree = (team: TeamInfo): boolean => {
 		const cached = memo.get(team.id);
-		if (cached !== undefined) return cached;
+		if (cached !== undefined) {
+			return cached;
+		}
 		if (team.name.toLowerCase().includes(normalizedSearch)) {
 			memo.set(team.id, true);
 			return true;
@@ -59,11 +63,17 @@ function teamsMatchingSearch(
 	};
 
 	const traverse = (node: TeamInfo) => {
-		if (!hasMatchInSubtree(node)) return;
+		if (!hasMatchInSubtree(node)) {
+			return;
+		}
 		result.add(node.id);
-		for (const child of childrenMap.get(node.id) ?? []) traverse(child);
+		for (const child of childrenMap.get(node.id) ?? []) {
+			traverse(child);
+		}
 	};
-	for (const root of roots) traverse(root);
+	for (const root of roots) {
+		traverse(root);
+	}
 	return result;
 }
 
@@ -114,7 +124,9 @@ export function AdminTeamsTable({
 
 	const getCatalogLabels = (repoId: number): LabelInfo[] => {
 		const byId = repoLabelCatalog.get(repoId);
-		if (!byId) return [];
+		if (!byId) {
+			return [];
+		}
 		return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
 	};
 

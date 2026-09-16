@@ -1,3 +1,1 @@
-import { ThemeProvider, useTheme } from "./ThemeContext.tsx";
-
-export { ThemeProvider, useTheme };
+export { ThemeProvider, useTheme } from "./ThemeContext.tsx";

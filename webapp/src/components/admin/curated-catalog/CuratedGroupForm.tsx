@@ -138,7 +138,9 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 		if (!valid) {
 			setRefusals((count) => count + 1);
 			const [first] = errorSummary;
-			if (first) requestAnimationFrame(() => document.getElementById(first.fieldId)?.focus());
+			if (first) {
+				requestAnimationFrame(() => document.getElementById(first.fieldId)?.focus());
+			}
 			return;
 		}
 		onSubmit({
@@ -323,8 +325,8 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 											onChange={(patch) =>
 												setForm((previous) => ({
 													...previous,
-													...(patch.icon !== undefined ? { icon: patch.icon } : {}),
-													...(patch.color !== undefined ? { color: patch.color } : {}),
+													...(patch.icon === undefined ? {} : { icon: patch.icon }),
+													...(patch.color === undefined ? {} : { color: patch.color }),
 												}))
 											}
 											disabled={formDisabled}

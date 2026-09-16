@@ -89,7 +89,8 @@ type Story = StoryObj<typeof meta>;
 
 export const InstanceScope: Story = {
 	play: async ({ canvas }) => {
-		await expect((await canvas.findAllByText("Acme"))[0]).toBeVisible();
+		const [acme] = await canvas.findAllByText("Acme");
+		await expect(acme).toBeVisible();
 		await expect(await canvas.findByText("System")).toBeVisible();
 	},
 };

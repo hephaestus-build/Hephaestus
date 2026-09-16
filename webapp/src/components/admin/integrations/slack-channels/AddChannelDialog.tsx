@@ -22,14 +22,16 @@ import { SlackChannelPasteField } from "./SlackChannelPasteField";
 export interface AddChannelDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	candidates?: SlackChannelCandidate[];
+	candidates?: readonly SlackChannelCandidate[];
 	onSubmit: (input: { slackChannelId: string; channelName?: string }) => Promise<void> | void;
 }
+
+const NO_CANDIDATES: readonly SlackChannelCandidate[] = [];
 
 export function AddChannelDialog({
 	open,
 	onOpenChange,
-	candidates = [],
+	candidates = NO_CANDIDATES,
 	onSubmit,
 }: AddChannelDialogProps) {
 	const [selectedCandidate, setSelectedCandidate] = useState<SlackChannelCandidate | null>(null);
@@ -69,7 +71,9 @@ export function AddChannelDialog({
 	}
 
 	async function submit() {
-		if (submitting) return;
+		if (submitting) {
+			return;
+		}
 		if (!resolved) {
 			setSubmitError(
 				hasCandidates
@@ -85,10 +89,10 @@ export function AddChannelDialog({
 			await onSubmit(resolved);
 			handleOpenChange(false);
 		} catch {
-			return;
-		} finally {
-			setSubmitting(false);
+			// Rejection = keep the dialog open. The mutation's onError already surfaced the
+			// toast, so swallow here rather than let it escape as an unhandled rejection.
 		}
+		setSubmitting(false);
 	}
 
 	return (

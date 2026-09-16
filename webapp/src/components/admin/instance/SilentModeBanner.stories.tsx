@@ -27,9 +27,9 @@ type Story = StoryObj<typeof meta>;
 
 export const Engaged: Story = {
 	play: async ({ canvas }) => {
-		canvas.getByText(/silent mode is engaged/i, { exact: false });
-		canvas.getByText(/incident #42/i, { exact: false });
-		canvas.getByRole("link", { name: /manage/i });
+		canvas.getByText(/silent mode is engaged/iu, { exact: false });
+		canvas.getByText(/incident #42/iu, { exact: false });
+		canvas.getByRole("link", { name: /manage/iu });
 	},
 };
 

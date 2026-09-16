@@ -348,13 +348,7 @@ function WorkspaceUsageDetails({
 			<h2 id={`${panelId}-heading`} className="font-medium">
 				Usage details · {workspace.displayName}
 			</h2>
-			{error != null ? (
-				<QueryErrorAlert
-					error={error}
-					title={`Couldn't load usage details for ${workspace.displayName}`}
-					onRetry={onRetry}
-				/>
-			) : (
+			{error == null ? (
 				<>
 					{paces.map((pace) => (
 						<BudgetPaceAlert
@@ -383,6 +377,12 @@ function WorkspaceUsageDetails({
 						</section>
 					</div>
 				</>
+			) : (
+				<QueryErrorAlert
+					error={error}
+					title={`Couldn't load usage details for ${workspace.displayName}`}
+					onRetry={onRetry}
+				/>
 			)}
 		</section>
 	);

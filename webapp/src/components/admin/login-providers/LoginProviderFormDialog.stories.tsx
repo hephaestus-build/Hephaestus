@@ -73,11 +73,11 @@ export const Create: Story = {
 export const CreateOutline: Story = {
 	play: async () => {
 		await userEvent.click(await screen.findByRole("combobox", { name: "Provider type" }));
-		await userEvent.click(await screen.findByRole("option", { name: /Outline/i }));
+		await userEvent.click(await screen.findByRole("option", { name: /Outline/iu }));
 
 		screen.getByLabelText("Instance base URL");
-		screen.getByText(/nobody signs in to Hephaestus with it/i);
-		screen.getByText(/Settings → Applications/);
+		screen.getByText(/nobody signs in to Hephaestus with it/iu);
+		screen.getByText(/Settings → Applications/u);
 	},
 };
 
@@ -86,7 +86,7 @@ export const EditSlack: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("Edit login provider"));
 		await expect(screen.queryByLabelText("Instance base URL")).not.toBeInTheDocument();
-		screen.getByText(/Use the same Slack app client ID and secret/);
+		screen.getByText(/Use the same Slack app client ID and secret/u);
 	},
 };
 

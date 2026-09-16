@@ -43,7 +43,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 	const practiceMutationKey = ["practice-catalog", workspaceSlug, "practices"] as const;
 	const structuralScope = practiceCatalogStructureScope(workspaceSlug);
 	const applyPlacementCaches = (
-		placements: Array<Pick<Practice, "groupSlug" | "displayOrder" | "slug">>,
+		placements: Pick<Practice, "groupSlug" | "displayOrder" | "slug">[],
 	) => {
 		queryClient.setQueryData<Practice[]>(practicesQueryKey, (practices = []) =>
 			applyPracticePlacements(practices, placements),
@@ -193,9 +193,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 		scope: structuralScope,
 		onMutate: async (variables) => {
 			await queryClient.cancelQueries({ queryKey: groupsQueryKey });
-			const previousOrder = queryClient
-				.getQueryData<PracticeGroup[]>(groupsQueryKey)
-				?.slice()
+			const previousOrder = [...(queryClient.getQueryData<PracticeGroup[]>(groupsQueryKey) ?? [])]
 				.sort((a, b) => a.displayOrder - b.displayOrder)
 				.map((group) => group.slug);
 			queryClient.setQueryData<PracticeGroup[]>(groupsQueryKey, (groups = []) =>

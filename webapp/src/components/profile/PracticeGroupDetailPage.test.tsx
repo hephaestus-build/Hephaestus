@@ -140,7 +140,7 @@ describe("PracticeGroupDetailPage", () => {
 				isLoading={false}
 			/>,
 		);
-		fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+		fireEvent.click(screen.getByRole("button", { name: /retry/iu }));
 		expect(onRetry).toHaveBeenCalledOnce();
 	});
 

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { isCommonAssetRequest } from "msw";
 import { initialize, mswLoader } from "msw-storybook-addon";
-import React from "react";
+import type { ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/integrations/theme";
@@ -28,7 +28,7 @@ initialize(
 	handlers,
 );
 
-const QueryDecorator: Decorator = (Story) => {
+const withQueryClient: Decorator = (Story) => {
 	const queryClient = new QueryClient({
 		defaultOptions: {
 			queries: {
@@ -47,7 +47,7 @@ const QueryDecorator: Decorator = (Story) => {
 	);
 };
 
-const RouterDecorator: Decorator = (Story) => {
+const withRouter: Decorator = (Story) => {
 	const rootRoute = createRootRoute({
 		component: () => <Story />,
 	});
@@ -62,48 +62,14 @@ const RouterDecorator: Decorator = (Story) => {
  * nothing to find. Mounted here rather than per story, because the surfaces that raise a toast are
  * spread across the app and the ones that forget to mount it are exactly the ones that need it.
  */
-const ToastDecorator: Decorator = (Story) => (
+const withToaster: Decorator = (Story) => (
 	<>
 		<Story />
 		<Toaster />
 	</>
 );
 
-const injectDocsThemeCSS = () => {
-	if (typeof document === "undefined") return;
-
-	const styleId = "storybook-docs-theme";
-	let style = document.getElementById(styleId);
-
-	if (!style) {
-		style = document.createElement("style");
-		style.id = styleId;
-		document.head.appendChild(style);
-	}
-
-	style.textContent = `
-		.docs-story {
-			background-color: var(--background) !important;
-			color: var(--foreground) !important;
-		}
-	`;
-};
-
-const ThemeDecorator: Decorator = (Story) => {
-	React.useEffect(() => {
-		injectDocsThemeCSS();
-	}, []);
-
-	return <Story />;
-};
-
-const StorybookThemeProvider = ({
-	theme,
-	children,
-}: {
-	theme: string;
-	children: React.ReactNode;
-}) => {
+function StorybookThemeProvider({ theme, children }: { theme: string; children: ReactNode }) {
 	return (
 		<ThemeProvider
 			key={theme}
@@ -113,7 +79,7 @@ const StorybookThemeProvider = ({
 			{children}
 		</ThemeProvider>
 	);
-};
+}
 
 const preview: Preview = {
 	parameters: {
@@ -125,8 +91,8 @@ const preview: Preview = {
 		},
 		controls: {
 			matchers: {
-				color: /(background|color)$/i,
-				date: /Date$/,
+				color: /(?:background|color)$/iu,
+				date: /Date$/u,
 			},
 		},
 		options: {
@@ -189,10 +155,9 @@ const preview: Preview = {
 	},
 	loaders: [mswLoader],
 	decorators: [
-		QueryDecorator,
-		RouterDecorator,
-		ToastDecorator,
-		ThemeDecorator,
+		withQueryClient,
+		withRouter,
+		withToaster,
 		withThemeByClassName({
 			themes: {
 				light: "light",
@@ -209,7 +174,7 @@ const preview: Preview = {
 			defaultTheme: "light",
 			// The addon types `Provider` as `any`, so the shape it is called with — one entry of
 			// `themes` above — is declared here.
-			Provider: ({ theme, children }: { theme: { name: string }; children: React.ReactNode }) => (
+			Provider: ({ theme, children }: { theme: { name: string }; children: ReactNode }) => (
 				<StorybookThemeProvider theme={theme.name}>{children}</StorybookThemeProvider>
 			),
 		}),

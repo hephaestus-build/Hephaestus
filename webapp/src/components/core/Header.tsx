@@ -143,11 +143,7 @@ export default function Header({
 				{isAuthenticated ? feedbackDialog : null}
 				<ModeToggle />
 				<div className="flex items-center gap-2">
-					{!isAuthenticated ? (
-						<Button variant="outline" onClick={onLogin} disabled={isLoading}>
-							Sign in
-						</Button>
-					) : (
+					{isAuthenticated ? (
 						<div className="flex items-center gap-2">
 							<DropdownMenu>
 								<DropdownMenuTrigger
@@ -204,6 +200,10 @@ export default function Header({
 								</DropdownMenuContent>
 							</DropdownMenu>
 						</div>
+					) : (
+						<Button variant="outline" onClick={onLogin} disabled={isLoading}>
+							Sign in
+						</Button>
 					)}
 				</div>
 			</div>

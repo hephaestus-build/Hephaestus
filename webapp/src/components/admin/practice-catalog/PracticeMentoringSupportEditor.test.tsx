@@ -44,12 +44,12 @@ describe("PracticeMentoringSupportEditor", () => {
 		const user = userEvent.setup();
 		await renderWithRouter(<Controlled />, "/admin/practices/new");
 
-		await user.click(screen.getByRole("radio", { name: /Human review needed/ }));
+		await user.click(screen.getByRole("radio", { name: /Human review needed/u }));
 		expect(screen.getByLabelText("review rule").textContent).toBe(
 			"LANGUAGE_MODEL:DECLARED_EVIDENCE_INSUFFICIENT",
 		);
 
-		await user.click(screen.getByRole("radio", { name: /Guidance only/ }));
+		await user.click(screen.getByRole("radio", { name: /Guidance only/u }));
 		expect(screen.getByLabelText("review rule").textContent).toBe("NONE:NONE");
 	});
 
@@ -60,14 +60,14 @@ describe("PracticeMentoringSupportEditor", () => {
 			"/admin/practices/new",
 		);
 
-		await user.click(screen.getByRole("radio", { name: /Human review needed/ }));
-		screen.getByRole("textbox", { name: /Why is human review needed/ });
+		await user.click(screen.getByRole("radio", { name: /Human review needed/u }));
+		screen.getByRole("textbox", { name: /Why is human review needed/u });
 		expect(screen.getByLabelText("insufficiency reason").textContent).toBe("set");
 		// The reason is not a limitation, so asking for a human adds nothing to that list.
 		expect(screen.getByLabelText("limitation count").textContent).toBe("0");
 
-		await user.click(screen.getByRole("radio", { name: /AI-supported mentoring/ }));
-		expect(screen.queryByRole("textbox", { name: /Why is human review needed/ })).toBeNull();
+		await user.click(screen.getByRole("radio", { name: /AI-supported mentoring/u }));
+		expect(screen.queryByRole("textbox", { name: /Why is human review needed/u })).toBeNull();
 		expect(screen.getByLabelText("insufficiency reason").textContent).toBe("none");
 	});
 
@@ -85,8 +85,8 @@ describe("PracticeMentoringSupportEditor", () => {
 			"/admin/practices/new",
 		);
 
-		await user.click(screen.getByRole("radio", { name: /Guidance only/ }));
-		await user.click(screen.getByRole("radio", { name: /AI-supported mentoring/ }));
+		await user.click(screen.getByRole("radio", { name: /Guidance only/u }));
+		await user.click(screen.getByRole("radio", { name: /AI-supported mentoring/u }));
 
 		screen.getByDisplayValue("Keep this edited limitation.");
 	});
@@ -112,7 +112,7 @@ describe("PracticeMentoringSupportEditor", () => {
 		}
 		await renderWithRouter(<CodeProbe />, "/admin/practices/new");
 
-		await user.type(screen.getByLabelText(/Description/), "Runtime behavior not observed");
+		await user.type(screen.getByLabelText(/Description/u), "Runtime behavior not observed");
 
 		// A pure function of the text, so retyping the same limitation cannot look like a review-rule
 		// change to the policy digest.
@@ -136,10 +136,10 @@ describe("PracticeMentoringSupportEditor", () => {
 		// there is no native `disabled`, and `data-disabled` is only the CSS hook. A regression that
 		// keeps the styling and drops the semantics leaves that one alone.
 		expect(
-			screen.getByRole("radio", { name: /AI-supported mentoring/ }).getAttribute("aria-disabled"),
+			screen.getByRole("radio", { name: /AI-supported mentoring/u }).getAttribute("aria-disabled"),
 		).toBe("true");
 		expect(
-			screen.getByRole("radio", { name: /Human review needed/ }).getAttribute("aria-disabled"),
+			screen.getByRole("radio", { name: /Human review needed/u }).getAttribute("aria-disabled"),
 		).not.toBe("true");
 	});
 

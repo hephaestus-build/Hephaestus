@@ -27,8 +27,11 @@ beforeEach(() => {
 afterEach(() => {
 	toast.dismiss();
 	vi.unstubAllGlobals();
-	if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
-	else Reflect.deleteProperty(navigator, "clipboard");
+	if (originalClipboard) {
+		Object.defineProperty(navigator, "clipboard", originalClipboard);
+	} else {
+		Reflect.deleteProperty(navigator, "clipboard");
+	}
 });
 
 async function openCopyAction() {

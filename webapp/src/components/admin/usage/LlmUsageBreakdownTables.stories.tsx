@@ -64,8 +64,8 @@ const dayRows: LlmUsageByDay[] = [
 	{
 		day: new Date("2026-07-22"),
 		events: 70,
-		instanceTotalCostUsd: 2.0,
-		ownProviderTotalCostUsd: 1.0,
+		instanceTotalCostUsd: 2,
+		ownProviderTotalCostUsd: 1,
 		unpricedEventCount: 0,
 	},
 ];

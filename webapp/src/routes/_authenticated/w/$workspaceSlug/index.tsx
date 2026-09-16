@@ -90,7 +90,9 @@ function LeaderboardContainer() {
 	const effectiveDates = getEffectiveDates();
 
 	const parseDateParam = (value?: string | null) => {
-		if (!value) return undefined;
+		if (!value) {
+			return;
+		}
 		const parsed = new Date(value);
 		return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 	};
@@ -139,12 +141,12 @@ function LeaderboardContainer() {
 			)
 		: undefined;
 
-	type MetaTeam = {
+	interface MetaTeam {
 		id: number;
 		name: string;
 		parentId?: number;
 		hidden?: boolean;
-	};
+	}
 
 	const teamsList = (teamsQuery.data ?? []) as MetaTeam[];
 	const teamById = new Map<number, MetaTeam>(teamsList.map((t) => [t.id, t]));
@@ -153,9 +155,11 @@ function LeaderboardContainer() {
 		const names: string[] = [];
 		let cur: MetaTeam | undefined = t;
 		while (cur) {
-			if (!cur.hidden) names.push(cur.name);
+			if (!cur.hidden) {
+				names.push(cur.name);
+			}
 			const parent: MetaTeam | undefined =
-				cur.parentId !== undefined ? teamById.get(cur.parentId) : undefined;
+				cur.parentId === undefined ? undefined : teamById.get(cur.parentId);
 			cur = parent;
 		}
 		return names.reverse().join(" / ");

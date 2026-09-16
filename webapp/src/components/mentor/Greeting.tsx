@@ -2,7 +2,7 @@ import { motion } from "motion/react";
 
 import { HephIcon } from "@/components/brand/HephIcon";
 
-export const Greeting = () => {
+export function Greeting() {
 	return (
 		<div
 			key="overview"
@@ -41,4 +41,4 @@ export const Greeting = () => {
 			</div>
 		</div>
 	);
-};
+}

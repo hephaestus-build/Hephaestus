@@ -74,7 +74,9 @@ export function SilentModeCard({
 
 	const confirmRelease = (event: SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (releaseDisabled) return;
+		if (releaseDisabled) {
+			return;
+		}
 		if (confirmWord.trim() !== RELEASE_CONFIRM_WORD) {
 			setMismatch(true);
 			return;

@@ -60,15 +60,15 @@ export const MobileReflow: Story = {
 		chromatic: { viewports: [320, 375, 768] },
 	},
 	play: async () => {
-		await screen.findByRole("button", { name: /save changes/i });
+		await screen.findByRole("button", { name: /save changes/iu });
 		await expectDialogFitsViewport();
 	},
 };
 
 export const ValidationError: Story = {
 	play: async () => {
-		await userEvent.click(await screen.findByRole("button", { name: /add inactive model/i }));
-		await expectSettledVisible(await screen.findByText(/display name is required/i));
-		await expectSettledVisible(await screen.findByText(/upstream model id is required/i));
+		await userEvent.click(await screen.findByRole("button", { name: /add inactive model/iu }));
+		await expectSettledVisible(await screen.findByText(/display name is required/iu));
+		await expectSettledVisible(await screen.findByText(/upstream model id is required/iu));
 	},
 };

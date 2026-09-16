@@ -8,7 +8,9 @@ import { expectSettledVisible } from "@/test/overlay";
 import { GroupDetailsDialog } from "./GroupDetailsDialog";
 
 const [reviewReadyGroup] = mockGroups;
-if (!reviewReadyGroup) throw new Error("The shared group fixtures no longer hold a group to edit");
+if (!reviewReadyGroup) {
+	throw new Error("The shared group fixtures no longer hold a group to edit");
+}
 
 const meta = {
 	title: "Workspace admin/Practices/Group details",

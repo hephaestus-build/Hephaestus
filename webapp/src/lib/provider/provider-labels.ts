@@ -20,7 +20,9 @@ const PROVIDER_LABELS: Record<string, string> = {
  * nothing); a missing type falls back to `fallback`, which prose can set to e.g. "that provider".
  */
 export function getProviderLabel(providerType?: string | null, fallback = "that provider"): string {
-	if (!providerType) return fallback;
+	if (!providerType) {
+		return fallback;
+	}
 	return PROVIDER_LABELS[providerType.toUpperCase()] ?? providerType;
 }
 

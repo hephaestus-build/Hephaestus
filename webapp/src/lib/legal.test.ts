@@ -79,16 +79,15 @@ describe("isSafeLegalHref / isSafeLegalImageSrc", () => {
 });
 
 describe("resolveLegalContent", () => {
-	const originalFetch = globalThis.fetch;
 	let requestedUrls: string[] = [];
 
 	beforeEach(() => {
 		requestedUrls = [];
-		globalThis.fetch = vi.fn();
+		vi.spyOn(globalThis, "fetch");
 	});
 
 	afterEach(() => {
-		globalThis.fetch = originalFetch;
+		vi.restoreAllMocks();
 	});
 
 	interface MockedFile {

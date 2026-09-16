@@ -49,7 +49,9 @@ export function withRole(
 	role: EvidenceRole,
 ): PracticeEvidenceRequirement[] {
 	const remaining = needs.filter((need) => need.sourceKind !== sourceKind);
-	if (role !== "NOT_USED") remaining.push({ sourceKind, stance: role });
+	if (role !== "NOT_USED") {
+		remaining.push({ sourceKind, stance: role });
+	}
 	return remaining.sort((left, right) => left.sourceKind.localeCompare(right.sourceKind));
 }
 

@@ -283,10 +283,12 @@ describe("instance catalog routes", () => {
 		await waitFor(() => expect(latestGroup).toBe("delivery"));
 
 		fireEvent.click(await screen.findByRole("link", { name: practiceDefinition.name }));
-		expect(
-			(await screen.findByRole("combobox", { name: "Practice group" }, ROUTE_RENDER_WAIT))
-				.textContent,
-		).toContain("Delivery");
+		const group = await screen.findByRole(
+			"combobox",
+			{ name: "Practice group" },
+			ROUTE_RENDER_WAIT,
+		);
+		expect(group.textContent).toContain("Delivery");
 	});
 
 	it("explains which practices group exclusion affects", async () => {
@@ -315,7 +317,7 @@ describe("instance catalog routes", () => {
 			),
 		);
 		const confirmation = screen.getByRole("alertdialog");
-		within(confirmation).getByText(/also stops offering 1 currently offered practice/);
+		within(confirmation).getByText(/also stops offering 1 currently offered practice/u);
 		within(confirmation).getByText("Say what changed and why");
 		fireEvent.click(within(confirmation).getByRole("button", { name: "Stop offering" }));
 
@@ -450,7 +452,7 @@ describe("instance catalog routes", () => {
 		await waitFor(() => expect(latestTag).toBe("tag-2"));
 
 		fireEvent.click(await screen.findByRole("link", { name: practiceDefinition.name }));
-		const name = await screen.findByRole("textbox", { name: /Name/ }, ROUTE_RENDER_WAIT);
+		const name = await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT);
 		fireEvent.change(name, { target: { value: "Updated name" } });
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
@@ -539,7 +541,7 @@ describe("instance catalog routes", () => {
 			),
 		);
 		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
-		const name = await screen.findByRole("textbox", { name: /Name/ }, ROUTE_RENDER_WAIT);
+		const name = await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT);
 		fireEvent.change(name, { target: { value: "Unsaved draft name" } });
 
 		fireEvent.click(
@@ -622,14 +624,14 @@ describe("instance catalog routes", () => {
 		);
 		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
 
-		const name = await screen.findByRole("textbox", { name: /Name/ }, ROUTE_RENDER_WAIT);
+		const name = await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT);
 		fireEvent.change(name, { target: { value: "My unsaved draft" } });
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		await screen.findByText("This practice changed while you were editing");
 
 		fireEvent.click(screen.getByRole("button", { name: "Continue with my draft" }));
 		await waitFor(() =>
-			expect(screen.getByRole<HTMLInputElement>("textbox", { name: /Name/ }).value).toBe(
+			expect(screen.getByRole<HTMLInputElement>("textbox", { name: /Name/u }).value).toBe(
 				"My unsaved draft",
 			),
 		);
@@ -643,7 +645,7 @@ describe("instance catalog routes", () => {
 		[
 			"changed",
 			async () => {
-				await userEvent.setup().click(screen.getByRole("radio", { name: /Conversation/ }));
+				await userEvent.setup().click(screen.getByRole("radio", { name: /Conversation/u }));
 			},
 			mockConversationWorkType.recommendedPolicy,
 			["chat.conversation_thread.settled"],

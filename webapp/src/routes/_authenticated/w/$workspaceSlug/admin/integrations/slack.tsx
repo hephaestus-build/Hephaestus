@@ -185,7 +185,9 @@ function SlackIntegrationPage() {
 	const triggerSync = useMutation({
 		...triggerSyncJobMutation(),
 		onSuccess: () => {
-			if (connectionId == null) return;
+			if (connectionId == null) {
+				return;
+			}
 			void queryClient.invalidateQueries({
 				queryKey: getConnectionSyncStatusQueryKey({
 					path: { workspaceSlug: slug, connectionId },
@@ -206,7 +208,9 @@ function SlackIntegrationPage() {
 	const cancelJob = useMutation({
 		...updateConnectionSyncJobMutation(),
 		onSuccess: () => {
-			if (connectionId == null) return;
+			if (connectionId == null) {
+				return;
+			}
 			void queryClient.invalidateQueries({
 				queryKey: getConnectionSyncStatusQueryKey({
 					path: { workspaceSlug: slug, connectionId },
@@ -276,7 +280,9 @@ function SlackIntegrationPage() {
 					isCancelling={cancelJob.isPending}
 					onRetry={() => void statusQuery.refetch()}
 					onSync={() => {
-						if (connectionId == null) return;
+						if (connectionId == null) {
+							return;
+						}
 						triggerSync.mutate({
 							path: { workspaceSlug: slug, connectionId },
 							body: { type: "RECONCILIATION" },
@@ -284,7 +290,9 @@ function SlackIntegrationPage() {
 					}}
 					onCancel={() => {
 						const jobId = status.activeJob?.id;
-						if (connectionId == null || jobId == null) return;
+						if (connectionId == null || jobId == null) {
+							return;
+						}
 						cancelJob.mutate({
 							path: { workspaceSlug: slug, connectionId, jobId },
 							body: { cancelRequested: true },

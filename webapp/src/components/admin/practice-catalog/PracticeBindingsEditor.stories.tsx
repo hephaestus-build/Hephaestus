@@ -61,14 +61,14 @@ type Story = StoryObj<typeof meta>;
 export const PullRequestLifecycle: Story = {
 	play: async ({ canvas }) => {
 		const strip = within(canvas.getByRole("group", { name: "Reviews when" }));
-		await expect(strip.getByRole("checkbox", { name: /^Opened/ })).toBeChecked();
-		await expect(strip.getByRole("checkbox", { name: /^Merged/ })).not.toBeChecked();
+		await expect(strip.getByRole("checkbox", { name: /^Opened/u })).toBeChecked();
+		await expect(strip.getByRole("checkbox", { name: /^Merged/u })).not.toBeChecked();
 		await expect(
 			strip.getByRole("checkbox", { name: "New commits pushed every time" }),
 		).toBeVisible();
 		// Nothing numbers the occasion, because a practice only ever has the one.
-		await expect(canvas.queryByText(/Occasion 1/)).toBeNull();
-		await expect(canvas.queryByRole("button", { name: /Add occasion/ })).toBeNull();
+		await expect(canvas.queryByText(/Occasion 1/u)).toBeNull();
+		await expect(canvas.queryByRole("button", { name: /Add occasion/u })).toBeNull();
 	},
 };
 
@@ -78,7 +78,7 @@ export const IssueLifecycle: Story = {
 		const strip = within(canvas.getByRole("group", { name: "Reviews when" }));
 		await expect(strip.getByRole("checkbox", { name: "Details changed every time" })).toBeChecked();
 		// An issue is never a draft, so the question is not asked.
-		await expect(canvas.queryByRole("switch", { name: /^Include drafts/ })).toBeNull();
+		await expect(canvas.queryByRole("switch", { name: /^Include drafts/u })).toBeNull();
 	},
 };
 
@@ -86,9 +86,9 @@ export const DocumentLifecycle: Story = {
 	args: { options: mockDocumentWorkType, binding: mockDocumentBinding },
 	play: async ({ canvas }) => {
 		const strip = within(canvas.getByRole("group", { name: "Reviews when" }));
-		await expect(strip.getByRole("checkbox", { name: /^Published/ })).toBeChecked();
+		await expect(strip.getByRole("checkbox", { name: /^Published/u })).toBeChecked();
 		await expect(strip.getByRole("checkbox", { name: "Content changed every time" })).toBeChecked();
-		await expect(strip.getByRole("checkbox", { name: /^Archived/ })).not.toBeChecked();
+		await expect(strip.getByRole("checkbox", { name: /^Archived/u })).not.toBeChecked();
 	},
 };
 
@@ -110,7 +110,7 @@ export const ReadingASourceWhole: Story = {
 	args: { binding: mockMergeBinding },
 	play: async ({ canvas }) => {
 		const strip = within(canvas.getByRole("group", { name: "Reviews when" }));
-		await expect(strip.getByRole("checkbox", { name: /^Merged/ })).toBeChecked();
+		await expect(strip.getByRole("checkbox", { name: /^Merged/u })).toBeChecked();
 		await expect(
 			within(canvas.getByRole("group", { name: "What this review reads" })).getByText(
 				"· captured whole",
@@ -126,9 +126,9 @@ export const ReadingASourceWhole: Story = {
 export const AskingByHandIsNotAMoment: Story = {
 	play: async ({ canvas }) => {
 		const strip = within(canvas.getByRole("group", { name: "Reviews when" }));
-		await expect(canvas.queryByRole("checkbox", { name: /Review requested by hand/ })).toBeNull();
-		await expect(strip.queryByText(/ask for this review by hand/)).toBeNull();
-		await expect(canvas.getByText(/ask for this review by hand/)).toBeVisible();
+		await expect(canvas.queryByRole("checkbox", { name: /Review requested by hand/u })).toBeNull();
+		await expect(strip.queryByText(/ask for this review by hand/u)).toBeNull();
+		await expect(canvas.getByText(/ask for this review by hand/u)).toBeVisible();
 	},
 };
 
@@ -136,8 +136,8 @@ export const AskingByHandIsNotAMoment: Story = {
 export const GuidanceOnlyPromisesNoHandAskedReview: Story = {
 	args: { mode: "guidance-only", binding: { ...mockPullRequestBinding, needs: [] } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/reads nothing, because no review runs/)).toBeVisible();
-		await expect(canvas.queryByText(/ask for this review by hand/)).toBeNull();
+		await expect(canvas.getByText(/reads nothing, because no review runs/u)).toBeVisible();
+		await expect(canvas.queryByText(/ask for this review by hand/u)).toBeNull();
 	},
 };
 
@@ -151,9 +151,9 @@ export const IncludingDrafts: Story = {
 export const RecordedButNotReviewed: Story = {
 	args: { mode: "human-review" },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/nothing is reviewed while the practice asks/)).toBeVisible();
+		await expect(canvas.getByText(/nothing is reviewed while the practice asks/u)).toBeVisible();
 		// Asking by hand would not review it either while it waits for a human.
-		await expect(canvas.queryByText(/ask for this review by hand/)).toBeNull();
+		await expect(canvas.queryByText(/ask for this review by hand/u)).toBeNull();
 	},
 };
 
@@ -211,7 +211,7 @@ export const AMomentTheWorkTypeNoLongerOffers: Story = {
 		},
 	},
 	play: async ({ args, canvas }) => {
-		const stray = canvas.getByRole("checkbox", { name: /^Review requested by hand/ });
+		const stray = canvas.getByRole("checkbox", { name: /^Review requested by hand/u });
 		await expect(stray).toBeChecked();
 
 		await userEvent.click(stray);
@@ -226,7 +226,7 @@ export const AMomentTheWorkTypeNoLongerOffers: Story = {
 export const ChoosingAMoment: Story = {
 	play: async ({ args, canvas }) => {
 		const strip = within(canvas.getByRole("group", { name: "Reviews when" }));
-		await userEvent.click(strip.getByRole("checkbox", { name: /^Review submitted/ }));
+		await userEvent.click(strip.getByRole("checkbox", { name: /^Review submitted/u }));
 
 		// Sorted on the way out, so an untouched practice does not come back looking edited.
 		await expect(args.onChange).toHaveBeenCalledWith({

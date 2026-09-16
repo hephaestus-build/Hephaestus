@@ -61,16 +61,18 @@ export const DiscoveryUnsupported: Story = {
 	},
 	play: async () => {
 		await userEvent.type(await screen.findByLabelText("Base URL"), "https://example.com");
-		await userEvent.click(screen.getByRole("button", { name: /test & fetch models/i }));
-		await expectSettledVisible(await screen.findByText(/discovery unsupported/i));
-		await expect(screen.getByRole("button", { name: /save inactive connection/i })).toBeEnabled();
+		await userEvent.click(screen.getByRole("button", { name: /test & fetch models/iu }));
+		await expectSettledVisible(await screen.findByText(/discovery unsupported/iu));
+		await expect(screen.getByRole("button", { name: /save inactive connection/iu })).toBeEnabled();
 	},
 };
 
 export const ValidationError: Story = {
 	play: async () => {
-		await userEvent.click(await screen.findByRole("button", { name: /save inactive connection/i }));
-		await expectSettledVisible(await screen.findByText(/display name is required/i));
+		await userEvent.click(
+			await screen.findByRole("button", { name: /save inactive connection/iu }),
+		);
+		await expectSettledVisible(await screen.findByText(/display name is required/iu));
 	},
 };
 
@@ -81,7 +83,7 @@ export const MobileReflow: Story = {
 		chromatic: { viewports: [320, 375, 768] },
 	},
 	play: async () => {
-		await screen.findByRole("button", { name: /save inactive connection/i });
+		await screen.findByRole("button", { name: /save inactive connection/iu });
 		await expectDialogFitsViewport();
 	},
 };

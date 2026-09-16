@@ -63,12 +63,15 @@ function asTestCase(value: string | TestCase): TestCase {
 }
 
 function interpolate(template: string, data: Record<string, string> = {}): string {
-	return template.replaceAll(/{{\s*([^}\s]+)\s*}}/g, (_, key: string) => data[key] ?? "");
+	return template.replaceAll(
+		/\{\{\s*(?<key>[^}\s]+)\s*\}\}/gu,
+		(_, key: string) => data[key] ?? "",
+	);
 }
 
 function messagePattern(template: string): RegExp {
-	const escaped = template.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
-	return new RegExp(`^${escaped.replaceAll(/\\{\\{\s*[^}]+\s*\\}\\}/g, ".+?")}$`);
+	const escaped = template.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+	return new RegExp(`^${escaped.replaceAll(/\\\{\\\{\s*[^}]+\s*\\\}\\\}/gu, ".+?")}$`, "u");
 }
 
 function endPosition(code: string, byteOffset: number): { line: number; column: number } {
@@ -124,14 +127,14 @@ export const ruleTester = {
 		}
 		// oxlint-disable-next-line vitest/valid-title -- The rule name is the subject of this shared suite.
 		describe(ruleName, () => {
-			tests.valid.forEach((value) => {
+			for (const value of tests.valid) {
 				const test = asTestCase(value);
 				const run = test.only ? it.only : it;
 				run("accepts valid code", () => {
 					expect(lint(ruleName, test)).toStrictEqual([]);
 				});
-			});
-			tests.invalid.forEach((test) => {
+			}
+			for (const test of tests.invalid) {
 				const run = test.only ? it.only : it;
 				run("reports invalid code", () => {
 					const diagnostics = lint(ruleName, test);
@@ -143,12 +146,16 @@ export const ruleTester = {
 					for (const [errorIndex, expected] of test.errors.entries()) {
 						const diagnostic = diagnostics[errorIndex];
 						expect(diagnostic).toBeDefined();
-						if (!diagnostic) continue;
+						if (!diagnostic) {
+							continue;
+						}
 						const template =
 							expected.messageId === undefined
 								? undefined
 								: rule.meta?.messages?.[expected.messageId];
-						if (expected.messageId !== undefined) expect(template).toBeDefined();
+						if (expected.messageId !== undefined) {
+							expect(template).toBeDefined();
+						}
 						const message =
 							expected.message ??
 							(template === undefined
@@ -156,18 +163,30 @@ export const ruleTester = {
 								: expected.data
 									? interpolate(template, expected.data)
 									: messagePattern(template));
-						if (message !== undefined) expect(diagnostic.message).toMatch(message);
+						if (message !== undefined) {
+							expect(diagnostic.message).toMatch(message);
+						}
 						const span = diagnostic.labels[0]?.span;
 						expect(span).toBeDefined();
-						if (!span) continue;
-						if (expected.line !== undefined) expect(span.line).toBe(expected.line);
-						if (expected.column !== undefined) expect(span.column).toBe(expected.column);
+						if (!span) {
+							continue;
+						}
+						if (expected.line !== undefined) {
+							expect(span.line).toBe(expected.line);
+						}
+						if (expected.column !== undefined) {
+							expect(span.column).toBe(expected.column);
+						}
 						const end = endPosition(test.code, span.offset + span.length);
-						if (expected.endLine !== undefined) expect(end.line).toBe(expected.endLine);
-						if (expected.endColumn !== undefined) expect(end.column).toBe(expected.endColumn);
+						if (expected.endLine !== undefined) {
+							expect(end.line).toBe(expected.endLine);
+						}
+						if (expected.endColumn !== undefined) {
+							expect(end.column).toBe(expected.endColumn);
+						}
 					}
 				});
-			});
+			}
 		});
 	},
 };

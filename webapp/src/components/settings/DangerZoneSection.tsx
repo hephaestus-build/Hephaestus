@@ -91,7 +91,9 @@ function DataExportRow() {
 		refetchInterval: (query) => {
 			const status = query.state.data?.status?.toUpperCase();
 			const stillWorking = status && EXPORT_IN_PROGRESS.has(status);
-			if (!stillWorking || requestedAt === null) return stillWorking ? 2000 : false;
+			if (!stillWorking || requestedAt === null) {
+				return stillWorking ? 2000 : false;
+			}
 			return query.state.dataUpdatedAt - requestedAt < MAX_EXPORT_WAIT_MS ? 2000 : false;
 		},
 	});
@@ -108,7 +110,9 @@ function DataExportRow() {
 	const isFailed = status === "FAILED" || status === "EXPIRED" || isStalled;
 
 	const handleDownload = async () => {
-		if (exportId === null) return;
+		if (exportId === null) {
+			return;
+		}
 		setIsDownloading(true);
 		try {
 			const response = await downloadDataExport({
@@ -130,23 +134,28 @@ function DataExportRow() {
 			const anchor = document.createElement("a");
 			anchor.href = url;
 			anchor.download = "hephaestus-export.json";
-			document.body.appendChild(anchor);
+			document.body.append(anchor);
 			anchor.click();
 			anchor.remove();
 			URL.revokeObjectURL(url);
 		} catch {
 			toast.error("Failed to download export. Please try again later.");
-		} finally {
-			setIsDownloading(false);
 		}
+		setIsDownloading(false);
 	};
 
 	let statusText = "";
-	if (requestExport.isPending) statusText = "Requesting export…";
-	else if (isPreparing) statusText = "Preparing your export… this can take a moment.";
-	else if (isReady) statusText = "Your export is ready to download.";
-	else if (isStalled) statusText = "This is taking longer than expected. Please try again.";
-	else if (isFailed) statusText = "The export could not be prepared. Please try again.";
+	if (requestExport.isPending) {
+		statusText = "Requesting export…";
+	} else if (isPreparing) {
+		statusText = "Preparing your export… this can take a moment.";
+	} else if (isReady) {
+		statusText = "Your export is ready to download.";
+	} else if (isStalled) {
+		statusText = "This is taking longer than expected. Please try again.";
+	} else if (isFailed) {
+		statusText = "The export could not be prepared. Please try again.";
+	}
 
 	return (
 		<div className="flex items-start justify-between gap-6 py-2">
@@ -208,7 +217,9 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 		// The server requires the confirmation header to equal the caller's own account id
 		// (a deliberate "you know who you are" guard against forged/CSRF-style deletes).
 		const userId = getUserId();
-		if (!confirmed || !userId) return;
+		if (!confirmed || !userId) {
+			return;
+		}
 		deleteAccount.mutate({ headers: { "X-Confirm-Delete": userId } });
 	};
 

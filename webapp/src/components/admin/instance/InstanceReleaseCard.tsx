@@ -70,26 +70,30 @@ function ExternalLink({ href, children }: { href: string; children: ReactNode })
 
 function runningLabel(running: ReleaseStatus["running"]): string {
 	switch (running.channel) {
-		case "RELEASE":
+		case "RELEASE": {
 			return `v${running.version}`;
-		case "COMMIT":
+		}
+		case "COMMIT": {
 			return `commit ${running.version.slice(0, 7)}`;
-		case "DEVELOPMENT":
+		}
+		case "DEVELOPMENT": {
 			return running.version;
+		}
 	}
 }
 
 function CheckSummary({ release }: { release: ReleaseStatus }) {
-	const description = RELEASE_CHECK_STATUS_DEFS[release.status].description;
+	const { description } = RELEASE_CHECK_STATUS_DEFS[release.status];
 	const checked = <RelativeTime value={release.lastSuccess} fallback="at an unknown time" />;
 	switch (release.status) {
-		case "CURRENT":
+		case "CURRENT": {
 			return (
 				<>
 					{description} Checked {checked}.
 				</>
 			);
-		case "UPDATE_AVAILABLE":
+		}
+		case "UPDATE_AVAILABLE": {
 			return (
 				<>
 					{description}
@@ -102,7 +106,8 @@ function CheckSummary({ release }: { release: ReleaseStatus }) {
 					) : null}
 				</>
 			);
-		case "FAILED":
+		}
+		case "FAILED": {
 			return (
 				<>
 					{description}
@@ -127,17 +132,21 @@ function CheckSummary({ release }: { release: ReleaseStatus }) {
 					) : null}
 				</>
 			);
-		case "NEVER_CHECKED":
+		}
+		case "NEVER_CHECKED": {
 			return <>{description} The first one runs a minute after start.</>;
-		case "DISABLED":
+		}
+		case "DISABLED": {
 			return (
 				<>
 					{description} Set <code>HEPHAESTUS_RELEASE_CHECK_ENABLED=true</code> to resume, or compare
 					with the <ExternalLink href={RELEASES_URL}>published releases</ExternalLink> yourself.
 				</>
 			);
-		case "NOT_APPLICABLE":
-			return <>{description}</>;
+		}
+		case "NOT_APPLICABLE": {
+			return description;
+		}
 	}
 }
 

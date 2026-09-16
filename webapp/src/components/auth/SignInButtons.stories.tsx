@@ -45,7 +45,7 @@ export const LinkOnlyProvidersHidden: Story = {
 	},
 	play: async () => {
 		await screen.findByRole("button", { name: "Continue with GitHub" });
-		await expect(screen.queryByRole("button", { name: /slack|outline/i })).toBeNull();
+		await expect(screen.queryByRole("button", { name: /slack|outline/iu })).toBeNull();
 	},
 };
 
@@ -55,7 +55,7 @@ export const Loading: Story = { args: { options: { status: "loading" } } };
 export const Empty: Story = {
 	args: { options: { status: "ready", providers: [] } },
 	play: async () => {
-		await screen.findByText(/No sign-in options are configured/);
+		await screen.findByText(/No sign-in options are configured/u);
 		await expect(screen.queryByRole("button")).toBeNull();
 	},
 };
@@ -63,10 +63,12 @@ export const Empty: Story = {
 export const DiscoveryFailed: Story = {
 	args: { options: { status: "error", onRetry: fn() } },
 	play: async ({ args }) => {
-		if (args.options.status !== "error") throw new Error("story misconfigured");
+		if (args.options.status !== "error") {
+			throw new Error("story misconfigured");
+		}
 		await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
 		await expect(args.options.onRetry).toHaveBeenCalled();
-		await expect(screen.queryByRole("button", { name: /continue with/i })).toBeNull();
+		await expect(screen.queryByRole("button", { name: /continue with/iu })).toBeNull();
 	},
 };
 

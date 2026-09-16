@@ -153,7 +153,9 @@ function AdminLlmPage() {
 		...filedUnder(CONNECTION_WRITE_MUTATION_KEY, adminDeleteLlmConnectionMutation()),
 		onSuccess: (_data, variables) => {
 			void invalidateConnections();
-			if (variables.path.id === selectedConnectionId) setSelectedConnectionId(null);
+			if (variables.path.id === selectedConnectionId) {
+				setSelectedConnectionId(null);
+			}
 			toast.success("Connection deleted");
 		},
 		onError: (error) => reportConnectionError(error, "Couldn't delete the connection"),
@@ -203,7 +205,9 @@ function AdminLlmPage() {
 		updateSharing.isPending;
 
 	const handleSaveModel = async (body: AdminLlmModelSaveBody) => {
-		if (!selectedConnection) return;
+		if (!selectedConnection) {
+			return;
+		}
 		try {
 			await saveAdminLlmModelSafely({
 				connectionId: selectedConnection.id,
@@ -342,7 +346,9 @@ function AdminLlmPage() {
 				open={connectionDialogOpen}
 				onOpenChange={(open) => {
 					setConnectionDialogOpen(open);
-					if (!open) setProbedModels(null);
+					if (!open) {
+						setProbedModels(null);
+					}
 				}}
 				editing={editingConnection}
 				isSubmitting={createConnection.isPending || updateConnection.isPending}
@@ -393,7 +399,9 @@ function AdminLlmPage() {
 			<AdminLlmModelAccessDialog
 				open={accessModel != null}
 				onOpenChange={(open) => {
-					if (!open) setAccessModel(null);
+					if (!open) {
+						setAccessModel(null);
+					}
 				}}
 				model={accessModel}
 				workspaceOptions={workspaceOptions}
@@ -402,7 +410,9 @@ function AdminLlmPage() {
 				onRetryWorkspaces={() => void workspacesQuery.refetch()}
 				isSubmitting={updateSharing.isPending}
 				onSave={(body) => {
-					if (!accessModel) return;
+					if (!accessModel) {
+						return;
+					}
 					updateSharing.mutate(
 						{ path: { id: accessModel.id }, body },
 						{
@@ -423,7 +433,9 @@ function AdminLlmPage() {
 			<ConfirmAccessDialog
 				open={challenge !== undefined}
 				onOpenChange={(open) => {
-					if (!open) setChallenge(undefined);
+					if (!open) {
+						setChallenge(undefined);
+					}
 				}}
 				maxAgeSeconds={challenge?.maxAgeSeconds}
 				providers={confirmAccess.providers}

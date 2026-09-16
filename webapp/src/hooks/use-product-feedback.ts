@@ -38,14 +38,21 @@ const DRAFT_KEPT = "Your draft is still here.";
 
 function submissionError(error: unknown, subject: "survey" | "feedback"): string {
 	const status = problemStatusOf(error);
-	if (status === undefined)
+	if (status === undefined) {
 		return `Couldn't send. ${DRAFT_KEPT} Check your connection and try again.`;
-	if (status === 429) return `Please wait a minute before sending more feedback. ${DRAFT_KEPT}`;
-	if (status === 401) return "Your session has expired. Sign in again before sending.";
-	if (subject === "survey" && status === 409)
+	}
+	if (status === 429) {
+		return `Please wait a minute before sending more feedback. ${DRAFT_KEPT}`;
+	}
+	if (status === 401) {
+		return "Your session has expired. Sign in again before sending.";
+	}
+	if (subject === "survey" && status === 409) {
 		return "This survey was already answered or declined, possibly in another tab.";
-	if (subject === "survey" && status === 404)
+	}
+	if (subject === "survey" && status === 404) {
 		return "This survey is no longer available. Your answers have not been sent.";
+	}
 	return `Couldn't send (${problemDetailOf(error, "the server refused the request")}). ${DRAFT_KEPT}`;
 }
 
@@ -89,7 +96,9 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 	// too, or the invitation reopens to the same refusal until the next refetch.
 	const dropWhenGone = (error: unknown, variables: { path: { surveyId: string } }) => {
 		const status = problemStatusOf(error);
-		if (status === 404 || status === 409) removeFromCaches(variables.path.surveyId);
+		if (status === 404 || status === 409) {
+			removeFromCaches(variables.path.surveyId);
+		}
 	};
 	const submit = useMutation({
 		...submitProductSurveyResponseMutation(),
@@ -118,7 +127,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		onSuccess: (_, variables) => {
 			removeFromCaches(variables.path.surveyId);
 			toast.success("Survey declined. You won't be asked again.", {
-				duration: 15000,
+				duration: 15_000,
 				action: { label: "Undo", onClick: () => undoDecline.mutate({ path: variables.path }) },
 			});
 		},
@@ -139,10 +148,14 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			decline.reset();
 		},
 		acknowledge: (surveyId: string) => {
-			if (workspaceSlug) acknowledge.mutate({ path: { workspaceSlug: slug, surveyId } });
+			if (workspaceSlug) {
+				acknowledge.mutate({ path: { workspaceSlug: slug, surveyId } });
+			}
 		},
 		submit: async (survey: SurveyIdentity, answers: Answer[]) => {
-			if (deciding()) return false;
+			if (deciding()) {
+				return false;
+			}
 			decline.reset();
 			try {
 				await submit.mutateAsync({
@@ -156,7 +169,9 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			}
 		},
 		decline: async (surveyId: string) => {
-			if (deciding()) return false;
+			if (deciding()) {
+				return false;
+			}
 			submit.reset();
 			try {
 				await decline.mutateAsync({ path: { workspaceSlug: slug, surveyId } });
@@ -190,10 +205,13 @@ export function useSubmitProductFeedback(workspaceSlug: string | undefined) {
 		error: mutation.isError ? submissionError(mutation.error, "feedback") : undefined,
 		reset: mutation.reset,
 		submit: async (body: FeedbackRequest) => {
-			if (queryClient.isMutating({ mutationKey: FEEDBACK_SEND }) > 0) return false;
+			if (queryClient.isMutating({ mutationKey: FEEDBACK_SEND }) > 0) {
+				return false;
+			}
 			try {
-				if (workspaceSlug) await workspaceMutation.mutateAsync({ path: { workspaceSlug }, body });
-				else await instanceMutation.mutateAsync({ body });
+				await (workspaceSlug
+					? workspaceMutation.mutateAsync({ path: { workspaceSlug }, body })
+					: instanceMutation.mutateAsync({ body }));
 				return true;
 			} catch {
 				return false;

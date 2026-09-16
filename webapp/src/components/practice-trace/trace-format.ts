@@ -1,13 +1,10 @@
 import type { PracticeTraceEntry, ReviewRequestOutcome, TracedSignal } from "@/api/types.gen";
 import type { ReviewSectionId } from "@/components/admin/practices/review/review-sections";
 import { statusValues } from "@/components/practice-vocabulary/status-def";
-import {
-	TRACE_OUTCOME_DEFS,
-	type TraceOutcome,
-} from "@/components/practice-vocabulary/trace-outcome-defs";
+import { TRACE_OUTCOME_DEFS } from "@/components/practice-vocabulary/trace-outcome-defs";
 import { WITHHOLDING_REASON_DEFS } from "@/components/practice-vocabulary/withholding-defs";
 
-export type { TraceOutcome };
+export type { TraceOutcome } from "@/components/practice-vocabulary/trace-outcome-defs";
 export type WithheldReason = PracticeTraceEntry["withheldReasons"][number];
 export type SignalState = TracedSignal["state"];
 export type SignalStateReason = NonNullable<TracedSignal["stateReason"]>;

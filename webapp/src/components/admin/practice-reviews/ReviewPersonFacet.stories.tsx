@@ -69,7 +69,7 @@ export const Default: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Developer" }));
 		const listbox = await screen.findByRole("listbox", { name: "Developer options" });
-		await userEvent.click(await within(listbox).findByRole("option", { name: /Grace Hopper/ }));
+		await userEvent.click(await within(listbox).findByRole("option", { name: /Grace Hopper/u }));
 		await expect(args.onChange).toHaveBeenCalledWith(9);
 		await canvas.findByRole("combobox", { name: "Developer: Grace Hopper" });
 	},
@@ -120,7 +120,7 @@ export const MorePeopleThanTheFacetCanList: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Developer" }));
 		await screen.findByRole("listbox", { name: "Developer options" });
-		await screen.findByText(/Showing the first 100 members/);
+		await screen.findByText(/Showing the first 100 members/u);
 	},
 };
 

@@ -14,10 +14,10 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByRole("link", { name: /Applied Education Technologies/ }),
+			canvas.getByRole("link", { name: /Applied Education Technologies/u }),
 		).toHaveAttribute("href", "https://aet.cit.tum.de/");
 		await expect(
-			canvas.getByRole("link", { name: /Technical University of Munich/ }),
+			canvas.getByRole("link", { name: /Technical University of Munich/u }),
 		).toHaveAttribute("href", "https://www.tum.de/en/");
 	},
 };

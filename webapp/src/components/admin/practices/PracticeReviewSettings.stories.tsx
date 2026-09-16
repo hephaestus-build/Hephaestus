@@ -229,7 +229,7 @@ export const CumulativeWideningDraft: Story = {
 		await expect(canvas.getByText("You have unsaved coverage changes.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
 		const dialog = within(await screen.findByRole("alertdialog"));
-		await expect(dialog.getByText(/Monitored repositories covered:/)).toHaveTextContent(
+		await expect(dialog.getByText(/Monitored repositories covered:/u)).toHaveTextContent(
 			"Monitored repositories covered: 1 → 3 of 3",
 		);
 		await expectNoPageOverflow();

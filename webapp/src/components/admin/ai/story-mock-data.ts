@@ -123,7 +123,7 @@ export const mockJobFailedResultProcessing: AgentJob = {
 	errorMessage: "Review result processing failed.",
 	llmModel: "openai/gpt-oss-120b",
 	llmTotalInputTokens: 31_000,
-	llmTotalOutputTokens: 1_200,
+	llmTotalOutputTokens: 1200,
 	retryCount: 1,
 	exitCode: 0,
 };

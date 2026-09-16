@@ -40,18 +40,22 @@ const profileSearchSchema = z.object({
 });
 
 const parseRepositoryIds = (value?: string): number[] => {
-	if (!value) return [];
+	if (!value) {
+		return [];
+	}
 
 	return value
 		.split(",")
 		.map((id) => id.trim())
-		.filter((id) => /^\d+$/.test(id))
-		.map((id) => Number(id))
+		.filter((id) => /^\d+$/u.test(id))
+		.map(Number)
 		.filter((id) => Number.isSafeInteger(id) && id > 0);
 };
 
 const serializeRepositoryIds = (repositoryIds: number[]) => {
-	if (repositoryIds.length === 0) return undefined;
+	if (repositoryIds.length === 0) {
+		return;
+	}
 	return repositoryIds.join(",");
 };
 
@@ -95,7 +99,9 @@ function UserProfile() {
 	const effectiveDates = getEffectiveDates();
 
 	const parseDateParam = (value?: string) => {
-		if (!value) return undefined;
+		if (!value) {
+			return;
+		}
 		const parsed = new Date(value);
 		return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 	};
@@ -131,7 +137,9 @@ function UserProfile() {
 	});
 	const practicesByGroup = (standingsQuery.data ?? []).reduce<Record<string, PracticeStanding[]>>(
 		(grouped, practice) => {
-			if (!practice.groupSlug) return grouped;
+			if (!practice.groupSlug) {
+				return grouped;
+			}
 			const forGroup = grouped[practice.groupSlug] ?? [];
 			forGroup.push(practice);
 			grouped[practice.groupSlug] = forGroup;
@@ -199,8 +207,12 @@ function UserProfile() {
 			activityMonitorData={activityMonitorQuery.data}
 			activityMonitorError={workspaceQuery.error ?? activityMonitorQuery.error}
 			onRetryActivityMonitor={() => {
-				if (workspaceQuery.isError) void workspaceQuery.refetch();
-				if (activityMonitorQuery.isError) void activityMonitorQuery.refetch();
+				if (workspaceQuery.isError) {
+					void workspaceQuery.refetch();
+				}
+				if (activityMonitorQuery.isError) {
+					void activityMonitorQuery.refetch();
+				}
 			}}
 			activityMonitorFilters={{
 				repositoryIds: selectedRepositoryIds,
@@ -237,9 +249,15 @@ function UserProfile() {
 							groupsQuery.error ?? groupStandingsQuery.error ?? standingsQuery.error ?? undefined
 						}
 						onRetry={() => {
-							if (groupsQuery.isError) void groupsQuery.refetch();
-							if (groupStandingsQuery.isError) void groupStandingsQuery.refetch();
-							if (standingsQuery.isError) void standingsQuery.refetch();
+							if (groupsQuery.isError) {
+								void groupsQuery.refetch();
+							}
+							if (groupStandingsQuery.isError) {
+								void groupStandingsQuery.refetch();
+							}
+							if (standingsQuery.isError) {
+								void standingsQuery.refetch();
+							}
 						}}
 						onOpenDetails={(group) => {
 							void navigate({

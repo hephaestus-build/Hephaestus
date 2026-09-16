@@ -34,7 +34,7 @@ import {
 
 export interface NavAdminProps {
 	workspaceSlug: string;
-	integrationKinds: ReadonlyArray<IntegrationCatalogEntry["kind"]>;
+	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
 	scmProviderType?: "GITHUB" | "GITLAB";
 }
 
@@ -49,7 +49,9 @@ function useSectionOpen(onSection: boolean) {
 
 	if (onSection !== wasOnSection) {
 		setWasOnSection(onSection);
-		if (onSection) setOpen(true);
+		if (onSection) {
+			setOpen(true);
+		}
 	}
 
 	return [open, setOpen] as const;

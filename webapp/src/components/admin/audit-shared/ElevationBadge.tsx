@@ -21,7 +21,9 @@ export interface ElevationBadgeProps {
  * elevation was tracked read as not elevated, and a system actor is a member of nothing.
  */
 export function ElevationBadge({ elevated }: ElevationBadgeProps) {
-	if (!elevated) return null;
+	if (!elevated) {
+		return null;
+	}
 	return (
 		<Badge variant="warning" title={ELEVATION_DESCRIPTION}>
 			<ShieldAlert aria-hidden />

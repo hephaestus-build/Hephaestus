@@ -6,7 +6,9 @@ export function nameForRef(
 ): string | undefined {
 	for (const row of rows) {
 		for (const ref of [row.account, row.actor, row.actingActor]) {
-			if (ref?.id === id) return ref.displayName ?? undefined;
+			if (ref?.id === id) {
+				return ref.displayName ?? undefined;
+			}
 		}
 	}
 	return undefined;

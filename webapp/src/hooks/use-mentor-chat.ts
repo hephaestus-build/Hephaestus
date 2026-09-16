@@ -90,7 +90,7 @@ export function useMentorChat({
 
 	// Overlaid on the server's record: an entry wins while its mutation is in flight, so dropping it
 	// on failure falls straight back to the server without a second request.
-	const [castVotes, setCastVotes] = useState<Record<string, boolean>>({});
+	const [castVotes, setCastVotes] = useState(() => new Map<string, boolean>());
 
 	// Keyed by the id the votes were cast against rather than by `threadId`, so a brand-new thread
 	// learning its id does not read as a thread switch and discard them.
@@ -98,14 +98,18 @@ export function useMentorChat({
 	const [votedThreadId, setVotedThreadId] = useState(voteThreadId);
 	if (votedThreadId !== voteThreadId) {
 		setVotedThreadId(voteThreadId);
-		setCastVotes({});
+		setCastVotes(new Map());
 	}
 
 	const voteState: Record<string, boolean | undefined> = {};
 	for (const vote of extractVotesFromThreadDetail(threadDetail)) {
-		if (vote.messageId) voteState[vote.messageId] = vote.isUpvoted;
+		if (vote.messageId) {
+			voteState[vote.messageId] = vote.isUpvoted;
+		}
 	}
-	Object.assign(voteState, castVotes);
+	for (const [messageId, isUpvoted] of castVotes) {
+		voteState[messageId] = isUpvoted;
+	}
 
 	// `updatedAt` stays unset: it is the server's stamp on a stored vote, and no surface renders it.
 	const votes: ChatMessageVote[] = Object.entries(voteState)
@@ -181,10 +185,18 @@ export function useMentorChat({
 
 	const hydratedRef = useRef<string | null>(null);
 	useEffect(() => {
-		if (!threadId) return;
-		if (hydratedRef.current === threadId) return;
-		if (status === "streaming" || status === "submitted") return;
-		if (!threadDetail?.messages) return;
+		if (!threadId) {
+			return;
+		}
+		if (hydratedRef.current === threadId) {
+			return;
+		}
+		if (status === "streaming" || status === "submitted") {
+			return;
+		}
+		if (!threadDetail?.messages) {
+			return;
+		}
 
 		// A transcript that will not parse would otherwise render as an empty conversation with nothing
 		// to explain it. Keyed on the thread, so a re-run of this effect updates one toast, not stacks.
@@ -219,7 +231,7 @@ export function useMentorChat({
 		if (!voteThreadId) {
 			return;
 		}
-		setCastVotes((prev) => ({ ...prev, [messageId]: isUpvoted }));
+		setCastVotes((prev) => new Map(prev).set(messageId, isUpvoted));
 		voteMessageMut.mutate(
 			{
 				path: { workspaceSlug: slug, threadId: voteThreadId, messageId },
@@ -228,8 +240,8 @@ export function useMentorChat({
 			{
 				onError: () => {
 					setCastVotes((prev) => {
-						const next = { ...prev };
-						delete next[messageId];
+						const next = new Map(prev);
+						next.delete(messageId);
 						return next;
 					});
 				},
@@ -268,7 +280,7 @@ export function useMentorChat({
 		sendMessage,
 		threadDetail,
 		isThreadLoading,
-		threadError: threadError,
+		threadError,
 		threads,
 		isThreadsLoading,
 		currentThreadId: threadId ?? id,

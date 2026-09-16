@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest";
 import { filedUnder, pathNumber, usePendingMutationIds } from "./use-pending-mutation-ids";
 
 /** The shape every generated mutation takes: the path parameters the endpoint is keyed on. */
-type Vars = { path: { id: number } };
+interface Vars {
+	path: { id: number };
+}
 
 const KEY = ["thing"];
 

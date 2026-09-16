@@ -50,7 +50,7 @@ export const RefusalsLinkToTheirFix: Story = {
 			"href",
 			"/w/demo/admin/practices/review?section=when-and-where",
 		);
-		await expect(canvas.getAllByRole("link", { name: /^Open |^Set up / })).toHaveLength(1);
+		await expect(canvas.getAllByRole("link", { name: /^Open |^Set up /u })).toHaveLength(1);
 	},
 };
 
@@ -61,7 +61,7 @@ export const MembersAreOfferedNoAdminLinks: Story = {
 		await expect(
 			canvas.getByText("This workspace's review settings turned it away."),
 		).toBeVisible();
-		await expect(canvas.queryByRole("link", { name: /^Open |^Set up / })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("link", { name: /^Open |^Set up /u })).not.toBeInTheDocument();
 	},
 };
 
@@ -74,7 +74,9 @@ export const EntriesCanTakeFocus: Story = {
 		await expect(canvas.getAllByText("New commits pushed")).toHaveLength(2);
 		for (const id of ["occurrence-sig-sync-9ab3c410", "occurrence-sig-sync-b71d0a52"]) {
 			const target = canvasElement.ownerDocument.getElementById(id);
-			if (!target) throw new Error(`No timeline entry with id ${id}`);
+			if (!target) {
+				throw new Error(`No timeline entry with id ${id}`);
+			}
 			await expect(target).toHaveAttribute("tabindex", "-1");
 		}
 	},

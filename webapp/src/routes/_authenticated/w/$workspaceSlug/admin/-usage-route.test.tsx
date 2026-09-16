@@ -47,7 +47,7 @@ async function renderUsageRoute(onPutBudget?: () => Promise<Response> | Response
 	return screen.findByRole("button", { name: "Change cap" }, ROUTE_RENDER_WAIT);
 }
 
-const capField = () => screen.getByLabelText(/Monthly cap/i);
+const capField = () => screen.getByLabelText(/Monthly cap/iu);
 
 /**
  * Only what is peculiar to *this* route. Where a rejection is reported — inline while the dialog is

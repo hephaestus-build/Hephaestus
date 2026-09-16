@@ -29,7 +29,9 @@ function LoginRoute() {
 	const navigate = useNavigate();
 
 	useEffect(() => {
-		if (isAuthenticated) void navigate({ href: safeReturnTo(returnTo), replace: true });
+		if (isAuthenticated) {
+			void navigate({ href: safeReturnTo(returnTo), replace: true });
+		}
 	}, [isAuthenticated, navigate, returnTo]);
 
 	// Account deletion reloads this route; the confirmation must survive that reload.

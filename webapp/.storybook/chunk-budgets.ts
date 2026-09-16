@@ -15,7 +15,9 @@ export function checkChunkBudget(code: string, moduleIds: string[]) {
 		moduleIds.some((id) => id.replaceAll("\\", "/").endsWith(module)),
 	);
 	if (!budget) {
-		if (bytes <= 500_000) return;
+		if (bytes <= 500_000) {
+			return;
+		}
 		throw new Error(`Unrecognized oversized Storybook chunk: ${bytes} bytes (limit 500000)`);
 	}
 	const gzip = gzipSync(code).byteLength;
@@ -34,9 +36,13 @@ export function storybookChunkBudgets(): Plugin {
 		// Vite expands its preload map after generateBundle; budget the final bytes written.
 		writeBundle(_options, bundle) {
 			for (const output of Object.values(bundle)) {
-				if (output.type !== "chunk") continue;
+				if (output.type !== "chunk") {
+					continue;
+				}
 				const report = checkChunkBudget(output.code, Object.keys(output.modules));
-				if (report) this.info(report);
+				if (report) {
+					this.info(report);
+				}
 			}
 		},
 	};

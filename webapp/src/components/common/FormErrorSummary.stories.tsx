@@ -48,7 +48,7 @@ export const Default: Story = {
 
 export const EntryMovesFocusToItsField: Story = {
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("link", { name: /Give the practice a name/ }));
+		await userEvent.click(canvas.getByRole("link", { name: /Give the practice a name/u }));
 		// A frame later: an entry may first have to reveal a collapsed section for its field to exist.
 		await waitFor(() => expect(canvas.getByLabelText("Name")).toHaveFocus());
 	},
@@ -63,7 +63,7 @@ const collapsedSlugError = {
 export const EntryRevealsACollapsedSectionFirst: Story = {
 	args: { errors: [collapsedSlugError] },
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("link", { name: /identifier/ }));
+		await userEvent.click(canvas.getByRole("link", { name: /identifier/u }));
 		await expect(collapsedSlugError.reveal).toHaveBeenCalledOnce();
 	},
 };

@@ -55,8 +55,8 @@ export const Default: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
 
-		await userEvent.type(await screen.findByPlaceholderText(/search channels/i), "general");
-		await userEvent.click(await screen.findByRole("option", { name: /#general/i }));
+		await userEvent.type(await screen.findByPlaceholderText(/search channels/iu), "general");
+		await userEvent.click(await screen.findByRole("option", { name: /#general/iu }));
 
 		await expect(args.onSelect).toHaveBeenCalledWith(
 			expect.objectContaining({ slackChannelId: "C05GENERAL5" }),
@@ -67,18 +67,18 @@ export const Default: Story = {
 export const Searching: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
-		const search = await screen.findByPlaceholderText(/search channels/i);
+		const search = await screen.findByPlaceholderText(/search channels/iu);
 
 		await userEvent.type(search, "team");
-		await expectSettledVisible(await screen.findByRole("option", { name: /#team-standup/i }));
-		screen.getByRole("option", { name: /#team-listed/i });
-		screen.getByRole("option", { name: /#team-archive/i });
-		await expect(screen.queryByRole("option", { name: /#general/i })).not.toBeInTheDocument();
+		await expectSettledVisible(await screen.findByRole("option", { name: /#team-standup/iu }));
+		screen.getByRole("option", { name: /#team-listed/iu });
+		screen.getByRole("option", { name: /#team-archive/iu });
+		await expect(screen.queryByRole("option", { name: /#general/iu })).not.toBeInTheDocument();
 
 		await userEvent.clear(search);
 		await userEvent.type(search, "C05GENERAL5");
-		await expectSettledVisible(await screen.findByRole("option", { name: /#general/i }));
-		await expect(screen.queryByRole("option", { name: /#team-standup/i })).not.toBeInTheDocument();
+		await expectSettledVisible(await screen.findByRole("option", { name: /#general/iu }));
+		await expect(screen.queryByRole("option", { name: /#team-standup/iu })).not.toBeInTheDocument();
 	},
 };
 
@@ -87,15 +87,15 @@ export const KeyboardNavigation: Story = {
 		const trigger = canvas.getByRole("combobox");
 		await userEvent.click(trigger);
 
-		const search = await screen.findByPlaceholderText(/search channels/i);
+		const search = await screen.findByPlaceholderText(/search channels/iu);
 		await waitFor(() => expect(search).toHaveFocus());
 
 		await userEvent.keyboard("{ArrowDown}");
-		const first = await screen.findByRole("option", { name: /#general/i });
+		const first = await screen.findByRole("option", { name: /#general/iu });
 		await waitFor(() => expect(search).toHaveAttribute("aria-activedescendant", first.id));
 
 		await userEvent.keyboard("{ArrowDown}");
-		const second = screen.getByRole("option", { name: /#team-standup/i });
+		const second = screen.getByRole("option", { name: /#team-standup/iu });
 		await waitFor(() => expect(search).toHaveAttribute("aria-activedescendant", second.id));
 
 		await userEvent.keyboard("{ArrowUp}");
@@ -119,15 +119,15 @@ export const AccessibleStructure: Story = {
 		await expectSettledVisible(await screen.findByRole("listbox"));
 		await expect(trigger).toHaveAttribute("aria-expanded", "true");
 		await expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
-		await expect(screen.getByRole("option", { name: /#general/i })).toHaveAttribute(
+		await expect(screen.getByRole("option", { name: /#general/iu })).toHaveAttribute(
 			"aria-selected",
 			"true",
 		);
-		await expect(screen.getByRole("option", { name: /#team-standup/i })).toHaveAttribute(
+		await expect(screen.getByRole("option", { name: /#team-standup/iu })).toHaveAttribute(
 			"aria-selected",
 			"false",
 		);
-		await expect(screen.getByPlaceholderText(/search channels/i)).toHaveAccessibleName(
+		await expect(screen.getByPlaceholderText(/search channels/iu)).toHaveAccessibleName(
 			"Search Slack channels",
 		);
 	},
@@ -155,10 +155,10 @@ export const WithDisabledReasons: Story = {
 	},
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
-		const search = await screen.findByPlaceholderText(/search channels/i);
+		const search = await screen.findByPlaceholderText(/search channels/iu);
 		await waitFor(() => expect(search).toHaveFocus());
 
-		const archived = await screen.findByRole("option", { name: /#team-archive/i });
+		const archived = await screen.findByRole("option", { name: /#team-archive/iu });
 		await expect(archived).toHaveTextContent("Archived");
 		await expect(archived).toHaveAttribute("data-disabled");
 		await expect(getComputedStyle(archived).pointerEvents).toBe("none");
@@ -175,7 +175,7 @@ export const PrivateChannel: Story = {
 	args: { selectedChannelId: "C06STANDUP6" },
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
-		await expectSettledVisible(await screen.findByRole("img", { name: /private/i }));
+		await expectSettledVisible(await screen.findByRole("img", { name: /private/iu }));
 	},
 };
 
@@ -183,7 +183,7 @@ export const Empty: Story = {
 	args: { candidates: [] },
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
-		await expectSettledVisible(await screen.findByText(/no channels found/i));
+		await expectSettledVisible(await screen.findByText(/no channels found/iu));
 	},
 };
 
@@ -191,10 +191,10 @@ export const EmptySearchResult: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
 		await userEvent.type(
-			await screen.findByPlaceholderText(/search channels/i),
+			await screen.findByPlaceholderText(/search channels/iu),
 			"nothing-matches-this",
 		);
-		await expectSettledVisible(await screen.findByText(/no channels found/i));
+		await expectSettledVisible(await screen.findByText(/no channels found/iu));
 		await expect(screen.queryByRole("option")).not.toBeInTheDocument();
 	},
 };

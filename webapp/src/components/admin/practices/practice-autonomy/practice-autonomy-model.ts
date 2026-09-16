@@ -42,8 +42,11 @@ export function groupPracticesByGroup(
 	for (const practice of practices) {
 		const key = practice.groupSlug ?? UNASSIGNED_GROUP_KEY;
 		const bucket = byGroup.get(key);
-		if (bucket) bucket.push(practice);
-		else byGroup.set(key, [practice]);
+		if (bucket) {
+			bucket.push(practice);
+		} else {
+			byGroup.set(key, [practice]);
+		}
 	}
 
 	const groups: AutonomyGroup[] = [];
@@ -76,7 +79,9 @@ export function groupPracticesByGroup(
 		});
 	}
 
-	if (!overridesOnly) return groups;
+	if (!overridesOnly) {
+		return groups;
+	}
 
 	return groups
 		.map((group) => ({

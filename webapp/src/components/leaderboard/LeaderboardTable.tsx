@@ -25,7 +25,7 @@ type TeamLeaderboardEntry = LeaderboardEntry & {
 };
 
 export interface LeaderboardTableProps {
-	leaderboard?: LeaderboardEntry[] | TeamLeaderboardEntry[];
+	leaderboard?: readonly LeaderboardEntry[] | readonly TeamLeaderboardEntry[];
 	isLoading: boolean;
 	variant: LeaderboardVariant;
 	currentUser?: UserInfo;
@@ -35,8 +35,11 @@ export interface LeaderboardTableProps {
 	providerType?: ProviderType;
 	leaguesEnabled?: boolean;
 }
+
+const NO_ENTRIES: readonly LeaderboardEntry[] = [];
+
 export function LeaderboardTable({
-	leaderboard = [],
+	leaderboard = NO_ENTRIES,
 	isLoading,
 	variant,
 	currentUser,
@@ -61,7 +64,7 @@ export function LeaderboardTable({
 	}
 
 	const isTeam = variant === "TEAM";
-	const entries: LeaderboardEntry[] = leaderboard;
+	const entries: readonly LeaderboardEntry[] = leaderboard;
 
 	return (
 		<Table>
@@ -83,8 +86,10 @@ export function LeaderboardTable({
 			<TableBody>
 				{entries.map((entry) => {
 					if (isTeam) {
-						const team = entry.team;
-						if (!team) return null;
+						const { team } = entry;
+						if (!team) {
+							return null;
+						}
 						const displayName = teamLabelsById?.[team.id] ?? team.name;
 						const teamIdentity = (
 							<div className="flex items-center gap-2 font-medium">
@@ -125,7 +130,7 @@ export function LeaderboardTable({
 						);
 					}
 
-					const user = entry.user;
+					const { user } = entry;
 					if (!user) {
 						return null;
 					}

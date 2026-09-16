@@ -51,7 +51,7 @@ export function ObservationsListPage({
 	// Guarded on the filter being set, because that is the only condition under which the first row
 	// names the filtered person — unfiltered, row zero is whoever happens to sort first, and the facet
 	// would put a stranger's name on somebody else's id.
-	const filteredSubject = search.subjectUserId != null ? rows[0]?.subject : undefined;
+	const filteredSubject = search.subjectUserId == null ? undefined : rows[0]?.subject;
 	const hasFilter = hasObservationFilter(search);
 	const reset = () => onSearchChange(clearedObservationFilters());
 	const patchFilter = (patch: Partial<ObservationsSearch>) => onSearchChange({ ...patch, page: 0 });

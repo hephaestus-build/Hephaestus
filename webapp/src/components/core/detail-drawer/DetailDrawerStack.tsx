@@ -50,7 +50,9 @@ export function DetailDrawerStack<TKind extends string>({
 
 	// Mounting is the arrival `useArrived` needs; a component left mounted on `null` has already
 	// spent its first render.
-	if (stack.length === 0) return null;
+	if (stack.length === 0) {
+		return null;
+	}
 	return (
 		<DetailDrawerLevelView
 			depth={0}
@@ -83,7 +85,9 @@ function DetailDrawerLevelView<TKind extends string>({
 }: DetailDrawerLevelViewProps<TKind>) {
 	const entry = stack[depth];
 	const arrived = useArrived();
-	if (!entry) return null;
+	if (!entry) {
+		return null;
+	}
 
 	const child = stack[depth + 1];
 	const guarded = guardedKinds?.includes(entry.kind) ?? false;
@@ -94,7 +98,9 @@ function DetailDrawerLevelView<TKind extends string>({
 			open={arrived && (closingDepth === null || depth < closingDepth)}
 			swipeDirection="right"
 			onOpenChange={(next) => {
-				if (next) return;
+				if (next) {
+					return;
+				}
 				// Every way out is the same way out: Escape, a press on the page, a swipe and the
 				// panel's own controls all just close it. What protects a draft is the prompt
 				// `useUnsavedChanges` raises on the navigation, not a gesture this refuses.
@@ -105,7 +111,9 @@ function DetailDrawerLevelView<TKind extends string>({
 				setClosingDepth(depth);
 			}}
 			onOpenChangeComplete={(next) => {
-				if (next || closingDepth !== depth) return;
+				if (next || closingDepth !== depth) {
+					return;
+				}
 				onClose(depth);
 			}}
 		>

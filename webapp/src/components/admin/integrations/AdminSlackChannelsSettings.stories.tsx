@@ -89,10 +89,12 @@ export const Default: Story = {
 export const Empty: Story = {
 	args: { channels: [] },
 	play: async ({ canvas }) => {
-		canvas.getByText(/no channels monitored yet/i);
+		canvas.getByText(/no channels monitored yet/iu);
 		// Both the header button and the empty-state CTA are labelled "Add channel", so an empty
 		// list must offer two of them — the CTA is not a relabelled header button.
-		await expect(canvas.getAllByRole("button", { name: /add channel/i }).length).toBeGreaterThan(1);
+		await expect(canvas.getAllByRole("button", { name: /add channel/iu }).length).toBeGreaterThan(
+			1,
+		);
 	},
 };
 
@@ -115,7 +117,9 @@ export const WithOptOuts: Story = {
 		// getByText("2") would be satisfied by a stray "2" rendered anywhere in the table.
 		const rowFor = (channel: string) => {
 			const row = canvas.getByRole("button", { name: `Actions for ${channel}` }).closest("tr");
-			if (!row) throw new Error(`The actions button for ${channel} is not inside a row.`);
+			if (!row) {
+				throw new Error(`The actions button for ${channel} is not inside a row.`);
+			}
 			return row;
 		};
 		within(rowFor("team-standup")).getByText("2");
@@ -152,8 +156,8 @@ export const NoChannelName: Story = {
 export const NotConnected: Story = {
 	args: { hasSlackConnection: false, channels: [pending] },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("button", { name: /add channel/i })).not.toBeInTheDocument();
-		canvas.getByText(/connect slack to monitor channels/i);
+		await expect(canvas.queryByRole("button", { name: /add channel/iu })).not.toBeInTheDocument();
+		canvas.getByText(/connect slack to monitor channels/iu);
 		// The passed-in channel must not render while disconnected: the inert section shows only the
 		// discovery copy, never a monitored-channel row the admin cannot act on.
 		await expect(canvas.queryByText("team-intro")).not.toBeInTheDocument();
@@ -164,15 +168,15 @@ export const NotConnected: Story = {
 export const ActivateConfirm: Story = {
 	args: { channels: [pending] },
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /actions for team-intro/i }));
-		await userEvent.click(await screen.findByRole("menuitem", { name: /activate monitoring/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /actions for team-intro/iu }));
+		await userEvent.click(await screen.findByRole("menuitem", { name: /activate monitoring/iu }));
 		const dialog = await screen.findByRole("dialog");
-		within(dialog).getByText(/post a visible announcement/i);
+		within(dialog).getByText(/post a visible announcement/iu);
 
 		// Opening the dialog must not itself transition the channel — the gate is the confirm.
 		await expect(args.onUpdateConsent).not.toHaveBeenCalled();
 
-		await userEvent.click(within(dialog).getByRole("button", { name: /^activate monitoring$/i }));
+		await userEvent.click(within(dialog).getByRole("button", { name: /^activate monitoring$/iu }));
 		await expect(args.onUpdateConsent).toHaveBeenCalledWith({
 			slackChannelId: pending.slackChannelId,
 			consentState: "ACTIVE",
@@ -184,21 +188,21 @@ export const ActivateConfirm: Story = {
 export const RevokeTypeToConfirm: Story = {
 	args: { channels: [active] },
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /actions for team-standup/i }));
-		await userEvent.click(await screen.findByRole("menuitem", { name: /remove & erase/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /actions for team-standup/iu }));
+		await userEvent.click(await screen.findByRole("menuitem", { name: /remove & erase/iu }));
 		const dialog = await screen.findByRole("alertdialog");
 
 		// Enabled, but it will not erase anything until the ID matches — and it says so.
-		const confirm = within(dialog).getByRole("button", { name: /remove & erase/i });
+		const confirm = within(dialog).getByRole("button", { name: /remove & erase/iu });
 		await expect(confirm).toBeEnabled();
 		await userEvent.click(confirm);
-		within(dialog).getByText(/that does not match/i);
+		within(dialog).getByText(/that does not match/iu);
 		await expect(args.onRemoveChannel).not.toHaveBeenCalled();
 
-		await userEvent.type(within(dialog).getByLabelText(/to confirm/i), active.slackChannelId);
-		await expect(within(dialog).queryByText(/that does not match/i)).not.toBeInTheDocument();
+		await userEvent.type(within(dialog).getByLabelText(/to confirm/iu), active.slackChannelId);
+		await expect(within(dialog).queryByText(/that does not match/iu)).not.toBeInTheDocument();
 
-		await userEvent.type(within(dialog).getByLabelText(/reason/i), "left the course");
+		await userEvent.type(within(dialog).getByLabelText(/reason/iu), "left the course");
 		await userEvent.click(confirm);
 		await expect(args.onRemoveChannel).toHaveBeenCalledWith({
 			slackChannelId: active.slackChannelId,
@@ -211,7 +215,7 @@ export const RevokeTypeToConfirm: Story = {
 export const Loading: Story = {
 	args: { isLoading: true, channels: [] },
 	play: async ({ canvas }) => {
-		canvas.getByText(/monitored channels have their/i);
+		canvas.getByText(/monitored channels have their/iu);
 	},
 };
 
@@ -219,13 +223,13 @@ export const Loading: Story = {
 export const LoadError: Story = {
 	args: { channels: [], isError: true, onRetry: fn() },
 	play: async ({ args, canvas }) => {
-		await expect(canvas.queryByText(/no channels monitored yet/i)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/no channels monitored yet/iu)).not.toBeInTheDocument();
 		await expect(canvas.getByRole("alert")).toHaveTextContent(
-			/couldn't load the monitored channels/i,
+			/couldn't load the monitored channels/iu,
 		);
 
 		// Retry is wired, not decorative.
-		await userEvent.click(canvas.getByRole("button", { name: /^retry$/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /^retry$/iu }));
 		await expect(args.onRetry).toHaveBeenCalledTimes(1);
 	},
 };
@@ -234,14 +238,14 @@ export const LoadError: Story = {
 export const RemovePendingNothingCollected: Story = {
 	args: { channels: [pending] },
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /actions for team-intro/i }));
-		await userEvent.click(await screen.findByRole("menuitem", { name: /remove & erase/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /actions for team-intro/iu }));
+		await userEvent.click(await screen.findByRole("menuitem", { name: /remove & erase/iu }));
 		const dialog = await screen.findByRole("alertdialog");
-		within(dialog).getByText(/nothing has been collected/i);
-		await expect(within(dialog).queryByLabelText(/to confirm/i)).not.toBeInTheDocument();
+		within(dialog).getByText(/nothing has been collected/iu);
+		await expect(within(dialog).queryByLabelText(/to confirm/iu)).not.toBeInTheDocument();
 
 		// No gate to clear: Remove goes straight through, with no reason recorded.
-		await userEvent.click(within(dialog).getByRole("button", { name: /^remove$/i }));
+		await userEvent.click(within(dialog).getByRole("button", { name: /^remove$/iu }));
 		await expect(args.onRemoveChannel).toHaveBeenCalledWith({
 			slackChannelId: pending.slackChannelId,
 			reason: undefined,
@@ -274,33 +278,35 @@ export const AddChannelPicker: Story = {
 		],
 	},
 	play: async ({ args, canvas }) => {
-		const [headerAddChannel] = canvas.getAllByRole("button", { name: /add channel/i });
-		if (!headerAddChannel) throw new Error("No control to add a channel was rendered");
+		const [headerAddChannel] = canvas.getAllByRole("button", { name: /add channel/iu });
+		if (!headerAddChannel) {
+			throw new Error("No control to add a channel was rendered");
+		}
 		await userEvent.click(headerAddChannel);
 		const dialog = await screen.findByRole("dialog");
 
 		// The options live in the combobox's popover — open it. (The popover is portalled, so
 		// the options are queried from the document, not from the dialog subtree.)
-		await userEvent.click(within(dialog).getByRole("combobox", { name: /^channel$/i }));
+		await userEvent.click(within(dialog).getByRole("combobox", { name: /^channel$/iu }));
 
 		// The archived channel is a disabled option with a reason, not silently missing.
-		await expect(await screen.findByRole("option", { name: /#team-standup/i })).toHaveAttribute(
+		await expect(await screen.findByRole("option", { name: /#team-standup/iu })).toHaveAttribute(
 			"aria-disabled",
 			"true",
 		);
-		screen.getByText(/^archived$/i);
+		screen.getByText(/^archived$/iu);
 
 		// Searching narrows the option list instead of scrolling a flat button list.
 		await userEvent.type(
-			screen.getByRole("combobox", { name: /search available slack channels/i }),
+			screen.getByRole("combobox", { name: /search available slack channels/iu }),
 			"general",
 		);
-		screen.getByRole("option", { name: /#general/i });
-		await expect(screen.queryByRole("option", { name: /#team-standup/i })).not.toBeInTheDocument();
+		screen.getByRole("option", { name: /#general/iu });
+		await expect(screen.queryByRole("option", { name: /#team-standup/iu })).not.toBeInTheDocument();
 
 		// Picking an option and submitting registers the channel — the admin never handles a raw id.
-		await userEvent.click(screen.getByRole("option", { name: /#general/i }));
-		await userEvent.click(within(dialog).getByRole("button", { name: /^add channel$/i }));
+		await userEvent.click(screen.getByRole("option", { name: /#general/iu }));
+		await userEvent.click(within(dialog).getByRole("button", { name: /^add channel$/iu }));
 		await expect(args.onRegisterChannel).toHaveBeenCalledWith({
 			slackChannelId: "C05GENERAL5",
 			channelName: "general",
@@ -318,15 +324,17 @@ export const MutationError: Story = {
 	},
 	play: async ({ canvas }) => {
 		// Empty list ⇒ both a header button and an empty-state CTA; open via the header one.
-		const [headerAddChannel] = canvas.getAllByRole("button", { name: /add channel/i });
-		if (!headerAddChannel) throw new Error("No control to add a channel was rendered");
+		const [headerAddChannel] = canvas.getAllByRole("button", { name: /add channel/iu });
+		if (!headerAddChannel) {
+			throw new Error("No control to add a channel was rendered");
+		}
 		await userEvent.click(headerAddChannel);
 		const dialog = await screen.findByRole("dialog");
 		await userEvent.type(
-			within(dialog).getByLabelText(/paste a channel link or id/i),
+			within(dialog).getByLabelText(/paste a channel link or id/iu),
 			"C0974LJBPBK",
 		);
-		await userEvent.click(within(dialog).getByRole("button", { name: /^add channel$/i }));
+		await userEvent.click(within(dialog).getByRole("button", { name: /^add channel$/iu }));
 		// Rejected mutation ⇒ the dialog stays open for a retry.
 		await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
 	},

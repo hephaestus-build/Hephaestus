@@ -66,7 +66,9 @@ export function FilterToggle<TValue extends string>({
 				value={[value]}
 				onValueChange={(next) => {
 					const chosen = next[0];
-					if (chosen) onChange(chosen);
+					if (chosen) {
+						onChange(chosen);
+					}
 				}}
 				variant="outline"
 				size="sm"

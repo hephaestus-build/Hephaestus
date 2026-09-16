@@ -71,7 +71,9 @@ function RootLayout() {
 		select: (matches) => {
 			for (let index = matches.length - 1; index >= 0; index -= 1) {
 				const matchSurface = matches[index]?.staticData.surface;
-				if (matchSurface) return matchSurface;
+				if (matchSurface) {
+					return matchSurface;
+				}
 			}
 			return "standard";
 		},
@@ -132,6 +134,7 @@ function RootLayout() {
 			<Toaster />
 			<PublicLoginOverlay />
 			{showCopilot && (
+				// oxlint-disable-next-line react/jsx-no-useless-fragment -- Sentry takes an element, not `null`, and an empty one is the way to render nothing.
 				<ErrorBoundary fallback={<></>} handled>
 					<Suspense fallback={null}>
 						<GlobalCopilot />
@@ -151,12 +154,14 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 	const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>("FEEDBACK");
 	const [survey, setSurvey] = useState<SurveyInvitation>();
 	const [surveyOpen, setSurveyOpen] = useState(false);
-	const [drafts, setDrafts] = useState<Record<string, SurveyResponseDraft>>({});
+	const [drafts, setDrafts] = useState(() => new Map<string, SurveyResponseDraft>());
 	const nudged = useRef(false);
 	const invitations = surveys.query.data ?? [];
 	const openSurvey = (surveyId: string) => {
 		const next = invitations.find((candidate) => candidate.id === surveyId);
-		if (!next) return;
+		if (!next) {
+			return;
+		}
 		setSurvey(next);
 		setSurveyOpen(true);
 	};
@@ -175,13 +180,15 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 				: `New survey: ${invitation.title}`,
 			{
 				description: `${surveyEstimate(invitation.questions)}. It waits in the feedback menu.`,
-				duration: 12000,
+				duration: 12_000,
 				action: { label: "Take survey", onClick: () => openSurvey(invitation.id) },
 			},
 		);
 	});
 	useEffect(() => {
-		if (!unseen || nudged.current) return;
+		if (!unseen || nudged.current) {
+			return;
+		}
 		nudged.current = true;
 		nudge(unseen);
 	}, [unseen]);
@@ -198,7 +205,9 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 			<ProductFeedbackDialog
 				open={feedbackOpen}
 				onOpenChange={(open) => {
-					if (!open) feedback.reset();
+					if (!open) {
+						feedback.reset();
+					}
 					setFeedbackOpen(open);
 				}}
 				kind={feedbackKind}
@@ -216,20 +225,28 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 					survey={survey}
 					open={surveyOpen}
 					onOpenChange={(open) => {
-						if (!open) closeSurvey();
+						if (!open) {
+							closeSurvey();
+						}
 					}}
-					draft={drafts[survey.id] ?? EMPTY_SURVEY_RESPONSE_DRAFT}
-					onDraftChange={(draft) => setDrafts((current) => ({ ...current, [survey.id]: draft }))}
+					draft={drafts.get(survey.id) ?? EMPTY_SURVEY_RESPONSE_DRAFT}
+					onDraftChange={(draft) => setDrafts((current) => new Map(current).set(survey.id, draft))}
 					isSubmitting={surveys.isPending}
 					error={surveys.error}
 					onSubmit={async (answers) => {
 						if (await surveys.submit(survey, answers)) {
-							setDrafts(({ [survey.id]: _sent, ...rest }) => rest);
+							setDrafts((current) => {
+								const next = new Map(current);
+								next.delete(survey.id);
+								return next;
+							});
 							closeSurvey();
 						}
 					}}
 					onDecline={async () => {
-						if (await surveys.decline(survey.id)) closeSurvey();
+						if (await surveys.decline(survey.id)) {
+							closeSurvey();
+						}
 					}}
 				/>
 			)}
@@ -341,7 +358,7 @@ function AppSidebarContainer() {
 
 	const sidebarContext: SidebarContext = pathname.startsWith("/admin")
 		? "admin"
-		: pathname === "/mentor" || /^\/w\/[^/]+\/mentor/.test(pathname)
+		: pathname === "/mentor" || /^\/w\/[^/]+\/mentor/u.test(pathname)
 			? "mentor"
 			: "main";
 
@@ -361,7 +378,9 @@ function AppSidebarContainer() {
 	}
 
 	const handleWorkspaceChange = (ws: typeof chromeWorkspace) => {
-		if (!ws) return;
+		if (!ws) {
+			return;
+		}
 		void switchWorkspace(ws);
 	};
 
@@ -412,8 +431,9 @@ function PublicLoginOverlay() {
 			onSignIn={(registrationId) => login(registrationId, returnTo)}
 			devReturnTo={returnTo}
 			onClose={() => {
-				if (location.maskedLocation) router.history.back();
-				else
+				if (location.maskedLocation) {
+					router.history.back();
+				} else {
 					void router.navigate({
 						to: ".",
 						search: (previous) => ({ ...previous, login: undefined }),
@@ -421,6 +441,7 @@ function PublicLoginOverlay() {
 						replace: true,
 						resetScroll: false,
 					});
+				}
 			}}
 		/>
 	);

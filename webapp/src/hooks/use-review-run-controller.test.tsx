@@ -45,7 +45,7 @@ describe("review result-processing retry", () => {
 			await waitFor(() => expect(result.current.job?.deliveryStatus).toBe("PENDING"));
 			expect(result.current.feedback).toStrictEqual({ status: "pending" });
 			await waitFor(() => expect(result.current.job?.deliveryStatus).toBe("DELIVERED"), {
-				timeout: 7_000,
+				timeout: 7000,
 			});
 			await waitFor(() => {
 				expect(result.current.observations).toStrictEqual({ status: "ready", items: [], total: 1 });

@@ -8,8 +8,12 @@ let inFlight: Promise<SessionRefreshResult> | null = null;
 
 async function rotate(): Promise<SessionRefreshResult> {
 	const { response } = await refresh();
-	if (!response) return "unavailable";
-	if (response.ok) return "refreshed";
+	if (!response) {
+		return "unavailable";
+	}
+	if (response.ok) {
+		return "refreshed";
+	}
 	return response.status === 401 ? "expired" : "unavailable";
 }
 

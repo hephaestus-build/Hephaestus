@@ -13,6 +13,7 @@ import {
 	placePracticeMutation,
 	previewGroupAdoptionQueryKey,
 } from "@/api/@tanstack/react-query.gen";
+import type * as ReactQueryGen from "@/api/@tanstack/react-query.gen";
 import type { Practice } from "@/api/types.gen";
 import {
 	mockGroups,
@@ -23,7 +24,7 @@ import {
 import { usePracticeCatalogMutations } from "./use-practice-catalog-mutations";
 
 vi.mock("@/api/@tanstack/react-query.gen", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@/api/@tanstack/react-query.gen")>();
+	const actual = await importOriginal<typeof ReactQueryGen>();
 	return {
 		...actual,
 		deleteGroupMutation: vi.fn(),

@@ -237,7 +237,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		{ value: NO_GROUP, label: "Unassigned" },
 		...groups.map((group) => ({ value: group.slug, label: group.name })),
 	];
-	const artifactKind = form.artifactKind;
+	const { artifactKind } = form;
 	const selectedWorkType = workTypeOptionsFor(definitionOptions, artifactKind);
 	// Recorded history belongs to the work type the practice was reviewed under: switching work type
 	// changes which sources are allowed, so the same rows would resolve to "Unknown source".
@@ -246,20 +246,22 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 	// is spared building a map to discard.
 	// https://react.dev/reference/react/useRef#avoiding-recreating-the-ref-contents
 	const draftsRef = useRef<Map<string, WorkTypeDraft>>(null);
-	draftsRef.current ??= new Map(
-		artifactKind
-			? [
-					[
-						artifactKind,
-						{
-							bindings: form.bindings,
-							precomputeScript: form.precomputeScript,
-							automatedReviewPolicy: form.automatedReviewPolicy,
-						},
-					],
-				]
-			: [],
-	);
+	if (draftsRef.current === null) {
+		draftsRef.current = new Map(
+			artifactKind
+				? [
+						[
+							artifactKind,
+							{
+								bindings: form.bindings,
+								precomputeScript: form.precomputeScript,
+								automatedReviewPolicy: form.automatedReviewPolicy,
+							},
+						],
+					]
+				: [],
+		);
+	}
 	const workTypeDrafts = draftsRef.current;
 	const canRunMentoring = canAttemptAutomatedReview(
 		form.automatedReviewPolicy,
@@ -284,7 +286,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 			return {
 				...previous,
 				name,
-				...(!slugWasEdited ? { slug: generateSlug(name) } : {}),
+				...(slugWasEdited ? {} : { slug: generateSlug(name) }),
 			};
 		});
 	};
@@ -292,7 +294,9 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 	const selectWorkType = (next: PracticeWorkTypeDefinitionOptions) => {
 		setForm((previous) => {
 			const previousKind = previous.artifactKind;
-			if (previousKind === next.artifactKind) return previous;
+			if (previousKind === next.artifactKind) {
+				return previous;
+			}
 			if (previousKind) {
 				workTypeDrafts.set(previousKind, {
 					bindings: previous.bindings,
@@ -537,7 +541,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									}
 									placeholder="Explain why this practice is worth caring about…"
 									className="min-h-24"
-									maxLength={2_000}
+									maxLength={2000}
 								/>
 								<FieldDescription>
 									Shown to developers; it does not change review rules.
@@ -553,7 +557,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									}
 									placeholder="Describe a concrete example of doing this well…"
 									className="min-h-24"
-									maxLength={2_000}
+									maxLength={2000}
 								/>
 								<FieldDescription>
 									Give one concrete example a developer can act on.
@@ -596,7 +600,9 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									value={artifactKind}
 									onValueChange={(value) => {
 										const next = workTypes.find((option) => option.artifactKind === value);
-										if (next) selectWorkType(next);
+										if (next) {
+											selectWorkType(next);
+										}
 									}}
 									className="gap-2"
 								>

@@ -173,7 +173,9 @@ function PracticeCatalogRoute() {
 			}),
 			queryClient.invalidateQueries({
 				predicate: ({ queryKey }) => {
-					if (queryOperationId(queryKey) !== "previewGroupAdoption") return false;
+					if (queryOperationId(queryKey) !== "previewGroupAdoption") {
+						return false;
+					}
 					const [key] = queryKey;
 					return isRecord(key) && isRecord(key.path) && key.path.workspaceSlug === workspaceSlug;
 				},
@@ -202,7 +204,9 @@ function PracticeCatalogRoute() {
 		const entry = detailStack[depth];
 		const query = levelQueries[depth];
 		const preview = practiceAdoptionAt(query);
-		if (!entry || !query || !preview) return;
+		if (!entry || !query || !preview) {
+			return;
+		}
 		setStaleLevelKey(null);
 		try {
 			await adoptCatalogPractice.mutateAsync({
@@ -222,8 +226,11 @@ function PracticeCatalogRoute() {
 			}
 			if (status === 412) {
 				const refreshed = await query.refetch();
-				if (refreshed.isSuccess) setStaleLevelKey(detailStackKey(entry));
-				else toast.error("The adoption preview changed but couldn't be refreshed");
+				if (refreshed.isSuccess) {
+					setStaleLevelKey(detailStackKey(entry));
+				} else {
+					toast.error("The adoption preview changed but couldn't be refreshed");
+				}
 				return;
 			}
 			toast.error("Couldn't add the practice");
@@ -370,7 +377,9 @@ function PracticeCatalogRoute() {
 						const groupPreview = groupAdoptionAt(query);
 						const adoptGroup = async () => {
 							const preview = groupAdoptionAt(query);
-							if (!query || !preview) return;
+							if (!query || !preview) {
+								return;
+							}
 							setStaleLevelKey(null);
 							try {
 								await adoptCatalogGroup.mutateAsync({
@@ -379,10 +388,15 @@ function PracticeCatalogRoute() {
 								});
 							} catch (error) {
 								// Same failure as a practice's, so the same recovery: refresh in place.
-								if (problemStatusOf(error) !== 412) return;
+								if (problemStatusOf(error) !== 412) {
+									return;
+								}
 								const refreshed = await query.refetch();
-								if (refreshed.isSuccess) setStaleLevelKey(detailStackKey(entry));
-								else toast.error("The group plan changed but couldn't be refreshed");
+								if (refreshed.isSuccess) {
+									setStaleLevelKey(detailStackKey(entry));
+								} else {
+									toast.error("The group plan changed but couldn't be refreshed");
+								}
 							}
 						};
 						return (
@@ -391,9 +405,8 @@ function PracticeCatalogRoute() {
 								state={
 									groupPreview === undefined || levelPending
 										? { status: "loading" }
-										: levelError !== undefined
-											? { status: "error", error: levelError, onRetry: refetchLevel }
-											: {
+										: levelError === undefined
+											? {
 													status: "ready",
 													preview: groupPreview,
 													action:
@@ -403,6 +416,7 @@ function PracticeCatalogRoute() {
 																? "adding"
 																: "idle",
 												}
+											: { status: "error", error: levelError, onRetry: refetchLevel }
 								}
 								onOpenPractice={(catalogSlug) =>
 									stackControls.open({ kind: "catalog-practice", id: catalogSlug })
@@ -525,7 +539,9 @@ function PracticeCatalogRoute() {
 			<AlertDialog
 				open={deletingGroup !== null}
 				onOpenChange={(open) => {
-					if (!open) setDeletingGroup(null);
+					if (!open) {
+						setDeletingGroup(null);
+					}
 				}}
 			>
 				<AlertDialogContent>
@@ -542,7 +558,9 @@ function PracticeCatalogRoute() {
 							variant="outline"
 							disabled={catalog.deleteGroup.isPending}
 							onClick={() => {
-								if (!deletingGroup) return;
+								if (!deletingGroup) {
+									return;
+								}
 								catalog.deleteGroup.mutate(
 									{ path: { workspaceSlug, groupSlug: deletingGroup.slug } },
 									{ onSuccess: () => setDeletingGroup(null) },
@@ -555,7 +573,9 @@ function PracticeCatalogRoute() {
 							variant="destructive"
 							disabled={catalog.deleteGroup.isPending}
 							onClick={() => {
-								if (!deletingGroup) return;
+								if (!deletingGroup) {
+									return;
+								}
 								catalog.deleteGroup.mutate(
 									{
 										path: { workspaceSlug, groupSlug: deletingGroup.slug },
@@ -574,7 +594,9 @@ function PracticeCatalogRoute() {
 			<AlertDialog
 				open={deletingPractice !== null}
 				onOpenChange={(open) => {
-					if (!open) setDeletingPractice(null);
+					if (!open) {
+						setDeletingPractice(null);
+					}
 				}}
 			>
 				<AlertDialogContent>
@@ -590,13 +612,14 @@ function PracticeCatalogRoute() {
 							variant="destructive"
 							className="min-w-28"
 							onClick={() => {
-								if (deletingPractice)
+								if (deletingPractice) {
 									catalog.deletePractice.mutate(
 										{
 											path: { workspaceSlug, practiceSlug: deletingPractice.slug },
 										},
 										{ onSuccess: () => setDeletingPractice(null) },
 									);
+								}
 							}}
 							disabled={catalog.deletePractice.isPending}
 						>

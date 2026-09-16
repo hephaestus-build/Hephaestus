@@ -42,8 +42,14 @@ export function surveyAvailability(
 	survey: Pick<Survey, "active" | "startsAt" | "endsAt">,
 	now: number,
 ): SurveyAvailability {
-	if (survey.endsAt && survey.endsAt.getTime() <= now) return "ENDED";
-	if (!survey.active) return "PAUSED";
-	if (survey.startsAt.getTime() > now) return "SCHEDULED";
+	if (survey.endsAt && survey.endsAt.getTime() <= now) {
+		return "ENDED";
+	}
+	if (!survey.active) {
+		return "PAUSED";
+	}
+	if (survey.startsAt.getTime() > now) {
+		return "SCHEDULED";
+	}
 	return "OPEN";
 }

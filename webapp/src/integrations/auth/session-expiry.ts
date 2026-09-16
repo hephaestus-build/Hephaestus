@@ -6,7 +6,7 @@ import { refreshAccessToken } from "@/integrations/auth/session-refresh";
 
 function apiBasePath(): string {
 	try {
-		return new URL(environment.serverUrl, window.location.origin).pathname.replace(/\/$/, "");
+		return new URL(environment.serverUrl, window.location.origin).pathname.replace(/\/$/u, "");
 	} catch {
 		return "";
 	}
@@ -24,17 +24,27 @@ function isExemptFromSessionExpiry(pathname: string, url: string): boolean {
 	if (base && requestPath.startsWith(`${base}/`)) {
 		requestPath = requestPath.slice(base.length);
 	}
-	if (requestPath === "/user") return true;
-	if (requestPath.startsWith("/auth/")) return true;
-	if (pathname === "/login" || pathname.startsWith("/auth/")) return true;
+	if (requestPath === "/user") {
+		return true;
+	}
+	if (requestPath.startsWith("/auth/")) {
+		return true;
+	}
+	if (pathname === "/login" || pathname.startsWith("/auth/")) {
+		return true;
+	}
 	return false;
 }
 
 export function handlePossibleSessionExpiry(response: Response, queryClient: QueryClient): boolean {
-	if (response.status !== 401) return false;
+	if (response.status !== 401) {
+		return false;
+	}
 
-	const pathname = window.location.pathname;
-	if (isExemptFromSessionExpiry(pathname, response.url)) return false;
+	const { pathname } = window.location;
+	if (isExemptFromSessionExpiry(pathname, response.url)) {
+		return false;
+	}
 	void recoverOrLogout(queryClient, window.location.pathname + window.location.search);
 	return true;
 }
@@ -55,9 +65,13 @@ function recoverOrLogout(queryClient: QueryClient, currentPath: string): Promise
 async function doRecoverOrLogout(queryClient: QueryClient, currentPath: string): Promise<void> {
 	// oxlint-disable-next-line no-restricted-properties -- Recovery cooldown uses wall-clock time outside React.
 	const recentlyRecovered = Date.now() - lastRefreshRecoveryAt < REFRESH_RECOVERY_COOLDOWN_MS;
-	if (recentlyRecovered) return;
+	if (recentlyRecovered) {
+		return;
+	}
 	const result = await refreshAccessToken();
-	if (result === "unavailable") return;
+	if (result === "unavailable") {
+		return;
+	}
 	if (result === "refreshed") {
 		// oxlint-disable-next-line no-restricted-properties -- Recovery cooldown uses wall-clock time outside React.
 		lastRefreshRecoveryAt = Date.now();

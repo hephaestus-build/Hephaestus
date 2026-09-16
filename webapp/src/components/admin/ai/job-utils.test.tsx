@@ -53,17 +53,17 @@ describe("jobWait", () => {
 describe("holdReasonCopy", () => {
 	it("names the reason it knows in words an operator can act on", () => {
 		expect(holdReasonCopy("BUDGET").label).toBe("Over the AI budget");
-		expect(holdReasonCopy("BUDGET").detail).toMatch(/resumes on its own/);
+		expect(holdReasonCopy("BUDGET").detail).toMatch(/resumes on its own/u);
 	});
 
 	it("reads a reason it has never seen as English rather than as a constant", () => {
 		expect(holdReasonCopy("MODEL_UNAVAILABLE").label).toBe("Model unavailable");
-		expect(holdReasonCopy("MODEL_UNAVAILABLE").detail).toMatch(/resumes on its own/);
+		expect(holdReasonCopy("MODEL_UNAVAILABLE").detail).toMatch(/resumes on its own/u);
 	});
 
 	it("never suggests a held run failed", () => {
 		for (const reason of ["BUDGET", "MODEL_UNAVAILABLE"]) {
-			expect(holdReasonCopy(reason).detail).toMatch(/rather than failed/);
+			expect(holdReasonCopy(reason).detail).toMatch(/rather than failed/u);
 		}
 	});
 });

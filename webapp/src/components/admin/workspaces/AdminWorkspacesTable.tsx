@@ -23,8 +23,12 @@ export interface AdminWorkspacesTableProps {
 }
 
 function statusVariant(status: string): "secondary" | "destructive" | "outline" {
-	if (status === "ACTIVE") return "secondary";
-	if (status === "SUSPENDED" || status === "PURGED") return "destructive";
+	if (status === "ACTIVE") {
+		return "secondary";
+	}
+	if (status === "SUSPENDED" || status === "PURGED") {
+		return "destructive";
+	}
 	return "outline";
 }
 

@@ -228,7 +228,7 @@ export const Streaming: Story = {
 		status: "streaming",
 	},
 	render: (args) => {
-		const StreamingDemo = () => {
+		function StreamingDemo() {
 			const [streamingMessage, setStreamingMessage] = useState("");
 
 			const fullResponse = `Great question! The **useEffect hook** is one of the most important React hooks for managing side effects in functional components.
@@ -289,7 +289,7 @@ The key is to include all values from component scope that are used inside the e
 				const interval = setInterval(() => {
 					if (currentIndex < fullResponse.length) {
 						setStreamingMessage(fullResponse.slice(0, currentIndex + 1));
-						currentIndex++;
+						currentIndex += 1;
 					} else {
 						// Reset and start over
 						currentIndex = 0;
@@ -315,7 +315,7 @@ The key is to include all values from component scope that are used inside the e
 			];
 
 			return <Messages {...args} messages={messages} status="streaming" />;
-		};
+		}
 
 		return <StreamingDemo />;
 	},

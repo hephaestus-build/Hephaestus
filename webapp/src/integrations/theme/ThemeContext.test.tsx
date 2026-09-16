@@ -7,7 +7,7 @@ describe("ThemeProvider", () => {
 	afterEach(() => {
 		localStorage.clear();
 		document.documentElement.className = "";
-		document.documentElement.removeAttribute("data-color-mode");
+		delete document.documentElement.dataset.colorMode;
 	});
 
 	// `localStorage` outlives any rename of the themes, so a value from an older build must not reach
@@ -17,6 +17,6 @@ describe("ThemeProvider", () => {
 
 		render(<ThemeProvider defaultTheme="light" />);
 
-		expect(document.documentElement.getAttribute("data-color-mode")).toBe("light");
+		expect(document.documentElement.dataset.colorMode).toBe("light");
 	});
 });

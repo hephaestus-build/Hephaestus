@@ -4,8 +4,8 @@ import { freshnessTone } from "./sync-format";
 
 describe("freshnessTone", () => {
 	const now = new Date("2026-08-07T12:00:00.000Z");
-	const hourly = 3_600;
-	const ago = (seconds: number) => new Date(now.getTime() - seconds * 1_000);
+	const hourly = 3600;
+	const ago = (seconds: number) => new Date(now.getTime() - seconds * 1000);
 
 	it("calls a resource fresh for the whole gap between two runs", () => {
 		// One cadence old is what every resource is right before its next scheduled run, so flagging

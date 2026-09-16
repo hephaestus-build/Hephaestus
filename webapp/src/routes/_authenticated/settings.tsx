@@ -50,8 +50,9 @@ function RouteComponent() {
 	// question afresh. The parent guard only runs on navigation, so without this the reader is left on
 	// a page whose controls have quietly gone and whose writes the server has started refusing.
 	useEffect(() => {
-		if (accountConsent?.completed === false)
+		if (accountConsent?.completed === false) {
 			void navigate({ to: "/consent", search: { returnTo: "/settings" }, replace: true });
+		}
 	}, [accountConsent?.completed, navigate]);
 
 	const {
@@ -106,7 +107,9 @@ function RouteComponent() {
 	// Spread-based helper: reads latest cache to avoid stale-closure race under rapid toggling
 	const updateSetting = (patch: Partial<UserSettings>) => {
 		const current = queryClient.getQueryData<UserSettings>(userSettingsQueryKey);
-		if (!current) return;
+		if (!current) {
+			return;
+		}
 		updateSettingsMutation.mutate({
 			body: { ...current, ...patch },
 		});

@@ -28,7 +28,9 @@ export function ReviewRunActions({
 	onCancel,
 	onRetry,
 }: ReviewRunActionsProps) {
-	if (!isCancellable(job.status) && !isResultProcessingRetryable(job)) return null;
+	if (!isCancellable(job.status) && !isResultProcessingRetryable(job)) {
+		return null;
+	}
 	return (
 		<div className="flex gap-2">
 			{isCancellable(job.status) && (

@@ -6,7 +6,7 @@ import { AboutPage } from "./AboutPage";
 import type { ProjectManager } from "./ProjectManagerCard";
 
 const projectManager: ProjectManager = {
-	id: 5898705,
+	id: 5_898_705,
 	login: "felixtjdietrich",
 	name: "Felix T.J. Dietrich",
 	title: "Project lead",
@@ -93,7 +93,7 @@ export const Showcase: Story = {
 		isPending: false,
 		isError: false,
 		otherContributors: mockContributors,
-		projectManager: projectManager,
+		projectManager,
 	},
 };
 
@@ -102,7 +102,7 @@ export const IsLoading: Story = {
 		isPending: true,
 		isError: false,
 		otherContributors: [],
-		projectManager: projectManager,
+		projectManager,
 	},
 };
 
@@ -111,7 +111,7 @@ export const IsError: Story = {
 		isPending: false,
 		isError: true,
 		otherContributors: [],
-		projectManager: projectManager,
+		projectManager,
 	},
 };
 
@@ -120,6 +120,6 @@ export const NoContributors: Story = {
 		isPending: false,
 		isError: false,
 		otherContributors: [],
-		projectManager: projectManager,
+		projectManager,
 	},
 };

@@ -72,11 +72,11 @@ const tokenCountSchema = z
 	.string()
 	.trim()
 	.refine(
-		(value) => value === "" || /^\d+$/.test(value),
+		(value) => value === "" || /^\d+$/u.test(value),
 		"Enter a whole number of tokens, or leave it blank.",
 	)
 	.refine(
-		(value) => value === "" || !/^\d+$/.test(value) || Number(value) <= MAX_TOKEN_COUNT,
+		(value) => value === "" || !/^\d+$/u.test(value) || Number(value) <= MAX_TOKEN_COUNT,
 		`Enter ${MAX_TOKEN_COUNT.toLocaleString("en-US")} tokens or fewer.`,
 	);
 

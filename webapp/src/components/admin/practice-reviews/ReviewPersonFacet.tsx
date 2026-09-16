@@ -50,7 +50,7 @@ export function ReviewPersonFacet({
 	const { options, capped } = people;
 	const selectedOption =
 		options.find((option) => option.userId === selected) ??
-		(selected != null ? { userId: selected, label: fallbackName ?? `#${selected}` } : null);
+		(selected == null ? null : { userId: selected, label: fallbackName ?? `#${selected}` });
 
 	return (
 		<Combobox

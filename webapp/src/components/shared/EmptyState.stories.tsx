@@ -57,7 +57,9 @@ export const LongDescription: Story = {
 	play: async ({ canvas }) => {
 		const action = canvas.getByRole("button", { name: "View repositories" });
 		const card = action.closest('[data-slot="card"]');
-		if (!card) throw new Error("Empty state card is missing");
+		if (!card) {
+			throw new Error("Empty state card is missing");
+		}
 		await expect(action.getBoundingClientRect().bottom).toBeLessThanOrEqual(
 			card.getBoundingClientRect().bottom,
 		);

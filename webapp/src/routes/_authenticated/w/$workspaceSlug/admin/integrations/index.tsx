@@ -70,7 +70,7 @@ function IntegrationOverviewCardContainer({
 	entry: Parameters<typeof IntegrationOverviewCard>[0]["entry"];
 }) {
 	const queryClient = useQueryClient();
-	const connectionId = entry.connectionId;
+	const { connectionId } = entry;
 	const livePushUnavailable = useLivePushUnavailable();
 
 	const statusQuery = useQuery({
@@ -85,7 +85,9 @@ function IntegrationOverviewCardContainer({
 	const triggerSync = useMutation({
 		...triggerSyncJobMutation(),
 		onSuccess: () => {
-			if (connectionId == null) return;
+			if (connectionId == null) {
+				return;
+			}
 			void queryClient.invalidateQueries({
 				queryKey: getConnectionSyncStatusQueryKey({ path: { workspaceSlug, connectionId } }),
 			});
@@ -109,7 +111,9 @@ function IntegrationOverviewCardContainer({
 			onRetryStatus={() => void statusQuery.refetch()}
 			isTriggering={triggerSync.isPending}
 			onSync={() => {
-				if (connectionId == null) return;
+				if (connectionId == null) {
+					return;
+				}
 				triggerSync.mutate({
 					path: { workspaceSlug, connectionId },
 					body: { type: "RECONCILIATION" },

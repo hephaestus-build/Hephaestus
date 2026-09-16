@@ -35,8 +35,9 @@ const config: StorybookConfig = {
 			if (
 				log.plugin === "builtin:vite-reporter" &&
 				log.message.startsWith("\n(!) Some chunks are larger than 500 kB after minification.")
-			)
+			) {
 				return;
+			}
 			handler(level, log);
 		};
 		viteConfig.plugins ??= [];

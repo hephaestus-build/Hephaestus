@@ -29,7 +29,9 @@ const TRANSPARENT = "rgba(0, 0, 0, 0)";
 
 function cardOf(name: RegExp): HTMLElement {
 	const card = screen.getByRole("radio", { name }).closest("label");
-	if (!card) throw new Error(`No card wraps the ${name} radio`);
+	if (!card) {
+		throw new Error(`No card wraps the ${name} radio`);
+	}
 	return card;
 }
 
@@ -39,10 +41,10 @@ function cardOf(name: RegExp): HTMLElement {
  */
 export const AllWorkspaces: Story = {
 	play: async () => {
-		const chosen = cardOf(/^All workspaces/i);
-		const other = cardOf(/^Selected workspaces/i);
+		const chosen = cardOf(/^All workspaces/iu);
+		const other = cardOf(/^Selected workspaces/iu);
 
-		await expect(screen.getByRole("radio", { name: /^All workspaces/i })).toHaveAttribute(
+		await expect(screen.getByRole("radio", { name: /^All workspaces/iu })).toHaveAttribute(
 			"data-checked",
 		);
 		await expect(getComputedStyle(chosen).backgroundColor).not.toBe(TRANSPARENT);
@@ -56,8 +58,8 @@ export const AllWorkspaces: Story = {
 export const SelectedWorkspaces: Story = {
 	args: { value: "SELECTED" },
 	play: async () => {
-		const chosen = cardOf(/^Selected workspaces/i);
-		const other = cardOf(/^All workspaces/i);
+		const chosen = cardOf(/^Selected workspaces/iu);
+		const other = cardOf(/^All workspaces/iu);
 
 		await expect(getComputedStyle(chosen).backgroundColor).not.toBe(TRANSPARENT);
 		await expect(getComputedStyle(other).backgroundColor).toBe(TRANSPARENT);

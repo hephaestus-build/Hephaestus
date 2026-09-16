@@ -22,7 +22,7 @@ import { AddCollectionDialog } from "./AddCollectionDialog";
 import { OutlineCollectionRow, type OutlineMirrorState } from "./OutlineCollectionRow";
 import { RemoveCollectionAlertDialog } from "./RemoveCollectionAlertDialog";
 
-export type { OutlineMirrorState };
+export type { OutlineMirrorState } from "./OutlineCollectionRow";
 
 /** Shared by the loading and loaded states so the header doesn't materialise on resolve. */
 function CollectionsTableHeader() {
@@ -176,7 +176,9 @@ export function OutlineCollectionsSection({
 			<RemoveCollectionAlertDialog
 				collection={removeCollection}
 				onOpenChange={(open) => {
-					if (!open) setRemoveCollection(null);
+					if (!open) {
+						setRemoveCollection(null);
+					}
 				}}
 				onConfirm={onRemoveCollection}
 			/>

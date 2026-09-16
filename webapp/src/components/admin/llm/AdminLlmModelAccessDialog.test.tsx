@@ -37,9 +37,9 @@ describe("AdminLlmModelAccessDialog", () => {
 			/>,
 		);
 
-		fireEvent.click(screen.getByRole("radio", { name: /^Selected workspaces/i }));
-		screen.getByText(/stop in the workspaces you removed/i);
-		screen.getByText(/no workspace will be able to use this model/i);
+		fireEvent.click(screen.getByRole("radio", { name: /^Selected workspaces/iu }));
+		screen.getByText(/stop in the workspaces you removed/iu);
+		screen.getByText(/no workspace will be able to use this model/iu);
 	});
 
 	it("saves the selected workspace allowlist", async () => {
@@ -56,12 +56,12 @@ describe("AdminLlmModelAccessDialog", () => {
 		);
 
 		fireEvent.click(screen.getByRole("combobox", { name: "Workspaces" }));
-		fireEvent.click(await screen.findByRole("option", { name: /beta/i }));
+		fireEvent.click(await screen.findByRole("option", { name: /beta/iu }));
 
-		expect(screen.getByRole("option", { name: /alpha/i }).getAttribute("aria-selected")).toBe(
+		expect(screen.getByRole("option", { name: /alpha/iu }).getAttribute("aria-selected")).toBe(
 			"true",
 		);
-		expect(screen.getByRole("option", { name: /beta/i }).getAttribute("aria-selected")).toBe(
+		expect(screen.getByRole("option", { name: /beta/iu }).getAttribute("aria-selected")).toBe(
 			"true",
 		);
 		expect(screen.getByRole("combobox", { name: "Workspaces" }).textContent).toContain(
@@ -85,8 +85,8 @@ describe("AdminLlmModelAccessDialog", () => {
 		const { rerender } = render(<AdminLlmModelAccessDialog {...props} model={granted} />);
 
 		fireEvent.click(screen.getByRole("combobox", { name: "Workspaces" }));
-		fireEvent.click(await screen.findByRole("option", { name: /beta/i }));
-		expect(screen.getByRole("option", { name: /beta/i }).getAttribute("aria-selected")).toBe(
+		fireEvent.click(await screen.findByRole("option", { name: /beta/iu }));
+		expect(screen.getByRole("option", { name: /beta/iu }).getAttribute("aria-selected")).toBe(
 			"false",
 		);
 
@@ -97,7 +97,7 @@ describe("AdminLlmModelAccessDialog", () => {
 			/>,
 		);
 
-		expect(screen.getByRole("option", { name: /beta/i }).getAttribute("aria-selected")).toBe(
+		expect(screen.getByRole("option", { name: /beta/iu }).getAttribute("aria-selected")).toBe(
 			"false",
 		);
 		expect(screen.getByRole("combobox", { name: "Workspaces" }).textContent).toContain("Alpha");
@@ -115,13 +115,13 @@ describe("AdminLlmModelAccessDialog", () => {
 			/>,
 		);
 
-		fireEvent.click(screen.getByRole("radio", { name: /^Selected workspaces/i }));
+		fireEvent.click(screen.getByRole("radio", { name: /^Selected workspaces/iu }));
 		fireEvent.click(screen.getByRole("combobox", { name: "Workspaces" }));
-		fireEvent.click(await screen.findByRole("option", { name: /alpha/i }));
-		fireEvent.click(await screen.findByRole("option", { name: /beta/i }));
+		fireEvent.click(await screen.findByRole("option", { name: /alpha/iu }));
+		fireEvent.click(await screen.findByRole("option", { name: /beta/iu }));
 
 		screen.getByText("Future workspaces will need an explicit grant");
-		expect(screen.queryByText(/stop in the workspaces you removed/i)).toBeNull();
+		expect(screen.queryByText(/stop in the workspaces you removed/iu)).toBeNull();
 	});
 
 	it("can grant public access even when the workspace directory is unavailable", () => {
@@ -143,7 +143,7 @@ describe("AdminLlmModelAccessDialog", () => {
 			true,
 		);
 
-		fireEvent.click(screen.getByRole("radio", { name: /^All workspaces/i }));
+		fireEvent.click(screen.getByRole("radio", { name: /^All workspaces/iu }));
 		const save = screen.getByRole<HTMLButtonElement>("button", { name: "Save access" });
 		expect(save.disabled).toBe(false);
 

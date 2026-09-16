@@ -37,9 +37,15 @@ export function MessageActions({
 	onVote,
 	onEdit,
 }: MessageActionsProps) {
-	if (isLoading) return null;
-	if (!messageContentToCopy.trim()) return null;
-	if (messageRole === "user" && isInEditMode) return null;
+	if (isLoading) {
+		return null;
+	}
+	if (!messageContentToCopy.trim()) {
+		return null;
+	}
+	if (messageRole === "user" && isInEditMode) {
+		return null;
+	}
 
 	const isUserMessage = messageRole === "user";
 	const isAssistantMessage = messageRole === "assistant";

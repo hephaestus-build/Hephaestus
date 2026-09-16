@@ -28,11 +28,17 @@ export const typedStoryMeta = defineRule({
 	create(context) {
 		/** `Meta` and `SB.Meta` name the same type; a namespace import changes the spelling only. */
 		const asMetaReference = (type: ESTree.TSType | null | undefined) => {
-			if (type?.type !== "TSTypeReference") return undefined;
+			if (type?.type !== "TSTypeReference") {
+				return;
+			}
 			const { typeName } = type;
-			if (typeName.type === "Identifier" && typeName.name === "Meta") return type;
-			if (typeName.type === "TSQualifiedName" && typeName.right.name === "Meta") return type;
-			return undefined;
+			if (typeName.type === "Identifier" && typeName.name === "Meta") {
+				return type;
+			}
+			if (typeName.type === "TSQualifiedName" && typeName.right.name === "Meta") {
+				return type;
+			}
+			return;
 		};
 
 		const namesComponent = (meta: ESTree.Node) =>
@@ -46,18 +52,26 @@ export const typedStoryMeta = defineRule({
 			meta: ESTree.TSTypeReference,
 			value: ESTree.Expression | null | undefined,
 		) => {
-			if (meta.typeArguments) return;
-			if (value && namesComponent(value)) context.report({ node: value, messageId: "untyped" });
+			if (meta.typeArguments) {
+				return;
+			}
+			if (value && namesComponent(value)) {
+				context.report({ node: value, messageId: "untyped" });
+			}
 		};
 
 		return {
 			TSSatisfiesExpression(node) {
 				const meta = asMetaReference(node.typeAnnotation);
-				if (meta) checkStatedType(meta, node.expression);
+				if (meta) {
+					checkStatedType(meta, node.expression);
+				}
 			},
 			TSAsExpression(node) {
 				const meta = asMetaReference(node.typeAnnotation);
-				if (meta) context.report({ node: meta, messageId: "asserted" });
+				if (meta) {
+					context.report({ node: meta, messageId: "asserted" });
+				}
 			},
 			VariableDeclarator(node) {
 				const annotation = asMetaReference(node.id.typeAnnotation?.typeAnnotation);

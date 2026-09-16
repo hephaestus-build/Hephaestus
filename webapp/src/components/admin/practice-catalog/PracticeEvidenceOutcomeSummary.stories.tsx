@@ -35,8 +35,8 @@ type Story = StoryObj<typeof meta>;
 export const RequirementsThatKeepSkipping: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("4 of 12 reviews ran")).toBeVisible();
-		await expect(canvas.getByText(/Skipped in 8 reviews/)).toBeVisible();
-		await expect(canvas.getByText(/Code changes — was empty \(6 reviews\)/)).toBeVisible();
+		await expect(canvas.getByText(/Skipped in 8 reviews/u)).toBeVisible();
+		await expect(canvas.getByText(/Code changes — was empty \(6 reviews\)/u)).toBeVisible();
 	},
 };
 
@@ -62,7 +62,7 @@ export const ReasonsCanOutnumberTheSkips: Story = {
 		}),
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/Skipped in 1 review,/)).toBeVisible();
+		await expect(canvas.getByText(/Skipped in 1 review,/u)).toBeVisible();
 		await expect(canvas.getAllByRole("listitem").map((row) => row.textContent)).toEqual([
 			"Code changes — was not fully captured (1 review)",
 			"Pull request details — was not available (1 review)",
@@ -81,7 +81,7 @@ export const SkippedByItsOwnSetting: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText(/this practice is not set up for automated review \(9 reviews\)/),
+			canvas.getByText(/this practice is not set up for automated review \(9 reviews\)/u),
 		).toBeVisible();
 	},
 };
@@ -90,7 +90,7 @@ export const RequirementsThatAlwaysHold: Story = {
 	args: { outcome: outcome({ practiceSlug: "submit-reviewable-work", considered: 12 }) },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("12 of 12 reviews ran")).toBeVisible();
-		await expect(canvas.getByText(/met every time a review reached this practice/)).toBeVisible();
+		await expect(canvas.getByText(/met every time a review reached this practice/u)).toBeVisible();
 	},
 };
 
@@ -109,7 +109,7 @@ export const OnADocumentPractice: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText(/Document under review — was not fully captured \(2 reviews\)/),
+			canvas.getByText(/Document under review — was not fully captured \(2 reviews\)/u),
 		).toBeVisible();
 	},
 };

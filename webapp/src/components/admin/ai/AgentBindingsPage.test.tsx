@@ -50,7 +50,9 @@ function renderPage(overrides: Partial<AgentBindingsPageProps> = {}) {
 function practiceDetectionCard(): HTMLElement {
 	const field = screen.getByLabelText("Practice reviews model");
 	const form = field.closest("form");
-	if (form == null) throw new Error("practice-review card has no form");
+	if (form == null) {
+		throw new Error("practice-review card has no form");
+	}
 	return form;
 }
 
@@ -72,7 +74,7 @@ describe("AgentBindingsPage", () => {
 		const { onSave } = renderPage();
 
 		const card = within(practiceDetectionCard());
-		card.getByText(/GPT Test/);
+		card.getByText(/GPT Test/u);
 		expect(card.getByRole("switch", { name: "Use this model" }).getAttribute("aria-checked")).toBe(
 			"true",
 		);
@@ -89,7 +91,7 @@ describe("AgentBindingsPage", () => {
 		renderPage();
 
 		const card = within(practiceDetectionCard());
-		const trigger = card.getByRole("button", { name: /Advanced/ });
+		const trigger = card.getByRole("button", { name: /Advanced/u });
 		expect(trigger.getAttribute("aria-expanded")).toBe("false");
 		expect(card.queryByLabelText("Timeout (seconds)")).toBeNull();
 
@@ -103,7 +105,7 @@ describe("AgentBindingsPage", () => {
 		const { onSave } = renderPage();
 		const card = within(practiceDetectionCard());
 
-		fireEvent.click(card.getByRole("button", { name: /Advanced/ }));
+		fireEvent.click(card.getByRole("button", { name: /Advanced/u }));
 		fireEvent.change(card.getByLabelText("Timeout (seconds)"), { target: { value: "" } });
 		fireEvent.click(card.getByRole("button", { name: "Save assignment" }));
 
@@ -116,7 +118,7 @@ describe("AgentBindingsPage", () => {
 		const { onSave } = renderPage();
 		const card = within(practiceDetectionCard());
 
-		fireEvent.click(card.getByRole("button", { name: /Advanced/ }));
+		fireEvent.click(card.getByRole("button", { name: /Advanced/u }));
 		const timeout = card.getByLabelText("Timeout (seconds)");
 		fireEvent.change(timeout, { target: { value: "5" } });
 		fireEvent.click(card.getByRole("button", { name: "Save assignment" }));
@@ -137,7 +139,7 @@ describe("AgentBindingsPage", () => {
 		const { onSave } = renderPage();
 		const card = within(practiceDetectionCard());
 
-		fireEvent.click(card.getByRole("button", { name: /Advanced/ }));
+		fireEvent.click(card.getByRole("button", { name: /Advanced/u }));
 		const timeout = card.getByLabelText("Timeout (seconds)");
 		fireEvent.change(timeout, { target: { value: "14400" } });
 		fireEvent.click(card.getByRole("button", { name: "Save assignment" }));
@@ -151,7 +153,7 @@ describe("AgentBindingsPage", () => {
 
 		expect(onSave).toHaveBeenCalledWith(
 			"PRACTICE_REVIEW",
-			expect.objectContaining({ timeoutSeconds: 10800 }),
+			expect.objectContaining({ timeoutSeconds: 10_800 }),
 		);
 	});
 
@@ -159,9 +161,9 @@ describe("AgentBindingsPage", () => {
 		renderPage();
 		const card = within(practiceDetectionCard());
 
-		fireEvent.click(card.getByRole("button", { name: /Advanced/ }));
+		fireEvent.click(card.getByRole("button", { name: /Advanced/u }));
 		fireEvent.change(card.getByLabelText("Max concurrent runs"), { target: { value: "0" } });
-		fireEvent.click(card.getByRole("button", { name: /Advanced/ }));
+		fireEvent.click(card.getByRole("button", { name: /Advanced/u }));
 		expect(card.queryByLabelText("Max concurrent runs")).toBeNull();
 
 		fireEvent.click(card.getByRole("button", { name: "Save assignment" }));
@@ -174,7 +176,7 @@ describe("AgentBindingsPage", () => {
 		renderPage();
 		const card = within(practiceDetectionCard());
 
-		fireEvent.click(card.getByRole("button", { name: /Advanced/ }));
+		fireEvent.click(card.getByRole("button", { name: /Advanced/u }));
 		const timeout = card.getByLabelText("Timeout (seconds)");
 		const concurrency = card.getByLabelText("Max concurrent runs");
 		fireEvent.change(timeout, { target: { value: "" } });

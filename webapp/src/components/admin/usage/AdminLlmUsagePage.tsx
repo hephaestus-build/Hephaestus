@@ -78,13 +78,13 @@ export function AdminLlmUsagePage({
 
 	const fx: Fx = report?.fx;
 	const sharedTitleFx =
-		sharedBudget != null
-			? spendOfCapConversion(sharedSpend, sharedBudget, fx)
-			: spendConversion(sharedSpend, fx);
+		sharedBudget == null
+			? spendConversion(sharedSpend, fx)
+			: spendOfCapConversion(sharedSpend, sharedBudget, fx);
 	const providerTitleFx =
-		providerCap != null
-			? spendOfCapConversion(providerSpend, providerCap, fx)
-			: spendConversion(providerSpend, fx);
+		providerCap == null
+			? spendConversion(providerSpend, fx)
+			: spendOfCapConversion(providerSpend, providerCap, fx);
 	const hasConversion =
 		sharedTitleFx != null ||
 		providerTitleFx != null ||
@@ -113,176 +113,178 @@ export function AdminLlmUsagePage({
 				}
 			/>
 
-			{error != null ? (
-				<QueryErrorAlert error={error} title="Couldn't load AI usage" onRetry={onRetry} />
-			) : isLoading || report == null ? (
-				<>
-					<div className="grid gap-4 md:grid-cols-2">
-						{["shared", "provider"].map((slot) => (
-							<Card key={slot}>
-								<CardHeader>
-									<Skeleton className="h-4 w-40" />
-									<Skeleton className="h-7 w-28" />
-								</CardHeader>
-								<CardContent>
-									<Skeleton className="h-1.5 w-full" />
-								</CardContent>
-							</Card>
-						))}
-					</div>
-					<Card>
-						<CardHeader>
-							<CardTitle>By run type</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<LlmUsageByJobTypeTable />
-						</CardContent>
-					</Card>
-				</>
-			) : (
-				<>
-					{providerPaused && (
-						<BudgetExhaustedAlert
-							scope="own"
-							verdict={report.ownProviderBudgetVerdict}
-							month={month}
-							unpricedEventCount={unpricedEventCount}
-							context="usage"
-							workspaceSlug={workspaceSlug}
-							onEditOwnProviderCap={onEditOwnProviderCap}
-						/>
-					)}
-					{sharedPaused && (
-						<BudgetExhaustedAlert
-							scope="shared"
-							verdict={report.instanceBudgetVerdict}
-							month={month}
-							unpricedEventCount={unpricedEventCount}
-							context="usage"
-							workspaceSlug={workspaceSlug}
-						/>
-					)}
-
-					{providerWarning != null && (
-						<BudgetPaceAlert
-							scope="provider"
-							percent={providerWarning}
-							spendUsd={providerSpend}
-							capUsd={providerCap}
-							projection={projectBudget(providerSpend, providerCap, month, now)}
-							fx={fx}
-						/>
-					)}
-					{sharedWarning != null && (
-						<BudgetPaceAlert
-							scope="shared"
-							percent={sharedWarning}
-							spendUsd={sharedSpend}
-							capUsd={sharedBudget}
-							projection={projectBudget(sharedSpend, sharedBudget, month, now)}
-							fx={fx}
-						/>
-					)}
-
-					{unpricedEventCount > 0 && (
-						<Alert variant="warning" role="status">
-							<CircleAlert aria-hidden />
-							<AlertTitle>
-								{unpricedEventCount === 1
-									? "1 run isn't counted in these totals"
-									: `${unpricedEventCount.toLocaleString()} runs aren't counted in these totals`}
-							</AlertTitle>
-							<AlertDescription>
-								<p>
-									They have no price set, so real spend may be higher. Add prices for your own
-									models in <AiModelsLink workspaceSlug={workspaceSlug} />; for shared models, ask
-									your host.
-								</p>
-							</AlertDescription>
-						</Alert>
-					)}
-
-					<div className="grid gap-4 md:grid-cols-2">
-						<SharedBudgetCard
-							isCurrentMonth={isCurrentMonth}
-							spendUsd={sharedSpend}
-							capUsd={sharedBudget}
-							percent={sharedPercent}
-							paused={sharedPaused}
-							titleFx={sharedTitleFx}
-						/>
-						{hasProviderCapOrSpend ? (
-							<ProviderCapCard
-								isCurrentMonth={isCurrentMonth}
-								spendUsd={providerSpend}
-								capUsd={providerCap}
-								percent={providerPercent}
-								paused={providerPaused}
-								onEditOwnProviderCap={onEditOwnProviderCap}
-								titleFx={providerTitleFx}
-							/>
-						) : (
-							<NoProviderCard
-								isCurrentMonth={isCurrentMonth}
+			{error == null ? (
+				isLoading || report == null ? (
+					<>
+						<div className="grid gap-4 md:grid-cols-2">
+							{["shared", "provider"].map((slot) => (
+								<Card key={slot}>
+									<CardHeader>
+										<Skeleton className="h-4 w-40" />
+										<Skeleton className="h-7 w-28" />
+									</CardHeader>
+									<CardContent>
+										<Skeleton className="h-1.5 w-full" />
+									</CardContent>
+								</Card>
+							))}
+						</div>
+						<Card>
+							<CardHeader>
+								<CardTitle>By run type</CardTitle>
+							</CardHeader>
+							<CardContent>
+								<LlmUsageByJobTypeTable />
+							</CardContent>
+						</Card>
+					</>
+				) : (
+					<>
+						{providerPaused && (
+							<BudgetExhaustedAlert
+								scope="own"
+								verdict={report.ownProviderBudgetVerdict}
+								month={month}
+								unpricedEventCount={unpricedEventCount}
+								context="usage"
 								workspaceSlug={workspaceSlug}
 								onEditOwnProviderCap={onEditOwnProviderCap}
 							/>
 						)}
-					</div>
+						{sharedPaused && (
+							<BudgetExhaustedAlert
+								scope="shared"
+								verdict={report.instanceBudgetVerdict}
+								month={month}
+								unpricedEventCount={unpricedEventCount}
+								context="usage"
+								workspaceSlug={workspaceSlug}
+							/>
+						)}
 
-					{!hasUsage ? (
-						<Empty variant="outlined">
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<CircleDollarSign />
-								</EmptyMedia>
-								<EmptyTitle>No AI usage in {formatMonthLabel(month)}</EmptyTitle>
-							</EmptyHeader>
-							<EmptyContent>
-								<Link
-									to="/w/$workspaceSlug/admin/models"
-									params={{ workspaceSlug }}
-									className={buttonVariants({ variant: "outline", size: "sm" })}
-								>
-									Open AI models
-								</Link>
-							</EmptyContent>
-						</Empty>
-					) : (
-						<>
-							<Card>
-								<CardHeader>
-									<CardTitle>By run type</CardTitle>
-								</CardHeader>
-								<CardContent>
-									<LlmUsageByJobTypeTable report={report} fx={fx} />
-								</CardContent>
-							</Card>
+						{providerWarning != null && (
+							<BudgetPaceAlert
+								scope="provider"
+								percent={providerWarning}
+								spendUsd={providerSpend}
+								capUsd={providerCap}
+								projection={projectBudget(providerSpend, providerCap, month, now)}
+								fx={fx}
+							/>
+						)}
+						{sharedWarning != null && (
+							<BudgetPaceAlert
+								scope="shared"
+								percent={sharedWarning}
+								spendUsd={sharedSpend}
+								capUsd={sharedBudget}
+								projection={projectBudget(sharedSpend, sharedBudget, month, now)}
+								fx={fx}
+							/>
+						)}
 
-							<Card>
-								<CardHeader>
-									<CardTitle>By day</CardTitle>
-								</CardHeader>
-								<CardContent>
-									{report.byDay.length === 0 ? (
-										<Empty variant="outlined">
-											<EmptyHeader>
-												<EmptyMedia variant="icon">
-													<CircleDollarSign />
-												</EmptyMedia>
-												<EmptyTitle>No daily breakdown yet</EmptyTitle>
-											</EmptyHeader>
-										</Empty>
-									) : (
-										<LlmUsageByDayTable report={report} fx={fx} />
-									)}
-								</CardContent>
-							</Card>
-						</>
-					)}
+						{unpricedEventCount > 0 && (
+							<Alert variant="warning" role="status">
+								<CircleAlert aria-hidden />
+								<AlertTitle>
+									{unpricedEventCount === 1
+										? "1 run isn't counted in these totals"
+										: `${unpricedEventCount.toLocaleString()} runs aren't counted in these totals`}
+								</AlertTitle>
+								<AlertDescription>
+									<p>
+										They have no price set, so real spend may be higher. Add prices for your own
+										models in <AiModelsLink workspaceSlug={workspaceSlug} />; for shared models, ask
+										your host.
+									</p>
+								</AlertDescription>
+							</Alert>
+						)}
 
-					{hasConversion && <FxDisclosure fx={fx} isCurrentMonth={isCurrentMonth} />}
-				</>
+						<div className="grid gap-4 md:grid-cols-2">
+							<SharedBudgetCard
+								isCurrentMonth={isCurrentMonth}
+								spendUsd={sharedSpend}
+								capUsd={sharedBudget}
+								percent={sharedPercent}
+								paused={sharedPaused}
+								titleFx={sharedTitleFx}
+							/>
+							{hasProviderCapOrSpend ? (
+								<ProviderCapCard
+									isCurrentMonth={isCurrentMonth}
+									spendUsd={providerSpend}
+									capUsd={providerCap}
+									percent={providerPercent}
+									paused={providerPaused}
+									onEditOwnProviderCap={onEditOwnProviderCap}
+									titleFx={providerTitleFx}
+								/>
+							) : (
+								<NoProviderCard
+									isCurrentMonth={isCurrentMonth}
+									workspaceSlug={workspaceSlug}
+									onEditOwnProviderCap={onEditOwnProviderCap}
+								/>
+							)}
+						</div>
+
+						{hasUsage ? (
+							<>
+								<Card>
+									<CardHeader>
+										<CardTitle>By run type</CardTitle>
+									</CardHeader>
+									<CardContent>
+										<LlmUsageByJobTypeTable report={report} fx={fx} />
+									</CardContent>
+								</Card>
+
+								<Card>
+									<CardHeader>
+										<CardTitle>By day</CardTitle>
+									</CardHeader>
+									<CardContent>
+										{report.byDay.length === 0 ? (
+											<Empty variant="outlined">
+												<EmptyHeader>
+													<EmptyMedia variant="icon">
+														<CircleDollarSign />
+													</EmptyMedia>
+													<EmptyTitle>No daily breakdown yet</EmptyTitle>
+												</EmptyHeader>
+											</Empty>
+										) : (
+											<LlmUsageByDayTable report={report} fx={fx} />
+										)}
+									</CardContent>
+								</Card>
+							</>
+						) : (
+							<Empty variant="outlined">
+								<EmptyHeader>
+									<EmptyMedia variant="icon">
+										<CircleDollarSign />
+									</EmptyMedia>
+									<EmptyTitle>No AI usage in {formatMonthLabel(month)}</EmptyTitle>
+								</EmptyHeader>
+								<EmptyContent>
+									<Link
+										to="/w/$workspaceSlug/admin/models"
+										params={{ workspaceSlug }}
+										className={buttonVariants({ variant: "outline", size: "sm" })}
+									>
+										Open AI models
+									</Link>
+								</EmptyContent>
+							</Empty>
+						)}
+
+						{hasConversion && <FxDisclosure fx={fx} isCurrentMonth={isCurrentMonth} />}
+					</>
+				)
+			) : (
+				<QueryErrorAlert error={error} title="Couldn't load AI usage" onRetry={onRetry} />
 			)}
 		</PageLayout>
 	);
@@ -346,9 +348,9 @@ function SharedBudgetCard({
 				</CardDescription>
 				<CapHeadline spendUsd={spendUsd} capUsd={capUsd} titleFx={titleFx} />
 				<CardDescription>
-					{capUsd != null
-						? "Shared-model budget · set by your host"
-						: "No shared-model budget set by your host"}
+					{capUsd == null
+						? "No shared-model budget set by your host"
+						: "Shared-model budget · set by your host"}
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-3">
@@ -395,9 +397,9 @@ function ProviderCapCard({
 				</CardDescription>
 				<CapHeadline spendUsd={spendUsd} capUsd={capUsd} titleFx={titleFx} />
 				<CardDescription>
-					{capUsd != null
-						? "Provider cap · set by you, billed by your provider"
-						: "No provider cap set · billed to you by your provider"}
+					{capUsd == null
+						? "No provider cap set · billed to you by your provider"
+						: "Provider cap · set by you, billed by your provider"}
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-3">
@@ -413,7 +415,7 @@ function ProviderCapCard({
 				)}
 				{isCurrentMonth ? (
 					<Button variant="outline" size="sm" onClick={onEditOwnProviderCap}>
-						{capUsd != null ? "Change cap" : "Set cap"}
+						{capUsd == null ? "Set cap" : "Change cap"}
 					</Button>
 				) : (
 					<CapIsNotMonthScoped subject="cap" />

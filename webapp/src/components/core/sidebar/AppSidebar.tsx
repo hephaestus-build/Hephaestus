@@ -39,7 +39,7 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	isAdmin: boolean;
 	isAppAdmin: boolean;
 	hasMentorAccess: boolean;
-	integrationKinds: ReadonlyArray<IntegrationCatalogEntry["kind"]>;
+	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
 	context: SidebarContext;
 	workspaces: WorkspaceListItem[];
 	activeWorkspace?: WorkspaceListItem;

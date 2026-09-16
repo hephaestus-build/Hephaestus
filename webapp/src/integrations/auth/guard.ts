@@ -19,7 +19,9 @@ export function currentUserQueryOptions() {
 		// its lifetime is deliberately independent of observer unmounts — hence no `signal`.
 		queryFn: async () => {
 			const { data, error, response } = await getCurrentUser();
-			if (data !== undefined && response?.ok) return data;
+			if (data !== undefined && response?.ok) {
+				return data;
+			}
 			// The generated client's error body need not contain the actual HTTP status.
 			throw new Error("Could not verify your session.", { cause: response ?? error });
 		},
@@ -33,7 +35,7 @@ export async function resolveCurrentUser(
 	const options = currentUserQueryOptions();
 	try {
 		const user = await queryClient.query({ ...options, staleTime: "static" });
-		void queryClient.query(options).catch(() => undefined);
+		void queryClient.query(options).catch(() => {});
 		return user;
 	} catch (error) {
 		if (error instanceof Error && error.cause instanceof Response && error.cause.status === 401) {
@@ -50,8 +52,10 @@ export function isAppAdmin(
 }
 
 function isServerRefusal(error: unknown): boolean {
-	if (!isRecord(error)) return false;
-	const status = error.status;
+	if (!isRecord(error)) {
+		return false;
+	}
+	const { status } = error;
 	return typeof status === "number" && status >= 400 && status < 500;
 }
 
@@ -96,20 +100,29 @@ function fullyDecode(value: string): string {
 
 /** Accept only local absolute paths, preserving valid percent-encoded segments. */
 export function safeReturnTo(value: string | undefined): string {
-	if (!value) return "/";
-	const decoded = fullyDecode(value);
-	if (/[\s\p{Cc}]/u.test(decoded)) return "/";
-	if (!decoded.startsWith("/") || decoded.startsWith("//")) return "/";
-	// Browsers normalize backslashes into slashes; reject scheme and authority-like prefixes too.
-	if (/^\/[\\]/.test(decoded) || /^\/+[a-z]+:/i.test(decoded) || decoded.startsWith("/@"))
+	if (!value) {
 		return "/";
+	}
+	const decoded = fullyDecode(value);
+	if (/[\s\p{Cc}]/u.test(decoded)) {
+		return "/";
+	}
+	if (!decoded.startsWith("/") || decoded.startsWith("//")) {
+		return "/";
+	}
+	// Browsers normalize backslashes into slashes; reject scheme and authority-like prefixes too.
+	if (/^\/[\\]/u.test(decoded) || /^\/+[a-z]+:/iu.test(decoded) || decoded.startsWith("/@")) {
+		return "/";
+	}
 	// Return the original so encoded query delimiters remain encoded.
 	return value;
 }
 
 /** Check before gated queries: the server rejects them with 428 until consent is recorded. */
 export async function consentIsPending(queryClient: QueryClient): Promise<boolean> {
-	if (!(await resolveCurrentUser(queryClient))) return false;
+	if (!(await resolveCurrentUser(queryClient))) {
+		return false;
+	}
 	try {
 		const status = await queryClient.query(getConsentStatusOptions({}));
 		return !status.completed;

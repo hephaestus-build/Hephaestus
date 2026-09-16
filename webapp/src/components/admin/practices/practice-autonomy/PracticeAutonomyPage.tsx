@@ -137,8 +137,11 @@ export function PracticeAutonomyPage({
 	const toggle = (slug: string, checked: boolean) => {
 		setSelected((current) => {
 			const next = new Set(current);
-			if (checked) next.add(slug);
-			else next.delete(slug);
+			if (checked) {
+				next.add(slug);
+			} else {
+				next.delete(slug);
+			}
 			return next;
 		});
 	};
@@ -240,8 +243,11 @@ export function PracticeAutonomyPage({
 								setSelected((current) => {
 									const next = new Set(current);
 									for (const slug of slugs) {
-										if (checked) next.add(slug);
-										else next.delete(slug);
+										if (checked) {
+											next.add(slug);
+										} else {
+											next.delete(slug);
+										}
 									}
 									return next;
 								})
@@ -280,10 +286,18 @@ export function PracticeAutonomyPage({
 }
 
 function automaticPromotionLabel(promotion: AutomaticPromotion | null): string {
-	if (promotion === null) return "this selection";
-	if (promotion.scope === "workspace") return "the workspace default";
-	if (promotion.scope === "group") return `the ${promotion.name} group`;
-	if (promotion.scope === "practice") return promotion.name;
+	if (promotion === null) {
+		return "this selection";
+	}
+	if (promotion.scope === "workspace") {
+		return "the workspace default";
+	}
+	if (promotion.scope === "group") {
+		return `the ${promotion.name} group`;
+	}
+	if (promotion.scope === "practice") {
+		return promotion.name;
+	}
 	return `${promotion.slugs.length} selected ${promotion.slugs.length === 1 ? "practice" : "practices"}`;
 }
 
@@ -295,17 +309,21 @@ function applyAutomaticPromotion(
 	>,
 ) {
 	switch (promotion.scope) {
-		case "workspace":
+		case "workspace": {
 			actions.onSetWorkspaceDefault("AUTOMATIC");
 			return;
-		case "group":
+		}
+		case "group": {
 			actions.onSetGroupAutonomy(promotion.slug, "AUTOMATIC");
 			return;
-		case "practice":
+		}
+		case "practice": {
 			actions.onSetPracticeAutonomy(promotion.slug, "AUTOMATIC");
 			return;
-		case "bulk":
+		}
+		case "bulk": {
 			actions.onBulkSetAutonomy(promotion.slugs, "AUTOMATIC");
+		}
 	}
 }
 
@@ -415,7 +433,9 @@ function BulkActionBar({
 	onSet: (autonomy: PracticeAutonomy | null) => void;
 	onClear: () => void;
 }) {
-	if (count === 0 && bulk === null) return null;
+	if (count === 0 && bulk === null) {
+		return null;
+	}
 
 	return (
 		<Item variant="muted" size="sm" role="group" aria-label="Selected practices">
@@ -487,7 +507,7 @@ function GroupGroup({
 	onSetPracticeAutonomy: (practiceSlug: string, autonomy: PracticeAutonomy) => void;
 	onClearPracticeAutonomy: (practiceSlug: string) => void;
 }) {
-	const groupSlug = group.groupSlug;
+	const { groupSlug } = group;
 	const groupPending = groupSlug !== null && pending.groupSlugs.has(groupSlug);
 	const selectableSlugs = group.practices
 		.filter((practice) => reviewableByHephaestus(practice.automatedReviewPolicy))

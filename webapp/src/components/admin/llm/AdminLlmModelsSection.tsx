@@ -39,9 +39,15 @@ export interface AdminLlmModelsSectionProps {
 }
 
 function readinessLabel(model: LlmModel, connectionEnabled: boolean): string {
-	if (!model.currentPrice || model.currentPrice.pricingMode === "UNPRICED") return "Price missing";
-	if (!connectionEnabled) return "Connection off";
-	if (!model.enabled) return "Model off";
+	if (!model.currentPrice || model.currentPrice.pricingMode === "UNPRICED") {
+		return "Price missing";
+	}
+	if (!connectionEnabled) {
+		return "Connection off";
+	}
+	if (!model.enabled) {
+		return "Model off";
+	}
 	if (model.visibility === "GRANTED" && model.grantedWorkspaceIds.length === 0) {
 		return "No workspace access";
 	}
@@ -49,12 +55,18 @@ function readinessLabel(model: LlmModel, connectionEnabled: boolean): string {
 }
 
 function shareLabel(model: LlmModel, workspaces: WorkspaceOption[]): string {
-	if (model.visibility === "PUBLIC") return "All workspaces";
-	if (model.grantedWorkspaceIds.length === 0) return "No workspaces";
+	if (model.visibility === "PUBLIC") {
+		return "All workspaces";
+	}
+	if (model.grantedWorkspaceIds.length === 0) {
+		return "No workspaces";
+	}
 	const firstName = workspaces.find(
 		(workspace) => workspace.id === model.grantedWorkspaceIds[0],
 	)?.displayName;
-	if (!firstName) return `${model.grantedWorkspaceIds.length} workspaces`;
+	if (!firstName) {
+		return `${model.grantedWorkspaceIds.length} workspaces`;
+	}
 	return model.grantedWorkspaceIds.length === 1
 		? firstName
 		: `${firstName} + ${model.grantedWorkspaceIds.length - 1} more`;

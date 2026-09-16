@@ -70,7 +70,7 @@ export const Default: Story = {
 export const Empty: Story = {
 	args: { events: [] },
 	play: async ({ canvas }) => {
-		canvas.getByText(/no activity yet/i);
+		canvas.getByText(/no activity yet/iu);
 	},
 };
 
@@ -82,8 +82,8 @@ export const LoadFailed: Story = {
 	args: { events: [], error: { status: 500 }, onRetry: fn() },
 	play: async ({ canvas }) => {
 		// The failure must not read as "no activity"; a 5xx is retryable so the affordance shows.
-		await expect(canvas.queryByText(/no activity yet/i)).not.toBeInTheDocument();
-		canvas.getByRole("button", { name: /retry/i });
+		await expect(canvas.queryByText(/no activity yet/iu)).not.toBeInTheDocument();
+		canvas.getByRole("button", { name: /retry/iu });
 	},
 };
 
@@ -91,6 +91,6 @@ export const LoadFailed: Story = {
 export const Forbidden: Story = {
 	args: { events: [], error: { status: 403 }, onRetry: fn() },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("button", { name: /retry/iu })).not.toBeInTheDocument();
 	},
 };

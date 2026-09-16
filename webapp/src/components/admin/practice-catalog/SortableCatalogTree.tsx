@@ -120,7 +120,9 @@ interface ActiveEntryDrop extends CatalogDropTarget {
 
 /** dnd-kit types `data.current` as an open record, so the payload is checked rather than asserted. */
 function isCatalogDndData(data: unknown): data is CatalogDndData {
-	if (typeof data !== "object" || data === null || !("type" in data)) return false;
+	if (typeof data !== "object" || data === null || !("type" in data)) {
+		return false;
+	}
 	return data.type === "group" || data.type === "bucket" || data.type === "entry";
 }
 
@@ -173,8 +175,11 @@ export function SortableCatalogTree<
 	for (const entry of visibleEntries) {
 		const key = entry.groupSlug ?? UNASSIGNED_CATALOG_BUCKET;
 		const bucket = byGroup.get(key);
-		if (bucket) bucket.push(entry);
-		else byGroup.set(key, [entry]);
+		if (bucket) {
+			bucket.push(entry);
+		} else {
+			byGroup.set(key, [entry]);
+		}
 	}
 	const totalByGroup = new Map<string, number>();
 	for (const entry of entries) {
@@ -211,7 +216,9 @@ export function SortableCatalogTree<
 							droppableContainers.find((container) => container.id === id)?.data.current,
 						)?.type === type,
 				);
-				if (collision) return [collision];
+				if (collision) {
+					return [collision];
+				}
 			}
 			return [];
 		}
@@ -224,13 +231,17 @@ export function SortableCatalogTree<
 	}: Pick<DragOverEvent, "active" | "over">): CatalogDropTarget | null => {
 		const activeData = catalogDndData(active.data.current);
 		const overData = catalogDndData(over?.data.current);
-		if (activeData?.type !== "entry" || !over || !overData) return null;
-		const groupSlug = overData.groupSlug;
-		if (blockedMoveDestinationSlugs.has(groupSlug ?? UNASSIGNED_CATALOG_BUCKET)) return null;
+		if (activeData?.type !== "entry" || !over || !overData) {
+			return null;
+		}
+		const { groupSlug } = overData;
+		if (blockedMoveDestinationSlugs.has(groupSlug ?? UNASSIGNED_CATALOG_BUCKET)) {
+			return null;
+		}
 		if (overData.type !== "entry") {
 			return getCatalogDropTarget(entries, activeData.entrySlug, groupSlug);
 		}
-		const translated = active.rect.current.translated;
+		const { translated } = active.rect.current;
 		const afterAnchor = translated
 			? translated.top + translated.height / 2 > over.rect.top + over.rect.height / 2
 			: false;
@@ -250,8 +261,12 @@ export function SortableCatalogTree<
 
 	const handleDragStart = ({ active }: DragStartEvent) => {
 		const data = catalogDndData(active.data.current);
-		if (data?.type === "group") setActiveDrag({ type: "group", slug: data.groupSlug });
-		if (data?.type === "entry") setActiveDrag({ type: "entry", slug: data.entrySlug });
+		if (data?.type === "group") {
+			setActiveDrag({ type: "group", slug: data.groupSlug });
+		}
+		if (data?.type === "entry") {
+			setActiveDrag({ type: "entry", slug: data.entrySlug });
+		}
 	};
 
 	const handleDragOver = (event: DragOverEvent) => {
@@ -265,15 +280,21 @@ export function SortableCatalogTree<
 		const overData = catalogDndData(event.over?.data.current);
 		const target = resolveEntryDropTarget(event);
 		resetDrag();
-		if (!event.over || !activeData || !overData) return;
+		if (!event.over || !activeData || !overData) {
+			return;
+		}
 		if (activeData.type === "group" && overData.type === "group") {
 			const ids = sortedGroups.map((group) => group.slug);
 			const from = ids.indexOf(activeData.groupSlug);
 			const to = ids.indexOf(overData.groupSlug);
-			if (from !== to) onReorderGroups(arrayMove(ids, from, to));
+			if (from !== to) {
+				onReorderGroups(arrayMove(ids, from, to));
+			}
 			return;
 		}
-		if (activeData.type !== "entry" || !target) return;
+		if (activeData.type !== "entry" || !target) {
+			return;
+		}
 		const currentGroupSlug = activeData.groupSlug;
 		const currentPosition = entries
 			.filter((entry) => (entry.groupSlug ?? null) === currentGroupSlug)
@@ -307,7 +328,9 @@ export function SortableCatalogTree<
 					? `Moving ${data.label}, position ${sortedGroups.findIndex(({ slug }) => slug === overData.groupSlug) + 1} of ${sortedGroups.length}.`
 					: undefined;
 			}
-			if (data?.type !== "entry") return undefined;
+			if (data?.type !== "entry") {
+				return;
+			}
 			const target = resolveEntryDropTarget({ active, over });
 			return target
 				? `Moving ${data.label}, ${describeTarget(target, data.entrySlug)}.`
@@ -332,7 +355,9 @@ export function SortableCatalogTree<
 	const registerActionTrigger = (key: string) => (node: HTMLButtonElement | null) => {
 		if (node && !node.disabled && focusAfterMove.current === key) {
 			node.focus();
-			if (document.activeElement === node) focusAfterMove.current = null;
+			if (document.activeElement === node) {
+				focusAfterMove.current = null;
+			}
 		}
 	};
 	const prepareFocus = (key: string) => {
@@ -343,9 +368,13 @@ export function SortableCatalogTree<
 		const index = sortedGroups.findIndex((candidate) => candidate.slug === group.slug);
 		const disabled = groupReorderDisabled || disabledGroupSlugs.has(group.slug);
 		const move = (offset: number) => {
-			if (disabled) return;
+			if (disabled) {
+				return;
+			}
 			const target = index + offset;
-			if (target < 0 || target >= sortedGroups.length) return;
+			if (target < 0 || target >= sortedGroups.length) {
+				return;
+			}
 			prepareFocus(focusKey);
 			onReorderGroups(
 				arrayMove(
@@ -373,13 +402,15 @@ export function SortableCatalogTree<
 		const movesDisabled = disabledEntrySlugs.has(entry.slug) || !showEntryReorderHandles;
 		const reorderDisabled = movesDisabled || blockedEntryOrderBuckets.has(bucketKey);
 		const moveToPosition = (position: number) => {
-			if (reorderDisabled || position < 0 || position >= ordered.length) return;
+			if (reorderDisabled || position < 0 || position >= ordered.length) {
+				return;
+			}
 			prepareFocus(focusKey);
 			onPlaceEntry(entry.slug, currentGroupSlug, position);
 		};
 		return {
 			canMoveUp: !reorderDisabled && index > 0,
-			canMoveDown: !reorderDisabled && index >= 0 && index < ordered.length - 1,
+			canMoveDown: !reorderDisabled && index !== -1 && index < ordered.length - 1,
 			moveUp: () => moveToPosition(index - 1),
 			moveDown: () => moveToPosition(index + 1),
 			currentGroupSlug,
@@ -396,7 +427,9 @@ export function SortableCatalogTree<
 					return;
 				}
 				const target = getCatalogDropTarget(entries, entry.slug, groupSlug);
-				if (!target) return;
+				if (!target) {
+					return;
+				}
 				if (target.groupSlug) {
 					setCollapsedGroups((collapsed) => collapsed.filter((slug) => slug !== target.groupSlug));
 				}
@@ -800,7 +833,9 @@ function SortableEntryRow<TEntry extends SortableCatalogEntry>({
 }
 
 function DropIndicator({ visible, atEnd = false }: { visible: boolean; atEnd?: boolean }) {
-	if (!visible) return null;
+	if (!visible) {
+		return null;
+	}
 	return (
 		<div
 			aria-hidden="true"

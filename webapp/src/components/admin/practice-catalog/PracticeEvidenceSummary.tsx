@@ -137,12 +137,14 @@ export function PracticeAutomatedReviewValidationSummary({
 	);
 }
 
+const NO_SIGNALS: readonly PracticeSignalOption[] = [];
+
 export function PracticeEvidenceSummary({
 	policy,
 	bindings,
 	validation,
 	sources,
-	signals = [],
+	signals = NO_SIGNALS,
 	workTypeLabel,
 	className,
 	showValidation = true,

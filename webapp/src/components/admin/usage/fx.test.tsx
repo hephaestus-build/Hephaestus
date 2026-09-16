@@ -48,7 +48,7 @@ function dayReport(
 }
 
 /** `en-US` puts a non-breaking space between an ISO code and the number. */
-const NBSP = "\u00a0";
+const NBSP = "\u00A0";
 
 describe("spend conversion", () => {
 	it("converts a spend figure at the spend precision", () => {
@@ -152,7 +152,7 @@ describe("totals convert the USD sum", () => {
 		const byDay = rows.map((value, index) => day(value, `2026-07-0${index + 1}T00:00:00.000Z`));
 		render(<LlmUsageByDayTable report={dayReport(byDay, 2.3)} fx={eur} />);
 
-		const footer = screen.getByRole("row", { name: /^Total/ });
+		const footer = screen.getByRole("row", { name: /^Total/u });
 		expect(footer.textContent).toContain("$2.30");
 		expect(footer.textContent).toContain("≈ €2.02");
 		expect(footer.textContent).not.toContain("€2.04");

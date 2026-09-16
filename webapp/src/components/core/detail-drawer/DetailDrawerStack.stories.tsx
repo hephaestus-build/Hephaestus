@@ -10,20 +10,23 @@ import { expectSettledVisible } from "@/test/overlay";
 
 import { DetailDrawerStack } from "./DetailDrawerStack";
 
-const popups = () =>
-	Array.from(document.querySelectorAll<HTMLElement>('[data-slot="drawer-popup"]'));
+const popups = () => [...document.querySelectorAll<HTMLElement>('[data-slot="drawer-popup"]')];
 
 /** The level at `depth`, so a story that has fewer open than it expects says which. */
 const popupAt = (depth: number): HTMLElement => {
 	const popup = popups()[depth];
-	if (!popup) throw new Error(`Expected at least ${depth + 1} open drawer level(s).`);
+	if (!popup) {
+		throw new Error(`Expected at least ${depth + 1} open drawer level(s).`);
+	}
 	return popup;
 };
 
 /** The page beside the panel, which is what a dismissing press lands on. */
 const pageBesideThePanel = (): Element => {
 	const page = document.elementFromPoint(20, 200);
-	if (!page) throw new Error("Nothing is under the point beside the panel.");
+	if (!page) {
+		throw new Error("Nothing is under the point beside the panel.");
+	}
 	return page;
 };
 
@@ -201,11 +204,15 @@ export const ArrivesWithAnEnterTransition: Story = {
 		const observer = new MutationObserver((records) => {
 			for (const record of records) {
 				for (const node of record.addedNodes) {
-					if (!(node instanceof HTMLElement)) continue;
+					if (!(node instanceof HTMLElement)) {
+						continue;
+					}
 					const popup = node.matches('[data-slot="drawer-popup"]')
 						? node
-						: node.querySelector('[data-slot="drawer-popup"]');
-					if (popup?.hasAttribute("data-starting-style")) started = true;
+						: node.querySelector<HTMLElement>('[data-slot="drawer-popup"]');
+					if (popup?.dataset.startingStyle !== undefined) {
+						started = true;
+					}
 				}
 			}
 		});

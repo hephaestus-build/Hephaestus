@@ -80,12 +80,14 @@ function mockUsageRoutes(options: {
 async function renderUsageRoute(url = "/admin/usage") {
 	renderRouteAt(url);
 	await screen.findByRole("heading", { name: "AI usage" }, ROUTE_RENDER_WAIT);
-	return screen.findByRole("button", { name: /Set budget for Acme/ }, ROUTE_RENDER_WAIT);
+	return screen.findByRole("button", { name: /Set budget for Acme/u }, ROUTE_RENDER_WAIT);
 }
 
 async function saveBudget(amount: string) {
 	const dialog = await screen.findByRole("dialog");
-	fireEvent.change(within(dialog).getByLabelText(/Monthly budget/i), { target: { value: amount } });
+	fireEvent.change(within(dialog).getByLabelText(/Monthly budget/iu), {
+		target: { value: amount },
+	});
 	fireEvent.click(within(dialog).getByRole("button", { name: "Save budget" }));
 }
 
@@ -104,15 +106,15 @@ describe("instance AI usage route", () => {
 		mockUsageRoutes({ budgetUsd: 50 });
 		await renderUsageRoute();
 
-		fireEvent.click(screen.getByRole("button", { name: /View usage details for Acme/ }));
+		fireEvent.click(screen.getByRole("button", { name: /View usage details for Acme/u }));
 		await screen.findByText("Acme has used 86% of its shared-model budget");
 
-		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/ }));
+		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/u }));
 		await saveBudget("200");
 
 		await screen.findByText("Budget saved. New calls resume within a minute.");
 		await waitFor(() =>
-			expect(screen.queryByText(/Acme has used \d+% of its shared-model budget/)).toBeNull(),
+			expect(screen.queryByText(/Acme has used \d+% of its shared-model budget/u)).toBeNull(),
 		);
 	});
 
@@ -133,7 +135,7 @@ describe("instance AI usage route", () => {
 		});
 		await renderUsageRoute();
 
-		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/ }));
+		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/u }));
 		await saveBudget("200");
 
 		fireEvent.keyDown(await screen.findByRole("dialog"), { key: "Escape" });
@@ -161,7 +163,7 @@ describe("instance AI usage route", () => {
 		});
 		await renderUsageRoute();
 
-		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/ }));
+		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/u }));
 		await saveBudget("9999999");
 
 		const dialog = await screen.findByRole("dialog");

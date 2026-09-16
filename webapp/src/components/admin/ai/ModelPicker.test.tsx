@@ -44,8 +44,8 @@ describe("ModelPicker", () => {
 		renderPicker({ availableModels: models, value: { scope: "SHARED", id: 1 }, onChange: vi.fn() });
 		expect(screen.getByRole("combobox").textContent).toContain("GPT-5 · Organization endpoint");
 		fireEvent.click(screen.getByRole("combobox"));
-		screen.getByRole("option", { name: /GPT-5 · Organization endpoint/ });
-		screen.getByRole("option", { name: /GPT-5 · Workspace endpoint/ });
+		screen.getByRole("option", { name: /GPT-5 · Organization endpoint/u });
+		screen.getByRole("option", { name: /GPT-5 · Workspace endpoint/u });
 		screen.getByText("Shared models");
 		screen.getByText("Your models");
 	});

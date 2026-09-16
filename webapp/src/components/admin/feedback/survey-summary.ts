@@ -15,7 +15,9 @@ export function npsBuckets(counts: readonly OptionCount[]): NpsBucketCounts {
 	const totals: NpsBucketCounts = { promoters: 0, passives: 0, detractors: 0, total: 0 };
 	for (const { value, count } of counts) {
 		const rating = Number(value);
-		if (!Number.isInteger(rating)) continue;
+		if (!Number.isInteger(rating)) {
+			continue;
+		}
 		for (const { bucket, low, high } of NPS_BUCKETS) {
 			if (rating >= low && rating <= high) {
 				totals[bucket] += count;

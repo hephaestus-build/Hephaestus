@@ -214,30 +214,32 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 					? "Hephaestus was updated while this page was open."
 					: termsAccepted && answered
 						? "That's everything. Let's get to work."
-						: !asksAboutResearch
-							? "One thing first: the rules."
-							: termsAccepted
+						: asksAboutResearch
+							? termsAccepted
 								? "Thanks. One question to go, and either answer is fine by me."
-								: answer !== undefined
-									? "Noted. Just the terms left."
-									: "Two things first: the rules, and whether you'd like to take part in the research.";
+								: answer === undefined
+									? "Two things first: the rules, and whether you'd like to take part in the research."
+									: "Noted. Just the terms left."
+							: "One thing first: the rules.";
 
 	const hint =
 		state.status !== "ready" || stale
 			? undefined
 			: !termsAccepted && !answered
 				? "Accept the terms and answer the research question."
-				: !termsAccepted
-					? "Accept the terms to continue."
-					: !answered
-						? "Answer the research question to continue."
-						: asksAboutResearch
+				: termsAccepted
+					? answered
+						? asksAboutResearch
 							? "You can change your answer later in settings."
-							: undefined;
+							: undefined
+						: "Answer the research question to continue."
+					: "Accept the terms to continue.";
 
 	function submit(event: SubmitEvent<HTMLFormElement>) {
 		event.preventDefault();
-		if (state.status !== "ready" || !ready || submitting) return;
+		if (state.status !== "ready" || !ready || submitting) {
+			return;
+		}
 		state.onSubmit({
 			noticeVersion: state.notice.noticeVersion,
 			termsAccepted: true,

@@ -22,13 +22,14 @@ export const Route = createFileRoute("/consent")({
 	}),
 	beforeLoad: async ({ context, search }) => {
 		const user = await resolveCurrentUser(context.queryClient);
-		if (!user)
+		if (!user) {
 			throw redirect({ to: "/login", search: { returnTo: safeReturnTo(search.returnTo) } });
+		}
 		// The page owns retry and sign-out on failure; a loader error would bypass both.
-		const consent = await context.queryClient
-			.query(getConsentStatusOptions({}))
-			.catch(() => undefined);
-		if (consent?.completed) throw redirect({ href: safeReturnTo(search.returnTo) });
+		const consent = await context.queryClient.query(getConsentStatusOptions({})).catch(() => {});
+		if (consent?.completed) {
+			throw redirect({ href: safeReturnTo(search.returnTo) });
+		}
 	},
 	component: ConsentRoute,
 });
@@ -54,10 +55,12 @@ function ConsentRoute() {
 	});
 
 	useEffect(() => {
-		if (data?.completed) void navigate({ href: safeReturnTo(returnTo), replace: true });
+		if (data?.completed) {
+			void navigate({ href: safeReturnTo(returnTo), replace: true });
+		}
 	}, [data?.completed, navigate, returnTo]);
 
-	if (isError)
+	if (isError) {
 		return (
 			<ConsentPage
 				state={{ status: "error", error, onRetry: () => void refetch() }}
@@ -65,7 +68,8 @@ function ConsentRoute() {
 				onReload={reload}
 			/>
 		);
-	if (!data)
+	}
+	if (!data) {
 		return (
 			<ConsentPage
 				state={{ status: "loading" }}
@@ -73,6 +77,7 @@ function ConsentRoute() {
 				onReload={reload}
 			/>
 		);
+	}
 
 	const submission: ConsentSubmission = mutation.isPending
 		? { status: "saving" }

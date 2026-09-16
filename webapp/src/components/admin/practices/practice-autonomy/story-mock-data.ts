@@ -74,7 +74,9 @@ export function buildAutonomyFixture({
 			const held = spec.reviewable === false ? "OFF" : spec.override;
 			const effective = held ?? groupEffective;
 			const source = held ? "PRACTICE" : group.override ? "GROUP" : "WORKSPACE";
-			if (held) overriddenCount += 1;
+			if (held) {
+				overriddenCount += 1;
+			}
 			counts[effective] += 1;
 			workspaceCounts[effective] += 1;
 			practices.push({
@@ -135,8 +137,8 @@ export function buildAutonomyFixture({
 const slugify = (name: string) =>
 	name
 		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-|-$/g, "");
+		.replaceAll(/[^a-z0-9]+/gu, "-")
+		.replaceAll(/^-|-$/gu, "");
 
 const SCALE_GROUP_NAMES = [
 	"Pull request hygiene",

@@ -37,12 +37,12 @@ describe("SlackPreferencesSection", () => {
 		const row = screen.getByRole("group", { name: "Hephaestus Test Slack preferences" });
 		within(row).getByText("2 active monitored channels");
 
-		fireEvent.click(within(row).getByRole("switch", { name: /use my new channel messages/i }));
+		fireEvent.click(within(row).getByRole("switch", { name: /use my new channel messages/iu }));
 
 		// The flip alone must NOT delete anything — an irreversible deletion is gated by a confirmation.
 		expect(onToggleChannelMessages).not.toHaveBeenCalled();
 
-		fireEvent.click(screen.getByRole("button", { name: /turn off & delete/i }));
+		fireEvent.click(screen.getByRole("button", { name: /turn off & delete/iu }));
 
 		expect(onToggleChannelMessages).toHaveBeenCalledWith("hephaestustest", false);
 	});
@@ -59,11 +59,11 @@ describe("SlackPreferencesSection", () => {
 			/>,
 		);
 
-		fireEvent.click(screen.getByRole("switch", { name: /use my new channel messages/i }));
+		fireEvent.click(screen.getByRole("switch", { name: /use my new channel messages/iu }));
 		fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
 		expect(onToggleChannelMessages).not.toHaveBeenCalled();
-		screen.getByRole("switch", { name: /use my new channel messages/i });
+		screen.getByRole("switch", { name: /use my new channel messages/iu });
 	});
 
 	it("does not fake controls when Slack is linked but no workspace is available", () => {
@@ -77,7 +77,7 @@ describe("SlackPreferencesSection", () => {
 			/>,
 		);
 
-		screen.getByText(/Slack is connected/i);
+		screen.getByText(/Slack is connected/iu);
 		expect(screen.queryByRole("switch")).toBeNull();
 	});
 });

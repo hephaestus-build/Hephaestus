@@ -347,7 +347,7 @@ describe("PracticeReviewSettings", () => {
 
 		await screen.findByText("acme/archived");
 		expect(screen.queryByText("Not monitored")).toBeNull();
-		expect(screen.queryByTitle(/unavailable/)).toBeNull();
+		expect(screen.queryByTitle(/unavailable/u)).toBeNull();
 	});
 
 	it("marks persisted targets unavailable only after a successful list excludes them", async () => {
@@ -385,7 +385,7 @@ describe("PracticeReviewSettings", () => {
 		const view = await renderSettings();
 		const active = await screen.findByRole("switch", { name: "Send feedback" });
 		expect(active.getAttribute("aria-checked")).toBe("true");
-		expect(screen.queryByRole("switch", { name: /Active/ })).toBeNull();
+		expect(screen.queryByRole("switch", { name: /Active/u })).toBeNull();
 		view.unmount();
 		await renderSettings({
 			policy: {
@@ -399,6 +399,6 @@ describe("PracticeReviewSettings", () => {
 		expect(screen.getByRole("switch", { name: "Send feedback" }).getAttribute("aria-checked")).toBe(
 			"false",
 		);
-		expect(screen.queryByRole("switch", { name: /Paused/ })).toBeNull();
+		expect(screen.queryByRole("switch", { name: /Paused/u })).toBeNull();
 	});
 });

@@ -46,7 +46,9 @@ export function ReviewPracticeLink({
 }
 
 function PracticeGroupMark({ group }: { group: ReviewPracticeGroup | undefined }) {
-	if (!group) return null;
+	if (!group) {
+		return null;
+	}
 	return (
 		<GroupPill
 			size="sm"

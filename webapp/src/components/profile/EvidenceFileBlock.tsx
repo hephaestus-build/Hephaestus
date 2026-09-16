@@ -27,7 +27,7 @@ export function EvidenceFileBlock({
 	const lines = location.snippet?.split("\n") ?? [];
 	const firstLineNumber = location.startLine;
 	const hasSnippet = lines.length > 0;
-	const bodyId = `evidence-${location.path.replace(/[^\w-]/g, "-")}-${firstLineNumber}-${instanceId}`;
+	const bodyId = `evidence-${location.path.replaceAll(/[^\w-]/gu, "-")}-${firstLineNumber}-${instanceId}`;
 	const SourceIcon = source.icon;
 
 	return (

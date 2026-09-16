@@ -31,14 +31,14 @@ export interface LlmModelFieldsValue {
 	price: PriceModeValue;
 }
 
-type EditedModel = {
+interface EditedModel {
 	displayName: string;
 	upstreamModelId: string;
 	contextWindow?: number;
 	maxOutputTokens?: number;
 	supportsReasoning?: boolean;
 	enabled?: boolean;
-};
+}
 
 export function modelFieldsValueOf(
 	model: EditedModel | null,
@@ -47,8 +47,8 @@ export function modelFieldsValueOf(
 	return {
 		displayName: model?.displayName ?? "",
 		upstreamModelId: model?.upstreamModelId ?? "",
-		contextWindow: model?.contextWindow != null ? String(model.contextWindow) : "",
-		maxOutputTokens: model?.maxOutputTokens != null ? String(model.maxOutputTokens) : "",
+		contextWindow: model?.contextWindow == null ? "" : String(model.contextWindow),
+		maxOutputTokens: model?.maxOutputTokens == null ? "" : String(model.maxOutputTokens),
 		supportsReasoning: model?.supportsReasoning ?? false,
 		enabled: model?.enabled ?? false,
 		price,

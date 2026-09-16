@@ -25,7 +25,7 @@ export interface SyncNowButtonProps {
  */
 export function SyncNowButton({ onClick, triggeringType = null, activeJob }: SyncNowButtonProps) {
 	const disabled = triggeringType != null || activeJob != null;
-	const text = activeJob != null ? "Syncing…" : triggeringType != null ? "Starting…" : "Sync now";
+	const text = activeJob == null ? (triggeringType == null ? "Sync now" : "Starting…") : "Syncing…";
 
 	return (
 		<>
@@ -42,11 +42,11 @@ export function SyncNowButton({ onClick, triggeringType = null, activeJob }: Syn
 			the announcement names *that* job rather than the trigger's intent — a backfill request that
 			landed behind a running reconciliation must not report the reconciliation as a backfill. */}
 			<span role="status" aria-live="polite" className="sr-only">
-				{activeJob != null
-					? `${JOB_TYPE_LABEL[activeJob.type]} in progress`
-					: triggeringType != null
-						? `Starting ${JOB_TYPE_LABEL[triggeringType].toLowerCase()}`
-						: ""}
+				{activeJob == null
+					? triggeringType == null
+						? ""
+						: `Starting ${JOB_TYPE_LABEL[triggeringType].toLowerCase()}`
+					: `${JOB_TYPE_LABEL[activeJob.type]} in progress`}
 			</span>
 		</>
 	);

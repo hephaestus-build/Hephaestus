@@ -47,11 +47,17 @@ function bucketThreads(threads: ChatThreadSummary[], now: number): ThreadGroupDa
 		const createdAt = thread.createdAt ? new Date(thread.createdAt).getTime() : now;
 		const ageDays = (now - createdAt) / day;
 		let bucket: BucketName;
-		if (ageDays < 1) bucket = "Today";
-		else if (ageDays < 2) bucket = "Yesterday";
-		else if (ageDays < 7) bucket = "Last 7 days";
-		else if (ageDays < 30) bucket = "Last 30 days";
-		else bucket = "Older";
+		if (ageDays < 1) {
+			bucket = "Today";
+		} else if (ageDays < 2) {
+			bucket = "Yesterday";
+		} else if (ageDays < 7) {
+			bucket = "Last 7 days";
+		} else if (ageDays < 30) {
+			bucket = "Last 30 days";
+		} else {
+			bucket = "Older";
+		}
 		buckets[bucket].push(thread);
 	}
 
@@ -151,7 +157,7 @@ function ThreadGroup({
 									render={
 										<Link
 											to="/w/$workspaceSlug/mentor/$threadId"
-											params={{ workspaceSlug: workspaceSlug, threadId: thread.id ?? "" }}
+											params={{ workspaceSlug, threadId: thread.id ?? "" }}
 										/>
 									}
 								>

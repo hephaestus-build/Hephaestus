@@ -32,7 +32,7 @@ describe("generateSlug", () => {
 		// 50 chars of "a" + "-b" = 52 chars → truncated to 51 → ends with hyphen → stripped
 		const input = `${"a".repeat(50)}-b`;
 		const slug = generateSlug(input);
-		expect(slug).not.toMatch(/-$/);
+		expect(slug).not.toMatch(/-$/u);
 		expect(slug.length).toBeLessThanOrEqual(51);
 	});
 

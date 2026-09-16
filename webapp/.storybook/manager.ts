@@ -2,10 +2,10 @@ import { addons } from "storybook/manager-api";
 
 const startCase = (input: string): string =>
 	input
-		.replace(/([a-z])([A-Z])/g, "$1 $2")
-		.replace(/[_-]+/g, " ")
+		.replaceAll(/(?<lower>[a-z])(?<upper>[A-Z])/gu, "$<lower> $<upper>")
+		.replaceAll(/[_-]+/gu, " ")
 		.trim()
-		.split(/\s+/)
+		.split(/\s+/u)
 		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
 		.join(" ");
 

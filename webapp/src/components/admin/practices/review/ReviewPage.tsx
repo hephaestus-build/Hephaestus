@@ -41,7 +41,9 @@ export function ReviewPage({ section, onSectionChange, running, sections }: Revi
 				value={section}
 				onValueChange={(next) => {
 					const opened = REVIEW_SECTIONS.find((candidate) => candidate.id === next);
-					if (opened) onSectionChange(opened.id);
+					if (opened) {
+						onSectionChange(opened.id);
+					}
 				}}
 				className="gap-6"
 			>

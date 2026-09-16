@@ -8,13 +8,13 @@ import { expectSettledVisible } from "@/test/overlay";
 
 import { SCM_CLASS_KEYS, SyncResourcesTable } from "./SyncResourcesTable";
 
-const SYNC_INTERVAL_SECONDS = 3_600;
+const SYNC_INTERVAL_SECONDS = 3600;
 
 function scmCounts(syncedAt: Date | undefined, scale = 1): SyncResourceState["counts"] {
 	return [
 		{ key: "issues", label: "Issues", count: 3410 * scale, lastSyncedAt: syncedAt },
 		{ key: "pullRequests", label: "Pull requests", count: 1204 * scale, lastSyncedAt: syncedAt },
-		{ key: "issueComments", label: "Comments", count: 12882 * scale, lastSyncedAt: undefined },
+		{ key: "issueComments", label: "Comments", count: 12_882 * scale, lastSyncedAt: undefined },
 		{ key: "reviews", label: "Reviews", count: 4120 * scale, lastSyncedAt: undefined },
 		{
 			key: "reviewComments",
@@ -22,7 +22,7 @@ function scmCounts(syncedAt: Date | undefined, scale = 1): SyncResourceState["co
 			count: 9004 * scale,
 			lastSyncedAt: undefined,
 		},
-		{ key: "commits", label: "Commits", count: 28710 * scale, lastSyncedAt: undefined },
+		{ key: "commits", label: "Commits", count: 28_710 * scale, lastSyncedAt: undefined },
 	];
 }
 
@@ -48,7 +48,7 @@ const resources: SyncResourceState[] = [
 			{ key: "issueComments", label: "Comments", count: 0, lastSyncedAt: undefined },
 			{ key: "reviews", label: "Reviews", count: 4120, lastSyncedAt: undefined },
 			{ key: "reviewComments", label: "Review comments", count: 0, lastSyncedAt: undefined },
-			{ key: "commits", label: "Commits", count: 28710, lastSyncedAt: undefined },
+			{ key: "commits", label: "Commits", count: 28_710, lastSyncedAt: undefined },
 		],
 		state: "SYNCED",
 		lastSyncedAt: minutesBefore(6),
@@ -146,7 +146,7 @@ const zeroCommentsFleet: SyncResourceState[] = [
 			{ key: "issueComments", label: "Comments", count: 0, lastSyncedAt: undefined },
 			{ key: "reviews", label: "Reviews", count: 940, lastSyncedAt: undefined },
 			{ key: "reviewComments", label: "Review comments", count: 0, lastSyncedAt: undefined },
-			{ key: "commits", label: "Commits", count: 15400, lastSyncedAt: undefined },
+			{ key: "commits", label: "Commits", count: 15_400, lastSyncedAt: undefined },
 		],
 		state: "SYNCED",
 		lastSyncedAt: minutesBefore(7),
@@ -180,10 +180,10 @@ const divergent: SyncResourceState[] = [
 		counts: [
 			{ key: "issues", label: "Issues", count: 3410, lastSyncedAt: minutesBefore(4) },
 			{ key: "pullRequests", label: "Pull requests", count: 1204, lastSyncedAt: daysBefore(3) },
-			{ key: "issueComments", label: "Comments", count: 12882, lastSyncedAt: undefined },
+			{ key: "issueComments", label: "Comments", count: 12_882, lastSyncedAt: undefined },
 			{ key: "reviews", label: "Reviews", count: 4120, lastSyncedAt: undefined },
 			{ key: "reviewComments", label: "Review comments", count: 9004, lastSyncedAt: undefined },
-			{ key: "commits", label: "Commits", count: 28710, lastSyncedAt: undefined },
+			{ key: "commits", label: "Commits", count: 28_710, lastSyncedAt: undefined },
 		],
 		state: "SYNCED",
 		lastSyncedAt: minutesBefore(4),
@@ -321,20 +321,20 @@ export const Default: Story = {
 		canvas.getByRole("columnheader", { name: "Last synced" });
 		await expect(canvas.queryByRole("columnheader", { name: "Items" })).toBeNull();
 		await expect(canvas.queryByRole("columnheader", { name: "State" })).toBeNull();
-		await expect(canvas.queryByRole("columnheader", { name: /synced through/i })).toBeNull();
+		await expect(canvas.queryByRole("columnheader", { name: /synced through/iu })).toBeNull();
 
 		canvas.getByText("ls1intum/Artemis");
 
-		canvas.getByRole("row", { name: /legacy-mirror/ });
+		canvas.getByRole("row", { name: /legacy-mirror/u });
 	},
 };
 
 export const WatermarkDivergence: Story = {
 	args: { resources: divergent },
 	play: async ({ canvas }) => {
-		canvas.getByLabelText(/further behind/);
+		canvas.getByLabelText(/further behind/u);
 
-		await userEvent.hover(canvas.getByText(/ago$/));
+		await userEvent.hover(canvas.getByText(/ago$/u));
 		await expectSettledVisible(await screen.findByText("Pull requests"));
 	},
 };
@@ -342,9 +342,9 @@ export const WatermarkDivergence: Story = {
 export const ZeroCommentsAgainstManyIssues: Story = {
 	args: { resources: zeroCommentsFleet },
 	play: async ({ canvas }) => {
-		const totals = canvas.getByRole("row", { name: /All repositories/ });
+		const totals = canvas.getByRole("row", { name: /All repositories/u });
 		await userEvent.hover(within(totals).getByText("0"));
-		await expectSettledVisible(await screen.findByText(/pipeline may not be running/i));
+		await expectSettledVisible(await screen.findByText(/pipeline may not be running/iu));
 	},
 };
 
@@ -360,11 +360,11 @@ export const SeventyOneRepositories: Story = {
 			await expect(container.scrollHeight).toBeGreaterThan(container.clientHeight);
 		}
 
-		canvas.getByRole("row", { name: /legacy-mirror/ });
+		canvas.getByRole("row", { name: /legacy-mirror/u });
 
 		const search = canvas.getByRole("searchbox");
 		await userEvent.type(search, "legacy");
-		canvas.getByText(/1 of 71 repositories/i);
+		canvas.getByText(/1 of 71 repositories/iu);
 	},
 };
 
@@ -386,15 +386,15 @@ export const NeverSynced: Story = {
 
 		canvas.getByText("Never");
 		await userEvent.hover(canvas.getByText("Never"));
-		await expectSettledVisible(await screen.findByText(/has not synced yet/i));
+		await expectSettledVisible(await screen.findByText(/has not synced yet/iu));
 	},
 };
 
 export const Backfilling: Story = {
 	args: { resources },
 	play: async ({ canvas }) => {
-		canvas.getByText(/backfilling · 62%/i);
-		canvas.getByRole("progressbar", { name: /backfill progress for ls1intum\/aeolus/i });
+		canvas.getByText(/backfilling · 62%/iu);
+		canvas.getByRole("progressbar", { name: /backfill progress for ls1intum\/aeolus/iu });
 	},
 };
 
@@ -403,7 +403,7 @@ export const RowHover: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.hover(canvas.getByText("ls1intum/Artemis"));
 		await expectSettledVisible(await screen.findByText("Items"));
-		await expectSettledVisible(await screen.findByText(/no backfill has run/i));
+		await expectSettledVisible(await screen.findByText(/no backfill has run/iu));
 	},
 };
 
@@ -421,8 +421,8 @@ export const SlackChannels: Story = {
 		canvas.getByText("C0123ABCD");
 		canvas.getByText("All channels");
 
-		const firstRow = canvas.getByRole("row", { name: /#design/ });
-		within(firstRow).getByRole("button", { name: /very stale/i });
+		const firstRow = canvas.getByRole("row", { name: /#design/u });
+		within(firstRow).getByRole("button", { name: /very stale/iu });
 	},
 };
 
@@ -438,22 +438,22 @@ export const OutlineCollections: Story = {
 		canvas.getByText("Engineering Handbook");
 		canvas.getByText("col_handbook");
 
-		const firstRow = canvas.getByRole("row", { name: /Archived Notes/ });
-		within(firstRow).getByRole("button", { name: /very stale/i });
+		const firstRow = canvas.getByRole("row", { name: /Archived Notes/u });
+		within(firstRow).getByRole("button", { name: /very stale/iu });
 
 		await userEvent.hover(canvas.getByText("Engineering Handbook"));
 		await expectSettledVisible(await screen.findByText("350 items"));
 
-		await userEvent.hover(canvas.getByRole("button", { name: /error for archived notes/i }));
-		await expectSettledVisible(await screen.findByText(/api token was revoked/i));
+		await userEvent.hover(canvas.getByRole("button", { name: /error for archived notes/iu }));
+		await expectSettledVisible(await screen.findByText(/api token was revoked/iu));
 	},
 };
 
 export const NoCadence: Story = {
 	args: { resources, syncIntervalSeconds: undefined },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("button", { name: /stale/i })).not.toBeInTheDocument();
-		canvas.getAllByRole("button", { name: /ago$/ });
+		await expect(canvas.queryByRole("button", { name: /stale/iu })).not.toBeInTheDocument();
+		canvas.getAllByRole("button", { name: /ago$/u });
 	},
 };
 
@@ -461,9 +461,9 @@ export const FilteredEmpty: Story = {
 	args: { resources },
 	play: async ({ canvas }) => {
 		await userEvent.type(canvas.getByRole("searchbox"), "zzz-no-such-repo");
-		canvas.getByText(/no repositories match/i);
+		canvas.getByText(/no repositories match/iu);
 
-		await userEvent.click(canvas.getByRole("button", { name: /clear filter/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /clear filter/iu }));
 		canvas.getByText("ls1intum/Artemis");
 	},
 };
@@ -474,11 +474,11 @@ export const AttentionFilter: Story = {
 		canvas.getByText("acme/fresh-service");
 		canvas.getByText("acme/stale-service");
 
-		await userEvent.click(canvas.getByRole("button", { name: /attention \(1\)/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /attention \(1\)/iu }));
 		canvas.getByText("acme/stale-service");
 		await expect(canvas.queryByText("acme/fresh-service")).not.toBeInTheDocument();
 
-		await userEvent.click(canvas.getByRole("button", { name: /fresh \(1\)/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /fresh \(1\)/iu }));
 		canvas.getByText("acme/fresh-service");
 		await expect(canvas.queryByText("acme/stale-service")).not.toBeInTheDocument();
 	},
@@ -488,15 +488,15 @@ export const AttentionFacetFallsBackWhenCleared: Story = {
 	args: { resources: [] },
 	render: ({ resources: _ownedByTheHarness, ...args }) => <FacetFallbackHarness {...args} />,
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /attention \(1\)/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /attention \(1\)/iu }));
 		canvas.getByText("acme/stale-service");
 		await expect(canvas.queryByText("acme/fresh-service")).not.toBeInTheDocument();
 
-		await userEvent.click(canvas.getByRole("button", { name: /heal the stale row/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /heal the stale row/iu }));
 
-		await expect(canvas.queryByRole("button", { name: /attention/i })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("button", { name: /attention/iu })).not.toBeInTheDocument();
 		await expect(
-			canvas.queryByText(/no repositories match the current filter/i),
+			canvas.queryByText(/no repositories match the current filter/iu),
 		).not.toBeInTheDocument();
 		canvas.getByText("acme/fresh-service");
 	},

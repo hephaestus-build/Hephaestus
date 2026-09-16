@@ -100,9 +100,13 @@ import {
 	Zap,
 } from "lucide-react";
 
+import { humanizeToken } from "@/lib/humanize";
 import { hasText } from "@/lib/text";
 
-export type GroupVisual = { Icon: LucideIcon; pill: string };
+export interface GroupVisual {
+	Icon: LucideIcon;
+	pill: string;
+}
 
 const SLATE_PILL = "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
 
@@ -237,8 +241,7 @@ export const ICON_COMPONENTS: Record<string, LucideIcon> = {
 export const ICON_NAMES = Object.keys(ICON_COMPONENTS);
 
 export function iconLabel(name: string): string {
-	const words = name.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
-	return words.charAt(0).toUpperCase() + words.slice(1);
+	return humanizeToken(name);
 }
 
 export function iconSearchText(name: string): string {

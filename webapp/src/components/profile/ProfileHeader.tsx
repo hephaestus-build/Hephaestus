@@ -26,11 +26,18 @@ export interface ProfileHeaderProps {
 	leaguesEnabled?: boolean;
 }
 
+const FIRST_LEVEL: ProfileXpRecord = {
+	currentLevel: 1,
+	currentLevelXP: 0,
+	totalXP: 0,
+	xpNeeded: 150,
+};
+
 export function ProfileHeader({
 	user,
 	firstContribution,
 	leaguePoints = 0,
-	userXpRecord = { currentLevel: 1, currentLevelXP: 0, totalXP: 0, xpNeeded: 150 },
+	userXpRecord = FIRST_LEVEL,
 	isLoading,
 	progressionEnabled = true,
 	leaguesEnabled = true,

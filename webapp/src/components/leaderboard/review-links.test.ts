@@ -22,7 +22,9 @@ beforeEach(() => {
 			constructor(private readonly data: Record<string, Blob>) {}
 			async getType(type: string) {
 				const blob = this.data[type];
-				if (!blob) throw new Error(`Missing clipboard format: ${type}`);
+				if (!blob) {
+					throw new Error(`Missing clipboard format: ${type}`);
+				}
 				return blob;
 			}
 		},
@@ -31,8 +33,11 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.unstubAllGlobals();
-	if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
-	else Reflect.deleteProperty(navigator, "clipboard");
+	if (originalClipboard) {
+		Object.defineProperty(navigator, "clipboard", originalClipboard);
+	} else {
+		Reflect.deleteProperty(navigator, "clipboard");
+	}
 });
 
 describe("review links", () => {
@@ -68,7 +73,8 @@ describe("review links", () => {
 		expect(html.querySelectorAll("a")).toHaveLength(1);
 		expect(html.querySelector("a")?.textContent).toBe(label);
 		expect(html.querySelector("a")?.getAttribute("href")).toBe(url);
-		expect(await (await item.getType("text/plain")).text()).toBe(url);
+		const text = await item.getType("text/plain");
+		await expect(text.text()).resolves.toBe(url);
 	});
 
 	it("falls back to plain text when rich copying is rejected", async () => {

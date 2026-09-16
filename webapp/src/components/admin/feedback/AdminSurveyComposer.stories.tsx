@@ -106,8 +106,10 @@ export const RatingQuestion: Story = {
 export const ManyQuestions: Story = {
 	play: async () => {
 		const add = await screen.findByRole("button", { name: "Add question" });
-		for (let count = 1; count < 6; count += 1) await userEvent.click(add);
-		await expect(screen.getAllByRole("group", { name: /^Question \d+$/ })).toHaveLength(6);
+		for (let count = 1; count < 6; count += 1) {
+			await userEvent.click(add);
+		}
+		await expect(screen.getAllByRole("group", { name: /^Question \d+$/u })).toHaveLength(6);
 		await expect(
 			screen.getByText("This survey has 6 questions; response rates drop sharply beyond 5."),
 		).toBeVisible();
@@ -117,10 +119,14 @@ export const ManyQuestions: Story = {
 		// Moving swaps the questions themselves, prompts included, not just their numbers.
 		const expectPrompts = async (...values: string[]) => {
 			const fields = screen.getAllByRole("textbox", { name: "Question" });
-			for (const [index, value] of values.entries()) await expect(fields[index]).toHaveValue(value);
+			for (const [index, value] of values.entries()) {
+				await expect(fields[index]).toHaveValue(value);
+			}
 		};
 		const [first, second] = screen.getAllByRole("textbox", { name: "Question" });
-		if (!first || !second) throw new Error("expected two prompts");
+		if (!first || !second) {
+			throw new Error("expected two prompts");
+		}
 		await userEvent.type(first, "First");
 		await userEvent.type(second, "Second");
 		await userEvent.click(screen.getByRole("button", { name: "Move question 2 up" }));
@@ -129,7 +135,7 @@ export const ManyQuestions: Story = {
 		await expectPrompts("First", "Second");
 
 		await userEvent.click(screen.getByRole("button", { name: "Remove question 6" }));
-		await expect(screen.getAllByRole("group", { name: /^Question \d+$/ })).toHaveLength(5);
+		await expect(screen.getAllByRole("group", { name: /^Question \d+$/u })).toHaveLength(5);
 	},
 };
 
@@ -153,9 +159,9 @@ export const Preview: Story = {
 		await userEvent.type(screen.getByLabelText("End"), "2099-01-01T09:00");
 		await userEvent.click(screen.getByRole("button", { name: "Preview" }));
 		const dialog = within(await screen.findByRole("dialog", { name: "Onboarding check-in" }));
-		await expectSettledVisible(dialog.getByText(/1 question · under a minute · closes in/));
+		await expectSettledVisible(dialog.getByText(/1 question · under a minute · closes in/u));
 		await expect(dialog.getByRole("progressbar")).toHaveTextContent("Question 1 of 1");
-		await expect(dialog.getByText(/What slowed you down in your first week\?/)).toBeVisible();
+		await expect(dialog.getByText(/What slowed you down in your first week\?/u)).toBeVisible();
 		await userEvent.keyboard("{Escape}");
 		await waitFor(() =>
 			expect(screen.queryByRole("dialog", { name: "Onboarding check-in" })).toBeNull(),
@@ -220,7 +226,7 @@ export const WithResearchProgramme: Story = {
 		const dialog = within(await screen.findByRole("dialog", { name: "Acting on feedback" }));
 		await expectSettledVisible(dialog.getByText("Research"));
 		await expect(
-			dialog.getByText(/study run by Technical University of Munich, which you agreed to join/),
+			dialog.getByText(/study run by Technical University of Munich, which you agreed to join/u),
 		).toBeVisible();
 		await expect(dialog.getByRole("link", { name: "User settings" })).toBeVisible();
 	},

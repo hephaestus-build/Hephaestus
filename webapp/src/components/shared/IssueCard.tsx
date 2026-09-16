@@ -20,7 +20,7 @@ export interface IssueCardProps {
 	state?: "OPEN" | "CLOSED" | "MERGED";
 	isDraft?: boolean;
 	isMerged?: boolean;
-	pullRequestLabels?: LabelInfo[];
+	pullRequestLabels?: readonly LabelInfo[];
 	children?: React.ReactNode;
 	/** If true, the card will not be wrapped in an <a> tag */
 	noLinkWrapper?: boolean;
@@ -34,6 +34,8 @@ export interface IssueCardProps {
 	providerType?: ProviderType;
 }
 
+const NO_LABELS: readonly LabelInfo[] = [];
+
 export function IssueCard({
 	isLoading,
 	title,
@@ -46,7 +48,7 @@ export function IssueCard({
 	state,
 	isDraft,
 	isMerged,
-	pullRequestLabels = [],
+	pullRequestLabels = NO_LABELS,
 	children,
 	noLinkWrapper = false,
 	rightContent,

@@ -54,7 +54,7 @@ export const HumanReviewReasonIsNotALimitation: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByLabelText(/Why is human review needed/)).toHaveValue(
+		await expect(canvas.getByLabelText(/Why is human review needed/u)).toHaveValue(
 			"The trade-off was agreed in a conversation no automated review can read.",
 		);
 		await expect(
@@ -83,7 +83,7 @@ export const GuidanceOnly: Story = {
 export const AiReviewUnavailable: Story = {
 	args: { supportedAutomatedReviewModes: [] },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/no AI review available on this instance/)).toBeVisible();
+		await expect(canvas.getByText(/no AI review available on this instance/u)).toBeVisible();
 	},
 };
 

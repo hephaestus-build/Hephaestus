@@ -13,8 +13,12 @@ export function jobWait(
 	job: Pick<AgentJob, "status" | "holdReason" | "availableAt">,
 	now: number,
 ): JobWait | null {
-	if (job.status !== "QUEUED") return null;
-	if (job.holdReason) return { kind: "hold", reason: job.holdReason };
+	if (job.status !== "QUEUED") {
+		return null;
+	}
+	if (job.holdReason) {
+		return { kind: "hold", reason: job.holdReason };
+	}
 	const availableAt = asDate(job.availableAt);
 	return availableAt && availableAt.getTime() > now ? { kind: "backoff" } : null;
 }
@@ -42,7 +46,9 @@ const UNKNOWN_HOLD_DETAIL =
 
 export function holdReasonCopy(reason: string): HoldReasonCopy {
 	const known = HOLD_REASON_COPY[reason];
-	if (known) return known;
+	if (known) {
+		return known;
+	}
 	return { label: humanizeToken(reason), detail: UNKNOWN_HOLD_DETAIL };
 }
 
@@ -57,7 +63,9 @@ export function isResultProcessingRetryable(
 }
 
 export function formatTokens(value: number | undefined): string {
-	if (value == null) return "—";
+	if (value == null) {
+		return "—";
+	}
 	return value.toLocaleString();
 }
 

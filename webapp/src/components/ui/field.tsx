@@ -170,7 +170,7 @@ function FieldSeparator({
  */
 function resolveErrorContent(
 	children: React.ReactNode,
-	errors: Array<{ message?: string } | undefined> | undefined,
+	errors: ({ message?: string } | undefined)[] | undefined,
 ) {
 	if (children) {
 		return children;
@@ -199,7 +199,7 @@ function FieldError({
 	errors,
 	...props
 }: React.ComponentProps<"div"> & {
-	errors?: Array<{ message?: string } | undefined>;
+	errors?: ({ message?: string } | undefined)[];
 }) {
 	const content = resolveErrorContent(children, errors);
 

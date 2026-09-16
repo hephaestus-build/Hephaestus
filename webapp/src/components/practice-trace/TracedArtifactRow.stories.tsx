@@ -61,7 +61,7 @@ export const UnlinkableArtifact: Story = {
 		await expect(link).toHaveAttribute("href", "/w/demo/reviews/chat.conversation_thread/88");
 		// The kind rides in the accessible name, not only in the icon: this row's title happens to be
 		// the word "Conversation" too, and only one of the two is readable without sight.
-		await expect(link).toHaveAccessibleName(/Conversation/);
+		await expect(link).toHaveAccessibleName(/Conversation/u);
 	},
 };
 

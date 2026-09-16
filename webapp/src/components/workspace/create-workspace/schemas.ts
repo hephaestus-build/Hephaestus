@@ -29,9 +29,9 @@ export const workspaceDetailsSchema = z.object({
 		.trim()
 		.min(3, "Must be at least 3 characters")
 		.max(51, "Must be at most 51 characters")
-		.regex(/^[a-z0-9]/, "Must start with a lowercase letter or digit")
-		.regex(/[a-z0-9]$/, "Must end with a lowercase letter or digit")
-		.regex(/^[a-z0-9-]+$/, "Only lowercase letters, digits, and hyphens allowed")
+		.regex(/^[a-z0-9]/u, "Must start with a lowercase letter or digit")
+		.regex(/[a-z0-9]$/u, "Must end with a lowercase letter or digit")
+		.regex(/^[a-z0-9-]+$/u, "Only lowercase letters, digits, and hyphens allowed")
 		.refine((s) => !s.includes("--"), "No consecutive hyphens allowed"),
 });
 export type WorkspaceDetailsData = z.infer<typeof workspaceDetailsSchema>;

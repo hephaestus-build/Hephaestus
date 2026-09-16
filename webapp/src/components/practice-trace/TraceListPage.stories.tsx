@@ -59,7 +59,9 @@ export const Default: Story = {
 		// Written out rather than read back off the fixture, so a fixture that loses a row fails here
 		// instead of quietly agreeing with the page.
 		await expect(await canvas.findByText("5 pieces of work.")).toBeVisible();
-		await expect(canvas.getByRole("link", { name: /Member-facing review activity/ })).toBeVisible();
+		await expect(
+			canvas.getByRole("link", { name: /Member-facing review activity/u }),
+		).toBeVisible();
 		await expect(canvas.getByText("6 moments recorded · 2 started a review")).toBeVisible();
 	},
 };
@@ -77,7 +79,7 @@ export const EveryKindIsNamed: Story = {
 		await expect(await canvas.findByText("Onboarding: your first week")).toBeVisible();
 		await expect(canvas.queryByText("docs.document")).not.toBeInTheDocument();
 
-		await userEvent.click(canvas.getByRole("combobox", { name: /Show/ }));
+		await userEvent.click(canvas.getByRole("combobox", { name: /Show/u }));
 		// The listbox is portalled, so it is on `screen` rather than in the canvas.
 		await expectSettledVisible(await screen.findByRole("option", { name: "Documents" }));
 		screen.getByRole("option", { name: "Conversations" });
@@ -88,8 +90,11 @@ export const EveryKindIsNamed: Story = {
 export const Loading: Story = {
 	args: { isLoading: true, artifacts: undefined },
 	play: async ({ canvas }) => {
-		const status = (await canvas.findByText("Loading review activity")).closest('[role="status"]');
-		if (!(status instanceof HTMLElement)) throw new Error("The skeleton is not a live region");
+		const label = await canvas.findByText("Loading review activity");
+		const status = label.closest('[role="status"]');
+		if (!(status instanceof HTMLElement)) {
+			throw new Error("The skeleton is not a live region");
+		}
 		// Counted, not eyeballed: a skeleton of four bars for a page of twenty is the jump a skeleton
 		// exists to prevent.
 		await expect(status.querySelectorAll(":scope > div")).toHaveLength(TRACE_PAGE_SIZE);
@@ -112,7 +117,7 @@ export const FilteredToOneKind: Story = {
 	play: async ({ args, canvas }) => {
 		await expect(await canvas.findByRole("combobox", { name: "Show" })).toHaveTextContent("Issues");
 
-		await userEvent.click(canvas.getByRole("button", { name: /Reset/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Reset/u }));
 		await expect(args.onSearchChange).toHaveBeenCalledWith({ kind: undefined, page: undefined });
 	},
 };
@@ -137,7 +142,7 @@ export const NoWorkOfThatKind: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(await canvas.findByText("No conversations recorded yet")).toBeVisible();
-		await expect(canvas.getByText(/Switch back to all work/)).toBeVisible();
+		await expect(canvas.getByText(/Switch back to all work/u)).toBeVisible();
 	},
 };
 
@@ -148,7 +153,7 @@ export const LoadFailed: Story = {
 	},
 	play: async ({ args, canvas }) => {
 		await expect(await canvas.findByText("Couldn't load review activity")).toBeVisible();
-		await expect(canvas.getByText(/Unknown artifact kind/)).toBeVisible();
+		await expect(canvas.getByText(/Unknown artifact kind/u)).toBeVisible();
 		// A 400 is not retryable, so the alert withholds the button even though a handler was passed.
 		await expect(canvas.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
 		await expect(args.onRetry).not.toHaveBeenCalled();

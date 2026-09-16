@@ -75,7 +75,7 @@ const viteConfig = {
 					// Keep the shared renderer cacheable across application releases. Do not collect all
 					// dependencies: feature libraries belong to the routes that actually use them.
 					groups: [
-						{ name: "react-runtime", test: /[/]node_modules[/](react|react-dom|scheduler)[/]/ },
+						{ name: "react-runtime", test: /[/]node_modules[/](?:react|react-dom|scheduler)[/]/u },
 					],
 				},
 			},

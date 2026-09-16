@@ -31,7 +31,7 @@ type Story = StoryObj<typeof meta>;
 /** First visit: a named region with an equal-prominence Decline / Allow pair and no Cancel. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		canvas.getByRole("region", { name: /your privacy/i });
+		canvas.getByRole("region", { name: /your privacy/iu });
 		canvas.getByRole("button", { name: "Decline" });
 		canvas.getByRole("button", { name: "Allow" });
 		await expect(canvas.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();

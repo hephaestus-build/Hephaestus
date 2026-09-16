@@ -99,7 +99,9 @@ export function TablePagination({
 	renderPageLink,
 	className,
 }: TablePaginationProps) {
-	if (totalPages <= 1) return null;
+	if (totalPages <= 1) {
+		return null;
+	}
 
 	return (
 		<Pagination className={className}>

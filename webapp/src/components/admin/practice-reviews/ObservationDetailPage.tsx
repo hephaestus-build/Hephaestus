@@ -71,7 +71,7 @@ export function ObservationDetailPage({
 		/>
 	);
 
-	if (isLoading)
+	if (isLoading) {
 		return (
 			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
@@ -80,6 +80,7 @@ export function ObservationDetailPage({
 				</div>
 			</article>
 		);
+	}
 	if (error) {
 		return (
 			<article className="max-w-4xl min-w-0 space-y-8">

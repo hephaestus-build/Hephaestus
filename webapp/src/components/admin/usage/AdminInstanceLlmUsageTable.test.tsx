@@ -206,13 +206,13 @@ describe("AdminInstanceLlmUsageTable", () => {
 		renderTable([workspace], { isCurrentMonth: false });
 
 		expect(rowControlNames()).toStrictEqual(["View usage details for Example Workspace"]);
-		screen.getByText(/applies from the moment it is saved/i);
+		screen.getByText(/applies from the moment it is saved/iu);
 	});
 
 	it("says nothing about month scope while the editors are on screen", () => {
 		renderTable([workspace]);
 
-		expect(screen.queryByText(/applies from the moment it is saved/i)).toBeNull();
+		expect(screen.queryByText(/applies from the moment it is saved/iu)).toBeNull();
 	});
 
 	it("shows daily and run-type breakdowns for the expanded workspace", () => {
@@ -269,8 +269,8 @@ describe("AdminInstanceLlmUsageTable", () => {
 		);
 
 		screen.getByText("Example Workspace has used 84% of its shared-model budget");
-		screen.getByText(/At this pace, the budget is reached around July 12\./);
-		expect(screen.queryByText(/of its provider cap/)).toBeNull();
+		screen.getByText(/At this pace, the budget is reached around July 12\./u);
+		expect(screen.queryByText(/of its provider cap/u)).toBeNull();
 	});
 
 	describe("display currency", () => {
@@ -294,14 +294,14 @@ describe("AdminInstanceLlmUsageTable", () => {
 				fx: eur,
 			});
 
-			expect(screen.queryByText(/reference rate published on/)).toBeNull();
+			expect(screen.queryByText(/reference rate published on/u)).toBeNull();
 		});
 
 		it("survives a month with no workspaces in it", () => {
 			renderTable([], { fx: eur });
 
 			screen.getByText("No workspaces on this instance yet");
-			expect(screen.queryByText(/reference rate published on/)).toBeNull();
+			expect(screen.queryByText(/reference rate published on/u)).toBeNull();
 		});
 
 		it("hands the table's own rate and the server's own total to the expanded breakdown", () => {
@@ -337,7 +337,7 @@ describe("AdminInstanceLlmUsageTable", () => {
 			);
 
 			const byDay = screen.getByRole("table", { name: "AI spend by day" });
-			const footer = within(byDay).getByRole("row", { name: /^Total/ });
+			const footer = within(byDay).getByRole("row", { name: /^Total/u });
 			expect(footer.textContent).toContain("€");
 			expect(footer.textContent).not.toContain("£");
 			expect(footer.textContent).toContain("$4.25");

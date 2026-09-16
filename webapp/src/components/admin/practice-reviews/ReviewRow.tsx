@@ -69,7 +69,9 @@ export function ReviewRowList({ label, children }: ReviewRowListProps) {
 
 export function ReviewRowMeta({ items }: { items: ReactNode[] }) {
 	const shown = items.filter(Boolean);
-	if (shown.length === 0) return null;
+	if (shown.length === 0) {
+		return null;
+	}
 	return (
 		<p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 break-words">
 			{shown.map((item, index) => (

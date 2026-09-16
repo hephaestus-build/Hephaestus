@@ -18,7 +18,9 @@ const LAYOUT_SLACK_PX = 1;
 async function expectRungsConnected(rungs: HTMLElement[]) {
 	await expect(rungs.length).toBeGreaterThan(1);
 	const [firstBox, ...laterBoxes] = rungs.map((rung) => rung.getBoundingClientRect());
-	if (!firstBox) throw new Error("The ladder rendered no rungs.");
+	if (!firstBox) {
+		throw new Error("The ladder rendered no rungs.");
+	}
 	let previous = firstBox;
 	for (const [offset, current] of laterBoxes.entries()) {
 		const stacked =

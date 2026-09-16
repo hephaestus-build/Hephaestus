@@ -18,7 +18,9 @@ function ThreadContainer() {
 	const mentorChat = useMentorChat({ threadId });
 
 	const handleMessageSubmit = ({ text }: { text: string }) => {
-		if (!text.trim()) return;
+		if (!text.trim()) {
+			return;
+		}
 		mentorChat.sendMessage(text);
 	};
 
@@ -34,7 +36,9 @@ function ThreadContainer() {
 
 	const handleMessageEdit = (messageId: string, content: string) => {
 		const idx = mentorChat.messages.findIndex((m) => m.id === messageId);
-		if (idx === -1) return;
+		if (idx === -1) {
+			return;
+		}
 		mentorChat.setMessages(mentorChat.messages.slice(0, idx));
 		mentorChat.sendMessage(content);
 	};

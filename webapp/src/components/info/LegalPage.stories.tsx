@@ -74,11 +74,15 @@ function captureDisclaimerWarning(page: LegalPageId) {
 	// oxlint-disable-next-line no-console -- Unexpected diagnostics must remain visible while the intentional fallback warning is asserted.
 	const original = console.warn;
 	const warning = spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
-		if (args.length !== 1 || args[0] !== expected) original(...args);
+		if (args.length !== 1 || args[0] !== expected) {
+			original(...args);
+		}
 	});
 	return async () => {
 		try {
-			for (const args of warning.mock.calls) await expect(args).toEqual([expected]);
+			for (const args of warning.mock.calls) {
+				await expect(args).toEqual([expected]);
+			}
 		} finally {
 			warning.mockRestore();
 		}

@@ -54,7 +54,9 @@ export function clearedRunFilters(): Partial<RunsSearch> {
  * matching a word to a tag from memory.
  */
 function StatusItemLabel({ value }: { value: string }) {
-	if (!isReviewStatus(value)) return <span className="text-muted-foreground">All statuses</span>;
+	if (!isReviewStatus(value)) {
+		return <span className="text-muted-foreground">All statuses</span>;
+	}
 	return <StatusBadge def={REVIEW_STATUS_DEFS[value]} />;
 }
 

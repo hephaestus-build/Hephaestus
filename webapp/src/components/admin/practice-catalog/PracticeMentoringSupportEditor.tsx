@@ -16,10 +16,12 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 type MentoringSupport = "AI_SUPPORTED" | "HUMAN_CONTEXT_REQUIRED" | "GUIDANCE_ONLY";
 
-const LIMITATION_CODE = /^[A-Z][A-Z0-9_]{2,63}$/;
+const LIMITATION_CODE = /^[A-Z][A-Z0-9_]{2,63}$/u;
 
 export function mentoringSupportOf(policy: PracticeAutomatedReviewPolicy): MentoringSupport {
-	if (policy.automatedReview.mode === "NONE") return "GUIDANCE_ONLY";
+	if (policy.automatedReview.mode === "NONE") {
+		return "GUIDANCE_ONLY";
+	}
 	if (policy.automatedReview.evidenceSufficiency === "DECLARED_EVIDENCE_INSUFFICIENT") {
 		return "HUMAN_CONTEXT_REQUIRED";
 	}
@@ -34,18 +36,19 @@ export function mentoringSupportOf(policy: PracticeAutomatedReviewPolicy): Mento
 export function limitationCodeFor(description: string) {
 	const slug = description
 		.toUpperCase()
-		.replace(/[^A-Z0-9]+/g, "_")
-		.replace(/^_+|_+$/g, "")
+		.replaceAll(/[^A-Z0-9]+/gu, "_")
+		.replaceAll(/^_+|_+$/gu, "")
 		.slice(0, 63);
 	return LIMITATION_CODE.test(slug) ? slug : `LIMITATION_${fnv1a(description)}`;
 }
 
 /** Deterministic, non-cryptographic fallback for text that cannot form a legal code. */
 function fnv1a(input: string) {
-	let hash = 0x811c9dc5;
+	let hash = 0x81_1c_9d_c5;
 	for (let index = 0; index < input.length; index += 1) {
+		// oxlint-disable-next-line unicorn/prefer-code-point -- The code is stored, so the hash stays over UTF-16 units; code points would change it for an astral character.
 		hash ^= input.charCodeAt(index);
-		hash = Math.imul(hash, 0x01000193) >>> 0;
+		hash = Math.imul(hash, 0x01_00_01_93) >>> 0;
 	}
 	return hash.toString(16).toUpperCase().padStart(8, "0");
 }
@@ -86,7 +89,7 @@ export function practicePolicyError(policy: PracticeAutomatedReviewPolicy) {
 	) {
 		return "Explain at least one limitation that requires additional context.";
 	}
-	return undefined;
+	return;
 }
 
 export interface PracticeMentoringSupportEditorProps {
@@ -129,7 +132,9 @@ export function PracticeMentoringSupportEditor({
 
 	const updateSupport = (next: MentoringSupport) => {
 		if (next === "GUIDANCE_ONLY") {
-			if (value.automatedReview.mode !== "NONE") savedPolicy.current = value;
+			if (value.automatedReview.mode !== "NONE") {
+				savedPolicy.current = value;
+			}
 			onChange({
 				...value,
 				automatedReview: { mode: "NONE", evidenceSufficiency: "NONE" },

@@ -15,13 +15,14 @@ export interface UserProfile {
 	githubId?: string;
 	gitlabId?: string;
 	identityProvider?: string;
-	linkedProviders: Array<{ type: string; serverUrl?: string }>;
+	linkedProviders: { type: string; serverUrl?: string }[];
 }
 
-const serverUrl = () => environment.serverUrl.replace(/\/$/, "");
+const serverUrl = () => environment.serverUrl.replace(/\/$/u, "");
 
 function readCookie(name: string): string | undefined {
-	const value = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))?.[1];
+	const value = new RegExp(`(?:^|; )${name}=(?<value>[^;]*)`, "u").exec(document.cookie)?.groups
+		?.value;
 	return value === undefined ? undefined : decodeURIComponent(value);
 }
 

@@ -68,8 +68,8 @@ export const RequiredQuestionBlocksNext: Story = {
 		await expect(canvas.getByRole("alert")).toHaveTextContent("Pick a number to continue.");
 		await expect(canvas.getByRole("progressbar")).toHaveTextContent("Question 1 of 4");
 		// A required question is the unmarked one; the optional ones say so in their own heading.
-		await expect(canvas.getByRole("group", { name: /How useful/ })).not.toHaveAccessibleName(
-			/optional/,
+		await expect(canvas.getByRole("group", { name: /How useful/u })).not.toHaveAccessibleName(
+			/optional/u,
 		);
 		await userEvent.click(canvas.getByRole("radio", { name: "4" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
@@ -83,7 +83,7 @@ export const OptionalQuestionCanBeSkipped: Story = {
 	play: async ({ canvas, args }) => {
 		await expect(canvas.getByRole("progressbar")).toHaveTextContent("Question 2 of 4");
 		await expect(
-			canvas.getByRole("group", { name: /Where do you read feedback.*\(optional\)/ }),
+			canvas.getByRole("group", { name: /Where do you read feedback.*\(optional\)/u }),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
 		await expect(canvas.getByRole("alert")).toHaveTextContent(
@@ -170,9 +170,9 @@ const wordChoices = [
 export const LetterShortcutsOnChoices: Story = {
 	args: { questions: wordChoices },
 	play: async ({ canvas }) => {
-		const second = canvas.getByRole("radio", { name: /On my practice page/ });
+		const second = canvas.getByRole("radio", { name: /On my practice page/u });
 		await expect(second.closest("label")).toHaveAttribute("data-shortcut", "B");
-		canvas.getByRole("radio", { name: /On the pull request/ }).focus();
+		canvas.getByRole("radio", { name: /On the pull request/u }).focus();
 		await userEvent.keyboard("b");
 		await expect(second).toBeChecked();
 	},
@@ -185,8 +185,8 @@ export const MultipleChoiceWithAnotherAnswer: Story = {
 		draft: { answers: { channel: "On the pull request" }, item: "wants" },
 	},
 	play: async ({ canvas, args }) => {
-		await userEvent.click(canvas.getByRole("checkbox", { name: /Shorter feedback/ }));
-		await userEvent.click(canvas.getByRole("checkbox", { name: /Examples from my own code/ }));
+		await userEvent.click(canvas.getByRole("checkbox", { name: /Shorter feedback/u }));
+		await userEvent.click(canvas.getByRole("checkbox", { name: /Examples from my own code/u }));
 		await userEvent.type(
 			canvas.getByRole("textbox", { name: "Something else" }),
 			"A weekly digest",
@@ -216,7 +216,7 @@ export const RecommendationScale: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getAllByRole("radio")).toHaveLength(11);
-		await expect(canvas.getByText(/0 = Not at all likely · 10 = Extremely likely/)).toBeVisible();
+		await expect(canvas.getByText(/0 = Not at all likely · 10 = Extremely likely/u)).toBeVisible();
 		await expect(canvas.queryByText("A")).toBeNull();
 		await userEvent.click(canvas.getByRole("radio", { name: "0" }));
 		await expect(canvas.getByRole("radio", { name: "0" })).toBeChecked();
@@ -271,7 +271,7 @@ export const RatingWithoutLabels: Story = {
 		questions: [question({ id: "useful", prompt: "How useful?", type: "RATING", required: true })],
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText(/[=]/)).toBeNull();
+		await expect(canvas.queryByText(/[=]/u)).toBeNull();
 		await expect(canvas.getAllByRole("radio")).toHaveLength(5);
 	},
 };
@@ -343,11 +343,11 @@ export const Sending: Story = {
 export const SkipThenPreviousLeavesNothingChecked: Story = {
 	args: { draft: { answers: { useful: "4" }, item: "channel" } },
 	play: async ({ canvas, args }) => {
-		await userEvent.click(canvas.getByRole("radio", { name: /On my practice page/ }));
+		await userEvent.click(canvas.getByRole("radio", { name: /On my practice page/u }));
 		await userEvent.click(canvas.getByRole("button", { name: "Skip" }));
 		await expect(canvas.getByRole("progressbar")).toHaveTextContent("Question 3 of 4");
 		await userEvent.click(canvas.getByRole("button", { name: "Previous" }));
-		await expect(canvas.getByRole("radio", { name: /On my practice page/ })).not.toBeChecked();
+		await expect(canvas.getByRole("radio", { name: /On my practice page/u })).not.toBeChecked();
 		await expect(args.onDraftChange).toHaveBeenLastCalledWith({
 			answers: { useful: "4", channel: undefined },
 			item: "channel",

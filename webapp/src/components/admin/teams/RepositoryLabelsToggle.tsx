@@ -19,9 +19,13 @@ export function RepositoryLabelsToggle({
 }: RepositoryLabelsToggleProps) {
 	const activeByName = new Map<string, LabelInfo>();
 	for (const l of team.labels) {
-		if (l.repository?.id !== repository.id) continue;
+		if (l.repository?.id !== repository.id) {
+			continue;
+		}
 		const key = l.name.toLowerCase();
-		if (key && !activeByName.has(key)) activeByName.set(key, l);
+		if (key && !activeByName.has(key)) {
+			activeByName.set(key, l);
+		}
 	}
 
 	const shown = [...catalogLabels].sort((a, b) => a.name.localeCompare(b.name));
@@ -29,11 +33,9 @@ export function RepositoryLabelsToggle({
 	const handleToggle = async (label: LabelInfo) => {
 		const key = label.name.toLowerCase();
 		const active = activeByName.get(key);
-		if (active) {
-			await onRemoveLabel?.(team.id, active.id);
-		} else {
-			await onAddLabel?.(team.id, repository.id, label.name);
-		}
+		await (active
+			? onRemoveLabel?.(team.id, active.id)
+			: onAddLabel?.(team.id, repository.id, label.name));
 	};
 
 	return (

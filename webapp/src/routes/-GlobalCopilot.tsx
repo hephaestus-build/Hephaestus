@@ -21,7 +21,9 @@ export default function GlobalCopilot() {
 	const { features, isLoading: featuresLoading } = useWorkspaceFeatures(workspaceSlug);
 
 	const handleMessageSubmit = ({ text }: { text: string }) => {
-		if (!text.trim()) return;
+		if (!text.trim()) {
+			return;
+		}
 		mentorChat.sendMessage(text);
 	};
 
@@ -31,7 +33,9 @@ export default function GlobalCopilot() {
 
 	const handleMessageEdit = (messageId: string, content: string) => {
 		const messageIndex = mentorChat.messages.findIndex((message) => message.id === messageId);
-		if (messageIndex === -1) return;
+		if (messageIndex === -1) {
+			return;
+		}
 		mentorChat.setMessages(mentorChat.messages.slice(0, messageIndex));
 		mentorChat.sendMessage(content);
 	};

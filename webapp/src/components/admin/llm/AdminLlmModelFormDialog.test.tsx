@@ -81,8 +81,8 @@ describe("AdminLlmModelFormDialog", () => {
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
 		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
 		fireEvent.click(screen.getByRole("radio", { name: "Price per 1M tokens" }));
-		fireEvent.change(screen.getByLabelText(/^Input \(USD\)/), { target: { value: "0" } });
-		fireEvent.change(screen.getByLabelText(/^Output \(USD\)/), { target: { value: "0" } });
+		fireEvent.change(screen.getByLabelText(/^Input \(USD\)/u), { target: { value: "0" } });
+		fireEvent.change(screen.getByLabelText(/^Output \(USD\)/u), { target: { value: "0" } });
 
 		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
 
@@ -104,8 +104,8 @@ describe("AdminLlmModelFormDialog", () => {
 		const onSave = renderDialog();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
 		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
-		const contextWindow = screen.getByLabelText(/^Context window/);
-		const maxOutput = screen.getByLabelText(/^Max output tokens/);
+		const contextWindow = screen.getByLabelText(/^Context window/u);
+		const maxOutput = screen.getByLabelText(/^Max output tokens/u);
 		fireEvent.change(contextWindow, { target: { value: "3000000000" } });
 		fireEvent.change(maxOutput, { target: { value: "3000000000" } });
 
@@ -118,7 +118,7 @@ describe("AdminLlmModelFormDialog", () => {
 			maxOutputTokens: "3000000000",
 			pricingMode: "UNPRICED",
 		});
-		expect(rejected.contextWindow).toMatch(/tokens or fewer/);
+		expect(rejected.contextWindow).toMatch(/tokens or fewer/u);
 		expect(onSave).not.toHaveBeenCalled();
 
 		const alerts = screen.getAllByRole("alert");
@@ -137,7 +137,7 @@ describe("AdminLlmModelFormDialog", () => {
 		fireEvent.change(contextWindow, { target: { value: "200000" } });
 		fireEvent.change(maxOutput, { target: { value: "8000" } });
 		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
-		expect(onSave).toHaveBeenCalledTimes(1);
+		expect(onSave).toHaveBeenCalledOnce();
 	});
 
 	it("turns an active model off when its price becomes unknown", () => {

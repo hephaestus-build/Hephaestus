@@ -1,4 +1,4 @@
-import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
+import type { APIRequestContext, APIResponse, BrowserContext, Page } from "@playwright/test";
 import { z } from "zod";
 
 import { expect, loginAsDevAdmin, test } from "./fixtures";
@@ -6,10 +6,23 @@ import { expect, loginAsDevAdmin, test } from "./fixtures";
 const serverUrl = process.env.E2E_SERVER_URL ?? "http://localhost:8080";
 const userSchema = z.looseObject({ accessTokenExpiresAt: z.number() });
 
+async function statusOf(request: Promise<APIResponse>) {
+	const response = await request;
+	return response.status();
+}
+
+async function jsonOf(request: Promise<APIResponse>): Promise<unknown> {
+	const response = await request;
+	return response.json();
+}
+
 async function accessCookie(context: BrowserContext, name = "HEPHAESTUS_AT") {
-	const cookie = (await context.cookies(serverUrl)).find((value) => value.name === name);
+	const cookies = await context.cookies(serverUrl);
+	const cookie = cookies.find((value) => value.name === name);
 	expect(cookie, "dev login must issue an HttpOnly access cookie").toBeDefined();
-	if (!cookie) throw new Error("Missing session cookie");
+	if (!cookie) {
+		throw new Error("Missing session cookie");
+	}
 	return cookie;
 }
 
@@ -93,17 +106,17 @@ test("two tabs renew without losing their shared session and old tokens stay rev
 	const refreshed = [waitForRefresh(page, 204), waitForRefresh(other, 204)];
 	await Promise.all([page.clock.fastForward(61_000), other.clock.fastForward(61_000)]);
 	await Promise.all(refreshed);
-	expect((await context.request.get(`${serverUrl}/user`)).status()).toBe(200);
+	expect(await statusOf(context.request.get(`${serverUrl}/user`))).toBe(200);
 	expect(
-		(
-			await context.request.get(`${serverUrl}/user`, {
+		await statusOf(
+			context.request.get(`${serverUrl}/user`, {
 				headers: { Cookie: `${oldCookie.name}=${oldCookie.value}` },
-			})
-		).status(),
+			}),
+		),
 	).toBe(401);
 	await Promise.all([page.reload(), other.reload()]);
-	await expect(page).toHaveURL(/\/settings$/);
-	await expect(other).toHaveURL(/\/settings$/);
+	await expect(page).toHaveURL(/\/settings$/u);
+	await expect(other).toHaveURL(/\/settings$/u);
 });
 
 test("a temporary renewal outage preserves the page and later activity recovers", async ({
@@ -116,14 +129,14 @@ test("a temporary renewal outage preserves the page and later activity recovers"
 	const failed = waitForRefresh(page, 503);
 	await page.clock.fastForward(61_000);
 	await failed;
-	await expect(page).toHaveURL(/\/settings$/);
-	expect((await context.request.get(`${serverUrl}/user`)).status()).toBe(200);
+	await expect(page).toHaveURL(/\/settings$/u);
+	expect(await statusOf(context.request.get(`${serverUrl}/user`))).toBe(200);
 	const renewed = waitForRefresh(page, 204);
 	await page.clock.fastForward(11_000);
 	await page.mouse.click(5, 5);
 	await renewed;
-	await expect(page).toHaveURL(/\/settings$/);
-	expect((await context.request.get(`${serverUrl}/user`)).status()).toBe(200);
+	await expect(page).toHaveURL(/\/settings$/u);
+	expect(await statusOf(context.request.get(`${serverUrl}/user`))).toBe(200);
 });
 
 test("logout requires CSRF protection and revoked sessions cannot renew", async ({
@@ -133,35 +146,35 @@ test("logout requires CSRF protection and revoked sessions cannot renew", async 
 	await loginAsDevAdmin(page, "session-logout");
 	const signedInCookie = await accessCookie(context);
 	await scheduleRenewal(page);
-	expect((await context.request.post(`${serverUrl}/auth/logout`)).status()).toBe(403);
-	expect((await context.request.get(`${serverUrl}/user`)).status()).toBe(200);
+	expect(await statusOf(context.request.post(`${serverUrl}/auth/logout`))).toBe(403);
+	expect(await statusOf(context.request.get(`${serverUrl}/user`))).toBe(200);
 	const csrf = await accessCookie(context, "XSRF-TOKEN");
 	const headers = { "X-XSRF-TOKEN": decodeURIComponent(csrf.value) };
-	expect((await context.request.post(`${serverUrl}/auth/logout`, { headers })).status()).toBe(204);
+	expect(await statusOf(context.request.post(`${serverUrl}/auth/logout`, { headers }))).toBe(204);
 	expect(
-		(
-			await context.request.get(`${serverUrl}/user`, {
+		await statusOf(
+			context.request.get(`${serverUrl}/user`, {
 				headers: { Cookie: `${signedInCookie.name}=${signedInCookie.value}` },
-			})
-		).status(),
+			}),
+		),
 	).toBe(401);
 	expect(
-		(
-			await context.request.get(`${serverUrl}/identity-providers`, {
+		await statusOf(
+			context.request.get(`${serverUrl}/identity-providers`, {
 				headers: { Cookie: `${signedInCookie.name}=${signedInCookie.value}` },
-			})
-		).status(),
+			}),
+		),
 	).toBe(200);
 	const renewalCsrf = await accessCookie(context, "XSRF-TOKEN");
 	expect(
-		(
-			await context.request.post(`${serverUrl}/auth/refresh`, {
+		await statusOf(
+			context.request.post(`${serverUrl}/auth/refresh`, {
 				headers: { "X-XSRF-TOKEN": decodeURIComponent(renewalCsrf.value) },
-			})
-		).status(),
+			}),
+		),
 	).toBe(401);
 	await page.clock.fastForward(61_000);
-	await expect(page).toHaveURL(/\/login/);
+	await expect(page).toHaveURL(/\/login/u);
 });
 
 test("signing out in another tab cannot be undone by a delayed renewal response", async ({
@@ -184,7 +197,7 @@ test("signing out in another tab cannot be undone by a delayed renewal response"
 		held.release();
 	}
 	await expect(other).toHaveURL((url) => url.pathname === "/");
-	expect((await context.request.get(`${serverUrl}/user`)).status()).toBe(401);
+	expect(await statusOf(context.request.get(`${serverUrl}/user`))).toBe(401);
 });
 
 test("failed sign-out reports the failure and allows a successful retry", async ({
@@ -197,12 +210,12 @@ test("failed sign-out reports the failure and allows a successful retry", async 
 	await page.getByRole("button", { name: "Account", exact: true }).click();
 	await page.getByRole("menuitem", { name: "Sign Out", exact: true }).click();
 	await expect(page.getByText("Could not confirm sign-out. Please try again.")).toBeVisible();
-	await expect(page).toHaveURL(/\/settings$/);
-	expect((await context.request.get(`${serverUrl}/user`)).status()).toBe(200);
+	await expect(page).toHaveURL(/\/settings$/u);
+	expect(await statusOf(context.request.get(`${serverUrl}/user`))).toBe(200);
 	await page.getByRole("button", { name: "Account", exact: true }).click();
 	await page.getByRole("menuitem", { name: "Sign Out", exact: true }).click();
 	await expect(page).toHaveURL((url) => url.pathname === "/");
-	expect((await context.request.get(`${serverUrl}/user`)).status()).toBe(401);
+	expect(await statusOf(context.request.get(`${serverUrl}/user`))).toBe(401);
 });
 
 test("a cold identity outage shows the existing retry screen instead of signing out", async ({
@@ -214,7 +227,7 @@ test("a cold identity outage shows the existing retry screen instead of signing 
 	await expect(
 		page.getByRole("heading", { name: "Something went wrong", exact: true }),
 	).toBeVisible();
-	await expect(page).toHaveURL(/\/settings$/);
+	await expect(page).toHaveURL(/\/settings$/u);
 	await page.unroute("**/user");
 	await page.getByRole("button", { name: "Try again", exact: true }).click();
 	await expect(page.getByRole("heading", { name: "User settings", exact: true })).toBeVisible();
@@ -230,29 +243,29 @@ test("exiting impersonation waits for a delayed renewal and restores the operato
 	let targetId: number;
 	try {
 		expect(
-			(
-				await target.request.post(`${serverUrl}/auth/dev-login`, {
+			await statusOf(
+				target.request.post(`${serverUrl}/auth/dev-login`, {
 					data: { username: "session-impersonated", admin: false },
-				})
-			).status(),
+				}),
+			),
 		).toBe(204);
 		targetId = z
 			.object({ id: z.number() })
-			.parse(await (await target.request.get(`${serverUrl}/user`)).json()).id;
+			.parse(await jsonOf(target.request.get(`${serverUrl}/user`))).id;
 		const notice = z
 			.object({ noticeVersion: z.string(), researchOrganization: z.string().optional() })
-			.parse(await (await target.request.get(`${serverUrl}/user/consent`)).json());
+			.parse(await jsonOf(target.request.get(`${serverUrl}/user/consent`)));
 		// This instance names no research organisation, so setup is the terms alone and a research
 		// answer would be an answer to a question it never put.
 		expect(notice.researchOrganization).toBeUndefined();
 		const targetCsrf = await accessCookie(target, "XSRF-TOKEN");
 		expect(
-			(
-				await target.request.put(`${serverUrl}/user/consent`, {
+			await statusOf(
+				target.request.put(`${serverUrl}/user/consent`, {
 					headers: { "X-XSRF-TOKEN": decodeURIComponent(targetCsrf.value) },
 					data: { noticeVersion: notice.noticeVersion, termsAccepted: true },
-				})
-			).status(),
+				}),
+			),
 		).toBe(200);
 	} finally {
 		await target.close();
@@ -260,15 +273,15 @@ test("exiting impersonation waits for a delayed renewal and restores the operato
 	await loginAsDevAdmin(page, "session-operator");
 	const operator = z
 		.object({ id: z.number() })
-		.parse(await (await context.request.get(`${serverUrl}/user`)).json());
+		.parse(await jsonOf(context.request.get(`${serverUrl}/user`)));
 	const csrf = await accessCookie(context, "XSRF-TOKEN");
 	expect(
-		(
-			await context.request.post(`${serverUrl}/auth/impersonate`, {
+		await statusOf(
+			context.request.post(`${serverUrl}/auth/impersonate`, {
 				headers: { "X-XSRF-TOKEN": decodeURIComponent(csrf.value) },
 				data: { targetAccountId: targetId, reason: "Verify session transition isolation" },
-			})
-		).status(),
+			}),
+		),
 	).toBe(204);
 	const held = await holdRenewal(page, request);
 	await scheduleRenewal(page);
@@ -286,6 +299,6 @@ test("exiting impersonation waits for a delayed renewal and restores the operato
 	).toBeHidden();
 	const restored = z
 		.object({ id: z.number(), impersonating: z.boolean() })
-		.parse(await (await context.request.get(`${serverUrl}/user`)).json());
+		.parse(await jsonOf(context.request.get(`${serverUrl}/user`)));
 	expect(restored).toMatchObject({ id: operator.id, impersonating: false });
 });

@@ -131,7 +131,9 @@ export function spendOfCapConversion(
 
 function formatRateDate(value: DateLike): string {
 	const date = asDate(value);
-	if (!date) return "–";
+	if (!date) {
+		return "–";
+	}
 	return date.toLocaleDateString(undefined, {
 		month: "short",
 		day: "numeric",
@@ -270,9 +272,7 @@ export function FxDisclosure({ fx, isCurrentMonth }: FxDisclosureProps) {
 		<p className="text-sm text-muted-foreground">
 			{parts.lead}
 			{" ("}
-			<FxApprox conversion={parts.rate} />
-			{")"}
-			{parts.tail}
+			<FxApprox conversion={parts.rate} />){parts.tail}
 		</p>
 	);
 }

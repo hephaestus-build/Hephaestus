@@ -34,8 +34,12 @@ const PROVIDER_TYPE_ITEMS: { value: ProviderType; label: string }[] = [
 ];
 
 function scopesPlaceholder(type: ProviderType): string {
-	if (type === "SLACK") return "openid profile email";
-	if (type === "OUTLINE") return "read";
+	if (type === "SLACK") {
+		return "openid profile email";
+	}
+	if (type === "OUTLINE") {
+		return "read";
+	}
 	return "Defaulted by provider type if blank";
 }
 
@@ -105,7 +109,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 		editing?.redirectUri ??
 		`${window.location.origin}/api/login/oauth2/code/${registrationId.trim() || "<registration-id>"}`;
 
-	const REGISTRATION_ID_PATTERN = /^[a-z][a-z0-9-]{1,62}$/;
+	const REGISTRATION_ID_PATTERN = /^[a-z][a-z0-9-]{1,62}$/u;
 	const validate = (): boolean => {
 		const next: { registrationId?: string; baseUrl?: string } = {};
 		if (!isEdit && !REGISTRATION_ID_PATTERN.test(registrationId.trim())) {

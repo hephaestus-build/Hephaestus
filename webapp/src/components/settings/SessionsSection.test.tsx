@@ -111,6 +111,6 @@ describe("SessionsSection", () => {
 		server.use(noSessions);
 		renderWithClient(<SessionsSection />);
 		await screen.findByText("No active sessions found.");
-		expect(screen.queryByRole("button", { name: /Sign out everywhere else/ })).toBeNull();
+		expect(screen.queryByRole("button", { name: /Sign out everywhere else/u })).toBeNull();
 	});
 });

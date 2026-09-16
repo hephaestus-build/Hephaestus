@@ -42,7 +42,9 @@ function ReviewActivityDetailRoute() {
 	const requestReview = useMutation({
 		...requestPracticeReviewMutation(),
 		onSuccess: (outcome, { path, body }) => {
-			if (outcome.status !== "SUBMITTED") return;
+			if (outcome.status !== "SUBMITTED") {
+				return;
+			}
 			void queryClient.invalidateQueries({
 				queryKey: getArtifactTraceQueryKey({
 					path: { ...path, artifactKind: body.artifactKind, artifactId: body.artifactId },

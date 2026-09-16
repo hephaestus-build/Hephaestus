@@ -155,7 +155,7 @@ describe("practice-group routes", () => {
 				HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
 			),
 		);
-		await userEvent.click(screen.getByRole("button", { name: /retry/i }));
+		await userEvent.click(screen.getByRole("button", { name: /retry/iu }));
 		await screen.findByRole("heading", { name: group.name }, ROUTE_RENDER_WAIT);
 	});
 	it("filters and clears review runs without resetting scroll", async () => {

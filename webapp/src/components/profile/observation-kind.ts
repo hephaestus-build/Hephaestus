@@ -61,8 +61,11 @@ export const OBSERVATION_KIND_PRESENTATION = {
 	{ label: string; icon: LucideIcon; className: string }
 >;
 export function observationKind(observation: ObservationKindInput): ObservationKind {
-	if (observation.assessmentStatus !== "ASSESSED") return observation.assessmentStatus;
-	if (!observation.presence || !observation.assessment)
+	if (observation.assessmentStatus !== "ASSESSED") {
+		return observation.assessmentStatus;
+	}
+	if (!observation.presence || !observation.assessment) {
 		throw new Error("Assessed observations require presence and assessment");
+	}
 	return `${observation.presence}_${observation.assessment}`;
 }

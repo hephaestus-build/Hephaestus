@@ -90,7 +90,7 @@ export const Invalid: Story = {
 export const OpensAndListsGroups: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
-		await expect(await screen.findByRole("option", { name: /GPT-5/ })).toBeVisible();
-		await expect(await screen.findByRole("option", { name: /My OpenAI key/ })).toBeVisible();
+		await expect(await screen.findByRole("option", { name: /GPT-5/u })).toBeVisible();
+		await expect(await screen.findByRole("option", { name: /My OpenAI key/u })).toBeVisible();
 	},
 };

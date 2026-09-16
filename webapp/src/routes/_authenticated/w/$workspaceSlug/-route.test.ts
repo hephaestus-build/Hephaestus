@@ -28,29 +28,29 @@ async function land(url: string, queryClient = new QueryClient()) {
 		context: { queryClient, auth: undefined },
 	});
 	await router.load();
-	return router.state.location;
+	return router.state.location.href;
 }
 
 /** The gate every `/w/<slug>/…` route inherits, driven through the generated tree. */
 describe("workspace route gate", () => {
 	it("opens a workspace the account can reach", async () => {
 		listWorkspaces("acme");
-		expect((await land("/w/acme")).href).toBe("/w/acme");
+		await expect(land("/w/acme")).resolves.toBe("/w/acme");
 	});
 
 	it("returns an inaccessible workspace's deep link to an accessible workspace home", async () => {
 		listWorkspaces("acme");
-		expect((await land(DEEP_LINK)).href).toBe(WORKSPACE_HOME);
+		await expect(land(DEEP_LINK)).resolves.toBe(WORKSPACE_HOME);
 	});
 
 	it("returns to the home page when no workspace is accessible", async () => {
 		listWorkspaces();
-		expect((await land(DEEP_LINK)).href).toBe("/");
+		await expect(land(DEEP_LINK)).resolves.toBe("/");
 	});
 
 	it("keeps the route when the workspace list cannot be fetched", async () => {
 		server.use(http.get("*/workspaces", () => HttpResponse.error()));
-		expect((await land(DEEP_LINK)).href).toBe(DEEP_LINK);
+		await expect(land(DEEP_LINK)).resolves.toBe(DEEP_LINK);
 	});
 
 	it("opens a just-created workspace the cache carries before the server lists it", async () => {
@@ -63,6 +63,6 @@ describe("workspace route gate", () => {
 			workspaceListItem("brand-new"),
 		]);
 
-		expect((await land("/w/brand-new", queryClient)).href).toBe("/w/brand-new");
+		await expect(land("/w/brand-new", queryClient)).resolves.toBe("/w/brand-new");
 	});
 });

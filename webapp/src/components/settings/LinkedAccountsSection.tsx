@@ -71,13 +71,17 @@ const LINK_ONLY_RATIONALE: Record<string, string> = {
  * to a generic link icon for unknown providers so new IdPs render gracefully.
  */
 function getProviderIcon(providerType?: string): LucideIcon | BrandIcon {
-	if (!providerType) return LinkIcon;
+	if (!providerType) {
+		return LinkIcon;
+	}
 	return PROVIDER_ICONS[providerType.toUpperCase()] ?? LinkIcon;
 }
 
 function formatLastLogin(lastLoginAt?: Date): string | undefined {
 	const date = asDate(lastLoginAt);
-	if (!date) return undefined;
+	if (!date) {
+		return undefined;
+	}
 	return date.toLocaleDateString(undefined, {
 		year: "numeric",
 		month: "short",
@@ -140,7 +144,9 @@ export function LinkedAccountsSection({
 	// offered as something to "connect".
 	const linkableProviders = providers.filter((provider) => {
 		const type = provider.providerType?.toUpperCase();
-		if (type === "DEV") return false;
+		if (type === "DEV") {
+			return false;
+		}
 		return !type || !linkedProviderTypes.has(type);
 	});
 
@@ -273,7 +279,7 @@ export function LinkedAccountsSection({
 								const Icon = getProviderIcon(type);
 								const label =
 									firstNonBlank(provider.displayName) ?? getProviderLabel(type, "this account");
-								const registrationId = provider.registrationId;
+								const { registrationId } = provider;
 								return (
 									<Item key={registrationId} variant="outline" role="listitem">
 										<ItemMedia variant="icon">

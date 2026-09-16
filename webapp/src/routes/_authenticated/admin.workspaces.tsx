@@ -90,12 +90,12 @@ function AdminWorkspacesPage() {
 
 			<ImpersonateDialog
 				user={
-					impersonateTarget?.ownerAccountId != null
-						? {
+					impersonateTarget?.ownerAccountId == null
+						? null
+						: {
 								id: impersonateTarget.ownerAccountId,
 								displayName: impersonateTarget.ownerLogin ?? impersonateTarget.displayName,
 							}
-						: null
 				}
 				defaultReason={
 					impersonateTarget
@@ -115,8 +115,10 @@ function AdminWorkspacesPage() {
 					}
 				}}
 				onConfirm={(user, reason) => {
-					if (user.id == null || impersonateTarget == null) return;
-					const workspaceSlug = impersonateTarget.workspaceSlug;
+					if (user.id == null || impersonateTarget == null) {
+						return;
+					}
+					const { workspaceSlug } = impersonateTarget;
 					impersonate.mutate(
 						{ body: { targetAccountId: user.id, reason } },
 						{

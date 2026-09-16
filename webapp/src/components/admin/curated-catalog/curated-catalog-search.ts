@@ -6,7 +6,7 @@ import {
 } from "@/components/core/detail-drawer/detail-stack";
 import { ARTIFACT_KIND_VALUES } from "@/lib/artifact-kinds";
 
-export const CURATED_CATALOG_SEARCH_PARAMS: Array<keyof CuratedCatalogSearch> = [
+export const CURATED_CATALOG_SEARCH_PARAMS: (keyof CuratedCatalogSearch)[] = [
 	"q",
 	"status",
 	"artifact",

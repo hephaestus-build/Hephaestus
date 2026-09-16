@@ -31,14 +31,16 @@ export function ImpersonationBannerHost() {
 			setWritesEnabled(false);
 			return;
 		}
-		document.body.setAttribute("data-impersonating", "true");
+		document.body.dataset.impersonating = "true";
 		return () => {
-			document.body.removeAttribute("data-impersonating");
+			delete document.body.dataset.impersonating;
 			setWritesEnabled(false);
 		};
 	}, [isImpersonating, setWritesEnabled]);
 
-	if (!isImpersonating) return null;
+	if (!isImpersonating) {
+		return null;
+	}
 
 	return (
 		<ImpersonationBanner

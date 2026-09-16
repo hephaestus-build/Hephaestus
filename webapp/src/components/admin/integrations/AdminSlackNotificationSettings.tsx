@@ -68,11 +68,11 @@ export interface AdminSlackNotificationSettingsProps {
 	enabled: boolean;
 	scheduleDay?: number;
 	scheduleTime?: string;
-	channelCandidates?: SlackChannelCandidate[];
+	channelCandidates?: readonly SlackChannelCandidate[];
 	onSaved: () => void;
 }
 
-const TIME_24H = /^([01]\d|2[0-3]):[0-5]\d$/;
+const TIME_24H = /^(?:[01]\d|2[0-3]):[0-5]\d$/u;
 const DEFAULT_DAY = 1;
 const DEFAULT_TIME = "09:00";
 
@@ -86,6 +86,8 @@ const DAYS = [
 	{ value: "7", label: "Sunday" },
 ];
 
+const NO_CANDIDATES: readonly SlackChannelCandidate[] = [];
+
 export function AdminSlackNotificationSettings({
 	workspaceSlug,
 	hasSlackConnection,
@@ -95,7 +97,7 @@ export function AdminSlackNotificationSettings({
 	enabled,
 	scheduleDay,
 	scheduleTime,
-	channelCandidates = [],
+	channelCandidates = NO_CANDIDATES,
 	onSaved,
 }: AdminSlackNotificationSettingsProps) {
 	const selectableDigestChannels = channelCandidates.filter((candidate) => !candidate.archived);
@@ -124,12 +126,17 @@ export function AdminSlackNotificationSettings({
 	// cannot replay it.
 	useEffect(() => {
 		const result = window.sessionStorage.getItem("slack-connect-result");
-		if (!result) return;
+		if (!result) {
+			return;
+		}
 		const reason = window.sessionStorage.getItem("slack-connect-reason") ?? undefined;
 		window.sessionStorage.removeItem("slack-connect-result");
 		window.sessionStorage.removeItem("slack-connect-reason");
-		if (result === "success") toast.success("Slack workspace connected");
-		else toast.error("Slack connection failed", { description: reason });
+		if (result === "success") {
+			toast.success("Slack workspace connected");
+		} else {
+			toast.error("Slack connection failed", { description: reason });
+		}
 	}, []);
 
 	const referenceText = channelReference ?? "";
@@ -141,7 +148,9 @@ export function AdminSlackNotificationSettings({
 	/** The paste hatch and the combobox write the same single value; the last one used wins. */
 	function handlePastedReference(value: string) {
 		setChannelReference(value);
-		if (value.trim().length === 0) return;
+		if (value.trim().length === 0) {
+			return;
+		}
 		const parsed = parseSlackChannelReference(value);
 		setSelectedChannelId(parsed ? parsed.channelId : "");
 	}
@@ -276,7 +285,9 @@ export function AdminSlackNotificationSettings({
 										value={dayInput}
 										disabled={save.isPending}
 										onValueChange={(value) => {
-											if (value) setDayInput(value);
+											if (value) {
+												setDayInput(value);
+											}
 										}}
 									>
 										<SelectTrigger id="slack-day">
@@ -465,7 +476,9 @@ export function AdminSlackNotificationSettings({
 							variant="destructive"
 							disabled={disconnect.isPending || slackConnectionId == null}
 							onClick={() => {
-								if (slackConnectionId == null) return;
+								if (slackConnectionId == null) {
+									return;
+								}
 								disconnect.mutate({
 									path: { workspaceSlug, id: slackConnectionId },
 									body: { state: "UNINSTALLED" },

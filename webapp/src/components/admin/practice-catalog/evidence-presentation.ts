@@ -31,12 +31,15 @@ export function evidenceQualityRequirement(
 	quality: PracticeEvidenceSourceOption["requiredQuality"] | undefined,
 ): string | null {
 	switch (quality) {
-		case "COMPLETE_AND_NON_EMPTY":
+		case "COMPLETE_AND_NON_EMPTY": {
 			return "Must be captured whole, and not be empty";
-		case "COMPLETE":
+		}
+		case "COMPLETE": {
 			return "Must be captured whole";
-		default:
+		}
+		default: {
 			return null;
+		}
 	}
 }
 
@@ -117,7 +120,9 @@ export function automatedReviewUnavailableLabel(
 	requirements: PracticeAutomatedReviewPolicy,
 	supportedModes: readonly PracticeAutomatedReviewPolicy["automatedReview"]["mode"][],
 ) {
-	if (requirements.automatedReview.mode === "NONE") return "Guidance only";
+	if (requirements.automatedReview.mode === "NONE") {
+		return "Guidance only";
+	}
 	if (requirements.automatedReview.evidenceSufficiency === "DECLARED_EVIDENCE_INSUFFICIENT") {
 		return "Human review needed";
 	}
@@ -134,7 +139,9 @@ export function automatedReviewUnavailableLabel(
 export function automatedReviewLimitationLabel(
 	automatedReview: PracticeAutomatedReviewPolicy["automatedReview"],
 ) {
-	if (automatedReview.mode === "NONE") return "Guidance only";
+	if (automatedReview.mode === "NONE") {
+		return "Guidance only";
+	}
 	if (automatedReview.evidenceSufficiency === "DECLARED_EVIDENCE_INSUFFICIENT") {
 		return "Human review needed";
 	}

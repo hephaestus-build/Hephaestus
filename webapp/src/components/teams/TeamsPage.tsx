@@ -24,11 +24,17 @@ function buildVisibleTree(visibleTeams: TeamInfo[], allTeamsById: Map<number, Te
 		let pid = team.parentId;
 		const guard = new Set<number>();
 		while (pid !== undefined) {
-			if (guard.has(pid)) return undefined;
+			if (guard.has(pid)) {
+				return undefined;
+			}
 			guard.add(pid);
 			const parent = allTeamsById.get(pid);
-			if (!parent) return undefined;
-			if (!parent.hidden) return parent.id;
+			if (!parent) {
+				return undefined;
+			}
+			if (!parent.hidden) {
+				return parent.id;
+			}
 			pid = parent.parentId;
 		}
 		return undefined;
@@ -67,27 +73,34 @@ function collectDescendantMemberIds(
 
 	const collect = (teamId: number): Set<number> => {
 		const cached = memo.get(teamId);
-		if (cached !== undefined) return cached;
+		if (cached !== undefined) {
+			return cached;
+		}
 		const children = childrenMap.get(teamId) ?? [];
 		const res = new Set<number>();
 		for (const child of children) {
-			for (const id of membersByTeamId.get(child.id) ?? []) res.add(id);
-			for (const id of collect(child.id)) res.add(id);
+			for (const id of membersByTeamId.get(child.id) ?? []) {
+				res.add(id);
+			}
+			for (const id of collect(child.id)) {
+				res.add(id);
+			}
 		}
 		memo.set(teamId, res);
 		return res;
 	};
 
-	for (const team of visibleTeams) collect(team.id);
+	for (const team of visibleTeams) {
+		collect(team.id);
+	}
 	return memo;
 }
 
 export function TeamsPage({ teams, isLoading }: TeamsPageProps) {
 	const visibleTeams = teams.filter((t) => !t.hidden);
 
-	const sortMembers = (team: TeamInfo) => {
-		return [...team.members].sort((a, b) => a.name.localeCompare(b.name));
-	};
+	const sortMembers = (team: TeamInfo) =>
+		[...team.members].sort((a, b) => a.name.localeCompare(b.name));
 
 	const allTeamsById = new Map(teams.map((t) => [t.id, t]));
 	const { roots, childrenMap } = buildVisibleTree(visibleTeams, allTeamsById);
@@ -172,8 +185,10 @@ export function TeamsPage({ teams, isLoading }: TeamsPageProps) {
 		};
 
 		const scrollToHash = (): boolean => {
-			const hash = window.location.hash;
-			if (!hash) return false;
+			const { hash } = window.location;
+			if (!hash) {
+				return false;
+			}
 			const id = hash.slice(1);
 			const el = document.getElementById(id);
 			if (el) {

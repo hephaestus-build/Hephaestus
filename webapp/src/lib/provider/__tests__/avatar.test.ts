@@ -22,12 +22,12 @@ describe("getWorkspaceAvatarUrl", () => {
 
 describe("getTeamAvatarUrl", () => {
 	it("returns GitHub team avatar URL with team ID", () => {
-		expect(getTeamAvatarUrl("GITHUB", 12345)).toBe(
+		expect(getTeamAvatarUrl("GITHUB", 12_345)).toBe(
 			"https://avatars.githubusercontent.com/t/12345?s=512&v=4",
 		);
 	});
 
 	it("returns null for GitLab", () => {
-		expect(getTeamAvatarUrl("GITLAB", 12345)).toBeNull();
+		expect(getTeamAvatarUrl("GITLAB", 12_345)).toBeNull();
 	});
 });

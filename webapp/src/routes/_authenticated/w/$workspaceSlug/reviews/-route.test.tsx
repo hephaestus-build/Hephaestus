@@ -53,7 +53,7 @@ describe("review activity routes", () => {
 		renderRouteAt("/w/acme/reviews");
 
 		await screen.findByRole("heading", { name: "Review activity" }, ROUTE_RENDER_WAIT);
-		await screen.findByRole("link", { name: /Member-facing review activity/ }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("link", { name: /Member-facing review activity/u }, ROUTE_RENDER_WAIT);
 	});
 
 	/** Page 2 of "issues only" stays issues only: the filter lives in the router's search state. */

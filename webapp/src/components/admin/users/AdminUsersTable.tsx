@@ -49,9 +49,13 @@ function roleBadgeVariant(appRole: string | undefined) {
 
 // Active is neutral; suspended / being-deleted are non-normal states and read as destructive.
 function statusBadgeVariant(status: string | undefined) {
-	if (!status) return "outline" as const;
+	if (!status) {
+		return "outline" as const;
+	}
 	const normalized = status.toUpperCase();
-	if (normalized === "ACTIVE") return "secondary" as const;
+	if (normalized === "ACTIVE") {
+		return "secondary" as const;
+	}
 	if (normalized === "SUSPENDED" || normalized === "DELETING" || normalized === "DELETED") {
 		return "destructive" as const;
 	}

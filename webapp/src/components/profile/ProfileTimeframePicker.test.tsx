@@ -16,7 +16,7 @@ describe("ProfileTimeframePicker", () => {
 			"Custom range",
 		);
 		await userEvent.click(screen.getByRole("button", { name: "Choose custom dates" }));
-		screen.getByRole("button", { name: /September 2nd, 2026/ });
+		screen.getByRole("button", { name: /September 2nd, 2026/u });
 	});
 	it("renders bookmarked dates without rewriting them", () => {
 		const onTimeframeChange = vi.fn();
@@ -52,10 +52,10 @@ describe("ProfileTimeframePicker", () => {
 			/>,
 		);
 		await userEvent.click(screen.getByRole("button", { name: "Choose custom dates" }));
-		await userEvent.click(screen.getByRole("button", { name: /June 9th, 2026/ }));
+		await userEvent.click(screen.getByRole("button", { name: /June 9th, 2026/u }));
 		expect(onTimeframeChange).toHaveBeenCalledExactlyOnceWith(
-			expect.stringMatching(/^2026-06-02T00:00:00(?:Z|[+-]\d{2}:\d{2})$/),
-			expect.stringMatching(/^2026-06-10T00:00:00(?:Z|[+-]\d{2}:\d{2})$/),
+			expect.stringMatching(/^2026-06-02T00:00:00(?:Z|[+-]\d{2}:\d{2})$/u),
+			expect.stringMatching(/^2026-06-10T00:00:00(?:Z|[+-]\d{2}:\d{2})$/u),
 		);
 	});
 	it("keeps the calendar open while a controlled range changes", async () => {
@@ -74,12 +74,12 @@ describe("ProfileTimeframePicker", () => {
 		}
 		render(<ControlledPicker />);
 		await userEvent.click(screen.getByRole("button", { name: "Choose custom dates" }));
-		await userEvent.click(screen.getByRole("button", { name: /June 12th, 2026/ }));
+		await userEvent.click(screen.getByRole("button", { name: /June 12th, 2026/u }));
 		screen.getByRole("dialog");
 		expect(screen.getByRole("button", { name: "Choose custom dates" }).textContent).toContain(
 			"Jun 2 – 12",
 		);
-		await userEvent.click(screen.getByRole("button", { name: /June 15th, 2026/ }));
+		await userEvent.click(screen.getByRole("button", { name: /June 15th, 2026/u }));
 		screen.getByRole("dialog");
 		expect(screen.getByRole("button", { name: "Choose custom dates" }).textContent).toContain(
 			"Jun 2 – 15",

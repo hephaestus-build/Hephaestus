@@ -16,7 +16,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	args: {
 		projectManager: {
-			id: 5898705,
+			id: 5_898_705,
 			login: "felixtjdietrich",
 			name: "Felix T.J. Dietrich",
 			title: "Project lead",
@@ -28,14 +28,14 @@ export const Default: Story = {
 		},
 		contributors: [
 			{
-				id: 12345678,
+				id: 12_345_678,
 				name: "Alice Developer",
 				login: "contributor1",
 				avatarUrl: "https://avatars.githubusercontent.com/u/12345678",
 				htmlUrl: "https://github.com/contributor1",
 			},
 			{
-				id: 87654321,
+				id: 87_654_321,
 				name: "Bob Builder",
 				login: "contributor2",
 				avatarUrl: "https://avatars.githubusercontent.com/u/87654321",

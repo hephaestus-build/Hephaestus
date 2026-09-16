@@ -42,7 +42,7 @@ const votesArraySchema = z.array(voteSchema);
 /** Votes are decoration, so anything unreadable degrades to "no votes" and the transcript still renders. */
 export function extractVotesFromThreadDetail(
 	threadDetail: unknown,
-): Array<{ messageId?: string; isUpvoted?: boolean }> {
+): { messageId?: string; isUpvoted?: boolean }[] {
 	if (!threadDetail || typeof threadDetail !== "object") {
 		return [];
 	}

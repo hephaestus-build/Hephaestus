@@ -102,7 +102,9 @@ export const AdminContext: Story = {
 	play: async ({ canvas, canvasElement }) => {
 		canvas.getByText("Practice catalog");
 		const content = canvasElement.querySelector<HTMLElement>('[data-slot="sidebar-content"]');
-		if (!content) throw new Error("sidebar content not found");
+		if (!content) {
+			throw new Error("sidebar content not found");
+		}
 		await expect(content.scrollWidth).toBeLessThanOrEqual(content.clientWidth);
 	},
 };
@@ -118,7 +120,7 @@ export const AdminContextNoWorkspace: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("Instance administration");
 		canvas.getByText("Back to app");
-		await expect(canvas.queryByText(/no workspace/i)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/no workspace/iu)).not.toBeInTheDocument();
 	},
 };
 

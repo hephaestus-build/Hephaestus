@@ -33,16 +33,14 @@ describe("paging a filtered list", () => {
 	it("keeps the filter while changing the page", async () => {
 		await renderAtPage(0);
 
-		expect((await screen.findByRole("link", { name: "Go to page 2" })).getAttribute("href")).toBe(
-			"/w/demo/reviews?kind=scm.issue&page=1",
-		);
+		const next = await screen.findByRole("link", { name: "Go to page 2" });
+		expect(next.getAttribute("href")).toBe("/w/demo/reviews?kind=scm.issue&page=1");
 	});
 
 	it("leaves the first page out of the URL rather than writing page=0", async () => {
 		await renderAtPage(1);
 
-		expect((await screen.findByRole("link", { name: "Go to page 1" })).getAttribute("href")).toBe(
-			"/w/demo/reviews?kind=scm.issue",
-		);
+		const previous = await screen.findByRole("link", { name: "Go to page 1" });
+		expect(previous.getAttribute("href")).toBe("/w/demo/reviews?kind=scm.issue");
 	});
 });

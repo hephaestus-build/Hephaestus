@@ -23,7 +23,9 @@ export interface PracticeDetailHoverCardProps {
 export function PracticeDetailHoverCard({ practice, children }: PracticeDetailHoverCardProps) {
 	const why = practice.whyItMatters?.trim();
 	const good = practice.whatGoodLooksLike?.trim();
-	if (!why && !good) return children;
+	if (!why && !good) {
+		return children;
+	}
 
 	return (
 		<HoverCard>

@@ -63,7 +63,7 @@ function setup(overrides: Partial<Parameters<typeof AdminSlackChannelsSettings>[
 }
 
 function openRowMenu(label: string) {
-	fireEvent.click(screen.getByRole("button", { name: new RegExp(`actions for ${label}`, "i") }));
+	fireEvent.click(screen.getByRole("button", { name: new RegExp(`actions for ${label}`, "iu") }));
 }
 
 describe("AdminSlackChannelsSettings — reversible row actions swallow rejections", () => {
@@ -74,9 +74,9 @@ describe("AdminSlackChannelsSettings — reversible row actions swallow rejectio
 			const onUpdateConsent = vi.fn().mockRejectedValue(new Error("boom"));
 			setup({ channels: [active], onUpdateConsent });
 			openRowMenu("team-standup");
-			fireEvent.click(await screen.findByRole("menuitem", { name: /^pause$/i }));
+			fireEvent.click(await screen.findByRole("menuitem", { name: /^pause$/iu }));
 
-			await waitFor(() => expect(onUpdateConsent).toHaveBeenCalledTimes(1));
+			await waitFor(() => expect(onUpdateConsent).toHaveBeenCalledOnce());
 			// Let unhandled rejections surface on the next event-loop turn while React finishes closing the menu.
 			await act(async () => {
 				await new Promise((resolve) => {
@@ -96,9 +96,9 @@ describe("AdminSlackChannelsSettings — reversible row actions swallow rejectio
 			const onRegisterChannel = vi.fn().mockRejectedValue(new Error("boom"));
 			setup({ channels: [revoked], onRegisterChannel });
 			openRowMenu("team-legacy");
-			fireEvent.click(await screen.findByRole("menuitem", { name: /set up again/i }));
+			fireEvent.click(await screen.findByRole("menuitem", { name: /set up again/iu }));
 
-			await waitFor(() => expect(onRegisterChannel).toHaveBeenCalledTimes(1));
+			await waitFor(() => expect(onRegisterChannel).toHaveBeenCalledOnce());
 			await act(async () => {
 				await new Promise((resolve) => {
 					setTimeout(resolve, 0);
@@ -116,7 +116,7 @@ describe("AdminSlackChannelsSettings — Slack channel picker", () => {
 		const { props } = setup({ channels: [revoked] });
 		openRowMenu("team-legacy");
 
-		fireEvent.click(await screen.findByRole("menuitem", { name: /set up again/i }));
+		fireEvent.click(await screen.findByRole("menuitem", { name: /set up again/iu }));
 
 		expect(props.onRegisterChannel).toHaveBeenCalledWith({
 			slackChannelId: revoked.slackChannelId,

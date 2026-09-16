@@ -45,17 +45,27 @@ function withinScope(
 	const agentJobId = single(url, "agentJobId");
 	const artifactKind = single(url, "artifactKind");
 	const artifactId = single(url, "artifactId");
-	if (agentJobId && row.agentJobId !== agentJobId) return false;
-	if (artifactKind && row.artifact?.type !== artifactKind) return false;
-	if (artifactId && String(row.artifact?.id) !== artifactId) return false;
+	if (agentJobId && row.agentJobId !== agentJobId) {
+		return false;
+	}
+	if (artifactKind && row.artifact?.type !== artifactKind) {
+		return false;
+	}
+	if (artifactId && String(row.artifact?.id) !== artifactId) {
+		return false;
+	}
 	return true;
 }
 
 function withinDates(url: URL, at: Date) {
 	const from = single(url, "from");
 	const to = single(url, "to");
-	if (from && at < new Date(from)) return false;
-	if (to && at >= new Date(to)) return false;
+	if (from && at < new Date(from)) {
+		return false;
+	}
+	if (to && at >= new Date(to)) {
+		return false;
+	}
 	return true;
 }
 
@@ -110,14 +120,19 @@ function filterFeedback(rows: ReviewFeedback[], url: URL) {
 const ACTIONABILITY_RANK: Record<string, number> = { CRITICAL: 0, MAJOR: 1, MINOR: 2, INFO: 3 };
 
 function actionability(row: ReviewObservation): number {
-	if (row.assessmentStatus !== "ASSESSED" || !row.presence || !row.assessment) return 6;
-	if ((row.presence === "PRESENT") !== (row.assessment === "GOOD"))
+	if (row.assessmentStatus !== "ASSESSED" || !row.presence || !row.assessment) {
+		return 6;
+	}
+	if ((row.presence === "PRESENT") !== (row.assessment === "GOOD")) {
 		return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
+	}
 	return 5;
 }
 
 function sortObservations(rows: ReviewObservation[], url: URL) {
-	if (single(url, "sort") !== "ACTIONABILITY") return rows;
+	if (single(url, "sort") !== "ACTIONABILITY") {
+		return rows;
+	}
 	// Ties are newest first, as on the server.
 	return [...rows].sort(
 		(a, b) =>

@@ -38,7 +38,11 @@ export const PLACEMENT_DEFS: StatusDefs<PlacementType> = {
  */
 export function placementLabel(place: DeliveryPlace, placementType?: PlacementType): string {
 	const placeLabel = DELIVERY_PLACE_DEFS[place].label;
-	if (!placementType) return placeLabel;
-	if (placementType === "CONVERSATION_TURN") return PLACEMENT_DEFS.CONVERSATION_TURN.label;
+	if (!placementType) {
+		return placeLabel;
+	}
+	if (placementType === "CONVERSATION_TURN") {
+		return PLACEMENT_DEFS.CONVERSATION_TURN.label;
+	}
 	return `${PLACEMENT_DEFS[placementType].label} ${placeLabel.toLowerCase()}`;
 }

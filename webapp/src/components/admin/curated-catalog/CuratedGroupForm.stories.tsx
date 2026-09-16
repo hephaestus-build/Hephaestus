@@ -93,7 +93,7 @@ export const StaleEdit: Story = {
 export const Submitting: Story = {
 	args: { mode: "edit", initialData, isPending: true },
 	play: async () => {
-		await expect(screen.getByRole("textbox", { name: /Name/ })).toBeDisabled();
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toBeDisabled();
 	},
 };
 

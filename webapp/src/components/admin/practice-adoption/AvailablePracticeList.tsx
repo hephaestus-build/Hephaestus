@@ -69,8 +69,10 @@ export function AvailablePracticeList({
 		<div className="space-y-5">
 			{Array.from(groups, ([key, entries]) => {
 				const [first] = entries;
-				if (!first) return null;
-				const groupSlug = first.groupSlug;
+				if (!first) {
+					return null;
+				}
+				const { groupSlug } = first;
 				const available = entries.filter(({ availability }) => availability === "AVAILABLE").length;
 				const restorable = entries.filter(({ availability }) => availability === "ADOPTED").length;
 				const groupMissing = groupSlug !== undefined && !existingGroupSlugs.has(groupSlug);

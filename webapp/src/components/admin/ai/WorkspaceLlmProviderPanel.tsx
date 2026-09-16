@@ -54,7 +54,10 @@ export interface WorkspaceLlmProviderPanelProps {
 	ownProviderAllowed: boolean;
 }
 
-type TestResult = { ok: boolean; message: string };
+interface TestResult {
+	ok: boolean;
+	message: string;
+}
 
 // Each write is filed under a shared prefix so one cache lookup answers "is this row busy" — a row
 // stays disabled until *its own* write settles, not until whichever write settles first. The filing
@@ -79,7 +82,7 @@ export function WorkspaceLlmProviderPanel({
 	const [modelConnectionId, setModelConnectionId] = useState<number | null>(null);
 	const [editingModel, setEditingModel] = useState<WorkspaceLlmModel | null>(null);
 	const [registrationDisabled, setRegistrationDisabled] = useState(false);
-	const [testResults, setTestResults] = useState<Record<number, TestResult>>({});
+	const [testResults, setTestResults] = useState(() => new Map<number, TestResult>());
 	const [deletingConnection, setDeletingConnection] = useState<WorkspaceLlmConnection | null>(null);
 	const registrationBlocked = !ownProviderAllowed || registrationDisabled;
 
@@ -110,7 +113,9 @@ export function WorkspaceLlmProviderPanel({
 			toast.success("Provider connected");
 		},
 		onError: (error) => {
-			if (problemStatusOf(error) === 403) setRegistrationDisabled(true);
+			if (problemStatusOf(error) === 403) {
+				setRegistrationDisabled(true);
+			}
 			toast.error("Couldn't connect your provider", { description: problemDetailOf(error) });
 		},
 	});
@@ -137,24 +142,25 @@ export function WorkspaceLlmProviderPanel({
 	const probeConnection = useMutation({
 		...filedUnder(probeKey, workspaceProbeLlmConnectionMutation()),
 		onSuccess: (result, variables) => {
-			setTestResults((current) => ({
-				...current,
-				[variables.path.id]: result.reachable
-					? {
-							ok: true,
-							message: `Connected. ${result.modelCount} model${result.modelCount === 1 ? "" : "s"} available.`,
-						}
-					: { ok: false, message: result.message ?? "Could not reach the provider." },
-			}));
+			setTestResults((current) =>
+				new Map(current).set(
+					variables.path.id,
+					result.reachable
+						? {
+								ok: true,
+								message: `Connected. ${result.modelCount} model${result.modelCount === 1 ? "" : "s"} available.`,
+							}
+						: { ok: false, message: result.message ?? "Could not reach the provider." },
+				),
+			);
 		},
 		onError: (error, variables) => {
-			setTestResults((current) => ({
-				...current,
-				[variables.path.id]: {
+			setTestResults((current) =>
+				new Map(current).set(variables.path.id, {
 					ok: false,
 					message: problemDetailOf(error, "Could not reach the provider."),
-				},
-			}));
+				}),
+			);
 		},
 	});
 	const probingConnectionIds = usePendingMutationIds(probeKey, (variables) =>
@@ -172,7 +178,9 @@ export function WorkspaceLlmProviderPanel({
 			toast.success("Model added");
 		},
 		onError: (error) => {
-			if (problemStatusOf(error) === 403) setRegistrationDisabled(true);
+			if (problemStatusOf(error) === 403) {
+				setRegistrationDisabled(true);
+			}
 			toast.error("Couldn't add the model", { description: problemDetailOf(error) });
 		},
 	});
@@ -283,7 +291,7 @@ export function WorkspaceLlmProviderPanel({
 
 					{connections.map((connection) => {
 						const connectionModels = models.filter((model) => model.connectionId === connection.id);
-						const testResult = testResults[connection.id];
+						const testResult = testResults.get(connection.id);
 						return (
 							<Card
 								key={connection.id}
@@ -339,8 +347,8 @@ export function WorkspaceLlmProviderPanel({
 											}
 											onClick={() => {
 												setTestResults((current) => {
-													const next = { ...current };
-													delete next[connection.id];
+													const next = new Map(current);
+													next.delete(connection.id);
 													return next;
 												});
 												probeConnection.mutate({ path: { workspaceSlug, id: connection.id } });
@@ -425,7 +433,9 @@ export function WorkspaceLlmProviderPanel({
 				editing={editingModel}
 				isSubmitting={createModel.isPending || updateModel.isPending}
 				onCreate={(body: CreateWorkspaceLlmModelRequest) => {
-					if (modelConnectionId == null) return;
+					if (modelConnectionId == null) {
+						return;
+					}
 					createModel.mutate({ path: { workspaceSlug, connectionId: modelConnectionId }, body });
 				}}
 				onUpdate={(id, body: UpdateWorkspaceLlmModelRequest) =>

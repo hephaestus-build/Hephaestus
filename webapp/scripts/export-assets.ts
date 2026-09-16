@@ -16,8 +16,9 @@ const applicationMarkSvg = markSvg.replace(
 	'transform="translate(24 20) scale(3.3333)"',
 	'transform="translate(14.8 12) scale(4.1)"',
 );
-if (applicationMarkSvg === markSvg)
+if (applicationMarkSvg === markSvg) {
 	throw new Error("The application icon crop could not be applied.");
+}
 const interFont = await readFile(
 	new URL(import.meta.resolve("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2")),
 );
@@ -36,7 +37,9 @@ await mkdir(readmeImageDirectory, { recursive: true });
 for (const [source, targets] of [
 	["hephaestus-mark.svg", [resolve(publicDirectory, "brand/hephaestus-mark.svg")]],
 ] as const) {
-	for (const target of targets) await copyFile(resolve(sourceDirectory, source), target);
+	for (const target of targets) {
+		await copyFile(resolve(sourceDirectory, source), target);
+	}
 }
 
 const proxyCompose = await readFile(proxyComposePath, "utf8");
@@ -47,7 +50,7 @@ const proxyMark = markSvg
 	)
 	.trim();
 const nextProxyCompose = proxyCompose.replace(
-	/<svg class="brand" xmlns="http:\/\/www\.w3\.org\/2000\/svg".*<\/svg>/,
+	/<svg class="brand" xmlns="http:\/\/www\.w3\.org\/2000\/svg".*<\/svg>/u,
 	proxyMark,
 );
 if (nextProxyCompose === proxyCompose && !proxyCompose.includes(proxyMark)) {
@@ -146,7 +149,7 @@ try {
 
 async function waitForStorybook(storyId: string): Promise<void> {
 	for (let attempt = 0; attempt < 120; attempt += 1) {
-		const response = await fetch(`${storybookUrl}/index.json`).catch(() => undefined);
+		const response = await fetch(`${storybookUrl}/index.json`).catch(() => {});
 		if (response?.ok) {
 			const index: unknown = await response.json();
 			if (
@@ -176,7 +179,9 @@ async function exportReadmeImages(activeBrowser: Browser): Promise<void> {
 	);
 
 	try {
-		for (const capture of readmeCaptures) await waitForStorybook(capture.storyId);
+		for (const capture of readmeCaptures) {
+			await waitForStorybook(capture.storyId);
+		}
 		for (const capture of readmeCaptures) {
 			for (const theme of ["light", "dark"] as const) {
 				const page = await activeBrowser.newPage({

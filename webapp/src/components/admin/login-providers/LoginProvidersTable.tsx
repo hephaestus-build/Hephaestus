@@ -231,7 +231,9 @@ export function LoginProvidersTable({
 				open={deleting != null}
 				// Dismissal is allowed even while the DELETE is in flight (ADR 0027).
 				onOpenChange={(open) => {
-					if (!open) setDeleting(null);
+					if (!open) {
+						setDeleting(null);
+					}
 				}}
 			>
 				<AlertDialogContent>

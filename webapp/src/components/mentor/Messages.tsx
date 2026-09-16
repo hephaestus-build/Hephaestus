@@ -14,7 +14,7 @@ import type { PartRendererMap } from "./renderers/types";
 
 export interface MessagesProps {
 	messages: ChatMessage[];
-	votes?: Array<ChatMessageVote>;
+	votes?: ChatMessageVote[];
 	status: UseChatHelpers<ChatMessage>["status"];
 	readonly?: boolean;
 	showThinking?: boolean;
@@ -48,13 +48,21 @@ export function Messages({
 	const isArtifact = variant === "artifact";
 
 	const hasVisibleContent = (message: ChatMessage): boolean => {
-		const parts = message.parts;
-		if (parts.length === 0) return false;
+		const { parts } = message;
+		if (parts.length === 0) {
+			return false;
+		}
 		for (const p of parts) {
-			if (p.type === "text" && p.text.trim().length > 0) return true;
-			if (p.type === "file") return true;
+			if (p.type === "text" && p.text.trim().length > 0) {
+				return true;
+			}
+			if (p.type === "file") {
+				return true;
+			}
 			// Every state a tool part can be in renders something, so reaching one is visible content.
-			if (isStaticToolUIPart<ChatTools>(p)) return true;
+			if (isStaticToolUIPart<ChatTools>(p)) {
+				return true;
+			}
 		}
 		return false;
 	};
@@ -87,7 +95,9 @@ export function Messages({
 						showThinking &&
 						(status === "submitted" || status === "streaming");
 
-					if (hideEmptyAssistantPlaceholder) return null;
+					if (hideEmptyAssistantPlaceholder) {
+						return null;
+					}
 
 					return (
 						<PreviewMessage
@@ -109,7 +119,9 @@ export function Messages({
 					(status === "submitted" || status === "streaming") &&
 					(() => {
 						const last = messages.at(-1);
-						if (!last) return <ThinkingMessage />;
+						if (!last) {
+							return <ThinkingMessage />;
+						}
 						const isUser = last.role === "user";
 						const assistantHasVisible = last.role === "assistant" && hasVisibleContent(last);
 						return isUser || !assistantHasVisible ? <ThinkingMessage /> : null;

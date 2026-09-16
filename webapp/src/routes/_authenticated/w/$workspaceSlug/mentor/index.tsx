@@ -27,7 +27,9 @@ function MentorContainer() {
 	// Once per mount, guarded by a ref rather than by the dependency list, which cannot promise it:
 	// a second run would mint a second id and strand an empty "New chat" in the list.
 	useEffect(() => {
-		if (!workspaceSlug || hasStartedRef.current) return;
+		if (!workspaceSlug || hasStartedRef.current) {
+			return;
+		}
 		hasStartedRef.current = true;
 
 		const threadId = uuidv4();
@@ -37,11 +39,13 @@ function MentorContainer() {
 		});
 
 		// Flat: `NavMentorThreads` buckets by `createdAt`, so ordering here is not load-bearing.
-		queryClient.setQueryData<Array<ChatThreadSummary>>(
+		queryClient.setQueryData<ChatThreadSummary[]>(
 			listThreadsQueryKey({ path: { workspaceSlug: slug } }),
 			(prev) => {
 				const threads = prev ?? [];
-				if (threads.some((t) => t.id === threadId)) return threads;
+				if (threads.some((t) => t.id === threadId)) {
+					return threads;
+				}
 				const newSummary: ChatThreadSummary = {
 					id: threadId,
 					title: "New chat",

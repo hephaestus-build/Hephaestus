@@ -77,9 +77,15 @@ export function PracticeForm(props: PracticeFormProps) {
 		}
 
 		const clear: NonNullable<UpdatePracticeRequest["clear"]> = [];
-		if (!definition.precomputeScript) clear.push("PRECOMPUTE_SCRIPT");
-		if (!definition.whyItMatters) clear.push("WHY_IT_MATTERS");
-		if (!definition.whatGoodLooksLike) clear.push("WHAT_GOOD_LOOKS_LIKE");
+		if (!definition.precomputeScript) {
+			clear.push("PRECOMPUTE_SCRIPT");
+		}
+		if (!definition.whyItMatters) {
+			clear.push("WHY_IT_MATTERS");
+		}
+		if (!definition.whatGoodLooksLike) {
+			clear.push("WHAT_GOOD_LOOKS_LIKE");
+		}
 		return props.onSubmit(
 			props.initialData.slug,
 			{

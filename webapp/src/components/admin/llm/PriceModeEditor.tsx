@@ -73,7 +73,7 @@ export function PriceModeEditor({
 					min={0}
 					step="0.01"
 					inputMode="decimal"
-					value={value[key] != null ? String(value[key]) : ""}
+					value={value[key] == null ? "" : String(value[key])}
 					onChange={(e) => {
 						const raw = e.target.value;
 						set(key, raw === "" ? undefined : Number(raw));

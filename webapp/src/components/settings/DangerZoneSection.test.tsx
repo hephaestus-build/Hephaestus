@@ -36,16 +36,16 @@ describe("DangerZoneSection — data export", () => {
 		vi.useFakeTimers({ shouldAdvanceTime: true });
 		renderWithClient(<DangerZoneSection onAccountDeleted={vi.fn()} />);
 
-		fireEvent.click(screen.getByRole("button", { name: /Request export/ }));
+		fireEvent.click(screen.getByRole("button", { name: /Request export/u }));
 
 		// First status poll returns PENDING; the in-progress copy proves we're polling.
-		await waitFor(() => screen.getByText(/Preparing your export/i));
+		await waitFor(() => screen.getByText(/Preparing your export/iu));
 
 		// Drive the 2s poll interval forward; the next poll lands READY.
 		await act(() => vi.advanceTimersByTimeAsync(2000));
 
-		await waitFor(() => screen.getByRole("button", { name: /Download/ }));
-		screen.getByText(/ready to download/i);
+		await waitFor(() => screen.getByRole("button", { name: /Download/u }));
+		screen.getByText(/ready to download/iu);
 	});
 });
 
@@ -99,7 +99,7 @@ describe("DangerZoneSection — account deletion", () => {
 		await waitFor(() => expect(confirmButton.disabled).toBe(false));
 		fireEvent.click(confirmButton);
 
-		await waitFor(() => expect(onAccountDeleted).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(onAccountDeleted).toHaveBeenCalledOnce());
 		expect(sentHeader).toBe(String(currentUser.id));
 	});
 

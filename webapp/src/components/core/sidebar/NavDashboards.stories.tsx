@@ -40,8 +40,9 @@ export const AllFeaturesDisabled: Story = {
 		// Profile and Teams are not workspace capabilities, so they stay whatever else is off.
 		await expect(await canvas.findByRole("link", { name: "Profile" })).toBeVisible();
 		await expect(canvas.getByRole("link", { name: "Teams" })).toBeVisible();
-		for (const gated of ["Leaderboard", "Review activity"])
+		for (const gated of ["Leaderboard", "Review activity"]) {
 			await expect(canvas.queryByRole("link", { name: gated })).toBeNull();
+		}
 	},
 };
 

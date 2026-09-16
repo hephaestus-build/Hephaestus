@@ -14,7 +14,7 @@ export function curatedEntryCopy(
 	kind: "practice" | "group",
 ): CuratedEntryCopy {
 	switch (status.state) {
-		case "YOURS":
+		case "YOURS": {
 			return {
 				label: "No Hephaestus default",
 				tone: "info",
@@ -22,7 +22,8 @@ export function curatedEntryCopy(
 					? `This ${kind} has no Hephaestus default and is maintained on this instance.`
 					: `This ${kind} has no Hephaestus default and is excluded from new workspaces.`,
 			};
-		case "EDITED_HERE":
+		}
+		case "EDITED_HERE": {
 			return {
 				label: "Customized on this instance",
 				tone: "info",
@@ -30,7 +31,8 @@ export function curatedEntryCopy(
 					? `This ${kind} is customized on this instance. Updates to the Hephaestus default need review before they apply.`
 					: `This customized ${kind} is excluded from new workspaces.`,
 			};
-		case "UPDATE_WAITING":
+		}
+		case "UPDATE_WAITING": {
 			if (kind === "group") {
 				return {
 					label: "Hephaestus update available",
@@ -52,7 +54,8 @@ export function curatedEntryCopy(
 						? "Applying this update would change wording or developer guidance only. Review rules would stay the same."
 						: "Applying this update would change review rules. Your saved version stays in place until you decide.",
 			};
-		case "NO_LONGER_SHIPPED":
+		}
+		case "NO_LONGER_SHIPPED": {
 			return {
 				label: "Removed from Hephaestus defaults",
 				tone: "attention",
@@ -60,9 +63,10 @@ export function curatedEntryCopy(
 					? `This ${kind} is no longer a Hephaestus default. Keep it as a custom ${kind}, or exclude it from new workspaces.`
 					: `This ${kind} is no longer a Hephaestus default and is excluded from new workspaces. Existing workspaces do not change.`,
 			};
+		}
 		// Named rather than defaulted: a state added by the API later must become a type error, not
 		// silently render the most reassuring answer.
-		case "FROM_HEPHAESTUS":
+		case "FROM_HEPHAESTUS": {
 			return {
 				label: "Uses Hephaestus default",
 				tone: "neutral",
@@ -70,6 +74,7 @@ export function curatedEntryCopy(
 					? `This ${kind} uses the Hephaestus default. Future updates apply automatically until you customize it.`
 					: `This ${kind} uses the Hephaestus default but is excluded from new workspaces.`,
 			};
+		}
 	}
 }
 

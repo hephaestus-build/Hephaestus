@@ -73,7 +73,7 @@ export const Default: Story = {
 		await expect(screen.getByText("17 answered · Average 3.6")).toBeVisible();
 		await expect(screen.getByText("14 answered · Average 7.9 · NPS 21")).toBeVisible();
 		await expect(
-			screen.getByText(/5 promoters \(9–10\) · 5 passives \(7–8\) · 4 detractors \(0–6\)/),
+			screen.getByText(/5 promoters \(9–10\) · 5 passives \(7–8\) · 4 detractors \(0–6\)/u),
 		).toBeVisible();
 		// A free-text question has no distribution to draw.
 		await expect(screen.getByText("9 answers — read them in the responses below.")).toBeVisible();
@@ -92,7 +92,7 @@ export const Research: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("Research"));
 		await expect(
-			screen.getByText(/belong to the study run by Technical University of Munich/),
+			screen.getByText(/belong to the study run by Technical University of Munich/u),
 		).toBeVisible();
 	},
 };
@@ -146,7 +146,7 @@ export const NoResponses: Story = {
 export const PublishedByDeletedAccount: Story = {
 	args: { state: ready({ ...adminSurvey, createdBy: undefined }) },
 	play: async () => {
-		await expectSettledVisible(await screen.findByText(/Published by a deleted account/));
+		await expectSettledVisible(await screen.findByText(/Published by a deleted account/u));
 	},
 };
 

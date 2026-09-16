@@ -55,14 +55,14 @@ describe("feedback proposal route", () => {
 
 		renderRouteAtWithRouter(`/w/acme/admin/practices/reviews/delivery/${FEEDBACK_ID}`);
 
-		await screen.findByRole("heading", { name: /Feedback for/ }, ROUTE_RENDER_WAIT);
-		expect(screen.getByText(/Please keep the cache scoped/)).not.toBeNull();
+		await screen.findByRole("heading", { name: /Feedback for/u }, ROUTE_RENDER_WAIT);
+		expect(screen.getByText(/Please keep the cache scoped/u)).not.toBeNull();
 		const [firstObservation] = reviewFeedbackDetail.observations;
 		assert(firstObservation);
 		expect(screen.getByRole("link", { name: firstObservation.summary })).not.toBeNull();
 
 		await userEvent.click(screen.getByRole("button", { name: "Approve for delivery" }));
-		await screen.findByRole("heading", { name: /Feedback for/ }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: /Feedback for/u }, ROUTE_RENDER_WAIT);
 		expect(requestBody).toStrictEqual({ decision: "APPROVED" });
 	});
 
@@ -86,7 +86,7 @@ describe("feedback proposal route", () => {
 		);
 
 		renderRouteAtWithRouter(`/w/acme/admin/practices/reviews/delivery/${FEEDBACK_ID}`);
-		await screen.findByRole("heading", { name: /Feedback for/ }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: /Feedback for/u }, ROUTE_RENDER_WAIT);
 		await userEvent.click(screen.getByRole("button", { name: "Reject feedback" }));
 		const dialog = await screen.findByRole("dialog");
 		await userEvent.click(within(dialog).getByText("Missing important context"));

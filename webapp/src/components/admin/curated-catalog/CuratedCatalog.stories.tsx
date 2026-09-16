@@ -168,7 +168,7 @@ export const CustomOrder: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Use Hephaestus order" }));
 		const dialog = await screen.findByRole("alertdialog");
-		await expect(dialog).toHaveAccessibleDescription(/Definitions and inclusion will not change/);
+		await expect(dialog).toHaveAccessibleDescription(/Definitions and inclusion will not change/u);
 		await userEvent.click(within(dialog).getByRole("button", { name: "Use Hephaestus order" }));
 		await expect(args.onResetOrder).toHaveBeenCalledOnce();
 	},
@@ -228,7 +228,7 @@ export const FilteringOpensMatchingGroups: Story = {
 	render: (args) => <FilterTransition {...args} />,
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ canvas }) => {
-		const group = canvas.getByRole("button", { name: /^Packaging work for review 3$/ });
+		const group = canvas.getByRole("button", { name: /^Packaging work for review 3$/u });
 		await userEvent.click(group);
 		await userEvent.click(canvas.getByRole("combobox", { name: "Filter by work type" }));
 		await userEvent.click(await screen.findByRole("option", { name: "Pull or merge requests" }));
@@ -271,7 +271,7 @@ export const ExcludingAGroupListsItsPractices: Story = {
 			}),
 		);
 		const dialog = await screen.findByRole("alertdialog");
-		await within(dialog).findByText(/also stops offering 3 currently offered practices/);
+		await within(dialog).findByText(/also stops offering 3 currently offered practices/u);
 		await within(dialog).findByText("Say what changed and why");
 	},
 };
@@ -327,7 +327,7 @@ export const ExcludingAGroupCountsOnlyIncludedPractices: Story = {
 			}),
 		);
 		const dialog = await screen.findByRole("alertdialog");
-		await within(dialog).findByText(/also stops offering 1 currently offered practice/);
+		await within(dialog).findByText(/also stops offering 1 currently offered practice/u);
 		await within(dialog).findByText("Keep a change to one concern");
 		await expect(within(dialog).queryByText("Say what changed and why")).not.toBeInTheDocument();
 	},
@@ -359,7 +359,7 @@ export const ExcludingAGroupDoesNotRecountExcludedPractices: Story = {
 				name: "Offer Packaging work for review to workspaces",
 			}),
 		);
-		await screen.findByText(/No additional practices are affected/);
+		await screen.findByText(/No additional practices are affected/u);
 	},
 };
 

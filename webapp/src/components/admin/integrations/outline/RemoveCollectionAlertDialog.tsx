@@ -44,7 +44,9 @@ export function RemoveCollectionAlertDialog({
 	}
 
 	async function confirm() {
-		if (!collection) return;
+		if (!collection) {
+			return;
+		}
 		setSubmitting(true);
 		try {
 			await onConfirm({ collectionId: collection.collectionId });
@@ -52,9 +54,8 @@ export function RemoveCollectionAlertDialog({
 		} catch {
 			// Rejection = keep the dialog open. The mutation's onError already surfaced the
 			// toast, so swallow here rather than let it escape as an unhandled rejection.
-		} finally {
-			setSubmitting(false);
 		}
+		setSubmitting(false);
 	}
 
 	return (

@@ -45,11 +45,11 @@ const EVIDENCE_ROLE_OPTIONS = [
 	// Off is the answer on most sources, so it is marked rather than shouted: a filled pill on the
 	// majority would hide the few that are on.
 	{ value: "NOT_USED", label: "Off", selected: "bg-muted text-foreground hover:bg-muted" },
-] satisfies Array<{
+] satisfies {
 	value: SegmentedRole;
 	label: string;
 	selected: string;
-}>;
+}[];
 
 type SegmentedRole = Exclude<EvidenceRole, "EXHAUSTIVE">;
 
@@ -88,7 +88,9 @@ export function PracticeEvidenceEditor({
 	const [lastInvalid, setLastInvalid] = useState(invalid);
 	if (invalid !== lastInvalid) {
 		setLastInvalid(invalid);
-		if (invalid) setOpen(true);
+		if (invalid) {
+			setOpen(true);
+		}
 	}
 	const required = options.allowedSources.filter(
 		(source) => roleOf(needs, source.sourceKind) !== "NOT_USED" && !isContextual(needs, source),
@@ -283,8 +285,12 @@ interface AbsenceClaimProps {
  * capture, since choosing it there is a request the server refuses.
  */
 function AbsenceClaim({ source, role, controlId, disabled, onRoleChange }: AbsenceClaimProps) {
-	if (role === "CONTEXTUAL" || role === "NOT_USED") return null;
-	if (!source.supportsExhaustiveEvidence) return null;
+	if (role === "CONTEXTUAL" || role === "NOT_USED") {
+		return null;
+	}
+	if (!source.supportsExhaustiveEvidence) {
+		return null;
+	}
 	const checkboxId = `${controlId}-exhaustive`;
 	const claimed = role === "EXHAUSTIVE";
 	const scopeId = `${checkboxId}-scope`;

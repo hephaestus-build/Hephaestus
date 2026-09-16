@@ -17,7 +17,7 @@ export interface ResolvedLegalContent {
 // "unset profile" case — the resolver never constructs an unexpected URL.
 // Kept in sync with webapp/docker/entrypoint.sh — a unit test pins the pair.
 export const LEGAL_PROFILE_PATTERN_SOURCE = "^[a-z0-9][a-z0-9_-]{0,31}$";
-const PROFILE_PATTERN = new RegExp(LEGAL_PROFILE_PATTERN_SOURCE);
+const PROFILE_PATTERN = new RegExp(LEGAL_PROFILE_PATTERN_SOURCE, "u");
 
 export function isValidLegalProfile(profile: string): boolean {
 	return PROFILE_PATTERN.test(profile);
@@ -28,8 +28,8 @@ export function isValidLegalProfile(profile: string): boolean {
 // `\/(?!\/)` permits absolute same-origin paths like `/privacy` while rejecting
 // scheme-relative URLs like `//evil.com/x` that would otherwise bypass the
 // external-link target="_blank" + rel="noopener" hardening in SafeAnchor.
-const SAFE_HREF_PATTERN = /^(?:https?:|mailto:|tel:|#|\/(?!\/))/i;
-const SAFE_IMG_SRC_PATTERN = /^(?:https?:|\/(?!\/))/i;
+const SAFE_HREF_PATTERN = /^(?:https?:|mailto:|tel:|#|\/(?!\/))/iu;
+const SAFE_IMG_SRC_PATTERN = /^(?:https?:|\/(?!\/))/iu;
 
 export function isSafeLegalHref(href: unknown): href is string {
 	return typeof href === "string" && SAFE_HREF_PATTERN.test(href);
@@ -58,21 +58,31 @@ async function tryFetch(url: string, signal?: AbortSignal): Promise<string | nul
 	try {
 		// oxlint-disable-next-line no-restricted-globals -- Static markdown the deployment drops into the SPA's own origin, not application-server data: no operation for it exists in `openapi.yaml`, or could.
 		response = await fetch(url, { signal, cache: "no-cache" });
-	} catch (err) {
+	} catch (error) {
 		// Preserve abort semantics so the caller can distinguish teardown from
 		// a network failure; everything else is "candidate missing, keep cascading".
-		if (err instanceof DOMException && err.name === "AbortError") throw err;
+		if (error instanceof DOMException && error.name === "AbortError") {
+			throw error;
+		}
 		return null;
 	}
-	if (!response.ok) return null;
+	if (!response.ok) {
+		return null;
+	}
 	// Defeat SPA fallbacks that served /index.html with a 200. nginx is configured
 	// to 404 on missing legal files, but the client-side guard protects forks whose
 	// reverse proxy is not (yet) configured that way.
 	const contentType = response.headers.get("content-type") ?? "";
-	if (contentType.includes("text/html")) return null;
+	if (contentType.includes("text/html")) {
+		return null;
+	}
 	const body = await response.text();
-	if (!body.trim()) return null;
-	if (body.trimStart().toLowerCase().startsWith("<!doctype html")) return null;
+	if (!body.trim()) {
+		return null;
+	}
+	if (body.trimStart().toLowerCase().startsWith("<!doctype html")) {
+		return null;
+	}
 	return body;
 }
 

@@ -43,9 +43,9 @@ export function selectGroupPatch(
 	request: UpdatePracticeGroupRequest,
 ): UpdatePracticeGroupRequest {
 	return {
-		...(request.visibleInPracticeDashboards !== undefined
-			? { visibleInPracticeDashboards: group.visibleInPracticeDashboards }
-			: {}),
+		...(request.visibleInPracticeDashboards === undefined
+			? {}
+			: { visibleInPracticeDashboards: group.visibleInPracticeDashboards }),
 		...("color" in request ? { color: group.color } : {}),
 		...("description" in request ? { description: group.description } : {}),
 		...("displayOrder" in request ? { displayOrder: group.displayOrder } : {}),
@@ -117,7 +117,9 @@ export function placePractice(
 	position: number,
 ): Practice[] {
 	const moving = practices.find((practice) => practice.slug === slug);
-	if (!moving) return practices;
+	if (!moving) {
+		return practices;
+	}
 
 	const sourceGroupSlug = moving.groupSlug ?? null;
 	const inGroup = (candidate: Practice, candidateGroupSlug: string | null) =>

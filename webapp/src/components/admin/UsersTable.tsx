@@ -128,7 +128,9 @@ export function UsersTable({
 	const filteredData = useMemo(
 		() =>
 			users.filter((user) => {
-				if (view.team === "all") return true;
+				if (view.team === "all") {
+					return true;
+				}
 				return user.teams.some((team) => team.id.toString() === view.team);
 			}),
 		[users, view.team],
@@ -185,7 +187,9 @@ export function UsersTable({
 	const lastPage = Math.max(0, table.getPageCount() - 1);
 
 	useEffect(() => {
-		if (!isLoading && view.page > lastPage) onViewChange({ page: lastPage });
+		if (!isLoading && view.page > lastPage) {
+			onViewChange({ page: lastPage });
+		}
 	}, [isLoading, lastPage, onViewChange, view.page]);
 
 	return (
@@ -255,18 +259,16 @@ export function UsersTable({
 								{table
 									.getAllColumns()
 									.filter((column) => column.getCanHide())
-									.map((column) => {
-										return (
-											<DropdownMenuCheckboxItem
-												key={column.id}
-												className="capitalize"
-												checked={column.getIsVisible()}
-												onCheckedChange={(value) => column.toggleVisibility(value)}
-											>
-												{column.id}
-											</DropdownMenuCheckboxItem>
-										);
-									})}
+									.map((column) => (
+										<DropdownMenuCheckboxItem
+											key={column.id}
+											className="capitalize"
+											checked={column.getIsVisible()}
+											onCheckedChange={(value) => column.toggleVisibility(value)}
+										>
+											{column.id}
+										</DropdownMenuCheckboxItem>
+									))}
 							</DropdownMenuGroup>
 						</DropdownMenuContent>
 					</DropdownMenu>

@@ -165,8 +165,11 @@ export function AdminLlmConnectionsTable({
 											aria-label={connection.displayName}
 											onCheckedChange={(checked) => {
 												const stopsWork = !checked && modelsOn(connection) > 0;
-												if (stopsWork) setTurningOff(connection);
-												else onToggleEnabled(connection, checked);
+												if (stopsWork) {
+													setTurningOff(connection);
+												} else {
+													onToggleEnabled(connection, checked);
+												}
 											}}
 										/>
 										{busy && <Spinner className="size-3.5 text-muted-foreground" />}

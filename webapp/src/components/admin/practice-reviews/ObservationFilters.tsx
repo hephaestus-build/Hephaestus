@@ -67,7 +67,10 @@ export function hasObservationFilter(search: ObservationsSearch): boolean {
 	);
 }
 
-type NamedGroup = { slug: string; name: string };
+interface NamedGroup {
+	slug: string;
+	name: string;
+}
 
 export function groupFacetOptions(groups: readonly NamedGroup[] | undefined): FacetOption[] {
 	return (groups ?? []).map((group) => ({ value: group.slug, label: group.name }));

@@ -70,7 +70,9 @@ export const OutlinedEmptyDrawsItsEdge: Story = {
 	play: async ({ canvas }) => {
 		const panelOf = (title: string) => {
 			const panel = canvas.getByText(title).closest('[data-slot="empty"]');
-			if (!panel) throw new Error(`No empty panel around ${title}`);
+			if (!panel) {
+				throw new Error(`No empty panel around ${title}`);
+			}
 			return style(panel);
 		};
 		const outlined = panelOf("Connect a repository to start reviewing work.");
@@ -164,7 +166,9 @@ export const DashedCardDrawsItsEdge: Story = {
 	),
 	play: async ({ canvas }) => {
 		const card = canvas.getByText("Drop a repository here").closest('[data-slot="card"]');
-		if (!card) throw new Error("No card");
+		if (!card) {
+			throw new Error("No card");
+		}
 		await expect(style(card).borderStyle).toBe("dashed");
 		await expect(px(style(card).borderTopWidth)).toBeGreaterThan(0);
 	},
@@ -178,7 +182,9 @@ export const FlushCardDropsItsPadding: Story = {
 	),
 	play: async ({ canvas }) => {
 		const card = canvas.getByText("Rows").closest('[data-slot="card"]');
-		if (!card) throw new Error("No card");
+		if (!card) {
+			throw new Error("No card");
+		}
 		await expect(style(card).paddingTop).toBe("0px");
 	},
 };
@@ -195,7 +201,9 @@ export const BandedHeaderIsFlush: Story = {
 	play: async ({ canvas }) => {
 		const header = canvas.getByText("Reviewing").closest('[data-slot="card-header"]');
 		const card = header?.closest('[data-slot="card"]');
-		if (!header || !card) throw new Error("No card");
+		if (!header || !card) {
+			throw new Error("No card");
+		}
 		await expect(header.getBoundingClientRect().top).toBeCloseTo(
 			card.getBoundingClientRect().top,
 			0,
@@ -235,11 +243,15 @@ export const BorderedTableWithOwnRow: Story = {
 	play: async ({ canvas }) => {
 		// The edge is on the scroll container, not the <table>.
 		const container = canvas.getByRole("table", { name: "Spend" }).parentElement;
-		if (!container) throw new Error("No container");
+		if (!container) {
+			throw new Error("No container");
+		}
 		await expect(px(style(container).borderTopWidth)).toBeGreaterThan(0);
 		const own = canvas.getByText("You").closest("tr");
 		const other = canvas.getByText("Team").closest("tr");
-		if (!own || !other) throw new Error("No rows");
+		if (!own || !other) {
+			throw new Error("No rows");
+		}
 		await expect(style(own).backgroundColor).not.toBe(style(other).backgroundColor);
 	},
 };
@@ -256,7 +268,7 @@ export const BareTextareaHasNoEdgeOrRing: Story = {
 		await userEvent.tab();
 		await expect(field).toHaveFocus();
 		// A zero-width ring still serialises as a shadow layer; what matters is that no layer has extent.
-		const extents = style(field).boxShadow.match(/-?\d*\.?\d+px/g) ?? [];
+		const extents = style(field).boxShadow.match(/-?\d*\.?\d+px/gu) ?? [];
 		await expect(extents.every((length) => px(length) === 0)).toBe(true);
 	},
 };

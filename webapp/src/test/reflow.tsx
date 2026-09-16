@@ -113,7 +113,7 @@ export async function expectNoPanelOverflow(panel: HTMLElement) {
  */
 export async function expectNoOverflowingElement(root: HTMLElement = document.body) {
 	const limit = window.innerWidth + LAYOUT_SLACK_PX;
-	const offenders = Array.from(root.querySelectorAll<HTMLElement>("*"))
+	const offenders = [...root.querySelectorAll<HTMLElement>("*")]
 		.map((element) => ({ element, rect: element.getBoundingClientRect() }))
 		.filter(({ rect }) => rect.width > 0 && (rect.right > limit || rect.left < -LAYOUT_SLACK_PX))
 		.map(
@@ -162,7 +162,7 @@ export async function expectControlOnScreen(control: HTMLElement) {
 /** The last match wins: layers portal in open order, so a confirm raised from a sheet comes after it. */
 export function openDialogPopup(): HTMLElement {
 	const popups = document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]');
-	const popup = popups[popups.length - 1];
+	const popup = [...popups].at(-1);
 	if (popup == null) {
 		throw new Error("No open dialog: expected an element with role dialog or alertdialog.");
 	}
@@ -220,12 +220,16 @@ export async function expectPanelContentInset(panel: HTMLElement) {
 	const box = panel.getBoundingClientRect();
 	// The panel's own border, which its regions sit inside.
 	const BORDER = 2;
-	const flush = Array.from(panel.querySelectorAll<HTMLElement>("*")).filter((element) => {
-		const slot = element.getAttribute("data-slot") ?? "";
-		if (regions.has(slot) || element.tagName === "FORM") return false;
+	const flush = [...panel.querySelectorAll<HTMLElement>("*")].filter((element) => {
+		const slot = element.dataset.slot ?? "";
+		if (regions.has(slot) || element.tagName === "FORM") {
+			return false;
+		}
 		const rect = element.getBoundingClientRect();
 		// Narrow elements are decoration — separators, bleeds — not content that should be inset.
-		if (rect.width < 40) return false;
+		if (rect.width < 40) {
+			return false;
+		}
 		return Math.abs(rect.left - box.left) <= BORDER || Math.abs(box.right - rect.right) <= BORDER;
 	});
 	await expect(

@@ -104,7 +104,7 @@ export const Submitting: Story = {
 	args: { isPending: true, onSubmit: fn() },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByRole("textbox", { name: /Name/ })).toBeDisabled();
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toBeDisabled();
 	},
 };
 
@@ -143,7 +143,7 @@ export const ValidationErrors: Story = {
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
 		await expect(screen.getByText("Name must be at least 3 characters")).toBeVisible();
 		await expect(screen.queryByText("Select at least one trigger event")).not.toBeInTheDocument();
-		await expect(screen.getByRole("textbox", { name: /Name/ })).toHaveAttribute(
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toHaveAttribute(
 			"aria-invalid",
 			"true",
 		);
@@ -157,9 +157,9 @@ export const ValidationAndSubmit: Story = {
 		createSubmit.mockClear();
 		await ValidationErrors.play?.(context);
 
-		await userEvent.type(screen.getByRole("textbox", { name: /Name/ }), "Clear review context");
+		await userEvent.type(screen.getByRole("textbox", { name: /Name/u }), "Clear review context");
 		await userEvent.type(
-			screen.getByRole("textbox", { name: /What to look for/ }),
+			screen.getByRole("textbox", { name: /What to look for/u }),
 			"Check whether the reviewed work explains its purpose.",
 		);
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
@@ -190,13 +190,13 @@ export const ConversationPractice: Story = {
 	play: async () => {
 		await settledDrawerPanel();
 		createSubmit.mockClear();
-		await userEvent.type(screen.getByRole("textbox", { name: /Name/ }), "Helpful discussion");
-		await userEvent.click(screen.getByRole("radio", { name: /Conversation/ }));
+		await userEvent.type(screen.getByRole("textbox", { name: /Name/u }), "Helpful discussion");
+		await userEvent.click(screen.getByRole("radio", { name: /Conversation/u }));
 		// A conversation is settled or it is not, so its one occasion is chosen for the author rather
 		// than left as an empty list that cannot be saved.
 		await expect(screen.getByRole("checkbox", { name: "Discussion settled" })).toBeChecked();
 		await userEvent.type(
-			screen.getByRole("textbox", { name: /What to look for/ }),
+			screen.getByRole("textbox", { name: /What to look for/u }),
 			"Check whether the conversation stays constructive.",
 		);
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));

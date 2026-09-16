@@ -14,7 +14,9 @@ export function filedUnder<TOptions extends object>(
  * filtering by key narrows which mutations come back, not what they carry.
  */
 function pathParam(variables: unknown, field: string): unknown {
-	if (!isRecord(variables) || !isRecord(variables.path)) return undefined;
+	if (!isRecord(variables) || !isRecord(variables.path)) {
+		return undefined;
+	}
 	return variables.path[field];
 }
 

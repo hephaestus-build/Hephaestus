@@ -148,9 +148,9 @@ function AdminInstanceUsagePage() {
 				isCurrentMonth={isCurrentMonth}
 				isPending={updateBudget.isPending}
 				serverError={
-					updateBudget.error != null
-						? problemDetailOf(updateBudget.error, "Couldn't save the budget")
-						: null
+					updateBudget.error == null
+						? null
+						: problemDetailOf(updateBudget.error, "Couldn't save the budget")
 				}
 				onOpenChange={(open) => {
 					if (!open) {

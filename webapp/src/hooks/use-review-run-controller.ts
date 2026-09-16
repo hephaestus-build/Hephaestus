@@ -58,12 +58,16 @@ interface PagedQuery<T> {
  * caller knows which, so it passes `stillRunning` in.
  */
 function toSectionState<T>(query: PagedQuery<T>, stillRunning: boolean): ReviewSectionState<T> {
-	if (query.isLoading) return { status: "loading" };
+	if (query.isLoading) {
+		return { status: "loading" };
+	}
 	if (query.isError) {
 		return { status: "error", error: query.error, onRetry: () => void query.refetch() };
 	}
 	const items = query.data?.content ?? [];
-	if (stillRunning && items.length === 0) return { status: "pending" };
+	if (stillRunning && items.length === 0) {
+		return { status: "pending" };
+	}
 	return { status: "ready", items, total: query.data?.page?.totalElements ?? 0 };
 }
 
@@ -100,7 +104,9 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 	// Processing finishes after execution. Reload the outputs when either stage settles, including
 	// retries of a completed review; its previously cached feedback can otherwise stay stale.
 	useEffect(() => {
-		if (!jobQuery.data || runIsActive || jobQuery.data.deliveryStatus === "PENDING") return;
+		if (!jobQuery.data || runIsActive || jobQuery.data.deliveryStatus === "PENDING") {
+			return;
+		}
 		void queryClient.invalidateQueries({
 			queryKey: listPracticeReviewObservationsQueryKey({
 				path: { workspaceSlug },

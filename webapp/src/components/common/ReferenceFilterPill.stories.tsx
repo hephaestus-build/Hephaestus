@@ -32,7 +32,7 @@ export const ClearsTheFilter: Story = {
 	args: { name: "Grace Hopper" },
 	play: async ({ canvas, args }) => {
 		await userEvent.click(
-			canvas.getByRole("button", { name: /clear actor filter \(Grace Hopper\)/i }),
+			canvas.getByRole("button", { name: /clear actor filter \(Grace Hopper\)/iu }),
 		);
 		await expect(args.onClear).toHaveBeenCalledOnce();
 	},

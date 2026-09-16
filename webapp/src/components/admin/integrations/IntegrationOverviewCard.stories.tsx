@@ -6,7 +6,7 @@ import { minutesBefore } from "@/components/common/story-clock";
 
 import { IntegrationOverviewCard } from "./IntegrationOverviewCard";
 
-const SYNC_INTERVAL_SECONDS = 3_600;
+const SYNC_INTERVAL_SECONDS = 3600;
 
 const status: ConnectionSyncStatus = {
 	connectionId: 7,
@@ -58,7 +58,7 @@ export const Connected: Story = {};
 export const Syncing: Story = {
 	args: { status: { ...status, health: "FAILED", activeJob: runningJob } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByLabelText(/connection health/i)).toHaveTextContent("Syncing");
+		await expect(canvas.getByLabelText(/connection health/iu)).toHaveTextContent("Syncing");
 	},
 };
 
@@ -72,7 +72,7 @@ export const WithErroredResources: Story = {
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText("3 errored");
-		canvas.getByText(/of 12 resources/i);
+		canvas.getByText(/of 12 resources/iu);
 	},
 };
 
@@ -111,8 +111,8 @@ export const UnknownCadence: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("button", { name: /stale/i })).not.toBeInTheDocument();
-		canvas.getByText(/ago$/);
+		await expect(canvas.queryByRole("button", { name: /stale/iu })).not.toBeInTheDocument();
+		canvas.getByText(/ago$/u);
 	},
 };
 
@@ -127,7 +127,7 @@ export const NeverSynced: Story = {
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText("Never synced");
-		canvas.getByText(/no events received yet/i);
+		canvas.getByText(/no events received yet/iu);
 	},
 };
 
@@ -139,9 +139,9 @@ export const StatusError: Story = {
 		onRetryStatus: fn(),
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/couldn't load sync status/i);
-		canvas.getByText(/github api is unavailable/i);
-		await userEvent.click(canvas.getByRole("button", { name: /retry/i }));
+		canvas.getByText(/couldn't load sync status/iu);
+		canvas.getByText(/github api is unavailable/iu);
+		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetryStatus).toHaveBeenCalledTimes(1);
 	},
 };
@@ -154,8 +154,8 @@ export const StatusErrorForbidden: Story = {
 		onRetryStatus: fn(),
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/not an admin of this workspace/i);
-		await expect(canvas.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+		canvas.getByText(/not an admin of this workspace/iu);
+		await expect(canvas.queryByRole("button", { name: /retry/iu })).not.toBeInTheDocument();
 	},
 };
 
@@ -172,12 +172,12 @@ export const CredentialUnreadable: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/the stored token can't be read/i)).toBeVisible();
+		await expect(canvas.getByText(/the stored token can't be read/iu)).toBeVisible();
 		// The overview does not know the provider's door, so it points at the page that does.
-		await expect(canvas.getByText(/the connection's page says how to replace it/i)).toBeVisible();
+		await expect(canvas.getByText(/the connection's page says how to replace it/iu)).toBeVisible();
 		// Neither a health verdict nor a sync trigger beside a token nothing can use.
-		await expect(canvas.queryByText(/healthy/i)).not.toBeInTheDocument();
-		await expect(canvas.queryByRole("button", { name: /sync now/i })).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/healthy/iu)).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("button", { name: /sync now/iu })).not.toBeInTheDocument();
 	},
 };
 
@@ -193,9 +193,9 @@ export const ConnectionSuspended: Story = {
 		status: { ...status, connectionState: "SUSPENDED", health: "SUSPENDED" },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/syncing is paused/i);
-		canvas.getByText(/suspended by the provider/i);
-		await expect(canvas.queryByText(/connection is suspended/i)).not.toBeInTheDocument();
+		canvas.getByText(/syncing is paused/iu);
+		canvas.getByText(/suspended by the provider/iu);
+		await expect(canvas.queryByText(/connection is suspended/iu)).not.toBeInTheDocument();
 	},
 };
 
@@ -211,8 +211,8 @@ export const ConnectionPending: Story = {
 		status: undefined,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/finishing setup/i);
-		await expect(canvas.queryByText(/slack is pending/i)).not.toBeInTheDocument();
+		canvas.getByText(/finishing setup/iu);
+		await expect(canvas.queryByText(/slack is pending/iu)).not.toBeInTheDocument();
 	},
 };
 
@@ -228,8 +228,8 @@ export const ConnectionUninstalled: Story = {
 		status: undefined,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/the app was removed/i);
-		await expect(canvas.queryByText(/slack is uninstalled/i)).not.toBeInTheDocument();
+		canvas.getByText(/the app was removed/iu);
+		await expect(canvas.queryByText(/slack is uninstalled/iu)).not.toBeInTheDocument();
 	},
 };
 
@@ -239,8 +239,8 @@ export const ScmNotConnected: Story = {
 		status: undefined,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/source control is selected when the workspace is created/i);
-		await expect(canvas.queryByRole("link", { name: /connect/i })).not.toBeInTheDocument();
+		canvas.getByText(/source control is selected when the workspace is created/iu);
+		await expect(canvas.queryByRole("link", { name: /connect/iu })).not.toBeInTheDocument();
 	},
 };
 

@@ -28,7 +28,7 @@ import { SlackChannelRow } from "./slack-channels/SlackChannelRow";
 import { swallow } from "./swallow";
 import { TableRowsSkeleton } from "./TableRowsSkeleton";
 
-export type { SlackConsentState };
+export type { SlackConsentState } from "./slack-channels/consent-terms";
 
 export type SlackChannelCandidate = ApiSlackChannelCandidate;
 
@@ -55,7 +55,7 @@ export interface AdminSlackChannelsSettingsProps {
 	 * but inert: it explains what monitoring does and points at the connect card above. */
 	hasSlackConnection: boolean;
 	channels: SlackMonitoredChannel[];
-	channelCandidates?: SlackChannelCandidate[];
+	channelCandidates?: readonly SlackChannelCandidate[];
 	isLoading: boolean;
 	/** The channel list query failed — show a retry panel instead of the empty state. */
 	isError?: boolean;
@@ -78,16 +78,19 @@ export interface AdminSlackChannelsSettingsProps {
 	onRemoveChannel: (input: { slackChannelId: string; reason?: string }) => Promise<void> | void;
 }
 
+const NO_CANDIDATES: readonly SlackChannelCandidate[] = [];
+
 /**
  * Admin surface to allow-list Slack channels and drive their per-channel consent lifecycle
  * (PENDING → ACTIVE ⇄ PAUSED → REVOKED + erase). Pure: all data + mutations live in the route
  * container.
  */
+
 export function AdminSlackChannelsSettings({
 	workspaceSlug,
 	hasSlackConnection,
 	channels,
-	channelCandidates = [],
+	channelCandidates = NO_CANDIDATES,
 	isLoading,
 	isError = false,
 	error,
@@ -134,7 +137,78 @@ export function AdminSlackChannelsSettings({
 						</p>
 					)}
 
-					{!hasSlackConnection ? (
+					{hasSlackConnection ? (
+						isLoading ? (
+							<Table>
+								<ChannelsTableHeader />
+								<TableRowsSkeleton columns={["w-32", "w-16", "w-12", "w-20", null]} rows={3} />
+							</Table>
+						) : isError ? (
+							<QueryErrorAlert
+								error={error}
+								title="We couldn't load the monitored channels"
+								onRetry={onRetry}
+							/>
+						) : hasChannels ? (
+							<Table>
+								<ChannelsTableHeader />
+								<TableBody>
+									{channels.map((channel) => (
+										<SlackChannelRow
+											key={channel.slackChannelId}
+											channel={channel}
+											onActivate={setActivateChannel}
+											onPause={(c) =>
+												swallow(
+													onUpdateConsent({
+														slackChannelId: c.slackChannelId,
+														consentState: "PAUSED",
+													}),
+												)
+											}
+											onResume={(c) =>
+												swallow(
+													onUpdateConsent({
+														slackChannelId: c.slackChannelId,
+														consentState: "ACTIVE",
+													}),
+												)
+											}
+											onRemove={setRemoveChannel}
+											onSetUpAgain={(c) =>
+												swallow(
+													onRegisterChannel({
+														slackChannelId: c.slackChannelId,
+														channelName: c.channelName,
+													}),
+												)
+											}
+											onViewHistory={setHistoryChannel}
+										/>
+									))}
+								</TableBody>
+							</Table>
+						) : (
+							<Empty>
+								<EmptyHeader>
+									<EmptyMedia variant="icon">
+										<RadioIcon />
+									</EmptyMedia>
+									<EmptyTitle>No channels monitored yet</EmptyTitle>
+									<EmptyDescription>
+										Allow-list a Slack channel to start generating AI practice feedback from its
+										conversations. You choose exactly when monitoring begins.
+									</EmptyDescription>
+								</EmptyHeader>
+								<EmptyContent>
+									<Button size="sm" onClick={() => setAddOpen(true)}>
+										<PlusIcon className="size-4" />
+										Add channel
+									</Button>
+								</EmptyContent>
+							</Empty>
+						)
+					) : (
 						<Empty>
 							<EmptyHeader>
 								<EmptyMedia variant="icon">
@@ -146,75 +220,6 @@ export function AdminSlackChannelsSettings({
 									Slack integration card above, then allow-list the channels you want feedback from.
 								</EmptyDescription>
 							</EmptyHeader>
-						</Empty>
-					) : isLoading ? (
-						<Table>
-							<ChannelsTableHeader />
-							<TableRowsSkeleton columns={["w-32", "w-16", "w-12", "w-20", null]} rows={3} />
-						</Table>
-					) : isError ? (
-						<QueryErrorAlert
-							error={error}
-							title="We couldn't load the monitored channels"
-							onRetry={onRetry}
-						/>
-					) : hasChannels ? (
-						<Table>
-							<ChannelsTableHeader />
-							<TableBody>
-								{channels.map((channel) => (
-									<SlackChannelRow
-										key={channel.slackChannelId}
-										channel={channel}
-										onActivate={setActivateChannel}
-										onPause={(c) =>
-											swallow(
-												onUpdateConsent({
-													slackChannelId: c.slackChannelId,
-													consentState: "PAUSED",
-												}),
-											)
-										}
-										onResume={(c) =>
-											swallow(
-												onUpdateConsent({
-													slackChannelId: c.slackChannelId,
-													consentState: "ACTIVE",
-												}),
-											)
-										}
-										onRemove={setRemoveChannel}
-										onSetUpAgain={(c) =>
-											swallow(
-												onRegisterChannel({
-													slackChannelId: c.slackChannelId,
-													channelName: c.channelName,
-												}),
-											)
-										}
-										onViewHistory={setHistoryChannel}
-									/>
-								))}
-							</TableBody>
-						</Table>
-					) : (
-						<Empty>
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<RadioIcon />
-								</EmptyMedia>
-								<EmptyTitle>No channels monitored yet</EmptyTitle>
-								<EmptyDescription>
-									Allow-list a Slack channel to start generating AI practice feedback from its
-									conversations. You choose exactly when monitoring begins.
-								</EmptyDescription>
-							</EmptyHeader>
-							<EmptyContent>
-								<Button size="sm" onClick={() => setAddOpen(true)}>
-									<PlusIcon className="size-4" />
-									Add channel
-								</Button>
-							</EmptyContent>
 						</Empty>
 					)}
 				</CardContent>
@@ -230,7 +235,9 @@ export function AdminSlackChannelsSettings({
 			<ActivateChannelDialog
 				channel={activateChannel}
 				onOpenChange={(open) => {
-					if (!open) setActivateChannel(null);
+					if (!open) {
+						setActivateChannel(null);
+					}
 				}}
 				onConfirm={(c) =>
 					onUpdateConsent({ slackChannelId: c.slackChannelId, consentState: "ACTIVE" })
@@ -240,7 +247,9 @@ export function AdminSlackChannelsSettings({
 			<RemoveChannelAlertDialog
 				channel={removeChannel}
 				onOpenChange={(open) => {
-					if (!open) setRemoveChannel(null);
+					if (!open) {
+						setRemoveChannel(null);
+					}
 				}}
 				onConfirm={onRemoveChannel}
 			/>
@@ -249,7 +258,9 @@ export function AdminSlackChannelsSettings({
 				workspaceSlug={workspaceSlug}
 				channel={historyChannel}
 				onOpenChange={(open) => {
-					if (!open) setHistoryChannel(null);
+					if (!open) {
+						setHistoryChannel(null);
+					}
 				}}
 			/>
 		</>

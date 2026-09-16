@@ -10,11 +10,13 @@ import { server } from "@/mocks/server";
 import { useFeatureFlags } from "./hooks";
 
 function wrapper(queryClient: QueryClient) {
-	return ({ children }: { children: ReactNode }) => (
-		<QueryClientProvider client={queryClient}>
-			<AuthProvider>{children}</AuthProvider>
-		</QueryClientProvider>
-	);
+	return function AuthWrapper({ children }: { children: ReactNode }) {
+		return (
+			<QueryClientProvider client={queryClient}>
+				<AuthProvider>{children}</AuthProvider>
+			</QueryClientProvider>
+		);
+	};
 }
 
 describe("useFeatureFlags", () => {

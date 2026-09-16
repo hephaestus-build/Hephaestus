@@ -27,7 +27,7 @@ export const ASSERT_FUNCTION_NAMES = [
 	"**.findAllBy*",
 ];
 
-const escaped = (literal: string) => literal.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+const escaped = (literal: string) => literal.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
 
 export const asRegExp = (glob: string) =>
 	new RegExp(
@@ -35,13 +35,18 @@ export const asRegExp = (glob: string) =>
 			.split("**")
 			.map((crossing) => crossing.split("*").map(escaped).join("[^.]*"))
 			.join(".*")}$`,
+		"u",
 	);
 
 const configuredNames = (options: Readonly<Options>) => {
 	const [first] = options;
-	if (typeof first !== "object" || first === null || Array.isArray(first)) return undefined;
+	if (typeof first !== "object" || first === null || Array.isArray(first)) {
+		return;
+	}
 	const names = first.assertFunctionNames;
-	if (!Array.isArray(names)) return undefined;
+	if (!Array.isArray(names)) {
+		return;
+	}
 	return names.filter((name) => typeof name === "string");
 };
 
@@ -54,7 +59,7 @@ const delegatesToStoryPlay = (callee: ESTree.Node) =>
 	callee.type === "MemberExpression" &&
 	memberName(callee) === "play" &&
 	callee.object.type === "Identifier" &&
-	/^[A-Z]/.test(callee.object.name);
+	/^[A-Z]/u.test(callee.object.name);
 
 export const playMustAssert = defineRule({
 	meta: {
@@ -88,16 +93,24 @@ export const playMustAssert = defineRule({
 
 		return {
 			Property(node) {
-				if (playFunction(node)) plays.push({ key: node.key, asserted: false });
+				if (playFunction(node)) {
+					plays.push({ key: node.key, asserted: false });
+				}
 			},
 			"Property:exit"(node) {
-				if (!playFunction(node)) return;
+				if (!playFunction(node)) {
+					return;
+				}
 				const play = plays.pop();
-				if (play && !play.asserted) context.report({ node: play.key, messageId: "noAssertion" });
+				if (play && !play.asserted) {
+					context.report({ node: play.key, messageId: "noAssertion" });
+				}
 			},
 			CallExpression(node) {
 				const play = plays.at(-1);
-				if (!play || play.asserted) return;
+				if (!play || play.asserted) {
+					return;
+				}
 				if (delegatesToStoryPlay(node.callee)) {
 					play.asserted = true;
 					return;

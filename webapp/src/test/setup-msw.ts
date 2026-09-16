@@ -20,13 +20,12 @@ client.setConfig({ baseUrl: "http://localhost:8080" });
 
 // jsdom has no ResizeObserver; Base UI's anchor positioning observes elements to keep a popup
 // pinned to its trigger. A no-op stub is enough — no assertion depends on the measurements.
-if (typeof globalThis.ResizeObserver === "undefined") {
-	globalThis.ResizeObserver = class ResizeObserver {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
+// oxlint-disable-next-line typescript/no-unnecessary-condition -- lib.dom declares it, jsdom does not ship it
+globalThis.ResizeObserver ??= class ResizeObserver {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+};
 
 // jsdom has no `matchMedia`; the toaster asks it for `prefers-reduced-motion` on mount.
 if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {

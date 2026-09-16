@@ -21,7 +21,7 @@ function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnch
 	if (!isSafeLegalHref(href)) {
 		return <span className={className}>{children}</span>;
 	}
-	const isExternal = /^https?:/i.test(href);
+	const isExternal = /^https?:/iu.test(href);
 	return (
 		<a
 			href={href}
@@ -35,7 +35,9 @@ function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnch
 }
 
 function SafeImage({ src, alt, className }: ImgHTMLAttributes<HTMLImageElement>) {
-	if (!isSafeLegalImageSrc(src)) return null;
+	if (!isSafeLegalImageSrc(src)) {
+		return null;
+	}
 	return <img src={src} alt={alt ?? ""} className={className} />;
 }
 
@@ -76,13 +78,15 @@ interface LegalContentProps {
 
 function LegalContent({ page, profile, resolver }: LegalContentProps) {
 	const [resolved, setResolved] = useState<ResolvedLegalContent | null>(null);
-	const [error, setError] = useState<Error | null>(null);
+	const [loadError, setLoadError] = useState<Error | null>(null);
 
 	useEffect(() => {
 		const controller = new AbortController();
 		resolver(page, { signal: controller.signal, profile })
 			.then((content) => {
-				if (controller.signal.aborted) return;
+				if (controller.signal.aborted) {
+					return;
+				}
 				setResolved(content);
 				if (content.source === "disclaimer" && !warnedDisclaimer.has(page)) {
 					warnedDisclaimer.add(page);
@@ -92,10 +96,14 @@ function LegalContent({ page, profile, resolver }: LegalContentProps) {
 					);
 				}
 			})
-			.catch((err: unknown) => {
-				if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError"))
+			.catch((error: unknown) => {
+				if (
+					controller.signal.aborted ||
+					(error instanceof DOMException && error.name === "AbortError")
+				) {
 					return;
-				setError(err instanceof Error ? err : new Error("Failed to load legal content"));
+				}
+				setLoadError(error instanceof Error ? error : new Error("Failed to load legal content"));
 			});
 		return () => controller.abort();
 	}, [page, profile, resolver]);
@@ -111,7 +119,7 @@ function LegalContent({ page, profile, resolver }: LegalContentProps) {
 				</div>
 			) : null}
 
-			{error ? (
+			{loadError ? (
 				<div
 					role="alert"
 					className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"

@@ -76,7 +76,9 @@ export function ProductFeedbackDialog({
 	const copy = FEEDBACK_KIND_COPY[kind];
 	const remaining = MESSAGE_MAX_LENGTH - message.length;
 	const submit = async () => {
-		if (!message.trim() || isSubmitting) return;
+		if (!message.trim() || isSubmitting) {
+			return;
+		}
 		const accepted = await onSubmit({
 			kind,
 			message: message.trim(),

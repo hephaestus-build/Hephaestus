@@ -17,7 +17,9 @@ export interface ActiveJobProgressProps {
  * first batch lands), and that path stays a spinner rather than inventing a denominator.
  */
 export function ActiveJobProgress({ job }: ActiveJobProgressProps) {
-	if (!job) return null;
+	if (!job) {
+		return null;
+	}
 
 	const processed = job.itemsProcessed ?? 0;
 	const total = job.itemsTotal;

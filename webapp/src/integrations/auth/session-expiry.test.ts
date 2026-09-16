@@ -58,7 +58,7 @@ describe("handlePossibleSessionExpiry", () => {
 		await flush();
 		expect(refreshMock).toHaveBeenCalledOnce();
 		expect(assigned).toHaveLength(0);
-		expect(invalidate).toHaveBeenCalled();
+		expect(invalidate).toHaveBeenCalledWith();
 	});
 
 	it("logs out to /login with sanitised returnTo when the 401 cannot be refreshed", async () => {

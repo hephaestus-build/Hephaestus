@@ -46,8 +46,8 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText(/reset and recalculate leagues/i)).not.toBeInTheDocument();
-		await canvas.findByRole("button", { name: /^delete workspace$/i });
+		await expect(canvas.queryByText(/reset and recalculate leagues/iu)).not.toBeInTheDocument();
+		await canvas.findByRole("button", { name: /^delete workspace$/iu });
 	},
 };
 

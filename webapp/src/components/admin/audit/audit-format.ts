@@ -13,8 +13,12 @@ const HIGH_RISK_EVENTS = new Set([
 ]);
 
 export function eventSeverity(eventType: string, result: string): AuditSeverity {
-	if (result === "FAILURE") return "error";
-	if (HIGH_RISK_EVENTS.has(eventType)) return "warning";
+	if (result === "FAILURE") {
+		return "error";
+	}
+	if (HIGH_RISK_EVENTS.has(eventType)) {
+		return "warning";
+	}
 	return "info";
 }
 
@@ -54,7 +58,9 @@ export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
 
 export function eventLabel(eventType: string): string {
 	const known = (EVENT_TYPE_LABELS as Record<string, string | undefined>)[eventType];
-	if (known) return known;
+	if (known) {
+		return known;
+	}
 	return humanizeToken(eventType);
 }
 
@@ -63,26 +69,38 @@ export function resultLabel(result: string): string {
 }
 
 export function humanizeDetails(details: string | undefined): string | null {
-	if (!details) return null;
+	if (!details) {
+		return null;
+	}
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(details);
 	} catch {
 		return details;
 	}
-	if (!isRecord(parsed)) return String(parsed);
+	if (!isRecord(parsed)) {
+		return String(parsed);
+	}
 	if ("from" in parsed || "to" in parsed) {
 		return `${stringify(parsed.from)} → ${stringify(parsed.to)}`;
 	}
 	const entries = Object.entries(parsed);
-	if (entries.length === 0) return null;
+	if (entries.length === 0) {
+		return null;
+	}
 	return entries.map(([k, v]) => `${k}: ${stringify(v)}`).join(", ");
 }
 
 function stringify(value: unknown): string {
-	if (value === null || value === undefined) return "—";
-	if (typeof value === "string") return value;
-	if (typeof value === "number" || typeof value === "boolean") return String(value);
+	if (value === null || value === undefined) {
+		return "—";
+	}
+	if (typeof value === "string") {
+		return value;
+	}
+	if (typeof value === "number" || typeof value === "boolean") {
+		return String(value);
+	}
 	// Objects and arrays: `String` would give "[object Object]" or a bare comma-joined run.
 	return JSON.stringify(value);
 }

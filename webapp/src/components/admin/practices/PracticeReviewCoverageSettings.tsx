@@ -148,15 +148,19 @@ export function PracticeReviewCoverageSettings({
 		}
 	};
 	const review = async () => {
-		if (conflicted) return;
+		if (conflicted) {
+			return;
+		}
 		const scope = draft;
 		const etag = sourceEtag;
 		setWorkflow({ status: "checking" });
 		try {
 			const result = await preview(scope);
-			if (result.widens)
+			if (result.widens) {
 				setWorkflow({ status: "confirm", preview: result, scope, sourceEtag: etag });
-			else await save(scope, etag);
+			} else {
+				await save(scope, etag);
+			}
 		} catch {
 			setWorkflow({ status: "error", action: "preview" });
 		}
@@ -432,7 +436,9 @@ function withPersistedOptions<TValue extends string | number>(
 	unknown: (value: TValue) => FacetOption<TValue>,
 	unavailable: (value: TValue) => FacetOption<TValue>,
 ): FacetOption<TValue>[] {
-	if (state.status !== "ready") return selected.map(unknown);
+	if (state.status !== "ready") {
+		return selected.map(unknown);
+	}
 	return [
 		...state.options,
 		...selected
@@ -601,7 +607,9 @@ function BaseBranchEditor({
 	const descriptionId = `${id}-description`;
 	const errorId = `${id}-error`;
 	const add = () => {
-		if (trimmed.length === 0 || duplicate) return;
+		if (trimmed.length === 0 || duplicate) {
+			return;
+		}
 		onChange([...values, trimmed]);
 		setDraft("");
 	};

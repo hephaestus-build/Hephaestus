@@ -69,7 +69,7 @@ describe("WorkspaceLlmConnectionFormDialog", () => {
 		const onUpdate = renderDialog();
 		fireEvent.click(screen.getByRole("switch", { name: "Active" }));
 		screen.getByText("All workspace models will stop immediately");
-		fireEvent.click(screen.getByRole("checkbox", { name: /remove stored api key/i }));
+		fireEvent.click(screen.getByRole("checkbox", { name: /remove stored api key/iu }));
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onUpdate).toHaveBeenCalledWith(
 			connection.id,

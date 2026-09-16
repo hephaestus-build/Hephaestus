@@ -347,7 +347,9 @@ function AdminCuratedCatalogPage() {
 						const practice = catalogQuery.data.practices.find(
 							(candidate) => candidate.slug === practiceSlug,
 						);
-						if (!practice) return;
+						if (!practice) {
+							return;
+						}
 						const optimistic = placeCuratedPractice(
 							catalogQuery.data,
 							practiceSlug,

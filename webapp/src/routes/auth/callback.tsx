@@ -24,7 +24,9 @@ function AuthCallbackPage() {
 	const navigate = useNavigate();
 
 	useEffect(() => {
-		if (isLoading) return;
+		if (isLoading) {
+			return;
+		}
 		if (isError) {
 			void navigate({ to: "/login", search: { returnTo: safeReturnTo(returnTo) }, replace: true });
 			return;

@@ -36,23 +36,23 @@ async function renderContainer() {
 }
 
 function deleteButton() {
-	return screen.getByRole("button", { name: /^delete workspace$/i });
+	return screen.getByRole("button", { name: /^delete workspace$/iu });
 }
 
 /** Waits out the permission check that gates the owner-only control. */
 function findDeleteButton() {
-	return screen.findByRole("button", { name: /^delete workspace$/i }, WAIT);
+	return screen.findByRole("button", { name: /^delete workspace$/iu }, WAIT);
 }
 
 async function openDialog() {
 	await findDeleteButton();
 	fireEvent.click(deleteButton());
-	return screen.findByLabelText(/to confirm/i);
+	return screen.findByLabelText(/to confirm/iu);
 }
 
 function confirmButton() {
 	return within(screen.getByRole("alertdialog")).getByRole("button", {
-		name: /^delete workspace$/i,
+		name: /^delete workspace$/iu,
 	});
 }
 
@@ -137,8 +137,8 @@ describe("AdminDangerZoneSettings", () => {
 		);
 		await renderContainer();
 
-		expect(screen.queryByText(/only the workspace owner/i)).toBeNull();
-		screen.getByText(/checking your permissions/i);
+		expect(screen.queryByText(/only the workspace owner/iu)).toBeNull();
+		screen.getByText(/checking your permissions/iu);
 
 		resolveRole();
 		await findDeleteButton();
@@ -157,18 +157,18 @@ describe("AdminDangerZoneSettings", () => {
 		);
 		await renderContainer();
 
-		const retry = await screen.findByRole("button", { name: /^retry$/i }, WAIT);
+		const retry = await screen.findByRole("button", { name: /^retry$/iu }, WAIT);
 		fireEvent.click(retry);
 
 		await findDeleteButton();
-		expect(screen.queryByRole("button", { name: /^retry$/i })).toBeNull();
+		expect(screen.queryByRole("button", { name: /^retry$/iu })).toBeNull();
 	});
 
 	it("hides deletion from a non-owner admin", async () => {
 		server.use(membershipHandler("ADMIN"));
 		await renderContainer();
 
-		await screen.findByText(/only the workspace owner/i, undefined, WAIT);
-		expect(screen.queryByRole("button", { name: /^delete workspace$/i })).toBeNull();
+		await screen.findByText(/only the workspace owner/iu, undefined, WAIT);
+		expect(screen.queryByRole("button", { name: /^delete workspace$/iu })).toBeNull();
 	});
 });

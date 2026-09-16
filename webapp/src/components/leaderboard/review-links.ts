@@ -6,8 +6,10 @@ export function reviewLinkUrl(value: string | undefined) {
 }
 
 export async function copyReviewLinks(links: readonly { label: string; url: string }[]) {
-	if (links.length === 0) throw new Error("No review links to copy");
-	const clipboard = navigator.clipboard;
+	if (links.length === 0) {
+		throw new Error("No review links to copy");
+	}
+	const { clipboard } = navigator;
 	const plainText = links.map(({ url }) => url).join("\n");
 
 	if (typeof ClipboardItem !== "undefined") {

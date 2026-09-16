@@ -7,7 +7,9 @@ export function SkipToContent() {
 				const target = event.currentTarget.ownerDocument.getElementById(
 					event.currentTarget.hash.slice(1),
 				);
-				if (!target) return;
+				if (!target) {
+					return;
+				}
 				event.preventDefault();
 				target.focus();
 			}}

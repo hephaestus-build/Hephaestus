@@ -71,8 +71,12 @@ function GroupDetailsForm({
 		trimmed === group?.name && icon === (group.icon ?? null) && color === (group.color ?? null);
 
 	const saveDetails = async () => {
-		if (unchanged) return onOpenChange(false);
-		if (await onSubmit({ name: trimmed, icon, color })) onOpenChange(false);
+		if (unchanged) {
+			return onOpenChange(false);
+		}
+		if (await onSubmit({ name: trimmed, icon, color })) {
+			onOpenChange(false);
+		}
 	};
 
 	return (
@@ -105,8 +109,12 @@ function GroupDetailsForm({
 								icon={icon}
 								color={color}
 								onChange={(patch) => {
-									if (patch.icon !== undefined) setIcon(patch.icon);
-									if (patch.color !== undefined) setColor(patch.color);
+									if (patch.icon !== undefined) {
+										setIcon(patch.icon);
+									}
+									if (patch.color !== undefined) {
+										setColor(patch.color);
+									}
 								}}
 								disabled={pending}
 							/>

@@ -125,13 +125,13 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 												href={`https://github.com/hephaestus-build/Hephaestus/commit/${buildInfo.commit}`}
 												target="_blank"
 												rel="noopener noreferrer"
-												aria-label={`View commit ${buildInfo.commit.substring(0, 7)}`}
+												aria-label={`View commit ${buildInfo.commit.slice(0, 7)}`}
 												className="flex items-center gap-1 transition-colors hover:text-foreground"
 											/>
 										}
 									>
 										<GitCommitIcon size={12} />
-										<span>{buildInfo.commit.substring(0, 7)}</span>
+										<span>{buildInfo.commit.slice(0, 7)}</span>
 									</TooltipTrigger>
 									<TooltipContent>{buildInfo.commit}</TooltipContent>
 								</Tooltip>

@@ -46,7 +46,7 @@ describe("LoginProviderFormDialog", () => {
 		);
 
 		expect(screen.queryByLabelText("Instance base URL")).toBeNull();
-		screen.getByText(/Use the same Slack app client ID and secret/);
+		screen.getByText(/Use the same Slack app client ID and secret/u);
 		fireEvent.change(screen.getByLabelText("Client ID"), { target: { value: "slack-client" } });
 		fireEvent.change(screen.getByLabelText("Client secret"), {
 			target: { value: "slack-secret" },
@@ -76,7 +76,7 @@ describe("LoginProviderFormDialog", () => {
 
 		// The type select must expose OUTLINE; without it the Outline login provider is uncreatable.
 		fireEvent.click(screen.getByRole("combobox", { name: "Provider type" }));
-		screen.getByRole("option", { name: /Outline/i });
+		screen.getByRole("option", { name: /Outline/iu });
 	});
 
 	it("treats Outline like GitLab: it carries an instance base URL, and submits it", () => {
@@ -123,8 +123,8 @@ describe("LoginProviderFormDialog", () => {
 			/>,
 		);
 
-		screen.getByText(/nobody signs in to Hephaestus with it/i);
-		screen.getByText(/Settings → Applications/);
+		screen.getByText(/nobody signs in to Hephaestus with it/iu);
+		screen.getByText(/Settings → Applications/u);
 		screen.getByText(outlineProvider.redirectUri);
 	});
 });

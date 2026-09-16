@@ -35,7 +35,9 @@ function renderContainer({ livePushUnavailable = false } = {}) {
 
 function OutlineIntegrationTestContainer() {
 	const outline = useOutlineIntegration("demo");
-	if (outline.isLoading) return <Skeleton className="h-48 w-full" />;
+	if (outline.isLoading) {
+		return <Skeleton className="h-48 w-full" />;
+	}
 	if (outline.connectionsError) {
 		return (
 			<QueryErrorAlert
@@ -191,23 +193,23 @@ describe("Outline integration — connect happy path", () => {
 
 		renderContainer();
 
-		await screen.findByLabelText(/api token/i);
-		expect(screen.queryByLabelText(/allow-list/i)).toBeNull();
-		expect(screen.queryByLabelText(/collections/i)).toBeNull();
+		await screen.findByLabelText(/api token/iu);
+		expect(screen.queryByLabelText(/allow-list/iu)).toBeNull();
+		expect(screen.queryByLabelText(/collections/iu)).toBeNull();
 
 		// The server URL starts EMPTY: a prefilled cloud URL would send a self-hoster's token to
 		// Outline Cloud if they only pasted the token. Connect stays disabled until it is typed.
-		const serverUrl = screen.getByLabelText<HTMLInputElement>(/server url/i);
+		const serverUrl = screen.getByLabelText<HTMLInputElement>(/server url/iu);
 		expect(serverUrl.value).toBe("");
-		fireEvent.change(screen.getByLabelText(/api token/i), {
+		fireEvent.change(screen.getByLabelText(/api token/iu), {
 			target: { value: "ol_api_secret" },
 		});
 		expect(
-			screen.getByRole<HTMLButtonElement>("button", { name: /connect outline/i }).disabled,
+			screen.getByRole<HTMLButtonElement>("button", { name: /connect outline/iu }).disabled,
 		).toBe(true);
 
 		fireEvent.change(serverUrl, { target: { value: "https://wiki.acme.dev" } });
-		fireEvent.click(screen.getByRole("button", { name: /connect outline/i }));
+		fireEvent.click(screen.getByRole("button", { name: /connect outline/iu }));
 
 		await waitFor(() =>
 			expect(connectBody).toStrictEqual({
@@ -221,8 +223,8 @@ describe("Outline integration — connect happy path", () => {
 
 		// The invalidated connections query refetches → the card flips to connected, showing written
 		// copy ("Outline connected") and the Sync control, not a raw status token.
-		await screen.findByText(/outline connected/i);
-		await screen.findByRole("button", { name: /sync now/i });
+		await screen.findByText(/outline connected/iu);
+		await screen.findByRole("button", { name: /sync now/iu });
 		expect(toast.success).toHaveBeenCalledWith("Outline connected");
 	});
 });
@@ -259,14 +261,14 @@ describe("Outline integration — add-collection round trip", () => {
 		renderContainer();
 		await screen.findByText("Engineering");
 
-		fireEvent.click(screen.getByRole("button", { name: /add collection/i }));
+		fireEvent.click(screen.getByRole("button", { name: /add collection/iu }));
 		const dialog = await screen.findByRole("dialog");
 
-		const mirrored = await within(dialog).findByRole("option", { name: /engineering/i });
+		const mirrored = await within(dialog).findByRole("option", { name: /engineering/iu });
 		expect(mirrored.getAttribute("aria-disabled")).toBe("true");
 
-		fireEvent.click(within(dialog).getByRole("option", { name: /architecture decisions/i }));
-		fireEvent.click(within(dialog).getByRole("button", { name: /add 1 collection/i }));
+		fireEvent.click(within(dialog).getByRole("option", { name: /architecture decisions/iu }));
+		fireEvent.click(within(dialog).getByRole("button", { name: /add 1 collection/iu }));
 
 		await waitFor(() => expect(registerBody).toStrictEqual({ collectionId: "col-arch" }));
 
@@ -296,16 +298,16 @@ describe("Outline integration — pause / resume", () => {
 		renderContainer();
 		await screen.findByText("Engineering");
 
-		fireEvent.click(screen.getByRole("button", { name: /actions for engineering/i }));
-		fireEvent.click(await screen.findByRole("menuitem", { name: /^pause$/i }));
+		fireEvent.click(screen.getByRole("button", { name: /actions for engineering/iu }));
+		fireEvent.click(await screen.findByRole("menuitem", { name: /^pause$/iu }));
 
 		await waitFor(() =>
 			expect(patchBodies).toContainEqual({ collectionId: "col-eng", state: "PAUSED" }),
 		);
 		await screen.findByText("Paused");
 
-		fireEvent.click(screen.getByRole("button", { name: /actions for engineering/i }));
-		fireEvent.click(await screen.findByRole("menuitem", { name: /^resume$/i }));
+		fireEvent.click(screen.getByRole("button", { name: /actions for engineering/iu }));
+		fireEvent.click(await screen.findByRole("menuitem", { name: /^resume$/iu }));
 
 		await waitFor(() =>
 			expect(patchBodies).toContainEqual({ collectionId: "col-eng", state: "ENABLED" }),
@@ -330,20 +332,20 @@ describe("Outline integration — remove with confirm", () => {
 		renderContainer();
 		await screen.findByText("Engineering");
 
-		fireEvent.click(screen.getByRole("button", { name: /actions for engineering/i }));
-		fireEvent.click(await screen.findByRole("menuitem", { name: /remove & erase/i }));
+		fireEvent.click(screen.getByRole("button", { name: /actions for engineering/iu }));
+		fireEvent.click(await screen.findByRole("menuitem", { name: /remove & erase/iu }));
 
 		const dialog = await screen.findByRole("alertdialog");
 		// Nothing is deleted until the confirm — and the copy must state the mirror erase.
 		expect(deletedId).toBeUndefined();
 		expect(dialog.textContent).toMatch(
-			/permanently erases all 12 mirrored documents\s+from Hephaestus/i,
+			/permanently erases all 12 mirrored documents\s+from Hephaestus/iu,
 		);
 
-		fireEvent.click(within(dialog).getByRole("button", { name: /remove & erase/i }));
+		fireEvent.click(within(dialog).getByRole("button", { name: /remove & erase/iu }));
 
 		await waitFor(() => expect(deletedId).toBe("col-eng"));
-		await screen.findByText(/no collections mirrored yet/i);
+		await screen.findByText(/no collections mirrored yet/iu);
 		expect(toast.success).toHaveBeenCalledWith(
 			"Collection removed and its mirrored documents erased",
 		);
@@ -363,7 +365,7 @@ describe("Outline integration — sync now", () => {
 		);
 
 		renderContainer();
-		const syncButton = await screen.findByRole<HTMLButtonElement>("button", { name: /sync now/i });
+		const syncButton = await screen.findByRole<HTMLButtonElement>("button", { name: /sync now/iu });
 		await waitFor(() => expect(syncButton.disabled).toBe(false));
 		fireEvent.click(syncButton);
 
@@ -384,7 +386,7 @@ describe("Outline integration — token lifecycle", () => {
 
 		renderContainer();
 
-		await screen.findByText(/^outline connected$/i);
+		await screen.findByText(/^outline connected$/iu);
 		expect(screen.queryByText(activeOutlineConnection.instanceKey)).toBeNull();
 	});
 
@@ -402,8 +404,8 @@ describe("Outline integration — token lifecycle", () => {
 
 		renderContainer();
 
-		await screen.findByText(/we couldn't verify the outline token/i);
-		screen.getByRole("button", { name: /retry/i });
+		await screen.findByText(/we couldn't verify the outline token/iu);
+		screen.getByRole("button", { name: /retry/iu });
 	});
 
 	it("surfaces a rejected token as a destructive alert instead of a healthy-looking card", async () => {
@@ -417,8 +419,8 @@ describe("Outline integration — token lifecycle", () => {
 
 		renderContainer();
 
-		await screen.findByText(/outline no longer accepts this token/i);
-		expect(screen.queryByText(/outline accepts this token/i)).toBeNull();
+		await screen.findByText(/outline no longer accepts this token/iu);
+		expect(screen.queryByText(/outline accepts this token/iu)).toBeNull();
 	});
 
 	it("names the token and its last4 when Outline lets the key list itself", async () => {
@@ -427,9 +429,9 @@ describe("Outline integration — token lifecycle", () => {
 
 		renderContainer();
 
-		await screen.findByText(/outline accepts this token/i);
-		screen.getByText(/Hephaestus mirror/);
-		screen.getByText(/…9f2c/);
+		await screen.findByText(/outline accepts this token/iu);
+		screen.getByText(/Hephaestus mirror/u);
+		screen.getByText(/…9f2c/u);
 	});
 });
 
@@ -471,13 +473,13 @@ describe("Outline integration — with live push down, polling keeps a running s
 		await act(async () => {
 			await vi.advanceTimersByTimeAsync(50);
 		});
-		screen.getByText(/reconciliation running/i);
+		screen.getByText(/reconciliation running/iu);
 
 		// No user interaction, no invalidation — only the 5s refetchInterval can clear this.
 		await act(async () => {
-			await vi.advanceTimersByTimeAsync(5_000);
+			await vi.advanceTimersByTimeAsync(5000);
 		});
-		expect(screen.queryByText(/reconciliation running/i)).toBeNull();
+		expect(screen.queryByText(/reconciliation running/iu)).toBeNull();
 		expect(statusReads).toBeGreaterThanOrEqual(2);
 	});
 });
@@ -505,15 +507,15 @@ describe("Outline integration — Outline not enabled on this instance", () => {
 
 		renderContainer();
 
-		fireEvent.change(await screen.findByLabelText(/server url/i), {
+		fireEvent.change(await screen.findByLabelText(/server url/iu), {
 			target: { value: "https://wiki.acme.dev" },
 		});
-		fireEvent.change(screen.getByLabelText(/api token/i), { target: { value: "ol_api_secret" } });
-		fireEvent.click(screen.getByRole("button", { name: /connect outline/i }));
+		fireEvent.change(screen.getByLabelText(/api token/iu), { target: { value: "ol_api_secret" } });
+		fireEvent.click(screen.getByRole("button", { name: /connect outline/iu }));
 
 		// The raw ProblemDetail is still shown; the hint is derived from it and added below.
-		await screen.findByText(/outline may not be enabled on this instance/i);
-		screen.getByText(/no connectionstrategy registered for kind=outline/i);
+		await screen.findByText(/outline may not be enabled on this instance/iu);
+		screen.getByText(/no connectionstrategy registered for kind=outline/iu);
 	});
 });
 
@@ -563,7 +565,7 @@ describe("Outline integration — collections plane is gated on the connection",
 		server.use(http.get("*/workspaces/demo/connections", () => HttpResponse.json([])));
 
 		renderContainer();
-		await screen.findByRole("button", { name: /connect outline/i });
-		expect(screen.queryByText(/mirrored collections/i)).toBeNull();
+		await screen.findByRole("button", { name: /connect outline/iu });
+		expect(screen.queryByText(/mirrored collections/iu)).toBeNull();
 	});
 });

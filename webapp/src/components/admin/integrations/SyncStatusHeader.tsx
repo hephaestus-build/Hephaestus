@@ -98,7 +98,9 @@ function rateLimitReading(rateLimit: RateLimitSnapshot, now: number): ReactNode 
 				<span className="text-muted-foreground"> / {rateLimit.limit.toLocaleString()}</span>
 			</span>
 		);
-		if (!rateLimit.resetAt) return value;
+		if (!rateLimit.resetAt) {
+			return value;
+		}
 		return (
 			<Tooltip>
 				<TooltipTrigger className="cursor-help">{value}</TooltipTrigger>
@@ -179,7 +181,9 @@ function ConnectionDiagnostics({ status }: { status: ConnectionSyncStatus }) {
 	// Every row is gated on a real observation, so a connection that reports none (a fresh Slack
 	// workspace before its first event) has nothing to qualify — render no empty row rather than an
 	// invisible flex box the surrounding `space-y-4` would still pad around.
-	if (diagnostics.length === 0) return null;
+	if (diagnostics.length === 0) {
+		return null;
+	}
 
 	return (
 		<ItemGroup className="flex-row flex-wrap items-center gap-x-4 gap-y-2">
@@ -284,11 +288,7 @@ export function SyncStatusHeader({
 						</div>
 						<Skeleton className="h-8 w-40" />
 					</div>
-				) : !status ? (
-					<p className="text-sm text-muted-foreground">
-						No {label} connection found for this workspace.
-					</p>
-				) : (
+				) : status ? (
 					<>
 						<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
 							{!credentialsUnreadableSince && (
@@ -373,6 +373,10 @@ export function SyncStatusHeader({
 							</div>
 						)}
 					</>
+				) : (
+					<p className="text-sm text-muted-foreground">
+						No {label} connection found for this workspace.
+					</p>
 				)}
 			</CardContent>
 		</Card>

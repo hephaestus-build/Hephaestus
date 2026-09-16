@@ -62,6 +62,8 @@ export default class CoverageReporter implements Reporter {
 			})),
 		);
 		process.stdout.write(`\n${summary}`);
-		if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+		if (process.env.GITHUB_STEP_SUMMARY) {
+			appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+		}
 	}
 }

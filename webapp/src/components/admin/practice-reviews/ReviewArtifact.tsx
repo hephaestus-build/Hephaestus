@@ -57,19 +57,25 @@ export function reviewArtifactIcon(artifact: ReviewArtifactDisplay): ArtifactGly
 
 export function reviewArtifactLabel(artifact: ReviewArtifactDisplay): string {
 	switch (artifact.type) {
-		case ARTIFACT_KIND.pullRequest:
-			if (artifact.provider === "GITLAB")
+		case ARTIFACT_KIND.pullRequest: {
+			if (artifact.provider === "GITLAB") {
 				return artifact.number == null ? "Merge request" : `MR !${artifact.number}`;
+			}
 			return artifact.number == null ? "Pull request" : `PR #${artifact.number}`;
-		case ARTIFACT_KIND.issue:
+		}
+		case ARTIFACT_KIND.issue: {
 			return artifact.number == null ? "Issue" : `Issue #${artifact.number}`;
-		case ARTIFACT_KIND.conversationThread:
+		}
+		case ARTIFACT_KIND.conversationThread: {
 			return artifact.channelName ? `#${artifact.channelName}` : "Conversation";
-		case ARTIFACT_KIND.document:
+		}
+		case ARTIFACT_KIND.document: {
 			return "Document";
-		default:
+		}
+		default: {
 			// A kind this build has no copy for still names itself rather than rendering blank.
 			return artifactKindLabel(artifact.type);
+		}
 	}
 }
 

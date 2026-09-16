@@ -21,7 +21,9 @@ export function toEvidenceLocations(evidence: ObservationDetail["evidence"]): Ev
 }
 export function splitPath(path: string): { directory: string; fileName: string } {
 	const lastSlash = path.lastIndexOf("/");
-	if (lastSlash < 0) return { directory: "", fileName: path };
+	if (lastSlash === -1) {
+		return { directory: "", fileName: path };
+	}
 	return { directory: path.slice(0, lastSlash + 1), fileName: path.slice(lastSlash + 1) };
 }
 export function evidenceLineRangeLabel(location: EvidenceLocation): string {
