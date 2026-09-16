@@ -127,7 +127,7 @@ export function FacetMultiSelect<TValue extends string | number>({
 									className="mx-0.5 data-[orientation=vertical]:h-4"
 								/>
 								{selectedOptions.length > MAX_INLINE_CHIPS ? (
-									<Badge variant="secondary" size="sm">
+									<Badge variant="secondary" size="xs">
 										{selectedOptions.length} selected
 									</Badge>
 								) : (
@@ -135,7 +135,7 @@ export function FacetMultiSelect<TValue extends string | number>({
 										<Badge
 											key={option.value}
 											variant="secondary"
-											size="sm"
+											size="xs"
 											className="hidden max-w-36 sm:inline-flex"
 										>
 											{option.icon && <option.icon aria-hidden className={option.iconClassName} />}
@@ -144,7 +144,7 @@ export function FacetMultiSelect<TValue extends string | number>({
 									))
 								)}
 								{selectedOptions.length <= MAX_INLINE_CHIPS && (
-									<Badge variant="secondary" size="sm" className="sm:hidden">
+									<Badge variant="secondary" size="xs" className="sm:hidden">
 										{selectedOptions.length} selected
 									</Badge>
 								)}

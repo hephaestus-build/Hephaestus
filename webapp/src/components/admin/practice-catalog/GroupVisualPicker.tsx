@@ -74,7 +74,7 @@ export function GroupVisualPicker({
 							Color
 						</p>
 						<ToggleGroup
-							variant="swatch"
+							variant="chip"
 							disabled={disabled}
 							value={[activeColor]}
 							onValueChange={(value) => value[0] && onChange({ color: value[0] })}
@@ -89,7 +89,7 @@ export function GroupVisualPicker({
 									value={key}
 									aria-label={key}
 									disabled={disabled}
-									className={cn("size-7 min-w-0", PILL[key])}
+									className={cn("size-7 min-w-0 border-black/10 dark:border-white/15", PILL[key])}
 								>
 									{activeColor === key && <Check className="size-3.5" aria-hidden="true" />}
 								</ToggleGroupItem>

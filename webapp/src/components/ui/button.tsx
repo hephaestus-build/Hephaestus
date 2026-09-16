@@ -8,8 +8,7 @@ import { cn } from "cn";
  *
  * 1. `quiet`, the ghost that rests at muted contrast: toolbar and row actions that sit beside the
  *    content they act on, and come up to full contrast on hover and focus.
- * 2. `warning-outline`, the outlined `destructive-outline` in the warning tone, for an action inside
- *    a banner that is already warning-coloured.
+ * 2. `warning-outline`, `destructive-outline` in the warning tone, so the two tones come as a pair.
  * 3. The `shape` axis. `pill` is applied after `size`, so it overrides whatever radius the size chose.
  * 4. `aria-pressed` is styled wherever `aria-expanded` already was: a toggle that is on has to look
  *    it, and upstream styles only the expanded case.
@@ -37,10 +36,9 @@ const buttonVariants = cva(
 					"bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/70",
 				"destructive-outline":
 					"border-destructive/30 text-destructive bg-background hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-input/30 dark:hover:bg-destructive/20",
-				// The same outlined shape in the warning tone, for an action offered inside a banner
-				// that is already warning-coloured and would swallow a neutral button.
+				// `destructive-outline` in the warning tone, so a warning surface has the same pair.
 				"warning-outline":
-					"border-warning/50 text-warning bg-transparent hover:bg-warning/20 hover:text-warning focus-visible:ring-warning/20 dark:focus-visible:ring-warning/40",
+					"border-warning/30 text-warning bg-background hover:bg-warning/10 hover:text-warning focus-visible:ring-warning/20 dark:focus-visible:ring-warning/40 dark:bg-input/30 dark:hover:bg-warning/20",
 				link: "text-primary underline-offset-4 hover:underline",
 			},
 			size: {

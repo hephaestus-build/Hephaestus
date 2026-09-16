@@ -179,8 +179,8 @@ export const ComposedProgressHasOneTrack: Story = {
 	},
 };
 
-/** A bordered table's edge belongs to the scroll container, so it rounds with the table. */
-export const BorderedTableHasOneEdge: Story = {
+/** The edge belongs to the scroll container, and the reader's own row is set apart from the rest. */
+export const BorderedTableWithOwnRow: Story = {
 	render: () => (
 		<Table bordered aria-label="Spend">
 			<TableBody>
@@ -218,5 +218,36 @@ export const BareTextareaHasNoEdge: Story = {
 	play: async ({ canvas }) => {
 		const field = canvas.getByRole("textbox", { name: "Message" });
 		await expect(Number.parseFloat(getComputedStyle(field).borderTopWidth)).toBe(0);
+	},
+};
+
+/**
+ * The two outlined tones are one pair: same surface, same edge weight, only the hue differs. The
+ * strips are the impersonation banner's, which has no story of its own, so axe checks its contrast here.
+ */
+export const OutlinedTonesShareOneSurface: Story = {
+	render: () => (
+		<div className="flex flex-col gap-2">
+			<div className="flex items-center gap-3 rounded-lg border-warning/40 bg-warning/10 p-2 text-sm text-warning">
+				Impersonating a member
+				<Button variant="warning-outline" size="sm">
+					Enable writes
+				</Button>
+			</div>
+			<div className="flex items-center gap-3 rounded-lg border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive">
+				Writes are enabled
+				<Button variant="destructive-outline" size="sm">
+					Stop impersonating
+				</Button>
+			</div>
+		</div>
+	),
+	play: async ({ canvas }) => {
+		const warning = getComputedStyle(canvas.getByRole("button", { name: "Enable writes" }));
+		const destructive = getComputedStyle(
+			canvas.getByRole("button", { name: "Stop impersonating" }),
+		);
+		await expect(warning.backgroundColor).toBe(destructive.backgroundColor);
+		await expect(warning.borderTopWidth).toBe(destructive.borderTopWidth);
 	},
 };

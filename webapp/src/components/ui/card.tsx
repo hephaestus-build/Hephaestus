@@ -19,7 +19,7 @@ const cardVariants = cva(
 				default: "",
 				muted: "bg-muted/40",
 				// Wrapped in a link or given an onClick: the surface answers the pointer.
-				interactive: "transition-colors hover:bg-accent/50 group-hover:bg-accent/50",
+				interactive: "transition-colors hover:bg-accent/50 in-[a:hover]:bg-accent/50",
 				destructive: "ring-destructive/50",
 				// The dashed edge says the space is meant to hold something.
 				dashed: "border border-dashed ring-0",

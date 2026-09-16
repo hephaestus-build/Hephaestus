@@ -64,8 +64,8 @@ export function ImpersonationBanner() {
 			className={cn(
 				"sticky top-0 z-50 flex w-full items-center justify-center gap-x-3 gap-y-1 flex-wrap border-b px-4 py-2 text-sm",
 				writesEnabled
-					? "border-destructive/40 bg-destructive/15 text-destructive"
-					: "border-warning/40 bg-warning/15 text-warning",
+					? "border-destructive/40 bg-destructive/10 text-destructive"
+					: "border-warning/40 bg-warning/10 text-warning",
 			)}
 		>
 			<span>
@@ -110,19 +110,12 @@ export function ImpersonationBanner() {
 			)}
 
 			<Button
-				variant={writesEnabled ? "outline" : "warning-outline"}
+				variant={writesEnabled ? "destructive-outline" : "warning-outline"}
 				size="sm"
 				disabled={exit.isPending}
 				onClick={() => exit.mutate({})}
 				aria-label="Stop impersonating and restore your account"
-				// The strip is already tinted, so the opaque `destructive-outline` would read as a pale
-				// chip on it; the warning half of the pair is a variant because it needs no override.
-				className={cn(
-					"h-7",
-					writesEnabled
-						? "bg-transparent border-destructive/50 text-destructive hover:bg-destructive/20 hover:text-destructive"
-						: "",
-				)}
+				className="h-7"
 			>
 				{exit.isPending ? <Spinner className="mr-2 size-3.5" /> : null}
 				Stop impersonating

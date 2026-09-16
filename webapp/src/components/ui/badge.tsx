@@ -4,6 +4,13 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "cn";
 
+/**
+ * ⚠️ Diverges from the shadcn registry — `shadcn add badge` drops the following; re-apply them.
+ *
+ * 1. The `size` axis: `xs` for a count or identifier inside a control, `lg` for a pill that carries a
+ *    sentence.
+ * 2. `muted`, an outlined tag resting at muted contrast, and `mentor`, the mentor's own accent.
+ */
 const badgeVariants = cva(
 	"h-5 gap-1 rounded-4xl border border-transparent px-2 py-0.5 text-xs font-medium transition-all has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&>svg]:size-3! inline-flex items-center justify-center w-fit whitespace-nowrap shrink-0 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive overflow-hidden group/badge",
 	{
@@ -25,8 +32,7 @@ const badgeVariants = cva(
 			},
 			size: {
 				default: "",
-				// A count or identifier inside a control: squarer, tighter, and not bold against its host.
-				sm: "rounded-sm px-1 font-normal",
+				// A count or identifier inside a control, one step below the control's own type.
 				xs: "h-4 px-1.5 text-2xs [&>svg]:size-2.5!",
 				// Wraps and grows with its content, for a pill that carries a sentence rather than a word.
 				lg: "h-auto gap-1.5 px-2.5 py-1 text-sm whitespace-normal [&>svg]:size-4!",

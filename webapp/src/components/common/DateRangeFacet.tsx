@@ -48,7 +48,7 @@ export function DateRangeFacet({ title, value, onChange }: DateRangeFacetProps) 
 									orientation="vertical"
 									className="mx-0.5 data-[orientation=vertical]:h-4"
 								/>
-								<Badge variant="secondary" size="sm">
+								<Badge variant="secondary" size="xs">
 									{applied}
 								</Badge>
 							</>

@@ -77,7 +77,7 @@ export function ReviewPersonFacet({
 				{selectedOption && (
 					<>
 						<Separator orientation="vertical" className="mx-0.5 data-[orientation=vertical]:h-4" />
-						<Badge variant="secondary" size="sm" className="max-w-36">
+						<Badge variant="secondary" size="xs" className="max-w-36">
 							<span className="truncate">{selectedOption.label}</span>
 						</Badge>
 					</>

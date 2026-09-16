@@ -5,15 +5,13 @@ import { cn } from "cn";
 /**
  * ⚠️ Diverges from the shadcn registry — `shadcn add table` drops the following; re-apply it.
  *
- * 1. `TableHead` and `TableCell` take `numeric`, which gives figures one advance width so digits line
- *    up down a column and a changing value does not shift the ones beside it. Upstream leaves that to
- *    each call site, which is how 39 cells came to spell it out by hand.
- * 2. `Table` takes `bordered`, the rounded edge every standalone data table here draws; ten wrote the
- *    classes into `containerClassName` and the rest wrapped the table in a div for the same effect.
- * 3. `TableRow` takes `variant`: `static` for a total or detail row that is not a hover target, and
+ * 1. `TableHead` and `TableCell` take `numeric`: figures share one advance width, so a column of
+ *    numbers lines up and a changing value does not shift its neighbours.
+ * 2. `Table` takes `bordered`, the rounded edge every standalone data table here draws.
+ * 3. `TableRow` takes `variant`: `static` for a total or detail row that is not a hover target,
  *    `highlighted` for the reader's own row.
- * 4. `TableHeader` and `TableFooter` take `sticky`, which pins them over the scrolling rows on an
- *    opaque surface.
+ * 4. `TableHeader` and `TableFooter` take `sticky`, pinned over the scrolling rows on an opaque
+ *    surface.
  */
 
 function Table({
@@ -111,11 +109,7 @@ function TableRow({
 	);
 }
 
-/**
- * `numeric` marks a cell that holds a number. Figures then share one advance width, so digits line
- * up down the column and a changing value does not shift the ones beside it. Which numeral variant
- * that takes is the table's decision, not each call site's; alignment stays the caller's layout.
- */
+/** Marks a cell that holds a number; alignment stays the caller's layout. */
 type NumericCell = { numeric?: boolean };
 
 function TableHead({ className, numeric, ...props }: React.ComponentProps<"th"> & NumericCell) {

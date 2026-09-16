@@ -4,7 +4,15 @@
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -421,4 +429,50 @@ void test("vp lint preserves house rules, design-system checks and type-aware di
 
 void test("webapp and docs use the same global lint policy", () => {
 	assert.deepEqual(effectiveLintOptions("docs"), effectiveLintOptions("webapp"));
+});
+
+/**
+ * A `no-restyle` contract names registry components by regex. A name nothing exports matches nothing
+ * and reports nothing, so a renamed or re-vendored primitive would leave its contract behind as dead
+ * policy that still looks deliberate.
+ */
+void test("every no-restyle contract names a component the registry exports", () => {
+	const config = asRecord(
+		parse(readFileSync(join(WEBAPP, ".oxlintrc.json"), "utf8")),
+		"webapp lint",
+	);
+	const rule = asRecord(config.rules, "webapp lint rules")["shadcn/no-restyle"];
+	assert.ok(Array.isArray(rule), "no-restyle is configured with options");
+	const contracts = asRecord(rule[1], "no-restyle options").contracts;
+	assert.ok(Array.isArray(contracts) && contracts.length > 0, "no-restyle declares contracts");
+
+	const ui = join(WEBAPP, "src/components/ui");
+	const exported = new Set<string>();
+	for (const file of readdirSync(ui)) {
+		if (!file.endsWith(".tsx") || file.includes(".stories.")) continue;
+		const source = readFileSync(join(ui, file), "utf8");
+		for (const [, names] of source.matchAll(/export \{([^}]*)\}/g)) {
+			for (const entry of (names ?? "").split(",")) {
+				const exportedName = entry
+					.trim()
+					.split(/\s+as\s+/)
+					.at(-1);
+				if (exportedName) exported.add(exportedName);
+			}
+		}
+		for (const [, name] of source.matchAll(/export (?:function|const) (\w+)/g)) {
+			if (name) exported.add(name);
+		}
+	}
+
+	for (const contract of contracts) {
+		const pattern = String(asRecord(contract, "no-restyle contract").pattern);
+		for (const name of pattern.replace(/^\^\(?|\)?\$$/g, "").split("|")) {
+			assert.ok(/^[A-Z]\w*$/.test(name), `contract pattern is a plain name list: ${pattern}`);
+			assert.ok(
+				exported.has(name),
+				`no-restyle contract names ${name}, which no registry file exports`,
+			);
+		}
+	}
 });

@@ -87,9 +87,8 @@
 						"allow": ["layout", "typography", "color", "shape", "effects", "motion"],
 						"deny": ["rounded"]
 					},
-					// Badge and the two components that forward to it: monospace is a content decision
-					// for an identifier, not a restyle.
-					{ "pattern": "^(Badge|LabelBadge|RemovableToken)$", "allow": ["layout", "font-mono"] },
+					// Badge: monospace is a content decision for an identifier, not a restyle.
+					{ "pattern": "^Badge$", "allow": ["layout", "font-mono"] },
 					// Card: elevation and its transition depend on where the card sits; `outline-none` is
 					// for a region focused by script, which must not ring.
 					{ "pattern": "^Card$", "allow": ["layout", "effects", "motion", "outline-none"] },
