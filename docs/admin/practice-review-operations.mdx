@@ -24,6 +24,12 @@ A working deployment must:
 
 Each workspace enables practice review and chooses its own coverage.
 
+`PRACTICE_REVIEW_SAMPLING_TEMPERATURE` sets the sampling temperature of every model call in a
+practice review; unset, the model's own default applies. A review classifies work against fixed
+criteria, and the same work should land in the same cell on every run, so a low value (`0.2`) is the
+setting to try when reviews of unchanged work disagree with each other. It does not apply to the
+mentor. Check the docker Compose files forward it.
+
 See the
 [server configuration](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/application.yml)
 and [reference Compose files](https://github.com/hephaestus-build/Hephaestus/tree/main/docker) before changing an

@@ -7,8 +7,10 @@ import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -20,12 +22,24 @@ class PracticePiAdapterTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        adapter = adapter(null);
+    }
+
+    private static PracticePiAdapter adapter(@Nullable Double samplingTemperature) {
         ObjectMapper mapper = new ObjectMapper();
-        SimpleMeterRegistry metrics = new SimpleMeterRegistry();
-        adapter = new PracticePiAdapter(
+        return new PracticePiAdapter(
                 new PiRuntimeFactory(mapper),
-                new PiResultParser(mapper, metrics),
-                new AgentImageProperties(IMAGE, ImagePullPolicy.IF_NOT_PRESENT));
+                new PiResultParser(mapper, new SimpleMeterRegistry()),
+                new AgentImageProperties(IMAGE, ImagePullPolicy.IF_NOT_PRESENT),
+                new PracticeReviewProperties(false, 15, 5, false, samplingTemperature));
+    }
+
+    @Test
+    void carriesTheSamplingTemperatureOnlyWhenTheOperatorSetOne() {
+        assertThat(adapter.buildSandboxSpec(proxyRequest()).environment())
+                .doesNotContainKey(PracticePiAdapter.SAMPLING_TEMPERATURE_ENV);
+        assertThat(adapter(0.2).buildSandboxSpec(proxyRequest()).environment())
+                .containsEntry(PracticePiAdapter.SAMPLING_TEMPERATURE_ENV, "0.2");
     }
 
     private PracticeAgentRequest proxyRequest() {

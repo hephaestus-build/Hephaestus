@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,10 @@ public class PracticePiAdapter {
     private final PiRuntimeFactory runtimeFactory;
     private final PiResultParser resultParser;
     private final AgentImageProperties imageProperties;
+    private final PracticeReviewProperties reviewProperties;
+
+    /** The runner reads it and registers it as the model's sampling temperature. */
+    static final String SAMPLING_TEMPERATURE_ENV = "LLM_SAMPLING_TEMPERATURE";
 
     public PracticeSandboxSpec buildSandboxSpec(PracticeAgentRequest request) {
         PiRuntimeFactory.PiPlan plan = runtimeFactory.build(new PiPlanSpec(
@@ -35,10 +41,15 @@ public class PracticePiAdapter {
                 PROFILE,
                 Map.of(),
                 buildPrecomputeStep(request.timeoutSeconds())));
+        Map<String, String> environment = new LinkedHashMap<>(plan.environment());
+        Double temperature = reviewProperties.samplingTemperature();
+        if (temperature != null) {
+            environment.put(SAMPLING_TEMPERATURE_ENV, temperature.toString());
+        }
         return new PracticeSandboxSpec(
                 imageProperties.reference(),
                 plan.command(),
-                plan.environment(),
+                Map.copyOf(environment),
                 plan.inputFiles(),
                 SandboxLayout.OUTPUT_PATH,
                 null,

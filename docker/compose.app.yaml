@@ -10,6 +10,8 @@ x-practice-review-env:
   PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR: ${PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR:-5}
   PRACTICE_REVIEW_PROGRESS_FOOTER: ${PRACTICE_REVIEW_PROGRESS_FOOTER:-false}
   PRACTICE_REVIEW_REACTION_SUPPRESSION: ${PRACTICE_REVIEW_REACTION_SUPPRESSION:-false}
+  # The sampling temperature of every review model call; unset leaves the model's own default.
+  PRACTICE_REVIEW_SAMPLING_TEMPERATURE: ${PRACTICE_REVIEW_SAMPLING_TEMPERATURE:-}
   # Spend guardrails for reviewing past work. A campaign is priced before it runs; these bound what
   # an administrator can confirm in one.
   PRACTICE_REVIEW_BACKFILL_MAX_WINDOW: ${PRACTICE_REVIEW_BACKFILL_MAX_WINDOW:-400d}
