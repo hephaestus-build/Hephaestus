@@ -463,7 +463,6 @@ void test("watchdog cross-thread rebind: no event leakage from concurrently-boun
 	const threadA = "33333333-3333-3333-3333-333333333333";
 	const threadB = "44444444-4444-4444-4444-444444444444";
 	const runner = spawnRunner(t, {
-		// 100+100 = 200 ms total stub turn
 		MENTOR_RUNNER_STUB_DELAY_MS: "100",
 		MENTOR_TURN_BUDGET_MS: "50",
 		MENTOR_TURN_GRACE_MS: "30",

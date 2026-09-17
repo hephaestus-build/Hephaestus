@@ -127,16 +127,14 @@ export const UsdOnly: Story = {
 	args: { fx: null },
 };
 
-type ByDayStory = StoryObj;
-
-export const ByDay: ByDayStory = {
+export const ByDay: StoryObj = {
 	render: () => <LlmUsageByDayTable report={report()} fx={eur} />,
 };
 
-export const ByDayLoading: ByDayStory = {
+export const ByDayLoading: StoryObj = {
 	render: () => <LlmUsageByDayTable fx={eur} />,
 };
 
-export const ByDayEmpty: ByDayStory = {
+export const ByDayEmpty: StoryObj = {
 	render: () => <LlmUsageByDayTable report={report({ byDay: [] })} fx={eur} />,
 };

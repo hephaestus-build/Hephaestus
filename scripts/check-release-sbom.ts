@@ -105,7 +105,7 @@ function spdxInventory(spdxInput: unknown, repository: string, digest: string): 
 		canonicalRepository(text(container.name, "SPDX container name")) !== repository ||
 		container.versionInfo !== digest
 	) {
-		throw new Error(`SPDX document is not bound to ${repository}@${digest}`);
+		throw new Error(`SPDX document is not bound to ${imageReference(repository, digest)}`);
 	}
 	return { purls, keys };
 }
@@ -129,7 +129,7 @@ function cycloneDxInventory(
 		canonicalRepository(text(subject.name, "CycloneDX component name")) !== repository ||
 		subject.version !== digest
 	) {
-		throw new Error(`CycloneDX document is not bound to ${repository}@${digest}`);
+		throw new Error(`CycloneDX document is not bound to ${imageReference(repository, digest)}`);
 	}
 	const purls = new Set<string>();
 	const keys = new Set<string>();
@@ -145,6 +145,11 @@ function cycloneDxInventory(
 	return { purls, keys };
 }
 
+/** The form a Syft `repoDigests` entry takes, which every binding is checked against. */
+function imageReference(repository: string, digest: string): string {
+	return `${repository}@${digest}`;
+}
+
 interface SyftBinding {
 	repository: string;
 	digest: string;
@@ -154,7 +159,7 @@ interface SyftBinding {
 
 function assertSyftSource(syft: JsonObject, binding: SyftBinding): void {
 	const { repository, digest, os, architecture } = binding;
-	const reference = `${repository}@${digest}`;
+	const reference = imageReference(repository, digest);
 	const source = object(syft.source, "Syft source");
 	const metadata = object(source.metadata, "Syft source metadata");
 	if (source.type !== "image") {

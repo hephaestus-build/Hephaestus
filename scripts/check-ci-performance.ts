@@ -66,7 +66,7 @@ function historyMarkdown(summaries: TestSummary[]): string {
 	].join("\n")}\n`;
 }
 
-/** The median of a baseline window, which `regressions` only builds once seven profiles are usable. */
+/** The median of a baseline window; `regressions` builds one only from a full window. */
 function baselineMedian(values: readonly number[]): number {
 	const value = median(values);
 	assert.ok(value !== null, "the baseline window is never empty");

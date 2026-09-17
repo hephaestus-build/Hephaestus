@@ -162,7 +162,6 @@ export const KeyboardNavigation: Story = {
 	play: async ({ args }) => {
 		const dialog = await screen.findByRole("dialog");
 		const search = await within(dialog).findByRole("combobox");
-		await userEvent.click(search);
 		await waitFor(async () => expect(search).toHaveFocus());
 
 		await userEvent.keyboard("{ArrowDown}");

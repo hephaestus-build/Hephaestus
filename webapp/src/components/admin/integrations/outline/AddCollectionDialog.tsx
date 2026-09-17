@@ -241,6 +241,7 @@ function CollectionPicker({
 		<Combobox
 			multiple
 			inline
+			open
 			items={candidates}
 			value={selectedCandidates}
 			onValueChange={(next) => onSelectedIdsChange(next.map((c) => c.collectionId))}

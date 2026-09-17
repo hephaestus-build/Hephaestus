@@ -69,8 +69,8 @@ function changeRoleLabel(isSelfAdmin: boolean, appRole: string | undefined) {
 	return appRole === "APP_ADMIN" ? "Revoke admin" : "Change role";
 }
 
-export function AdminUsersTable(props: AdminUsersTableProps) {
-	const { users, hasSearch, totalLoaded, hasNextPage, isFetchingNextPage, onLoadMore } = props;
+export function AdminUsersTable({ totalLoaded, onLoadMore, ...rows }: AdminUsersTableProps) {
+	const { users, hasSearch, hasNextPage, isFetchingNextPage } = rows;
 	return (
 		<div className="space-y-4">
 			<Table bordered aria-label="Application users">
@@ -87,7 +87,7 @@ export function AdminUsersTable(props: AdminUsersTableProps) {
 					</TableRow>
 				</TableHeader>
 				<TableBody>
-					<UserRows {...props} />
+					<UserRows {...rows} />
 				</TableBody>
 			</Table>
 

@@ -283,8 +283,9 @@
 		"typescript/consistent-return": "off",
 
 		// -- Promises and errors ---------------------------------------------------------------------
-		// The typed `only-throw-error`, `prefer-promise-reject-errors`, `prefer-find` and
-		// `prefer-includes` each subsume the untyped rule of the same name, which is not listed.
+		// The typed `only-throw-error`, `prefer-promise-reject-errors` and `prefer-includes` subsume
+		// `no-throw-literal`, the untyped `prefer-promise-reject-errors` and `unicorn/prefer-includes`,
+		// which are not listed.
 		// A function that returns a promise is `async`, so a thrown error and a rejection are one thing
 		// to a caller.
 		"typescript/promise-function-async": "error",
@@ -330,6 +331,9 @@
 		// -- Modern spellings ------------------------------------------------------------------------
 		"typescript/prefer-for-of": "error",
 		"typescript/prefer-find": "error",
+		// The typed `prefer-find` reads `[0]` and `.at(0)`; `.shift()`, `.pop()`, `.at(-1)` and a
+		// destructured first element are this one's.
+		"unicorn/prefer-array-find": "error",
 		"typescript/prefer-includes": "error",
 		"typescript/prefer-string-starts-ends-with": "error",
 		"typescript/prefer-regexp-exec": "error",
