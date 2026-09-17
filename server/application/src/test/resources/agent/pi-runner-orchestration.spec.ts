@@ -220,6 +220,10 @@ if (scenario) {
 									/\[L2\] reads " {2}insecure\(\);", not "insecure\(user\);"/,
 								);
 								await assert.rejects(cite("src/Missing.java", "insecure();"), /no such file/);
+								await assert.rejects(
+									cite("src/logo.png", "PNG"),
+									/binary and has no lines to quote/,
+								);
 								await assert.rejects(cite("../task.json", "schemaVersion"), /no such file/);
 								record("citation:refused");
 								await cite("src/Auth.java", "insecure();");
@@ -374,6 +378,10 @@ if (scenario) {
 									GIT_COMMITTER_EMAIL: "t@t",
 								},
 							});
+						writeFileSync(
+							join(cwd, "repos/primary/src/logo.png"),
+							Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2]),
+						);
 						git("init", "-q");
 						git("add", ".");
 						git("commit", "-q", "-m", "first");

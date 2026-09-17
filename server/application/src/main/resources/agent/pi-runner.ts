@@ -686,7 +686,12 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 								? "no such file in the checkout"
 								: `no such file at revision ${citation.revision} in the checkout's history`,
 					}
-				: resolveOnEitherSide(citation, content);
+				: content === BINARY
+					? {
+							mismatch:
+								"that file is binary and has no lines to quote; cite the change that adds it (work/change/files.json) or the text that embeds it",
+						}
+					: resolveOnEitherSide(citation, content);
 		if ("mismatch" in resolved) {
 			throw new Error(
 				`citation does not match ${citation.path}:${citation.startLine}-${citation.endLine} ` +
@@ -739,8 +744,16 @@ function excerptOf(text: string): string {
 	return JSON.stringify(text.length > 160 ? `${text.slice(0, 160)}…` : text);
 }
 
+/** What a repository read returns for a file that is not text: git's own rule, a NUL in the opening bytes. */
+const BINARY = Symbol("binary");
+
+/** The bytes as text, or BINARY: a quote of a binary file cannot be verified, here or at admission. */
+function asText(bytes: Buffer): string | typeof BINARY {
+	return bytes.subarray(0, 8000).includes(0) ? BINARY : bytes.toString("utf8");
+}
+
 /** The blob at a repository-relative path in a revision of the checkout's history, or null. */
-function readRevisionFile(path: string, revision: string): string | null {
+function readRevisionFile(path: string, revision: string): string | typeof BINARY | null {
 	if (path.startsWith("/") || path.split("/").includes("..")) return null;
 	const child = spawnSync(
 		"git",
@@ -750,15 +763,15 @@ function readRevisionFile(path: string, revision: string): string | null {
 			env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" },
 		},
 	);
-	return child.status === 0 ? child.stdout.toString("utf8") : null;
+	return child.status === 0 ? asText(child.stdout) : null;
 }
 
 /** The file at a repository-relative path in the checkout, or null when there is none. */
-function readCheckoutFile(path: string): string | null {
+function readCheckoutFile(path: string): string | typeof BINARY | null {
 	const file = resolvePath(INPUT_PATHS.repositoryRoot, path);
 	if (!file.startsWith(`${INPUT_PATHS.repositoryRoot}/`)) return null;
 	try {
-		return readFileSync(file, "utf8");
+		return asText(readFileSync(file));
 	} catch {
 		return null;
 	}
