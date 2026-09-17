@@ -29,11 +29,28 @@ export default async function readyAndTraceableHandoff(
 		);
 	}
 
+	// --- Readiness: the checklist as written, counted, so a tick is never guessed at. ---
+	const description = m.body ?? "";
+	const ticked = (description.match(/^\s*[-*]\s*\[[xX]\]/gm) ?? []).length;
+	const unticked = (description.match(/^\s*[-*]\s*\[ \]/gm) ?? []).length;
+	const draftMarker = /\b(wip|do not merge|draft)\b/i.test(m.title ?? "");
+	if (ticked + unticked > 0) {
+		directions.push(
+			`Checklist fact: the description carries ${ticked} ticked and ${unticked} unticked checkbox line(s)${draftMarker ? "; the title carries a draft-style word" : ""}. Read the lines in description.md to tell a real Definition of Done from a template that was left in place.`,
+		);
+	} else if (draftMarker) {
+		directions.push(
+			"Readiness fact: the title carries a draft-style word; check the draft flag in metadata.json.",
+		);
+	}
+
 	return {
 		hints: [],
 		metrics: {
 			issueMentionSyntaxCandidateCount: allRefs.size,
 			commitCount: commits.length,
+			checklistTicked: ticked,
+			checklistUnticked: unticked,
 		},
 		directions,
 	};

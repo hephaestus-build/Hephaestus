@@ -54,8 +54,11 @@ void test("a testing checklist does not turn a traceable handoff into a test-abs
 			changeDir,
 		);
 		assert.equal(result.metrics.issueMentionSyntaxCandidateCount, 1);
-		assert.equal(result.directions.length, 1);
 		assert.match(result.directions[0] ?? "", /#42/);
+		// The checklist is counted as written, so a tick is a fact rather than a guess.
+		assert.equal(result.metrics.checklistTicked, 1);
+		assert.equal(result.metrics.checklistUnticked, 0);
+		assert.match(result.directions[1] ?? "", /1 ticked and 0 unticked/);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
