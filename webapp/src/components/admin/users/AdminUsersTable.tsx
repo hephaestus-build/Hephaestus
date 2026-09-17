@@ -1,6 +1,4 @@
 import { LogOut, MoreHorizontal, UserCog, Users } from "lucide-react";
-import type { ReactNode } from "react";
-
 import type { AdminAccountView } from "@/api/types.gen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,23 +69,58 @@ function changeRoleLabel(isSelfAdmin: boolean, appRole: string | undefined) {
 	return appRole === "APP_ADMIN" ? "Revoke admin" : "Change role";
 }
 
-export function AdminUsersTable({
+export function AdminUsersTable(props: AdminUsersTableProps) {
+	const { users, hasSearch, totalLoaded, hasNextPage, isFetchingNextPage, onLoadMore } = props;
+	return (
+		<div className="space-y-4">
+			<Table bordered aria-label="Application users">
+				<TableHeader>
+					<TableRow>
+						<TableHead scope="col">ID</TableHead>
+						<TableHead scope="col">Name</TableHead>
+						<TableHead scope="col">Email</TableHead>
+						<TableHead scope="col">Role</TableHead>
+						<TableHead scope="col">Status</TableHead>
+						<TableHead scope="col" className="text-right">
+							<span className="sr-only">Actions</span>
+						</TableHead>
+					</TableRow>
+				</TableHeader>
+				<TableBody>
+					<UserRows {...props} />
+				</TableBody>
+			</Table>
+
+			<div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
+				<p className="text-sm text-muted-foreground" aria-live="polite">
+					Showing {users.length}
+					{hasSearch ? ` of ${totalLoaded} loaded` : ""} user{users.length === 1 ? "" : "s"}
+				</p>
+				{hasNextPage && (
+					<Button variant="outline" size="sm" onClick={onLoadMore} disabled={isFetchingNextPage}>
+						{isFetchingNextPage ? <Spinner className="size-4" /> : null}
+						Load more
+					</Button>
+				)}
+			</div>
+		</div>
+	);
+}
+
+function UserRows({
 	users,
 	isLoading,
 	isError,
 	hasSearch,
-	totalLoaded,
 	currentUserId,
 	hasNextPage,
 	isFetchingNextPage,
-	onLoadMore,
 	onChangeRole,
 	onImpersonate,
 	onForceSignOut,
-}: AdminUsersTableProps) {
-	let body: ReactNode;
+}: Omit<AdminUsersTableProps, "totalLoaded" | "onLoadMore">) {
 	if (isLoading) {
-		body = (
+		return (
 			<TableRow>
 				<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
 					<div className="flex flex-col items-center justify-center gap-2">
@@ -97,16 +130,18 @@ export function AdminUsersTable({
 				</TableCell>
 			</TableRow>
 		);
-	} else if (isError) {
-		body = (
+	}
+	if (isError) {
+		return (
 			<TableRow>
 				<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
 					<p className="text-sm text-destructive">Failed to load users. Please try again later.</p>
 				</TableCell>
 			</TableRow>
 		);
-	} else if (users.length === 0) {
-		body = (
+	}
+	if (users.length === 0) {
+		return (
 			<TableRow>
 				<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
 					{hasSearch && (hasNextPage || isFetchingNextPage) ? (
@@ -128,109 +163,71 @@ export function AdminUsersTable({
 				</TableCell>
 			</TableRow>
 		);
-	} else {
-		body = users.map((user) => {
-			const isSelf = user.id != null && user.id === currentUserId;
-			// You can't revoke your own admin — it would lock you out of /admin with no
-			// in-app recovery (the server rejects it too; this just hides the footgun).
-			const isSelfAdmin = isSelf && user.appRole === "APP_ADMIN";
-			const name = user.displayName ?? "—";
-			return (
-				<TableRow key={user.id ?? user.primaryEmail}>
-					<TableCell className="font-mono text-xs text-muted-foreground">
-						{user.id ?? "—"}
-					</TableCell>
-					<TableCell className="font-medium">{name}</TableCell>
-					<TableCell className="text-muted-foreground">{user.primaryEmail ?? "—"}</TableCell>
-					<TableCell>
-						<Badge variant={roleBadgeVariant(user.appRole)}>{user.appRole ?? "USER"}</Badge>
-					</TableCell>
-					<TableCell>
-						{hasText(user.status) ? (
-							<Badge variant={statusBadgeVariant(user.status)}>{user.status}</Badge>
-						) : (
-							<span className="text-muted-foreground">—</span>
-						)}
-					</TableCell>
-					<TableCell className="text-right">
-						<DropdownMenu>
-							<DropdownMenuTrigger
-								render={
-									<Button variant="ghost" size="icon-xs" aria-label={`Actions for ${name}`} />
-								}
-							>
-								<MoreHorizontal className="size-4" />
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end">
-								<DropdownMenuGroup>
-									<DropdownMenuLabel>Account actions</DropdownMenuLabel>
-									<DropdownMenuItem
-										disabled={isSelfAdmin}
-										onClick={() => {
-											if (!isSelfAdmin) {
-												onChangeRole(user);
-											}
-										}}
-									>
-										<UserCog className="size-4" />
-										{changeRoleLabel(isSelfAdmin, user.appRole)}
-									</DropdownMenuItem>
-									<DropdownMenuSeparator />
-									<DropdownMenuItem
-										disabled={isSelf}
-										onClick={() => {
-											if (!isSelf) {
-												onImpersonate(user);
-											}
-										}}
-									>
-										<Users className="size-4" />
-										{isSelf ? "Cannot impersonate self" : "Impersonate"}
-									</DropdownMenuItem>
-									<DropdownMenuSeparator />
-									<DropdownMenuItem variant="destructive" onClick={() => onForceSignOut(user)}>
-										<LogOut className="size-4" />
-										Force sign-out
-									</DropdownMenuItem>
-								</DropdownMenuGroup>
-							</DropdownMenuContent>
-						</DropdownMenu>
-					</TableCell>
-				</TableRow>
-			);
-		});
 	}
-
-	return (
-		<div className="space-y-4">
-			<Table bordered aria-label="Application users">
-				<TableHeader>
-					<TableRow>
-						<TableHead scope="col">ID</TableHead>
-						<TableHead scope="col">Name</TableHead>
-						<TableHead scope="col">Email</TableHead>
-						<TableHead scope="col">Role</TableHead>
-						<TableHead scope="col">Status</TableHead>
-						<TableHead scope="col" className="text-right">
-							<span className="sr-only">Actions</span>
-						</TableHead>
-					</TableRow>
-				</TableHeader>
-				<TableBody>{body}</TableBody>
-			</Table>
-
-			<div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
-				<p className="text-sm text-muted-foreground" aria-live="polite">
-					Showing {users.length}
-					{hasSearch ? ` of ${totalLoaded} loaded` : ""} user{users.length === 1 ? "" : "s"}
-				</p>
-				{hasNextPage && (
-					<Button variant="outline" size="sm" onClick={onLoadMore} disabled={isFetchingNextPage}>
-						{isFetchingNextPage ? <Spinner className="size-4" /> : null}
-						Load more
-					</Button>
-				)}
-			</div>
-		</div>
-	);
+	return users.map((user) => {
+		const isSelf = user.id != null && user.id === currentUserId;
+		// You can't revoke your own admin — it would lock you out of /admin with no
+		// in-app recovery (the server rejects it too; this just hides the footgun).
+		const isSelfAdmin = isSelf && user.appRole === "APP_ADMIN";
+		const name = user.displayName ?? "—";
+		return (
+			<TableRow key={user.id ?? user.primaryEmail}>
+				<TableCell className="font-mono text-xs text-muted-foreground">{user.id ?? "—"}</TableCell>
+				<TableCell className="font-medium">{name}</TableCell>
+				<TableCell className="text-muted-foreground">{user.primaryEmail ?? "—"}</TableCell>
+				<TableCell>
+					<Badge variant={roleBadgeVariant(user.appRole)}>{user.appRole ?? "USER"}</Badge>
+				</TableCell>
+				<TableCell>
+					{hasText(user.status) ? (
+						<Badge variant={statusBadgeVariant(user.status)}>{user.status}</Badge>
+					) : (
+						<span className="text-muted-foreground">—</span>
+					)}
+				</TableCell>
+				<TableCell className="text-right">
+					<DropdownMenu>
+						<DropdownMenuTrigger
+							render={<Button variant="ghost" size="icon-xs" aria-label={`Actions for ${name}`} />}
+						>
+							<MoreHorizontal className="size-4" />
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							<DropdownMenuGroup>
+								<DropdownMenuLabel>Account actions</DropdownMenuLabel>
+								<DropdownMenuItem
+									disabled={isSelfAdmin}
+									onClick={() => {
+										if (!isSelfAdmin) {
+											onChangeRole(user);
+										}
+									}}
+								>
+									<UserCog className="size-4" />
+									{changeRoleLabel(isSelfAdmin, user.appRole)}
+								</DropdownMenuItem>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem
+									disabled={isSelf}
+									onClick={() => {
+										if (!isSelf) {
+											onImpersonate(user);
+										}
+									}}
+								>
+									<Users className="size-4" />
+									{isSelf ? "Cannot impersonate self" : "Impersonate"}
+								</DropdownMenuItem>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem variant="destructive" onClick={() => onForceSignOut(user)}>
+									<LogOut className="size-4" />
+									Force sign-out
+								</DropdownMenuItem>
+							</DropdownMenuGroup>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</TableCell>
+			</TableRow>
+		);
+	});
 }

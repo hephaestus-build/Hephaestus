@@ -2,6 +2,7 @@ import { mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { isSet } from "./lib/env.ts";
 import { run } from "./lib/process.ts";
 import { releaseCertificateIdentity, releaseRepository } from "./lib/release-identities.ts";
 import { isRelease } from "./release-image-lock.ts";
@@ -39,7 +40,7 @@ const repository = releaseRepository(release, process.env);
 try {
 	const assets = [asset, `${asset}.sigstore.json`, "manifest.json"];
 	if (process.env.GITHUB_ACTIONS === "true") {
-		if (process.env.GH_TOKEN === undefined || process.env.GH_TOKEN === "") {
+		if (!isSet(process.env.GH_TOKEN)) {
 			throw new Error("GH_TOKEN is required to verify a draft release");
 		}
 		// Draft release assets used by the publication smoke test require authenticated GitHub access.

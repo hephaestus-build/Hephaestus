@@ -85,14 +85,14 @@ function mockModelsRoute(bindings: () => AgentBinding[]) {
 }
 
 function deferredBindingsRefetch(bindings: () => AgentBinding[]) {
-	const pending = deferred<undefined>();
+	const pending = deferred();
 	return {
 		handler: http.get("*/workspaces/:workspaceSlug/agents", async () => {
 			await pending.promise;
 			return HttpResponse.json(bindings());
 		}),
 		release: () => {
-			pending.resolve(undefined);
+			pending.resolve();
 		},
 	};
 }
@@ -119,7 +119,7 @@ const saveButton = (purposeLabel: string) =>
 
 describe("workspace AI models route", () => {
 	it("keeps each purpose's card pending independently when two saves run at once", async () => {
-		const slowSave = deferred<undefined>();
+		const slowSave = deferred();
 		let detectionSaves = 0;
 		server.use(
 			http.put("*/workspaces/:workspaceSlug/agents/PRACTICE_REVIEW", async () => {
@@ -141,7 +141,7 @@ describe("workspace AI models route", () => {
 		await waitFor(() => expect(saveButton("Heph model").disabled).toBe(false));
 		expect(saveButton("Practice reviews model").disabled).toBe(true);
 
-		slowSave.resolve(undefined);
+		slowSave.resolve();
 		await waitFor(() => expect(saveButton("Practice reviews model").disabled).toBe(false));
 		expect(detectionSaves).toBe(1);
 	});

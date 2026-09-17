@@ -413,7 +413,6 @@ export const ArtifactEmpty: Story = {
  */
 export const ArtifactStreaming: Story = {
 	args: {
-		// Use first 2 messages for a cleaner demo
 		messages: multiTurnMessages.slice(0, 2),
 		status: "streaming",
 		variant: "artifact",

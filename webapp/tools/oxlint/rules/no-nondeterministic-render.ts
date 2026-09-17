@@ -111,6 +111,8 @@ function reading(
  */
 type Timing = "module" | "render" | "elsewhere";
 
+const BY_TIMING = { module: "moduleLoad", render: "duringRender" } as const;
+
 function timingOf(node: ESTree.Node): Timing {
 	let current: ESTree.Node | null = node.parent;
 	while (current !== null) {
@@ -167,10 +169,7 @@ export const noNondeterministicRender = defineRule({
 				return;
 			}
 			const hidden = node.type === "CallExpression" && node.callee.type === "Identifier";
-			let messageId = timing === "module" ? "moduleLoad" : "duringRender";
-			if (hidden) {
-				messageId = "hiddenClock";
-			}
+			const messageId = hidden ? "hiddenClock" : BY_TIMING[timing];
 			// Two readings are two edits, so each is reported where it stands.
 			context.report({ node, messageId, data: { reading: read } });
 		};

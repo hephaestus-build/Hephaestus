@@ -7,6 +7,7 @@ import path from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { isSet } from "./lib/env.ts";
 import { run } from "./lib/process.ts";
 
 const serverDirectory = path.join(import.meta.dirname, "..", "server");
@@ -16,7 +17,7 @@ const startupBudgetMs = 180_000;
 
 async function executableJar(): Promise<string> {
 	const configured = process.env.HEPHAESTUS_APPLICATION_JAR;
-	if (configured !== undefined && configured !== "") {
+	if (isSet(configured)) {
 		return configured;
 	}
 	await run(process.execPath, [wrapper, ":application:bootJar", ...process.argv.slice(2)], {

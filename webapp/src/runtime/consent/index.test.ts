@@ -53,8 +53,7 @@ describe("cookie consent", () => {
 		expect(getStoredConsent()).toBeNull();
 	});
 
-	it("re-prompts (treats as no decision) when the stored consent version is older/missing", () => {
-		// no version
+	it("re-prompts (treats as no decision) when the stored consent carries no version or an older one", () => {
 		localStorage.setItem(
 			CONSENT_STORAGE_KEY,
 			JSON.stringify({ errorMonitoring: true, decidedAt: "x" }),
@@ -114,7 +113,7 @@ describe("cookie consent", () => {
 	});
 
 	it("notifies subscribers on set and on reopen", () => {
-		const listener = vi.fn<() => void>();
+		const listener = vi.fn();
 		const unsubscribe = subscribeConsent(listener);
 		setStoredConsent({ errorMonitoring: false });
 		requestConsentReopen();

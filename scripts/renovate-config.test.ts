@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
+import { isSet } from "./lib/env.ts";
 import { isRecord, parseJson } from "./lib/json.ts";
 import { BUNDLED_PINS } from "./lib/toolchain-pins.ts";
 
@@ -197,7 +198,7 @@ function extractedDatasources(matchStrings: string[], content: string): string[]
 	for (const pattern of matchStrings) {
 		for (const match of content.matchAll(new RegExp(pattern, "gmu"))) {
 			const datasource = match.groups?.datasource;
-			if (datasource !== undefined && datasource !== "") {
+			if (isSet(datasource)) {
 				datasources.push(datasource);
 			}
 		}

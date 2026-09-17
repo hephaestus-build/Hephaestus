@@ -11,6 +11,7 @@ import { type Document, isMap, isScalar, isSeq, parseDocument, visit, type YAMLM
 
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
 import { versionBranch } from "./dispatch-version-pr-ci.ts";
+import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
@@ -22,7 +23,7 @@ import { validateManifest } from "./verify-release-evidence.ts";
 
 function job(source: string, name: string): string {
 	const match = new RegExp(
-		`^  ${name}:\\n([\\s\\S]*?)(?=^  [A-Za-z][\\w-]*:\\s*$|(?![\\s\\S]))`,
+		`^  ${name}:\\n(?:[\\s\\S]*?)(?=^  [A-Za-z][\\w-]*:\\s*$|(?![\\s\\S]))`,
 		"mu",
 	).exec(source);
 	assert.ok(match, `Missing ${name} job`);
@@ -31,7 +32,7 @@ function job(source: string, name: string): string {
 
 function pathFilter(source: string, name: string): string {
 	const match = new RegExp(
-		`^            ${name}:\\n([\\s\\S]*?)(?=^            [\\w-]+:\\s*$)`,
+		`^            ${name}:\\n(?:[\\s\\S]*?)(?=^            [\\w-]+:\\s*$)`,
 		"mu",
 	).exec(source);
 	assert.ok(match, `Missing ${name} path filter`);
@@ -399,10 +400,7 @@ void describe("CI contract", () => {
 		const instructions = await readFile("AGENTS.md", "utf8");
 		const vocabulary = /^### Task vocabulary\n(?<body>[\s\S]*?)(?=^###? )/mu.exec(instructions)
 			?.groups?.body;
-		assert.ok(
-			vocabulary !== undefined && vocabulary !== "",
-			"AGENTS.md § Verifying must contain the task vocabulary",
-		);
+		assert.ok(isSet(vocabulary), "AGENTS.md § Verifying must contain the task vocabulary");
 		const allowedPrefixes = new Set(
 			[...vocabulary.matchAll(/^\| `(?<prefix>[a-z]+)` \|/gmu)].map(
 				({ groups }) => groups?.prefix ?? "",
@@ -633,10 +631,7 @@ void describe("CI contract", () => {
 					const inputs = stepInputs(declaration);
 					const template = asString(inputs.get("max-annotations"), `${file} max-annotations`);
 					const expression = /^\$\{\{(?<body>[\s\S]+)\}\}$/u.exec(template)?.groups?.body;
-					assert.ok(
-						expression !== undefined && expression !== "",
-						`${file} must calculate annotation count`,
-					);
+					assert.ok(isSet(expression), `${file} must calculate annotation count`);
 					// Status functions are available in step `if`, not action `with` inputs.
 					// No custom status functions are registered: the native expression parser rejects them.
 					const parsed = new Parser(
@@ -775,7 +770,7 @@ void describe("CI contract", () => {
 		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 		const packageJob = job(orchestrator, "server-package");
 		const packaging = /^\s+run: (?<command>\.\/gradlew .*)$/mu.exec(packageJob)?.groups?.command;
-		assert.ok(packaging !== undefined && packaging !== "");
+		assert.ok(isSet(packaging));
 		assert.match(packaging, /:application:bootJar/u);
 		assert.match(packaging, /:application:testClasses/u);
 		assert.equal((packageJob.match(/actions\/upload-artifact@/gu) ?? []).length, 1);
@@ -1075,22 +1070,17 @@ void describe("CI contract", () => {
 			assert.match(image, /single-arch: \$\{\{ inputs\.single_arch == 'true' \}\}/u);
 			assert.doesNotMatch(image, /^\s+tags:/mu);
 		}
-		for (const called of [docker])
 		// Required, and with no default: a caller that forgets it fails to start, rather than
 		// silently publishing one architecture where a release needs two.
-		{
-			assert.match(called, /^ {6}single_arch:\n(?: {8}.*\n)*? {8}required: true$/mu);
-		}
+		assert.match(docker, /^ {6}single_arch:\n(?: {8}.*\n)*? {8}required: true$/mu);
 		assert.match(
 			job(source, "application-server-image"),
 			/single-arch: \$\{\{ needs\.detect-changes\.outputs\.single-arch == 'true' \}\}/u,
 		);
-		for (const consumer of [job(source, "Docker")]) {
-			assert.match(
-				consumer,
-				/single_arch: \$\{\{ needs\.detect-changes\.outputs\.single-arch \}\}/u,
-			);
-		}
+		assert.match(
+			job(source, "Docker"),
+			/single_arch: \$\{\{ needs\.detect-changes\.outputs\.single-arch \}\}/u,
+		);
 		const inherited = job(docker, "tag-unchanged-images");
 		assert.match(inherited, /HEAD_SHA/u);
 		assert.match(inherited, /pr-\$PR_NUMBER/u);
@@ -2272,7 +2262,7 @@ void describe("CI contract", () => {
 			".github/workflows/ci-quality-gates.yml",
 		]) {
 			const source = sources.get(file);
-			assert.ok(source !== undefined && source !== "");
+			assert.ok(isSet(source));
 			assert.equal((source.match(/uses: \.\/\.github\/actions\/setup-browsers/gu) ?? []).length, 1);
 			assert.doesNotMatch(source, /playwright install chromium/u);
 		}

@@ -43,9 +43,9 @@ async function renderSettings(
 				autoTriggerEnabled: true,
 				manualTriggerEnabled: true,
 				isSaving: false,
-				onUpdate: vi.fn<() => void>(),
+				onUpdate: vi.fn(),
 			}}
-			policy={{ settings, isSaving: false, onUpdate: vi.fn(), onReset: vi.fn<() => void>() }}
+			policy={{ settings, isSaving: false, onUpdate: vi.fn(), onReset: vi.fn() }}
 			coverage={{
 				preview: vi.fn(async () => ({
 					current: settings.coverageSummary,
@@ -83,7 +83,7 @@ describe("PracticeReviewSettings", () => {
 		const onUpdate = vi.fn();
 		const persisted = selectedSettings();
 		await renderSettings({
-			policy: { settings: persisted, isSaving: false, onUpdate, onReset: vi.fn<() => void>() },
+			policy: { settings: persisted, isSaving: false, onUpdate, onReset: vi.fn() },
 			coverage: { preview, repositories, people },
 		});
 
@@ -119,7 +119,7 @@ describe("PracticeReviewSettings", () => {
 		}));
 		const onUpdate = vi.fn();
 		await renderSettings({
-			policy: { settings, isSaving: false, onUpdate, onReset: vi.fn<() => void>() },
+			policy: { settings, isSaving: false, onUpdate, onReset: vi.fn() },
 			coverage: { preview, repositories, people },
 		});
 
@@ -141,7 +141,7 @@ describe("PracticeReviewSettings", () => {
 			settings: persisted,
 			isSaving: false,
 			onUpdate: vi.fn(),
-			onReset: vi.fn<() => void>(),
+			onReset: vi.fn(),
 		};
 		function EtagHarness() {
 			const [current, setCurrent] = useState(persisted);
@@ -161,7 +161,7 @@ describe("PracticeReviewSettings", () => {
 							autoTriggerEnabled: true,
 							manualTriggerEnabled: true,
 							isSaving: false,
-							onUpdate: vi.fn<() => void>(),
+							onUpdate: vi.fn(),
 						}}
 						policy={{ ...policy, settings: current }}
 						coverage={{ preview: vi.fn(), repositories, people }}
@@ -198,9 +198,9 @@ describe("PracticeReviewSettings", () => {
 							autoTriggerEnabled: true,
 							manualTriggerEnabled: true,
 							isSaving: false,
-							onUpdate: vi.fn<() => void>(),
+							onUpdate: vi.fn(),
 						}}
-						policy={{ settings: current, isSaving: false, onUpdate, onReset: vi.fn<() => void>() }}
+						policy={{ settings: current, isSaving: false, onUpdate, onReset: vi.fn() }}
 						coverage={{ preview: vi.fn(), repositories, people }}
 					/>
 				</>
@@ -231,12 +231,12 @@ describe("PracticeReviewSettings", () => {
 						autoTriggerEnabled: true,
 						manualTriggerEnabled: true,
 						isSaving: false,
-						onUpdate: vi.fn<() => void>(),
+						onUpdate: vi.fn(),
 					}}
 					policy={{
 						settings: current,
 						isSaving: false,
-						onReset: vi.fn<() => void>(),
+						onReset: vi.fn(),
 						onUpdate: async (request) => {
 							assert(request.reviewScope);
 							setCurrent({ ...settings, reviewScope: request.reviewScope });
@@ -295,12 +295,12 @@ describe("PracticeReviewSettings", () => {
 							autoTriggerEnabled: true,
 							manualTriggerEnabled: true,
 							isSaving: false,
-							onUpdate: vi.fn<() => void>(),
+							onUpdate: vi.fn(),
 						}}
 						policy={{
 							settings: current,
 							isSaving: false,
-							onReset: vi.fn<() => void>(),
+							onReset: vi.fn(),
 							onUpdate: async (request) => {
 								assert(request.reviewScope);
 								setCurrent({ ...current, reviewScope: request.reviewScope, etag: '"saved"' });
@@ -345,7 +345,7 @@ describe("PracticeReviewSettings", () => {
 				}),
 				isSaving: false,
 				onUpdate: vi.fn(),
-				onReset: vi.fn<() => void>(),
+				onReset: vi.fn(),
 			},
 			coverage: {
 				preview: vi.fn(),
@@ -372,7 +372,7 @@ describe("PracticeReviewSettings", () => {
 				}),
 				isSaving: false,
 				onUpdate: vi.fn(),
-				onReset: vi.fn<() => void>(),
+				onReset: vi.fn(),
 			},
 		});
 
@@ -382,7 +382,7 @@ describe("PracticeReviewSettings", () => {
 
 	it("keeps the coverage draft available while an unrelated policy field saves", async () => {
 		await renderSettings({
-			policy: { settings, isSaving: true, onUpdate: vi.fn(), onReset: vi.fn<() => void>() },
+			policy: { settings, isSaving: true, onUpdate: vi.fn(), onReset: vi.fn() },
 		});
 
 		expect(
@@ -401,7 +401,7 @@ describe("PracticeReviewSettings", () => {
 				settings: { ...settings, deliveryStatus: "PAUSED" },
 				isSaving: false,
 				onUpdate: vi.fn(),
-				onReset: vi.fn<() => void>(),
+				onReset: vi.fn(),
 			},
 		});
 

@@ -6,7 +6,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { Client } from "pg";
 
-import { isHostname, positivePort, readEnvFile, requiredEnv } from "./lib/env.ts";
+import { isHostname, isSet, positivePort, readEnvFile, requiredEnv } from "./lib/env.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 
 const root = path.join(import.meta.dirname, "..");
@@ -301,7 +301,7 @@ async function smoke(): Promise<void> {
 		throw new Error("Dev review trigger is exposed");
 	}
 	const env = { ...(await readEnvFile(path.join(root, "server/.env"))), ...process.env };
-	if (env.GITHUB_OAUTH_CLIENT_ID !== undefined && env.GITHUB_OAUTH_CLIENT_ID !== "") {
+	if (isSet(env.GITHUB_OAUTH_CLIENT_ID)) {
 		const login = await request("/api/auth/login?provider=github&returnTo=/");
 		const authorization = await request("/api/oauth2/authorization/github");
 		if (login.headers.get("location") !== `${origin}/api/oauth2/authorization/github`) {
@@ -318,7 +318,7 @@ async function smoke(): Promise<void> {
 		}
 	}
 	const secret = env.HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET;
-	if (secret !== undefined && secret !== "") {
+	if (isSet(secret)) {
 		const body = JSON.stringify({
 			type: "url_verification",
 			challenge: "hephaestus-public-test-ok",
@@ -342,15 +342,39 @@ async function smoke(): Promise<void> {
 	console.log("Smoke OK.");
 }
 
+/** What the database says the seed left for `account`, each count as PostgreSQL returns it. */
+async function seedCounts(
+	database: Client,
+	account: string,
+): Promise<{ active: string; monitored: string; duplicate: string; mentor: string }> {
+	const [connections, repositories, duplicates, mentors] = await Promise.all([
+		database.query<{ count: string }>(
+			"SELECT count(*) FROM workspace w JOIN connection c ON c.workspace_id=w.id WHERE w.status='ACTIVE' AND lower(w.account_login)=lower($1) AND c.kind='GITLAB' AND c.state='ACTIVE'",
+			[account],
+		),
+		database.query<{ count: string }>(
+			"SELECT count(*) FROM repository_to_monitor r JOIN workspace w ON w.id=r.workspace_id WHERE w.status='ACTIVE' AND lower(w.account_login)=lower($1)",
+			[account],
+		),
+		database.query<{ count: string }>(
+			"SELECT count(*) FROM (SELECT lower(w.account_login), c.kind FROM workspace w JOIN connection c ON c.workspace_id=w.id AND c.state='ACTIVE' AND c.kind IN ('GITHUB','GITLAB') WHERE w.status='ACTIVE' GROUP BY lower(w.account_login),c.kind HAVING count(DISTINCT w.id) > 1) d",
+		),
+		database.query<{ count: string }>(
+			"SELECT count(*) FROM workspace w JOIN workspace_agent_binding ab ON ab.workspace_id=w.id AND ab.purpose='MENTOR' LEFT JOIN llm_model im ON im.id=ab.instance_model_id LEFT JOIN llm_connection ic ON ic.id=im.connection_id LEFT JOIN workspace_llm_model wlm ON wlm.id=ab.workspace_model_id AND wlm.workspace_id=w.id LEFT JOIN workspace_llm_connection wlc ON wlc.id=wlm.connection_id AND wlc.workspace_id=w.id WHERE w.status='ACTIVE' AND lower(w.account_login)=lower($1) AND w.mentor_enabled=true AND ab.enabled=true AND ((ab.instance_model_id IS NOT NULL AND im.enabled=true AND ic.enabled=true) OR (ab.workspace_model_id IS NOT NULL AND wlm.enabled=true AND wlc.enabled=true)) AND EXISTS (SELECT 1 FROM workspace_membership mem JOIN identity_link il ON il.external_actor_id=mem.user_id AND il.disabled_at IS NULL JOIN account_feature af ON af.account_id=il.account_id AND af.flag='mentor_access' WHERE mem.workspace_id=w.id)",
+			[account],
+		),
+	]);
+	const active = connections.rows[0]?.count ?? "0";
+	const monitored = repositories.rows[0]?.count ?? "0";
+	const duplicate = duplicates.rows[0]?.count ?? "0";
+	const mentor = mentors.rows[0]?.count ?? "0";
+	return { active, monitored, duplicate, mentor };
+}
+
 async function seedStatus(): Promise<void> {
 	const env = { ...(await readEnvFile(path.join(root, "server/.env"))), ...process.env };
 	const account = env.GITLAB_GROUP_PATH;
-	if (
-		env.GITLAB_PAT === undefined ||
-		env.GITLAB_PAT === "" ||
-		account === undefined ||
-		account === ""
-	) {
+	if (!isSet(env.GITLAB_PAT) || !isSet(account)) {
 		console.log("SCM seed: skipped (GITLAB_PAT or GITLAB_GROUP_PATH missing)");
 		return;
 	}
@@ -367,27 +391,7 @@ async function seedStatus(): Promise<void> {
 	});
 	await database.connect();
 	try {
-		const [connections, repositories, duplicates, mentors] = await Promise.all([
-			database.query<{ count: string }>(
-				"SELECT count(*) FROM workspace w JOIN connection c ON c.workspace_id=w.id WHERE w.status='ACTIVE' AND lower(w.account_login)=lower($1) AND c.kind='GITLAB' AND c.state='ACTIVE'",
-				[account],
-			),
-			database.query<{ count: string }>(
-				"SELECT count(*) FROM repository_to_monitor r JOIN workspace w ON w.id=r.workspace_id WHERE w.status='ACTIVE' AND lower(w.account_login)=lower($1)",
-				[account],
-			),
-			database.query<{ count: string }>(
-				"SELECT count(*) FROM (SELECT lower(w.account_login), c.kind FROM workspace w JOIN connection c ON c.workspace_id=w.id AND c.state='ACTIVE' AND c.kind IN ('GITHUB','GITLAB') WHERE w.status='ACTIVE' GROUP BY lower(w.account_login),c.kind HAVING count(DISTINCT w.id) > 1) d",
-			),
-			database.query<{ count: string }>(
-				"SELECT count(*) FROM workspace w JOIN workspace_agent_binding ab ON ab.workspace_id=w.id AND ab.purpose='MENTOR' LEFT JOIN llm_model im ON im.id=ab.instance_model_id LEFT JOIN llm_connection ic ON ic.id=im.connection_id LEFT JOIN workspace_llm_model wlm ON wlm.id=ab.workspace_model_id AND wlm.workspace_id=w.id LEFT JOIN workspace_llm_connection wlc ON wlc.id=wlm.connection_id AND wlc.workspace_id=w.id WHERE w.status='ACTIVE' AND lower(w.account_login)=lower($1) AND w.mentor_enabled=true AND ab.enabled=true AND ((ab.instance_model_id IS NOT NULL AND im.enabled=true AND ic.enabled=true) OR (ab.workspace_model_id IS NOT NULL AND wlm.enabled=true AND wlc.enabled=true)) AND EXISTS (SELECT 1 FROM workspace_membership mem JOIN identity_link il ON il.external_actor_id=mem.user_id AND il.disabled_at IS NULL JOIN account_feature af ON af.account_id=il.account_id AND af.flag='mentor_access' WHERE mem.workspace_id=w.id)",
-				[account],
-			),
-		]);
-		const active = connections.rows[0]?.count ?? "0";
-		const monitored = repositories.rows[0]?.count ?? "0";
-		const duplicate = duplicates.rows[0]?.count ?? "0";
-		const mentor = mentors.rows[0]?.count ?? "0";
+		const { active, monitored, duplicate, mentor } = await seedCounts(database, account);
 		console.log(
 			`SCM seed: activeConnections=${active} monitoredRepositories=${monitored} duplicateScmAccounts=${duplicate}`,
 		);

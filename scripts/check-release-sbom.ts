@@ -1,4 +1,6 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
+import { isSet } from "./lib/env.ts";
+import { readJsonFileSync } from "./lib/json.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -149,24 +151,16 @@ function cycloneDxInventory(
 	return { purls, keys };
 }
 
-export function validateReleaseSbom(
-	syftInput: unknown,
-	spdxInput: unknown,
-	cycloneDxInput: unknown,
-	subject: ReleaseSbomSubject,
-): JsonObject {
-	const { digest, platform } = subject;
-	if (!/^sha256:[a-f0-9]{64}$/u.test(digest)) {
-		throw new Error("subject digest is malformed");
-	}
-	const [os, architecture] = platform.split("/");
-	if (os !== "linux" || architecture === undefined || architecture === "") {
-		throw new Error("platform must be linux/<architecture>");
-	}
-	const repository = canonicalRepository(text(subject.repository, "subject repository"));
-	const reference = `${repository}@${digest}`;
+interface SyftBinding {
+	repository: string;
+	reference: string;
+	digest: string;
+	os: string;
+	architecture: string;
+}
 
-	const syft = object(syftInput, "Syft SBOM");
+function assertSyftSource(syft: JsonObject, binding: SyftBinding): void {
+	const { repository, reference, digest, os, architecture } = binding;
 	const source = object(syft.source, "Syft source");
 	const metadata = object(source.metadata, "Syft source metadata");
 	if (source.type !== "image") {
@@ -199,11 +193,12 @@ export function validateReleaseSbom(
 	if (!repoDigests.every((entry) => entry.endsWith(`@${digest}`))) {
 		throw new Error("Syft SBOM also resolves a digest the subject does not name");
 	}
+}
 
-	const artifacts = array(syft.artifacts, "Syft artifacts");
-	if (artifacts.length === 0) {
-		throw new Error("Syft SBOM contains no packages");
-	}
+function syftArtifactInventory(artifacts: readonly unknown[]): {
+	expectedPurls: Set<string>;
+	missingLicenses: JsonObject[];
+} {
 	const expectedPurls = new Set<string>();
 	const missingLicenses: JsonObject[] = [];
 	for (const [index, value] of artifacts.entries()) {
@@ -224,10 +219,14 @@ export function validateReleaseSbom(
 			});
 		}
 	}
+	return { expectedPurls, missingLicenses };
+}
 
-	const spdx = spdxInventory(spdxInput, repository, digest, reference);
-	const cycloneDx = cycloneDxInventory(cycloneDxInput, repository, digest, reference);
-
+function assertDerivedInventoriesCover(
+	artifacts: readonly unknown[],
+	spdx: PackageInventory,
+	cycloneDx: PackageInventory,
+): void {
 	for (const value of artifacts) {
 		const artifactPurl = purl(value);
 		const key = packageKey(value, "Syft artifact");
@@ -242,6 +241,37 @@ export function validateReleaseSbom(
 			);
 		}
 	}
+}
+
+export function validateReleaseSbom(
+	syftInput: unknown,
+	spdxInput: unknown,
+	cycloneDxInput: unknown,
+	subject: ReleaseSbomSubject,
+): JsonObject {
+	const { digest, platform } = subject;
+	if (!/^sha256:[a-f0-9]{64}$/u.test(digest)) {
+		throw new Error("subject digest is malformed");
+	}
+	const [os, architecture] = platform.split("/");
+	if (os !== "linux" || !isSet(architecture)) {
+		throw new Error("platform must be linux/<architecture>");
+	}
+	const repository = canonicalRepository(text(subject.repository, "subject repository"));
+	const reference = `${repository}@${digest}`;
+
+	const syft = object(syftInput, "Syft SBOM");
+	assertSyftSource(syft, { repository, reference, digest, os, architecture });
+
+	const artifacts = array(syft.artifacts, "Syft artifacts");
+	if (artifacts.length === 0) {
+		throw new Error("Syft SBOM contains no packages");
+	}
+	const { expectedPurls, missingLicenses } = syftArtifactInventory(artifacts);
+
+	const spdx = spdxInventory(spdxInput, repository, digest, reference);
+	const cycloneDx = cycloneDxInventory(cycloneDxInput, repository, digest, reference);
+	assertDerivedInventoriesCover(artifacts, spdx, cycloneDx);
 
 	return {
 		schemaVersion: 1,
@@ -254,26 +284,17 @@ export function validateReleaseSbom(
 	};
 }
 
-/** A positional argument the caller left out or passed empty. */
-function isBlank(value: string | undefined): value is undefined | "" {
-	return value === undefined || value === "";
-}
-
-function readJson(file: string): unknown {
-	return JSON.parse(readFileSync(file, "utf8")) as unknown;
-}
-
 if (import.meta.main) {
 	const [syftPath, spdxPath, cycloneDxPath, repository, digest, platform, outputPath] =
 		process.argv.slice(2);
 	if (
-		isBlank(syftPath) ||
-		isBlank(spdxPath) ||
-		isBlank(cycloneDxPath) ||
-		isBlank(repository) ||
-		isBlank(digest) ||
-		isBlank(platform) ||
-		isBlank(outputPath)
+		!isSet(syftPath) ||
+		!isSet(spdxPath) ||
+		!isSet(cycloneDxPath) ||
+		!isSet(repository) ||
+		!isSet(digest) ||
+		!isSet(platform) ||
+		!isSet(outputPath)
 	) {
 		throw new Error(
 			"usage: check-release-sbom <syft> <spdx> <cyclonedx> <repository> <digest> <platform> <output>",
@@ -281,6 +302,6 @@ if (import.meta.main) {
 	}
 	writeFileSync(
 		outputPath,
-		`${JSON.stringify(validateReleaseSbom(readJson(syftPath), readJson(spdxPath), readJson(cycloneDxPath), { repository, digest, platform }), null, 2)}\n`,
+		`${JSON.stringify(validateReleaseSbom(readJsonFileSync(syftPath), readJsonFileSync(spdxPath), readJsonFileSync(cycloneDxPath), { repository, digest, platform }), null, 2)}\n`,
 	);
 }

@@ -188,8 +188,7 @@ function triageRank(
 	return 5;
 }
 
-/** `"name"`, `"lastSynced"`, or the key of a count column. */
-type SortKey = string;
+type SortKey = "name" | "lastSynced" | (string & Record<never, never>);
 interface SortState {
 	key: SortKey;
 	dir: "asc" | "desc";

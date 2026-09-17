@@ -92,7 +92,7 @@ describe("DangerZoneSection — account deletion", () => {
 		const confirmButton = within(dialog).getByRole<HTMLButtonElement>("button", {
 			name: "Delete account",
 		});
-		// trimmed + case-insensitive match
+		// Padded and mixed-case on purpose: the match trims and ignores case.
 		fireEvent.change(within(dialog).getByLabelText("Confirmation phrase"), {
 			target: { value: "  Delete My Account  " },
 		});

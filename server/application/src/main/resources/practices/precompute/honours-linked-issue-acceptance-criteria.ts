@@ -88,6 +88,58 @@ function acFacts(body: string): { heading: boolean; boxes: number } {
 	return { heading, boxes };
 }
 
+function itemBody(item: LinkedWorkItem): string {
+	return (item.bodyExcerpt ?? item.body ?? item.description ?? "").trim();
+}
+
+interface LinkedIssueFacts {
+	bodyPresent: boolean;
+	acHeading: boolean;
+	acBoxes: number;
+}
+
+function linkedIssueFacts(linked: LinkedWorkItem[] | null): LinkedIssueFacts {
+	const facts: LinkedIssueFacts = { bodyPresent: false, acHeading: false, acBoxes: 0 };
+	for (const item of linked ?? []) {
+		const body = itemBody(item);
+		facts.bodyPresent ||= body.length > 0;
+		const f = acFacts(body);
+		facts.acHeading ||= f.heading;
+		facts.acBoxes += f.boxes;
+	}
+	return facts;
+}
+
+function referenceDirection(
+	closingRefs: string[],
+	branchRefs: string[],
+	keywordHits: number,
+): string {
+	if (closingRefs.length > 0) {
+		return `Issue-reference syntax candidate(s) (${closingRefs.join(", ")}) from title/body — inspect the exact mention in context, including templates/examples, before establishing that the author claims to close this issue. Only then map those criteria to the change.`;
+	}
+	if (branchRefs.length > 0) {
+		return `Branch name encodes a possible issue number (${branchRefs.join(", ")}) but no closing keyword/URL was found in title/body — treat this as a traceability candidate, not a closing claim: confirm it maps to a tracked issue before mapping any acceptance criteria.`;
+	}
+	if (keywordHits > 0) {
+		return `Closing keyword(s) present but no issue number parsed — investigate whether a tracked issue is linked another way before treating this as having no acceptance criteria to honour.`;
+	}
+	return `No closing reference, issue URL, or branch-encoded number found in title/body/branch — confirm there is genuinely no linked tracker issue before concluding there are no acceptance criteria to honour.`;
+}
+
+function linkedContextDirection(
+	linked: LinkedWorkItem[] | null,
+	{ bodyPresent, acHeading, acBoxes }: LinkedIssueFacts,
+): string {
+	if (linked === null) {
+		return `No linked_work_items.json was projected into context — the linked issue's body and its acceptance-criteria block are NOT visible here, so this practice cannot be assessed from the diff alone.`;
+	}
+	if (bodyPresent) {
+		return `Candidate issue facts: bodyPresent=true, acceptanceCriteriaBlockPresent=${acHeading || acBoxes > 0} (heading=${acHeading}, checkboxes=${acBoxes}) — these are text facts, not applicability. Confirm an authored closing claim in the original mention context before mapping criteria to done or deferred.`;
+	}
+	return `Linked-issue context exists but carries no issue body — there is no quotable acceptance-criteria text to map the change against.`;
+}
+
 export default async function honoursLinkedIssueAcceptanceCriteria(
 	_repoPath: string,
 	_diff: Map<string, DiffFile>,
@@ -104,77 +156,36 @@ export default async function honoursLinkedIssueAcceptanceCriteria(
 	collect(CLOSE_REF, `${title}\n${body}`, refs);
 	collect(ISSUE_URL, `${title}\n${body}`, refs);
 	const closingRefs = [...refs];
-	const hasClosingRef = closingRefs.length > 0;
 
 	const branchRefSet = new Set<string>();
 	collect(BRANCH_REF, branch, branchRefSet);
 	const branchRefs = [...branchRefSet];
-	const hasBranchRef = branchRefs.length > 0;
 
 	const keywordHits = (`${title}\n${body}`.match(CLOSE_KEYWORD) ?? []).length;
 	CLOSE_KEYWORD.lastIndex = 0;
 
 	const linked = unwrapLinkedItems(await readContextJson(contextDir, "linked_work_items.json"));
-	const linkedIssueBodyPresent =
-		linked?.some((i) => (i.bodyExcerpt ?? i.body ?? i.description ?? "").trim().length > 0) ??
-		false;
-	let acHeading = false;
-	let acBoxes = 0;
-	if (linked) {
-		for (const i of linked) {
-			const f = acFacts((i.bodyExcerpt ?? i.body ?? i.description ?? "").trim());
-			acHeading ||= f.heading;
-			acBoxes += f.boxes;
-		}
-	}
-	const hasCheckableAcBlock = acHeading || acBoxes > 0;
+	const facts = linkedIssueFacts(linked);
+	const hasCheckableAcBlock = facts.acHeading || facts.acBoxes > 0;
 
-	const directions: string[] = [];
-	if (hasClosingRef) {
-		directions.push(
-			`Issue-reference syntax candidate(s) (${closingRefs.join(", ")}) from title/body — inspect the exact mention in context, including templates/examples, before establishing that the author claims to close this issue. Only then map those criteria to the change.`,
-		);
-	} else if (hasBranchRef) {
-		directions.push(
-			`Branch name encodes a possible issue number (${branchRefs.join(", ")}) but no closing keyword/URL was found in title/body — treat this as a traceability candidate, not a closing claim: confirm it maps to a tracked issue before mapping any acceptance criteria.`,
-		);
-	} else if (keywordHits > 0) {
-		directions.push(
-			`Closing keyword(s) present but no issue number parsed — investigate whether a tracked issue is linked another way before treating this as having no acceptance criteria to honour.`,
-		);
-	} else {
-		directions.push(
-			`No closing reference, issue URL, or branch-encoded number found in title/body/branch — confirm there is genuinely no linked tracker issue before concluding there are no acceptance criteria to honour.`,
-		);
-	}
-
-	if (linked === null) {
-		directions.push(
-			`No linked_work_items.json was projected into context — the linked issue's body and its acceptance-criteria block are NOT visible here, so this practice cannot be assessed from the diff alone.`,
-		);
-	} else if (linkedIssueBodyPresent) {
-		directions.push(
-			`Candidate issue facts: bodyPresent=true, acceptanceCriteriaBlockPresent=${hasCheckableAcBlock} (heading=${acHeading}, checkboxes=${acBoxes}) — these are text facts, not applicability. Confirm an authored closing claim in the original mention context before mapping criteria to done or deferred.`,
-		);
-	} else {
-		directions.push(
-			`Linked-issue context exists but carries no issue body — there is no quotable acceptance-criteria text to map the change against.`,
-		);
-	}
+	const directions = [
+		referenceDirection(closingRefs, branchRefs, keywordHits),
+		linkedContextDirection(linked, facts),
+	];
 
 	return {
 		hints: [],
 		metrics: {
 			issueReferenceSyntaxCandidateCount: closingRefs.length,
-			hasIssueReferenceSyntaxCandidate: hasClosingRef ? 1 : 0,
+			hasIssueReferenceSyntaxCandidate: closingRefs.length > 0 ? 1 : 0,
 			branchRefCount: branchRefs.length,
-			hasBranchRef: hasBranchRef ? 1 : 0,
+			hasBranchRef: branchRefs.length > 0 ? 1 : 0,
 			closingKeywordHits: keywordHits,
 			linkedItemsFilePresent: linked === null ? 0 : 1,
 			linkedIssueCount: linked?.length ?? 0,
-			linkedIssueBodyPresent: linkedIssueBodyPresent ? 1 : 0,
+			linkedIssueBodyPresent: facts.bodyPresent ? 1 : 0,
 			acceptanceCriteriaBlockPresent: hasCheckableAcBlock ? 1 : 0,
-			acceptanceCriteriaCheckboxes: acBoxes,
+			acceptanceCriteriaCheckboxes: facts.acBoxes,
 		},
 		directions,
 	};

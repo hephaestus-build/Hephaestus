@@ -37,9 +37,14 @@ export function positivePort(value: string, name: string): number {
 	return port;
 }
 
+/** Whether an optional string — an environment variable, an argument, an output — carries a value. */
+export function isSet(value: string | undefined): value is string {
+	return value !== undefined && value !== "";
+}
+
 export function requiredEnv(environment: NodeJS.ProcessEnv, name: string): string {
 	const value = environment[name];
-	if (value === undefined || value === "") {
+	if (!isSet(value)) {
 		throw new Error(`${name} is not configured.`);
 	}
 	return value;

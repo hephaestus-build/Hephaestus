@@ -1,5 +1,6 @@
 import { appendFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
+import { isSet } from "./lib/env.ts";
 
 // These describe archive eligibility, not application execution. Verification failures stay live:
 // even an optional adapter investigated previously could fail for a different reason after an update.
@@ -7,7 +8,7 @@ const exclusion =
 	/\[warning\]\[cds\] Skipping \S+: (?<reason>Unsupported location|Old class has been linked|Signed JAR|JFR event class)$/u;
 
 const output = process.argv[2];
-if (output === undefined || output === "") {
+if (!isSet(output)) {
 	throw new Error("Usage: summarize-buildpack-log.ts <raw-log-path>");
 }
 writeFileSync(output, "");

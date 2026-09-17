@@ -26,7 +26,7 @@ describe("ReviewObservationRow", () => {
 				<ReviewObservationRow
 					observation={observation}
 					isOpen
-					onToggle={vi.fn<(observationId: string) => void>()}
+					onToggle={vi.fn()}
 					onRespond={onRespond}
 				/>
 			</ul>,
@@ -63,7 +63,7 @@ describe("ReviewObservationRow", () => {
 				<ReviewObservationRow
 					observation={explainedObservation}
 					isOpen
-					onToggle={vi.fn<(observationId: string) => void>()}
+					onToggle={vi.fn()}
 					onRespond={onRespond}
 				/>
 			</ul>,

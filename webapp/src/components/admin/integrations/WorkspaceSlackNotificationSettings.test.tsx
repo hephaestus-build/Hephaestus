@@ -38,7 +38,7 @@ function setup(candidates: SlackChannelCandidate[] = [], enabled = false) {
 			slackConnectionId={1}
 			enabled={enabled}
 			channelCandidates={candidates}
-			onSaved={vi.fn<() => void>()}
+			onSaved={vi.fn()}
 		/>,
 	);
 }

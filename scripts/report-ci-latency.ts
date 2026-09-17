@@ -3,6 +3,7 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { versionBranch } from "./dispatch-version-pr-ci.ts";
 import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
+import { median } from "./lib/statistics.ts";
 import { summarizeCiTimings } from "./report-ci-timings.ts";
 
 const WINDOW_DAYS = 28;
@@ -13,7 +14,7 @@ export function selectLatencyRuns(value: unknown, releaseBranch: string, now: nu
 		.filter((run) => {
 			const created = Date.parse(asString(run.created_at, "created_at"));
 			if (!Number.isFinite(created)) {
-				throw new TypeError("Invalid run creation timestamp");
+				throw new Error("Invalid run creation timestamp");
 			}
 			return (
 				run.event === "pull_request" &&
@@ -43,15 +44,6 @@ export function isFullVerification(jobs: readonly { name: string }[]) {
 		(names.has("Quality / Webapp") || names.has("Quality / Webapp / Gates")) &&
 		jobs.filter((job) => job.name.startsWith("Test / App Server: Integration (")).length === 2
 	);
-}
-
-function median(sorted: readonly number[]): number | null {
-	if (sorted.length === 0) {
-		return null;
-	}
-	const middle = Math.floor(sorted.length / 2);
-	const upper = sorted[middle] ?? 0;
-	return sorted.length % 2 === 0 ? ((sorted[middle - 1] ?? 0) + upper) / 2 : upper;
 }
 
 export function latencyBudget(values: number[]) {

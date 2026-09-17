@@ -5,6 +5,7 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { isSet } from "./lib/env.ts";
 import { isImageIndex, selectPlatformDigest } from "./lib/image-scan.ts";
 import { asRecord, asString, readJsonFile } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
@@ -293,16 +294,7 @@ if (import.meta.main) {
 	const release = flags.get("release");
 	const commit = flags.get("commit");
 	const digestsPath = flags.get("digests");
-	if (
-		directory === undefined ||
-		directory === "" ||
-		release === undefined ||
-		release === "" ||
-		commit === undefined ||
-		commit === "" ||
-		digestsPath === undefined ||
-		digestsPath === ""
-	) {
+	if (!isSet(directory) || !isSet(release) || !isSet(commit) || !isSet(digestsPath)) {
 		throw new Error(
 			"usage: generate-release-evidence <directory> --release <tag> --commit <sha> --digests <tsv>",
 		);

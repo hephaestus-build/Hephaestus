@@ -26,12 +26,8 @@ const meta = {
 			description: "Array of current attachments",
 			control: "object",
 		},
-		onAttachmentsChange: {
-			description: "Handler for attachment changes",
-			control: false,
-		},
-		onFileUpload: {
-			description: "Handler for file upload processing",
+		attachmentUpload: {
+			description: "Upload and attachment-change handlers; absent on a surface without attachments",
 			control: false,
 		},
 		onSubmit: {
@@ -50,23 +46,17 @@ const meta = {
 			description: "Whether the input should be readonly",
 			control: "boolean",
 		},
-		disableAttachments: {
-			description: "Whether to disable attachment functionality",
-			control: "boolean",
-		},
 	},
 	args: {
 		status: "ready",
 		onStop: fn(),
 		attachments: [],
-		onAttachmentsChange: fn(),
-		onFileUpload: fn(async () => []),
+		attachmentUpload: { onFileUpload: fn(async () => []), onAttachmentsChange: fn() },
 		onSubmit: fn(),
 		// Suggested actions send immediately via onSubmit; no handler required
 		placeholder: "Send a message...",
 		initialInput: "",
 		readonly: false,
-		disableAttachments: false,
 	},
 	decorators: [
 		(Story) => (
@@ -143,12 +133,15 @@ export const ReadonlyInput: Story = {
 };
 
 /**
- * Input with attachments disabled - no attachment button or file upload.
+ * Input on a surface without attachments - no attachment button or file input.
  */
-export const DisabledAttachments: Story = {
+export const WithoutAttachments: Story = {
 	args: {
-		disableAttachments: true,
+		attachmentUpload: undefined,
 		placeholder: "Send a message (attachments disabled)...",
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("button", { name: "Attach a file" })).toBeNull();
 	},
 };
 

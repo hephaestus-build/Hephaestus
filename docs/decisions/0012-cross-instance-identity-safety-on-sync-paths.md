@@ -191,16 +191,16 @@ exception is reusable).
 
 ## Update — 2026-09-17
 
-Supersedes § Decision "For defect 2" on what a definitive 404 does.
-`GithubDataSyncService` (`integration/scm/github/sync/`) still catches
-`RepositoryNotFoundOnGitProviderException`, but removes the monitor only for a legacy row with no
-`native_id`; a monitor with a stable native id is preserved and retried, because a name-404 for a
-repository whose id still resolves upstream is a rename or transfer, which
-[ADR 0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md) § (e) heals by
-`(native_id, provider_id)`. The transient-failure branch (`Optional.empty()` leaves the row) is
-unchanged.
+Supersedes § Decision "For defect 2" on what a definitive 404 does, and corrects one name in
+"For defect 1".
 
-Name correction for § Decision "For defect 1": the type parameter is `IdentityProviderType`
-(`integration/core/connection/IdentityProviderType.java`), so the method is
-`OrganizationRepository.findByLoginIgnoreCaseAndProvider_Type(String, IdentityProviderType)`;
-`GitProviderType` no longer exists. The unscoped `findByLoginIgnoreCase(String)` is still absent.
+- `GithubDataSyncService` (`integration/scm/github/sync/`) catches
+  `RepositoryNotFoundOnGitProviderException` and removes the monitor only for a row with no
+  `native_id`; a monitor whose native id resolves upstream is kept and retried, because a name-404
+  for it is a rename or transfer, which
+  [ADR 0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md) § (e) heals by
+  `(native_id, provider_id)`. The transient branch (`Optional.empty()` leaves the row) is as decided.
+- The type parameter is `IdentityProviderType` (`integration/core/connection/`), so the method is
+  `OrganizationRepository.findByLoginIgnoreCaseAndProvider_Type(String, IdentityProviderType)`;
+  `GitProviderType` does not exist, and the unscoped `findByLoginIgnoreCase(String)` is absent as
+  decided.

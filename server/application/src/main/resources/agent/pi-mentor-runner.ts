@@ -368,6 +368,8 @@ async function runAfter(previous: Promise<void>, fn: () => unknown): Promise<voi
 		// through enqueue), which is the correct backpressure target: don't accept more
 		// Pi events than we can ship to Java.
 		if (process.stdout.writableLength > STDOUT_BACKPRESSURE_THRESHOLD_BYTES) {
+			// `events.once` rejects when the emitter emits `error` while it waits, and stdout has no
+			// `error` listener of its own, so an EPIPE during the wait lands in the catch below.
 			await once(process.stdout, "drain");
 		}
 		await fn();
@@ -1276,7 +1278,8 @@ function createStubRuntime(): MentorRuntime {
 			isStreaming = false;
 		},
 		async steer() {
-			// The stub answers nothing mid-turn.
+			// Resolving is what `handleSteer` needs to answer `accepted: true`; the turn in flight keeps
+			// its scripted frames, so a steered stub turn streams exactly what an unsteered one does.
 		},
 		async abort() {
 			if (isStreaming) {
@@ -1293,7 +1296,8 @@ function createStubRuntime(): MentorRuntime {
 			return { cancelled: false };
 		},
 		async dispose() {
-			// The stub holds nothing to release.
+			// Shutdown awaits this before exiting, and nothing here can hold the process open: the
+			// delays in `prompt` are awaited there, and the subscriber set needs no teardown.
 		},
 	};
 }

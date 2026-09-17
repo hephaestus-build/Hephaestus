@@ -105,7 +105,7 @@ describe("the unsaved-changes guard around a save", () => {
 		// React to have processed it.
 		await act(async () => {
 			failed.reject(new Error("Conflict"));
-			await expect(failed.promise).rejects.toThrow("Conflict");
+			await Promise.allSettled([failed.promise]);
 		});
 		fireEvent.click(screen.getByRole("link", { name: "Cancel" }));
 

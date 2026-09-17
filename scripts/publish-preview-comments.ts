@@ -1,3 +1,4 @@
+import { isSet } from "./lib/env.ts";
 import { asStringArray, readJsonFile } from "./lib/json.ts";
 import { PREVIEW_COMMENT_LIMIT } from "./lib/preview-comment.ts";
 
@@ -39,10 +40,7 @@ export async function publishPreviewComments({
 }): Promise<void> {
 	const title = kind === "docs" ? "📚 Documentation preview" : "🧩 Storybook preview";
 	const removed = [`## ${title}\n\n~~Preview has been removed~~ (PR closed)\n`];
-	let bodies =
-		path !== undefined && path !== ""
-			? asStringArray(await readJsonFile(path), "Preview comments")
-			: removed;
+	let bodies = isSet(path) ? asStringArray(await readJsonFile(path), "Preview comments") : removed;
 	if (
 		bodies.length === 0 ||
 		bodies.some((body) => !body.trim() || body.length > PREVIEW_COMMENT_LIMIT)
@@ -50,7 +48,7 @@ export async function publishPreviewComments({
 		throw new Error("Preview comments must be nonempty and fit GitHub's comment limit.");
 	}
 	const { repo, issue } = context;
-	if (path !== undefined && path !== "") {
+	if (isSet(path)) {
 		const pull = await github.rest.pulls.get({ ...repo, pull_number: issue.number });
 		if (pull.data.state === "closed") {
 			bodies = removed;

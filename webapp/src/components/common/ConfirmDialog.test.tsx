@@ -36,7 +36,7 @@ async function expectDismissed() {
 	await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
 }
 
-function openConfirm(onConfirm = vi.fn<(subject: Row) => void>()) {
+function openConfirm(onConfirm = vi.fn()) {
 	render(<Harness onConfirm={onConfirm} />);
 	fireEvent.click(screen.getByRole("button", { name: "Delete GPT-5" }));
 	expect(screen.getByRole("alertdialog").textContent).toContain("Delete “GPT-5”?");
@@ -55,7 +55,7 @@ describe("ConfirmDialog", () => {
 
 	it("lets Escape out while the confirmed request is still in flight", async () => {
 		// WCAG 2.2 SC 2.1.2: nothing here reads the caller's pending state, so no keyboard trap.
-		const onConfirm = vi.fn<(subject: Row) => void>();
+		const onConfirm = vi.fn();
 		render(<Harness onConfirm={onConfirm} />);
 		fireEvent.click(screen.getByRole("button", { name: "Delete GPT-5" }));
 
@@ -81,12 +81,12 @@ describe("ConfirmDialog", () => {
 		render(
 			<ConfirmDialog
 				subject={row}
-				onClose={vi.fn<() => void>()}
+				onClose={vi.fn()}
 				title={(subject) => `Turn off “${subject.displayName}”?`}
 				description={(subject) => `Everything on ${subject.displayName} stops.`}
 				confirmLabel="Turn off connection"
 				cancelLabel="Keep active"
-				onConfirm={vi.fn<(subject: Row) => void>()}
+				onConfirm={vi.fn()}
 			/>,
 		);
 

@@ -11,6 +11,77 @@ import path from "node:path";
 
 import type { AgentSessionEvent, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 
+/**
+ * What the journal keeps of each session event. Native Pi JSONL owns message bodies and tool results;
+ * the journal adds execution timing, retries and compaction, which are not reconstructed by guessing
+ * from the saved messages. `type` keeps the event's name alone, since the full event can duplicate
+ * entire conversations and native sessions retain that content; `none` keeps nothing.
+ */
+const JOURNAL = {
+	tool_execution_start: "detail",
+	tool_execution_end: "detail",
+	message_end: "detail",
+	summarization_retry_attempt_start: "type",
+	summarization_retry_finished: "type",
+	summarization_retry_scheduled: "type",
+	agent_settled: "type",
+	agent_start: "type",
+	agent_end: "type",
+	turn_start: "type",
+	turn_end: "type",
+	compaction_start: "type",
+	compaction_end: "type",
+	auto_retry_start: "type",
+	auto_retry_end: "type",
+	bash_execution_update: "none",
+	entry_appended: "none",
+	message_start: "none",
+	message_update: "none",
+	queue_update: "none",
+	session_info_changed: "none",
+	thinking_level_changed: "none",
+	tool_execution_update: "none",
+} satisfies Record<AgentSessionEvent["type"], "detail" | "type" | "none">;
+
+// Read off the table, so a `detail` entry without a case in `eventDetail` fails to compile.
+type DetailedEvent = Extract<
+	AgentSessionEvent,
+	{
+		type: {
+			[T in keyof typeof JOURNAL]: (typeof JOURNAL)[T] extends "detail" ? T : never;
+		}[keyof typeof JOURNAL];
+	}
+>;
+
+function isDetailed(event: AgentSessionEvent): event is DetailedEvent {
+	return JOURNAL[event.type] === "detail";
+}
+
+function eventDetail(event: DetailedEvent): Record<string, unknown> {
+	switch (event.type) {
+		case "tool_execution_start": {
+			return { type: event.type, toolCallId: event.toolCallId, toolName: event.toolName };
+		}
+		case "tool_execution_end": {
+			return {
+				type: event.type,
+				toolCallId: event.toolCallId,
+				toolName: event.toolName,
+				isError: event.isError,
+			};
+		}
+		case "message_end": {
+			return {
+				type: event.type,
+				role: event.message.role,
+				...(event.message.role === "assistant"
+					? { stopReason: event.message.stopReason, usage: event.message.usage }
+					: {}),
+			};
+		}
+	}
+}
+
 /** Private execution artifacts, never application logs or telemetry attributes. */
 export class ReviewTrace {
 	readonly sessionDir: string;
@@ -95,62 +166,10 @@ export class ReviewTrace {
 		if (event.type === "agent_settled") {
 			this.activeSessions.delete(sessionId);
 		}
-		// Native Pi JSONL owns message bodies and tool results. This journal adds execution timing,
-		// retries and compaction, which are not reconstructed by guessing from the saved messages.
-		switch (event.type) {
-			case "tool_execution_start": {
-				this.record(sessionId, {
-					type: event.type,
-					toolCallId: event.toolCallId,
-					toolName: event.toolName,
-				});
-				break;
-			}
-			case "tool_execution_end": {
-				this.record(sessionId, {
-					type: event.type,
-					toolCallId: event.toolCallId,
-					toolName: event.toolName,
-					isError: event.isError,
-				});
-				break;
-			}
-			case "message_end": {
-				this.record(sessionId, {
-					type: event.type,
-					role: event.message.role,
-					...(event.message.role === "assistant"
-						? { stopReason: event.message.stopReason, usage: event.message.usage }
-						: {}),
-				});
-				break;
-			}
-			case "summarization_retry_attempt_start":
-			case "summarization_retry_finished":
-			case "summarization_retry_scheduled":
-			case "agent_settled":
-			case "agent_start":
-			case "agent_end":
-			case "turn_start":
-			case "turn_end":
-			case "compaction_start":
-			case "compaction_end":
-			case "auto_retry_start":
-			case "auto_retry_end": {
-				// The full event can duplicate entire conversations; native sessions retain that content.
-				this.record(sessionId, { type: event.type });
-				break;
-			}
-			case "bash_execution_update":
-			case "entry_appended":
-			case "message_start":
-			case "message_update":
-			case "queue_update":
-			case "session_info_changed":
-			case "thinking_level_changed":
-			case "tool_execution_update": {
-				break;
-			}
+		if (isDetailed(event)) {
+			this.record(sessionId, eventDetail(event));
+		} else if (JOURNAL[event.type] === "type") {
+			this.record(sessionId, { type: event.type });
 		}
 	}
 

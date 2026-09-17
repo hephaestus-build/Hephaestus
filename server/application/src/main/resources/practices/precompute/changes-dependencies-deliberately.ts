@@ -247,8 +247,10 @@ function ecosystemFor(path: string): Ecosystem | null {
 	return ECOSYSTEMS.find((e) => e.isManifest(base)) ?? null;
 }
 
+type DependencyFact = "ADDED" | "REMOVED" | "UNCHANGED" | "PIN_DROPPED" | "PIN_LOOSENED" | "BUMPED";
+
 // Classify the constraint delta for a dependency present on both sides (added + removed for same name).
-function classifyDelta(oldC: string, newC: string): string {
+function classifyDelta(oldC: string, newC: string): DependencyFact {
 	const o = oldC.trim();
 	const n = newC.trim();
 	// Identical constraint text on both sides means the -X/+X pair differs only by whitespace/newline (e.g. a
@@ -310,6 +312,65 @@ function collectMavenDeps(df: DiffFile, side: "added" | "removed"): Map<string, 
 	return out;
 }
 
+// The diff line for a dependency name on a given side (for hint placement). Match on a quote/word/coordinate
+// boundary, not a bare substring, so a prefix-sharing sibling (react vs react-dom, or a scoped name appearing
+// inside another package's URL) doesn't grab the wrong line.
+function lineFor(df: DiffFile, name: string, side: "added" | "removed"): number {
+	const lines = side === "added" ? df.addedLines : df.removedLines;
+	const bounded = new RegExp(`(^|[^\\w.\\-/])${escapeRegExp(name)}([^\\w.\\-/]|$)`, "u");
+	for (const [ln, content] of lines) {
+		if (bounded.test(content)) {
+			return ln;
+		}
+	}
+	// Fallback: a constructed key (e.g. a Gradle group:name coordinate) may not survive the boundary
+	// test against the raw line — keep the substring scan so the hint still lands on a real line.
+	for (const [ln, content] of lines) {
+		if (content.includes(name)) {
+			return ln;
+		}
+	}
+	return 0;
+}
+
+interface DependencyChange {
+	fact: DependencyFact;
+	side: "added" | "removed";
+	context: string;
+}
+
+// `name` comes from the union of both sides, so a name on neither is not a case here.
+function dependencyChange(
+	name: string,
+	added: Map<string, string>,
+	removed: Map<string, string>,
+): DependencyChange {
+	const oldC = removed.get(name) ?? "";
+	const newC = added.get(name) ?? "";
+	if (added.has(name) && !removed.has(name)) {
+		return { fact: "ADDED", side: "added", context: `+ ${name} ${newC}`.trim() };
+	}
+	if (!added.has(name) && removed.has(name)) {
+		return { fact: "REMOVED", side: "removed", context: `- ${name} ${oldC}`.trim() };
+	}
+	return { fact: classifyDelta(oldC, newC), side: "added", context: `${name}: ${oldC} -> ${newC}` };
+}
+
+// Which lockfile basenames exist anywhere in the repo (sibling-present fact)? findFiles needs an extension;
+// scan the basenames we care about via their extensions.
+function repoLockfiles(repoPath: string, lockfileNames: Set<string>): Set<string> {
+	const present = new Set<string>();
+	for (const ext of ["json", "lock", "yaml", "resolved", "lockfile", "sum"]) {
+		for (const f of findFiles(repoPath, ext)) {
+			const base = basenameLower(f);
+			if (lockfileNames.has(base)) {
+				present.add(base);
+			}
+		}
+	}
+	return present;
+}
+
 export default function changesDependenciesDeliberately(
 	repoPath: string,
 	diffFiles: Map<string, DiffFile>,
@@ -318,26 +379,19 @@ export default function changesDependenciesDeliberately(
 	const hints: Hint[] = [];
 	const changedManifests = new Set<string>();
 	const touchedLockfiles = new Set<string>();
-	let depsAdded = 0;
-	let depsRemoved = 0;
-	let pinsLoosened = 0;
-	let pinsDropped = 0;
-	let bumped = 0;
+	const tally: Record<DependencyFact, number> = {
+		ADDED: 0,
+		REMOVED: 0,
+		UNCHANGED: 0,
+		PIN_DROPPED: 0,
+		PIN_LOOSENED: 0,
+		BUMPED: 0,
+	};
 
-	// Which lockfile basenames exist anywhere in the repo (sibling-present fact)?
 	const allLockfileNames = new Set(
 		ECOSYSTEMS.flatMap((e) => e.lockfiles.map((l) => l.toLowerCase())),
 	);
-	const repoLockfilesPresent = new Set<string>();
-	// findFiles needs an extension; scan the basenames we care about via their extensions.
-	for (const ext of ["json", "lock", "yaml", "resolved", "lockfile", "sum"]) {
-		for (const f of findFiles(repoPath, ext)) {
-			const base = basenameLower(f);
-			if (allLockfileNames.has(base)) {
-				repoLockfilesPresent.add(base);
-			}
-		}
-	}
+	const repoLockfilesPresent = repoLockfiles(repoPath, allLockfileNames);
 
 	for (const [path, df] of diffFiles) {
 		const base = basenameLower(path);
@@ -355,71 +409,28 @@ export default function changesDependenciesDeliberately(
 		const added = isMaven ? collectMavenDeps(df, "added") : collectDeps(df, eco, "added");
 		const removed = isMaven ? collectMavenDeps(df, "removed") : collectDeps(df, eco, "removed");
 
-		// helper to find the diff line for a dependency name on a given side (for hint placement). Match on a
-		// quote/word/coordinate boundary, not a bare substring, so a prefix-sharing sibling (react vs
-		// react-dom, or a scoped name appearing inside another package's URL) doesn't grab the wrong line.
-		const lineFor = (name: string, side: "added" | "removed"): number => {
-			const lines = side === "added" ? df.addedLines : df.removedLines;
-			const bounded = new RegExp(`(^|[^\\w.\\-/])${escapeRegExp(name)}([^\\w.\\-/]|$)`, "u");
-			for (const [ln, content] of lines) {
-				if (bounded.test(content)) {
-					return ln;
-				}
-			}
-			// Fallback: a constructed key (e.g. a Gradle group:name coordinate) may not survive the boundary
-			// test against the raw line — keep the substring scan so the hint still lands on a real line.
-			for (const [ln, content] of lines) {
-				if (content.includes(name)) {
-					return ln;
-				}
-			}
-			return 0;
-		};
-
 		const allNames = new Set<string>([...added.keys(), ...removed.keys()]);
 		for (const name of allNames) {
-			const inAdded = added.has(name);
-			const inRemoved = removed.has(name);
-			let fact: string;
-			let side: "added" | "removed" = "added";
-			if (inAdded && !inRemoved) {
-				fact = "ADDED";
-				depsAdded += 1;
-			} else if (!inAdded && inRemoved) {
-				fact = "REMOVED";
-				side = "removed";
-				depsRemoved += 1;
-			} else {
-				fact = classifyDelta(removed.get(name) ?? "", added.get(name) ?? "");
-				if (fact === "PIN_LOOSENED") {
-					pinsLoosened += 1;
-				} else if (fact === "PIN_DROPPED") {
-					pinsDropped += 1;
-				} else if (fact === "UNCHANGED") {
-					// whitespace/newline-only line pair — not a version change, count nothing
-				} else {
-					bumped += 1;
-				}
-			}
-			const oldC = removed.get(name) ?? "";
-			const newC = added.get(name) ?? "";
-			let ctx = `${name}: ${oldC} -> ${newC}`;
-			if (fact === "ADDED") {
-				ctx = `+ ${name} ${newC}`.trim();
-			} else if (fact === "REMOVED") {
-				ctx = `- ${name} ${oldC}`.trim();
-			}
+			const { fact, side, context } = dependencyChange(name, added, removed);
+			tally[fact] += 1;
 			hints.push({
 				file: path,
-				line: lineFor(name, side),
+				line: lineFor(df, name, side),
 				pattern: `dep:${fact}`,
-				context: ctx.slice(0, 160),
+				context: context.slice(0, 160),
 				inDiff: true,
 				flags: { ecosystem: base, dependency: name },
 			});
 		}
 	}
 
+	const {
+		ADDED: depsAdded,
+		REMOVED: depsRemoved,
+		PIN_LOOSENED: pinsLoosened,
+		PIN_DROPPED: pinsDropped,
+		BUMPED: bumped,
+	} = tally;
 	const lockfilePresent = repoLockfilesPresent.size > 0 || touchedLockfiles.size > 0;
 
 	const mavenChanged = [...changedManifests].some((p) => basenameLower(p) === "pom.xml");

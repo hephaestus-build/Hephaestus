@@ -1,19 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { toast } from "sonner";
 
 import { Chat } from "@/components/mentor/Chat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
+import { copyToClipboard } from "@/lib/clipboard";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/$threadId")({
 	component: ThreadContainer,
 });
-
-function copyToClipboard(content: string) {
-	navigator.clipboard.writeText(content).catch(() => {
-		toast.error("Couldn't copy that to the clipboard.");
-	});
-}
 
 function ThreadContainer() {
 	const { threadId } = Route.useParams();
@@ -139,7 +133,6 @@ function ThreadContainer() {
 				onCopy={copyToClipboard}
 				onVote={handleVote}
 				inputPlaceholder="Continue the conversation..."
-				disableAttachments
 				className="h-full"
 			/>
 		</div>

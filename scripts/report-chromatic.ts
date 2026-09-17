@@ -3,6 +3,7 @@ import { appendFileSync, readFileSync, rmSync } from "node:fs";
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 
+import { isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString } from "./lib/json.ts";
 
 const REPORT_PATH = "webapp/chromatic-report.xml";
@@ -118,28 +119,32 @@ function result(state: string, pass: boolean, message: string) {
 	return { state, pass, message };
 }
 
-export function visualVerdict(env: NodeJS.ProcessEnv, report?: string, now = Date.now()) {
-	const code = count(env.CHROMATIC_CODE);
-	const captured = count(env.CHROMATIC_CAPTURED);
-	const inherited = count(env.CHROMATIC_INHERITED);
-	const tests = count(env.CHROMATIC_TESTS);
-	const errors = count(env.CHROMATIC_ERRORS);
-	const changes = count(env.CHROMATIC_CHANGES);
-	const interactions = count(env.CHROMATIC_INTERACTIONS);
-	if (env.CHROMATIC_OUTCOME === "skipped" && env.CHROMATIC_POLICY_SKIP === "true") {
+type Verdict = ReturnType<typeof result>;
+
+/** A run the policy or a budget pause skipped on purpose, which passes without approving anything. */
+function skippedVerdict(env: NodeJS.ProcessEnv, now: number): Verdict | undefined {
+	if (env.CHROMATIC_OUTCOME !== "skipped") {
+		return undefined;
+	}
+	if (env.CHROMATIC_POLICY_SKIP === "true") {
 		return result(
 			"policy-skipped",
 			true,
 			"Not tested: fork or dependency-bot policy. This is not visual approval.",
 		);
 	}
-	if (env.CHROMATIC_OUTCOME === "skipped" && visualTestingPaused(env, now)) {
+	if (visualTestingPaused(env, now)) {
 		return result(
 			"budget-paused",
 			true,
 			`Visual comparison unavailable: maintainer-approved budget pause until ${env.CHROMATIC_PAUSED_UNTIL} 00:00 UTC. Browser interaction tests remain required. This is not visual approval; enforcement resumes automatically at the deadline.`,
 		);
 	}
+	return undefined;
+}
+
+/** What the action's exit code and outcome say before any count is read. */
+function runVerdict(env: NodeJS.ProcessEnv, code: number | undefined): Verdict | undefined {
 	if (code === 5 || code === 11 || code === 12) {
 		return result(
 			"quota-skipped",
@@ -161,6 +166,20 @@ export function visualVerdict(env: NodeJS.ProcessEnv, report?: string, now = Dat
 			"Chromatic did not complete successfully. Check action logs, credentials and service status before retrying.",
 		);
 	}
+	return undefined;
+}
+
+interface Counts {
+	captured: number | undefined;
+	inherited: number | undefined;
+	tests: number | undefined;
+	errors: number | undefined;
+	changes: number | undefined;
+	interactions: number | undefined;
+}
+
+function coverageVerdict(counts: Counts): Verdict | undefined {
+	const { captured, inherited, tests, errors, changes, interactions } = counts;
 	if ((errors ?? 0) > 0 || (interactions ?? 0) > 0) {
 		return result(
 			"failed",
@@ -184,6 +203,23 @@ export function visualVerdict(env: NodeJS.ProcessEnv, report?: string, now = Dat
 			"No usable visual coverage evidence. Check account limits, project testing settings and action outputs.",
 		);
 	}
+	return undefined;
+}
+
+export function visualVerdict(env: NodeJS.ProcessEnv, report?: string, now = Date.now()) {
+	const code = count(env.CHROMATIC_CODE);
+	const counts: Counts = {
+		captured: count(env.CHROMATIC_CAPTURED),
+		inherited: count(env.CHROMATIC_INHERITED),
+		tests: count(env.CHROMATIC_TESTS),
+		errors: count(env.CHROMATIC_ERRORS),
+		changes: count(env.CHROMATIC_CHANGES),
+		interactions: count(env.CHROMATIC_INTERACTIONS),
+	};
+	const early = skippedVerdict(env, now) ?? runVerdict(env, code) ?? coverageVerdict(counts);
+	if (early !== undefined) {
+		return early;
+	}
 	const reportError =
 		report === undefined
 			? "Missing structured Chromatic report evidence."
@@ -191,7 +227,8 @@ export function visualVerdict(env: NodeJS.ProcessEnv, report?: string, now = Dat
 	if (reportError !== undefined) {
 		return result("unavailable", false, reportError);
 	}
-	return captured > 0
+	const { captured, inherited, changes } = counts;
+	return (captured ?? 0) > 0
 		? result(
 				"tested-build",
 				true,
@@ -219,7 +256,7 @@ if (import.meta.main) {
 	if (process.argv[2] === "--clear") {
 		rmSync(REPORT_PATH, { force: true });
 		const output = process.env.GITHUB_OUTPUT;
-		if (output !== undefined && output !== "") {
+		if (isSet(output)) {
 			appendFileSync(output, `paused=${visualTestingPaused(process.env)}\n`);
 		}
 	} else {
@@ -232,7 +269,7 @@ if (import.meta.main) {
 		const verdict = visualVerdict(process.env, report);
 		const summary = coverageSummary(process.env, report);
 		const stepSummary = process.env.GITHUB_STEP_SUMMARY;
-		if (stepSummary !== undefined && stepSummary !== "") {
+		if (isSet(stepSummary)) {
 			appendFileSync(stepSummary, summary);
 		}
 		console.log(summary);

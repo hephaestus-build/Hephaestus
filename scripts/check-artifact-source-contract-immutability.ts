@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 
+import { isSet } from "./lib/env.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 // Git hooks export GIT_DIR and GIT_INDEX_FILE, which would silently redirect every command below at
@@ -20,7 +21,7 @@ const root = "server/application/src/main/resources/contracts/artifact-source";
 const githubBaseRef = process.env.GITHUB_BASE_REF;
 const baseRef =
 	process.env.CONTRACT_BASE_REF ??
-	(githubBaseRef !== undefined && githubBaseRef !== "" ? `origin/${githubBaseRef}` : "origin/main");
+	(isSet(githubBaseRef) ? `origin/${githubBaseRef}` : "origin/main");
 
 const git = (...args: string[]): string =>
 	execFileSync("git", args, {

@@ -21,8 +21,7 @@ client.setConfig({ baseUrl: "http://localhost:8080" });
 
 // jsdom has no ResizeObserver; Base UI's anchor positioning observes elements to keep a popup
 // pinned to its trigger. A stub that never fires is enough — no assertion depends on the measurements.
-// oxlint-disable-next-line typescript/no-unnecessary-condition -- lib.dom declares it, jsdom does not ship it
-globalThis.ResizeObserver ??= ObserverStub;
+vi.stubGlobal("ResizeObserver", ObserverStub);
 
 // jsdom has no `matchMedia`; the toaster asks it for `prefers-reduced-motion` on mount.
 if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
@@ -33,11 +32,11 @@ if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
 		// `MediaQueryList` still declares the pre-`addEventListener` pair, and library code
 		// feature-detects it, so the stand-in has to answer to it as well.
 		// oxlint-disable-next-line typescript/no-deprecated -- a polyfill has to implement the interface it stands in for
-		addListener: vi.fn<() => void>(),
+		addListener: vi.fn(),
 		// oxlint-disable-next-line typescript/no-deprecated -- a polyfill has to implement the interface it stands in for
-		removeListener: vi.fn<() => void>(),
-		addEventListener: vi.fn<() => void>(),
-		removeEventListener: vi.fn<() => void>(),
+		removeListener: vi.fn(),
+		addEventListener: vi.fn(),
+		removeEventListener: vi.fn(),
 		dispatchEvent: () => false,
 	});
 }

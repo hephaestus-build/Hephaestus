@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { isSet } from "./lib/env.ts";
 import { run } from "./lib/process.ts";
 
 const root = process.cwd();
@@ -54,29 +55,33 @@ async function copyFirst(
 	console.log(`  skipped ${destination} (no candidate found in root: ${candidates.join(" ")})`);
 }
 
+async function copyLocalConfig(): Promise<void> {
+	const jeanRoot = process.env.JEAN_ROOT_PATH;
+	if (!isSet(jeanRoot)) {
+		console.log("  JEAN_ROOT_PATH is not set — skipping config file copy.");
+		return;
+	}
+	console.log("Copying local config files...");
+	for (const [destination, candidates] of [
+		[
+			"server/application/src/main/resources/application-local.yml",
+			["server/application/src/main/resources/application-local.yml"],
+		],
+		[
+			"server/application/src/test/resources/application-live-local.yml",
+			["server/application/src/test/resources/application-live-local.yml"],
+		],
+		["server/.env", ["server/.env"]],
+		["docker/.env", ["docker/.env"]],
+		[".claude/settings.local.json", [".claude/settings.local.json"]],
+	] satisfies [string, string[]][]) {
+		await copyFirst(jeanRoot, destination, candidates);
+	}
+}
+
 async function main(): Promise<void> {
 	console.log("Setting up Jean worktree...");
-	const jeanRoot = process.env.JEAN_ROOT_PATH;
-	if (jeanRoot !== undefined && jeanRoot !== "") {
-		console.log("Copying local config files...");
-		for (const [destination, candidates] of [
-			[
-				"server/application/src/main/resources/application-local.yml",
-				["server/application/src/main/resources/application-local.yml"],
-			],
-			[
-				"server/application/src/test/resources/application-live-local.yml",
-				["server/application/src/test/resources/application-live-local.yml"],
-			],
-			["server/.env", ["server/.env"]],
-			["docker/.env", ["docker/.env"]],
-			[".claude/settings.local.json", [".claude/settings.local.json"]],
-		] satisfies [string, string[]][]) {
-			await copyFirst(jeanRoot, destination, candidates);
-		}
-	} else {
-		console.log("  JEAN_ROOT_PATH is not set — skipping config file copy.");
-	}
+	await copyLocalConfig();
 	const envPath = path.join(root, "server/.env");
 	let before: string | undefined;
 	try {

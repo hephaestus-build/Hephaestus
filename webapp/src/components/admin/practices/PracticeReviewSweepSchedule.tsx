@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { AlertCircle, CalendarClock } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type {
 	CreateReviewSweepScheduleRequest,
@@ -112,7 +112,7 @@ export function PracticeReviewSweepSchedule({
 	const scheduledKinds = new Set(schedules.map((schedule) => schedule.artifactKind));
 	const availableKinds = WORK_KIND_ITEMS.filter((kind) => !scheduledKinds.has(kind.value));
 
-	let scheduleList;
+	let scheduleList: ReactNode;
 	if (isLoading) {
 		scheduleList = (
 			<div className="flex justify-center py-6">

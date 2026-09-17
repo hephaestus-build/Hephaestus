@@ -170,8 +170,6 @@ export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 	const checking = state.status === "ready" && state.check.status === "pending";
 	const canCheck =
 		release !== undefined && release.status !== "DISABLED" && release.status !== "NOT_APPLICABLE";
-	const latest = release?.latest;
-	const newer = latest !== undefined && release?.status === "UPDATE_AVAILABLE";
 
 	let announcement = "";
 	if (state.status === "ready" && def) {
@@ -180,79 +178,6 @@ export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 		} else if (state.check.status === "success") {
 			announcement = def.label;
 		}
-	}
-
-	let body: ReactNode = null;
-	if (state.status === "loading") {
-		body = (
-			<div className="space-y-2">
-				<Skeleton className="h-6 w-56" />
-				<Skeleton className="h-4 w-full" />
-				<Skeleton className="h-4 w-2/3" />
-			</div>
-		);
-	} else if (state.status === "error") {
-		body = (
-			<QueryErrorAlert
-				title="Release information is unavailable"
-				error={state.error}
-				onRetry={state.onRetry}
-			/>
-		);
-	} else if (release && def) {
-		body = (
-			<>
-				<div className="flex flex-wrap items-center gap-2">
-					<StatusBadge def={def} />
-					<span className="font-mono text-sm">{runningLabel(release.running)}</span>
-				</div>
-
-				<p className="text-sm text-muted-foreground">
-					<CheckSummary release={release} />
-				</p>
-
-				{newer && (
-					<Alert variant={latest.schemaMigrations === true ? "warning" : "default"}>
-						{latest.schemaMigrations === true ? <TriangleAlertIcon /> : <InfoIcon />}
-						<AlertTitle>v{latest.version}</AlertTitle>
-						<AlertDescription>
-							<p>{migrationNote(latest.schemaMigrations)}</p>
-							<p className="flex flex-wrap gap-x-4">
-								<ExternalLink href={latest.notesUrl}>Release notes</ExternalLink>
-								<ExternalLink href={UPGRADE_GUIDE_URL}>Upgrade guide</ExternalLink>
-							</p>
-						</AlertDescription>
-					</Alert>
-				)}
-
-				{state.check.status === "error" && (
-					<QueryErrorAlert title="Could not check for updates" error={state.check.error} />
-				)}
-
-				<Collapsible>
-					<CollapsibleTrigger render={<Button type="button" variant="quiet" size="sm" />}>
-						Show deployment identity
-					</CollapsibleTrigger>
-					<CollapsibleContent className="mt-2">
-						<dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
-							<dt className="text-muted-foreground">Version</dt>
-							<dd className="font-mono break-all">{release.running.version}</dd>
-							<dt className="text-muted-foreground">Commit</dt>
-							<dd className="font-mono break-all">{release.running.commit ?? "not reported"}</dd>
-							<dt className="text-muted-foreground">Image</dt>
-							<dd className="font-mono break-all">{release.running.image ?? "not reported"}</dd>
-							<dt className="text-muted-foreground">Roles</dt>
-							<dd>{release.running.roles.map((role) => role.toLowerCase()).join(", ")}</dd>
-						</dl>
-						<p className="mt-2 text-xs text-muted-foreground">
-							Reported by this server from its release lock, not observed from the container. Other
-							roles report their own identity under <code>release</code> in{" "}
-							<code>/actuator/info</code>.
-						</p>
-					</CollapsibleContent>
-				</Collapsible>
-			</>
-		);
 	}
 
 	return (
@@ -285,8 +210,85 @@ export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 				<p role="status" aria-live="polite" className="sr-only">
 					{announcement}
 				</p>
-				{body}
+				<ReleaseBody state={state} />
 			</CardContent>
 		</Card>
+	);
+}
+
+function ReleaseBody({ state }: InstanceReleaseCardProps) {
+	if (state.status === "loading") {
+		return (
+			<div className="space-y-2">
+				<Skeleton className="h-6 w-56" />
+				<Skeleton className="h-4 w-full" />
+				<Skeleton className="h-4 w-2/3" />
+			</div>
+		);
+	}
+	if (state.status === "error") {
+		return (
+			<QueryErrorAlert
+				title="Release information is unavailable"
+				error={state.error}
+				onRetry={state.onRetry}
+			/>
+		);
+	}
+	const { release } = state;
+	const { latest } = release;
+	const newer = latest !== undefined && release.status === "UPDATE_AVAILABLE";
+	return (
+		<>
+			<div className="flex flex-wrap items-center gap-2">
+				<StatusBadge def={RELEASE_CHECK_STATUS_DEFS[release.status]} />
+				<span className="font-mono text-sm">{runningLabel(release.running)}</span>
+			</div>
+
+			<p className="text-sm text-muted-foreground">
+				<CheckSummary release={release} />
+			</p>
+
+			{newer && (
+				<Alert variant={latest.schemaMigrations === true ? "warning" : "default"}>
+					{latest.schemaMigrations === true ? <TriangleAlertIcon /> : <InfoIcon />}
+					<AlertTitle>v{latest.version}</AlertTitle>
+					<AlertDescription>
+						<p>{migrationNote(latest.schemaMigrations)}</p>
+						<p className="flex flex-wrap gap-x-4">
+							<ExternalLink href={latest.notesUrl}>Release notes</ExternalLink>
+							<ExternalLink href={UPGRADE_GUIDE_URL}>Upgrade guide</ExternalLink>
+						</p>
+					</AlertDescription>
+				</Alert>
+			)}
+
+			{state.check.status === "error" && (
+				<QueryErrorAlert title="Could not check for updates" error={state.check.error} />
+			)}
+
+			<Collapsible>
+				<CollapsibleTrigger render={<Button type="button" variant="quiet" size="sm" />}>
+					Show deployment identity
+				</CollapsibleTrigger>
+				<CollapsibleContent className="mt-2">
+					<dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+						<dt className="text-muted-foreground">Version</dt>
+						<dd className="font-mono break-all">{release.running.version}</dd>
+						<dt className="text-muted-foreground">Commit</dt>
+						<dd className="font-mono break-all">{release.running.commit ?? "not reported"}</dd>
+						<dt className="text-muted-foreground">Image</dt>
+						<dd className="font-mono break-all">{release.running.image ?? "not reported"}</dd>
+						<dt className="text-muted-foreground">Roles</dt>
+						<dd>{release.running.roles.map((role) => role.toLowerCase()).join(", ")}</dd>
+					</dl>
+					<p className="mt-2 text-xs text-muted-foreground">
+						Reported by this server from its release lock, not observed from the container. Other
+						roles report their own identity under <code>release</code> in{" "}
+						<code>/actuator/info</code>.
+					</p>
+				</CollapsibleContent>
+			</Collapsible>
+		</>
 	);
 }

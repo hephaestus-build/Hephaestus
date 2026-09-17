@@ -34,11 +34,14 @@ const page = await readFile(PAGE, "utf8");
 
 /** Every `##`…`####` section body, keyed by heading and ending where the next heading starts. */
 const SECTIONS = new Map<string, string>();
-const parts = page.split(/^#{2,4} (?<title>.+)$/mu);
-for (let index = 1; index + 1 < parts.length; index += 2) {
-	const [title, body] = [parts[index], parts[index + 1]];
-	if (title !== undefined && body !== undefined) {
-		SECTIONS.set(title.trim(), body);
+const headings = [...page.matchAll(/^#{2,4} (?<title>.+)$/gmu)];
+for (const [index, heading] of headings.entries()) {
+	const title = heading.groups?.title;
+	if (title !== undefined) {
+		SECTIONS.set(
+			title.trim(),
+			page.slice(heading.index + heading[0].length, headings[index + 1]?.index),
+		);
 	}
 }
 

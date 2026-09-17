@@ -41,7 +41,6 @@ function res(status: number, url: string): Response {
 	Object.defineProperty(r, "url", { value: url, configurable: true });
 	return r;
 }
-const flush = async () => sleep(0);
 
 describe("handlePossibleSessionExpiry", () => {
 	it("recovers a mid-session 401 via a silent refresh — no redirect", async () => {
@@ -56,7 +55,7 @@ describe("handlePossibleSessionExpiry", () => {
 		);
 
 		expect(handled).toBe(true);
-		await flush();
+		await sleep(0);
 		expect(refreshMock).toHaveBeenCalledOnce();
 		expect(assigned).toHaveLength(0);
 		expect(invalidate).toHaveBeenCalledWith();
@@ -73,7 +72,7 @@ describe("handlePossibleSessionExpiry", () => {
 		);
 
 		expect(handled).toBe(true);
-		await flush();
+		await sleep(0);
 		expect(refreshMock).toHaveBeenCalledOnce();
 		expect(assigned).toHaveLength(1);
 		const [target] = assigned;
@@ -89,9 +88,9 @@ describe("handlePossibleSessionExpiry", () => {
 		const qc = makeQueryClient();
 		const url = "http://localhost:8080/workspaces/acme/practices";
 		handlePossibleSessionExpiry(res(401, url), qc);
-		await flush();
+		await sleep(0);
 		handlePossibleSessionExpiry(res(401, url), qc);
-		await flush();
+		await sleep(0);
 		expect(refreshMock).toHaveBeenCalledOnce();
 		expect(assigned).toHaveLength(0);
 	});
@@ -102,7 +101,7 @@ describe("handlePossibleSessionExpiry", () => {
 		const qc = makeQueryClient();
 		const invalidate = vi.spyOn(qc, "invalidateQueries");
 		handlePossibleSessionExpiry(res(401, "http://localhost:8080/workspaces/acme"), qc);
-		await flush();
+		await sleep(0);
 		expect(assigned).toHaveLength(0);
 		expect(invalidate).not.toHaveBeenCalled();
 	});
@@ -117,7 +116,7 @@ describe("handlePossibleSessionExpiry", () => {
 			handlePossibleSessionExpiry(res(401, url), qc),
 			handlePossibleSessionExpiry(res(401, url), qc),
 		];
-		await flush();
+		await sleep(0);
 
 		expect(handled).toStrictEqual([true, true, true]);
 		expect(refreshMock).toHaveBeenCalledOnce();
@@ -185,7 +184,7 @@ describe("handlePossibleSessionExpiry", () => {
 			res(401, "http://localhost:8080/workspaces/acme"),
 			makeQueryClient(),
 		);
-		await flush();
+		await sleep(0);
 		const [target] = assigned;
 		assert(hasText(target));
 		const url = new URL(target);

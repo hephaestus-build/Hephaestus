@@ -6,12 +6,15 @@
  * than a few frames later as "undefined is not a function" — or, worse, pass having compared two
  * `undefined`s.
  */
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 
 export const parseJson = (text: string): unknown => JSON.parse(text);
 
 export const readJsonFile = async (file: string): Promise<unknown> =>
 	parseJson(await readFile(file, "utf8"));
+
+export const readJsonFileSync = (file: string): unknown => parseJson(readFileSync(file, "utf8"));
 
 const describe = (value: unknown): string => {
 	if (value === null) {

@@ -6,14 +6,7 @@ import { AddChannelDialog, type AddChannelDialogProps } from "./AddChannelDialog
 describe("AddChannelDialog — form submit", () => {
 	it("submits on Enter once the pasted reference is valid", async () => {
 		const onSubmit = vi.fn().mockResolvedValue(undefined);
-		render(
-			<AddChannelDialog
-				open
-				onOpenChange={vi.fn<() => void>()}
-				candidates={[]}
-				onSubmit={onSubmit}
-			/>,
-		);
+		render(<AddChannelDialog open onOpenChange={vi.fn()} candidates={[]} onSubmit={onSubmit} />);
 
 		const input = screen.getByLabelText(/paste a channel link or id/iu);
 		fireEvent.change(input, { target: { value: "C0974LJBPBK" } });
@@ -30,14 +23,7 @@ describe("AddChannelDialog — form submit", () => {
 	});
 
 	it("does not trim the pasted-reference field on every keystroke (no cursor jump)", () => {
-		render(
-			<AddChannelDialog
-				open
-				onOpenChange={vi.fn<() => void>()}
-				candidates={[]}
-				onSubmit={vi.fn()}
-			/>,
-		);
+		render(<AddChannelDialog open onOpenChange={vi.fn()} candidates={[]} onSubmit={vi.fn()} />);
 
 		const input = screen.getByLabelText<HTMLInputElement>(/paste a channel link or id/iu);
 		fireEvent.change(input, { target: { value: "  C0974LJBPBK  " } });

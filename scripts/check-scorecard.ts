@@ -1,5 +1,6 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 
+import { isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
 
 /**
@@ -77,7 +78,7 @@ export function checkScorecard(
 	}
 	const baselineDate = Date.parse(asString(baseline.date, "baseline.date"));
 	if (!Number.isFinite(baselineDate)) {
-		throw new TypeError("Invalid baseline date");
+		throw new Error("Invalid baseline date");
 	}
 	if (date < baselineDate) {
 		throw new Error("Assessment predates the baseline");
@@ -146,7 +147,7 @@ async function main() {
 	const summary = summarize(verdict);
 	process.stdout.write(summary);
 	const stepSummary = process.env.GITHUB_STEP_SUMMARY;
-	if (stepSummary !== undefined && stepSummary !== "") {
+	if (isSet(stepSummary)) {
 		await appendFile(stepSummary, summary);
 	}
 	if (verdict.failures.length > 0) {

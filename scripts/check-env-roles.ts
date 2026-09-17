@@ -404,14 +404,8 @@ interface Analysis {
 	readonly applicationContainers: readonly string[];
 }
 
-export function analyse(
-	applicationText: string,
-	compose: readonly ComposeFile[],
-	profileRoles: ProfileRoles = new Map(),
-): Analysis {
-	const { paths, placeholders } = readApplicationConfig(applicationText);
-
-	// Longest path first so a nested scope wins over its parent.
+/** Which role scope each placeholder variable binds; longest path first so a nested scope wins over its parent. */
+function variableOwnership(placeholders: ReadonlyMap<string, string>): Map<string, RoleScope> {
 	const scopeOrder = [...ROLE_SCOPES].toSorted((a, b) => b.path.length - a.path.length);
 	const ownership = new Map<string, RoleScope>();
 	for (const [variable, keyPath] of placeholders) {
@@ -420,17 +414,19 @@ export function analyse(
 			ownership.set(variable, scope);
 		}
 	}
+	return ownership;
+}
 
+function collectDeliveries(
+	compose: readonly ComposeFile[],
+	ownership: ReadonlyMap<string, RoleScope>,
+	profileRoles: ProfileRoles,
+): {
+	failures: string[];
+	delivered: Map<string, DeliveredVariable>;
+	applicationContainers: Delivery[];
+} {
 	const failures: string[] = [];
-	for (const scope of ROLE_SCOPES) {
-		if (!paths.has(scope.path)) {
-			failures.push(
-				`ROLE_SCOPES declares "${scope.path}" (${scope.role} role), which ${APPLICATION_YML} does not have.\n` +
-					"  Point it at wherever the setting moved, or drop the entry — as written it checks nothing.",
-			);
-		}
-	}
-
 	const delivered = new Map<string, DeliveredVariable>();
 	const applicationContainers: Delivery[] = [];
 	for (const [label, text] of compose) {
@@ -475,32 +471,16 @@ export function analyse(
 			}
 		}
 	}
+	return { failures, delivered, applicationContainers };
+}
 
-	for (const [variable, { scope, deliveries }] of delivered) {
-		if (deliveries.some(({ service }) => runsRole(service, scope.role, profileRoles))) {
-			continue;
-		}
-		failures.push(
-			`${variable} is forwarded by ${deliveries.map((d) => d.id).join(", ")}, but no service running the ${scope.role} role receives it.\n` +
-				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
-				"  Nothing in the deployment can read it, so it and anything documented around it are inert.",
-		);
-	}
-
-	for (const [variable, scope] of ownership) {
-		if (delivered.has(variable)) {
-			continue;
-		}
-		failures.push(
-			`${variable} is offered by ${APPLICATION_YML} but no service in the deployment forwards it.\n` +
-				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
-				"  The placeholder is what makes it an operator knob, so setting it in .env reaches nothing.\n" +
-				`  Forward it from a service that runs the ${scope.role} role, or drop the placeholder.`,
-		);
-	}
-
-	// disagreed. Compared on the raw spelling rather than the resolved default, because two
-	// containers can both resolve to nothing and still be handed different values.
+/**
+ * Settings the application containers disagree on. Compared on the raw spelling rather than the
+ * resolved default, because two containers can both resolve to nothing and still be handed
+ * different values.
+ */
+function disagreementFailures(applicationContainers: readonly Delivery[]): string[] {
+	const failures: string[] = [];
 	const spellings = new Map<string, Map<string, string[]>>();
 	for (const { id, service } of applicationContainers) {
 		for (const [variable, value] of service.raw) {
@@ -526,9 +506,19 @@ export function analyse(
 				`  Give them one value, or name ${variable} in PER_CONTAINER with the reason it differs.`,
 		);
 	}
+	return failures;
+}
 
-	// omitted. The loop above sees only containers that mention the key, so an absence has to be
-	// checked separately: the container that omits it reads the application default instead.
+/**
+ * Deployment-wide settings an application container omits. The disagreement check sees only
+ * containers that mention the key, so an absence has to be checked separately: the container that
+ * omits it reads the application default instead.
+ */
+function omissionFailures(
+	applicationContainers: readonly Delivery[],
+	paths: ReadonlySet<string>,
+): string[] {
+	const failures: string[] = [];
 	for (const { variable, path: keyPath, why } of DEPLOYMENT_WIDE) {
 		if (!paths.has(keyPath)) {
 			failures.push(
@@ -554,11 +544,63 @@ export function analyse(
 						"  deployment than its siblings.",
 		);
 	}
+	return failures;
+}
+
+export function analyse(
+	applicationText: string,
+	compose: readonly ComposeFile[],
+	profileRoles: ProfileRoles = new Map(),
+): Analysis {
+	const { paths, placeholders } = readApplicationConfig(applicationText);
+	const ownership = variableOwnership(placeholders);
+
+	const failures: string[] = [];
+	for (const scope of ROLE_SCOPES) {
+		if (!paths.has(scope.path)) {
+			failures.push(
+				`ROLE_SCOPES declares "${scope.path}" (${scope.role} role), which ${APPLICATION_YML} does not have.\n` +
+					"  Point it at wherever the setting moved, or drop the entry — as written it checks nothing.",
+			);
+		}
+	}
+
+	const deliveries = collectDeliveries(compose, ownership, profileRoles);
+	const { delivered, applicationContainers } = deliveries;
+	failures.push(...deliveries.failures);
+
+	for (const [variable, { scope, deliveries: forwarded }] of delivered) {
+		if (forwarded.some(({ service }) => runsRole(service, scope.role, profileRoles))) {
+			continue;
+		}
+		failures.push(
+			`${variable} is forwarded by ${forwarded.map((d) => d.id).join(", ")}, but no service running the ${scope.role} role receives it.\n` +
+				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
+				"  Nothing in the deployment can read it, so it and anything documented around it are inert.",
+		);
+	}
+
+	for (const [variable, scope] of ownership) {
+		if (delivered.has(variable)) {
+			continue;
+		}
+		failures.push(
+			`${variable} is offered by ${APPLICATION_YML} but no service in the deployment forwards it.\n` +
+				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
+				"  The placeholder is what makes it an operator knob, so setting it in .env reaches nothing.\n" +
+				`  Forward it from a service that runs the ${scope.role} role, or drop the placeholder.`,
+		);
+	}
+
+	failures.push(
+		...disagreementFailures(applicationContainers),
+		...omissionFailures(applicationContainers, paths),
+	);
 
 	return { failures, delivered, applicationContainers: applicationContainers.map((c) => c.id) };
 }
 
-if (process.argv[1] === import.meta.filename) {
+if (import.meta.main) {
 	const compose: ComposeFile[] = [];
 	for (const file of COMPOSE_FILES) {
 		compose.push([file, await readFile(path.join(REPO_ROOT, file), "utf8")]);

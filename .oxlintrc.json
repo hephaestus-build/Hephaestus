@@ -2,18 +2,11 @@
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 
 	// The base for every TypeScript file in the repository, and the config for everything outside
-	// `webapp/` and `docs/` — the agent runner, the precompute scripts, `scripts/`, the k6 scenarios,
-	// the task graph. `webapp/` and `docs/` extend it and add what only a browser tree needs
-	// (`oxlint.react.jsonc`, the vitest and shadcn plugins, the house plugin's story rules).
-	// `extends` carries `categories`, `rules`, `plugins`, `overrides` and `options`; `env`,
-	// `settings` and `ignorePatterns` are each tree's own, and so is `jsPlugins` on the object path
-	// Vite+ uses (`webapp/tools/oxlint/load-config.ts`).
-	//
-	// Every rule outside `correctness` and `suspicious` is listed, with the reason beside it wherever
-	// the choice is not the obvious one. A rule turned off carries its reason too: for a rule a
-	// category enables, why not here; for one no category enables, why the rule someone will reach
-	// for is wrong here — and the entry pins that decision across a category change in an oxlint
-	// release.
+	// `webapp/` and `docs/`, which extend it (`AGENTS.md` § Lint and format says what `extends`
+	// carries). Every rule outside `correctness` and `suspicious` is listed, with the reason beside it
+	// wherever the choice is not the obvious one. A rule turned off carries its reason too: for a rule
+	// a category enables, why not here; for one no category enables, why the rule someone will reach
+	// for is wrong here — the entry pins that decision across a category change in an oxlint release.
 
 	// Only the file-naming rule is enabled from the house plugin here; the rest read a Storybook
 	// story, a Testing Library query, a query key or the clock, and nothing out here renders.
@@ -58,11 +51,20 @@
 		"unicorn/no-negated-condition": "error",
 		"no-else-return": "error",
 		"no-useless-return": "error",
-		"unicorn/prefer-ternary": "error",
+		// Rewrites `if (a) { await x(); } else { await y(); }` as `await (a ? x() : y());`, a statement
+		// pair folded into an expression for no reader.
+		"unicorn/prefer-ternary": "off",
 		"unicorn/prefer-logical-operator-over-ternary": "error",
 		"arrow-body-style": ["error", "as-needed"],
 		"object-shorthand": "error",
-		"prefer-destructuring": ["error", { "object": true, "array": false }],
+		// Declarations only: `({ x } = y);` as a statement reads worse than `x = y.x;`.
+		"prefer-destructuring": [
+			"error",
+			{
+				"VariableDeclarator": { "object": true, "array": false },
+				"AssignmentExpression": { "object": false, "array": false }
+			}
+		],
 		"prefer-const": "error",
 		"one-var": ["error", "never"],
 		"vars-on-top": "error",
@@ -106,10 +108,7 @@
 		"max-classes-per-file": "error",
 		"max-nested-callbacks": "error",
 		"max-depth": "error",
-		// Cyclomatic complexity counts every `&&`, `??` and `?.` in JSX, so at the usual 20 it grades
-		// how many optional props a page has. Forty is the line between that and a function doing
-		// several components' work.
-		"complexity": ["error", { "max": 40 }],
+		"complexity": "error",
 		"radix": "error",
 		"symbol-description": "error",
 		"no-bitwise": "error",
@@ -187,9 +186,8 @@
 		"typescript/consistent-type-imports": ["error", { "fixStyle": "inline-type-imports" }],
 		"typescript/no-import-type-side-effects": "error",
 		"typescript/consistent-type-exports": "error",
-		// `import/no-duplicates` accepts a type-only import beside a value import from the same module;
-		// `no-duplicate-imports` does not, and one import list per module is the point.
-		"import/no-duplicates": "error",
+		// Not `import/no-duplicates`, which accepts a type-only import beside a value import from the
+		// same module; one import list per module is the point.
 		"no-duplicate-imports": "error",
 		// The house spelling is an alias, and a `../` survives moving the file only by accident. The
 		// Node trees that have no alias are excused below, each with the reason.
@@ -294,14 +292,16 @@
 		// A void expression used as a value is a bug; the arrow shorthand `() => setOpen(false)` is not.
 		"typescript/no-confusing-void-expression": ["error", { "ignoreArrowShorthand": true }],
 		// A value-returning function handed to a void callback slot has its result thrown away, and
-		// `() => cond && act()` is control flow spelled as an expression.
-		"typescript/strict-void-return": "error",
+		// `() => cond && act()` is control flow spelled as an expression. A function returning `any` —
+		// a `vi.fn()` or a Storybook `fn()` — is the harness's, not the caller's.
+		"typescript/strict-void-return": ["error", { "allowReturnAny": true }],
 		"typescript/no-misused-promises": "error",
 		"typescript/only-throw-error": "error",
 		"typescript/prefer-promise-reject-errors": "error",
 		"typescript/use-unknown-in-catch-callback-variable": "error",
-		// A deferred is `Promise.withResolvers()` and a delay is `setTimeout` from
-		// `node:timers/promises`; the constructor is for wrapping a callback API, in one helper.
+		// A deferred is `Promise.withResolvers()` — spelled `<undefined>` where it settles with nothing,
+		// since `no-invalid-void-type` rejects `void` as a call's type argument — and a delay is
+		// `setTimeout` from `node:timers/promises`; the constructor is for wrapping a callback API.
 		"promise/avoid-new": "error",
 		"promise/prefer-await-to-then": "error",
 		"promise/prefer-await-to-callbacks": "error",
@@ -317,7 +317,9 @@
 		"unicorn/error-message": "error",
 		"unicorn/throw-new-error": "error",
 		"unicorn/custom-error-definition": "error",
-		"unicorn/prefer-type-error": "error",
+		// Reads any `throw` after a `typeof` guard as a type error, including a value that failed
+		// validation; the class would then say something the error is not.
+		"unicorn/prefer-type-error": "off",
 		"unicorn/catch-error-name": "error",
 		"unicorn/prefer-optional-catch-binding": "error",
 		"unicorn/no-useless-promise-resolve-reject": "error",
@@ -433,8 +435,9 @@
 		"oxc/branches-sharing-code": "error",
 
 		// -- Doc comments ----------------------------------------------------------------------------
-		// A tag that is present says something; whether to write one at all stays a judgement, and
-		// the type is the signature's to state, so the tag-type rules the category enables are off.
+		// A tag that is present says something; whether to write one at all stays a judgement, so
+		// `require-yields` is off, and the type is the signature's to state, so the tag-type rules —
+		// `require-property-type` among the category's — are off.
 		"jsdoc/check-access": "error",
 		"jsdoc/empty-tags": "error",
 		"jsdoc/no-blank-blocks": "error",
@@ -443,20 +446,20 @@
 		"jsdoc/require-returns-description": "error",
 		"jsdoc/require-throws-description": "error",
 		"jsdoc/require-yields-description": "error",
+		"jsdoc/require-yields": "off",
 		"jsdoc/require-property-type": "off",
 		"jsdoc/require-throws-type": "off",
 		"jsdoc/require-yields-type": "off",
 
-		// -- Nursery at oxlint 1.81, opted in by name ------------------------------------------------
+		// -- Nursery, opted in by name ---------------------------------------------------------------
 		// A bump that drops one fails config load, which is the signal to revisit.
 		"import/export": "error",
 		"import/named": "error",
 		"no-unreachable-loop": "error",
 
 		// -- Files -----------------------------------------------------------------------------------
-		// `webapp/AGENTS.md` § File naming decides between the two: a component is PascalCase and
-		// everything else kebab-case. TanStack Router's directory is excused in the SPA's config.
-		"unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }],
+		// The SPA adds PascalCase for a file that exports a component.
+		"unicorn/filename-case": ["error", { "case": "kebabCase" }],
 		"hephaestus/no-non-ascii-filename": "error"
 	},
 
@@ -490,6 +493,14 @@
 			// A changesets changelog plugin is loaded by `require`, so CommonJS is the format it must be in.
 			"files": [".changeset/*.cjs"],
 			"rules": { "import/no-commonjs": "off", "unicorn/prefer-module": "off" }
+		},
+		{
+			// JavaScript run by k6: a JSDoc tag here carries the type, which is what it is for.
+			"files": ["load-tests/**/*.js", ".changeset/*.cjs"],
+			"rules": {
+				"jsdoc/require-param-description": "off",
+				"jsdoc/require-returns-description": "off"
+			}
 		},
 		{
 			// The gate hands Vite+ the same lint object the webapp's Vite config builds, so it uses the

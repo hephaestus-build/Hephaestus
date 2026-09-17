@@ -4,6 +4,7 @@ import process from "node:process";
 
 import { currentReleaseIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 
+import { isSet, requiredEnv } from "./lib/env.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 // The candidate is built by this repository's CI, so it lives in the current
@@ -23,7 +24,7 @@ function command(executable: string, args: string[]): string {
 }
 
 function nonEmpty(value: string | undefined): string | undefined {
-	return value === undefined || value === "" ? undefined : value;
+	return isSet(value) ? value : undefined;
 }
 
 function immutable(reference: string, repository: string): string {
@@ -84,10 +85,7 @@ if (
 	}
 	previousApplication = previousApplicationReference(suppliedPreviousVersion);
 } else {
-	const repository = nonEmpty(process.env.GITHUB_REPOSITORY);
-	if (repository === undefined) {
-		throw new Error("GITHUB_REPOSITORY is required");
-	}
+	const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
 	const requestedPrevious = nonEmpty(process.env.REQUESTED_PREVIOUS);
 	const previous =
 		requestedPrevious ??
@@ -113,10 +111,7 @@ if (
 	postgres = `${postgresRepository}:${candidate}`;
 }
 
-const output = nonEmpty(process.env.GITHUB_OUTPUT);
-if (output === undefined) {
-	throw new Error("GITHUB_OUTPUT is required");
-}
+const output = requiredEnv(process.env, "GITHUB_OUTPUT");
 appendFileSync(
 	output,
 	[

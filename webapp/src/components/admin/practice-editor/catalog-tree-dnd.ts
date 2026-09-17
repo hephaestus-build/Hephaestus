@@ -1,3 +1,4 @@
+import { byDisplayOrder } from "@/hooks/practice-catalog-cache";
 import { hasText } from "@/lib/text";
 
 export interface CatalogDropTarget {
@@ -17,7 +18,7 @@ export function getCatalogDropTarget(
 	}
 	const destination = entries
 		.filter((entry) => entry.slug !== activeSlug && (entry.groupSlug ?? null) === groupSlug)
-		.sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
+		.sort(byDisplayOrder);
 	if (!hasText(anchorSlug)) {
 		return { groupSlug, position: destination.length };
 	}

@@ -40,6 +40,10 @@ leaves it optional.
 The payoff is that an upstream defect gets fixed here once, with the note attached, instead of being
 worked around at every call site.
 
+A registry `cn-font-*` marker is dropped: the CLI strips it for a project that declares no
+`--font-heading`, and this one does not. That is what the CLI produces, not a divergence, so no file
+records it.
+
 A variant with one caller is still a variant when it names a system axis — a tone, a size, a shape,
 an edge. `shadcn/no-restyle` forbids composing radius, spacing or a border onto a primitive at the
 call site, so where upstream documents `rounded-full` or `border-dashed` as `className` composition,
@@ -63,11 +67,11 @@ derives URL segments from the filenames there and the router owns that naming.
 
 ## Linting
 
-**oxlint lints, oxfmt formats.** `.oxlintrc.json` extends the repository base (`../.oxlintrc.json`)
-and the React layer (`../oxlint.react.jsonc`) and holds only what this tree adds — the design-system
-checks, the test and story rules, the house plugin's story rules — or decides differently, each with
-the reason beside it; every restriction states itself at the call site when it fires. None of that
-is repeated here. What follows is what no diagnostic will ever tell you.
+**oxlint lints, oxfmt formats.** The rule set is layered as the root `AGENTS.md` § Lint and format
+says; `.oxlintrc.json` here holds only what this tree adds — the design-system checks, the test and
+story rules, the house plugin's story rules — or decides differently, each with the reason beside
+it, and every restriction states itself at the call site when it fires. None of that is repeated
+here. What follows is what no diagnostic will ever tell you.
 
 - **Suppress with `// oxlint-disable-next-line <rule> -- <why>`**, above the line the diagnostic
   points at, spelling the rule the way the **diagnostic** prints it — `plugin(rule)` becomes
@@ -107,12 +111,11 @@ is repeated here. What follows is what no diagnostic will ever tell you.
   `-A all` keeps the rest of the rule set out of the answer, and the severity flag keeps out the
   suppressions that rest of the rule set has just left unused. A nested `overrides` entry still
   applies, so a rule an override turns off for some files stays off there.
-- **An `off` entry only means something when the base, the React layer or a category would
-  otherwise switch the rule on.** Every category but `correctness` and `suspicious` is off, so
-  `"off"` on a rule none of the three names documents a decision the config does not need to make.
-  Confirm before adding one: delete the entry, re-run, and see whether anything reports. A rule the
-  base turns on and this tree turns off names the constraint that differs here — the browser
-  target, the React Compiler — not a preference.
+- **An `off` entry pins a decision and carries its reason.** The policy is the base's, in the header
+  of the root `.oxlintrc.json`: a rule a category enables says why not here, and a rule no category
+  enables says why the rule someone will reach for is wrong here, so the decision survives a
+  category change in an oxlint release. A rule the base turns on and this tree turns off names the
+  constraint that differs here — the browser target, the React Compiler — not a preference.
 
 ## Which admin console a component belongs to
 
@@ -320,8 +323,8 @@ The matchers **are** available in stories, because `expect` from `storybook/test
 an assertion out of a story into a route test is exactly how this bites.
 
 A test that holds a response open until an assertion has run uses `deferred()` from `@/test/async`
-— `Promise.withResolvers()` in all but name, which `tsconfig.json`'s `lib` cannot reach because it
-follows the browser target. `pending()`, `sleep()` and `nextFrame()` sit beside it; `ObserverStub`
+— `Promise.withResolvers()` in all but name, for the reason beside `"lib"` in `tsconfig.json`.
+`pending()`, `sleep()` and `nextFrame()` sit beside it; `ObserverStub`
 (`@/test/observers`) stands in for jsdom's missing `IntersectionObserver`/`ResizeObserver`, and
 `precedes()` (`@/test/dom`) reads document order without spelling the bitmask.
 

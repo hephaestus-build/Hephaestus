@@ -1,6 +1,5 @@
 import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 import { XMLParser } from "fast-xml-parser";
 
@@ -245,6 +244,6 @@ async function main(): Promise<void> {
 	}
 }
 
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.main) {
 	await main();
 }

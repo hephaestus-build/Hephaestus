@@ -1403,3 +1403,15 @@ export const mockJobs: AgentJob[] = [
 	mockJobFailedResultProcessing,
 	mockJobTimedOut,
 ];
+
+/**
+ * A story applies the server's facet filtering over its pool of rows; an unset or empty facet
+ * selects every row.
+ */
+export function selects(selected: string[] | undefined, actual: string | undefined): boolean {
+	return (
+		selected === undefined ||
+		selected.length === 0 ||
+		(actual !== undefined && selected.includes(actual))
+	);
+}

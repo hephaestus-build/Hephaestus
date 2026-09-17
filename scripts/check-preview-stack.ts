@@ -254,8 +254,7 @@ function productionAuthApiBasePath(): string {
 	return declared;
 }
 
-/** What every service in the stack must hold to, whatever it runs. */
-function findServiceViolations(name: string, service: Record<string, unknown>): string[] {
+function mountViolations(name: string, service: Record<string, unknown>): string[] {
 	const violations: string[] = [];
 	const mounts = Array.isArray(service.volumes) ? service.volumes : [];
 	for (const mount of mounts) {
@@ -267,6 +266,11 @@ function findServiceViolations(name: string, service: Record<string, unknown>): 
 			violations.push(`${name} mounts the Docker socket`);
 		}
 	}
+	return violations;
+}
+
+function imageViolations(name: string, service: Record<string, unknown>): string[] {
+	const violations: string[] = [];
 	// A preview runs the artifact CI published, not one built here: a build stage would make it a
 	// lookalike of the shipped image rather than the shipped image.
 	if (service.build !== undefined) {
@@ -279,6 +283,11 @@ function findServiceViolations(name: string, service: Record<string, unknown>): 
 	if (image && !image.startsWith(OWN_IMAGE_PREFIX) && !image.includes("@sha256:")) {
 		violations.push(`${name} runs ${image}, an upstream image that is not digest-pinned`);
 	}
+	return violations;
+}
+
+function privilegeViolations(name: string, service: Record<string, unknown>): string[] {
+	const violations: string[] = [];
 	if (service.privileged === true) {
 		violations.push(`${name} runs privileged`);
 	}
@@ -297,18 +306,104 @@ function findServiceViolations(name: string, service: Record<string, unknown>): 
 			violations.push(`${name} adds capability ${String(capability)}, which is not recorded here`);
 		}
 	}
+	return violations;
+}
+
+function isolationViolations(name: string, service: Record<string, unknown>): string[] {
+	const violations: string[] = [];
 	if (service.network_mode !== undefined) {
 		violations.push(`${name} sets network_mode and escapes its own networks`);
 	}
 	if (Array.isArray(service.ports) && service.ports.length > 0) {
 		violations.push(`${name} publishes a port on the shared host`);
 	}
-
 	const deploy = isRecord(service.deploy) ? service.deploy : {};
 	const resources = isRecord(deploy.resources) ? deploy.resources : {};
 	const limits = isRecord(resources.limits) ? resources.limits : {};
 	if (limits.memory === undefined || limits.memory === "") {
 		violations.push(`${name} has no memory limit and can starve staging`);
+	}
+	return violations;
+}
+
+/** What every service in the stack must hold to, whatever it runs. */
+function findServiceViolations(name: string, service: Record<string, unknown>): string[] {
+	return [
+		...mountViolations(name, service),
+		...imageViolations(name, service),
+		...privilegeViolations(name, service),
+		...isolationViolations(name, service),
+	];
+}
+
+function switchViolations(name: string, service: Record<string, unknown>): string[] {
+	const violations: string[] = [];
+	const environment = isRecord(service.environment) ? service.environment : {};
+	for (const [key, expected] of Object.entries(REQUIRED_SWITCHES)) {
+		const actual = environment[key];
+		if (actual !== expected) {
+			const shown = typeof actual === "string" ? actual : "«unset»";
+			violations.push(`${name} sets ${key}=${shown}, expected ${expected}`);
+		}
+	}
+	for (const key of REQUIRED_NON_EMPTY) {
+		const value = environment[key];
+		if (typeof value !== "string" || value === "") {
+			violations.push(`${name} renders an empty ${key}, which the server refuses to start with`);
+		}
+	}
+	return violations;
+}
+
+/**
+ * The browser reaches the API under a path, and the server re-adds that path to the OAuth URLs it
+ * sends the browser to. Disagree, and sign-in alone breaks: it redirects to a path nothing serves
+ * while every other request keeps working, so a healthy stack and a reachable page report success.
+ */
+function authPathViolations(services: readonly [string, Record<string, unknown>][]): string[] {
+	const serviceEnv = (wanted: string): Record<string, unknown> => {
+		const found = services.find(([name]) => name === wanted)?.[1];
+		return found && isRecord(found.environment) ? found.environment : {};
+	};
+	const serverUrl = serviceEnv("webapp").APPLICATION_SERVER_URL;
+	if (typeof serverUrl !== "string" || serverUrl === "") {
+		return [];
+	}
+	const violations: string[] = [];
+	let apiPath = "";
+	try {
+		apiPath = new URL(serverUrl).pathname.replace(/\/$/u, "");
+	} catch {
+		violations.push(`webapp sets APPLICATION_SERVER_URL=${serverUrl}, which is not a URL`);
+	}
+	const override = serviceEnv("appserver").HEPHAESTUS_AUTH_API_BASE_PATH;
+	const effective = normalizeApiBasePath(
+		typeof override === "string" ? override : productionAuthApiBasePath(),
+	);
+	if (effective !== normalizeApiBasePath(apiPath)) {
+		violations.push(
+			`the API is served at "${apiPath}" but OAuth URLs are built with "${effective}", so sign-in would leave the API`,
+		);
+	}
+	return violations;
+}
+
+/**
+ * Coolify runs every preview of this application under one Compose project, named after the
+ * application UUID with no pull request in it. A network defined here is therefore `<uuid>_<name>`
+ * for all of them at once — a shared network that reads as private. An external one names a
+ * network that already exists, so joining it is a decision rather than a side effect.
+ */
+function networkViolations(networks: unknown): string[] {
+	const violations: string[] = [];
+	for (const [name, network] of records(networks)) {
+		if (name === "default") {
+			continue;
+		}
+		if (network.external === true && typeof network.name === "string" && network.name !== "") {
+			continue;
+		}
+		violations.push(`the stack defines the ${name} network, which every preview would share`);
 	}
 	return violations;
 }
@@ -325,22 +420,8 @@ export function findViolations(stack: unknown): string[] {
 
 	for (const [name, service] of services) {
 		violations.push(...findServiceViolations(name, service));
-		if (name !== "appserver") {
-			continue;
-		}
-		const environment = isRecord(service.environment) ? service.environment : {};
-		for (const [key, expected] of Object.entries(REQUIRED_SWITCHES)) {
-			const actual = environment[key];
-			if (actual !== expected) {
-				const shown = typeof actual === "string" ? actual : "«unset»";
-				violations.push(`${name} sets ${key}=${shown}, expected ${expected}`);
-			}
-		}
-		for (const key of REQUIRED_NON_EMPTY) {
-			const value = environment[key];
-			if (typeof value !== "string" || value === "") {
-				violations.push(`${name} renders an empty ${key}, which the server refuses to start with`);
-			}
+		if (name === "appserver") {
+			violations.push(...switchViolations(name, service));
 		}
 	}
 
@@ -348,45 +429,7 @@ export function findViolations(stack: unknown): string[] {
 		violations.push("the rendered stack has no appserver service, so no switch was checked");
 	}
 
-	// The browser reaches the API under a path, and the server re-adds that path to the OAuth URLs it
-	// sends the browser to. Disagree, and sign-in alone breaks: it redirects to a path nothing serves
-	// while every other request keeps working, so a healthy stack and a reachable page report success.
-	const serviceEnv = (wanted: string): Record<string, unknown> => {
-		const found = services.find(([name]) => name === wanted)?.[1];
-		return found && isRecord(found.environment) ? found.environment : {};
-	};
-	const serverUrl = serviceEnv("webapp").APPLICATION_SERVER_URL;
-	if (typeof serverUrl === "string" && serverUrl !== "") {
-		let apiPath = "";
-		try {
-			apiPath = new URL(serverUrl).pathname.replace(/\/$/u, "");
-		} catch {
-			violations.push(`webapp sets APPLICATION_SERVER_URL=${serverUrl}, which is not a URL`);
-		}
-		const override = serviceEnv("appserver").HEPHAESTUS_AUTH_API_BASE_PATH;
-		const effective = normalizeApiBasePath(
-			typeof override === "string" ? override : productionAuthApiBasePath(),
-		);
-		if (effective !== normalizeApiBasePath(apiPath)) {
-			violations.push(
-				`the API is served at "${apiPath}" but OAuth URLs are built with "${effective}", so sign-in would leave the API`,
-			);
-		}
-	}
-	// Coolify runs every preview of this application under one Compose project, named after the
-	// application UUID with no pull request in it. A network defined here is therefore `<uuid>_<name>`
-	// for all of them at once — a shared network that reads as private. An external one names a
-	// network that already exists, so joining it is a decision rather than a side effect.
-	for (const [name, network] of records(stack.networks)) {
-		if (name === "default") {
-			continue;
-		}
-		if (network.external === true && typeof network.name === "string" && network.name !== "") {
-			continue;
-		}
-		violations.push(`the stack defines the ${name} network, which every preview would share`);
-	}
-
+	violations.push(...authPathViolations(services), ...networkViolations(stack.networks));
 	return violations;
 }
 

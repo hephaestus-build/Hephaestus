@@ -1,5 +1,6 @@
 import { Client } from "pg";
 
+import { isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 
 type JsonObject = Record<string, unknown>;
@@ -91,42 +92,58 @@ function nonNegativeNumber(value: string, name: string): number {
 	return Number(value);
 }
 
+function oneOf<const T extends string>(value: string, allowed: readonly T[], message: string): T {
+	const match = allowed.find((candidate) => candidate === value);
+	if (match === undefined) {
+		throw new Error(message);
+	}
+	return match;
+}
+
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+
+function loopbackUrl(value: string, protocols: readonly string[], message: string): string {
+	const parsed = new URL(value);
+	if (!protocols.includes(parsed.protocol) || !LOOPBACK_HOSTS.has(parsed.hostname)) {
+		throw new Error(message);
+	}
+	return value;
+}
+
 export function loadConfig(env: Record<string, string | undefined>, args: string[]): Config {
 	const flags = parseArgs(args);
 	const get = (flag: string, name: string, fallback = ""): string =>
 		flags.get(flag) ?? env[name] ?? fallback;
-	const provider = get("--provider", "E2E_PROVIDER", "gitlab");
-	if (provider !== "github" && provider !== "gitlab") {
-		throw new Error("provider must be github or gitlab");
-	}
-	const protocol = get("--llm-protocol", "E2E_LLM_PROTOCOL", "openai-completions");
-	if (protocol !== "openai-completions" && protocol !== "openai-responses") {
-		throw new Error("E2E_LLM_PROTOCOL is invalid");
-	}
-	const authMode = get("--llm-auth-mode", "E2E_LLM_AUTH_MODE", "BEARER");
-	if (authMode !== "BEARER" && authMode !== "API_KEY") {
-		throw new Error("E2E_LLM_AUTH_MODE is invalid");
-	}
-	const pricingMode = get("--llm-pricing-mode", "E2E_LLM_PRICING_MODE");
-	if (pricingMode !== "PRICED" && pricingMode !== "NO_CHARGE") {
-		throw new Error("E2E_LLM_PRICING_MODE must be PRICED or NO_CHARGE");
-	}
-	const appUrl = get("--app-url", "E2E_APP_URL", "http://localhost:8080");
-	const parsedApp = new URL(appUrl);
-	if (
-		parsedApp.protocol !== "http:" ||
-		!["localhost", "127.0.0.1", "[::1]", "::1"].includes(parsedApp.hostname)
-	) {
-		throw new Error("E2E_APP_URL must be a loopback URL");
-	}
-	const databaseUrl = env.E2E_DB_URL ?? "postgresql://root:root@localhost:5432/hephaestus";
-	const parsedDatabase = new URL(databaseUrl);
-	if (
-		!["postgres:", "postgresql:"].includes(parsedDatabase.protocol) ||
-		!["localhost", "127.0.0.1", "[::1]", "::1"].includes(parsedDatabase.hostname)
-	) {
-		throw new Error("E2E_DB_URL must be a loopback PostgreSQL URL");
-	}
+	const provider = oneOf(
+		get("--provider", "E2E_PROVIDER", "gitlab"),
+		["github", "gitlab"],
+		"provider must be github or gitlab",
+	);
+	const protocol = oneOf(
+		get("--llm-protocol", "E2E_LLM_PROTOCOL", "openai-completions"),
+		["openai-completions", "openai-responses"],
+		"E2E_LLM_PROTOCOL is invalid",
+	);
+	const authMode = oneOf(
+		get("--llm-auth-mode", "E2E_LLM_AUTH_MODE", "BEARER"),
+		["BEARER", "API_KEY"],
+		"E2E_LLM_AUTH_MODE is invalid",
+	);
+	const pricingMode = oneOf(
+		get("--llm-pricing-mode", "E2E_LLM_PRICING_MODE"),
+		["PRICED", "NO_CHARGE"],
+		"E2E_LLM_PRICING_MODE must be PRICED or NO_CHARGE",
+	);
+	const appUrl = loopbackUrl(
+		get("--app-url", "E2E_APP_URL", "http://localhost:8080"),
+		["http:"],
+		"E2E_APP_URL must be a loopback URL",
+	);
+	const databaseUrl = loopbackUrl(
+		env.E2E_DB_URL ?? "postgresql://root:root@localhost:5432/hephaestus",
+		["postgres:", "postgresql:"],
+		"E2E_DB_URL must be a loopback PostgreSQL URL",
+	);
 	const input = get("--llm-input-usd", "E2E_LLM_INPUT_USD");
 	const output = get("--llm-output-usd", "E2E_LLM_OUTPUT_USD");
 	const repository = get("--repo", "E2E_REPO") || undefined;
@@ -138,7 +155,7 @@ export function loadConfig(env: Record<string, string | undefined>, args: string
 		throw new Error("E2E_PR_ID must be numeric");
 	}
 	const priceNote = env.E2E_LLM_PRICE_NOTE;
-	if (pricingMode === "NO_CHARGE" && (priceNote === undefined || priceNote === "")) {
+	if (pricingMode === "NO_CHARGE" && !isSet(priceNote)) {
 		throw new Error("E2E_LLM_PRICE_NOTE is required for NO_CHARGE");
 	}
 	return {
@@ -235,7 +252,6 @@ interface ScmIdentity {
 	scmLogin: string;
 }
 
-/** The identity the PAT belongs to, and proof that it reaches the target repository. */
 async function resolveScmIdentity(config: Config): Promise<ScmIdentity> {
 	const scmOrigin = config.provider === "github" ? "https://github.com" : config.serverUrl;
 	const scmHeaders: Record<string, string> =
@@ -282,7 +298,6 @@ async function resolveScmIdentity(config: Config): Promise<ScmIdentity> {
 	return { scmOrigin, scmId, scmLogin };
 }
 
-/** Links the signed-in account to the SCM identity; returns the seeded SCM user's id. */
 async function seedIdentity(
 	database: Client,
 	config: Config,
@@ -371,7 +386,6 @@ async function ensureWorkspace(
 	return workspace;
 }
 
-/** Connects the workspace to the configured model; returns the catalogued model's id. */
 async function configureLlm(api: Api, config: Config): Promise<number> {
 	const settings = object(await api("GET", "/admin/llm/settings"), "LLM settings");
 	if (settings.allowWorkspaceConnections !== true) {
@@ -465,7 +479,6 @@ async function bindAgents(api: Api, config: Config, modelId: number): Promise<vo
 	}
 }
 
-/** Adopts one catalogued practice through the preview-then-commit flow the UI uses. */
 async function adoptAvailablePractice(api: Api, config: Config, jwt: string): Promise<void> {
 	const adoption = array(
 		await api("GET", `/workspaces/${config.workspaceSlug}/practice-catalog/adoption`),
@@ -515,7 +528,6 @@ async function adoptAvailablePractice(api: Api, config: Config, jwt: string): Pr
 	}
 }
 
-/** Switches every existing practice off, then defines the three the suite exercises. */
 async function definePractices(api: Api, config: Config): Promise<void> {
 	const needs = [
 		{ sourceKind: "scm.pull-request.core", stance: "REQUIRED" },
@@ -585,7 +597,6 @@ async function definePractices(api: Api, config: Config): Promise<void> {
 	}
 }
 
-/** The pull request the suite will drive: the configured one, verified, or else the newest monitored one. */
 async function selectPullRequest(
 	database: Client,
 	config: Config,

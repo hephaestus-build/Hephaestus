@@ -29,8 +29,8 @@ function assert(condition, message) {
 }
 
 /**
- * @param {() => unknown} fn - the call expected to throw
- * @param {string} message - what the thrown error reports when it does not
+ * @param {() => unknown} fn
+ * @param {string} message
  */
 function rejects(fn, message) {
 	try {

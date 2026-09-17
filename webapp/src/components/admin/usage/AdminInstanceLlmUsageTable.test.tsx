@@ -78,8 +78,8 @@ function renderTable(
 			expandedWorkspaceSlug={null}
 			isDetailLoading={false}
 			detailError={null}
-			onToggleDetails={vi.fn<() => void>()}
-			onEditSharedModelBudget={vi.fn<() => void>()}
+			onToggleDetails={vi.fn()}
+			onEditSharedModelBudget={vi.fn()}
 		/>,
 	);
 }
@@ -112,7 +112,7 @@ describe("AdminInstanceLlmUsageTable", () => {
 				isDetailLoading={false}
 				detailError={null}
 				onToggleDetails={onToggleDetails}
-				onEditSharedModelBudget={vi.fn<() => void>()}
+				onEditSharedModelBudget={vi.fn()}
 			/>,
 		);
 
@@ -231,8 +231,8 @@ describe("AdminInstanceLlmUsageTable", () => {
 				detailReport={detailReport}
 				isDetailLoading={false}
 				detailError={null}
-				onToggleDetails={vi.fn<() => void>()}
-				onEditSharedModelBudget={vi.fn<() => void>()}
+				onToggleDetails={vi.fn()}
+				onEditSharedModelBudget={vi.fn()}
 			/>,
 		);
 
@@ -266,8 +266,8 @@ describe("AdminInstanceLlmUsageTable", () => {
 				}}
 				isDetailLoading={false}
 				detailError={null}
-				onToggleDetails={vi.fn<() => void>()}
-				onEditSharedModelBudget={vi.fn<() => void>()}
+				onToggleDetails={vi.fn()}
+				onEditSharedModelBudget={vi.fn()}
 			/>,
 		);
 
@@ -334,8 +334,8 @@ describe("AdminInstanceLlmUsageTable", () => {
 					}}
 					isDetailLoading={false}
 					detailError={null}
-					onToggleDetails={vi.fn<() => void>()}
-					onEditSharedModelBudget={vi.fn<() => void>()}
+					onToggleDetails={vi.fn()}
+					onEditSharedModelBudget={vi.fn()}
 				/>,
 			);
 

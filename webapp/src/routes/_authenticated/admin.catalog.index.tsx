@@ -257,11 +257,11 @@ function AdminCuratedCatalogPage() {
 	const writePending =
 		structurePending || pendingGroupSlugs.size > 0 || pendingPracticeSlugs.size > 0;
 
-	let catalog: ReactNode;
+	let body: ReactNode;
 	if (catalogQuery.isPending) {
-		catalog = <PracticeTreeSkeleton groups={3} practicesPerGroup={3} />;
+		body = <PracticeTreeSkeleton groups={3} practicesPerGroup={3} />;
 	} else if (catalogQuery.isError) {
-		catalog = (
+		body = (
 			<QueryErrorAlert
 				error={catalogQuery.error}
 				title="Couldn't load the practice catalog"
@@ -271,7 +271,7 @@ function AdminCuratedCatalogPage() {
 			/>
 		);
 	} else {
-		catalog = (
+		body = (
 			<CuratedCatalogPage
 				groups={catalogQuery.data.groups}
 				practices={catalogQuery.data.practices}
@@ -386,7 +386,7 @@ function AdminCuratedCatalogPage() {
 				}
 			/>
 
-			{catalog}
+			{body}
 
 			<DetailDrawerStack
 				stack={detailStack}

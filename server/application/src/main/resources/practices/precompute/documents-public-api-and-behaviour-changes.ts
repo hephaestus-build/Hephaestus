@@ -116,17 +116,9 @@ function isComment(trimmed: string): boolean {
 	);
 }
 
-export default async function documentsPublicApiAndBehaviourChanges(
-	repoPath: string,
-	diffFiles: Map<string, DiffFile>,
-	_m: PullRequestMetadata,
-) {
-	// (1) Does the repo declare a public library/framework product?
-	let hasPublicProduct = false;
+// (1) Does the repo declare a public library/framework product?
+async function declaresPublicProduct(repoPath: string): Promise<boolean> {
 	for (const ext of MANIFEST_NAMES) {
-		if (hasPublicProduct) {
-			break;
-		}
 		for (const manifestPath of findFiles(repoPath, ext)) {
 			const matcher = PRODUCT_MANIFESTS.find(([re]) => re.test(manifestPath));
 			if (!matcher) {
@@ -135,11 +127,19 @@ export default async function documentsPublicApiAndBehaviourChanges(
 			const lines = await readFileLines(manifestPath);
 			const text = [...lines.values()].join("\n");
 			if (matcher[1](text)) {
-				hasPublicProduct = true;
-				break;
+				return true;
 			}
 		}
 	}
+	return false;
+}
+
+export default async function documentsPublicApiAndBehaviourChanges(
+	repoPath: string,
+	diffFiles: Map<string, DiffFile>,
+	_m: PullRequestMetadata,
+) {
+	const hasPublicProduct = await declaresPublicProduct(repoPath);
 
 	// (2) Classify each declaration ADDED in the diff as public (exported) or internal.
 	const hints: Hint[] = [];

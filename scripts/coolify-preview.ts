@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto";
 import { appendFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { requiredEnv as required, requiredPositiveInteger } from "./lib/env.ts";
+import { isSet, requiredEnv as required, requiredPositiveInteger } from "./lib/env.ts";
 import { isRecord } from "./lib/json.ts";
 
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
@@ -443,7 +443,7 @@ export function deploymentLogUrl(
 	config: Pick<DeploymentConfig, "coolifyUrl">,
 	candidate?: string,
 ): string {
-	if (candidate === undefined || candidate === "" || /\s/u.test(candidate)) {
+	if (!isSet(candidate) || /\s/u.test(candidate)) {
 		return config.coolifyUrl.href;
 	}
 	if (candidate.startsWith("/project/")) {

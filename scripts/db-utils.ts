@@ -3,7 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { positivePort, readEnvFile } from "./lib/env.ts";
+import { isSet, positivePort, readEnvFile } from "./lib/env.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 
 const root = path.join(import.meta.dirname, "..");
@@ -137,7 +137,7 @@ export function promoteDraft(draftXml: string, timestamp: number, existing?: str
 		}),
 	);
 	const body = renumbered.map((set) => `    ${set}\n`).join("");
-	if (existing !== undefined && existing !== "") {
+	if (isSet(existing)) {
 		return existing.replace(closingTag, `${body}${closingTag}`);
 	}
 	return `<?xml version="1.0" encoding="UTF-8"?>
@@ -329,7 +329,7 @@ async function main(): Promise<void> {
 		await withDatabase(value, async (signal) => {
 			drift = await diffSchema(value, signal);
 		});
-		if (drift !== undefined && drift !== "") {
+		if (isSet(drift)) {
 			console.error(`❌ The schema drifts from the JPA model:\n${drift}`);
 			console.error("Run: vp run db:draft-changelog");
 			process.exitCode = 1;
@@ -342,7 +342,7 @@ async function main(): Promise<void> {
 	let written: string | undefined;
 	await withDatabase(value, async (signal) => {
 		const drift = await diffSchema(value, signal);
-		if (drift === undefined || drift === "") {
+		if (!isSet(drift)) {
 			return;
 		}
 		written = await promote(drift);

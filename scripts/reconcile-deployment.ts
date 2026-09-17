@@ -11,7 +11,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 
-import { requiredEnv } from "./lib/env.ts";
+import { isSet, requiredEnv } from "./lib/env.ts";
 import { asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 
@@ -473,51 +473,53 @@ function fetchOptions(config: HostConfig): { cwd: string; signal: AbortSignal } 
 	return { cwd: config.checkout, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) };
 }
 
-/**
- * The commit `ref` names in `checkout`. Trimmed because a SHA is compared and interpolated; the
- * blobs read elsewhere are not, since the channel must reach cosign byte for byte as it was signed.
- */
+/** The commit `ref` names in `checkout`. Trimmed because a SHA is compared and interpolated. */
 async function revision(checkout: string, ref: string): Promise<string> {
 	const sha = await output("git", ["rev-parse", ref], { cwd: checkout });
 	return sha.trim();
 }
 
-export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
-	const config = hostConfig(process.env);
-	const appliedFile = path.join(config.stateDirectory, "applied.json");
-	const applied = await readApplied(appliedFile);
-	const startedAt = new Date();
-
-	await mkdir(config.stateDirectory, { recursive: true });
-	// Before anything else, and in particular before the channel is parsed: a tick that stopped between
-	// recording a release and adopting its tooling would otherwise read the next channel with the
-	// tooling that release replaced. The recorded release's tree is rebuilt at the commit the signed
-	// lock named if it is gone and checked either way, so what is adopted is that release and nothing
-	// that happens to sit at its path. Node keeps running the module it loaded, so when the link
-	// moved, this tick ends here and the next one runs the adopted tooling.
-	if (applied) {
-		const commit = appliedCommit(applied);
-		if (commit === undefined) {
-			// Nothing on disk tells an accepted tree from one a failed re-promotion staged, so a record
-			// from before the commit was kept is never completed from a tree or a lock: the next apply
-			// records the commit, and until then the host reports the tooling as pending.
-			console.log(
-				`${applied.release} was recorded before its commit was kept; keeping the current tooling until the next apply`,
-			);
-		} else {
-			const { tree } = await ensureReleaseTree(
-				config.checkout,
-				releasesDirectory(config),
-				applied.release,
-				commit,
-			);
-			if (await followTooling(config, tree, unitsDirectory)) {
-				console.log(`Adopted the tooling of ${applied.release}; the next run uses it`);
-				return;
-			}
-		}
+/**
+ * Whether this tick handed over to the recorded release's tooling. Runs before anything else, and in
+ * particular before the channel is parsed: a tick that stopped between recording a release and
+ * adopting its tooling would otherwise read the next channel with the tooling that release
+ * replaced. The recorded release's tree is rebuilt at the commit the signed lock named if it is gone
+ * and checked either way, so what is adopted is that release and nothing that happens to sit at its
+ * path. Node keeps running the module it loaded, so when the link moved, this tick ends here and the
+ * next one runs the adopted tooling.
+ */
+async function adoptedAppliedTooling(
+	config: HostConfig,
+	applied: AppliedState,
+	unitsDirectory: string,
+): Promise<boolean> {
+	const commit = appliedCommit(applied);
+	if (commit === undefined) {
+		// Nothing on disk tells an accepted tree from one a failed re-promotion staged, so a record
+		// from before the commit was kept is never completed from a tree or a lock: the next apply
+		// records the commit, and until then the host reports the tooling as pending.
+		console.log(
+			`${applied.release} was recorded before its commit was kept; keeping the current tooling until the next apply`,
+		);
+		return false;
 	}
+	const { tree } = await ensureReleaseTree(
+		config.checkout,
+		releasesDirectory(config),
+		applied.release,
+		commit,
+	);
+	if (await followTooling(config, tree, unitsDirectory)) {
+		console.log(`Adopted the tooling of ${applied.release}; the next run uses it`);
+		return true;
+	}
+	return false;
+}
 
+/** The channel at the tip of deploy-state, parsed only after cosign accepted its signature. */
+async function fetchSignedChannel(
+	config: HostConfig,
+): Promise<{ channel: Channel; channelCommit: string }> {
 	await run(
 		"git",
 		["fetch", "--quiet", "origin", "+refs/heads/deploy-state:refs/remotes/origin/deploy-state"],
@@ -538,6 +540,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 				"promoted yet. Run the Promote workflow for it and this host applies it on the next tick.",
 		);
 	}
+	// Not trimmed: the channel must reach cosign byte for byte as it was signed.
 	const channelJson = await output("git", ["show", `${channelCommit}:${channelPath}`], {
 		cwd: config.checkout,
 	});
@@ -562,96 +565,88 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		"https://token.actions.githubusercontent.com",
 		path.join(scratch, "channel.json"),
 	]);
+	return { channel: parseChannel(parseJson(channelJson)), channelCommit };
+}
 
-	const channel = parseChannel(parseJson(channelJson));
-	const advances =
-		applied && channelCommit !== applied.channelCommit
-			? await succeeds(
-					"git",
-					["merge-base", "--is-ancestor", applied.channelCommit, channelCommit],
-					{
-						cwd: config.checkout,
-					},
-				)
-			: true;
-	// Whether the target is behind what runs. Both are commits of the default branch here, so the
-	// clone answers it directly; between releases the version comparison in decide covers it, and a
-	// change of form is a deliberate move only a version or an operator can order.
-	//
-	// The branch is fetched first: without the objects, `merge-base` fails and a failure would read
-	// as "not behind", which is the wrong way for this check to be wrong.
-	let targetPrecedesApplied = false;
-	if (applied && !RELEASE_TAG.test(channel.release) && !RELEASE_TAG.test(applied.release)) {
-		await run(
-			"git",
-			["fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main"],
-			fetchOptions(config),
-		);
-		for (const commit of [channel.release, applied.release]) {
-			if (
-				!(await succeeds("git", ["cat-file", "-e", `${commit}^{commit}`], { cwd: config.checkout }))
-			) {
-				throw new Error(
-					`cannot order ${channel.release} against ${applied.release}: ${commit} is unknown here`,
-				);
-			}
-		}
-		targetPrecedesApplied =
-			channel.release !== applied.release &&
-			(await succeeds("git", ["merge-base", "--is-ancestor", channel.release, applied.release], {
-				cwd: config.checkout,
-			}));
+/**
+ * Whether the target is behind what runs. Both are commits of the default branch here, so the
+ * clone answers it directly; between releases the version comparison in decide covers it, and a
+ * change of form is a deliberate move only a version or an operator can order.
+ *
+ * The branch is fetched first: without the objects, `merge-base` fails and a failure would read
+ * as "not behind", which is the wrong way for this check to be wrong.
+ */
+async function targetIsBehindApplied(
+	config: HostConfig,
+	channel: Channel,
+	applied: AppliedState | undefined,
+): Promise<boolean> {
+	if (!applied || RELEASE_TAG.test(channel.release) || RELEASE_TAG.test(applied.release)) {
+		return false;
 	}
-	const decision = decide(channel, applied, channelCommit, advances, targetPrecedesApplied);
-
-	if (decision.action === "refuse") {
-		throw new Error(decision.reason);
-	}
-	if (decision.action === "noop") {
-		console.log(`No change: ${decision.reason}`);
-		if (applied && applied.channelCommit !== channelCommit) {
-			await writeAtomic(
-				appliedFile,
-				`${JSON.stringify({ ...applied, channelCommit }, null, "\t")}\n`,
-			);
-		}
-		if (config.metricsFile !== undefined && config.metricsFile !== "" && applied) {
-			await writeAtomic(
-				config.metricsFile,
-				renderMetrics({
-					channel: config.channel,
-					release: applied.release,
-					commit: channelCommit,
-					success: true,
-					now: startedAt,
-					lastSuccessAt: new Date(applied.appliedAt),
-					toolingPending: appliedCommit(applied) === undefined,
-				}),
-			);
-		}
-		return;
-	}
-
-	// A release arrives as a tag; a commit is only reachable through the branch it is on, because a
-	// server does not serve an arbitrary object by name unless it is configured to.
 	await run(
 		"git",
-		RELEASE_TAG.test(decision.release)
-			? ["fetch", "--quiet", "origin", "tag", decision.release, "--no-tags"]
-			: ["fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main"],
+		["fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main"],
 		fetchOptions(config),
 	);
-	const releaseCommit = await revision(config.checkout, `${decision.release}^{commit}`);
-	const { tree: releaseTree } = await ensureReleaseTree(
-		config.checkout,
-		releasesDirectory(config),
-		decision.release,
-		releaseCommit,
+	for (const commit of [channel.release, applied.release]) {
+		if (
+			!(await succeeds("git", ["cat-file", "-e", `${commit}^{commit}`], { cwd: config.checkout }))
+		) {
+			throw new Error(
+				`cannot order ${channel.release} against ${applied.release}: ${commit} is unknown here`,
+			);
+		}
+	}
+	return (
+		channel.release !== applied.release &&
+		(await succeeds("git", ["merge-base", "--is-ancestor", channel.release, applied.release], {
+			cwd: config.checkout,
+		}))
 	);
+}
 
+async function recordUnchanged(
+	config: HostConfig,
+	appliedFile: string,
+	applied: AppliedState | undefined,
+	channelCommit: string,
+	startedAt: Date,
+): Promise<void> {
+	if (applied && applied.channelCommit !== channelCommit) {
+		await writeAtomic(
+			appliedFile,
+			`${JSON.stringify({ ...applied, channelCommit }, null, "\t")}\n`,
+		);
+	}
+	if (isSet(config.metricsFile) && applied) {
+		await writeAtomic(
+			config.metricsFile,
+			renderMetrics({
+				channel: config.channel,
+				release: applied.release,
+				commit: channelCommit,
+				success: true,
+				now: startedAt,
+				lastSuccessAt: new Date(applied.appliedAt),
+				toolingPending: appliedCommit(applied) === undefined,
+			}),
+		);
+	}
+}
+
+/** The release lock's env file, written for a commit channel and verified for a release. */
+async function prepareLock(
+	config: HostConfig,
+	channel: Channel,
+	applied: AppliedState | undefined,
+	release: string,
+	releaseCommit: string,
+	releaseTree: string,
+): Promise<{ lockEnv: string; lockFile: string }> {
 	const lockDirectory = path.join(config.stateDirectory, "release-locks");
 	await mkdir(lockDirectory, { recursive: true });
-	const lockFile = path.join(lockDirectory, `${decision.release}.env`);
+	const lockFile = path.join(lockDirectory, `${release}.env`);
 	if (channel.images) {
 		// A commit channel carries its own digests, and the channel file they arrived in was
 		// signature-verified before this point, so there is no release to fetch or verify. The
@@ -664,38 +659,45 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 			channel.images,
 			channel.refreshDatabaseImage,
 		);
-		await writeFile(lockFile, commitLockEnvironment(decision.release, images), { mode: 0o600 });
+		await writeFile(lockFile, commitLockEnvironment(release, images), { mode: 0o600 });
 	} else {
 		// The verifier is the tooling this tick runs, never the release's own copy of it.
 		await run(
 			process.execPath,
-			[path.join(import.meta.dirname, "prepare-release-lock.ts"), decision.release, lockFile],
+			[path.join(import.meta.dirname, "prepare-release-lock.ts"), release, lockFile],
 			{ cwd: releaseTree },
 		);
 	}
-
 	const lockEnv = await readFile(lockFile, "utf8");
 	if (!channel.images && lockedReleaseCommit(lockEnv) !== releaseCommit) {
-		throw new Error(`signed release lock does not cover the ${decision.release} source tree`);
+		throw new Error(`signed release lock does not cover the ${release} source tree`);
 	}
+	return { lockEnv, lockFile };
+}
 
-	const composeFor = (stack: Stack): string[] => [
-		"compose",
-		"--project-name",
-		stack,
-		"--env-file",
-		path.join(config.secretsDirectory, `${stack}.env`),
-		"--env-file",
-		lockFile,
-		"--file",
-		path.join(releaseTree, `docker/compose.${stack}.yaml`),
-	];
-
-	// Every stack is verified before any container starts, so a release that renders an unlocked image
-	// cannot get one running in the window before the guard refuses it.
+/**
+ * The compose arguments of every stack, each rendered and checked against the lock first: a release
+ * that renders an unlocked image cannot get one running in the window before the guard refuses it.
+ */
+async function verifiedComposeArgs(
+	config: HostConfig,
+	releaseTree: string,
+	lockFile: string,
+	lockEnv: string,
+): Promise<Map<Stack, string[]>> {
 	const composeArgsByStack = new Map<Stack, string[]>();
 	for (const stack of config.stacks) {
-		const composeArgs = composeFor(stack);
+		const composeArgs = [
+			"compose",
+			"--project-name",
+			stack,
+			"--env-file",
+			path.join(config.secretsDirectory, `${stack}.env`),
+			"--env-file",
+			lockFile,
+			"--file",
+			path.join(releaseTree, `docker/compose.${stack}.yaml`),
+		];
 		const rendered = asRecord(
 			parseJson(
 				await output("docker", [...composeArgs, "config", "--format", "json"], {
@@ -713,7 +715,14 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		}
 		composeArgsByStack.set(stack, composeArgs);
 	}
+	return composeArgsByStack;
+}
 
+async function startStacks(
+	config: HostConfig,
+	releaseTree: string,
+	composeArgsByStack: ReadonlyMap<Stack, string[]>,
+): Promise<void> {
 	for (const [stack, composeArgs] of composeArgsByStack) {
 		const foundation = FOUNDATION[stack];
 		if (!foundation) {
@@ -748,13 +757,80 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 			{ cwd: releaseTree },
 		);
 	}
+}
+
+export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
+	const config = hostConfig(process.env);
+	const appliedFile = path.join(config.stateDirectory, "applied.json");
+	const applied = await readApplied(appliedFile);
+	const startedAt = new Date();
+
+	await mkdir(config.stateDirectory, { recursive: true });
+	if (applied && (await adoptedAppliedTooling(config, applied, unitsDirectory))) {
+		return;
+	}
+
+	const { channel, channelCommit } = await fetchSignedChannel(config);
+	const advances =
+		applied && channelCommit !== applied.channelCommit
+			? await succeeds(
+					"git",
+					["merge-base", "--is-ancestor", applied.channelCommit, channelCommit],
+					{
+						cwd: config.checkout,
+					},
+				)
+			: true;
+	const decision = decide(
+		channel,
+		applied,
+		channelCommit,
+		advances,
+		await targetIsBehindApplied(config, channel, applied),
+	);
+
+	if (decision.action === "refuse") {
+		throw new Error(decision.reason);
+	}
+	if (decision.action === "noop") {
+		console.log(`No change: ${decision.reason}`);
+		await recordUnchanged(config, appliedFile, applied, channelCommit, startedAt);
+		return;
+	}
+
+	// A release arrives as a tag; a commit is only reachable through the branch it is on, because a
+	// server does not serve an arbitrary object by name unless it is configured to.
+	await run(
+		"git",
+		RELEASE_TAG.test(decision.release)
+			? ["fetch", "--quiet", "origin", "tag", decision.release, "--no-tags"]
+			: ["fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main"],
+		fetchOptions(config),
+	);
+	const releaseCommit = await revision(config.checkout, `${decision.release}^{commit}`);
+	const { tree: releaseTree } = await ensureReleaseTree(
+		config.checkout,
+		releasesDirectory(config),
+		decision.release,
+		releaseCommit,
+	);
+	const { lockEnv, lockFile } = await prepareLock(
+		config,
+		channel,
+		applied,
+		decision.release,
+		releaseCommit,
+		releaseTree,
+	);
+	const composeArgsByStack = await verifiedComposeArgs(config, releaseTree, lockFile, lockEnv);
+	await startStacks(config, releaseTree, composeArgsByStack);
 
 	const finishedAt = new Date();
 	await writeAtomic(
 		appliedFile,
 		`${JSON.stringify({ release: decision.release, channelCommit, appliedAt: finishedAt.toISOString(), commit: releaseCommit }, null, "\t")}\n`,
 	);
-	if (config.metricsFile !== undefined && config.metricsFile !== "") {
+	if (isSet(config.metricsFile)) {
 		await writeAtomic(
 			config.metricsFile,
 			renderMetrics({
@@ -995,7 +1071,7 @@ export async function syncUnits(tree: string, unitsDirectory: string): Promise<s
 async function reportFailure(): Promise<void> {
 	const metricsFile = process.env.HEPHAESTUS_METRICS_FILE;
 	const channel = process.env.HEPHAESTUS_CHANNEL;
-	if (metricsFile === undefined || metricsFile === "" || channel === undefined || channel === "") {
+	if (!isSet(metricsFile) || !isSet(channel)) {
 		return;
 	}
 	const applied = await readApplied(

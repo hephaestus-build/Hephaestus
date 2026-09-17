@@ -5,6 +5,7 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { isSet } from "./lib/env.ts";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const DOCS_CSS = "docs/src/css/custom.css";
@@ -72,9 +73,9 @@ export function findDrift(docsCss: string, appCss: string): string[] {
 	for (const { infima, app: appToken, docsTheme, appTheme = docsTheme } of COPIED_TOKENS) {
 		const docsValue = docs[docsTheme].get(infima);
 		const appValue = app[appTheme].get(appToken);
-		if (docsValue === undefined || docsValue === "") {
+		if (!isSet(docsValue)) {
 			problems.push(`${DOCS_CSS} no longer declares ${infima} for the ${docsTheme} theme.`);
-		} else if (appValue === undefined || appValue === "") {
+		} else if (!isSet(appValue)) {
 			problems.push(`${APP_CSS} no longer declares ${appToken} for the ${appTheme} theme.`);
 		} else if (docsValue !== appValue) {
 			problems.push(

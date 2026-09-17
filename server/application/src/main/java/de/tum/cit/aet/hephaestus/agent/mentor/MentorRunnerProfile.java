@@ -11,8 +11,8 @@ public final class MentorRunnerProfile implements PiRunnerProfile {
 
     /**
      * {@code pi-provider.ts} is shared with the practice runner; {@code pi-mentor-protocol.ts}
-     * declares the JSON-RPC contract this runner speaks with {@code MentorRunnerClient}. Both are
-     * imported with relative specifiers, so both must be staged beside pi-mentor-runner.ts.
+     * declares the JSON-RPC contract this runner speaks with {@code MentorRunnerClient}. Each is
+     * imported with a relative specifier, so each must be staged beside pi-mentor-runner.ts.
      */
     private static final List<String> SIDECARS = List.of(
             "pi-agent-sandbox.ts",

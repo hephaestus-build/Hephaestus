@@ -9,8 +9,9 @@
  * manifest against.
  */
 import { appendFile, writeFile } from "node:fs/promises";
-import { setTimeout as wait } from "node:timers/promises";
+import { setTimeout as sleep } from "node:timers/promises";
 
+import { isSet } from "./lib/env.ts";
 import type { Subject } from "./lib/image-scan.ts";
 import { readJsonFile } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
@@ -60,7 +61,7 @@ export async function resolveReleaseImages(
 	const inspect = options.inspect ?? inspectIndexDigest;
 	const attempts = options.attempts ?? 24;
 	const delayMs = options.delayMs ?? 5000;
-	const sleep = options.sleep ?? wait;
+	const pause = options.sleep ?? sleep;
 	const resolved: ResolvedImage[] = [];
 	for (const subject of subjects) {
 		let digest = "";
@@ -75,7 +76,7 @@ export async function resolveReleaseImages(
 					`could not resolve an index digest for ${subject.reference} (got: ${digest || "<empty>"})`,
 				);
 			}
-			await sleep(delayMs);
+			await pause(delayMs);
 		}
 		resolved.push({
 			image: subject.image,
@@ -130,7 +131,7 @@ if (import.meta.main) {
 	await writeFile(outputPath, formatResolvedImages(images));
 	process.stdout.write(formatResolvedImages(images));
 	const githubOutput = process.env.GITHUB_OUTPUT;
-	if (githubOutput !== undefined && githubOutput !== "") {
+	if (isSet(githubOutput)) {
 		await appendFile(githubOutput, digestOutputs(images));
 	}
 }

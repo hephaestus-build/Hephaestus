@@ -1,11 +1,9 @@
 import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { type CustomPromisifyLegacy, promisify } from "node:util";
+import { promisify } from "node:util";
 
-// `execFile` promisifies through its own `__promisify__` signature, which is what resolves to
-// `{ stdout, stderr }` rather than to the callback's single result.
-const promisifiableExecFile: CustomPromisifyLegacy<typeof execFile.__promisify__> = execFile;
-const execFileAsync = promisify(promisifiableExecFile);
+// oxlint-disable-next-line typescript/strict-void-return -- the rule reads the callback overload; tsc resolves the CustomPromisify one to { stdout, stderr }.
+const execFileAsync = promisify(execFile);
 
 /**
  * Node caps a captured subprocess at 1 MiB and throws `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` past it.

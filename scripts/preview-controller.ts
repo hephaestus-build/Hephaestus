@@ -1,4 +1,4 @@
-import { requiredEnv, requiredPositiveInteger } from "./lib/env.ts";
+import { isSet, requiredEnv, requiredPositiveInteger } from "./lib/env.ts";
 
 type ApiMethod<T> = (params: Record<string, unknown>) => Promise<{ data: T }>;
 
@@ -131,7 +131,7 @@ const hasPreviewLabel = (pull: PullRequest): boolean =>
 	pull.labels.some((label) => label.name === PREVIEW_LABEL);
 
 const maxActivePreviews = (): number =>
-	process.env.PREVIEW_MAX_ACTIVE !== undefined && process.env.PREVIEW_MAX_ACTIVE !== ""
+	isSet(process.env.PREVIEW_MAX_ACTIVE)
 		? requiredPositiveInteger(process.env, "PREVIEW_MAX_ACTIVE")
 		: DEFAULT_MAX_ACTIVE;
 
@@ -184,52 +184,44 @@ const occupiedEnvironments = async (
 	return [...occupied].toSorted();
 };
 
-const resolve = async ({ github, context, core }: ControllerInput): Promise<void> => {
-	const { owner, repo } = context.repo;
-	if (!context.payload.pull_request) {
-		throw new Error("Pull request payload is incomplete.");
-	}
-	const { number } = context.payload.pull_request;
-	const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: number });
-	const defaultBranch = context.payload.repository.default_branch;
-	const environment = `preview/pr-${number}`;
-	const labelled = hasPreviewLabel(pull);
-	core.setOutput("pr_number", String(number));
-	core.setOutput("environment", environment);
-	core.setOutput("announce", "false");
+/** The pull request under consideration, as every eligibility check reads it. */
+interface Target {
+	readonly github: GitHubApi;
+	readonly owner: string;
+	readonly repo: string;
+	readonly defaultBranch: string;
+	readonly number: number;
+	readonly pull: PullRequest;
+}
 
-	// Only a labelled pull request, and only for a reason someone can act on, earns a status comment.
-	const skip = (reason: string, quiet = false): void => {
-		core.notice(reason);
-		core.setOutput("eligible", "false");
-		core.setOutput("reason", reason);
-		core.setOutput("announce", String(labelled && !quiet));
-	};
-
-	if (!labelled) {
-		skip(`PR #${number} does not carry the \`${PREVIEW_LABEL}\` label.`);
-		return;
-	}
+const pullRequestSkipReason = ({ owner, repo, number, pull }: Target): string | undefined => {
 	if (pull.state !== "open") {
-		skip(`PR #${number} is closed.`);
-		return;
+		return `PR #${number} is closed.`;
 	}
 	if (pull.head.repo?.full_name !== `${owner}/${repo}`) {
-		skip(`PR #${number} comes from a fork. Previews run only for branches in this repository.`);
-		return;
+		return `PR #${number} comes from a fork. Previews run only for branches in this repository.`;
 	}
 	// Coolify is handed this association and refuses an untrusted one. Checking it here turns that
 	// into a skip reason on the pull request instead of a failure after the deployment is announced.
 	if (!TRUSTED_ASSOCIATIONS.has(pull.author_association)) {
-		skip(
-			`PR #${number} was opened by a ${pull.author_association.toLowerCase()}, not a repository collaborator.`,
-		);
-		return;
+		return `PR #${number} was opened by a ${pull.author_association.toLowerCase()}, not a repository collaborator.`;
 	}
+	return undefined;
+};
 
-	// Compared against the default branch rather than this pull request's own base: a stacked layer's
-	// diff hides whatever the layers beneath it changed, and those commits are in the head that
-	// Coolify deploys.
+/**
+ * Compared against the default branch rather than this pull request's own base: a stacked layer's
+ * diff hides whatever the layers beneath it changed, and those commits are in the head that
+ * Coolify deploys.
+ */
+const policySkipReason = async ({
+	github,
+	owner,
+	repo,
+	defaultBranch,
+	number,
+	pull,
+}: Target): Promise<string | undefined> => {
 	const comparison = await github.rest.repos.compareCommitsWithBasehead({
 		owner,
 		repo,
@@ -237,10 +229,7 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 	});
 	const files = comparison.data.files ?? [];
 	if (files.length >= COMPARE_FILE_LIMIT) {
-		skip(
-			`PR #${number} changes ${files.length}+ files, too many for GitHub to report in one comparison, so deployment policy cannot be verified.`,
-		);
-		return;
+		return `PR #${number} changes ${files.length}+ files, too many for GitHub to report in one comparison, so deployment policy cannot be verified.`;
 	}
 	const protectedFile = files.find(
 		(file) =>
@@ -249,12 +238,15 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 			file.filename.startsWith(".github/actions/"),
 	);
 	if (protectedFile) {
-		skip(
-			`PR #${number} changes trusted deployment policy (\`${protectedFile.filename}\`), so it cannot deploy until that change is merged.`,
-		);
-		return;
+		return `PR #${number} changes trusted deployment policy (\`${protectedFile.filename}\`), so it cannot deploy until that change is merged.`;
 	}
+	return undefined;
+};
 
+const hasLivePreview = async (
+	{ github, owner, repo, pull }: Target,
+	environment: string,
+): Promise<boolean> => {
 	const deployments = await github.rest.repos.listDeployments({
 		owner,
 		repo,
@@ -262,27 +254,36 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		per_page: 1,
 	});
 	const current = deployments.data[0];
-	if (current?.sha === pull.head.sha) {
-		const statuses = await github.rest.repos.listDeploymentStatuses({
-			owner,
-			repo,
-			deployment_id: current.id,
-			per_page: 1,
-		});
-		if (LIVE_STATES.has(statuses.data[0]?.state ?? "")) {
-			skip(`PR #${number} already has a current preview deployment.`, true);
-			return;
-		}
+	if (current?.sha !== pull.head.sha) {
+		return false;
 	}
+	const statuses = await github.rest.repos.listDeploymentStatuses({
+		owner,
+		repo,
+		deployment_id: current.id,
+		per_page: 1,
+	});
+	return LIVE_STATES.has(statuses.data[0]?.state ?? "");
+};
 
-	// A preview restores the default branch's database into an application built from this branch, so
-	// a branch missing one of the default branch's migrations runs against a database built from a
-	// changelog other than its own. Checking that here costs one comparison and can name the reason
-	// on the pull request. Leaving it to the deployment costs the deployment, and the failure it
-	// reports says only that the preview did not come up.
-	//
-	// It sits after the checks above on purpose: a head that already has a live preview needs no
-	// deployment, and refusing here would replace a working preview's comment with a refusal.
+/**
+ * A preview restores the default branch's database into an application built from this branch, so
+ * a branch missing one of the default branch's migrations runs against a database built from a
+ * changelog other than its own. Checking that here costs one comparison and can name the reason
+ * on the pull request. Leaving it to the deployment costs the deployment, and the failure it
+ * reports says only that the preview did not come up.
+ *
+ * It sits after the checks above on purpose: a head that already has a live preview needs no
+ * deployment, and refusing here would replace a working preview's comment with a refusal.
+ */
+const schemaSkipReason = async ({
+	github,
+	owner,
+	repo,
+	defaultBranch,
+	number,
+	pull,
+}: Target): Promise<string | undefined> => {
 	const behind = await github.rest.repos.compareCommitsWithBasehead({
 		owner,
 		repo,
@@ -308,14 +309,13 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 	// names the mechanisms as what branches in this state have run into, never as what this branch
 	// is guaranteed to hit.
 	if (behindFiles.length >= COMPARE_FILE_LIMIT) {
-		skip(
+		return (
 			`PR #${number} is ${behindFiles.length} files behind ${defaultBranch}, the most one GitHub ` +
-				`comparison reports, so whether this branch still carries ${defaultBranch}'s ` +
-				`migrations cannot be checked. A preview restores ${defaultBranch}'s database, and ` +
-				`branches behind on schema have failed to start against it. Merge ${defaultBranch} ` +
-				`in; the next push previews automatically.`,
+			`comparison reports, so whether this branch still carries ${defaultBranch}'s ` +
+			`migrations cannot be checked. A preview restores ${defaultBranch}'s database, and ` +
+			`branches behind on schema have failed to start against it. Merge ${defaultBranch} ` +
+			`in; the next push previews automatically.`
 		);
-		return;
 	}
 	for (const file of behindFiles) {
 		if (!isSchemaChange(file.filename)) {
@@ -331,24 +331,71 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 		if (await branchHasBlob(github, owner, repo, pull.head.sha, file)) {
 			continue;
 		}
-		skip(
+		return (
 			`PR #${number} does not have ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
-				`${defaultBranch}'s database, and branches in that state have failed to start against ` +
-				`it: Liquibase re-runs migrations that database has no record of and stops on a ` +
-				`relation that already exists, or Liquibase passes and startup then fails on a column ` +
-				`one of those migrations dropped. Merge ${defaultBranch} in; the next push previews ` +
-				`automatically.`,
+			`${defaultBranch}'s database, and branches in that state have failed to start against ` +
+			`it: Liquibase re-runs migrations that database has no record of and stops on a ` +
+			`relation that already exists, or Liquibase passes and startup then fails on a column ` +
+			`one of those migrations dropped. Merge ${defaultBranch} in; the next push previews ` +
+			`automatically.`
 		);
-		return;
 	}
+	return undefined;
+};
 
+const capacitySkipReason = async (
+	{ github, owner, repo }: Target,
+	environment: string,
+): Promise<string | undefined> => {
 	const maxActive = maxActivePreviews();
 	const occupied = await occupiedEnvironments(github, owner, repo);
 	if (!occupied.includes(environment) && occupied.length >= maxActive) {
 		const holders = occupied.map((slot) => `#${slot.replace("preview/pr-", "")}`).join(", ");
-		skip(
-			`The preview host is full (${occupied.length}/${maxActive}). Remove the \`${PREVIEW_LABEL}\` label from ${holders} to free a slot.`,
-		);
+		return `The preview host is full (${occupied.length}/${maxActive}). Remove the \`${PREVIEW_LABEL}\` label from ${holders} to free a slot.`;
+	}
+	return undefined;
+};
+
+const resolve = async ({ github, context, core }: ControllerInput): Promise<void> => {
+	const { owner, repo } = context.repo;
+	if (!context.payload.pull_request) {
+		throw new Error("Pull request payload is incomplete.");
+	}
+	const { number } = context.payload.pull_request;
+	const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+	const defaultBranch = context.payload.repository.default_branch;
+	const target: Target = { github, owner, repo, defaultBranch, number, pull };
+	const environment = `preview/pr-${number}`;
+	const labelled = hasPreviewLabel(pull);
+	core.setOutput("pr_number", String(number));
+	core.setOutput("environment", environment);
+	core.setOutput("announce", "false");
+
+	// Only a labelled pull request, and only for a reason someone can act on, earns a status comment.
+	const skip = (reason: string, quiet = false): void => {
+		core.notice(reason);
+		core.setOutput("eligible", "false");
+		core.setOutput("reason", reason);
+		core.setOutput("announce", String(labelled && !quiet));
+	};
+
+	if (!labelled) {
+		skip(`PR #${number} does not carry the \`${PREVIEW_LABEL}\` label.`);
+		return;
+	}
+	const ineligible = pullRequestSkipReason(target) ?? (await policySkipReason(target));
+	if (ineligible !== undefined) {
+		skip(ineligible);
+		return;
+	}
+	if (await hasLivePreview(target, environment)) {
+		skip(`PR #${number} already has a current preview deployment.`, true);
+		return;
+	}
+	const blocked =
+		(await schemaSkipReason(target)) ?? (await capacitySkipReason(target, environment));
+	if (blocked !== undefined) {
+		skip(blocked);
 		return;
 	}
 

@@ -120,7 +120,7 @@ describe("instance AI usage route", () => {
 	});
 
 	it("says so out loud when a budget write fails after the dialog was dismissed", async () => {
-		const slowPut = deferred<undefined>();
+		const slowPut = deferred();
 		mockUsageRoutes({
 			budgetUsd: 50,
 			onPutBudget: async () => {
@@ -139,7 +139,7 @@ describe("instance AI usage route", () => {
 		fireEvent.keyDown(await screen.findByRole("dialog"), { key: "Escape" });
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
-		slowPut.resolve(undefined);
+		slowPut.resolve();
 
 		await screen.findByText("Couldn't save the budget");
 		screen.getByText("The budget service is down.");

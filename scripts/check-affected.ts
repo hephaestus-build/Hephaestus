@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 
+import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
@@ -11,7 +12,7 @@ export function parseBase(args: string[]): string {
 		return "origin/main";
 	}
 	const [flag, revision] = args;
-	if (args.length === 2 && flag === "--base" && revision !== undefined && revision !== "") {
+	if (args.length === 2 && flag === "--base" && isSet(revision)) {
 		return revision;
 	}
 	throw new Error("Usage: vp run check:affected [--base <revision>]");
@@ -29,7 +30,6 @@ const fullGateInputs = [
 	/^patches\//u,
 	/^tsconfig(?:\.agents)?\.json$/u,
 	/^\.ox(?:fmt|lint)rc\.json$/u,
-	/^oxlint\.react\.jsonc$/u,
 	/^server\/openapi\.yaml$/u,
 	/^webapp\/src\/api\//u,
 	/^webapp\/src\/routeTree\.gen\.ts$/u,

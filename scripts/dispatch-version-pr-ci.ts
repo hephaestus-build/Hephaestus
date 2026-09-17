@@ -1,3 +1,4 @@
+import { isSet, requiredEnv } from "./lib/env.ts";
 // Version-PR trigger contract: docs/contributor/ci-cd.mdx.
 import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
@@ -67,31 +68,32 @@ async function branchHead(repository: string, branch: string): Promise<string | 
 	);
 }
 
-if (import.meta.main) {
-	const repository = process.env.GITHUB_REPOSITORY;
-	if (repository === undefined || repository === "") {
-		throw new Error("GITHUB_REPOSITORY is required");
-	}
+async function main(): Promise<void> {
+	const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
 	const branch = versionBranch(await readJsonFile(".changeset/config.json"));
 	const headSha = await branchHead(repository, branch);
-	if (headSha !== undefined && headSha !== "") {
-		const runs = parseRuns(
-			JSON.parse(
-				await gh([
-					"api",
-					`repos/${repository}/actions/workflows/${CI_WORKFLOW}/runs?branch=${encodeURIComponent(branch)}&per_page=100`,
-					"--jq",
-					"{workflow_runs: [.workflow_runs[] | {head_sha, conclusion}]}",
-				]),
-			),
-		);
-		if (needsDispatch(headSha, runs)) {
-			await gh(["workflow", "run", CI_WORKFLOW, "--ref", branch, "-f", "release-preflight=true"]);
-			process.stdout.write(`Dispatched CI/CD on ${branch} at ${headSha}.\n`);
-		} else {
-			process.stdout.write(`CI/CD already ran for ${branch} at ${headSha}.\n`);
-		}
-	} else {
+	if (!isSet(headSha)) {
 		process.stdout.write(`No ${branch} branch; nothing to validate.\n`);
+		return;
 	}
+	const runs = parseRuns(
+		JSON.parse(
+			await gh([
+				"api",
+				`repos/${repository}/actions/workflows/${CI_WORKFLOW}/runs?branch=${encodeURIComponent(branch)}&per_page=100`,
+				"--jq",
+				"{workflow_runs: [.workflow_runs[] | {head_sha, conclusion}]}",
+			]),
+		),
+	);
+	if (needsDispatch(headSha, runs)) {
+		await gh(["workflow", "run", CI_WORKFLOW, "--ref", branch, "-f", "release-preflight=true"]);
+		process.stdout.write(`Dispatched CI/CD on ${branch} at ${headSha}.\n`);
+	} else {
+		process.stdout.write(`CI/CD already ran for ${branch} at ${headSha}.\n`);
+	}
+}
+
+if (import.meta.main) {
+	await main();
 }

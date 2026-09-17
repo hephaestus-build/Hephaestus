@@ -15,6 +15,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { isSet } from "./env.ts";
 import { asArray, asRecord, asString } from "./json.ts";
 import { releaseSignerRepository } from "./release-signer.ts";
 
@@ -144,9 +145,7 @@ export function releaseRepository(
 ): string {
 	const identity = releaseIdentityFor(release, identities);
 	const { GITHUB_REPOSITORY, CI } = environment;
-	const inCi =
-		(GITHUB_REPOSITORY !== undefined && GITHUB_REPOSITORY !== "") ||
-		(CI !== undefined && CI !== "");
+	const inCi = isSet(GITHUB_REPOSITORY) || isSet(CI);
 	if (identity === identities.at(-1) && inCi) {
 		return releaseSignerRepository(environment);
 	}
@@ -160,7 +159,7 @@ export function releaseOwner(
 	identities: ReleaseIdentity[] = loadReleaseIdentities(),
 ): string {
 	const [owner] = releaseRepository(release, environment, identities).split("/");
-	if (owner === undefined || owner === "") {
+	if (!isSet(owner)) {
 		throw new Error(`could not derive an owner for ${release}`);
 	}
 	return owner;

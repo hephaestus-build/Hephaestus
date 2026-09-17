@@ -330,6 +330,7 @@ jobs:
               - 'security/vulnerability-policy.json'
               - 'scripts/scan-upstream-images.ts'
               - 'scripts/check-release-vulnerabilities.ts'
+              - 'scripts/lib/env.ts'
               - 'scripts/lib/image-scan.ts'
               - 'scripts/lib/json.ts'
               - 'scripts/lib/process.ts'

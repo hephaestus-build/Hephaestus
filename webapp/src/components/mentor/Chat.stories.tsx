@@ -26,14 +26,12 @@ const meta = {
 		attachments: [],
 		onMessageSubmit: fn(),
 		onStop: fn(),
-		onFileUpload: fn(async () => []),
-		onAttachmentsChange: fn(),
+		attachmentUpload: { onFileUpload: fn(async () => []), onAttachmentsChange: fn() },
 		onMessageEdit: fn(),
 		onCopy: fn(),
 		onVote: fn(),
 		scrollToBottom: fn(),
 		inputPlaceholder: "Ask me anything...",
-		disableAttachments: false,
 	},
 } satisfies Meta<typeof Chat>;
 
@@ -328,10 +326,10 @@ export const ReadOnlyArchive: Story = {
 	},
 };
 
-export const SecureMode: Story = {
+export const WithoutAttachments: Story = {
 	args: {
 		messages: CONVERSATION_MESSAGES.slice(0, 4),
-		disableAttachments: true,
+		attachmentUpload: undefined,
 		inputPlaceholder: "Send a message (file attachments disabled)...",
 	},
 };

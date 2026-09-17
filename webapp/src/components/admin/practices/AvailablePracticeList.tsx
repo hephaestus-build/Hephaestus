@@ -77,13 +77,6 @@ export function AvailablePracticeList({
 				const available = entries.filter(({ availability }) => availability === "AVAILABLE").length;
 				const restorable = entries.filter(({ availability }) => availability === "ADOPTED").length;
 				const groupMissing = groupSlug !== undefined && !existingGroupSlugs.has(groupSlug);
-				// The whole group can only be reviewed at once when it is still to be created here.
-				let reviewLabel = `Review group · ${countLabel(available)}`;
-				if (groupMissing && available === 0) {
-					reviewLabel = `Restore group · ${countLabel(restorable)}`;
-				} else if (!groupMissing) {
-					reviewLabel = `Review ${countLabel(available)}`;
-				}
 
 				return (
 					<Section
@@ -102,7 +95,7 @@ export function AvailablePracticeList({
 									entry={{ kind: "catalog-group", id: groupSlug }}
 									className={buttonVariants({ size: "sm", variant: "outline" })}
 								>
-									{reviewLabel}
+									{reviewLabel(groupMissing, available, restorable)}
 								</DetailStackLink>
 							) : (
 								<span className="text-xs text-muted-foreground">{countLabel(entries.length)}</span>
@@ -125,6 +118,17 @@ export function AvailablePracticeList({
 
 function countLabel(count: number): string {
 	return `${count} ${count === 1 ? "practice" : "practices"}`;
+}
+
+function reviewLabel(groupMissing: boolean, available: number, restorable: number): string {
+	if (!groupMissing) {
+		return `Review ${countLabel(available)}`;
+	}
+	// The whole group can only be reviewed at once when it is still to be created here.
+	if (available === 0) {
+		return `Restore group · ${countLabel(restorable)}`;
+	}
+	return `Review group · ${countLabel(available)}`;
 }
 
 function PracticeRow({ practice }: { practice: CatalogPracticeSummary }) {

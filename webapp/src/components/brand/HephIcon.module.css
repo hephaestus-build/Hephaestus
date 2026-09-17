@@ -1,6 +1,8 @@
 .icon {
 	--mentor-shadow-opacity: 0.08;
 	--mentor-blush-opacity: 0.25;
+	width: var(--heph-size);
+	height: var(--heph-size);
 }
 
 .shadow {

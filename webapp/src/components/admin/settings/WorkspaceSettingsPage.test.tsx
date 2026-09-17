@@ -14,10 +14,10 @@ const features: FeatureValues = {
 function setup(overrides: Partial<WorkspaceSettingsPageProps> = {}) {
 	const props: WorkspaceSettingsPageProps = {
 		isResettingLeagues: false,
-		onResetLeagues: vi.fn<() => void>(),
+		onResetLeagues: vi.fn(),
 		features,
 		isSavingFeatures: false,
-		onToggleFeature: vi.fn<() => void>(),
+		onToggleFeature: vi.fn(),
 		...overrides,
 	};
 	render(<WorkspaceSettingsPage {...props} />);

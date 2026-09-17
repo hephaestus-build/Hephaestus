@@ -11,17 +11,13 @@ import { isDeepStrictEqual } from "node:util";
 import packageArgument from "npm-package-arg";
 import { parse } from "yaml";
 
-import { asRecord, isRecord } from "./lib/json.ts";
+import { asRecord, isRecord, readJsonFileSync } from "./lib/json.ts";
 import { maskOptionalRuntimePeerMetadata } from "./lib/optional-runtime-peer.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { BUNDLED_PINS, bundledVersions, CATALOG_FILE } from "./lib/toolchain-pins.ts";
 
-function readJson(file: string): Record<string, unknown> {
-	return asRecord(JSON.parse(readFileSync(file, "utf8")), file);
-}
-
-const manifest = readJson("package.json");
+const manifest = asRecord(readJsonFileSync("package.json"), "package.json");
 const { devEngines, engines, packageManager } = manifest;
 const match =
 	typeof packageManager === "string"
@@ -121,7 +117,7 @@ for (const file of [
 	"webapp/package.json",
 	"docker/agents/pi/package.json",
 ]) {
-	const workspaceManifest = readJson(file);
+	const workspaceManifest = asRecord(readJsonFileSync(file), file);
 	const workspaceScripts = workspaceManifest.scripts;
 	if (isRecord(workspaceScripts)) {
 		for (const [name, command] of Object.entries(workspaceScripts)) {
@@ -196,7 +192,10 @@ const imageWorkspace = asRecord(
 if (imageWorkspace.minimumReleaseAge !== releaseAge) {
 	throw new Error(`docker/agents/pi/pnpm-workspace.yaml must set minimumReleaseAge ${releaseAge}`);
 }
-const imageEngines = readJson("docker/agents/pi/package.json").engines;
+const imageEngines = asRecord(
+	readJsonFileSync("docker/agents/pi/package.json"),
+	"docker/agents/pi/package.json",
+).engines;
 if (!isRecord(imageEngines) || imageEngines.pnpm !== version) {
 	throw new Error(`docker/agents/pi/package.json must pin pnpm ${version} through engines`);
 }
@@ -230,7 +229,7 @@ if (
 ) {
 	throw new Error("Gradle must compile with the JDK line from .java-version");
 }
-const renovate = readJson("renovate.json");
+const renovate = asRecord(readJsonFileSync("renovate.json"), "renovate.json");
 if (asRecord(renovate.constraints, "Renovate constraints").java !== javaVersion) {
 	throw new Error(
 		"Renovate constraints.java must restate .java-version for Gradle artifact updates",

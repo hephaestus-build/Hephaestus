@@ -1,18 +1,28 @@
 import { ruleTester } from "../rule-tester.ts";
 import { typedStoryMeta } from "./typed-story-meta.ts";
 
+const componentMeta = "const meta = { component: Button } satisfies Meta<typeof Button>;";
+
 ruleTester.run("typed-story-meta", typedStoryMeta, {
 	valid: [
-		"const meta = { component: Button } satisfies Meta<typeof Button>;",
+		componentMeta,
 		"const meta = { parameters: { layout: 'centered' } } satisfies Meta;",
 		"const meta = { parameters: { docs: { description: { component: 'All icons.' } } } } satisfies Meta;",
 		"const meta = { ...base } satisfies Meta;",
 		"const story = { component: Button } satisfies StoryObj;",
 		// The annotation spelling is fine where no component is named.
 		"const meta: Meta = { parameters: { layout: 'centered' } };",
-		"type Story = StoryObj<typeof meta>;",
-		"type Story = SB.StoryObj<typeof meta>;",
-		"type Story = StoryObj;",
+		`${componentMeta} type Story = StoryObj<typeof meta>;`,
+		`${componentMeta} type Story = SB.StoryObj<typeof meta>;`,
+		`${componentMeta} type Story = StoryObj;`,
+		`${componentMeta} export const Primary: StoryObj<typeof meta> = {};`,
+		// The meta goes by whatever name its declaration gives it.
+		"export const buttonMeta = { component: Button } satisfies Meta<typeof Button>; type Story = StoryObj<typeof buttonMeta>;",
+		// A gallery meta names no component, so there is no `typeof meta` for a story to subtract from.
+		"const meta = { args: { size: 'sm' } } satisfies Meta<typeof BronzeIcon>; export const Bronze: StoryObj<typeof BronzeIcon> = {};",
+		"type Story = StoryObj<typeof Button>;",
+		// A story with its own `render` may draw a sibling of the meta's component.
+		`${componentMeta} export const Loading: StoryObj<typeof ThinkingMessage> = { render: () => <ThinkingMessage /> };`,
 		"const meta: StoryObj = { component: Button };",
 		// An untyped object that is not a `meta` belongs to whoever declared it.
 		"const preset = { component: Button };",
@@ -59,11 +69,20 @@ ruleTester.run("typed-story-meta", typedStoryMeta, {
 			errors: [{ messageId: "annotated" }],
 		},
 		{
-			code: "type Story = StoryObj<typeof Button>;",
-			errors: [{ messageId: "storyOfComponent", line: 1, column: 23, endColumn: 36 }],
+			// The `satisfies` checks the object, but the annotation still widens `typeof meta`.
+			code: "const meta: Meta<typeof Button> = { component: Button } satisfies Meta<typeof Button>;",
+			errors: [{ messageId: "annotated", line: 1, column: 13, endColumn: 32 }],
 		},
 		{
-			code: "type Story = StoryObj<ButtonProps>;",
+			code: `${componentMeta}\ntype Story = StoryObj<typeof Button>;`,
+			errors: [{ messageId: "storyOfComponent", line: 2, column: 23, endColumn: 36 }],
+		},
+		{
+			code: `${componentMeta} type Story = StoryObj<ButtonProps>;`,
+			errors: [{ messageId: "storyOfComponent" }],
+		},
+		{
+			code: `${componentMeta} export const Primary: StoryObj<typeof Button> = { args: {} };`,
 			errors: [{ messageId: "storyOfComponent" }],
 		},
 		{

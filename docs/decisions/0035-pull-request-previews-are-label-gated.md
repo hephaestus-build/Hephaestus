@@ -194,21 +194,18 @@ Label admission is unchanged, and the Coolify production path is deleted in 2.0.
 
 ## Update — 2026-09-17: previews only for pull requests targeting `main`, and the concurrency groups
 
-Two parts of § Decision no longer describe the workflows; both stay standing as the record.
+Supersedes two parts of § Decision; both stay standing as the record.
 
-**The base-branch filter of rejected option 5 is in place.** Since #1623 (2026-08-30),
-`deploy-preview.yml` and `cleanup-preview.yml` trigger on `pull_request_target` with
-`branches: [main]`. A pull request within this repository gets a preview only while it targets
-`main`; a stacked layer becomes eligible when it is retargeted (`docs/contributor/ci-cd.mdx`
-§ Preview deployments). The security argument of option 5 is unchanged — the filter withholds no secret, fork
-exclusion is still the boundary — the filter keeps the privileged `pull_request_target` workflows
-anchored to the protected branch, and the stacked-preview cost the option priced is now paid.
-
-**There is no single lifecycle group and no `queue: max`.** Since #1611 (2026-08-29), deploy runs
-serialize in the group `hephaestus-preview-admission` with `cancel-in-progress: false`, so admission
-counting still cannot race another deploy; cleanup and the nightly reconcile's per-pull-request jobs
-serialize per pull request in `hephaestus-preview-lifecycle-<number>`, and the reconcile's inventory
-step in `preview-reconcile-inventory`. Deploy and cleanup of different pull requests may run at
-once. The first revisit trigger, which assumed one global group, is therefore partly spent: the
-split per pull request has happened for the lifecycle half while `PREVIEW_MAX_ACTIVE` still bounds
-the shared host.
+- The base-branch filter of rejected option 5 is in place: `deploy-preview.yml` and
+  `cleanup-preview.yml` trigger on `pull_request_target` with `branches: [main]`, so a pull request
+  gets a preview only while it targets `main` and a stacked layer becomes eligible when it is
+  retargeted (`docs/contributor/ci-cd.mdx` § Preview deployments). Option 5's security argument
+  stands — the filter withholds no secret and fork exclusion is the boundary; it keeps the
+  privileged workflows anchored to the protected branch at the stacked-preview cost the option priced.
+- There is no single lifecycle group and no `queue: max`: deploy runs serialize in
+  `hephaestus-preview-admission` with `cancel-in-progress: false` (`deploy-preview.yml`), so
+  admission counting cannot race another deploy; cleanup and the nightly reconcile's per-pull-request
+  jobs serialize in `hephaestus-preview-lifecycle-<number>` (`cleanup-preview.yml`,
+  `reconcile-previews.yml`) and the reconcile's inventory step in `preview-reconcile-inventory`.
+  Deploy and cleanup of different pull requests may run at once; of the first revisit trigger, only
+  `PREVIEW_MAX_ACTIVE` bounding the shared host stands.

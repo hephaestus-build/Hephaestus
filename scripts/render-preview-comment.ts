@@ -2,13 +2,14 @@ import { execFileSync } from "node:child_process";
 import { readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { isSet } from "./lib/env.ts";
 import { asRecord, asString, isRecord, readJsonFile } from "./lib/json.ts";
 import { compareLinks, renderPreviewComments, type PreviewLink } from "./lib/preview-comment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 function argument(index: number): string {
 	const value = process.argv[index];
-	if (value === undefined || value === "") {
+	if (!isSet(value)) {
 		throw new Error(
 			"Usage: render-preview-comment <docs|storybook> <artifact-directory> <preview-url> <base-sha> <output>",
 		);
@@ -119,14 +120,7 @@ function comment(
 	const introduction = `## ${heading}\n\n[${previewLabel}](<${baseUrl.href}>)\n\n### ${linksHeading}${count}`;
 	let footer = "";
 	const { GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID } = process.env;
-	if (
-		GITHUB_SERVER_URL !== undefined &&
-		GITHUB_SERVER_URL !== "" &&
-		GITHUB_REPOSITORY !== undefined &&
-		GITHUB_REPOSITORY !== "" &&
-		GITHUB_RUN_ID !== undefined &&
-		GITHUB_RUN_ID !== ""
-	) {
+	if (isSet(GITHUB_SERVER_URL) && isSet(GITHUB_REPOSITORY) && isSet(GITHUB_RUN_ID)) {
 		const sha = execFileSync("git", ["rev-parse", "HEAD"], {
 			encoding: "utf8",
 			maxBuffer: CAPTURE_LIMIT_BYTES,

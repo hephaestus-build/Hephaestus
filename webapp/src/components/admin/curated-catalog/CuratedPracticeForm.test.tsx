@@ -202,7 +202,7 @@ describe("CuratedPracticeForm", () => {
 				initialData={initialData}
 				isPending={false}
 				conflict
-				onContinueWithDraft={vi.fn<() => void>()}
+				onContinueWithDraft={vi.fn()}
 				onSubmit={submitSpy()}
 			/>,
 			"/admin/catalog/practices/clear-pr-description",

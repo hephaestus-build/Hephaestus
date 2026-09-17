@@ -365,21 +365,53 @@ const COMMENT_END = "-->";
 /** A fenced-code opener or closer: the marker run, then the info string (CommonMark § 4.5). */
 const FENCE = /^ {0,3}(?<marker>`{3,}|~{3,})(?<info>.*)$/u;
 
+/** Whether `line` closes a fence opened with `fence` (CommonMark § 4.5: same character, at least as long, bare). */
+function closesFence(line: string, fence: string): boolean {
+	const groups = FENCE.exec(line)?.groups;
+	const marker = groups?.marker;
+	return (
+		marker !== undefined &&
+		marker.startsWith(fence.charAt(0)) &&
+		marker.length >= fence.length &&
+		(groups?.info ?? "").trim() === ""
+	);
+}
+
+/** The marker of the fence `line` opens, if it opens one; a backtick info string opens nothing. */
+function openedFence(line: string): string | undefined {
+	const groups = FENCE.exec(line)?.groups;
+	const marker = groups?.marker;
+	if (marker === undefined || (marker.startsWith("`") && (groups?.info ?? "").includes("`"))) {
+		return undefined;
+	}
+	return marker;
+}
+
+/**
+ * `line` with its HTML comments removed, and whether one is still open at the end of it. Rescanned
+ * from the start each pass: closing one comment can bring a `<!` and a `--` together, which a single
+ * sweep would leave behind as an opening delimiter nothing goes on to remove.
+ */
+function withoutComments(input: string): { line: string; commented: boolean } {
+	let line = input;
+	for (let open = line.indexOf(COMMENT_START); open !== -1; open = line.indexOf(COMMENT_START)) {
+		const close = line.indexOf(COMMENT_END, open + COMMENT_START.length);
+		if (close === -1) {
+			return { line: line.slice(0, open), commented: true };
+		}
+		line = `${line.slice(0, open)} ${line.slice(close + COMMENT_END.length)}`;
+	}
+	return { line, commented: false };
+}
+
 function visibleMarkdown(markdown: string): string {
 	const kept: string[] = [];
 	let fence: string | undefined;
 	let commented = false;
 	for (const raw of markdown.replaceAll(/\r\n?/gu, "\n").split("\n")) {
 		let line = raw;
-		const fenceMatch = FENCE.exec(line)?.groups;
-		const marker = fenceMatch?.marker;
 		if (fence !== undefined) {
-			if (
-				marker !== undefined &&
-				marker.startsWith(fence.charAt(0)) &&
-				marker.length >= fence.length &&
-				(fenceMatch?.info ?? "").trim() === ""
-			) {
+			if (closesFence(line, fence)) {
 				fence = undefined;
 			}
 			continue;
@@ -392,27 +424,14 @@ function visibleMarkdown(markdown: string): string {
 			line = line.slice(close + COMMENT_END.length);
 			commented = false;
 		}
-		const visibleFence = FENCE.exec(line)?.groups;
-		const visibleMarker = visibleFence?.marker;
-		if (
-			visibleMarker !== undefined &&
-			!(visibleMarker.startsWith("`") && (visibleFence?.info ?? "").includes("`"))
-		) {
-			fence = visibleMarker;
+		const opened = openedFence(line);
+		if (opened !== undefined) {
+			fence = opened;
 			continue;
 		}
-		// Rescanned from the start each pass: closing one comment can bring a `<!` and a `--` together,
-		// which a single sweep would leave behind as an opening delimiter nothing goes on to remove.
-		for (let open = line.indexOf(COMMENT_START); open !== -1; open = line.indexOf(COMMENT_START)) {
-			const close = line.indexOf(COMMENT_END, open + COMMENT_START.length);
-			if (close === -1) {
-				line = line.slice(0, open);
-				commented = true;
-				break;
-			}
-			line = `${line.slice(0, open)} ${line.slice(close + COMMENT_END.length)}`;
-		}
-		kept.push(line);
+		const stripped = withoutComments(line);
+		commented = stripped.commented;
+		kept.push(stripped.line);
 	}
 	return kept.join("\n");
 }
@@ -494,7 +513,7 @@ const YAML_FALSE = new Set(["false", "no", "off"]);
  * `false` would skip the check it guards and call that a pass.
  */
 function yamlBoolean(block: string | undefined, key: string): boolean | string {
-	const raw = new RegExp(`^${key}:[ \\t]*(\\S+)`, "mu").exec(block ?? "")?.[1];
+	const raw = new RegExp(`^${key}:[ \\t]*(?<value>\\S+)`, "mu").exec(block ?? "")?.groups?.value;
 	if (raw === undefined) {
 		return false;
 	}

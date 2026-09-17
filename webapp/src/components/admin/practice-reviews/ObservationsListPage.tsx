@@ -55,11 +55,14 @@ export function ObservationsListPage({
 	const hasFilter = hasObservationFilter(search);
 	const reset = () => onSearchChange(clearedObservationFilters());
 	const patchFilter = (patch: Partial<ObservationsSearch>) => onSearchChange({ ...patch, page: 0 });
-	let resultsState: ObservationResultsState = { status: "ready", observations: rows };
-	if (isLoading) {
-		resultsState = { status: "loading" };
-	} else if (rows.length === 0) {
-		resultsState = hasFilter
+	function resultsState(): ObservationResultsState {
+		if (isLoading) {
+			return { status: "loading" };
+		}
+		if (rows.length > 0) {
+			return { status: "ready", observations: rows };
+		}
+		return hasFilter
 			? { status: "empty", filtered: true, onClearFilters: reset }
 			: { status: "empty", filtered: false };
 	}
@@ -81,7 +84,7 @@ export function ObservationsListPage({
 				<ObservationResults
 					workspaceSlug={workspaceSlug}
 					practices={practiceRecords}
-					state={resultsState}
+					state={resultsState()}
 				/>
 			) : (
 				<QueryErrorAlert error={error} title="Couldn't load observations" onRetry={onRetry} />

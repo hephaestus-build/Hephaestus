@@ -12,6 +12,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { DIGEST, environmentKey, readInventory, type ImageInventory } from "./commit-image-lock.ts";
+import { isSet } from "./lib/env.ts";
 import { SELF_HOST } from "./prepare-host-smoke-env.ts";
 import { commitLockEnvironment, isCommit } from "./reconcile-deployment.ts";
 
@@ -49,8 +50,8 @@ export function smokeLockImages(
 
 export function bootedBuild(environment: NodeJS.ProcessEnv): Build | undefined {
 	const { HEAD_SHA: commit, APPLICATION_DIGEST: applicationDigest } = environment;
-	const commitMissing = commit === undefined || commit === "";
-	const digestMissing = applicationDigest === undefined || applicationDigest === "";
+	const commitMissing = !isSet(commit);
+	const digestMissing = !isSet(applicationDigest);
 	if (commitMissing && digestMissing) {
 		return undefined;
 	}

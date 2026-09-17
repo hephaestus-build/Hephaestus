@@ -134,7 +134,7 @@ describe("source-control credential recovery", () => {
 
 	it("isolates a pending token replacement when switching workspaces", async () => {
 		const { workspace } = mockConnection("GITHUB");
-		const response = deferred<undefined>();
+		const response = deferred();
 		server.use(
 			http.get("*/workspaces", () =>
 				HttpResponse.json([workspaceListItem("acme"), workspaceListItem("other")]),
@@ -169,7 +169,7 @@ describe("source-control credential recovery", () => {
 				expect(screen.getByLabelText("New personal access token")).toHaveProperty("value", "");
 			});
 		} finally {
-			response.resolve(undefined);
+			response.resolve();
 		}
 		await waitFor(() =>
 			expect(
@@ -234,7 +234,7 @@ describe("integration job history", () => {
 		"resets $integration pagination without showing the previous workspace's jobs",
 		async ({ integration, kind }) => {
 			const { entry } = mockConnection("GITHUB");
-			const response = deferred<undefined>();
+			const response = deferred();
 			const requestedPages: (string | null)[] = [];
 			const job = {
 				id: 1,
@@ -274,7 +274,7 @@ describe("integration job history", () => {
 				await waitFor(() => expect(requestedPages).toStrictEqual(["0"]));
 				expect(screen.queryByText("123,456")).toBeNull();
 			} finally {
-				response.resolve(undefined);
+				response.resolve();
 			}
 			await screen.findByText("No sync jobs yet");
 		},

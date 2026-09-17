@@ -2,13 +2,13 @@ import { isMap, isScalar, isSeq, parseAllDocuments, type YAMLMap } from "yaml";
 
 type Range = [number, number];
 
-/** The retired peers a package map declares optional, with the ranges of every scalar naming one. */
+/** The retired peers a package map declares optional, and the ranges of every scalar naming one. */
 function optionalPeerRanges(
 	packages: YAMLMap,
 	isRetiredReference: (name: string) => boolean,
-	ranges: Range[],
-): Set<string> {
-	const optionalPeers = new Set<string>();
+): { peers: Set<string>; ranges: Range[] } {
+	const peers = new Set<string>();
+	const ranges: Range[] = [];
 	for (const entry of packages.items) {
 		if (!isMap(entry.value)) {
 			continue;
@@ -27,7 +27,7 @@ function optionalPeerRanges(
 			if (metadata.getIn([peer, "optional"]) !== true) {
 				continue;
 			}
-			optionalPeers.add(peer);
+			peers.add(peer);
 			const metaKey = metadata.items.find(
 				(item) => isScalar(item.key) && item.key.value === peer,
 			)?.key;
@@ -38,15 +38,12 @@ function optionalPeerRanges(
 			}
 		}
 	}
-	return optionalPeers;
+	return { peers, ranges };
 }
 
 /** The ranges of every `transitivePeerDependencies` item in a snapshot map naming an optional peer. */
-function transitivePeerRanges(
-	snapshots: YAMLMap,
-	optionalPeers: Set<string>,
-	ranges: Range[],
-): void {
+function transitivePeerRanges(snapshots: YAMLMap, optionalPeers: Set<string>): Range[] {
+	const ranges: Range[] = [];
 	for (const entry of snapshots.items) {
 		if (!isMap(entry.value)) {
 			continue;
@@ -66,6 +63,7 @@ function transitivePeerRanges(
 			}
 		}
 	}
+	return ranges;
 }
 
 // An unused optional type peer is not a runtime installation (ADR 0037). Keep the raw
@@ -84,13 +82,14 @@ export function maskOptionalRuntimePeerMetadata(
 		if (!isMap(packages)) {
 			continue;
 		}
-		const optionalPeers = optionalPeerRanges(packages, isRetiredReference, ranges);
-		if (optionalPeers.size === 0) {
+		const optional = optionalPeerRanges(packages, isRetiredReference);
+		if (optional.peers.size === 0) {
 			continue;
 		}
+		ranges.push(...optional.ranges);
 		const snapshots = document.get("snapshots");
 		if (isMap(snapshots)) {
-			transitivePeerRanges(snapshots, optionalPeers, ranges);
+			ranges.push(...transitivePeerRanges(snapshots, optional.peers));
 		}
 	}
 	let masked = text;

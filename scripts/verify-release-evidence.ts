@@ -5,6 +5,8 @@ import { isDeepStrictEqual } from "node:util";
 
 import { validateReleaseSbom } from "./check-release-sbom.ts";
 import { evaluate } from "./check-release-vulnerabilities.ts";
+import { readJsonFileSync } from "./lib/json.ts";
+import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
 	releaseCertificateIdentity,
 	releaseIdentityFor,
@@ -41,10 +43,6 @@ const imagePattern = /^[a-z0-9-]+$/u;
 
 function record(value: unknown): value is JsonObject {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readJson(file: string): unknown {
-	return JSON.parse(readFileSync(file, "utf8")) as unknown;
 }
 
 function serialized(value: unknown): string {
@@ -143,14 +141,11 @@ export function attestationContainsSbom(stdout: string, sbom: unknown): boolean 
 	);
 }
 
-export function validateManifest(
-	value: unknown,
+/** Every image the inventory names, first-party and upstream, with what its subjects must record. */
+function expectedImagesOf(
 	inventoryValue: unknown,
 	firstPartyNamespace: string,
-): Manifest {
-	if (!record(value) || value.schemaVersion !== 1 || !Array.isArray(value.subjects)) {
-		throw new Error("release manifest must use schema version 1 and contain subjects");
-	}
+): Map<string, ExpectedImage> {
 	if (
 		!record(inventoryValue) ||
 		inventoryValue.schemaVersion !== 1 ||
@@ -198,39 +193,57 @@ export function validateManifest(
 			repository: item.repository,
 		});
 	}
-	const subjects: Subject[] = value.subjects.map((item, index) => {
-		if (
-			!record(item) ||
-			typeof item.image !== "string" ||
-			!imagePattern.test(item.image) ||
-			(item.platform !== "linux/amd64" && item.platform !== "linux/arm64") ||
-			typeof item.digest !== "string" ||
-			!digestPattern.test(item.digest) ||
-			typeof item.indexDigest !== "string" ||
-			!digestPattern.test(item.indexDigest) ||
-			typeof item.repository !== "string" ||
-			(item.provenance !== "first-party" && item.provenance !== "upstream")
-		) {
-			throw new Error(`release manifest subject ${index} is malformed`);
-		}
-		const expected = expectedImages.get(item.image);
-		if (
-			!expected ||
-			expected.repository !== item.repository ||
-			expected.provenance !== item.provenance ||
-			(expected.indexDigest !== undefined && expected.indexDigest !== item.indexDigest)
-		) {
-			throw new Error(`release manifest subject ${item.image} does not match its inventory`);
-		}
-		return {
-			digest: item.digest,
-			image: item.image,
-			indexDigest: item.indexDigest,
-			platform: item.platform,
-			provenance: item.provenance,
-			repository: item.repository,
-		};
-	});
+	return expectedImages;
+}
+
+function parseSubject(
+	item: unknown,
+	index: number,
+	expectedImages: ReadonlyMap<string, ExpectedImage>,
+): Subject {
+	if (
+		!record(item) ||
+		typeof item.image !== "string" ||
+		!imagePattern.test(item.image) ||
+		(item.platform !== "linux/amd64" && item.platform !== "linux/arm64") ||
+		typeof item.digest !== "string" ||
+		!digestPattern.test(item.digest) ||
+		typeof item.indexDigest !== "string" ||
+		!digestPattern.test(item.indexDigest) ||
+		typeof item.repository !== "string" ||
+		(item.provenance !== "first-party" && item.provenance !== "upstream")
+	) {
+		throw new Error(`release manifest subject ${index} is malformed`);
+	}
+	const expected = expectedImages.get(item.image);
+	if (
+		!expected ||
+		expected.repository !== item.repository ||
+		expected.provenance !== item.provenance ||
+		(expected.indexDigest !== undefined && expected.indexDigest !== item.indexDigest)
+	) {
+		throw new Error(`release manifest subject ${item.image} does not match its inventory`);
+	}
+	return {
+		digest: item.digest,
+		image: item.image,
+		indexDigest: item.indexDigest,
+		platform: item.platform,
+		provenance: item.provenance,
+		repository: item.repository,
+	};
+}
+
+export function validateManifest(
+	value: unknown,
+	inventoryValue: unknown,
+	firstPartyNamespace: string,
+): Manifest {
+	if (!record(value) || value.schemaVersion !== 1 || !Array.isArray(value.subjects)) {
+		throw new Error("release manifest must use schema version 1 and contain subjects");
+	}
+	const expectedImages = expectedImagesOf(inventoryValue, firstPartyNamespace);
+	const subjects = value.subjects.map((item, index) => parseSubject(item, index, expectedImages));
 	if (
 		new Set(subjects.map(({ image, platform }) => `${image}\0${platform}`)).size !== subjects.length
 	) {
@@ -252,14 +265,6 @@ export function validateManifest(
 	return { schemaVersion: 1, subjects };
 }
 
-/**
- * Node caps a captured subprocess at 1 MiB and raises ENOBUFS past it. A `cosign verify-attestation`
- * envelope carries the whole SPDX SBOM base64-encoded, so the webapp's exceeds that cap and failed a
- * release mid-verification. The bound belongs here rather than at a call site: every capture in this
- * file reads an SBOM, an attestation or an image index, and none of them has a useful size limit.
- */
-const CAPTURE_LIMIT_BYTES = 256 * 1024 * 1024;
-
 function command(commandName: string, args: string[], capture = false): string {
 	const result = spawnSync(commandName, args, {
 		encoding: "utf8",
@@ -280,7 +285,7 @@ export function verifyReleaseEvidence(
 	directory: string,
 	mode: VerificationMode = "verify",
 ): Manifest {
-	const manifestValue = readJson(path.join(directory, "manifest.json"));
+	const manifestValue = readJsonFileSync(path.join(directory, "manifest.json"));
 	if (
 		!record(manifestValue) ||
 		typeof manifestValue.release !== "string" ||
@@ -294,27 +299,33 @@ export function verifyReleaseEvidence(
 	const { release } = manifestValue;
 	const manifest = validateManifest(
 		manifestValue,
-		readJson(path.join(directory, "release-images.json")),
+		readJsonFileSync(path.join(directory, "release-images.json")),
 		releaseIdentityFor(release).namespace,
 	);
-	const policy = readJson(path.join(directory, "vulnerability-policy.json"));
+	const policy = readJsonFileSync(path.join(directory, "vulnerability-policy.json"));
 	for (const subject of manifest.subjects) {
 		const suffix = subject.platform.replace("/", "-");
 		const prefix = path.join(directory, `${subject.image}-${suffix}`);
 		const sbom = validateReleaseSbom(
-			readJson(`${prefix}.syft.json`),
-			readJson(`${prefix}.spdx.json`),
-			readJson(`${prefix}.cdx.json`),
+			readJsonFileSync(`${prefix}.syft.json`),
+			readJsonFileSync(`${prefix}.spdx.json`),
+			readJsonFileSync(`${prefix}.cdx.json`),
 			subject,
 		);
 		persistOrVerify(`${prefix}.sbom-validation.json`, sbom, mode === "write-validation");
 		const reference = `${subject.repository}@${subject.digest}`;
-		validateLicenseReport(readJson(`${prefix}.license.json`), reference);
-		const result = evaluate(subject.image, readJson(`${prefix}.trivy.json`), policy, new Date(), {
-			digest: subject.digest,
-			platform: subject.platform,
-			reference,
-		});
+		validateLicenseReport(readJsonFileSync(`${prefix}.license.json`), reference);
+		const result = evaluate(
+			subject.image,
+			readJsonFileSync(`${prefix}.trivy.json`),
+			policy,
+			new Date(),
+			{
+				digest: subject.digest,
+				platform: subject.platform,
+				reference,
+			},
+		);
 		const policyResult = {
 			image: subject.image,
 			platform: subject.platform,
@@ -351,7 +362,7 @@ export function verifyReleaseEvidence(
 				],
 				true,
 			);
-			if (!attestationContainsSbom(attestations, readJson(`${prefix}.spdx.json`))) {
+			if (!attestationContainsSbom(attestations, readJsonFileSync(`${prefix}.spdx.json`))) {
 				throw new Error(`${subject.image} SBOM attestation does not match its durable evidence`);
 			}
 		}

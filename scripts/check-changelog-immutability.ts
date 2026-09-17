@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 
+import { isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
@@ -40,6 +41,25 @@ function includes(xml: string): string[] {
 	});
 }
 
+/** Whether the change is the one permitted archival rewrite: the released master retired whole. */
+function isArchivalTransition(
+	before: ChangelogSnapshot,
+	after: ChangelogSnapshot,
+	newIncludes: readonly string[],
+): boolean {
+	return (
+		before.blobs.get(master) === releasedMasterBlob &&
+		!before.blobs.has(`${archive}archive-master.xml`) &&
+		after.blobs.get(`${archive}archive-master.xml`) === releasedMasterBlob &&
+		newIncludes.length === 1 &&
+		newIncludes[0] ===
+			includes(
+				`<databaseChangeLog><include file="./changelog/${baseline}" relativeToChangelogFile="true"/></databaseChangeLog>`,
+			)[0] &&
+		after.blobs.has(`${directory}${baseline}`)
+	);
+}
+
 export function violations(before: ChangelogSnapshot, after: ChangelogSnapshot): string[] {
 	const errors: string[] = [];
 	let oldIncludes: string[];
@@ -50,16 +70,7 @@ export function violations(before: ChangelogSnapshot, after: ChangelogSnapshot):
 	} catch (error) {
 		return [`Invalid changelog: ${error instanceof Error ? error.message : String(error)}`];
 	}
-	const transition =
-		before.blobs.get(master) === releasedMasterBlob &&
-		!before.blobs.has(`${archive}archive-master.xml`) &&
-		after.blobs.get(`${archive}archive-master.xml`) === releasedMasterBlob &&
-		newIncludes.length === 1 &&
-		newIncludes[0] ===
-			includes(
-				`<databaseChangeLog><include file="./changelog/${baseline}" relativeToChangelogFile="true"/></databaseChangeLog>`,
-			)[0] &&
-		after.blobs.has(`${directory}${baseline}`);
+	const transition = isArchivalTransition(before, after, newIncludes);
 
 	for (const [path, blob] of before.blobs) {
 		if (path.startsWith("docs/db/archive/")) {
@@ -106,7 +117,7 @@ function snapshot(revision: string): ChangelogSnapshot {
 
 if (import.meta.main) {
 	const [base, head = "HEAD"] = process.argv.slice(2);
-	if (base === undefined || base === "" || process.argv.length > 4) {
+	if (!isSet(base) || process.argv.length > 4) {
 		throw new Error("Usage: node scripts/check-changelog-immutability.ts <base> [head]");
 	}
 	const errors = violations(snapshot(base), snapshot(head));

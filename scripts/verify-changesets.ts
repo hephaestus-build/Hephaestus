@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
 import { CLAUDE_SESSION_PATTERN } from "./lib/model-attribution.ts";
 
@@ -99,7 +100,7 @@ export const verifyChangesets = (
 
 async function main(): Promise<void> {
 	const [statusJson, ...arguments_] = process.argv.slice(2);
-	if (statusJson === undefined || statusJson === "") {
+	if (!isSet(statusJson)) {
 		throw new Error("usage: verify-changesets.ts <changeset-status-json> <files...>");
 	}
 	const status = await readJsonFile(statusJson);

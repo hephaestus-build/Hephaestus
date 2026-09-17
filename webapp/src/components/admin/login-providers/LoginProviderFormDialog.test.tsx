@@ -38,10 +38,10 @@ describe("LoginProviderFormDialog", () => {
 		render(
 			<LoginProviderFormDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				editing={slackProvider}
 				isSubmitting={false}
-				onCreate={vi.fn<() => void>()}
+				onCreate={vi.fn()}
 				onUpdate={onUpdate}
 			/>,
 		);
@@ -67,11 +67,11 @@ describe("LoginProviderFormDialog", () => {
 		render(
 			<LoginProviderFormDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				editing={null}
 				isSubmitting={false}
-				onCreate={vi.fn<() => void>()}
-				onUpdate={vi.fn<() => void>()}
+				onCreate={vi.fn()}
+				onUpdate={vi.fn()}
 			/>,
 		);
 
@@ -85,10 +85,10 @@ describe("LoginProviderFormDialog", () => {
 		render(
 			<LoginProviderFormDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				editing={outlineProvider}
 				isSubmitting={false}
-				onCreate={vi.fn<() => void>()}
+				onCreate={vi.fn()}
 				onUpdate={onUpdate}
 			/>,
 		);
@@ -116,11 +116,11 @@ describe("LoginProviderFormDialog", () => {
 		render(
 			<LoginProviderFormDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				editing={outlineProvider}
 				isSubmitting={false}
-				onCreate={vi.fn<() => void>()}
-				onUpdate={vi.fn<() => void>()}
+				onCreate={vi.fn()}
+				onUpdate={vi.fn()}
 			/>,
 		);
 

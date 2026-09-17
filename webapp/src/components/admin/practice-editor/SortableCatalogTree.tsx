@@ -35,6 +35,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemGroup } from "@/components/ui/item";
+import { byDisplayOrder } from "@/hooks/practice-catalog-cache";
 import { hasText } from "@/lib/text";
 
 import { type CatalogDropTarget, getCatalogDropTarget } from "./catalog-tree-dnd";
@@ -134,10 +135,6 @@ const groupDndId = (slug: string) => `group:${slug}`;
 const bucketDndId = (groupSlug: string | null) =>
 	`bucket:${groupSlug ?? UNASSIGNED_CATALOG_BUCKET}`;
 const entryDndId = (slug: string) => `entry:${slug}`;
-
-function byDisplayOrder<T extends { displayOrder: number; name: string }>(a: T, b: T) {
-	return a.displayOrder - b.displayOrder || a.name.localeCompare(b.name);
-}
 
 export function SortableCatalogTree<
 	TGroup extends SortableCatalogGroup,

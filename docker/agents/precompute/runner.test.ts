@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -15,22 +15,13 @@ void test("runner executes a staged practice and writes its public artifact cont
 		'export default () => ({hints: [], metrics: {found: 1}, directions: ["inspect sample"]});\n',
 	);
 
-	const child = spawn(
+	const { status, stderr } = spawnSync(
 		process.execPath,
 		[path.join(import.meta.dirname, "runner.ts"), "--repo", root, "--output", output],
-		{ stdio: ["ignore", "ignore", "pipe"] },
+		{ encoding: "utf8", stdio: ["ignore", "ignore", "pipe"] },
 	);
-	let stderr = "";
-	child.stderr.setEncoding("utf8");
-	child.stderr.on("data", (chunk: string) => {
-		stderr += chunk;
-	});
-	const exited = Promise.withResolvers<number | null>();
-	child.once("error", exited.reject);
-	child.once("close", exited.resolve);
-	const code = await exited.promise;
 
-	assert.equal(code, 0, stderr);
+	assert.equal(status, 0, stderr);
 	assert.deepEqual(JSON.parse(await readFile(path.join(output, "sample.json"), "utf8")), {
 		practice: "sample",
 		status: "ok",

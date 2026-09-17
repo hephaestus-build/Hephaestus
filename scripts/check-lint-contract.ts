@@ -23,6 +23,7 @@ import { pathToFileURL } from "node:url";
 import { parse } from "jsonc-parser";
 
 import { loadLintConfig } from "../webapp/tools/oxlint/load-config.ts";
+import { isSet } from "./lib/env.ts";
 import { asRecord, isRecord } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
@@ -422,13 +423,13 @@ void test("every no-restyle contract names a component the registry exports", ()
 					.trim()
 					.split(/\s+as\s+/u)
 					.at(-1);
-				if (exportedName !== undefined && exportedName !== "") {
+				if (isSet(exportedName)) {
 					exported.add(exportedName);
 				}
 			}
 		}
 		for (const { groups } of source.matchAll(/export (?:function|const) (?<name>\w+)/gu)) {
-			if (groups?.name !== undefined && groups.name !== "") {
+			if (isSet(groups?.name)) {
 				exported.add(groups.name);
 			}
 		}

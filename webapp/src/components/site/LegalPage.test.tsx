@@ -143,7 +143,7 @@ describe("LegalPage — XSS guardrail", () => {
 	it.each(["imprint", "privacy"] as const)(
 		"renders the %s disclaimer and warns exactly once across page mounts",
 		async (page) => {
-			using warn = vi.spyOn(console, "warn").mockImplementation(vi.fn<() => void>());
+			using warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
 			const expected = `[legal] Disclaimer fallback served for page=${page}. Configure LEGAL_PROFILE or mount /legal-overrides/. See docs/admin/legal-pages.`;
 			const first = render(
 				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={disclaimerResolver} />,

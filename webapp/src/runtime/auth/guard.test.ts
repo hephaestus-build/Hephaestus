@@ -134,7 +134,7 @@ describe("resolveCurrentUser", () => {
 		const requested = vi.fn(async () => response.promise);
 		server.use(http.get("*/user", requested));
 		const observer = new QueryObserver(queryClient, currentUserQueryOptions());
-		const unsubscribe = observer.subscribe(vi.fn<() => void>());
+		const unsubscribe = observer.subscribe(vi.fn());
 		const resolved = outcome(resolveCurrentUser(queryClient));
 		await vi.waitFor(() => expect(requested).toHaveBeenCalledOnce());
 		unsubscribe();

@@ -127,7 +127,7 @@ describe("PracticeMentoringSupportEditor", () => {
 				value={recommended}
 				recommended={recommended}
 				supportedAutomatedReviewModes={[]}
-				onChange={vi.fn<() => void>()}
+				onChange={vi.fn()}
 			/>,
 			"/admin/practices/new",
 		);

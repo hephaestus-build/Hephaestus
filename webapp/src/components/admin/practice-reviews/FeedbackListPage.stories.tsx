@@ -7,7 +7,7 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 
 import { FeedbackListPage } from "./FeedbackListPage";
-import { manyFeedback, reviewFeedback, workspaceMembers } from "./fixtures";
+import { manyFeedback, reviewFeedback, selects, workspaceMembers } from "./fixtures";
 import { type FeedbackSearch, feedbackQuery, REVIEW_PAGE_SIZE } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
 
@@ -39,14 +39,6 @@ function pool(rows: ReviewFeedback[]): ListPracticeReviewFeedbackResponse {
 			totalPages: Math.max(1, Math.ceil(rows.length / REVIEW_PAGE_SIZE)),
 		},
 	};
-}
-
-function selects(selected: string[] | undefined, actual: string | undefined): boolean {
-	return (
-		selected === undefined ||
-		selected.length === 0 ||
-		(actual !== undefined && selected.includes(actual))
-	);
 }
 
 /**

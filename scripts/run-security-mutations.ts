@@ -3,6 +3,7 @@ import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "
 import path from "node:path";
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
+import { isSet } from "./lib/env.ts";
 
 const VALID_STATUSES = new Set(["KILLED", "SURVIVED", "NO_COVERAGE", "EQUIVALENT"]);
 const REPORTED_STATUSES = [
@@ -183,7 +184,7 @@ function main() {
 	writeFileSync(path.resolve(reportDirectory, "summary.md"), output);
 	process.stdout.write(output);
 	const stepSummary = process.env.GITHUB_STEP_SUMMARY;
-	if (stepSummary !== undefined && stepSummary !== "") {
+	if (isSet(stepSummary)) {
 		appendFileSync(stepSummary, output);
 	}
 	if (!passed) {
@@ -191,7 +192,6 @@ function main() {
 	}
 }
 
-const entry = process.argv[1];
-if (entry !== undefined && entry !== "" && path.resolve(entry) === import.meta.filename) {
+if (import.meta.main) {
 	main();
 }

@@ -33,7 +33,7 @@ describe("ProfileTimeframePicker", () => {
 		screen.getByRole("button", { name: /September 2nd, 2026/u });
 	});
 	it("renders bookmarked dates without rewriting them", () => {
-		const onTimeframeChange = vi.fn<(afterDate: string, beforeDate?: string) => void>();
+		const onTimeframeChange = vi.fn();
 		const { rerender } = render(
 			<ProfileTimeframePicker
 				afterDate="2026-06-02T00:00:00"
@@ -58,7 +58,7 @@ describe("ProfileTimeframePicker", () => {
 	});
 
 	it("chooses a custom end day with an exclusive upper bound", async () => {
-		const onTimeframeChange = vi.fn<(afterDate: string, beforeDate?: string) => void>();
+		const onTimeframeChange = vi.fn();
 		render(
 			<ProfileTimeframePicker
 				afterDate="2026-06-02T00:00:00"

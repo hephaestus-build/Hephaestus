@@ -1,19 +1,13 @@
 import { useRouter } from "@tanstack/react-router";
-import { toast } from "sonner";
 import { Chat } from "@/components/mentor/Chat";
 import { Copilot } from "@/components/mentor/Copilot";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
+import { copyToClipboard } from "@/lib/clipboard";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
-
-function copyToClipboard(content: string) {
-	navigator.clipboard.writeText(content).catch(() => {
-		toast.error("Couldn't copy that to the clipboard.");
-	});
-}
 
 export default function GlobalCopilot() {
 	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
@@ -87,7 +81,6 @@ export default function GlobalCopilot() {
 				onCopy={copyToClipboard}
 				onVote={handleVote}
 				inputPlaceholder="Ask me anything..."
-				disableAttachments
 				className="h-full max-h-none"
 			/>
 		</Copilot>

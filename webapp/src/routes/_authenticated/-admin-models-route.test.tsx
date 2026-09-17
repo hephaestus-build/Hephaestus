@@ -68,7 +68,7 @@ async function confirmTurnOff(name: string) {
 
 describe("instance AI models route", () => {
 	it("keeps each connection's toggle pending independently when two run at once", async () => {
-		const slowToggle = deferred<undefined>();
+		const slowToggle = deferred();
 		let slowToggleCalls = 0;
 		const connections = [connection(1, "Slow provider"), connection(2, "Fast provider")];
 		const models = [model(11, 1, "Slow model"), model(12, 2, "Fast model")];
@@ -105,8 +105,7 @@ describe("instance AI models route", () => {
 			screen.getByRole<HTMLButtonElement>("button", { name: "Delete Fast provider" }).disabled,
 		).toBe(false);
 
-		// Released, and settled before the test ends: a refetch that lands after teardown has no window.
-		slowToggle.resolve(undefined);
+		slowToggle.resolve();
 		await waitFor(() =>
 			expect(screen.getByRole("switch", { name: "Slow provider" }).getAttribute("aria-busy")).toBe(
 				"false",
@@ -117,7 +116,7 @@ describe("instance AI models route", () => {
 	it("lets the access dialog be dismissed while its save is still in flight", async () => {
 		// There is no request timeout, so a dialog that refuses to close while `isPending` traps focus
 		// with nothing left to release it.
-		const slowSharing = deferred<undefined>();
+		const slowSharing = deferred();
 		let sharingCalls = 0;
 		const connections = [connection(1, "Shared OpenAI")];
 		const sharedModel = model(7, 1, "GPT Test");
@@ -148,7 +147,7 @@ describe("instance AI models route", () => {
 				.disabled,
 		).toBe(true);
 
-		slowSharing.resolve(undefined);
+		slowSharing.resolve();
 		await waitFor(() =>
 			expect(
 				screen.getByRole<HTMLButtonElement>("button", { name: "Manage access for GPT Test" })

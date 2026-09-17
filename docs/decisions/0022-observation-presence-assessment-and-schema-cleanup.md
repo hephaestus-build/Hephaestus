@@ -115,11 +115,11 @@ profile and named a storage location rather than how the developer engages — s
 
 Corrects § 5 on the channel value and the "Supersedes" pointer in the header.
 
-- The channel value renamed `REFLECTION_DASHBOARD` → `PROFILE` → `REFLECTION` is `IN_APP`.
+- The channel value renamed `REFLECTION_DASHBOARD` → `PROFILE` → `REFLECTION` is `IN_APP`:
   `practices.feedback.FeedbackChannel` is `IN_CONTEXT`, `IN_CHAT`, `IN_APP`, and
   `chk_feedback_channel` in `0000000000000_baseline_v0_77_4.sql` admits exactly those three;
   [ADR 0029](0029-measurement-intervention-seam-and-channel-levels.md) owns the channel vocabulary.
-- The header's "ADR 0021 F-6 / F-13 / F-24" names a numbered decision table ADR 0021 no longer
-  carries: that file was rewritten on 2026-07-31 (#1423) and 2026-08-18 (#1444). The superseded
-  content is what § Context quotes; the last revision carrying the table is
-  `7dc852afc:docs/decisions/0021-findings-feedback-synthesis-seam.md`.
+- The header's "ADR 0021 F-6 / F-13 / F-24" names a numbered decision table that
+  [ADR 0021](0021-observations-feedback-synthesis-seam.md) carried before the in-place rewrites its
+  § Status dates; the superseded content is what § Context quotes, and the last revision carrying the
+  table is `7dc852afc:docs/decisions/0021-findings-feedback-synthesis-seam.md`.

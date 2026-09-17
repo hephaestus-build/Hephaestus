@@ -50,7 +50,7 @@ describe("ReviewRunTimeline", () => {
 		render(
 			<ReviewRunTimeline
 				runs={runs}
-				onToggleObservation={vi.fn<(observationId: string) => void>()}
+				onToggleObservation={vi.fn()}
 				openObservationId={baseObservation.observationId}
 				onRespond={onRespond}
 			/>,
@@ -69,7 +69,7 @@ describe("ReviewRunTimeline", () => {
 		render(
 			<ReviewRunTimeline
 				runs={runs}
-				onToggleObservation={vi.fn<(observationId: string) => void>()}
+				onToggleObservation={vi.fn()}
 				openObservationId={baseObservation.observationId}
 				onRespond={onRespond}
 			/>,

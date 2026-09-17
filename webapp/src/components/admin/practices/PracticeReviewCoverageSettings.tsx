@@ -1,6 +1,6 @@
 import deepEqual from "fast-deep-equal";
 import { AlertCircle, ChevronDownIcon, Loader2Icon } from "lucide-react";
-import { useId, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import type {
 	PracticeReviewCoveragePreview,
 	PracticeReviewSettings,
@@ -166,7 +166,7 @@ export function PracticeReviewCoverageSettings({
 		}
 	};
 
-	let reviewButtonContent;
+	let reviewButtonContent: ReactNode;
 	if (workflow.status === "checking") {
 		reviewButtonContent = (
 			<>
@@ -542,6 +542,16 @@ function CoverageLabel({
 	);
 }
 
+function scopeDescription(monitored: boolean, baseBranches: string[]): string {
+	if (!monitored) {
+		return "This workspace no longer syncs this repository, so nothing in it is reviewed.";
+	}
+	if (baseBranches.length === 0) {
+		return "Every base branch";
+	}
+	return `Only ${baseBranches.join(", ")}`;
+}
+
 function RepositoryScopeRow({
 	nameWithOwner,
 	baseBranches,
@@ -556,11 +566,6 @@ function RepositoryScopeRow({
 	onChange: (next: string[]) => void;
 }) {
 	const editorId = useId();
-	let description = "This workspace no longer syncs this repository, so nothing in it is reviewed.";
-	if (monitored) {
-		description =
-			baseBranches.length === 0 ? "Every base branch" : `Only ${baseBranches.join(", ")}`;
-	}
 	return (
 		<Collapsible>
 			<Item variant="outline" size="sm" role="listitem" className="flex-wrap">
@@ -571,7 +576,9 @@ function RepositoryScopeRow({
 						</span>
 						{monitored ? null : <Badge variant="warning">Not monitored</Badge>}
 					</ItemTitle>
-					<ItemDescription className="break-all">{description}</ItemDescription>
+					<ItemDescription className="break-all">
+						{scopeDescription(monitored, baseBranches)}
+					</ItemDescription>
 				</ItemContent>
 				<ItemActions>
 					<CollapsibleTrigger

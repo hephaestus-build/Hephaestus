@@ -204,7 +204,7 @@ describe("usePracticeCatalogMutations", () => {
 			practice("elsewhere", "delivery", 0),
 		]);
 		client.setQueryData(adoptionCatalogQueryKey, []);
-		const deletion = deferred<undefined>();
+		const deletion = deferred();
 		vi.mocked(deletePracticeMutation).mockReturnValue({
 			mutationFn: async () => deletion.promise,
 		});
@@ -221,7 +221,7 @@ describe("usePracticeCatalogMutations", () => {
 		await waitFor(() => expect(result.current.deletePractice.isPending).toBe(true));
 		expect(result.current.blockedPracticeOrderBuckets).toStrictEqual(new Set(["quality"]));
 		expect(result.current.blockedMoveDestinationSlugs).toStrictEqual(new Set(["quality"]));
-		deletion.resolve(undefined);
+		deletion.resolve();
 		await waitFor(() => expect(result.current.deletePractice.isSuccess).toBe(true));
 		expect(client.getQueryState(adoptionCatalogQueryKey)?.isInvalidated).toBe(true);
 	});
@@ -234,7 +234,7 @@ describe("usePracticeCatalogMutations", () => {
 			path: { workspaceSlug: WORKSPACE, slug: "quality" },
 		});
 		client.setQueryData(groupPreviewKey, {});
-		const deletion = deferred<undefined>();
+		const deletion = deferred();
 		vi.mocked(deleteGroupMutation).mockReturnValue({
 			mutationFn: async () => deletion.promise,
 		});
@@ -252,7 +252,7 @@ describe("usePracticeCatalogMutations", () => {
 		expect(result.current.blockedMoveDestinationSlugs).toStrictEqual(
 			new Set(["quality", "__unassigned__"]),
 		);
-		deletion.resolve(undefined);
+		deletion.resolve();
 		await waitFor(() => expect(result.current.deleteGroup.isSuccess).toBe(true));
 		expect(client.getQueryState(groupPreviewKey)?.isInvalidated).toBe(true);
 	});
@@ -266,7 +266,7 @@ describe("usePracticeCatalogMutations", () => {
 		]);
 		client.setQueryData(adoptionCatalogQueryKey, []);
 		vi.mocked(deleteGroupMutation).mockReturnValue({
-			mutationFn: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+			mutationFn: vi.fn().mockResolvedValue(undefined),
 		});
 		const { result } = renderHook(() => usePracticeCatalogMutations(WORKSPACE), {
 			wrapper: wrapper(client),

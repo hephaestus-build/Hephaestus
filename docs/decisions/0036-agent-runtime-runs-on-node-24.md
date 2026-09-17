@@ -63,15 +63,11 @@ process grant makes Docker isolation and environment minimization load-bearing c
 
 ## Update — 2026-09-17: the image installs the SDK with pnpm
 
-Supersedes the install sentence of § Decision and the last sentence of § Consequences.
-
-Since #1728 (2026-09-02), `docker/agents/pi/Dockerfile` installs the Pi SDK in a
-`ghcr.io/pnpm/pnpm` build stage with `pnpm install --prod --frozen-lockfile --ignore-scripts` from
-`docker/agents/pi/package.json`, `pnpm-lock.yaml` and `pnpm-workspace.yaml`, then copies
-`/opt/pi-sdk` into the `node:24-slim` runtime stage. The runtime stage removes npm, npx, Corepack,
-Yarn and pnpm and fails the build if any of them survives on the filesystem, so the shipped image
-still carries Node and no package manager. The other build checks, the runner flags and the
-runtime-contract label (`SandboxLayout.RUNTIME_CONTRACT_VERSION = 2`) are unchanged.
-
-"Bun remains the repository package manager and tooling runtime" was superseded by
-[ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) on 2026-08-30.
+Supersedes the install sentence of § Decision; § Status carries what supersedes the last sentence
+of § Consequences. `docker/agents/pi/Dockerfile` installs the Pi SDK in a `ghcr.io/pnpm/pnpm` build
+stage with `pnpm install --prod --frozen-lockfile --ignore-scripts` from `docker/agents/pi/package.json`,
+`pnpm-lock.yaml` and `pnpm-workspace.yaml`, then copies `/opt/pi-sdk` into the `node:<NODE_VERSION>-slim`
+runtime stage, which removes npm, npx, Corepack, Yarn and pnpm and fails the build if any of them
+survives on the filesystem; the shipped image carries Node and no package manager. The other build
+checks, the runner flags and the runtime-contract label (`SandboxLayout.RUNTIME_CONTRACT_VERSION = 2`)
+are as decided.

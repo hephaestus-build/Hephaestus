@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,7 +9,7 @@ import { duplicatePorts } from "./check-ports.ts";
 import { withDisposableDatabase } from "./db-utils.ts";
 import { loadConfig } from "./e2e-setup.ts";
 import { updateEnv } from "./jean-setup.ts";
-import { isHostname, positivePort, readEnvFile } from "./lib/env.ts";
+import { isHostname, isSet, positivePort, readEnvFile } from "./lib/env.ts";
 
 await describe("environment parsing", async () => {
 	await test("parses data without evaluating shell syntax", async () => {
@@ -36,7 +36,7 @@ await test("duplicate port reporting identifies the conflicting pair", () => {
 });
 
 await test("duplicate configured ports fail the preflight", async () => {
-	const child = spawn(
+	const result = spawnSync(
 		process.execPath,
 		[path.join(import.meta.dirname, "check-ports.ts"), "--quiet"],
 		{
@@ -44,11 +44,7 @@ await test("duplicate configured ports fail the preflight", async () => {
 			stdio: "ignore",
 		},
 	);
-	const exited = Promise.withResolvers<number | null>();
-	child.once("exit", (code) => {
-		exited.resolve(code);
-	});
-	assert.equal(await exited.promise, 1);
+	assert.equal(result.status, 1);
 });
 
 await test("public host validation rejects Traefik rule syntax", () => {
@@ -115,9 +111,9 @@ await test("database drafting does not move data after shutdown failure", async 
 				backup,
 				async () => {
 					stops += 1;
-					return stops === 1
-						? Promise.resolve()
-						: Promise.reject(new Error("postgres still running"));
+					if (stops !== 1) {
+						throw new Error("postgres still running");
+					}
 				},
 				async () => {
 					await mkdir(data);
@@ -182,7 +178,7 @@ await describe("E2E setup trust boundaries", async () => {
 			} catch (error) {
 				diagnostic = error instanceof Error ? error.message : String(error);
 			}
-			assert.ok(diagnostic !== undefined && diagnostic !== "");
+			assert.ok(isSet(diagnostic));
 			assert.ok(!diagnostic.includes("pat-secret"));
 			assert.ok(!diagnostic.includes("llm-secret"));
 		}

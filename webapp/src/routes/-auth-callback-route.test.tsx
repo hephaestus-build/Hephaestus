@@ -36,7 +36,7 @@ describe("sign-in callback", () => {
 	});
 
 	it("lets the user leave while the session request is still pending", async () => {
-		const session = deferred<undefined>();
+		const session = deferred();
 		server.use(
 			http.get("*/user", async () => {
 				await session.promise;
@@ -52,7 +52,7 @@ describe("sign-in callback", () => {
 			expect(router.state.location.pathname).toBe("/login");
 			expect(router.state.location.search).toMatchObject({ returnTo: destination });
 		} finally {
-			session.resolve(undefined);
+			session.resolve();
 		}
 	});
 });

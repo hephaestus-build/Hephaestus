@@ -44,7 +44,7 @@ describe("ModelPicker", () => {
 		renderPicker({
 			availableModels: models,
 			value: { scope: "SHARED", id: 1 },
-			onChange: vi.fn<() => void>(),
+			onChange: vi.fn(),
 		});
 		expect(screen.getByRole("combobox").textContent).toContain("GPT-5 · Organization endpoint");
 		fireEvent.click(screen.getByRole("combobox"));
@@ -57,7 +57,7 @@ describe("ModelPicker", () => {
 	// Names written out rather than composed through `priceLabel`, the helper the component itself
 	// calls: a composed expectation catches "the price is gone" and never "the price is wrong".
 	it("keeps the price in each option's accessible name", () => {
-		renderPicker({ availableModels: models, value: null, onChange: vi.fn<() => void>() });
+		renderPicker({ availableModels: models, value: null, onChange: vi.fn() });
 		fireEvent.click(screen.getByRole("combobox"));
 
 		screen.getByRole("option", {
@@ -70,7 +70,7 @@ describe("ModelPicker", () => {
 		renderPicker({
 			availableModels: models,
 			value: null,
-			onChange: vi.fn<() => void>(),
+			onChange: vi.fn(),
 			invalid: true,
 			"aria-describedby": "picker-hint",
 		});

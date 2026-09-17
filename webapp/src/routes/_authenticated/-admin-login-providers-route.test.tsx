@@ -30,7 +30,7 @@ function renderLoginProvidersRoute() {
 
 describe("instance login providers route", () => {
 	it("keeps each provider's toggle pending independently when two run at once", async () => {
-		const slowToggle = deferred<undefined>();
+		const slowToggle = deferred();
 		let slowToggleCalls = 0;
 		const providers = [provider("github", "GitHub"), provider("gitlab", "GitLab")];
 		server.use(
@@ -68,8 +68,12 @@ describe("instance login providers route", () => {
 			false,
 		);
 
-		slowToggle.resolve(undefined);
-		await waitFor(() => expect(slowToggleCalls).toBe(1));
+		slowToggle.resolve();
+		await waitFor(() =>
+			expect(screen.getByRole("switch", { name: "Disable GitHub" }).getAttribute("aria-busy")).toBe(
+				"false",
+			),
+		);
 	});
 
 	it("asks for a fresh sign-in when a provider change is refused, and recovers its own load failure", async () => {

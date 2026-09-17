@@ -55,8 +55,10 @@ rollback line is an exact pnpm 11 pin rather than a partial toolchain rollback.
 ## Update — 2026-09-17: the pins have moved
 
 Corrects the version numbers in § Decision, which were the pins on the day of the decision. The rule
-stands: `package.json#packageManager` and `#devEngines` are authoritative and fail on drift, and
-Renovate moves them. On 2026-09-17 they name Node.js 24.20.0 and pnpm 12.3.4; the agent image
-(`docker/agents/pi/Dockerfile`) and the toolchain action follow the same pins. `pnpm peers check`
-is not run by any task or workflow; the typecheck, build and test gates remain the compatibility
-verdict, and `pnpm-workspace.yaml#allowBuilds` names the packages that may run a build script.
+stands: `package.json#devEngines` and `#packageManager` are authoritative, fail on drift
+(`scripts/check-toolchain.ts`) and are where the current Node.js and pnpm versions are read;
+`.github/actions/setup-toolchain/action.yml` reads them from there, and `docker/agents/pi/Dockerfile`
+carries its own `NODE_VERSION` and `ghcr.io/pnpm/pnpm` pins, which Renovate groups with them
+(`renovate.json`). `pnpm-workspace.yaml#allowBuilds` is the lifecycle allowlist and names more
+packages than the two § Decision lists. `pnpm peers check` is not run by any task or workflow; the
+typecheck, build and test gates are the compatibility verdict.

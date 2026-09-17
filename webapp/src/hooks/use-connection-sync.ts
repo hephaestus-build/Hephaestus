@@ -144,7 +144,8 @@ export function useConnectionSync({
 		triggerSync.mutate({ path: { workspaceSlug, connectionId }, body: { type } });
 	};
 
-	// The connection lookup fails first; the status lookup only runs once there is a connection.
+	// A connection that cannot be read makes its status meaningless, so the connection error wins
+	// when both are set.
 	let headerError: SyncStatusHeaderError | undefined;
 	if (connectionError != null) {
 		headerError = { failedQuery: "connection", cause: connectionError };

@@ -11,6 +11,7 @@ import {
 	manyObservations,
 	practiceGroups,
 	reviewObservations,
+	selects,
 	workspaceMembers,
 	workspacePractices,
 } from "./fixtures";
@@ -57,14 +58,6 @@ function pool(rows: ReviewObservation[]): ListPracticeReviewObservationsResponse
 			totalPages: Math.max(1, Math.ceil(rows.length / REVIEW_PAGE_SIZE)),
 		},
 	};
-}
-
-function selects(selected: string[] | undefined, actual: string | undefined): boolean {
-	return (
-		selected === undefined ||
-		selected.length === 0 ||
-		(actual !== undefined && selected.includes(actual))
-	);
 }
 
 /**

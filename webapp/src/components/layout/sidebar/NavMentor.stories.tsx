@@ -40,7 +40,6 @@ type Story = StoryObj<typeof meta>;
  */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		// SidebarMenuButton sizes every descendant svg to 16px; the mark is larger than a nav icon.
 		const link = canvas.getByRole("link", { name: /Heph/u });
 		const mark = link.querySelector("svg");
 		await expect(mark).not.toBeNull();

@@ -645,12 +645,6 @@ async function reconcilerFixture(directory: string) {
 	const callsFile = path.join(directory, "calls");
 	const metricsFile = path.join(directory, "deploy.prom");
 	const image = `example.invalid/app@sha256:${"a".repeat(64)}`;
-	const git = (...args: string[]) =>
-		execFileSync("git", args, {
-			cwd: checkout,
-			encoding: "utf8",
-			env: environmentForGitFixture(),
-		}).trim();
 	await Promise.all(
 		[checkout, units, bin].map(async (folder) => mkdir(folder, { recursive: true })),
 	);
@@ -675,25 +669,25 @@ async function reconcilerFixture(directory: string) {
 		path.join(checkout, "scripts/prepare-release-lock.ts"),
 		'throw new Error("candidate release must not verify itself");\n',
 	);
-	git("init", "--quiet", "--initial-branch=main");
-	git("config", "user.email", "host@example.invalid");
-	git("config", "user.name", "host");
-	git("config", "core.autocrlf", "false");
-	git("add", ".");
-	git("commit", "--quiet", "-m", "release");
-	const releaseCommit = git("rev-parse", "HEAD");
-	git("tag", "v1.0.0");
-	git("checkout", "--quiet", "-b", "deploy-state");
+	gitIn(checkout, "init", "--quiet", "--initial-branch=main");
+	gitIn(checkout, "config", "user.email", "host@example.invalid");
+	gitIn(checkout, "config", "user.name", "host");
+	gitIn(checkout, "config", "core.autocrlf", "false");
+	gitIn(checkout, "add", ".");
+	gitIn(checkout, "commit", "--quiet", "-m", "release");
+	const releaseCommit = gitIn(checkout, "rev-parse", "HEAD");
+	gitIn(checkout, "tag", "v1.0.0");
+	gitIn(checkout, "checkout", "--quiet", "-b", "deploy-state");
 	await mkdir(path.join(checkout, "channels"));
 	await writeFile(path.join(checkout, "channels/test.json"), JSON.stringify({ release: "v1.0.0" }));
 	await writeFile(path.join(checkout, "channels/test.json.sigstore.json"), "{}\n");
-	git("add", "channels");
-	git("commit", "--quiet", "-m", "promotion");
-	const channelCommit = git("rev-parse", "HEAD");
+	gitIn(checkout, "add", "channels");
+	gitIn(checkout, "commit", "--quiet", "-m", "promotion");
+	const channelCommit = gitIn(checkout, "rev-parse", "HEAD");
 	const origin = path.join(directory, "origin.git");
-	git("clone", "--quiet", "--bare", checkout, origin);
-	git("remote", "add", "origin", origin);
-	git("checkout", "--quiet", "main");
+	gitIn(checkout, "clone", "--quiet", "--bare", checkout, origin);
+	gitIn(checkout, "remote", "add", "origin", origin);
+	gitIn(checkout, "checkout", "--quiet", "main");
 	await symlink(bootstrap, path.join(directory, "tooling"));
 	await writeFile(metricsFile, "previous metrics\n");
 	await writeFile(callsFile, "");
@@ -789,7 +783,7 @@ await test(
 			assert.match(result.stderr, /Run the Promote workflow/u);
 			// The whole point: the journal gets the sentence, not a Node stack.
 			assert.doesNotMatch(result.stderr, /^\s+at /mu);
-			assert.doesNotMatch(result.stderr, /OperatorActionRequired:/u);
+			assert.doesNotMatch(result.stderr, /OperatorActionRequiredError:/u);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}

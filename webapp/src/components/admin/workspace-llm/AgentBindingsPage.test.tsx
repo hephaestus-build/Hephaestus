@@ -38,7 +38,7 @@ function renderPage(overrides: Partial<AgentBindingsPageProps> = {}) {
 			isError={false}
 			loadError={null}
 			pendingPurposes={new Set()}
-			onRetry={vi.fn<() => void>()}
+			onRetry={vi.fn()}
 			onSave={onSave}
 			onTurnOff={onTurnOff}
 			{...overrides}

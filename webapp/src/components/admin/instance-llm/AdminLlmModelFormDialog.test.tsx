@@ -15,7 +15,7 @@ function renderDialog(onSave = vi.fn<AdminLlmModelFormDialogProps["onSave"]>()) 
 	render(
 		<AdminLlmModelFormDialog
 			open
-			onOpenChange={vi.fn<() => void>()}
+			onOpenChange={vi.fn()}
 			editing={null}
 			workspaceOptions={[]}
 			probedModelIds={[]}
@@ -62,7 +62,7 @@ describe("AdminLlmModelFormDialog", () => {
 		render(
 			<AdminLlmModelFormDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				editing={editing}
 				workspaceOptions={[]}
 				probedModelIds={[]}
@@ -167,7 +167,7 @@ describe("AdminLlmModelFormDialog", () => {
 		render(
 			<AdminLlmModelFormDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				editing={editing}
 				workspaceOptions={[]}
 				probedModelIds={[]}

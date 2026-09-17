@@ -33,7 +33,7 @@ describe("SlackPreferencesSection", () => {
 				workspaces={[workspace]}
 				isSlackLinked
 				canConnectSlack
-				onConnectSlack={vi.fn<() => void>()}
+				onConnectSlack={vi.fn()}
 				onToggleChannelMessages={onToggleChannelMessages}
 			/>,
 		);
@@ -59,7 +59,7 @@ describe("SlackPreferencesSection", () => {
 				workspaces={[workspace]}
 				isSlackLinked
 				canConnectSlack
-				onConnectSlack={vi.fn<() => void>()}
+				onConnectSlack={vi.fn()}
 				onToggleChannelMessages={onToggleChannelMessages}
 			/>,
 		);
@@ -77,7 +77,7 @@ describe("SlackPreferencesSection", () => {
 				workspaces={[]}
 				isSlackLinked
 				canConnectSlack
-				onConnectSlack={vi.fn<() => void>()}
+				onConnectSlack={vi.fn()}
 				onToggleChannelMessages={vi.fn<SlackPreferencesSectionProps["onToggleChannelMessages"]>()}
 			/>,
 		);

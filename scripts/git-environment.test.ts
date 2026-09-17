@@ -113,7 +113,7 @@ void test("a gate that runs git the wrong way cannot reach the repository being 
 });
 
 void test("a repository test that runs git builds its environment in one place", () => {
-	const spawnsGit = /(?:execFile|execFileAsync|execFileSync|spawn|spawnSync)\(\s*"git"/u;
+	const spawnsGit = /(?:execFile|execFileAsync|execFileSync|spawn|spawnSync|run|output)\(\s*"git"/u;
 	// The naive form: an environment derived from this process, which under a hook names the
 	// repository being pushed.
 	const derivesFromProcess = /\.\.\.process\.env|process\.env\s*\)/u;
@@ -122,6 +122,7 @@ void test("a repository test that runs git builds its environment in one place",
 		spawnsGit.test(readFileSync(path.join(SCRIPTS, name), "utf8")),
 	);
 	assert.ok(running.includes("reconcile-deployment.test.ts"));
+	assert.ok(running.includes("check-java-nullness.test.ts"));
 	for (const name of running) {
 		const source = readFileSync(path.join(SCRIPTS, name), "utf8");
 		assert.match(

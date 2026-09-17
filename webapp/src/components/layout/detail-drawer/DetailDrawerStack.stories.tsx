@@ -262,9 +262,9 @@ export const DismissedLevelDoesNotComeBack: Story = {
 					// completes. Synchronous state hides the bug this story exists for.
 					onClose={(depth) => {
 						args.onClose(depth);
-						requestAnimationFrame(() =>
-							requestAnimationFrame(() => setStack(stack.slice(0, depth))),
-						);
+						requestAnimationFrame(() => {
+							requestAnimationFrame(() => setStack(stack.slice(0, depth)));
+						});
 					}}
 				/>
 			)}

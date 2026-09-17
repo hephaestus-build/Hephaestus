@@ -444,7 +444,9 @@ function PracticeCatalogRoute() {
 						let state: GroupAdoptionState;
 						if (groupPreview === undefined || levelPending) {
 							state = { status: "loading" };
-						} else if (levelError === undefined) {
+						} else if (levelError) {
+							state = { status: "error", error: levelError, onRetry: refetchLevel };
+						} else {
 							state = {
 								status: "ready",
 								preview: groupPreview,
@@ -453,8 +455,6 @@ function PracticeCatalogRoute() {
 									adoptCatalogGroup.isPending,
 								),
 							};
-						} else {
-							state = { status: "error", error: levelError, onRetry: refetchLevel };
 						}
 						return (
 							<GroupAdoptionPanel

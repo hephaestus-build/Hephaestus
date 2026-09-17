@@ -75,10 +75,12 @@ const makeGitHub = (options: GitHubOptions = {}) => {
 	const submitted: CreateReviewRequest[] = [];
 	const minimized: string[] = [];
 	const reviews = [...(options.reviews ?? [])];
-	const getPull = async () =>
-		options.failPullWith
-			? Promise.reject(options.failPullWith)
-			: Promise.resolve({ data: options.resolvedPull ?? pull });
+	const getPull = async () => {
+		if (options.failPullWith) {
+			throw options.failPullWith;
+		}
+		return { data: options.resolvedPull ?? pull };
+	};
 
 	const github: GitHubApi = {
 		graphql: async (_query, variables) => {

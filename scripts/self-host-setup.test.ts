@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
 	chmod,
 	copyFile,
@@ -67,26 +67,12 @@ async function setup(
 ): Promise<{ exitCode: number; output: string }> {
 	const bin = await installDockerStub(directory, options.database ?? "absent");
 	const searchPath = options.path ?? `${bin}:${process.env.PATH ?? ""}`;
-	const child = spawn(path.join(directory, "setup.sh"), {
+	const result = spawnSync(path.join(directory, "setup.sh"), {
+		encoding: "utf8",
 		env: { ...process.env, PATH: searchPath },
 		stdio: "pipe",
 	});
-	let stdout = "";
-	let stderr = "";
-	child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
-		stdout += chunk;
-	});
-	child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
-		stderr += chunk;
-	});
-	const exited = Promise.withResolvers<number>();
-	child.once("error", () => {
-		exited.resolve(1);
-	});
-	child.once("close", (code) => {
-		exited.resolve(code ?? 1);
-	});
-	return { exitCode: await exited.promise, output: `${stdout}${stderr}` };
+	return { exitCode: result.status ?? 1, output: `${result.stdout}${result.stderr}` };
 }
 
 function managedValues(environment: string): string[] {

@@ -46,11 +46,7 @@ describe("ChannelHistorySheet — failed load offers a retry", () => {
 		);
 
 		renderWithClient(
-			<ChannelHistorySheet
-				workspaceSlug="demo"
-				channel={channel}
-				onOpenChange={vi.fn<() => void>()}
-			/>,
+			<ChannelHistorySheet workspaceSlug="demo" channel={channel} onOpenChange={vi.fn()} />,
 		);
 
 		await screen.findByText(/could not load the consent history/iu);

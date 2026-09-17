@@ -140,10 +140,10 @@ results and recovery distinguishable.
 
 ## Update — 2026-09-17: `basedOn` names this run's observations only
 
-Supersedes the `basedOn` rule in § Composition contract. #1537 (2026-08-27) removed the
-`prior:<practiceSlug>` reference: `basedOn` now names only admitted observations from the current
-run, and at least one must belong to the unit's `practiceSlug`
-(`validateFeedbackEvidence` in `pi-runner-composition.ts`; `ComposedFeedbackUnit` in
-`agent.handler.composition`). Feedback that rests on the record rather than on this run is expressed
-through the history staged for the composer, not through a `basedOn` entry. #1519 (2026-08-25) added
-`alreadySaid` to the `IN_CHAT` `notes` object. Everything else in that section stands.
+Supersedes the `basedOn` rule in § Composition contract. `basedOn` names only admitted observations
+from the current run, and at least one must belong to the unit's `practiceSlug`
+(`validateFeedbackEvidence` in `server/application/src/main/resources/agent/pi-runner-composition.ts`;
+`ComposedFeedbackUnit` in `agent.handler.composition`); there is no `prior:<practiceSlug>`
+reference. Feedback that rests on the record rather than on this run is expressed through the
+history staged for the composer, and the `IN_CHAT` `notes` object carries an optional `alreadySaid`
+for it (`pi-runner.ts`). Everything else in that section stands.

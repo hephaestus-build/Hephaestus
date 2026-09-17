@@ -100,18 +100,26 @@ export function PracticeReviewsLayout({ workspaceSlug, children }: PracticeRevie
 			fuzzy: true,
 		}),
 	);
-	let activeId: PracticeReviewSection | undefined = "reviews";
-	if (targetActive) {
-		activeId = undefined;
-	} else if (deliveryActive) {
-		activeId = "delivery";
-	} else if (observationsActive) {
-		activeId = "observations";
+	function activeSection(): PracticeReviewSection | undefined {
+		if (targetActive) {
+			return undefined;
+		}
+		if (deliveryActive) {
+			return "delivery";
+		}
+		if (observationsActive) {
+			return "observations";
+		}
+		return "reviews";
 	}
 
 	return (
 		<PageLayout>
-			<PracticeReviewsHeader workspaceSlug={workspaceSlug} activeSection={activeId} scope={scope} />
+			<PracticeReviewsHeader
+				workspaceSlug={workspaceSlug}
+				activeSection={activeSection()}
+				scope={scope}
+			/>
 			{children}
 		</PageLayout>
 	);

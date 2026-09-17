@@ -220,6 +220,73 @@ export function normalizeInapplicability(inapplicability: unknown): RecordedInap
 	return { consulted: [...new Set(consulted)].toSorted(), subject, ruledOutBy };
 }
 
+/** The side a citation may carry: OLD or NEW for diff evidence, and none for anything else. */
+function citationSide(sourceKind: string, declared: unknown): DiffSide | null {
+	const side = declared == null ? null : trimmedText(declared).toUpperCase();
+	if (sourceKind === "scm.pull-request.diff") {
+		if (side !== "OLD" && side !== "NEW") {
+			throw new Error("diff evidence citation side must be OLD or NEW");
+		}
+		return side;
+	}
+	if (side !== null) {
+		throw new Error("non-diff evidence citation must not specify side");
+	}
+	return null;
+}
+
+function citationLines(fields: Record<string, unknown>): { startLine: number; endLine: number } {
+	const startLine = Number(fields.startLine);
+	const endLine = fields.endLine == null ? startLine : Number(fields.endLine);
+	if (!Number.isSafeInteger(startLine) || startLine <= 0 || startLine > 2_147_483_647) {
+		throw new Error("evidence citation startLine must be a positive integer");
+	}
+	if (!Number.isSafeInteger(endLine) || endLine < startLine || endLine > 2_147_483_647) {
+		throw new Error("evidence citation endLine must be >= startLine");
+	}
+	return { startLine, endLine };
+}
+
+function normalizeCitation(citation: unknown): NormalizedCitation {
+	// A citation that is not an object reads as one with every field missing, which is what the
+	// required-field checks below already reject by name.
+	const fields: Record<string, unknown> = isRecord(citation) ? citation : {};
+	const sourceKind = trimmedText(fields.sourceKind);
+	const artifactPath = typeof fields.artifactPath === "string" ? fields.artifactPath : "";
+	const path = typeof fields.path === "string" ? fields.path : "";
+	const quote = typeof fields.quote === "string" ? fields.quote : "";
+	if (!sourceKind) {
+		throw new Error("evidence citation sourceKind is required");
+	}
+	if (!artifactPath.trim()) {
+		throw new Error("evidence citation artifactPath is required");
+	}
+	if (!path.trim()) {
+		throw new Error("evidence citation path is required");
+	}
+	const side = citationSide(sourceKind, fields.side);
+	const { startLine, endLine } = citationLines(fields);
+	if (
+		!quote
+			.replaceAll("\u001C", "")
+			.replaceAll("\u001D", "")
+			.replaceAll("\u001E", "")
+			.replaceAll("\u001F", "")
+			.trim()
+	) {
+		throw new Error("evidence citation quote is required");
+	}
+	return {
+		sourceKind,
+		artifactPath,
+		path,
+		...(side == null ? {} : { side }),
+		startLine,
+		endLine,
+		quote,
+	};
+}
+
 export function normalizeEvidence(
 	evidence: unknown,
 	assessmentStatus: AssessmentStatus,
@@ -232,66 +299,7 @@ export function normalizeEvidence(
 	) {
 		throw new Error("evidence citations are required");
 	}
-	const citations = evidence.citations.map((citation: unknown): NormalizedCitation => {
-		// A citation that is not an object reads as one with every field missing, which is what the
-		// required-field checks below already reject by name.
-		const fields: Record<string, unknown> = isRecord(citation) ? citation : {};
-		const sourceKind = trimmedText(fields.sourceKind);
-		const artifactPath = typeof fields.artifactPath === "string" ? fields.artifactPath : "";
-		const path = typeof fields.path === "string" ? fields.path : "";
-		const declaredSide = fields.side == null ? null : trimmedText(fields.side).toUpperCase();
-		const startLine = Number(fields.startLine);
-		const endLine = fields.endLine == null ? startLine : Number(fields.endLine);
-		const quote = typeof fields.quote === "string" ? fields.quote : "";
-		if (!sourceKind) {
-			throw new Error("evidence citation sourceKind is required");
-		}
-		if (!artifactPath.trim()) {
-			throw new Error("evidence citation artifactPath is required");
-		}
-		if (!path.trim()) {
-			throw new Error("evidence citation path is required");
-		}
-		if (
-			sourceKind === "scm.pull-request.diff" &&
-			declaredSide !== "OLD" &&
-			declaredSide !== "NEW"
-		) {
-			throw new Error("diff evidence citation side must be OLD or NEW");
-		}
-		if (sourceKind !== "scm.pull-request.diff" && declaredSide !== null) {
-			throw new Error("non-diff evidence citation must not specify side");
-		}
-		if (!Number.isSafeInteger(startLine) || startLine <= 0 || startLine > 2_147_483_647) {
-			throw new Error("evidence citation startLine must be a positive integer");
-		}
-		if (!Number.isSafeInteger(endLine) || endLine < startLine || endLine > 2_147_483_647) {
-			throw new Error("evidence citation endLine must be >= startLine");
-		}
-		if (
-			!quote
-				.replaceAll("\u001C", "")
-				.replaceAll("\u001D", "")
-				.replaceAll("\u001E", "")
-				.replaceAll("\u001F", "")
-				.trim()
-		) {
-			throw new Error("evidence citation quote is required");
-		}
-		// Only the two checks above can let a side through, so this is a re-reading of what they proved
-		// rather than a second rule: anything else already threw.
-		const side: DiffSide | null =
-			declaredSide === "OLD" || declaredSide === "NEW" ? declaredSide : null;
-		return {
-			sourceKind,
-			artifactPath,
-			path,
-			...(side == null ? {} : { side }),
-			startLine,
-			endLine,
-			quote,
-		};
-	});
+	const citations = evidence.citations.map(normalizeCitation);
 	// Absence needs a bounded search, not just a citation to something else.
 	if (presence === "ABSENT") {
 		if (evidence.search == null) {
@@ -618,6 +626,41 @@ export function citationMatchesArtifact(citation: NormalizedCitation, content: s
 	return describeCitationMismatch(citation, content) === null;
 }
 
+/** The stored diff's lines on the cited side of the cited path, by line number. */
+function citedDiffLines(
+	citation: NormalizedCitation,
+	content: string,
+): { lines: Map<number, string> } | { mismatch: string } {
+	let oldPath: string | null = null;
+	let newPath: string | null = null;
+	const lines = new Map<number, string>();
+	for (const storedLine of content.split("\n")) {
+		// Both groups are mandatory, so binding them here is what lets the annotated branch below turn
+		// on a value the compiler has seen rather than on the match object being non-null.
+		const annotated = /^\[L(?<lineNumber>\d+)\] (?<text>[\s\S]*)$/u.exec(storedLine)?.groups;
+		const annotatedLineNumber = annotated?.lineNumber;
+		const line = annotated?.text ?? storedLine;
+		if (annotatedLineNumber === undefined) {
+			if (line.startsWith("--- ")) {
+				oldPath = diffPath(line.slice(4));
+			} else if (line.startsWith("+++ ")) {
+				newPath = diffPath(line.slice(4));
+			}
+			continue;
+		}
+		const lineNumber = Number(annotatedLineNumber);
+		if (!Number.isSafeInteger(lineNumber) || lineNumber > 2_147_483_647) {
+			return { mismatch: "invalid annotated line number" };
+		}
+		const side: DiffSide = line.startsWith("-") ? "OLD" : "NEW";
+		const path = side === "OLD" ? oldPath : newPath;
+		if (side === citation.side && path === citation.path) {
+			lines.set(lineNumber, line);
+		}
+	}
+	return { lines };
+}
+
 /**
  * Why a citation does not match, in one phrase, or null when it does. A refusal that only says "does
  * not match" leaves the session guessing at which of the coordinate, the side and the text was wrong,
@@ -632,34 +675,9 @@ export function describeCitationMismatch(
 		const found = content.includes(citation.quote);
 		return found ? null : "that text is not in the artifact";
 	}
-	let oldPath: string | null = null;
-	let newPath: string | null = null;
-	const citedLines = new Map<number, string>();
-	for (const storedLine of content.split("\n")) {
-		// Both groups are mandatory, so binding them here is what lets the annotated branch below turn
-		// on a value the compiler has seen rather than on the match object being non-null.
-		const annotated = /^\[L(?<lineNumber>\d+)\] (?<text>[\s\S]*)$/u.exec(storedLine)?.groups;
-		const annotatedLineNumber = annotated?.lineNumber;
-		const line = annotated?.text ?? storedLine;
-		if (annotatedLineNumber === undefined && line.startsWith("--- ")) {
-			oldPath = diffPath(line.slice(4));
-			continue;
-		}
-		if (annotatedLineNumber === undefined && line.startsWith("+++ ")) {
-			newPath = diffPath(line.slice(4));
-			continue;
-		}
-		if (annotatedLineNumber !== undefined) {
-			const lineNumber = Number(annotatedLineNumber);
-			if (!Number.isSafeInteger(lineNumber) || lineNumber > 2_147_483_647) {
-				return "invalid annotated line number";
-			}
-			const side: DiffSide = line.startsWith("-") ? "OLD" : "NEW";
-			const path = side === "OLD" ? oldPath : newPath;
-			if (side === citation.side && path === citation.path) {
-				citedLines.set(lineNumber, line);
-			}
-		}
+	const cited = citedDiffLines(citation, content);
+	if ("mismatch" in cited) {
+		return cited.mismatch;
 	}
 	// Match Java String.lines(): CR/LF delimiters, without the final terminator's empty item.
 	const quoteLines = citation.quote.split(/\r\n|\r|\n/u);
@@ -672,7 +690,7 @@ export function describeCitationMismatch(
 	}
 	for (const [index, quoteLine] of quoteLines.entries()) {
 		const lineNumber = citation.startLine + index;
-		const diffLine = citedLines.get(lineNumber);
+		const diffLine = cited.lines.get(lineNumber);
 		if (diffLine === undefined) {
 			return `the diff has no [L${lineNumber}] on the ${citation.side ?? "NEW"} side of ${citation.path}`;
 		}

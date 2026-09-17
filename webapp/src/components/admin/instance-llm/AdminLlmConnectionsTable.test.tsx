@@ -34,9 +34,9 @@ describe("AdminLlmConnectionsTable", () => {
 				mutatingIds={new Set<number>()}
 				selectedId={null}
 				onSelect={onSelect}
-				onEdit={vi.fn<() => void>()}
-				onToggleEnabled={vi.fn<() => void>()}
-				onDelete={vi.fn<() => void>()}
+				onEdit={vi.fn()}
+				onToggleEnabled={vi.fn()}
+				onDelete={vi.fn()}
 			/>,
 		);
 
@@ -60,10 +60,10 @@ describe("AdminLlmConnectionsTable", () => {
 				isError={false}
 				mutatingIds={new Set<number>()}
 				selectedId={null}
-				onSelect={vi.fn<() => void>()}
-				onEdit={vi.fn<() => void>()}
+				onSelect={vi.fn()}
+				onEdit={vi.fn()}
 				onToggleEnabled={onToggleEnabled}
-				onDelete={vi.fn<() => void>()}
+				onDelete={vi.fn()}
 			/>,
 		);
 		return { onToggleEnabled };
@@ -114,10 +114,10 @@ describe("AdminLlmConnectionsTable", () => {
 				isError={false}
 				mutatingIds={new Set<number>()}
 				selectedId={null}
-				onSelect={vi.fn<() => void>()}
-				onEdit={vi.fn<() => void>()}
-				onToggleEnabled={vi.fn<() => void>()}
-				onDelete={vi.fn<() => void>()}
+				onSelect={vi.fn()}
+				onEdit={vi.fn()}
+				onToggleEnabled={vi.fn()}
+				onDelete={vi.fn()}
 			/>,
 		);
 

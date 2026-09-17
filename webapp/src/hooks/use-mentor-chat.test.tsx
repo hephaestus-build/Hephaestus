@@ -140,9 +140,9 @@ function installFakeChat(initialStatus: ChatStatus = "ready"): FakeChat {
 				setStatus("submitted");
 			},
 			setMessages,
-			stop: vi.fn<() => Promise<void>>(),
+			stop: vi.fn(),
 			regenerate: vi.fn(),
-			clearError: vi.fn<() => void>(),
+			clearError: vi.fn(),
 			resumeStream: vi.fn(),
 			addToolOutput,
 			// Still a required member of `UseChatHelpers`, aliasing `addToolOutput`, so one spy backs both.
@@ -303,7 +303,7 @@ describe("useMentorChat", () => {
 
 	describe("error handling", () => {
 		it("surfaces a failed stream as state and tells the caller about it once", async () => {
-			const onError = vi.fn<(error: Error) => void>();
+			const onError = vi.fn();
 			const streamingError = new Error("Streaming error");
 			const { result } = renderHook(() => useMentorChat({ onError }), {
 				wrapper: createWrapper(queryClient),

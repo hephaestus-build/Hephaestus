@@ -2,7 +2,7 @@
 import { appendFile, readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 
-import { requiredEnv } from "./lib/env.ts";
+import { isSet, requiredEnv } from "./lib/env.ts";
 import { asRecord, asString, at, isRecord } from "./lib/json.ts";
 import { output, type RunOptions } from "./lib/process.ts";
 
@@ -136,7 +136,7 @@ if (import.meta.main) {
 		allowPositionals: true,
 	});
 	const { branch, message } = values;
-	if (branch === undefined || branch === "" || message === undefined || message === "") {
+	if (!isSet(branch) || !isSet(message)) {
 		throw new Error("--branch and --message are required");
 	}
 	const target: CommitTarget = {
@@ -161,7 +161,7 @@ if (import.meta.main) {
 		console.log("Selected paths match HEAD; no commit was created.");
 	}
 	const githubOutput = process.env.GITHUB_OUTPUT;
-	if (githubOutput !== undefined && githubOutput !== "") {
+	if (isSet(githubOutput)) {
 		await appendFile(githubOutput, `changed=${changed}\n`);
 	}
 }

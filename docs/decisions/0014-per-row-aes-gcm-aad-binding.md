@@ -155,18 +155,19 @@ Re-open this decision if any of the following land:
 ## Update — 2026-09-17
 
 Amends the key-rotation consequence and corrects one path. The blob format, the AAD layout and the
-`(workspaceId, kind, instanceKey, columnFqn)` binding are unchanged
+`(workspaceId, kind, instanceKey, columnFqn)` binding are as decided
 (`integration/core/connection/EncryptionContext.java`, `CredentialBundleConverter.java`).
 
-- **Rotation is no longer a single bulk re-encrypt under one key.** `connection.credentials_key_version`
-  records which key encrypted a row; `CredentialBundleConverter` holds the active key
-  (`hephaestus.security.credential-encryption-key`, `…-version`) and an optional prior key
-  (`hephaestus.security.prior-credential-encryption-key`, `…-version`) and decrypts each row with the
-  version the row names. `CredentialRotationService` (server role, gated by
-  `hephaestus.security.credential-rotation-enabled`) re-encrypts rows in batches under the same AAD.
-  The operator procedure is `docs/admin/credential-key-rotation.mdx`. There is still no KEK/DEK envelope.
-- **Path.** `1780313973588_changelog.xml` is archived at
-  `docs/db/archive/v0.77.4/changelog/1780313973588_changelog.xml`; the shipped chain starts at
+- Rotation is per row, not one bulk re-encrypt under one key: `connection.credentials_key_version`
+  records which key encrypted a row (`0000000000000_baseline_v0_77_4.sql`);
+  `CredentialBundleConverter` holds the active key (`hephaestus.security.credential-encryption-key`,
+  `…-version`) and an optional prior key (`hephaestus.security.prior-credential-encryption-key`,
+  `…-version`) and decrypts each row with the version it names; `CredentialRotationService` (server
+  role, gated by `hephaestus.security.credential-rotation-enabled`) re-encrypts rows in batches under
+  the same AAD. The operator procedure is `docs/admin/credential-key-rotation.mdx`. There is no
+  KEK/DEK envelope.
+- `1780313973588_changelog.xml` is archived at `docs/db/archive/v0.77.4/changelog/`, and the
+  shipped chain starts at
   `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.xml`
-  (`docs/contributor/database-migration.mdx`). `WorkspaceConnectionBackfillChange` remains in
-  `integration/core/connection/migration/` for the archived migration test.
+  (`docs/contributor/database-migration.mdx`); `WorkspaceConnectionBackfillChange` stays in
+  `integration/core/connection/migration/` for `WorkspaceConnectionBackfillChangeIntegrationTest`.

@@ -110,7 +110,7 @@ export function selectPracticePatch(
 
 export type PracticePlacement = Pick<Practice, "groupSlug" | "displayOrder" | "slug">;
 
-function byOrder(a: Practice, b: Practice) {
+export function byDisplayOrder<T extends { displayOrder: number; name: string }>(a: T, b: T) {
 	return a.displayOrder - b.displayOrder || a.name.localeCompare(b.name);
 }
 
@@ -128,11 +128,13 @@ export function placePractice(
 	const sourceGroupSlug = moving.groupSlug ?? null;
 	const inGroup = (candidate: Practice, candidateGroupSlug: string | null) =>
 		candidate.slug !== slug && (candidate.groupSlug ?? null) === candidateGroupSlug;
-	const source = practices.filter((practice) => inGroup(practice, sourceGroupSlug)).sort(byOrder);
+	const source = practices
+		.filter((practice) => inGroup(practice, sourceGroupSlug))
+		.sort(byDisplayOrder);
 	const destination =
 		sourceGroupSlug === groupSlug
 			? source
-			: practices.filter((practice) => inGroup(practice, groupSlug)).sort(byOrder);
+			: practices.filter((practice) => inGroup(practice, groupSlug)).sort(byDisplayOrder);
 	destination.splice(Math.min(position, destination.length), 0, {
 		...moving,
 		groupSlug: groupSlug ?? undefined,

@@ -57,14 +57,16 @@ loads, `create_parent` builds current+2 ahead with a default, an insert lands in
 
 ## Update — 2026-09-17
 
-Corrects § Decision "Image" and "Definition"; scheduling is unchanged
+Corrects § Decision "Image" and "Definition"; scheduling is as decided
 (`core.auth.audit.AuthEventPartitionMaintenance` calls `partman.run_maintenance_proc()` from the
-server role, and `docker/postgres/Dockerfile` still sets no `shared_preload_libraries`).
+server role, and `docker/postgres/Dockerfile` sets no `shared_preload_libraries`).
 
 - The image is `ghcr.io/hephaestus-build/postgres`, built from `postgres:18-bookworm` with
-  `postgresql-18-partman` ([ADR 0038](0038-postgresql-18-release-baseline.md)).
-- Changeset `1780825201546-18` (id `1780825201546-18-auth-event-partman`) is archived at
-  `docs/db/archive/v0.77.4/changelog/1780825201546_changelog.xml`. A fresh database registers
-  `auth_event` with `partman.create_parent` (monthly, `premake := 2`, retention 12 months) in
-  changeset `baseline_v0_77_4-seed` of
+  `postgresql-18-partman` (`docker/postgres/Dockerfile`;
+  [ADR 0038](0038-postgresql-18-release-baseline.md)).
+- Changeset `1780825201546-18-auth-event-partman` is archived at
+  `docs/db/archive/v0.77.4/changelog/1780825201546_changelog.xml`
+  ([ADR 0014](0014-per-row-aes-gcm-aad-binding.md) § Update 2026-09-17 has the archive); a fresh
+  database registers `auth_event` with `partman.create_parent` (monthly, `p_premake := 2`,
+  retention 12 months) in changeset `baseline_v0_77_4-seed` of
   `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.xml`.

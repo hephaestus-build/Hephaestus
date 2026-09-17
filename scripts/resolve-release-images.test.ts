@@ -37,9 +37,10 @@ void describe("resolveReleaseImages", () => {
 			delayMs: 0,
 			inspect: async () => {
 				attempts += 1;
-				return attempts < 3
-					? Promise.reject(new Error("MANIFEST_UNKNOWN"))
-					: Promise.resolve(DIGEST);
+				if (attempts < 3) {
+					throw new Error("MANIFEST_UNKNOWN");
+				}
+				return DIGEST;
 			},
 		});
 		assert.equal(attempts, 3);

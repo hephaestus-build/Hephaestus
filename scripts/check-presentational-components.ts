@@ -9,6 +9,7 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { isSet } from "./lib/env.ts";
 
 /** Resolved from this file, so the script runs identically from the repo root and from `webapp/`. */
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -92,11 +93,7 @@ const isTypeOnly = (typeKeyword: string | undefined, clause: string): boolean =>
 		return true;
 	}
 	const specifiers = /\{(?<specifiers>[\s\S]*)\}/u.exec(clause)?.groups?.specifiers;
-	if (
-		specifiers === undefined ||
-		specifiers === "" ||
-		clause.replace(/\{[\s\S]*\}/u, "").trim().length > 0
-	) {
+	if (!isSet(specifiers) || clause.replace(/\{[\s\S]*\}/u, "").trim().length > 0) {
 		return false;
 	}
 	return specifiers

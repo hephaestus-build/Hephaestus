@@ -25,6 +25,7 @@
  */
 import { appendFile } from "node:fs/promises";
 
+import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asRecord, asString, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
@@ -209,7 +210,7 @@ export async function hasSchemaMigrations(
 if (import.meta.main) {
 	const [sha] = process.argv.slice(2);
 	const repository = process.env.GITHUB_REPOSITORY;
-	if (sha === undefined || sha === "" || repository === undefined || repository === "") {
+	if (!isSet(sha) || !isSet(repository)) {
 		console.log("::error::usage: GITHUB_REPOSITORY=<owner/repo> plan-release.ts <sha>");
 		process.exitCode = 1;
 	} else {
@@ -242,7 +243,7 @@ if (import.meta.main) {
 				.map(([name, value]) => `${name}=${value}\n`)
 				.join("");
 			const outputFile = process.env.GITHUB_OUTPUT;
-			if (outputFile !== undefined && outputFile !== "") {
+			if (isSet(outputFile)) {
 				await appendFile(outputFile, outputs);
 			}
 		}

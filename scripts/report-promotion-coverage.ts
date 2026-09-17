@@ -1,4 +1,5 @@
 import { appendFileSync } from "node:fs";
+import { isSet } from "./lib/env.ts";
 
 function observation(frozen: boolean, outcome: string): string {
 	if (frozen) {
@@ -31,7 +32,7 @@ if (import.meta.main) {
 	);
 	process.stdout.write(summary);
 	const stepSummary = process.env.GITHUB_STEP_SUMMARY;
-	if (stepSummary !== undefined && stepSummary !== "") {
+	if (isSet(stepSummary)) {
 		appendFileSync(stepSummary, summary);
 	}
 }

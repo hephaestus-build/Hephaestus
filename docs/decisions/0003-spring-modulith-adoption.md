@@ -99,18 +99,21 @@ pattern in ADR 0005.
 
 Corrects the names in § Decision and § Consequences; the shape decided there is unchanged.
 
-- The `gitprovider` kernel became `integration/scm` in [ADR 0015](0015-unified-integration-framework.md).
-  `Type.OPEN` today is declared on `config`, `integration`, `integration/core`, `integration/scm`,
+- The `gitprovider` kernel is `integration/scm` ([ADR 0015](0015-unified-integration-framework.md)).
+  `Type.OPEN` is declared on `config`, `integration`, `integration/core`, `integration/scm`,
   `integration/scm/github`, `integration/scm/gitlab` and `integration/slack` (`package-info.java`
   under `server/application/src/main/java/de/tum/cit/aet/hephaestus/`).
-- `practices::finding` is `practices::observation` ([ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md)
-  renamed the entity); `practices` also exposes `feedback`, `feedback-approval`, `reaction` and
-  `autonomy`. `core` exposes `exception`, `security`, `proxy`, `runtime`, `event` as decided, plus
-  `web`, `webhook`, `release`, `settings-spi`, `config-audit-spi`, `auth-spi`, `auth-ratelimit`,
-  `current-account`, `worker-hub`, `worker-auth` and `worker-protocol`. `workspace` exposes
-  `context`, `authorization`, `spi`, `settings` as decided, plus `dto` and `events`.
+- `practices::finding` is `practices::observation`
+  ([ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md) renamed the entity);
+  `practices` also exposes `feedback`, `feedback-approval`, `reaction` and `autonomy`.
+- `core` exposes `exception`, `security`, `proxy`, `runtime` and `event` as decided, plus `web`,
+  `webhook`, `release`, `settings-spi`, `config-audit-spi`, `auth-spi`, `auth-ratelimit`,
+  `current-account`, `worker-hub`, `worker-auth` and `worker-protocol`.
+- `workspace` exposes `context`, `authorization`, `spi` and `settings` as decided, plus `dto` and
+  `events`.
+- `activity` exposes `scoring` as decided, plus `spi`.
 - The verification entry point is `ApplicationModules.of(Application.class, …)` in
   `server/application/src/test/java/de/tum/cit/aet/hephaestus/architecture/ModulithVerificationTest.java`;
   there is no `HephaestusApplication` class. `Application.java`, `SecurityConfig.java`,
-  `WebConfig.java` and `OpenAPIConfiguration.java` remain in the root package; `SecurityUtils` is in
+  `WebConfig.java` and `OpenAPIConfiguration.java` are in the root package; `SecurityUtils` is in
   `core/security/`.

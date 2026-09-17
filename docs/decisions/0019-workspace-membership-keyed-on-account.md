@@ -85,13 +85,15 @@ review in the originating branch.
 
 ## Update — 2026-09-17
 
-Not implemented. `workspace.WorkspaceMembership` is still `@EmbeddedId (workspaceId, userId)` with a
+Not implemented: `workspace.WorkspaceMembership` is `@EmbeddedId (workspaceId, userId)` with a
 `@ManyToOne` to `integration.scm.domain.user.User`, and
 `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.sql` has no
-`workspace_membership.account_id`. Two names in § Context moved: the auto-heal is
-`workspace.context.WorkspaceMembershipAutoSeeder`, gated by
-`hephaestus.workspace.auto-seed-membership` (default `false`) and called from `WorkspaceContextFilter`;
-the SPI is `core.auth.spi.AccountWorkspaceMembershipQuery` with
-`workspace.AccountWorkspaceMembershipQueryAdapter`. The `ExternalActor` rename § Decision
-anticipates never happened ([ADR 0017](0017-replace-keycloak-with-spring-native-auth.md) § Update
-2026-09-17).
+`workspace_membership.account_id`.
+[ADR 0017](0017-replace-keycloak-with-spring-native-auth.md) § Update 2026-09-17 has the schema,
+including the name the `ExternalActor` rename § Decision anticipates. Two names in § Context:
+
+- The auto-heal is `workspace.context.WorkspaceMembershipAutoSeeder`, called from
+  `WorkspaceContextFilter` and gated by `hephaestus.workspace.auto-seed-membership`, which
+  `application.yml` sets to `true` and `application-prod.yml` to `false`.
+- The SPI is `core.auth.spi.AccountWorkspaceMembershipQuery`, implemented by
+  `workspace.AccountWorkspaceMembershipQueryAdapter`.

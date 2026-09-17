@@ -68,6 +68,11 @@ export type CuratedGroupFormProps = CuratedGroupFormBaseProps &
 		| { mode: "edit"; initialData: CuratedGroupFormInitialValue }
 	);
 
+const SUBMIT_LABELS = {
+	create: { idle: "Create group", pending: "Creating…" },
+	edit: { idle: "Save changes", pending: "Saving…" },
+} as const;
+
 function initialState(initialData?: CuratedGroupFormValue): FormState {
 	return {
 		slug: initialData?.slug ?? "",
@@ -132,10 +137,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 	const valid = errorSummary.length === 0;
 	const updateAvailable = mode === "edit" && initialData.status.state === "UPDATE_WAITING";
 	const resetLabel = updateAvailable ? "Apply Hephaestus update" : "Restore Hephaestus default";
-	let submitLabel = isPending ? "Saving…" : "Save changes";
-	if (mode === "create") {
-		submitLabel = isPending ? "Creating…" : "Create group";
-	}
+	const submitLabel = SUBMIT_LABELS[mode][isPending ? "pending" : "idle"];
 
 	const submit = (event: React.SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();

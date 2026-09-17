@@ -6,21 +6,17 @@ export interface Deferred<T> {
 
 /**
  * A promise a test settles by hand — a request held open until the assertion that needs it in
- * flight has run. `Promise.withResolvers()` is the same thing in ES2024, which `tsconfig.json`'s
- * `lib` does not reach because it follows the browser target.
+ * flight has run. `Promise.withResolvers()` is the same thing, past `tsconfig.json`'s `lib`.
  */
-export function deferred<T>(): Deferred<T> {
-	let settle: Pick<Deferred<T>, "resolve" | "reject"> | undefined;
+export function deferred<T = void>(): Deferred<T> {
+	let settle!: Deferred<T>["resolve"];
+	let refuse!: Deferred<T>["reject"];
 	// oxlint-disable-next-line promise/avoid-new -- the one place a promise is built from its callbacks.
 	const promise = new Promise<T>((resolve, reject) => {
-		settle = { resolve, reject };
+		settle = resolve;
+		refuse = reject;
 	});
-	// The executor has already run — it is synchronous by specification — but nothing tells the
-	// type checker so.
-	if (settle === undefined) {
-		throw new Error("The promise executor did not run");
-	}
-	return { promise, ...settle };
+	return { promise, resolve: settle, reject: refuse };
 }
 
 /** A promise that never settles: a request that never answers. */
@@ -29,15 +25,15 @@ export async function pending<T = never>(): Promise<T> {
 }
 
 export async function sleep(ms: number): Promise<void> {
-	const { promise, resolve } = deferred<undefined>();
+	const { promise, resolve } = deferred();
 	setTimeout(resolve, ms);
 	return promise;
 }
 
 export async function nextFrame(): Promise<void> {
-	const { promise, resolve } = deferred<undefined>();
+	const { promise, resolve } = deferred();
 	requestAnimationFrame(() => {
-		resolve(undefined);
+		resolve();
 	});
 	return promise;
 }

@@ -9,6 +9,7 @@
  */
 import { appendFileSync } from "node:fs";
 import { text } from "node:stream/consumers";
+import { isSet } from "./lib/env.ts";
 
 /**
  * SGR escapes, which the runner emits whenever colour is forced on — `FORCE_COLOR` is set in some
@@ -40,7 +41,7 @@ if (import.meta.main) {
 		console.log(`::error::${task} did not pass. Reproduce with: vp run ${task}`);
 	}
 	const summary = process.env.GITHUB_STEP_SUMMARY;
-	if (summary !== undefined && summary !== "") {
+	if (isSet(summary)) {
 		appendFileSync(summary, `\n\`\`\`text\n${report.trim()}\n\`\`\`\n`);
 	}
 	process.exitCode = unpassed.length === 0 ? 0 : 1;

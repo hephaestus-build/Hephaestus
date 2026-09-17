@@ -116,24 +116,20 @@ export function getDateRangeForPreset(
 
 		case "this-week": {
 			const weekStart = getLeaderboardWeekStart(now, schedule);
-			// Open-ended to show activity "so far"
 			return { after: weekStart, before: undefined };
 		}
 
 		case "last-week": {
 			const lastWeekStart = getLastLeaderboardWeekStart(now, schedule);
 			const lastWeekEnd = getLeaderboardWeekEnd(lastWeekStart);
-			// Bounded - it's a completed week
 			return { after: lastWeekStart, before: lastWeekEnd };
 		}
 
 		case "this-month": {
-			// Open-ended
 			return { after: startOfMonth(now), before: undefined };
 		}
 
 		case "last-month": {
-			// Bounded - completed month
 			return { after: startOfMonth(subMonths(now, 1)), before: startOfMonth(now) };
 		}
 

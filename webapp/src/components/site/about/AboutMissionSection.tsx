@@ -14,7 +14,7 @@ const FEATURES_DATA: FeatureData[] = [
 			"Hephaestus reads a contribution and the work around it against the practices a workspace has chosen. Each piece of feedback names the practice it came from and points back to what it saw.",
 	},
 	{
-		icon: <HephIcon className="size-5" size={20} strokeWidth={1.7} animated={false} />,
+		icon: <HephIcon size={20} strokeWidth={1.7} animated={false} />,
 		badge: "Core feature",
 		title: "Talk it through",
 		description: "Ask why, push back, or work out the next step",

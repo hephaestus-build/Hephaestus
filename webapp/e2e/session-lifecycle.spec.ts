@@ -1,8 +1,6 @@
 import type { APIRequestContext, APIResponse, BrowserContext, Page } from "@playwright/test";
 import { z } from "zod";
 
-import { deferred } from "@/test/async";
-
 import { expect, loginAsDevAdmin, test } from "./fixtures";
 
 const serverUrl = process.env.E2E_SERVER_URL ?? "http://localhost:8080";
@@ -54,8 +52,8 @@ async function scheduleRenewal(page: Page) {
 }
 
 async function holdRenewal(page: Page, request: APIRequestContext) {
-	const processed = deferred<undefined>();
-	const release = deferred<undefined>();
+	const processed = Promise.withResolvers<undefined>();
+	const release = Promise.withResolvers<undefined>();
 	await page.route(
 		"**/auth/refresh",
 		async (route) => {

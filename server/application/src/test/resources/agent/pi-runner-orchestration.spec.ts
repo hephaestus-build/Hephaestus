@@ -89,9 +89,7 @@ if (hasText(scenario)) {
 			defineTool: (tool: unknown) => tool,
 			getAgentDir: () => cwd,
 			DefaultResourceLoader: class {
-				reload = mock.fn(async () => {
-					// The double has nothing to load.
-				});
+				reload = mock.fn();
 			},
 			SettingsManager: { create: () => ({}) },
 			SessionManager: {
@@ -105,9 +103,7 @@ if (hasText(scenario)) {
 						now += 20_000;
 					}
 					return {
-						registerProvider() {
-							// The double registers nothing.
-						},
+						registerProvider: mock.fn(),
 						getModel: () => ({ contextWindow: 128_000 }),
 					};
 				},
@@ -137,9 +133,7 @@ if (hasText(scenario)) {
 						state: { messages: [] },
 						sessionManager: manager,
 						subscribe: () => () => undefined,
-						clearQueue() {
-							// The double queues nothing.
-						},
+						clearQueue: mock.fn(),
 						abort: async () => {
 							record(`abort:${lane}`);
 						},

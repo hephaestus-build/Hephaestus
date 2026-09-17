@@ -123,48 +123,43 @@ function readSearchableText(file: string): string | null {
 	}
 }
 
-/**
- * Appends one match with its context lines in ripgrep's layout and reports whether any of the lines
- * had to be truncated.
- */
-function pushMatch(
-	blocks: string[],
+/** One match with its context lines in ripgrep's layout, and whether any line had to be cut. */
+function formatMatch(
 	shown: string,
 	lines: readonly string[],
 	lineNumber: number,
 	context: number,
-): boolean {
-	let linesTruncated = false;
+): { lines: string[]; truncated: boolean } {
+	let truncated = false;
 	const start = context > 0 ? Math.max(1, lineNumber - context) : lineNumber;
 	const end = context > 0 ? Math.min(lines.length, lineNumber + context) : lineNumber;
+	const formatted: string[] = [];
 	for (let current = start; current <= end; current += 1) {
 		const { text, wasTruncated } = truncateLine(lines[current - 1]?.replaceAll("\r", "") ?? "");
-		if (wasTruncated) {
-			linesTruncated = true;
-		}
-		blocks.push(
+		truncated ||= wasTruncated;
+		formatted.push(
 			current === lineNumber ? `${shown}:${current}: ${text}` : `${shown}-${current}- ${text}`,
 		);
 	}
 	if (context > 0) {
-		blocks.push("--");
+		formatted.push("--");
 	}
-	return linesTruncated;
+	return { lines: formatted, truncated };
 }
 
-/** Searches under `cwd` and returns the SDK grep tool's text output. Pure apart from reading files. */
-export function searchFiles(
+function noMatches(text: string): { text: string; details: GrepDetails } {
+	return { text, details: { matches: 0, truncated: false } };
+}
+
+/** Where the search is rooted, or why nothing under `params.path` may be read. */
+function resolveSearchRoot(
 	cwd: string,
 	params: GrepParams,
-	signal?: AbortSignal,
-): { text: string; details: GrepDetails } {
+): { searchRoot: string } | { error: string } {
 	const searchRoot = path.resolve(cwd, params.path ?? ".");
 	const fromWorkspace = path.relative(cwd, searchRoot);
 	if (fromWorkspace === ".." || fromWorkspace.startsWith(`..${path.sep}`)) {
-		return {
-			text: `Path ${params.path} is outside the workspace.`,
-			details: { matches: 0, truncated: false },
-		};
+		return { error: `Path ${params.path} is outside the workspace.` };
 	}
 	// The skips apply to a search rooted inside them as much as to a walk reaching them.
 	const rootSegments = fromWorkspace === "" ? [] : fromWorkspace.split(path.sep);
@@ -173,31 +168,23 @@ export function searchFiles(
 		rootSegments.some((_, index) => SKIPPED_PATHS.has(rootSegments.slice(0, index + 1).join("/")));
 	if (rootIsSkipped) {
 		return {
-			text: `Path ${params.path} is the sandbox's own state, not the reviewed work; it is not searchable.`,
-			details: { matches: 0, truncated: false },
+			error: `Path ${params.path} is the sandbox's own state, not the reviewed work; it is not searchable.`,
 		};
 	}
-	const compiled = compilePattern(params);
-	if ("error" in compiled) {
-		return { text: compiled.error, details: { matches: 0, truncated: false } };
-	}
-	const { matcher } = compiled;
-	const globMatcher =
-		params.glob !== undefined && params.glob !== "" ? globToRegExp(params.glob) : null;
-	const context =
-		params.context !== undefined && params.context > 0
-			? Math.min(MAX_CONTEXT, Math.floor(params.context))
-			: 0;
-	const limit = Math.max(1, params.limit ?? DEFAULT_LIMIT);
+	return { searchRoot };
+}
 
+function listSearchFiles(
+	cwd: string,
+	searchRoot: string,
+	params: GrepParams,
+	signal?: AbortSignal,
+): { files: string[] } | { error: string } {
 	let rootStat: Stats;
 	try {
 		rootStat = statSync(searchRoot);
 	} catch {
-		return {
-			text: `Path ${params.path ?? "."} does not exist.`,
-			details: { matches: 0, truncated: false },
-		};
+		return { error: `Path ${params.path ?? "."} does not exist.` };
 	}
 	const files: string[] = [];
 	if (rootStat.isDirectory()) {
@@ -205,52 +192,85 @@ export function searchFiles(
 	} else {
 		files.push(searchRoot);
 	}
+	return { files };
+}
 
+function searchOptions(params: GrepParams): {
+	globMatcher: RegExp | null;
+	context: number;
+	limit: number;
+} {
+	const globMatcher =
+		params.glob !== undefined && params.glob !== "" ? globToRegExp(params.glob) : null;
+	const context =
+		params.context !== undefined && params.context > 0
+			? Math.min(MAX_CONTEXT, Math.floor(params.context))
+			: 0;
+	const limit = Math.max(1, params.limit ?? DEFAULT_LIMIT);
+	return { globMatcher, context, limit };
+}
+
+/** The file's lines, or `null` when it is not evidence (`readSearchableText`). */
+function readSearchableLines(file: string): string[] | null {
+	const content = readSearchableText(file);
+	if (content === null) {
+		return null;
+	}
+	const lines = content.split("\n");
+	// A file's final newline ends its last line; it does not start an empty one.
+	if (lines.at(-1) === "") {
+		lines.pop();
+	}
+	return lines;
+}
+
+interface FileMatches {
+	blocks: string[];
+	matches: number;
+	/** Whether a line was left unexamined once `remaining` matches had been found. */
+	truncated: boolean;
+	linesTruncated: boolean;
+}
+
+function matchLines(
+	shown: string,
+	lines: readonly string[],
+	matcher: RegExp,
+	context: number,
+	remaining: number,
+): FileMatches {
 	const blocks: string[] = [];
 	let matches = 0;
-	let truncated = false;
 	let linesTruncated = false;
-	let aborted = signal?.aborted ?? false;
-	for (const file of files) {
-		if (signal?.aborted === true) {
-			aborted = true;
-			break;
+	for (let index = 0; index < lines.length; index += 1) {
+		if (matches >= remaining) {
+			return { blocks, matches, truncated: true, linesTruncated };
 		}
-		if (matches >= limit) {
-			truncated = true;
-			break;
-		}
-		const relativePath = path.relative(searchRoot, file);
-		// A single-file search has no relative path; its name stands in, as ripgrep prints it.
-		const shown = relativePath === "" ? path.basename(file) : relativePath;
-		if (globMatcher !== null && !globMatcher.test(shown.split(path.sep).join("/"))) {
+		const line = lines[index]?.replaceAll("\r", "") ?? "";
+		matcher.lastIndex = 0;
+		if (!matcher.test(line)) {
 			continue;
 		}
-		const content = readSearchableText(file);
-		if (content === null) {
-			continue;
-		}
-		const lines = content.split("\n");
-		// A file's final newline ends its last line; it does not start an empty one.
-		if (lines.at(-1) === "") {
-			lines.pop();
-		}
-		for (let index = 0; index < lines.length; index += 1) {
-			if (matches >= limit) {
-				truncated = true;
-				break;
-			}
-			const line = lines[index]?.replaceAll("\r", "") ?? "";
-			matcher.lastIndex = 0;
-			if (!matcher.test(line)) {
-				continue;
-			}
-			matches += 1;
-			if (pushMatch(blocks, shown, lines, index + 1, context)) {
-				linesTruncated = true;
-			}
-		}
+		matches += 1;
+		const match = formatMatch(shown, lines, index + 1, context);
+		blocks.push(...match.lines);
+		linesTruncated ||= match.truncated;
 	}
+	return { blocks, matches, truncated: false, linesTruncated };
+}
+
+interface SearchOutcome {
+	blocks: string[];
+	matches: number;
+	limit: number;
+	aborted: boolean;
+	truncated: boolean;
+	linesTruncated: boolean;
+}
+
+function renderSearch(outcome: SearchOutcome): { text: string; details: GrepDetails } {
+	const { blocks, matches, limit, aborted, linesTruncated } = outcome;
+	let { truncated } = outcome;
 	const notes: string[] = [];
 	if (aborted) {
 		notes.push("[Search stopped: the session's time is up]");
@@ -273,6 +293,70 @@ export function searchFiles(
 	}
 	const text = [blocks.length === 0 ? "No matches found" : body, ...notes].join("\n");
 	return { text, details: { matches, truncated } };
+}
+
+/** Searches under `cwd` and returns the SDK grep tool's text output. Pure apart from reading files. */
+export function searchFiles(
+	cwd: string,
+	params: GrepParams,
+	signal?: AbortSignal,
+): { text: string; details: GrepDetails } {
+	const root = resolveSearchRoot(cwd, params);
+	if ("error" in root) {
+		return noMatches(root.error);
+	}
+	const compiled = compilePattern(params);
+	if ("error" in compiled) {
+		return noMatches(compiled.error);
+	}
+	const { searchRoot } = root;
+	const { matcher } = compiled;
+	const { globMatcher, context, limit } = searchOptions(params);
+	const listed = listSearchFiles(cwd, searchRoot, params, signal);
+	if ("error" in listed) {
+		return noMatches(listed.error);
+	}
+
+	// One entry per file, flattened at the end: spreading a file's blocks into `push` is bounded by
+	// the engine's argument limit, which a generous `limit` against a dense file exceeds.
+	const blocks: string[][] = [];
+	let matches = 0;
+	let truncated = false;
+	let linesTruncated = false;
+	let aborted = signal?.aborted ?? false;
+	for (const file of listed.files) {
+		if (signal?.aborted === true) {
+			aborted = true;
+			break;
+		}
+		if (matches >= limit) {
+			truncated = true;
+			break;
+		}
+		const relativePath = path.relative(searchRoot, file);
+		// A single-file search has no relative path; its name stands in, as ripgrep prints it.
+		const shown = relativePath === "" ? path.basename(file) : relativePath;
+		if (globMatcher !== null && !globMatcher.test(shown.split(path.sep).join("/"))) {
+			continue;
+		}
+		const lines = readSearchableLines(file);
+		if (lines === null) {
+			continue;
+		}
+		const found = matchLines(shown, lines, matcher, context, limit - matches);
+		blocks.push(found.blocks);
+		matches += found.matches;
+		truncated ||= found.truncated;
+		linesTruncated ||= found.linesTruncated;
+	}
+	return renderSearch({
+		blocks: blocks.flat(),
+		matches,
+		limit,
+		aborted,
+		truncated,
+		linesTruncated,
+	});
 }
 
 /** The model's arguments arrive untyped; anything of the wrong shape is ignored rather than trusted. */

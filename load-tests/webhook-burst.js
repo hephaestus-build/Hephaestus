@@ -41,8 +41,8 @@ const payload = JSON.stringify({
 });
 
 /**
- * @param {Pick<import("k6/http").Response, "status" | "json">} response - the webhook endpoint's reply
- * @returns {boolean} whether the delivery was accepted and published
+ * @param {Pick<import("k6/http").Response, "status" | "json">} response
+ * @returns {boolean}
  */
 export function webhookAccepted(response) {
 	return response.status === 202 && jsonField(response, "status") === "ok";

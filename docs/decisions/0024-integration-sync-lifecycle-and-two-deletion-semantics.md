@@ -1,6 +1,6 @@
 # ADR 0024: Integration sync lifecycle — drift tombstones and mirror erasure are two different operations
 
-**Status:** Accepted (amended 2026-09-03 #1404, 2026-09-04 #1806, 2026-09-05 #1825, 2026-09-05 #1404, 2026-09-17 — Outline already has a resubmitter)
+**Status:** Accepted (amended 2026-09-03 #1404 — which reads honour a drift tombstone; 2026-09-04 #1806 — a re-offered signal is held, not retired; 2026-09-05 #1825 — live occasions share the reversible hold; 2026-09-05 #1404 — capture, new feedback and the two non-SCM kinds; 2026-09-17 — Outline already has a resubmitter)
 **Date:** 2026-07-18
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0015](0015-unified-integration-framework.md) (integration framework), [ADR 0008](0008-webhook-runtime-role.md) (webhook runtime role, non-redeliverable deliveries), [ADR 0023](0023-outline-documentation-integration.md) (Outline as a content source)
@@ -326,14 +326,13 @@ gone" apart from "this channel cannot carry it".
 
 ## Update — 2026-09-17: Outline already has a resubmitter
 
-Corrects the **Scope, and what is still open** paragraph of the 2026-09-04 update and the sentence
-"Outline's lack of a resubmitter remain[s] unchanged" in the 2026-09-05 (#1825) update; both stay
-standing. `DocumentReviewSubmitter` has implemented `PendingSignalResubmitter` for `docs.document`
-since #1444 (2026-08-18), so the 2026-09-04 revisit trigger "Outline gains a resubmitter" was already
-met when it was written. It resubmits a pending document signal and refuses one whose row is missing,
-or whose `DocumentProjection.ProjectedDocument.deleted()` is true, with terminal
-`SignalStateReason.ARTIFACT_GONE`. An Outline tombstone is reversible — `OutlineDocumentSyncService`
-clears `deletedAt` when the document reappears upstream — so a document signal re-offered while its
-row is tombstoned is retired for good, the outcome the 2026-09-04 update replaced for
+Corrects the **Scope, and what is still open** paragraph of the 2026-09-04 update and the Outline
+sentence of the 2026-09-05 (issue #1825) update; both stay standing. `DocumentReviewSubmitter`
+(`agent.job`) implements `PendingSignalResubmitter` for `docs.document`: it resubmits a pending
+document signal and refuses one whose row is missing, or whose
+`DocumentProjection.ProjectedDocument.deleted()` is true, with terminal
+`SignalStateReason.ARTIFACT_GONE`. An Outline tombstone is reversible (`OutlineDocumentSyncService`
+clears `deletedAt` when the document reappears upstream), so a document signal re-offered while its
+row is tombstoned is retired for good — the outcome the 2026-09-04 update replaced for
 `scm.pull_request` and `scm.issue` with the retryable `ARTIFACT_NOT_VISIBLE` hold. Whether
-`docs.document` takes the same hold is undecided; this update records the state, it changes nothing.
+`docs.document` takes the same hold is undecided.

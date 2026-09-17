@@ -29,10 +29,10 @@ describe("AdminLlmModelsSection", () => {
 				workspaceOptions={[{ id: 10, displayName: "Alpha", workspaceSlug: "alpha" }]}
 				models={[model]}
 				mutatingIds={new Set<number>()}
-				onAdd={vi.fn<() => void>()}
-				onEdit={vi.fn<() => void>()}
+				onAdd={vi.fn()}
+				onEdit={vi.fn()}
 				onManageAccess={onManageAccess}
-				onDelete={vi.fn<() => void>()}
+				onDelete={vi.fn()}
 			/>,
 		);
 

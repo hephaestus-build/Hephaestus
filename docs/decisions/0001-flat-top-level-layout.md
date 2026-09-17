@@ -55,17 +55,19 @@ reorganisation with concrete scaling justification.
 
 ## Update — 2026-09-17
 
-Corrects § Decision and § Consequences on where the server code lives. `server/` is a Gradle
-multi-project root ([ADR 0043](0043-gradle-java-build.md)) with two modules:
-`server/application/` (deployable code, resources, `db/changelog/`, tests) and
-`server/generated-clients/` (GraphQL and Outline codegen) — the split
-[ADR 0032](0032-generated-clients-build-boundary.md) decided. The nesting is a build-lifecycle
-boundary, not the organisational nesting this ADR removed. The repository root also carries
-`scripts/`, `docker/` and `load-tests/`; `server/` and `webapp/` remain the only deployables, so the
-revisit trigger has not fired.
+Corrects § Decision and § Consequences on where the code lives and what is shipped from it.
 
-The `generate:api:application-server` script named in § Consequences is now `generate:api:specs`
-and `generate:api:client` (`vite.config.ts`). The image is `ghcr.io/hephaestus-build/application-server`,
-selected by the release lock ([ADR 0034](0034-signed-release-image-lock.md)); the Compose service
-names `application-server` and `webhook-server` (`docker/compose.app.yaml`, `docker/compose.core.yaml`)
-are unchanged.
+- `server/` is a Gradle multi-project root with two modules, `server/application/` and
+  `server/generated-clients/` (`server/settings.gradle.kts`); the nesting is the build boundary
+  [ADR 0032](0032-generated-clients-build-boundary.md) decided and
+  [ADR 0043](0043-gradle-java-build.md) builds, not the organisational nesting this ADR removed.
+- The repository root also carries `scripts/`, `docker/` and `load-tests/`.
+- Four images are published (`.github/workflows/cicd.yml`, `ci-docker-build.yml`):
+  `application-server` from `server/`, `webapp` from `webapp/Dockerfile`, `postgres` from
+  `docker/postgres/Dockerfile` and `agent-pi` from `docker/agents/pi/Dockerfile`; the two under
+  `docker/` are build contexts, not top-level siblings.
+- The `generate:api:application-server` script is `generate:api:specs` and `generate:api:client`
+  (`vite.config.ts`).
+- The image is `ghcr.io/hephaestus-build/application-server`, selected by the release lock
+  ([ADR 0034](0034-signed-release-image-lock.md)); the Compose service names `application-server` and
+  `webhook-server` stand (`docker/compose.app.yaml`, `docker/compose.core.yaml`).

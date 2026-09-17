@@ -32,11 +32,11 @@ describe("AdminLlmModelAccessDialog", () => {
 		render(
 			<AdminLlmModelAccessDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				model={model}
 				workspaceOptions={workspaces}
 				isSubmitting={false}
-				onSave={vi.fn<() => void>()}
+				onSave={vi.fn()}
 			/>,
 		);
 
@@ -50,7 +50,7 @@ describe("AdminLlmModelAccessDialog", () => {
 		render(
 			<AdminLlmModelAccessDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				model={{ ...model, visibility: "GRANTED", grantedWorkspaceIds: [10] }}
 				workspaceOptions={workspaces}
 				isSubmitting={false}
@@ -110,11 +110,11 @@ describe("AdminLlmModelAccessDialog", () => {
 		render(
 			<AdminLlmModelAccessDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				model={model}
 				workspaceOptions={workspaces}
 				isSubmitting={false}
-				onSave={vi.fn<() => void>()}
+				onSave={vi.fn()}
 			/>,
 		);
 
@@ -132,7 +132,7 @@ describe("AdminLlmModelAccessDialog", () => {
 		render(
 			<AdminLlmModelAccessDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				model={{ ...model, visibility: "GRANTED", grantedWorkspaceIds: [10] }}
 				workspaceOptions={[]}
 				workspacesError={{ status: 503, detail: "Directory unavailable." }}

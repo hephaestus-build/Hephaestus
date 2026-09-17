@@ -4,7 +4,6 @@ import { delay, HttpResponse, http } from "msw";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { expectSettledVisible } from "@/stories/overlay";
-import { sleep } from "@/test/async";
 
 import { AddCollectionDialog } from "./AddCollectionDialog";
 
@@ -224,7 +223,7 @@ export const RegisteringSequentially: Story = {
 	parameters: { msw: { handlers: [candidatesHandler(candidates)] } },
 	args: {
 		onRegister: fn(async () => {
-			await sleep(400);
+			await delay(400);
 		}),
 	},
 	play: async () => {

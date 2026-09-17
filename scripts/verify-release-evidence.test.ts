@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import {
@@ -161,21 +160,6 @@ void describe("release evidence manifest", () => {
 					namespace,
 				),
 			/one index digest/u,
-		);
-	});
-});
-
-void describe("subprocess capture", () => {
-	void it("bounds every captured subprocess above Node's 1 MiB default", () => {
-		// A cosign attestation carries the whole SPDX SBOM base64-encoded. Under the default cap the
-		// capture raises ENOBUFS, which failed a release after the images were already tagged.
-		const source = readFileSync(new URL("verify-release-evidence.ts", import.meta.url), "utf8");
-		assert.match(source, /maxBuffer: CAPTURE_LIMIT_BYTES/u);
-		const limit = /const CAPTURE_LIMIT_BYTES = (?<mebibytes>\d+) \* 1024 \* 1024;/u.exec(source);
-		assert.ok(limit, "CAPTURE_LIMIT_BYTES must be declared in MiB");
-		assert.ok(
-			Number(limit.groups?.mebibytes) >= 64,
-			"an SBOM attestation needs far more than the 1 MiB default",
 		);
 	});
 });

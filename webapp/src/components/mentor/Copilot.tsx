@@ -54,8 +54,7 @@ export function Copilot({
 						/>
 					}
 				>
-					{/* The class, not the `size` prop: Button sizes a child svg to `size-4` unless a `size-*` class says otherwise. */}
-					<HephIcon className="size-14" pad={8} />
+					<HephIcon size={56} pad={8} />
 				</DrawerTrigger>
 			</div>
 			<DrawerContent size="panel">

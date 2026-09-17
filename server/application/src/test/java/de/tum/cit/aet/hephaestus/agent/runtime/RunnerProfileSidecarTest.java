@@ -20,7 +20,8 @@ import org.junit.jupiter.params.provider.MethodSource;
  * A runner script imports its sidecars with relative specifiers, so Node resolves them from the
  * staged directory rather than the classpath: one missing from a profile is not a compile error and
  * not a boot failure, but ERR_MODULE_NOT_FOUND inside the sandbox on every job it runs. A sidecar's
- * own imports resolve the same way, so the walk follows them.
+ * own imports resolve the same way, so the walk follows them, descending into a module only the
+ * first time {@code reached} admits it, which is what ends the walk on an import cycle.
  */
 @Tag("unit")
 class RunnerProfileSidecarTest {

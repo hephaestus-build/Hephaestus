@@ -14,11 +14,11 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		render(
 			<WorkspaceLlmModelFormDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				editing={null}
 				isSubmitting={false}
 				onCreate={onCreate}
-				onUpdate={vi.fn<() => void>()}
+				onUpdate={vi.fn()}
 			/>,
 		);
 		expect(screen.getByRole("switch", { name: "Active" }).getAttribute("aria-checked")).toBe(
@@ -51,10 +51,10 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		render(
 			<WorkspaceLlmModelFormDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				editing={editing}
 				isSubmitting={false}
-				onCreate={vi.fn<() => void>()}
+				onCreate={vi.fn()}
 				onUpdate={onUpdate}
 			/>,
 		);
@@ -83,10 +83,10 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		render(
 			<WorkspaceLlmModelFormDialog
 				open
-				onOpenChange={vi.fn<() => void>()}
+				onOpenChange={vi.fn()}
 				editing={editing}
 				isSubmitting={false}
-				onCreate={vi.fn<() => void>()}
+				onCreate={vi.fn()}
 				onUpdate={onUpdate}
 			/>,
 		);

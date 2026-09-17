@@ -1,10 +1,7 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 
-	// The SPA adds to the repository base and the React layer; neither is repeated here. What this
-	// file holds is what only this tree has: the design-system checks, the test and story rules, the
-	// house plugin's story rules, and the few base rules the browser target or the React Compiler
-	// decides differently.
+	// Extends the base and the React layer; only this tree's additions and differences live here.
 	"extends": ["../.oxlintrc.json", "../oxlint.react.jsonc"],
 
 	"plugins": ["vitest"],
@@ -149,21 +146,25 @@
 		],
 
 		// -- Where this tree decides a base rule differently -----------------------------------------
-		// Both want `toSorted`/`toReversed`, which `tsconfig.json`'s `lib` (ES2022) does not declare:
-		// the lib follows Vite's default browser target, which still includes Firefox 114, where the
-		// two do not exist. Copy before sorting an array a caller can observe — that mutation is the
-		// bug these describe.
+		// Both want `toSorted`/`toReversed`, past `tsconfig.json`'s `lib` (it says why). Copy before
+		// sorting an array a caller can observe — that mutation is the bug these describe.
 		"unicorn/no-array-sort": "off",
 		"unicorn/no-array-reverse": "off",
-		// The `??=` and `||=` these two propose are ones the React Compiler cannot lower yet
-		// (`react/todo`), and a ref initialiser is exactly where that `if` sits. Where a blank string
-		// should fall through, the question is asked by name (`hasText` / `firstNonBlank` in
-		// `@/lib/text`), so `ignorePrimitives` stays off.
+		// The `??=` and `||=` these two propose are ones the React Compiler does not lower
+		// (`react/todo` names them), and a ref initialiser is exactly where that `if` sits. Where a
+		// blank string should fall through, the question is asked by name (`hasText` /
+		// `firstNonBlank` in `@/lib/text`), so `ignorePrimitives` stays off.
 		"typescript/prefer-nullish-coalescing": ["error", { "ignoreIfStatements": true }],
 		"logical-assignment-operators": "off",
 		// Reads `.catch` by name, so zod's `.catch(undefined)` on every search-param schema is reported
 		// as a promise chain.
 		"promise/prefer-await-to-then": "off",
+		// Cyclomatic complexity counts every `&&`, `??` and `?.` in JSX, so at the base's 20 it grades
+		// how many optional props a page has. Forty is the line between that and a function doing
+		// several components' work.
+		"complexity": ["error", { "max": 40 }],
+		// `webapp/AGENTS.md` § File naming: a file that exports a component is PascalCase.
+		"unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }],
 		// TanStack Router signals redirects and 404s by throwing them; everything else must be an Error.
 		"typescript/only-throw-error": [
 			"error",
@@ -174,6 +175,8 @@
 				]
 			}
 		],
+
+		// -- What only this tree has -----------------------------------------------------------------
 		// CSS side effects and module augmentation.
 		"import/no-unassigned-import": [
 			"error",
@@ -296,7 +299,7 @@
 		"hephaestus/no-nondeterministic-render": "error",
 		"hephaestus/no-redundant-in-the-document": "error",
 		"hephaestus/svg-needs-accessible-name": "error"
-		// The other five read a Storybook story object and are scoped to story files in `overrides`.
+		// The rules that read a Storybook story object are scoped to story files in `overrides`.
 	},
 
 	// Never configure one rule for the same file from two entries: where two overrides match a file,
@@ -468,7 +471,7 @@
 			}
 		},
 		{
-			// All five read a Storybook story object, and only a story file holds one. `parameters.a11y`
+			// Each reads a Storybook story object, and only a story file holds one. `parameters.a11y`
 			// is also how `.storybook/preview.tsx` sets the project-wide bar none of them may lower; a
 			// `play` property elsewhere belongs to a media element; `canvasElement` exists only inside a
 			// play; and `meta`/`Meta` are recognised by name, which is Storybook's convention and
@@ -486,10 +489,7 @@
 				// One story quietly exempting itself leaves the whole suite green.
 				"hephaestus/no-story-a11y-override": "error",
 				"hephaestus/no-within-canvas-element": "error",
-				"hephaestus/typed-story-meta": "error",
-				// `fn()` from `storybook/test` is a `Mock<(...args: any[]) => any>`: the value it returns is
-				// the harness's, not the story's, so every `onX: fn()` reads as value-returning.
-				"typescript/strict-void-return": "off"
+				"hephaestus/typed-story-meta": "error"
 			}
 		},
 		{

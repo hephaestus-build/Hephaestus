@@ -87,7 +87,7 @@ describe("InstanceLlmSettingsCard", () => {
 				settings={{ allowedEgressHosts: "api.openai.com", allowWorkspaceConnections: false }}
 				isLoading={false}
 				isSubmitting={false}
-				onSave={vi.fn<() => void>()}
+				onSave={vi.fn()}
 			/>,
 		);
 

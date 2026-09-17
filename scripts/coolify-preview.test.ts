@@ -49,7 +49,6 @@ const deploymentConfig: DeploymentConfig = {
 	readToken: "read-token",
 };
 
-/** A `sleep` for tests, which have no clock to wait on. */
 const noSleep: Dependencies["sleep"] = async () => {
 	/* nothing waits in a test */
 };

@@ -47,9 +47,9 @@ function WorkspaceSettingsPage() {
 		},
 	});
 
-	let settings: ReactNode;
+	let body: ReactNode;
 	if (settingsQuery.data) {
-		settings = (
+		body = (
 			<div className="space-y-4">
 				{settingsQuery.isError ? (
 					<QueryErrorAlert
@@ -76,7 +76,7 @@ function WorkspaceSettingsPage() {
 			</div>
 		);
 	} else if (settingsQuery.isError) {
-		settings = (
+		body = (
 			<QueryErrorAlert
 				error={settingsQuery.error}
 				title="Couldn't load instance settings"
@@ -86,7 +86,7 @@ function WorkspaceSettingsPage() {
 			/>
 		);
 	} else {
-		settings = <Skeleton className="h-52 w-full rounded-xl" />;
+		body = <Skeleton className="h-52 w-full rounded-xl" />;
 	}
 
 	return (
@@ -97,7 +97,7 @@ function WorkspaceSettingsPage() {
 				description="Instance-wide operator controls. These apply across every workspace and override workspace settings while active."
 			/>
 
-			{settings}
+			{body}
 		</PageLayout>
 	);
 }

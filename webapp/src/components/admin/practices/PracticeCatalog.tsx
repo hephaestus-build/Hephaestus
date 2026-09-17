@@ -151,7 +151,7 @@ export function PracticeCatalog({
 	const inheritedFromFor = (practice: Practice) =>
 		(hasText(practice.groupSlug) ? groupNames.get(practice.groupSlug) : null) ?? null;
 
-	let catalogContent;
+	let catalogContent: ReactNode;
 	if (library?.state.status === "error") {
 		catalogContent = (
 			<QueryErrorAlert

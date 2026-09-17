@@ -1,6 +1,6 @@
 import { format, subDays } from "date-fns";
 import { AlertCircle, History } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type { CreateReviewBackfillRunRequest, ReviewBackfillRun } from "@/api/types.gen";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -114,7 +114,7 @@ export function PracticeReviewBackfill({
 	const active = runs.find((run) => run.status === "RUNNING" || run.status === "PAUSED");
 	const history = runs.filter((run) => run.status === "COMPLETED" || run.status === "CANCELLED");
 
-	let currentRun;
+	let currentRun: ReactNode;
 	if (active) {
 		currentRun = <ActiveRunSection run={active} isUpdating={isUpdating} onCancel={onCancel} />;
 	} else if (pending) {
@@ -382,7 +382,7 @@ function ActiveRunSection({
 }
 
 function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoading: boolean }) {
-	let history;
+	let history: ReactNode;
 	if (isLoading) {
 		history = (
 			<div className="flex justify-center py-6">

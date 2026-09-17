@@ -11,19 +11,21 @@ import type { Attachment } from "@/lib/types";
 
 import { PreviewAttachment } from "./PreviewAttachment";
 
+export interface AttachmentUpload {
+	onFileUpload: (files: File[]) => Promise<(Attachment | undefined)[]>;
+	onAttachmentsChange: (attachments: Attachment[]) => void;
+}
+
 export interface MultimodalInputProps {
 	status: "ready" | "submitted" | "error";
 	onStop: () => void;
 	attachments: Attachment[];
-	// Both are absent on a surface that disables attachments.
-	onAttachmentsChange?: (attachments: Attachment[]) => void;
-	onFileUpload?: (files: File[]) => Promise<(Attachment | undefined)[]>;
+	attachmentUpload?: AttachmentUpload;
 	onSubmit: (data: { text: string; attachments: Attachment[] }) => void;
 	className?: string;
 	placeholder?: string;
 	initialInput?: string;
 	readonly?: boolean;
-	disableAttachments?: boolean;
 	isAtBottom?: boolean;
 	scrollToBottom?: () => void;
 	isCurrentVersion?: boolean;
@@ -33,14 +35,12 @@ export function MultimodalInput({
 	status,
 	onStop,
 	attachments,
-	onAttachmentsChange,
-	onFileUpload,
+	attachmentUpload,
 	onSubmit,
 	className,
 	placeholder = "Send a message...",
 	initialInput = "",
 	readonly = false,
-	disableAttachments = false,
 	isAtBottom = true,
 	scrollToBottom,
 	isCurrentVersion = true,
@@ -89,19 +89,19 @@ export function MultimodalInput({
 
 	const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
 		const files = [...(event.target.files ?? [])];
-		if (files.length === 0 || onFileUpload === undefined) {
+		if (files.length === 0 || attachmentUpload === undefined) {
 			return;
 		}
 
 		setUploadQueue(files.map((file) => file.name));
 
 		try {
-			const uploadedAttachments = await onFileUpload(files);
+			const uploadedAttachments = await attachmentUpload.onFileUpload(files);
 			const successfullyUploadedAttachments = uploadedAttachments.filter(
 				(attachment) => attachment !== undefined,
 			);
 
-			onAttachmentsChange?.([...attachments, ...successfullyUploadedAttachments]);
+			attachmentUpload.onAttachmentsChange([...attachments, ...successfullyUploadedAttachments]);
 		} catch {
 			// The queue empties either way, so without this the files vanish with no symptom.
 			toast.error("Could not attach those files. Please try again.");
@@ -145,7 +145,7 @@ export function MultimodalInput({
 				)}
 			</AnimatePresence>
 
-			{!disableAttachments && (
+			{attachmentUpload !== undefined && (
 				<input
 					type="file"
 					className="pointer-events-none fixed -top-4 -left-4 size-0.5 opacity-0"
@@ -218,7 +218,7 @@ export function MultimodalInput({
 
 				<div className="flex justify-between gap-2">
 					<div className="flex gap-2">
-						{!disableAttachments && (
+						{attachmentUpload !== undefined && (
 							<AttachmentsButton fileInputRef={fileInputRef} status={status} readonly={readonly} />
 						)}
 					</div>

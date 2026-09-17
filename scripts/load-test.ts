@@ -2,8 +2,8 @@ import { spawnSync } from "node:child_process";
 import { copyFile, glob, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
+import { isSet } from "./lib/env.ts";
 import { asRecord, asString, asStringArray, parseJson } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
@@ -50,7 +50,7 @@ export function configuration(scenario: string, env: NodeJS.ProcessEnv) {
 	];
 	for (const name of required) {
 		const value = env[name]?.trim();
-		if (value === undefined || value === "") {
+		if (!isSet(value)) {
 			throw new Error(`${name} is required`);
 		}
 	}
@@ -162,22 +162,9 @@ async function checkScenarios(root: string) {
 
 const cell = (value: string) => value.replaceAll("|", String.raw`\|`).replaceAll(/\r?\n/gu, " ");
 
-export function renderBaseline(summary: unknown, metadata: unknown, template: string) {
-	const metrics = asRecord(asRecord(summary, "summary").metrics, "metrics");
-	const run = asRecord(metadata, "run");
-	const config = asRecord(run.inputs, "inputs");
-	if (run.scenario !== "webhook-burst" && run.scenario !== "detection-mentor") {
-		throw new Error("Invalid run scenario");
-	}
-	// A recorded run stays renderable after the checkout moves its pin, so the image only has to prove
-	// it was digest-pinned; the document names the image the run actually used.
-	const image = asString(run.image, "image");
-	if (!/^grafana\/k6:[\w.-]+@sha256:[0-9a-f]{64}$/u.test(image)) {
-		throw new Error("Run must record a digest-pinned k6 image");
-	}
-	const pinned = image === k6Image ? "" : ` (this checkout pins ${k6Image})`;
+function assertValidRun(run: Record<string, unknown>): void {
 	if (!Number.isFinite(Date.parse(asString(run.startedAt, "startedAt")))) {
-		throw new TypeError("Invalid run timestamp");
+		throw new Error("Invalid run timestamp");
 	}
 	if (
 		run.exitCode !== null &&
@@ -185,12 +172,13 @@ export function renderBaseline(summary: unknown, metadata: unknown, template: st
 	) {
 		throw new Error("Invalid run exit code");
 	}
-	const options = asRecord(run.options, "options");
-	const expected = asRecord(options.thresholds, "options.thresholds");
-	const scenarios = asRecord(options.scenarios, "options.scenarios");
-	if (Object.keys(expected).length === 0 || Object.keys(scenarios).length === 0) {
-		throw new Error("Missing effective k6 options");
-	}
+}
+
+/** Every configured threshold must have a verdict in the summary, and nothing else may. */
+function assertThresholdEvidence(
+	expected: Record<string, unknown>,
+	metrics: Record<string, unknown>,
+): void {
 	for (const [name, expressions] of Object.entries(expected)) {
 		const metric = asRecord(metrics[name], `metrics.${name}`);
 		const actual = asRecord(metric.thresholds, `metrics.${name}.thresholds`);
@@ -203,7 +191,9 @@ export function renderBaseline(summary: unknown, metadata: unknown, template: st
 			throw new Error(`Missing or mismatched threshold evidence for ${name}`);
 		}
 	}
-	const recorded = gatewayLimits(run.scenario);
+}
+
+function assertRecordedInputs(config: Record<string, unknown>, recorded: readonly string[]): void {
 	for (const [key, value] of Object.entries(config)) {
 		if (![...inputs, ...recorded].includes(key) || secrets.has(key) || typeof value !== "string") {
 			throw new Error(`Invalid recorded input ${key}`);
@@ -218,8 +208,14 @@ export function renderBaseline(summary: unknown, metadata: unknown, template: st
 			throw new Error(`Missing gateway limit ${key}`);
 		}
 	}
+}
+
+function thresholdRows(
+	metrics: Record<string, unknown>,
+	expected: Record<string, unknown>,
+): { rows: string[]; failed: boolean } {
 	const rows: string[] = [];
-	let failed = run.exitCode !== 0;
+	let failed = false;
 	for (const [name, value] of Object.entries(metrics).toSorted(([a], [b]) => a.localeCompare(b))) {
 		const metric = asRecord(value, name);
 		if (metric.thresholds === undefined) {
@@ -240,18 +236,50 @@ export function renderBaseline(summary: unknown, metadata: unknown, template: st
 	if (rows.length === 0) {
 		throw new Error("Summary has no threshold evidence");
 	}
-	const values = Object.entries(metrics)
+	return { rows, failed };
+}
+
+function metricRows(metrics: Record<string, unknown>): string[] {
+	return Object.entries(metrics)
 		.toSorted(([a], [b]) => a.localeCompare(b))
 		.flatMap(([name, value]) =>
 			Object.entries(asRecord(asRecord(value, name).values, `metrics.${name}.values`)).map(
 				([key, number]) => {
 					if (typeof number !== "number" || !Number.isFinite(number)) {
-						throw new TypeError(`Invalid metric ${name}.${key}`);
+						throw new Error(`Invalid metric ${name}.${key}`);
 					}
 					return `| ${cell(name)} | ${cell(key)} | ${number} |`;
 				},
 			),
 		);
+}
+
+export function renderBaseline(summary: unknown, metadata: unknown, template: string) {
+	const metrics = asRecord(asRecord(summary, "summary").metrics, "metrics");
+	const run = asRecord(metadata, "run");
+	const config = asRecord(run.inputs, "inputs");
+	if (run.scenario !== "webhook-burst" && run.scenario !== "detection-mentor") {
+		throw new Error("Invalid run scenario");
+	}
+	// A recorded run stays renderable after the checkout moves its pin, so the image only has to prove
+	// it was digest-pinned; the document names the image the run actually used.
+	const image = asString(run.image, "image");
+	if (!/^grafana\/k6:[\w.-]+@sha256:[0-9a-f]{64}$/u.test(image)) {
+		throw new Error("Run must record a digest-pinned k6 image");
+	}
+	const pinned = image === k6Image ? "" : ` (this checkout pins ${k6Image})`;
+	assertValidRun(run);
+	const options = asRecord(run.options, "options");
+	const expected = asRecord(options.thresholds, "options.thresholds");
+	const scenarios = asRecord(options.scenarios, "options.scenarios");
+	if (Object.keys(expected).length === 0 || Object.keys(scenarios).length === 0) {
+		throw new Error("Missing effective k6 options");
+	}
+	assertThresholdEvidence(expected, metrics);
+	assertRecordedInputs(config, gatewayLimits(run.scenario));
+	const { rows, failed: thresholdFailed } = thresholdRows(metrics, expected);
+	const failed = run.exitCode !== 0 || thresholdFailed;
+	const values = metricRows(metrics);
 	const identity = Object.entries(config)
 		.map(([key, value]) => `| ${cell(key)} | ${cell(String(value))} |`)
 		.join("\n");
@@ -279,7 +307,7 @@ async function main() {
 		return;
 	}
 	if (command === "report") {
-		if (argument === undefined || argument === "") {
+		if (!isSet(argument)) {
 			throw new Error("Usage: report:load:baseline <run-directory>");
 		}
 		const directory = path.resolve(argument);
@@ -362,11 +390,6 @@ async function main() {
 	process.exitCode = exitCode;
 }
 
-const entrypoint = process.argv[1];
-if (
-	entrypoint !== undefined &&
-	entrypoint !== "" &&
-	import.meta.url === pathToFileURL(entrypoint).href
-) {
+if (import.meta.main) {
 	await main();
 }

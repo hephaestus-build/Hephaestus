@@ -12,8 +12,8 @@ function abort(reason) {
 }
 
 /**
- * @param {string} name - the environment variable the scenario cannot run without
- * @returns {string} its non-empty value
+ * @param {string} name
+ * @returns {string}
  */
 export function required(name) {
 	const value = __ENV[name];
@@ -24,9 +24,9 @@ export function required(name) {
 }
 
 /**
- * @param {string} name - the environment variable holding a positive integer
- * @param {number} fallback - the value when the variable is unset
- * @returns {number} the configured or fallback integer
+ * @param {string} name
+ * @param {number} fallback
+ * @returns {number}
  */
 export function integer(name, fallback) {
 	const raw = __ENV[name] ?? String(fallback);
@@ -52,9 +52,9 @@ export function authHeaders() {
 }
 
 /**
- * @param {Pick<import("k6/http").Response, "json">} response - the response whose body may be JSON
- * @param {string} field - the top-level field to read
- * @returns {import("k6").JSONValue | null} the field, or null when the body is not JSON
+ * @param {Pick<import("k6/http").Response, "json">} response
+ * @param {string} field
+ * @returns {import("k6").JSONValue | null}
  */
 export function jsonField(response, field) {
 	try {

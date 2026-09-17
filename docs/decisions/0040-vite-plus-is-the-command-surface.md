@@ -89,6 +89,5 @@ the gates cannot express.
 Supersedes the mechanism in the **Git hooks run through the Vite+ dispatcher** bullet of
 § Decision; the dispatcher, `.vite-hooks/` and the rejection of `vp staged` are unchanged.
 `prepare` runs `scripts/enable-hooks.ts`, which calls `vp config --no-agent --hooks-dir .vite-hooks`
-through the `vite-plus` binary the lockfile resolves; since #1843 (2026-09-05) it no longer reads
-or unsets `core.hooksPath` first. Outside CI it also prints the commit-signing hint when the
-checkout is not configured to sign.
+through the `vite-plus` binary the lockfile resolves and neither reads nor unsets `core.hooksPath`;
+outside CI it also prints the commit-signing hint when the checkout is not configured to sign.

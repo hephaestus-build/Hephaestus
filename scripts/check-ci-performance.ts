@@ -1,8 +1,8 @@
 import { appendFile, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 import { isRecord } from "./lib/json.ts";
+import { median } from "./lib/statistics.ts";
 import { type TestSummary, validateProfile } from "./summarize-test-results.ts";
 
 interface Metric {
@@ -26,16 +26,6 @@ const metrics: Metric[] = [
 		tolerance: 0.15,
 	},
 ];
-
-const median = (values: number[]): number => {
-	const sorted = values.toSorted((left, right) => left - right);
-	const middle = Math.floor(sorted.length / 2);
-	if (sorted.length === 0) {
-		return 0;
-	}
-	const upper = sorted[middle] ?? 0;
-	return sorted.length % 2 === 0 ? ((sorted[middle - 1] ?? 0) + upper) / 2 : upper;
-};
 
 const percentile = (values: number[], percentage: number): number => {
 	const sorted = values.toSorted((left, right) => left - right);
@@ -96,8 +86,8 @@ export function regressions(current: TestSummary, history: TestSummary[]): strin
 	}
 	for (const metric of metrics) {
 		const baselineValues = baselineRuns.map(metric.value);
-		const baseline = median(baselineValues);
-		const deviation = median(baselineValues.map((value) => Math.abs(value - baseline)));
+		const baseline = median(baselineValues) ?? 0;
+		const deviation = median(baselineValues.map((value) => Math.abs(value - baseline))) ?? 0;
 		const limit = baseline + Math.max(baseline * metric.tolerance, deviation * 3);
 		if (candidates.every((summary) => metric.value(summary) > limit)) {
 			failures.push(`${metric.name} exceeded variance limit ${limit.toFixed(1)} three times`);
@@ -191,6 +181,6 @@ async function main(): Promise<void> {
 	}
 }
 
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.main) {
 	await main();
 }

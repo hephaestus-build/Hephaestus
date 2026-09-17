@@ -81,7 +81,7 @@ import {
 import { stopSession } from "./pi-session-lifecycle.ts";
 import { forkSessions, reconnaissanceSeed } from "./pi-session-tree.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
-import { hasText } from "./pi-text.ts";
+import { hasText, isBlank } from "./pi-text.ts";
 
 function parseJson(text: string): unknown {
 	return JSON.parse(text);
@@ -1424,7 +1424,7 @@ function validateUnit(
 		}
 		return null;
 	}
-	if (!hasText(unit.title?.trim())) {
+	if (isBlank(unit.title)) {
 		return "A unit that is not a WITHHOLD needs a title; skipped.";
 	}
 	if (unit.action === "SUPERSEDE") {
@@ -1448,7 +1448,7 @@ function validateUnit(
 	if (unit.notes) {
 		return "Only IN_CHAT units may carry a notes block; skipped.";
 	}
-	if (!hasText(unit.nextStep?.trim())) {
+	if (isBlank(unit.nextStep)) {
 		return `${unit.channel} needs a nextStep; skipped.`;
 	}
 	if (unit.channel === "IN_APP") {
@@ -1461,17 +1461,17 @@ function validateInChatUnit(unit: FeedbackUnit): string | null {
 	if (hasText(unit.body) || hasText(unit.nextStep)) {
 		return "IN_CHAT takes notes{situation,capability,evidenceSummary,inConversationSignal}, not body/nextStep - nothing on this lane is read out; skipped.";
 	}
-	const { notes } = unit;
-	if (!hasText(notes?.situation?.trim())) {
+	const notes = unit.notes ?? {};
+	if (isBlank(notes.situation)) {
 		return "IN_CHAT needs notes.situation; skipped.";
 	}
-	if (!hasText(notes.capability?.trim())) {
+	if (isBlank(notes.capability)) {
 		return "IN_CHAT needs notes.capability; skipped.";
 	}
-	if (!hasText(notes.evidenceSummary?.trim())) {
+	if (isBlank(notes.evidenceSummary)) {
 		return "IN_CHAT needs notes.evidenceSummary; skipped.";
 	}
-	if (!hasText(notes.inConversationSignal?.trim())) {
+	if (isBlank(notes.inConversationSignal)) {
 		return "IN_CHAT needs notes.inConversationSignal; skipped.";
 	}
 	if (unit.placement) {
@@ -1484,13 +1484,14 @@ function validateInAppUnit(
 	unit: FeedbackUnit,
 	observationsById: ReadonlyMap<string, AdmittedObservation>,
 ): string | null {
-	if (!hasText(unit.body?.trim())) {
+	const body = unit.body ?? "";
+	if (isBlank(body)) {
 		return "IN_APP needs a body; skipped.";
 	}
 	if (unit.placement) {
 		return "Only IN_CONTEXT units may carry a placement; skipped.";
 	}
-	const normalizedBody = normalizeQuotedText(unit.body);
+	const normalizedBody = normalizeQuotedText(body);
 	const repeatsCurrentEvidence = unit.basedOn.some((id) =>
 		(observationsById.get(id)?.citations ?? []).some((citation) => {
 			const quote = normalizeQuotedText(optionalString(citation.quote) ?? "");

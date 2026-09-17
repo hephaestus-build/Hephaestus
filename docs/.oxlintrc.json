@@ -4,9 +4,8 @@
 	// The Docusaurus site adds to the repository base and the React layer; neither is repeated here.
 	"extends": ["../.oxlintrc.json", "../oxlint.react.jsonc"],
 
-	// Only the file-naming rule is enabled from the house plugin. The rest hold the SPA's own
-	// conventions — its Storybook stories, its Testing Library queries, its query keys, its clock —
-	// and a Docusaurus site is not held to them.
+	// `jsPlugins` does not travel through `extends` on the object path (`load-config.ts`), so the
+	// plugin the base's file-naming rule needs is named here.
 	"jsPlugins": ["../webapp/tools/oxlint/index.ts"],
 
 	// Kept in step with `tsconfig.json`'s `lib`.

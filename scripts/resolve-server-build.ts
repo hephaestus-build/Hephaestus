@@ -24,6 +24,55 @@ function id(value: unknown): number {
 	return value;
 }
 
+/** Whether a listed run is a successful merge-queue CI/CD run of `commit` in `repository`. */
+function isQueueRunOf(
+	run: Record<string, unknown>,
+	repository: string,
+	commit: string,
+	defaultBranch: string,
+): boolean {
+	return (
+		run.event === "merge_group" &&
+		run.status === "completed" &&
+		run.conclusion === "success" &&
+		run.head_sha === commit &&
+		run.path === ".github/workflows/cicd.yml" &&
+		asRecord(run.repository, "repository").full_name === repository &&
+		asRecord(run.head_repository, "head repository").full_name === repository &&
+		asString(run.head_branch, "head branch").startsWith(`gh-readonly-queue/${defaultBranch}/`)
+	);
+}
+
+/** The server build artifact of `runId`, bound to the run and commit it must have come from. */
+function serverBuildArtifact(
+	artifacts: readonly unknown[],
+	runId: number,
+	commit: string,
+	repositoryId: number,
+): number | undefined {
+	for (const candidate of artifacts) {
+		const artifact = asRecord(candidate, "artifact");
+		if (
+			artifact.name !== `server-build-${runId}` ||
+			artifact.expired !== false ||
+			!/^sha256:[a-f\d]{64}$/u.test(asString(artifact.digest, "artifact digest"))
+		) {
+			continue;
+		}
+		const origin = asRecord(artifact.workflow_run, "artifact workflow run");
+		if (
+			origin.id !== runId ||
+			origin.head_sha !== commit ||
+			origin.repository_id !== repositoryId ||
+			origin.head_repository_id !== repositoryId
+		) {
+			continue;
+		}
+		return id(artifact.id);
+	}
+	return undefined;
+}
+
 export async function resolveServerBuild(
 	repository: string,
 	commit: string,
@@ -42,16 +91,7 @@ export async function resolveServerBuild(
 	);
 	for (const value of asArray(listing.workflow_runs, "workflow runs")) {
 		const run = asRecord(value, "workflow run");
-		if (
-			run.event !== "merge_group" ||
-			run.status !== "completed" ||
-			run.conclusion !== "success" ||
-			run.head_sha !== commit ||
-			run.path !== ".github/workflows/cicd.yml" ||
-			asRecord(run.repository, "repository").full_name !== repository ||
-			asRecord(run.head_repository, "head repository").full_name !== repository ||
-			!asString(run.head_branch, "head branch").startsWith(`gh-readonly-queue/${defaultBranch}/`)
-		) {
+		if (!isQueueRunOf(run, repository, commit, defaultBranch)) {
 			continue;
 		}
 		const runId = id(run.id);
@@ -80,25 +120,9 @@ export async function resolveServerBuild(
 		const artifacts = artifactPages.flatMap((page) =>
 			asArray(asRecord(page, "artifact page").artifacts, "artifacts"),
 		);
-		for (const candidate of artifacts) {
-			const artifact = asRecord(candidate, "artifact");
-			if (
-				artifact.name !== `server-build-${runId}` ||
-				artifact.expired !== false ||
-				!/^sha256:[a-f\d]{64}$/u.test(asString(artifact.digest, "artifact digest"))
-			) {
-				continue;
-			}
-			const origin = asRecord(artifact.workflow_run, "artifact workflow run");
-			if (
-				origin.id !== runId ||
-				origin.head_sha !== commit ||
-				origin.repository_id !== repositoryId ||
-				origin.head_repository_id !== repositoryId
-			) {
-				continue;
-			}
-			return { runId, artifactId: id(artifact.id) };
+		const artifactId = serverBuildArtifact(artifacts, runId, commit, repositoryId);
+		if (artifactId !== undefined) {
+			return { runId, artifactId };
 		}
 	}
 	return undefined;

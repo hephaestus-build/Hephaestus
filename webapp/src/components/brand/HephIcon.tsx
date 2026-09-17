@@ -29,8 +29,7 @@ export function HephIcon({
 	return (
 		<svg
 			className={cn(styles.icon, animated && styles.animated, className)}
-			height={size}
-			width={size}
+			style={{ "--heph-size": `${size}px` }}
 			viewBox={`-${pad} -${pad} ${24 + pad * 2} ${24 + pad * 2}`}
 			fill="none"
 			stroke="currentColor"

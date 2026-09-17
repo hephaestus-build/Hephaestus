@@ -1,6 +1,6 @@
 # ADR 0006: LLM proxy stays on the coordinator (BYO trust model)
 
-**Status:** Accepted (amended 2026-07-20, 2026-07-28 and 2026-09-03 — see the updates below); placement superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md)
+**Status:** Accepted (amended 2026-07-20 #1368, 2026-07-28 #1400 — extended to the server-side OpenAI-compatible model catalog, 2026-09-03 #1719 — proxy placement superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md))
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 

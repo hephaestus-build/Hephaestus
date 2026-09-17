@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { Attachment, ChatMessage } from "@/lib/types";
 
 import { Messages } from "./Messages";
-import { MultimodalInput } from "./MultimodalInput";
+import { type AttachmentUpload, MultimodalInput } from "./MultimodalInput";
 
 export interface ChatProps {
 	messages: ChatMessage[];
@@ -21,15 +21,12 @@ export interface ChatProps {
 	attachments: Attachment[];
 	onMessageSubmit: (data: { text: string; attachments: Attachment[] }) => void;
 	onStop: () => void;
-	// Both are absent on a surface that disables attachments.
-	onFileUpload?: (files: File[]) => Promise<Attachment[]>;
-	onAttachmentsChange?: (attachments: Attachment[]) => void;
+	attachmentUpload?: AttachmentUpload;
 	onMessageEdit?: (messageId: string, content: string) => void;
 	onCopy?: (content: string) => void;
 	onVote?: (messageId: string, isUpvote: boolean) => void;
 	onReload?: () => void;
 	inputPlaceholder?: string;
-	disableAttachments?: boolean;
 	className?: string;
 }
 
@@ -43,14 +40,12 @@ export function Chat({
 	attachments,
 	onMessageSubmit,
 	onStop,
-	onFileUpload,
-	onAttachmentsChange,
+	attachmentUpload,
 	onMessageEdit,
 	onCopy,
 	onVote,
 	onReload,
 	inputPlaceholder = "Send a message...",
-	disableAttachments = false,
 	className,
 }: ChatProps) {
 	const { containerRef, endRef, isAtBottom, scrollToBottom } = useScrollToBottom();
@@ -100,12 +95,10 @@ export function Chat({
 								status={status === "streaming" ? "submitted" : status}
 								onStop={onStop}
 								attachments={attachments}
-								onAttachmentsChange={onAttachmentsChange}
-								onFileUpload={onFileUpload}
+								attachmentUpload={attachmentUpload}
 								onSubmit={onMessageSubmit}
 								placeholder={inputPlaceholder}
 								readonly={readonly}
-								disableAttachments={disableAttachments}
 								isAtBottom={actualIsAtBottom}
 								scrollToBottom={actualScrollToBottom}
 								isCurrentVersion

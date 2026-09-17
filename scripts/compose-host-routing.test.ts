@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { isSet } from "./lib/env.ts";
 
 const STACKS = ["app", "core", "proxy"] as const;
 
@@ -9,9 +10,7 @@ function labels(stack: (typeof STACKS)[number], key: string): { router: string; 
 	const file = readFileSync(new URL(`../docker/compose.${stack}.yaml`, import.meta.url), "utf8");
 	const pattern = new RegExp(`traefik\\.http\\.routers\\.([a-z0-9-]+)\\.${key}=(.*?)"?$`, "gmu");
 	return [...file.matchAll(pattern)].flatMap(([, router, value]) =>
-		router !== undefined && value !== undefined && value !== ""
-			? [{ router: `${stack}/${router}`, value }]
-			: [],
+		router !== undefined && isSet(value) ? [{ router: `${stack}/${router}`, value }] : [],
 	);
 }
 

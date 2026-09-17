@@ -2,7 +2,6 @@ import type { UserTeams as ApiUserTeams } from "@/api/types.gen";
 
 // Extended interface for UserTeams that includes a user property for the components
 export interface ExtendedUserTeams extends Omit<ApiUserTeams, "teams"> {
-	// Preserve the original teams array type
 	teams: ApiUserTeams["teams"];
 	hidden: boolean;
 	user: {

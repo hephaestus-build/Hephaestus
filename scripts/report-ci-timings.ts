@@ -1,3 +1,4 @@
+import { isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
 
 function timestamp(value: unknown, label: string): number {
@@ -75,7 +76,7 @@ export function summarizeCiTimings(runValue: unknown, jobsValue: unknown) {
 
 if (import.meta.main) {
 	const [runFile, jobsFile] = process.argv.slice(2);
-	if (runFile === undefined || runFile === "" || jobsFile === undefined || jobsFile === "") {
+	if (!isSet(runFile) || !isSet(jobsFile)) {
 		throw new Error("Usage: report:ci-timings <run.json> <jobs.json>");
 	}
 	const [run, jobs] = await Promise.all([readJsonFile(runFile), readJsonFile(jobsFile)]);

@@ -52,7 +52,6 @@ function formatTimeRemaining(leaderboardEnd: string | undefined, now: Date): str
 	return `${diffSeconds}s`;
 }
 
-/** Scroll to the user's rank in the leaderboard table. */
 function scrollToRank(rank: number) {
 	const element = document.getElementById(`rank-${rank}`);
 	if (element) {

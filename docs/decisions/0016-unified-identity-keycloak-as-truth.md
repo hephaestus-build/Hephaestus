@@ -81,17 +81,20 @@ The partial unique index is the correct uniqueness contract for the seeded colum
 
 ## Update — 2026-09-17
 
-Status corrected to superseded. [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md) removed
-Keycloak, so nothing in § Decision beyond the Stage A deletions is what the code does:
+Status corrected to superseded: [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md)
+removed Keycloak, so nothing in § Decision beyond the Stage A deletions is what the code does.
 
 - `User.keycloak_subject` and `uq_user_keycloak_subject` do not exist in
-  `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.sql`; the only
-  `keycloak` reference left in `server/` is `NoKeycloakImportTest`, which forbids the import.
-- The Hephaestus principal is `core.auth.domain.Account`; the stable join key is
-  `identity_link (provider_id, subject)` (`core.auth.domain.IdentityLink`,
-  `IdentityLinkRepository.findActiveByProviderSubject`). Stage B never shipped as described.
-- The SCM `User` (`integration.scm.domain.user.User`) remains the attribution row and, contrary to
-  ADR 0017's data-model split, is still what `workspace_membership.user_id` references —
-  [ADR 0019](0019-workspace-membership-keyed-on-account.md) (Proposed) owns that gap.
-- `webapp/src/integrations/auth/keycloak.ts` is gone; the `1780313973588_changelog.xml` this ADR edited
-  is archived at `docs/db/archive/v0.77.4/changelog/`.
+  `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.sql`.
+  `NoKeycloakImportTest` forbids the `org.keycloak` import, and the other `keycloak` mentions under
+  `server/application/src` are Javadoc naming what the Spring-native code replaced or mirrors
+  (`core/auth/package-info.java`, `VerifiedEmailResolver`, `GitHubEmailOAuth2UserService`,
+  `AccountFeature`, `AccountFeatureRoleChecker`, `AccountControllerIntegrationTest`).
+- The Hephaestus principal is `core.auth.domain.Account` and the join key is `identity_link`
+  (`core.auth.domain.IdentityLink`, `IdentityLinkRepository.findActiveByProviderSubject`);
+  ADR 0017 § Update 2026-09-17 names its columns. Stage B is not what shipped.
+- The SCM `User` (`integration.scm.domain.user.User`) is the attribution row and what
+  `workspace_membership.user_id` references; ADR 0017 § Update 2026-09-17 records that gap and
+  [ADR 0019](0019-workspace-membership-keyed-on-account.md) (Proposed) owns it.
+- `webapp/src/integrations/auth/keycloak.ts` does not exist; `1780313973588_changelog.xml` is
+  archived ([ADR 0014](0014-per-row-aes-gcm-aad-binding.md) § Update 2026-09-17).

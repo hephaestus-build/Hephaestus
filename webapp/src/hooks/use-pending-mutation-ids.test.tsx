@@ -64,14 +64,14 @@ function Harness({ releaseFast }: { releaseFast: Promise<void> }) {
 
 function renderHarness() {
 	const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-	const fast = deferred<undefined>();
+	const fast = deferred();
 	render(
 		<QueryClientProvider client={client}>
 			<Harness releaseFast={fast.promise} />
 		</QueryClientProvider>,
 	);
 	return () => {
-		fast.resolve(undefined);
+		fast.resolve();
 	};
 }
 

@@ -27,9 +27,9 @@ SCM `User` is the authoritative person row, and Keycloak `sub` is persisted on
 
 ## Update — 2026-09-17
 
-Corrects the last sentence of § Outcome. The model ADR 0016 shipped was itself replaced by
-[ADR 0017](0017-replace-keycloak-with-spring-native-auth.md): Keycloak is gone, `User.keycloak_subject`
-does not exist, and the person row is `core.auth.domain.Account` joined to provider identities through
-`identity_link (provider_id, subject)`. The deletion this ADR records still holds — no
-`integration.identity` layer of that shape exists; today's `integration/identity/connect/` holds only
-`RegistrationToGitProviderResolver`.
+Corrects the last sentence of § Outcome. The model ADR 0016 shipped is itself superseded by
+[ADR 0017](0017-replace-keycloak-with-spring-native-auth.md): the person row is
+`core.auth.domain.Account`, joined to provider identities through `identity_link`, whose key
+ADR 0017 § Update 2026-09-17 names. The deletion this ADR records holds: `integration/identity/`
+carries no layer of that shape, only the `connect/` package
+[ADR 0015](0015-unified-integration-framework.md) § Update 2026-09-17 lists.

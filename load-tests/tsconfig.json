@@ -1,7 +1,8 @@
 {
 	// Type information for oxlint's type-aware rules over the k6 scenarios, which are JavaScript run
-	// by k6, not Node: `globals.d.ts` declares the one global k6 provides beyond `@types/k6`. Nothing
-	// compiles from here (`noEmit`); `test:load:syntax` runs the scenarios through k6 itself.
+	// by k6, not Node: `globals.d.ts` declares the one k6 global these scenarios read that `@types/k6`
+	// does not declare. Nothing compiles from here (`noEmit`); `test:load:syntax` runs the scenarios
+	// through k6 itself.
 	"compilerOptions": {
 		"allowJs": true,
 		"checkJs": true,

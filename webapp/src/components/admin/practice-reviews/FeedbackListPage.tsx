@@ -38,11 +38,14 @@ export function FeedbackListPage({
 	const hasFilter = hasFeedbackFilter(search);
 	const reset = () => onSearchChange(clearedFeedbackFilters());
 	const patchFilter = (patch: Partial<FeedbackSearch>) => onSearchChange({ ...patch, page: 0 });
-	let resultsState: FeedbackResultsState = { status: "ready", feedback: rows };
-	if (isLoading) {
-		resultsState = { status: "loading" };
-	} else if (rows.length === 0) {
-		resultsState = hasFilter
+	function resultsState(): FeedbackResultsState {
+		if (isLoading) {
+			return { status: "loading" };
+		}
+		if (rows.length > 0) {
+			return { status: "ready", feedback: rows };
+		}
+		return hasFilter
 			? { status: "empty", filtered: true, onClearFilters: reset }
 			: { status: "empty", filtered: false };
 	}
@@ -59,7 +62,7 @@ export function FeedbackListPage({
 				recipientName={filteredRecipient?.name ?? filteredRecipient?.login}
 			/>
 			{error == null ? (
-				<FeedbackResults workspaceSlug={workspaceSlug} state={resultsState} />
+				<FeedbackResults workspaceSlug={workspaceSlug} state={resultsState()} />
 			) : (
 				<QueryErrorAlert error={error} title="Couldn't load feedback" onRetry={onRetry} />
 			)}

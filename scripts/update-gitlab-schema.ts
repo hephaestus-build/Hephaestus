@@ -16,6 +16,7 @@ import {
 	printSchema,
 } from "graphql";
 
+import { isSet } from "./lib/env.ts";
 import { isRecord, parseJson } from "./lib/json.ts";
 
 const SCHEMA_DIR = path.resolve(
@@ -72,7 +73,7 @@ Options:
 
 	for (let i = 0; i < args.length; i += 1) {
 		const nextArg = args[i + 1]?.trim();
-		if (nextArg === undefined || nextArg === "") {
+		if (!isSet(nextArg)) {
 			continue;
 		}
 		if (args[i] === "--url") {
