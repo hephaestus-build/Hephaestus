@@ -73,7 +73,11 @@ type Story = StoryObj<typeof meta>;
 /**
  * Default empty state.
  */
-export const Default: Story = {};
+export const Default: Story = {
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Attach a file" })).toBeVisible();
+	},
+};
 
 /**
  * Input with some initial text.

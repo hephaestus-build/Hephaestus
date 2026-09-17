@@ -29,6 +29,8 @@ const MAX_CONTEXT = 20;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_LINE_LENGTH = 240;
 const MAX_OUTPUT_BYTES = 50 * 1024;
+// Bounds the block list held before the byte cut; the `limit` parameter is the model's, this is not.
+const MAX_LIMIT = 1000;
 /** Never evidence, at any depth. */
 const SKIPPED_ANYWHERE = new Set(["node_modules", ".git"]);
 /**
@@ -206,7 +208,7 @@ function searchOptions(params: GrepParams): {
 		params.context !== undefined && params.context > 0
 			? Math.min(MAX_CONTEXT, Math.floor(params.context))
 			: 0;
-	const limit = Math.max(1, params.limit ?? DEFAULT_LIMIT);
+	const limit = Math.min(MAX_LIMIT, Math.max(1, params.limit ?? DEFAULT_LIMIT));
 	return { globMatcher, context, limit };
 }
 
@@ -225,7 +227,6 @@ function readSearchableLines(file: string): string[] | null {
 }
 
 interface FileMatches {
-	blocks: string[];
 	matches: number;
 	/** Whether a line was left unexamined once `remaining` matches had been found. */
 	truncated: boolean;
@@ -238,13 +239,13 @@ function matchLines(
 	matcher: RegExp,
 	context: number,
 	remaining: number,
+	blocks: string[],
 ): FileMatches {
-	const blocks: string[] = [];
 	let matches = 0;
 	let linesTruncated = false;
 	for (let index = 0; index < lines.length; index += 1) {
 		if (matches >= remaining) {
-			return { blocks, matches, truncated: true, linesTruncated };
+			return { matches, truncated: true, linesTruncated };
 		}
 		const line = lines[index]?.replaceAll("\r", "") ?? "";
 		matcher.lastIndex = 0;
@@ -256,7 +257,7 @@ function matchLines(
 		blocks.push(...match.lines);
 		linesTruncated ||= match.truncated;
 	}
-	return { blocks, matches, truncated: false, linesTruncated };
+	return { matches, truncated: false, linesTruncated };
 }
 
 interface SearchOutcome {
@@ -295,7 +296,6 @@ function renderSearch(outcome: SearchOutcome): { text: string; details: GrepDeta
 	return { text, details: { matches, truncated } };
 }
 
-/** Searches under `cwd` and returns the SDK grep tool's text output. Pure apart from reading files. */
 export function searchFiles(
 	cwd: string,
 	params: GrepParams,
@@ -317,9 +317,7 @@ export function searchFiles(
 		return noMatches(listed.error);
 	}
 
-	// One entry per file, flattened at the end: spreading a file's blocks into `push` is bounded by
-	// the engine's argument limit, which a generous `limit` against a dense file exceeds.
-	const blocks: string[][] = [];
+	const blocks: string[] = [];
 	let matches = 0;
 	let truncated = false;
 	let linesTruncated = false;
@@ -343,20 +341,12 @@ export function searchFiles(
 		if (lines === null) {
 			continue;
 		}
-		const found = matchLines(shown, lines, matcher, context, limit - matches);
-		blocks.push(found.blocks);
+		const found = matchLines(shown, lines, matcher, context, limit - matches, blocks);
 		matches += found.matches;
 		truncated ||= found.truncated;
 		linesTruncated ||= found.linesTruncated;
 	}
-	return renderSearch({
-		blocks: blocks.flat(),
-		matches,
-		limit,
-		aborted,
-		truncated,
-		linesTruncated,
-	});
+	return renderSearch({ blocks, matches, limit, aborted, truncated, linesTruncated });
 }
 
 /** The model's arguments arrive untyped; anything of the wrong shape is ignored rather than trusted. */

@@ -1,6 +1,6 @@
 # ADR 0020: Context Fabric — everything is an integration, only practice review and mentor are native
 
-**Status:** Accepted (amended 2026-08-04 #1430, 2026-08-30 #1636 — evidence storage superseded by [ADR 0039](0039-git-and-postgresql-own-evidence.md); 2026-09-03 #1719 — context mechanism superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-17 — shipped slice corrected, revisit trigger §9 recorded)
+**Status:** Accepted (amended 2026-08-04 #1430 — artifact-source contract shipped; 2026-08-30 #1636 — filesystem evidence store superseded by [ADR 0039](0039-git-and-postgresql-own-evidence.md); 2026-09-03 #1719 — filesystem layout superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-17 — shipped slice corrected against the code)
 **Date:** 2026-06-12
 **Authors:** Hephaestus maintainers
 **Builds on:** [ADR 0015](0015-unified-integration-framework.md) (the integration framework and `Connection` aggregate), [ADR 0004](0004-sql-layer-tenancy-via-statement-inspector.md) (SQL-layer tenancy), [ADR 0014](0014-per-row-aes-gcm-aad-binding.md) (per-row AAD), [ADR 0007](0007-sandbox-spi-shape.md) (the agent sandbox / `ContentSource` seam)

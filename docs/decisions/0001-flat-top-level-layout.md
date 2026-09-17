@@ -68,6 +68,6 @@ Corrects § Decision and § Consequences on where the code lives and what is shi
   `docker/` are build contexts, not top-level siblings.
 - The `generate:api:application-server` script is `generate:api:specs` and `generate:api:client`
   (`vite.config.ts`).
-- The image is `ghcr.io/hephaestus-build/application-server`, selected by the release lock
-  ([ADR 0034](0034-signed-release-image-lock.md)); the Compose service names `application-server` and
-  `webhook-server` stand (`docker/compose.app.yaml`, `docker/compose.core.yaml`).
+- The image name is corrected in [ADR 0008](0008-webhook-runtime-role.md) § Update 2026-09-17; the
+  Compose service names `application-server` and `webhook-server` stand (`docker/compose.app.yaml`,
+  `docker/compose.core.yaml`).

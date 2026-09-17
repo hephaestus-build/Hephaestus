@@ -1,6 +1,7 @@
 .icon {
 	--mentor-shadow-opacity: 0.08;
 	--mentor-blush-opacity: 0.25;
+	/* Owned here, not by a utility: a container's [&_svg]:size-4 outranks a utility size, not this rule (`webapp/AGENTS.md` § Styling). */
 	width: var(--heph-size);
 	height: var(--heph-size);
 }

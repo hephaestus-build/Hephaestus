@@ -77,7 +77,7 @@ export function WorkspaceLlmUsagePage({
 
 function UsageSkeleton() {
 	return (
-		<>
+		<div className="space-y-6" aria-busy="true">
 			<div className="grid gap-4 md:grid-cols-2">
 				{["shared", "provider"].map((slot) => (
 					<Card key={slot}>
@@ -99,6 +99,6 @@ function UsageSkeleton() {
 					<LlmUsageByJobTypeTable />
 				</CardContent>
 			</Card>
-		</>
+		</div>
 	);
 }

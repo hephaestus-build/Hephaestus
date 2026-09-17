@@ -4,8 +4,8 @@
 	// The Docusaurus site adds to the repository base and the React layer; neither is repeated here.
 	"extends": ["../.oxlintrc.json", "../oxlint.react.jsonc"],
 
-	// `jsPlugins` does not travel through `extends` on the object path (`load-config.ts`), so the
-	// plugin the base's file-naming rule needs is named here.
+	// Named here because `load-config.ts` drops a base's `jsPlugins` on the object path (`AGENTS.md`
+	// § Lint and format).
 	"jsPlugins": ["../webapp/tools/oxlint/index.ts"],
 
 	// Kept in step with `tsconfig.json`'s `lib`.

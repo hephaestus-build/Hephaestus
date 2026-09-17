@@ -1,7 +1,6 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 
-	// Extends the base and the React layer; only this tree's additions and differences live here.
 	"extends": ["../.oxlintrc.json", "../oxlint.react.jsonc"],
 
 	"plugins": ["vitest"],
@@ -159,7 +158,7 @@
 		// Reads `.catch` by name, so zod's `.catch(undefined)` on every search-param schema is reported
 		// as a promise chain.
 		"promise/prefer-await-to-then": "off",
-		// Cyclomatic complexity counts every `&&`, `??` and `?.` in JSX, so at the base's 20 it grades
+		// Cyclomatic complexity counts every `&&`, `??` and `?.` in JSX, so at the default 20 it grades
 		// how many optional props a page has. Forty is the line between that and a function doing
 		// several components' work.
 		"complexity": ["error", { "max": 40 }],

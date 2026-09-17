@@ -70,12 +70,7 @@ interface PackageInventory {
 	keys: Set<string>;
 }
 
-function spdxInventory(
-	spdxInput: unknown,
-	repository: string,
-	digest: string,
-	reference: string,
-): PackageInventory {
+function spdxInventory(spdxInput: unknown, repository: string, digest: string): PackageInventory {
 	const spdx = object(spdxInput, "SPDX SBOM");
 	if (spdx.spdxVersion !== "SPDX-2.3" || spdx.dataLicense !== "CC0-1.0") {
 		throw new Error("invalid SPDX document metadata");
@@ -110,7 +105,7 @@ function spdxInventory(
 		canonicalRepository(text(container.name, "SPDX container name")) !== repository ||
 		container.versionInfo !== digest
 	) {
-		throw new Error(`SPDX document is not bound to ${reference}`);
+		throw new Error(`SPDX document is not bound to ${repository}@${digest}`);
 	}
 	return { purls, keys };
 }
@@ -119,7 +114,6 @@ function cycloneDxInventory(
 	cycloneDxInput: unknown,
 	repository: string,
 	digest: string,
-	reference: string,
 ): PackageInventory {
 	const cycloneDx = object(cycloneDxInput, "CycloneDX SBOM");
 	if (cycloneDx.bomFormat !== "CycloneDX") {
@@ -135,7 +129,7 @@ function cycloneDxInventory(
 		canonicalRepository(text(subject.name, "CycloneDX component name")) !== repository ||
 		subject.version !== digest
 	) {
-		throw new Error(`CycloneDX document is not bound to ${reference}`);
+		throw new Error(`CycloneDX document is not bound to ${repository}@${digest}`);
 	}
 	const purls = new Set<string>();
 	const keys = new Set<string>();
@@ -153,14 +147,14 @@ function cycloneDxInventory(
 
 interface SyftBinding {
 	repository: string;
-	reference: string;
 	digest: string;
 	os: string;
 	architecture: string;
 }
 
 function assertSyftSource(syft: JsonObject, binding: SyftBinding): void {
-	const { repository, reference, digest, os, architecture } = binding;
+	const { repository, digest, os, architecture } = binding;
+	const reference = `${repository}@${digest}`;
 	const source = object(syft.source, "Syft source");
 	const metadata = object(source.metadata, "Syft source metadata");
 	if (source.type !== "image") {
@@ -258,10 +252,9 @@ export function validateReleaseSbom(
 		throw new Error("platform must be linux/<architecture>");
 	}
 	const repository = canonicalRepository(text(subject.repository, "subject repository"));
-	const reference = `${repository}@${digest}`;
 
 	const syft = object(syftInput, "Syft SBOM");
-	assertSyftSource(syft, { repository, reference, digest, os, architecture });
+	assertSyftSource(syft, { repository, digest, os, architecture });
 
 	const artifacts = array(syft.artifacts, "Syft artifacts");
 	if (artifacts.length === 0) {
@@ -269,8 +262,8 @@ export function validateReleaseSbom(
 	}
 	const { expectedPurls, missingLicenses } = syftArtifactInventory(artifacts);
 
-	const spdx = spdxInventory(spdxInput, repository, digest, reference);
-	const cycloneDx = cycloneDxInventory(cycloneDxInput, repository, digest, reference);
+	const spdx = spdxInventory(spdxInput, repository, digest);
+	const cycloneDx = cycloneDxInventory(cycloneDxInput, repository, digest);
 	assertDerivedInventoriesCover(artifacts, spdx, cycloneDx);
 
 	return {

@@ -86,15 +86,12 @@ removed Keycloak, so nothing in § Decision beyond the Stage A deletions is what
 
 - `User.keycloak_subject` and `uq_user_keycloak_subject` do not exist in
   `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.sql`.
-  `NoKeycloakImportTest` forbids the `org.keycloak` import, and the other `keycloak` mentions under
-  `server/application/src` are Javadoc naming what the Spring-native code replaced or mirrors
-  (`core/auth/package-info.java`, `VerifiedEmailResolver`, `GitHubEmailOAuth2UserService`,
-  `AccountFeature`, `AccountFeatureRoleChecker`, `AccountControllerIntegrationTest`).
-- The Hephaestus principal is `core.auth.domain.Account` and the join key is `identity_link`
-  (`core.auth.domain.IdentityLink`, `IdentityLinkRepository.findActiveByProviderSubject`);
-  ADR 0017 § Update 2026-09-17 names its columns. Stage B is not what shipped.
+  `NoKeycloakImportTest` forbids the `org.keycloak` import; the remaining mentions under
+  `server/application/src` are Javadoc naming what the Spring-native code replaced.
+- The Hephaestus principal is `core.auth.domain.Account`; ADR 0017 § Update 2026-09-17 names the
+  join key. Stage B is not what shipped.
 - The SCM `User` (`integration.scm.domain.user.User`) is the attribution row and what
-  `workspace_membership.user_id` references; ADR 0017 § Update 2026-09-17 records that gap and
-  [ADR 0019](0019-workspace-membership-keyed-on-account.md) (Proposed) owns it.
+  `workspace_membership` references — ADR 0017 § Update 2026-09-17;
+  [ADR 0019](0019-workspace-membership-keyed-on-account.md) (Proposed) owns the re-key.
 - `webapp/src/integrations/auth/keycloak.ts` does not exist; `1780313973588_changelog.xml` is
   archived ([ADR 0014](0014-per-row-aes-gcm-aad-binding.md) § Update 2026-09-17).

@@ -1,5 +1,5 @@
-import { isSet, requiredEnv } from "./lib/env.ts";
 // Version-PR trigger contract: docs/contributor/ci-cd.mdx.
+import { isSet, requiredEnv } from "./lib/env.ts";
 import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 

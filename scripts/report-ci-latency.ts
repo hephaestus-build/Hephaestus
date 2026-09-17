@@ -3,7 +3,7 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { versionBranch } from "./dispatch-version-pr-ci.ts";
 import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
-import { median } from "./lib/statistics.ts";
+import { median, percentile } from "./lib/statistics.ts";
 import { summarizeCiTimings } from "./report-ci-timings.ts";
 
 const WINDOW_DAYS = 28;
@@ -50,9 +50,8 @@ export function latencyBudget(values: number[]) {
 	if (values.some((value) => !Number.isFinite(value) || value < 0)) {
 		throw new Error("Verdict durations must be finite and nonnegative");
 	}
-	const sorted = values.toSorted((a, b) => a - b);
-	const p50 = median(sorted);
-	const p90 = sorted[Math.ceil(sorted.length * 0.9) - 1] ?? null;
+	const p50 = median(values);
+	const p90 = percentile(values, 0.9);
 	let status: "insufficient-data" | "within-budget" | "exceeded";
 	if (values.length < 10) {
 		status = "insufficient-data";

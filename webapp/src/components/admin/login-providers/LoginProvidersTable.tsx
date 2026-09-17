@@ -1,6 +1,5 @@
 import { Copy, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import type { LoginProviderView } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -37,6 +36,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { copyToClipboard } from "@/lib/clipboard";
 import { getProviderLabel } from "@/lib/provider/provider-labels";
 
 interface LoginProvidersTableProps {
@@ -56,15 +56,6 @@ interface LoginProvidersTableProps {
 }
 
 const SKELETON_ROWS = ["a", "b", "c"];
-
-async function copyRedirect(uri: string) {
-	try {
-		await navigator.clipboard.writeText(uri);
-		toast.success("Redirect URI copied");
-	} catch {
-		toast.error("Could not copy to clipboard");
-	}
-}
 
 export function LoginProvidersTable({
 	providers,
@@ -175,9 +166,9 @@ export function LoginProvidersTable({
 													<InputGroupButton
 														size="icon-xs"
 														aria-label={`Copy redirect URI for ${provider.displayName}`}
-														onClick={() => {
-															void copyRedirect(provider.redirectUri);
-														}}
+														onClick={() =>
+															copyToClipboard(provider.redirectUri, "Redirect URI copied")
+														}
 													>
 														<Copy aria-hidden />
 													</InputGroupButton>

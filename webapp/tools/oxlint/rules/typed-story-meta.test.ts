@@ -21,7 +21,7 @@ ruleTester.run("typed-story-meta", typedStoryMeta, {
 		// A gallery meta names no component, so there is no `typeof meta` for a story to subtract from.
 		"const meta = { args: { size: 'sm' } } satisfies Meta<typeof BronzeIcon>; export const Bronze: StoryObj<typeof BronzeIcon> = {};",
 		"type Story = StoryObj<typeof Button>;",
-		// A story with its own `render` may draw a sibling of the meta's component.
+		// A story whose `render` takes no `args` passes a sibling its props where `tsc` checks them.
 		`${componentMeta} export const Loading: StoryObj<typeof ThinkingMessage> = { render: () => <ThinkingMessage /> };`,
 		"const meta: StoryObj = { component: Button };",
 		// An untyped object that is not a `meta` belongs to whoever declared it.
@@ -83,6 +83,12 @@ ruleTester.run("typed-story-meta", typedStoryMeta, {
 		},
 		{
 			code: `${componentMeta} export const Primary: StoryObj<typeof Button> = { args: {} };`,
+			errors: [{ messageId: "storyOfComponent" }],
+		},
+		{
+			// `args` beside a `render` reach the sibling as all-optional props, so the `render` earns
+			// no exemption.
+			code: `${componentMeta} export const Loading: StoryObj<typeof ThinkingMessage> = { render: (args) => <ThinkingMessage {...args} />, args: {} };`,
 			errors: [{ messageId: "storyOfComponent" }],
 		},
 		{

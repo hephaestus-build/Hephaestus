@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { CheckIcon, LibraryIcon, LockIcon } from "lucide-react";
-import { type ReactNode, useId, useRef, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 
 import { listOutlineCollectionCandidatesOptions } from "@/api/@tanstack/react-query.gen";
 import type { OutlineCollectionCandidate } from "@/api/types.gen";
@@ -58,9 +58,6 @@ export function AddCollectionDialog({
 	onOpenChange,
 	onRegister,
 }: AddCollectionDialogProps) {
-	const { contains } = useComboboxFilter({ sensitivity: "base" });
-	const comboboxRef = useRef<HTMLDivElement>(null);
-	const collectionListId = useId();
 	const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
 	const [submitting, setSubmitting] = useState(false);
 	const [submitError, setSubmitError] = useState<string | null>(null);
@@ -80,9 +77,6 @@ export function AddCollectionDialog({
 
 	const all = candidates ?? [];
 	const canSubmit = selectedIds.length > 0 && !submitting;
-	const selectedCandidates = all.filter((candidate) =>
-		selectedIds.includes(candidate.collectionId),
-	);
 
 	function handleOpenChange(next: boolean) {
 		if (!next) {
@@ -120,12 +114,7 @@ export function AddCollectionDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
-			<DialogContent
-				className="sm:max-w-lg"
-				initialFocus={() =>
-					comboboxRef.current?.querySelector<HTMLElement>('input[role="combobox"]') ?? false
-				}
-			>
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>Add collections to mirror</DialogTitle>
 					<DialogDescription>
@@ -147,64 +136,10 @@ export function AddCollectionDialog({
 						onRetry={() => {
 							void refetch();
 						}}
-					>
-						<Combobox
-							multiple
-							inline
-							items={all}
-							value={selectedCandidates}
-							onValueChange={(next) => setSelectedIds(next.map((c) => c.collectionId))}
-							filter={(candidate, query) => contains(candidate, query, searchTextOf)}
-							itemToStringLabel={labelOf}
-						>
-							<div ref={comboboxRef} className="rounded-lg border">
-								<ComboboxSearchInput
-									// oxlint-disable-next-line jsx-a11y/no-autofocus -- Narrowing the candidate list by typing is the only way through this dialog, so it opens onto the search box.
-									autoFocus
-									placeholder="Search collections…"
-									disabled={submitting}
-									aria-label="Search Outline collections"
-									aria-expanded="true"
-									aria-controls={collectionListId}
-								/>
-								<ComboboxEmpty>No collections match your search.</ComboboxEmpty>
-								<ComboboxList id={collectionListId} aria-label="Outline collections">
-									{(candidate: OutlineCollectionCandidate) => {
-										const label = labelOf(candidate);
-										const checked =
-											candidate.alreadyMirrored || selectedIds.includes(candidate.collectionId);
-										return (
-											<ComboboxItem
-												key={candidate.collectionId}
-												value={candidate}
-												disabled={candidate.alreadyMirrored || submitting}
-												className="pr-2"
-											>
-												<span
-													aria-hidden="true"
-													className="flex size-4 shrink-0 items-center justify-center rounded-xs border border-input"
-												>
-													{checked && <CheckIcon className="size-3.5" />}
-												</span>
-												<OutlineCollectionIcon icon={candidate.icon} color={candidate.color} />
-												<span className="min-w-0 flex-1">
-													<span className="block truncate text-sm font-medium">{label}</span>
-													{hasText(candidate.urlId) && (
-														<span className="block truncate font-mono text-xs text-muted-foreground">
-															{candidate.urlId}
-														</span>
-													)}
-												</span>
-												{candidate.alreadyMirrored && (
-													<Badge variant="outline">Already mirrored</Badge>
-												)}
-											</ComboboxItem>
-										);
-									}}
-								</ComboboxList>
-							</div>
-						</Combobox>
-					</CollectionPicker>
+						selectedIds={selectedIds}
+						onSelectedIdsChange={setSelectedIds}
+						disabled={submitting}
+					/>
 
 					<div aria-live="polite" className="mt-3 min-h-5 text-sm">
 						{submitting && total > 0 && (
@@ -234,19 +169,27 @@ export function AddCollectionDialog({
 	);
 }
 
+interface CollectionPickerProps {
+	candidates: OutlineCollectionCandidate[];
+	isLoading: boolean;
+	error: Error | null;
+	onRetry: () => void;
+	selectedIds: readonly string[];
+	onSelectedIdsChange: (ids: readonly string[]) => void;
+	disabled: boolean;
+}
+
 function CollectionPicker({
 	candidates,
 	isLoading,
 	error,
 	onRetry,
-	children,
-}: {
-	candidates: OutlineCollectionCandidate[];
-	isLoading: boolean;
-	error: Error | null;
-	onRetry: () => void;
-	children: ReactNode;
-}): ReactNode {
+	selectedIds,
+	onSelectedIdsChange,
+	disabled,
+}: CollectionPickerProps): ReactNode {
+	const { contains } = useComboboxFilter({ sensitivity: "base" });
+	const listId = useId();
 	if (isLoading) {
 		return (
 			<div className="space-y-2">
@@ -291,5 +234,63 @@ function CollectionPicker({
 			</Empty>
 		);
 	}
-	return children;
+	const selectedCandidates = candidates.filter((candidate) =>
+		selectedIds.includes(candidate.collectionId),
+	);
+	return (
+		<Combobox
+			multiple
+			inline
+			items={candidates}
+			value={selectedCandidates}
+			onValueChange={(next) => onSelectedIdsChange(next.map((c) => c.collectionId))}
+			filter={(candidate, query) => contains(candidate, query, searchTextOf)}
+			itemToStringLabel={labelOf}
+		>
+			<div className="rounded-lg border">
+				<ComboboxSearchInput
+					// oxlint-disable-next-line jsx-a11y/no-autofocus -- Narrowing the candidate list by typing is the only way through this dialog, so it opens onto the search box.
+					autoFocus
+					placeholder="Search collections…"
+					disabled={disabled}
+					aria-label="Search Outline collections"
+					aria-expanded="true"
+					aria-controls={listId}
+				/>
+				<ComboboxEmpty>No collections match your search.</ComboboxEmpty>
+				<ComboboxList id={listId} aria-label="Outline collections">
+					{(candidate: OutlineCollectionCandidate) => {
+						const label = labelOf(candidate);
+						const checked =
+							candidate.alreadyMirrored || selectedIds.includes(candidate.collectionId);
+						return (
+							<ComboboxItem
+								key={candidate.collectionId}
+								value={candidate}
+								disabled={candidate.alreadyMirrored || disabled}
+								className="pr-2"
+							>
+								<span
+									aria-hidden="true"
+									className="flex size-4 shrink-0 items-center justify-center rounded-xs border border-input"
+								>
+									{checked && <CheckIcon className="size-3.5" />}
+								</span>
+								<OutlineCollectionIcon icon={candidate.icon} color={candidate.color} />
+								<span className="min-w-0 flex-1">
+									<span className="block truncate text-sm font-medium">{label}</span>
+									{hasText(candidate.urlId) && (
+										<span className="block truncate font-mono text-xs text-muted-foreground">
+											{candidate.urlId}
+										</span>
+									)}
+								</span>
+								{candidate.alreadyMirrored && <Badge variant="outline">Already mirrored</Badge>}
+							</ComboboxItem>
+						);
+					}}
+				</ComboboxList>
+			</div>
+		</Combobox>
+	);
 }

@@ -135,8 +135,7 @@ function RootLayout() {
 			<Toaster />
 			<PublicLoginOverlay />
 			{showCopilot && (
-				// oxlint-disable-next-line react/jsx-no-useless-fragment -- Sentry takes an element, not `null`, and an empty one is the way to render nothing.
-				<ErrorBoundary fallback={<></>} handled>
+				<ErrorBoundary handled>
 					<Suspense fallback={null}>
 						<GlobalCopilot />
 					</Suspense>

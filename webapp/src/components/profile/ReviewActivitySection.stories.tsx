@@ -32,7 +32,10 @@ export const Default: Story = {
 export const Loading: Story = {
 	args: { isLoading: true, canViewAll: false },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText("No review activity")).toBeNull();
+		await expect(
+			canvas.getByRole("heading", { name: "Review activity" }).closest("[aria-busy]"),
+		).toHaveAttribute("aria-busy", "true");
+		// The fixture rows are still in `args`: loading takes precedence over data already given.
 		await expect(canvas.queryByText("Add new feature to dashboard")).toBeNull();
 	},
 };

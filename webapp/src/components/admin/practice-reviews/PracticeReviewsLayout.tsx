@@ -64,6 +64,23 @@ export interface PracticeReviewsHeaderProps {
 	scope?: ReviewScopeSearch;
 }
 
+function matchedSection(
+	targetActive: boolean,
+	deliveryActive: boolean,
+	observationsActive: boolean,
+): PracticeReviewSection | undefined {
+	if (targetActive) {
+		return undefined;
+	}
+	if (deliveryActive) {
+		return "delivery";
+	}
+	if (observationsActive) {
+		return "observations";
+	}
+	return "reviews";
+}
+
 export function PracticeReviewsLayout({ workspaceSlug, children }: PracticeReviewsLayoutProps) {
 	const matchRoute = useMatchRoute();
 	const params = useParams({ strict: false });
@@ -100,24 +117,12 @@ export function PracticeReviewsLayout({ workspaceSlug, children }: PracticeRevie
 			fuzzy: true,
 		}),
 	);
-	function activeSection(): PracticeReviewSection | undefined {
-		if (targetActive) {
-			return undefined;
-		}
-		if (deliveryActive) {
-			return "delivery";
-		}
-		if (observationsActive) {
-			return "observations";
-		}
-		return "reviews";
-	}
 
 	return (
 		<PageLayout>
 			<PracticeReviewsHeader
 				workspaceSlug={workspaceSlug}
-				activeSection={activeSection()}
+				activeSection={matchedSection(targetActive, deliveryActive, observationsActive)}
 				scope={scope}
 			/>
 			{children}

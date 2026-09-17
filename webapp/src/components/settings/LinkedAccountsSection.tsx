@@ -133,9 +133,7 @@ export function LinkedAccountsSection({
 	error,
 	onRetry,
 }: LinkedAccountsSectionProps) {
-	// Focus restoration: when a disconnect succeeds, the row and its trigger unmount and focus
-	// would otherwise drop to <body>. Move focus to the section heading so keyboard/SR users
-	// land back at "Connected Accounts". We detect a removal by the identities list shrinking.
+	// A disconnect unmounts the row and its trigger, and focus would otherwise drop to <body>.
 	const headingRef = useRef<HTMLHeadingElement>(null);
 	const prevIdentityCount = useRef(identities.length);
 	useEffect(() => {

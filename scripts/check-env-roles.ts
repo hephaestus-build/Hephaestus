@@ -417,37 +417,47 @@ function variableOwnership(placeholders: ReadonlyMap<string, string>): Map<strin
 	return ownership;
 }
 
-function collectDeliveries(
-	compose: readonly ComposeFile[],
-	ownership: ReadonlyMap<string, RoleScope>,
-	profileRoles: ProfileRoles,
-): {
-	failures: string[];
-	delivered: Map<string, DeliveredVariable>;
-	applicationContainers: Delivery[];
-} {
-	const failures: string[] = [];
-	const delivered = new Map<string, DeliveredVariable>();
-	const applicationContainers: Delivery[] = [];
+/** One Compose file's services, or why it could not be read; a YAML error is a failure, not a crash. */
+type ReadCompose = { services: Map<string, ComposeService> } | { error: string };
+
+function readDeployment(compose: readonly ComposeFile[]): Map<string, ReadCompose> {
+	const deployment = new Map<string, ReadCompose>();
 	for (const [label, text] of compose) {
-		let services: Map<string, ComposeService>;
 		try {
-			services = readComposeServices(text);
+			deployment.set(label, { services: readComposeServices(text) });
 		} catch (error) {
-			// Only here is the file's name known, so a YAML error is reported the way every other
-			// failure in this list is rather than ending the run as an unlabelled stack trace.
-			failures.push(
-				`${label} is not valid YAML: ${error instanceof Error ? error.message : String(error)}`,
-			);
-			continue;
+			deployment.set(label, { error: error instanceof Error ? error.message : String(error) });
 		}
-		if (services.size === 0) {
+	}
+	return deployment;
+}
+
+function composeFailures(deployment: ReadonlyMap<string, ReadCompose>): string[] {
+	const failures: string[] = [];
+	for (const [label, read] of deployment) {
+		if ("error" in read) {
+			failures.push(`${label} is not valid YAML: ${read.error}`);
+		} else if (read.services.size === 0) {
 			failures.push(
 				`${label} parsed to zero services, so every check below ran against nothing.\n` +
 					"  Either the file is not a Compose file or its shape has moved past what this script reads.",
 			);
 		}
-		for (const [name, service] of services) {
+	}
+	return failures;
+}
+
+function collectDeliveries(
+	deployment: ReadonlyMap<string, ReadCompose>,
+	ownership: ReadonlyMap<string, RoleScope>,
+): { delivered: Map<string, DeliveredVariable>; applicationContainers: Delivery[] } {
+	const delivered = new Map<string, DeliveredVariable>();
+	const applicationContainers: Delivery[] = [];
+	for (const [label, read] of deployment) {
+		if ("error" in read) {
+			continue;
+		}
+		for (const [name, service] of read.services) {
 			const id = `${label}:${name}`;
 			if (service.image.includes(APPLICATION_IMAGE)) {
 				applicationContainers.push({ id, service });
@@ -460,18 +470,71 @@ function collectDeliveries(
 				const record = delivered.get(variable) ?? { scope, deliveries: [] };
 				delivered.set(variable, record);
 				record.deliveries.push({ id, service });
-				if (!runsRole(service, scope.role, profileRoles)) {
-					failures.push(
-						`${id} sets ${variable}, and disables the ${scope.role} role that reads it.\n` +
-							`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
-							"  On this container those beans do not exist, so the variable configures nothing.\n" +
-							`  Move it to a service that runs the ${scope.role} role.`,
-					);
-				}
 			}
 		}
 	}
-	return { failures, delivered, applicationContainers };
+	return { delivered, applicationContainers };
+}
+
+/** Variables set on a container that has switched off the role reading them. */
+function misdeliveredFailures(
+	delivered: ReadonlyMap<string, DeliveredVariable>,
+	profileRoles: ProfileRoles,
+): string[] {
+	const failures: string[] = [];
+	for (const [variable, { scope, deliveries }] of delivered) {
+		for (const { id, service } of deliveries) {
+			if (runsRole(service, scope.role, profileRoles)) {
+				continue;
+			}
+			failures.push(
+				`${id} sets ${variable}, and disables the ${scope.role} role that reads it.\n` +
+					`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
+					"  On this container those beans do not exist, so the variable configures nothing.\n" +
+					`  Move it to a service that runs the ${scope.role} role.`,
+			);
+		}
+	}
+	return failures;
+}
+
+/** Variables forwarded somewhere, but never to a container running the role that reads them. */
+function undeliveredFailures(
+	delivered: ReadonlyMap<string, DeliveredVariable>,
+	profileRoles: ProfileRoles,
+): string[] {
+	const failures: string[] = [];
+	for (const [variable, { scope, deliveries }] of delivered) {
+		if (deliveries.some(({ service }) => runsRole(service, scope.role, profileRoles))) {
+			continue;
+		}
+		failures.push(
+			`${variable} is forwarded by ${deliveries.map((d) => d.id).join(", ")}, but no service running the ${scope.role} role receives it.\n` +
+				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
+				"  Nothing in the deployment can read it, so it and anything documented around it are inert.",
+		);
+	}
+	return failures;
+}
+
+/** Placeholders the application offers that no service forwards. */
+function unforwardedFailures(
+	ownership: ReadonlyMap<string, RoleScope>,
+	delivered: ReadonlyMap<string, DeliveredVariable>,
+): string[] {
+	const failures: string[] = [];
+	for (const [variable, scope] of ownership) {
+		if (delivered.has(variable)) {
+			continue;
+		}
+		failures.push(
+			`${variable} is offered by ${APPLICATION_YML} but no service in the deployment forwards it.\n` +
+				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
+				"  The placeholder is what makes it an operator knob, so setting it in .env reaches nothing.\n" +
+				`  Forward it from a service that runs the ${scope.role} role, or drop the placeholder.`,
+		);
+	}
+	return failures;
 }
 
 /**
@@ -565,34 +628,13 @@ export function analyse(
 		}
 	}
 
-	const deliveries = collectDeliveries(compose, ownership, profileRoles);
-	const { delivered, applicationContainers } = deliveries;
-	failures.push(...deliveries.failures);
-
-	for (const [variable, { scope, deliveries: forwarded }] of delivered) {
-		if (forwarded.some(({ service }) => runsRole(service, scope.role, profileRoles))) {
-			continue;
-		}
-		failures.push(
-			`${variable} is forwarded by ${forwarded.map((d) => d.id).join(", ")}, but no service running the ${scope.role} role receives it.\n` +
-				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
-				"  Nothing in the deployment can read it, so it and anything documented around it are inert.",
-		);
-	}
-
-	for (const [variable, scope] of ownership) {
-		if (delivered.has(variable)) {
-			continue;
-		}
-		failures.push(
-			`${variable} is offered by ${APPLICATION_YML} but no service in the deployment forwards it.\n` +
-				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
-				"  The placeholder is what makes it an operator knob, so setting it in .env reaches nothing.\n" +
-				`  Forward it from a service that runs the ${scope.role} role, or drop the placeholder.`,
-		);
-	}
-
+	const deployment = readDeployment(compose);
+	const { delivered, applicationContainers } = collectDeliveries(deployment, ownership);
 	failures.push(
+		...composeFailures(deployment),
+		...misdeliveredFailures(delivered, profileRoles),
+		...undeliveredFailures(delivered, profileRoles),
+		...unforwardedFailures(ownership, delivered),
 		...disagreementFailures(applicationContainers),
 		...omissionFailures(applicationContainers, paths),
 	);

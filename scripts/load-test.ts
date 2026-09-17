@@ -162,7 +162,7 @@ async function checkScenarios(root: string) {
 
 const cell = (value: string) => value.replaceAll("|", String.raw`\|`).replaceAll(/\r?\n/gu, " ");
 
-function assertValidRun(run: Record<string, unknown>): void {
+function assertRunTiming(run: Record<string, unknown>): void {
 	if (!Number.isFinite(Date.parse(asString(run.startedAt, "startedAt")))) {
 		throw new Error("Invalid run timestamp");
 	}
@@ -268,7 +268,7 @@ export function renderBaseline(summary: unknown, metadata: unknown, template: st
 		throw new Error("Run must record a digest-pinned k6 image");
 	}
 	const pinned = image === k6Image ? "" : ` (this checkout pins ${k6Image})`;
-	assertValidRun(run);
+	assertRunTiming(run);
 	const options = asRecord(run.options, "options");
 	const expected = asRecord(options.thresholds, "options.thresholds");
 	const scenarios = asRecord(options.scenarios, "options.scenarios");

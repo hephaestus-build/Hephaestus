@@ -20,6 +20,7 @@ import type { Practice, PracticeGroup } from "@/api/types.gen";
 import {
 	applyDisplayOrder,
 	applyPracticePlacements,
+	byDisplayOrder,
 	patchGroup,
 	placePractice,
 	practiceCatalogStructureScope,
@@ -195,7 +196,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 		onMutate: async (variables) => {
 			await queryClient.cancelQueries({ queryKey: groupsQueryKey });
 			const previousOrder = [...(queryClient.getQueryData<PracticeGroup[]>(groupsQueryKey) ?? [])]
-				.sort((a, b) => a.displayOrder - b.displayOrder)
+				.sort(byDisplayOrder)
 				.map((group) => group.slug);
 			queryClient.setQueryData<PracticeGroup[]>(groupsQueryKey, (groups = []) =>
 				applyDisplayOrder(groups, variables.body.orderedSlugs),
@@ -212,9 +213,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 			toast.error("Couldn't reorder the groups");
 		},
 		onSuccess: (updated) => {
-			const order = [...updated]
-				.sort((a, b) => a.displayOrder - b.displayOrder)
-				.map((group) => group.slug);
+			const order = [...updated].sort(byDisplayOrder).map((group) => group.slug);
 			queryClient.setQueryData<PracticeGroup[]>(groupsQueryKey, (groups = []) =>
 				applyDisplayOrder(groups, order),
 			);

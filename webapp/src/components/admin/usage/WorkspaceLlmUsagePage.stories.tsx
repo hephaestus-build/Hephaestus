@@ -43,8 +43,11 @@ export const Ready: Story = {
 export const Loading: Story = {
 	args: { view: { status: "loading" } },
 	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByRole("table", { name: "AI spend by run type" }).closest("[aria-busy]"),
+		).toHaveAttribute("aria-busy", "true");
+		// The skeleton must not claim the landmarks the report will own.
 		await expect(canvas.queryByRole("region", { name: /spend/u })).toBeNull();
-		await expect(canvas.queryByRole("alert")).toBeNull();
 	},
 };
 

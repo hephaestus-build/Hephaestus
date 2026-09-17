@@ -40,9 +40,9 @@ leaves it optional.
 The payoff is that an upstream defect gets fixed here once, with the note attached, instead of being
 worked around at every call site.
 
-A registry `cn-font-*` marker is dropped: the CLI strips it for a project that declares no
-`--font-heading`, and this one does not. That is what the CLI produces, not a divergence, so no file
-records it.
+A registry `cn-font-*` marker is not a divergence: the CLI's `transform-font.ts` replaces it with
+`font-heading` where the project's CSS declares `--font-heading`, and removes it where it does not,
+which is this project.
 
 A variant with one caller is still a variant when it names a system axis — a tone, a size, a shape,
 an edge. `shadcn/no-restyle` forbids composing radius, spacing or a border onto a primitive at the
@@ -301,7 +301,8 @@ Read that block rather than guessing a name.
 
 **A `*.module.css` is for what a utility cannot express, and for nothing else.** There are two in the
 tree — `HephIcon` and the landing scene — and each holds `@keyframes`, a generated `::before`, a
-`clip-path`, or a grid whose placement descendants override at a breakpoint. Anything a utility can
+`clip-path`, a grid whose placement descendants override at a breakpoint, or `HephIcon`'s size,
+which a container's `[&_svg]:size-4` would outrank as a utility. Anything a utility can
 say stays a utility: a module rule that is one `letter-spacing` or one `margin` is a utility in the
 wrong file, and it silently outranks the utility it duplicates, because Vite emits module CSS
 unlayered while Tailwind sits in `@layer utilities`. That inversion is the whole cost of the second

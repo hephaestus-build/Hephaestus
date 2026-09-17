@@ -58,7 +58,9 @@ Corrects the version numbers in § Decision, which were the pins on the day of t
 stands: `package.json#devEngines` and `#packageManager` are authoritative, fail on drift
 (`scripts/check-toolchain.ts`) and are where the current Node.js and pnpm versions are read;
 `.github/actions/setup-toolchain/action.yml` reads them from there, and `docker/agents/pi/Dockerfile`
-carries its own `NODE_VERSION` and `ghcr.io/pnpm/pnpm` pins, which Renovate groups with them
-(`renovate.json`). `pnpm-workspace.yaml#allowBuilds` is the lifecycle allowlist and names more
+repeats them as `ARG NODE_VERSION` and the `ghcr.io/pnpm/pnpm` tag, which
+`scripts/check-agent-runtime-pins.ts` (`NODE_VERSION`) and `scripts/check-toolchain.ts` (the pnpm
+tag and its digest) hold equal to `package.json` and Renovate groups (`renovate.json`).
+`pnpm-workspace.yaml#allowBuilds` is the lifecycle allowlist and names more
 packages than the two § Decision lists. `pnpm peers check` is not run by any task or workflow; the
 typecheck, build and test gates are the compatibility verdict.

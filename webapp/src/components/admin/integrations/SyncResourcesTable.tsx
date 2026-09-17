@@ -38,20 +38,14 @@ import { TableRowsSkeleton } from "./TableRowsSkeleton";
 
 type ClassKey = SyncResourceCount["key"];
 
-interface ClassColumn {
-	key: string;
-	label: string;
-	/**
-	 * The wire classes this column reports. More than one only for Comments, where the issue/review
-	 * split is an implementation detail of the mirror rather than a distinction an admin acts on — the
-	 * two are the same pipeline in the same repository, and the split is still spelled out in the cell's
-	 * tooltip so a stalled half is never hidden.
-	 */
-	sourceKeys: ClassKey[];
-}
-
-/** The count columns, in reading order, and the fold from wire classes to them. */
-const CLASS_COLUMNS: ClassColumn[] = [
+/**
+ * The count columns, in reading order, and the fold from wire classes to them. A column folds more
+ * than one class only for Comments, where the issue/review split is an implementation detail of the
+ * mirror rather than a distinction an admin acts on — the two are the same pipeline in the same
+ * repository, and the split is still spelled out in the cell's tooltip so a stalled half is never
+ * hidden.
+ */
+const CLASS_COLUMNS = [
 	{ key: "issues", label: "Issues", sourceKeys: ["issues"] },
 	{ key: "pullRequests", label: "PRs", sourceKeys: ["pullRequests"] },
 	{ key: "reviews", label: "Reviews", sourceKeys: ["reviews"] },
@@ -59,7 +53,9 @@ const CLASS_COLUMNS: ClassColumn[] = [
 	{ key: "commits", label: "Commits", sourceKeys: ["commits"] },
 	{ key: "messages", label: "Messages", sourceKeys: ["messages"] },
 	{ key: "documents", label: "Documents", sourceKeys: ["documents"] },
-];
+] as const satisfies readonly { key: string; label: string; sourceKeys: readonly ClassKey[] }[];
+
+type ClassColumn = (typeof CLASS_COLUMNS)[number];
 
 /** The classes an SCM repository mirrors — see {@link SyncResourcesTableProps.expectedClassKeys}. */
 export const SCM_CLASS_KEYS: ClassKey[] = [
@@ -188,7 +184,7 @@ function triageRank(
 	return 5;
 }
 
-type SortKey = "name" | "lastSynced" | (string & Record<never, never>);
+type SortKey = "name" | "lastSynced" | ClassColumn["key"];
 interface SortState {
 	key: SortKey;
 	dir: "asc" | "desc";

@@ -1,6 +1,6 @@
 # ADR 0024: Integration sync lifecycle — drift tombstones and mirror erasure are two different operations
 
-**Status:** Accepted (amended 2026-09-03 #1404 — which reads honour a drift tombstone; 2026-09-04 #1806 — a re-offered signal is held, not retired; 2026-09-05 #1825 — live occasions share the reversible hold; 2026-09-05 #1404 — capture, new feedback and the two non-SCM kinds; 2026-09-17 — Outline already has a resubmitter)
+**Status:** Accepted (amended 2026-09-03 #1404 — who may read a tombstoned row; 2026-09-04 #1806 — re-offered signals are held; 2026-09-05 #1825 — live occasions take the same hold; 2026-09-05 #1404 — capture and the non-SCM kinds; 2026-09-17 — Outline resubmitter recorded)
 **Date:** 2026-07-18
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0015](0015-unified-integration-framework.md) (integration framework), [ADR 0008](0008-webhook-runtime-role.md) (webhook runtime role, non-redeliverable deliveries), [ADR 0023](0023-outline-documentation-integration.md) (Outline as a content source)

@@ -6,8 +6,8 @@
 		"target": "ES2022",
 		"jsx": "react-jsx",
 		"module": "ESNext",
-		// Vite's default browser target decides the lib; `toSorted` and `Promise.withResolvers` are
-		// past it, so a helper that needs one belongs to the test tree, which runs on Node.
+		// Vite's default browser target decides the lib, and `toSorted` and `Promise.withResolvers`
+		// are past it. Only `e2e/`, which runs on Node, widens it (`e2e/tsconfig.json`).
 		"lib": ["ES2022", "DOM", "DOM.Iterable"],
 		"types": ["vite/client"],
 		/* Bundler mode */

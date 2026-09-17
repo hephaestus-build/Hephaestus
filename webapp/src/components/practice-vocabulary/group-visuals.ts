@@ -15,6 +15,7 @@ import {
 	CheckCheck,
 	CircleAlert,
 	CircleCheck,
+	CircleDashed,
 	Clipboard,
 	ClipboardCheck,
 	ClipboardList,
@@ -109,6 +110,12 @@ export interface GroupVisual {
 }
 
 const SLATE_PILL = "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
+
+/** Not in `PILL`: it marks the absence of a group, not a colour a group can pick. */
+export const UNASSIGNED_GROUP_VISUAL: GroupVisual = {
+	Icon: CircleDashed,
+	pill: "bg-muted text-muted-foreground",
+};
 
 // Tailwind requires complete class names in source to include them in the generated CSS.
 export const PILL: Record<string, string> = {

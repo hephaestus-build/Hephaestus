@@ -40,7 +40,10 @@ export const GitLab: Story = {
 export const Loading: Story = {
 	args: { isLoading: true, canViewAll: false },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText("No open pull requests")).toBeNull();
+		await expect(
+			canvas.getByRole("heading", { name: "Open pull requests" }).closest("[aria-busy]"),
+		).toHaveAttribute("aria-busy", "true");
+		// The fixture rows are still in `args`: loading takes precedence over data already given.
 		await expect(canvas.queryByText("Add new analytics dashboard")).toBeNull();
 	},
 };

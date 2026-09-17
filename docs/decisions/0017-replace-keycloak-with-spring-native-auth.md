@@ -129,9 +129,10 @@ Corrects § Decision "Data-model split", "JWT format" and "GDPR" against the sch
   `@ManyToOne User`; `WorkspaceContextFilter` resolves the account's SCM users through
   `workspace.CurrentAccountUsers` to reach a membership. The `account_id` re-key is
   [ADR 0019](0019-workspace-membership-keyed-on-account.md), Proposed.
-- The join key is `identity_link (provider_id, subject)`, unique together with
-  `COALESCE(team_id, '')` (`uq_identity_link_provider_subject_team`), and `provider_id` references
-  `identity_provider` (`integration.core.connection.IdentityProvider`), not `git_provider`.
+- The join key is `identity_link (provider_id, subject)`, unique together with the team
+  (`uq_identity_link_provider_subject_team`; the `IdentityLink` row of `docs/auth-glossary.md`
+  spells the index), and `provider_id` references `identity_provider`
+  (`integration.core.connection.IdentityProvider`), not `git_provider`.
 - There is no `oauth_authorized_client` table. `core.auth.AccountHardDeleteSweeper` deletes
   `identity_link`, `account_feature`, `issued_jwt` and `account_export` explicitly and keeps the
   `account` row as a `DELETED` tombstone; it does not touch `workspace_membership`, which is not

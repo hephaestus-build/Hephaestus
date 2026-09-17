@@ -1,17 +1,18 @@
 import path from "node:path";
 
-import type { OxfmtConfig } from "oxfmt";
 import { defineConfig } from "vite-plus";
 
+import { asStringArray } from "./scripts/lib/json.ts";
 import { readJsonc } from "./webapp/tools/jsonc.ts";
 
-const asStringArray = (value: unknown): string[] | undefined =>
-	Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value : undefined;
-
-const formatConfig = readJsonc<OxfmtConfig>(new URL(".oxfmtrc.json", import.meta.url));
+const formatConfig = readJsonc(new URL(".oxfmtrc.json", import.meta.url));
 const fmt = {
 	...formatConfig,
-	ignorePatterns: [...(formatConfig.ignorePatterns ?? []), "**/*.md", "**/*.html"],
+	ignorePatterns: [
+		...asStringArray(formatConfig.ignorePatterns, ".oxfmtrc.json#ignorePatterns"),
+		"**/*.md",
+		"**/*.html",
+	],
 };
 
 // The one home of every repository command; `package.json` keeps only `prepare`, which pnpm runs
@@ -69,18 +70,8 @@ const oxlintFormat = process.env.GITHUB_ACTIONS === "true" ? "-f github " : "";
 
 // The docs lint's file set, plus the trees markdownlint reaches outside `docs/`, read from its own
 // config so the fingerprint cannot miss a scope change.
-const markdownlintConfig = readJsonc<unknown>(
-	new URL("docs/.markdownlint-cli2.jsonc", import.meta.url),
-);
-const markdownScope = (
-	asStringArray(
-		typeof markdownlintConfig === "object" &&
-			markdownlintConfig !== null &&
-			"globs" in markdownlintConfig
-			? markdownlintConfig.globs
-			: undefined,
-	) ?? []
-)
+const markdownlintConfig = readJsonc(new URL("docs/.markdownlint-cli2.jsonc", import.meta.url));
+const markdownScope = asStringArray(markdownlintConfig.globs, "docs/.markdownlint-cli2.jsonc#globs")
 	.filter((glob) => glob.startsWith("../"))
 	.map((glob) => path.posix.normalize(`docs/${glob}`));
 const docsLintInputs = [

@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import type { ListPracticeReviewFeedbackResponse } from "@/api/types.gen";
+import type { ListPracticeReviewFeedbackResponse, ReviewFeedback } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { TablePagination } from "@/components/common/TablePagination";
 
@@ -21,6 +21,22 @@ export interface FeedbackListPageProps {
 	people: ReviewPeople;
 }
 
+function resultsState(
+	isLoading: boolean,
+	rows: ReviewFeedback[],
+	onClearFilters: (() => void) | undefined,
+): FeedbackResultsState {
+	if (isLoading) {
+		return { status: "loading" };
+	}
+	if (rows.length > 0) {
+		return { status: "ready", feedback: rows };
+	}
+	return onClearFilters
+		? { status: "empty", filtered: true, onClearFilters }
+		: { status: "empty", filtered: false };
+}
+
 export function FeedbackListPage({
 	workspaceSlug,
 	search,
@@ -38,17 +54,6 @@ export function FeedbackListPage({
 	const hasFilter = hasFeedbackFilter(search);
 	const reset = () => onSearchChange(clearedFeedbackFilters());
 	const patchFilter = (patch: Partial<FeedbackSearch>) => onSearchChange({ ...patch, page: 0 });
-	function resultsState(): FeedbackResultsState {
-		if (isLoading) {
-			return { status: "loading" };
-		}
-		if (rows.length > 0) {
-			return { status: "ready", feedback: rows };
-		}
-		return hasFilter
-			? { status: "empty", filtered: true, onClearFilters: reset }
-			: { status: "empty", filtered: false };
-	}
 
 	return (
 		<section aria-label="Feedback delivery" className="space-y-4">
@@ -62,7 +67,10 @@ export function FeedbackListPage({
 				recipientName={filteredRecipient?.name ?? filteredRecipient?.login}
 			/>
 			{error == null ? (
-				<FeedbackResults workspaceSlug={workspaceSlug} state={resultsState()} />
+				<FeedbackResults
+					workspaceSlug={workspaceSlug}
+					state={resultsState(isLoading, rows, hasFilter ? reset : undefined)}
+				/>
 			) : (
 				<QueryErrorAlert error={error} title="Couldn't load feedback" onRetry={onRetry} />
 			)}

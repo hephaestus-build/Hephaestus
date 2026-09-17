@@ -150,20 +150,22 @@ export function verifyRevert(baseSha: string, head = "HEAD", cwd?: string): Reve
 
 if (import.meta.main) {
 	const [baseSha, head] = process.argv.slice(2);
-	if (!isSet(baseSha)) {
-		throw new Error("usage: verify-revert.ts <base-sha> [head]");
-	}
-	const verdict = verifyRevert(baseSha, head);
-	if (verdict.verified) {
-		const reverted = verdict.commits.map((entry) => short(entry.reverted)).join(", ");
-		console.log(
-			`::notice::Verified revert of ${reverted}; the changeset freeze rules do not apply.`,
-		);
+	if (isSet(baseSha)) {
+		const verdict = verifyRevert(baseSha, head);
+		if (verdict.verified) {
+			const reverted = verdict.commits.map((entry) => short(entry.reverted)).join(", ");
+			console.log(
+				`::notice::Verified revert of ${reverted}; the changeset freeze rules do not apply.`,
+			);
+		} else {
+			console.log(`Not a verified revert (${verdict.reason}); the changeset rules apply in full.`);
+		}
+		const githubOutput = process.env.GITHUB_OUTPUT;
+		if (isSet(githubOutput)) {
+			appendFileSync(githubOutput, `verified-revert=${verdict.verified}\n`);
+		}
 	} else {
-		console.log(`Not a verified revert (${verdict.reason}); the changeset rules apply in full.`);
-	}
-	const githubOutput = process.env.GITHUB_OUTPUT;
-	if (isSet(githubOutput)) {
-		appendFileSync(githubOutput, `verified-revert=${verdict.verified}\n`);
+		console.log("::error::usage: verify-revert.ts <base-sha> [head]");
+		process.exitCode = 1;
 	}
 }

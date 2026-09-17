@@ -1419,7 +1419,7 @@ function validateUnit(
 		return evidenceError;
 	}
 	if (unit.action === "WITHHOLD") {
-		if (!hasText(unit.withholdReason)) {
+		if (isBlank(unit.withholdReason)) {
 			return "WITHHOLD needs a withholdReason; skipped.";
 		}
 		return null;
@@ -1428,7 +1428,7 @@ function validateUnit(
 		return "A unit that is not a WITHHOLD needs a title; skipped.";
 	}
 	if (unit.action === "SUPERSEDE") {
-		if (!hasText(unit.supersedesThreadKey)) {
+		if (isBlank(unit.supersedesThreadKey)) {
 			return "SUPERSEDE needs a supersedesThreadKey; skipped.";
 		}
 		if (

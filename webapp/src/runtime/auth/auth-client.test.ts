@@ -203,14 +203,14 @@ describe("authClient.logout", () => {
 	it.each([403, 503])("does not disguise HTTP %i as a successful sign-out", async (status) => {
 		server.use(http.post("*/auth/logout", () => new HttpResponse(null, { status })));
 		const assigned = captureNavigation();
-		await expect(authClient.logout()).rejects.toBeDefined();
+		await expect(authClient.logout()).rejects.toThrow("Could not sign out.");
 		expect(assigned).toStrictEqual([]);
 	});
 
 	it("keeps sign-out retryable when the connection fails", async () => {
 		server.use(http.post("*/auth/logout", () => HttpResponse.error(), { once: true }));
 		const assigned = captureNavigation();
-		await expect(authClient.logout()).rejects.toBeDefined();
+		await expect(authClient.logout()).rejects.toThrow("Could not sign out.");
 		expect(assigned).toStrictEqual([]);
 		server.use(http.post("*/auth/logout", () => new HttpResponse(null, { status: 204 })));
 		await authClient.logout();

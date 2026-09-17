@@ -3,10 +3,11 @@
 
 	// The base for every TypeScript file in the repository, and the config for everything outside
 	// `webapp/` and `docs/`, which extend it (`AGENTS.md` § Lint and format says what `extends`
-	// carries). Every rule outside `correctness` and `suspicious` is listed, with the reason beside it
-	// wherever the choice is not the obvious one. A rule turned off carries its reason too: for a rule
-	// a category enables, why not here; for one no category enables, why the rule someone will reach
-	// for is wrong here — the entry pins that decision across a category change in an oxlint release.
+	// carries). Every rule enabled outside `correctness` and `suspicious` is listed here by name, with
+	// the reason beside it wherever the choice is not the obvious one. A rule turned off carries its
+	// reason too: for a rule a category enables, why not here; for one no category enables, why the
+	// rule someone will reach for is wrong here — the entry pins that decision across a category
+	// change in an oxlint release.
 
 	// Only the file-naming rule is enabled from the house plugin here; the rest read a Storybook
 	// story, a Testing Library query, a query key or the clock, and nothing out here renders.
@@ -89,7 +90,8 @@
 		"no-var": "error",
 		"no-empty": "error",
 		// An empty body is a decision with no reason attached; a comment inside says why nothing
-		// happens. A test double that must do nothing is `vi.fn()`, which also records the call.
+		// happens. A test double that must do nothing is a mock (`mock.fn()`, `vi.fn()`), which also
+		// records the call.
 		"no-empty-function": "error",
 		// A comment on the line it explains competes with it for width; above the line it reads first.
 		"no-inline-comments": "error",
@@ -133,7 +135,6 @@
 		"no-inner-declarations": "error",
 		"no-prototype-builtins": "error",
 		"no-self-compare": "error",
-		"no-throw-literal": "error",
 		"no-constructor-return": "error",
 		"no-promise-executor-return": "error",
 		"no-loop-func": "error",
@@ -148,7 +149,6 @@
 		"no-implicit-globals": "error",
 		"unicode-bom": "error",
 		"array-callback-return": "error",
-		"prefer-promise-reject-errors": "error",
 		// `null == x` is the one loose comparison with an exact meaning — null or undefined, both of
 		// which arrive here — and `eqeqeq` carves it out by name; `no-eq-null` reports exactly that
 		// carve-out and would spell it as two comparisons at every site.
@@ -203,7 +203,6 @@
 		"import/no-dynamic-require": "error",
 		"import/no-webpack-loader-syntax": "error",
 		"import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
-		"unicorn/no-anonymous-default-export": "error",
 		"unicorn/prefer-module": "error",
 		"unicorn/prefer-node-protocol": "error",
 		// `import.meta.dirname` and `import.meta.filename` are the spelling of what
@@ -284,6 +283,8 @@
 		"typescript/consistent-return": "off",
 
 		// -- Promises and errors ---------------------------------------------------------------------
+		// The typed `only-throw-error`, `prefer-promise-reject-errors`, `prefer-find` and
+		// `prefer-includes` each subsume the untyped rule of the same name, which is not listed.
 		// A function that returns a promise is `async`, so a thrown error and a rejection are one thing
 		// to a caller.
 		"typescript/promise-function-async": "error",
@@ -336,14 +337,12 @@
 		// A `reduce` is a loop whose accumulator is hidden in a parameter; the loop reads.
 		"unicorn/no-array-reduce": "error",
 		"unicorn/no-array-method-this-argument": "error",
-		"unicorn/prefer-array-find": "error",
 		"unicorn/prefer-array-flat": "error",
 		"unicorn/prefer-array-flat-map": "error",
 		"unicorn/prefer-array-some": "error",
 		"unicorn/prefer-array-index-of": "error",
 		"unicorn/prefer-at": "error",
 		"unicorn/prefer-negative-index": "error",
-		"unicorn/prefer-includes": "error",
 		"unicorn/prefer-set-has": "error",
 		"unicorn/prefer-spread": "error",
 		"unicorn/prefer-string-slice": "error",
@@ -495,7 +494,8 @@
 			"rules": { "import/no-commonjs": "off", "unicorn/prefer-module": "off" }
 		},
 		{
-			// JavaScript run by k6: a JSDoc tag here carries the type, which is what it is for.
+			// Plain JavaScript — the k6 scenarios and the changesets plugin: a JSDoc tag here carries
+			// the type, which is what it is for.
 			"files": ["load-tests/**/*.js", ".changeset/*.cjs"],
 			"rules": {
 				"jsdoc/require-param-description": "off",

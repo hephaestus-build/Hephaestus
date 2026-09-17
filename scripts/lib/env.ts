@@ -37,7 +37,7 @@ export function positivePort(value: string, name: string): number {
 	return port;
 }
 
-/** Whether an optional string — an environment variable, an argument, an output — carries a value. */
+/** Whether an optional string carries a value; `webapp/src/lib/text.ts`'s `hasText` says why there are copies. */
 export function isSet(value: string | undefined): value is string {
 	return value !== undefined && value !== "";
 }

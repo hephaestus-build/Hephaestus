@@ -96,8 +96,9 @@ export const InstanceScope: Story = {
 };
 
 export const WorkspaceScope: StoryObj<typeof WorkspaceConfigAuditPanel> = {
-	render: (args) => <WorkspaceConfigAuditPanel {...args} />,
-	args: { search: {}, onSearchChange: fn(), workspaceSlug: "acme" },
+	render: () => (
+		<WorkspaceConfigAuditPanel search={{}} onSearchChange={fn()} workspaceSlug="acme" />
+	),
 	parameters: {
 		msw: {
 			handlers: [http.get("*/workspaces/*/config-audit", () => HttpResponse.json(page(entries)))],

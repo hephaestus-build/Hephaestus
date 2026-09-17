@@ -1,8 +1,9 @@
+import assert from "node:assert/strict";
 import { appendFile, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { isRecord } from "./lib/json.ts";
-import { median } from "./lib/statistics.ts";
+import { median, percentile } from "./lib/statistics.ts";
 import { type TestSummary, validateProfile } from "./summarize-test-results.ts";
 
 interface Metric {
@@ -27,10 +28,9 @@ const metrics: Metric[] = [
 	},
 ];
 
-const percentile = (values: number[], percentage: number): number => {
-	const sorted = values.toSorted((left, right) => left - right);
-	return sorted[Math.ceil(sorted.length * percentage) - 1] ?? 0;
-};
+function cell(value: number | null): string {
+	return value === null ? "n/a" : value.toFixed(1);
+}
 
 function historyMarkdown(summaries: TestSummary[]): string {
 	const usable = summaries.filter((summary) => summary.performance !== undefined).slice(-8);
@@ -61,9 +61,16 @@ function historyMarkdown(summaries: TestSummary[]): string {
 		"|---|---|---:|---:|",
 		...rows.map(
 			([name, unit, values]) =>
-				`| ${name} | ${unit} | ${percentile(values, 0.5).toFixed(1)} | ${percentile(values, 0.95).toFixed(1)} |`,
+				`| ${name} | ${unit} | ${cell(percentile(values, 0.5))} | ${cell(percentile(values, 0.95))} |`,
 		),
 	].join("\n")}\n`;
+}
+
+/** The median of a baseline window, which `regressions` only builds once seven profiles are usable. */
+function baselineMedian(values: readonly number[]): number {
+	const value = median(values);
+	assert.ok(value !== null, "the baseline window is never empty");
+	return value;
 }
 
 export function regressions(current: TestSummary, history: TestSummary[]): string[] {
@@ -86,8 +93,8 @@ export function regressions(current: TestSummary, history: TestSummary[]): strin
 	}
 	for (const metric of metrics) {
 		const baselineValues = baselineRuns.map(metric.value);
-		const baseline = median(baselineValues) ?? 0;
-		const deviation = median(baselineValues.map((value) => Math.abs(value - baseline))) ?? 0;
+		const baseline = baselineMedian(baselineValues);
+		const deviation = baselineMedian(baselineValues.map((value) => Math.abs(value - baseline)));
 		const limit = baseline + Math.max(baseline * metric.tolerance, deviation * 3);
 		if (candidates.every((summary) => metric.value(summary) > limit)) {
 			failures.push(`${metric.name} exceeded variance limit ${limit.toFixed(1)} three times`);

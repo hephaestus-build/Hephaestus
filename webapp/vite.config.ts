@@ -2,7 +2,6 @@ import path from "node:path";
 
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-import type { OxfmtConfig } from "oxfmt";
 import Terminal from "vite-plugin-terminal";
 import { configDefaults } from "vitest/config";
 
@@ -10,7 +9,7 @@ import { readJsonc } from "./tools/jsonc.ts";
 import { loadLintConfig } from "./tools/oxlint/load-config.ts";
 import { appSourcePlugins } from "./vite.shared.ts";
 
-const formatConfig = readJsonc<OxfmtConfig>(new URL("../.oxfmtrc.json", import.meta.url));
+const formatConfig = readJsonc(new URL("../.oxfmtrc.json", import.meta.url));
 const fmt = {
 	...formatConfig,
 	ignorePatterns: [

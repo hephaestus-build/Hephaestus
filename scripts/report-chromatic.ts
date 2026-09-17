@@ -178,7 +178,14 @@ interface Counts {
 	interactions: number | undefined;
 }
 
-function coverageVerdict(counts: Counts): Verdict | undefined {
+interface Coverage {
+	captured: number;
+	inherited: number;
+	changes: number;
+}
+
+/** The counts a passing build is described by, or the verdict that stops before that. */
+function coverageVerdict(counts: Counts): Verdict | Coverage {
 	const { captured, inherited, tests, errors, changes, interactions } = counts;
 	if ((errors ?? 0) > 0 || (interactions ?? 0) > 0) {
 		return result(
@@ -203,7 +210,7 @@ function coverageVerdict(counts: Counts): Verdict | undefined {
 			"No usable visual coverage evidence. Check account limits, project testing settings and action outputs.",
 		);
 	}
-	return undefined;
+	return { captured, inherited, changes };
 }
 
 export function visualVerdict(env: NodeJS.ProcessEnv, report?: string, now = Date.now()) {
@@ -216,9 +223,9 @@ export function visualVerdict(env: NodeJS.ProcessEnv, report?: string, now = Dat
 		changes: count(env.CHROMATIC_CHANGES),
 		interactions: count(env.CHROMATIC_INTERACTIONS),
 	};
-	const early = skippedVerdict(env, now) ?? runVerdict(env, code) ?? coverageVerdict(counts);
-	if (early !== undefined) {
-		return early;
+	const coverage = skippedVerdict(env, now) ?? runVerdict(env, code) ?? coverageVerdict(counts);
+	if ("state" in coverage) {
+		return coverage;
 	}
 	const reportError =
 		report === undefined
@@ -227,8 +234,8 @@ export function visualVerdict(env: NodeJS.ProcessEnv, report?: string, now = Dat
 	if (reportError !== undefined) {
 		return result("unavailable", false, reportError);
 	}
-	const { captured, inherited, changes } = counts;
-	return (captured ?? 0) > 0
+	const { captured, inherited, changes } = coverage;
+	return captured > 0
 		? result(
 				"tested-build",
 				true,

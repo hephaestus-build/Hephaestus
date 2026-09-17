@@ -1,6 +1,6 @@
 # ADR 0034: Production consumes one signed release image lock
 
-**Status:** Accepted (amended 2026-09-03 #1719 — [ADR 0041](0041-compose-1x-kubernetes-2.md) adds the 2.0 chart and CRD inventory; 2026-09-05 — the operator toolchain follows [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md))
+**Status:** Accepted (amended 2026-09-03 #1719 — 2.0 lock inventory from [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-05 — operator toolchain superseded by [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md))
 **Date:** 2026-08-28
 **Supersedes:** [ADR 0031](0031-agent-image-follows-the-deployments-own-tag.md)
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
 
 import {
 	isRetryableStatus,
@@ -7,7 +7,7 @@ import {
 	retrying,
 } from "../../../main/resources/agent/pi-runner-retry.ts";
 
-const noSleep = mock.fn(async () => undefined);
+const noSleep = async () => undefined;
 
 void test("a call that arrives is not repeated", async () => {
 	let calls = 0;

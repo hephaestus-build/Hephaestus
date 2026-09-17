@@ -57,7 +57,7 @@ export function ReviewActivitySection({
 	}
 
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex flex-col gap-4" aria-busy={isLoading}>
 			<h3 className="text-lg font-semibold">Review activity</h3>
 			<div className="flex flex-col gap-2">{list}</div>
 			{canViewAll && (

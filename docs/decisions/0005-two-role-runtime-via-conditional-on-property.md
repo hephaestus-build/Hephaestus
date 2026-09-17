@@ -1,6 +1,6 @@
 # ADR 0005: Two-role runtime topology via `@ConditionalOnProperty`
 
-**Status:** Accepted (amended 2026-05-20 #1110, 2026-07-20 / 2026-07-21 / 2026-07-22 #1368, 2026-08-22 — a setting must reach a container that can read it; 2026-09-03 #1719 — role count fixed at three by [ADR 0041](0041-compose-1x-kubernetes-2.md))
+**Status:** Accepted (amended 2026-05-20 #1110 — webhook role wired; 2026-07-20 #1368 — proxy capability flag removed; 2026-07-21 #1368 — agent queue moved to PostgreSQL; 2026-07-22 #1368 — what the worker gate covers; 2026-08-22 — role-scoped settings gate; 2026-09-03 #1719 — role deferral superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md))
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 

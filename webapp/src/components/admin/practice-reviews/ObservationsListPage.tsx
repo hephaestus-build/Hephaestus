@@ -1,6 +1,10 @@
 import { Link } from "@tanstack/react-router";
 
-import type { ListPracticeReviewObservationsResponse, Practice } from "@/api/types.gen";
+import type {
+	ListPracticeReviewObservationsResponse,
+	Practice,
+	ReviewObservation,
+} from "@/api/types.gen";
 import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { TablePagination } from "@/components/common/TablePagination";
@@ -34,6 +38,22 @@ export interface ObservationsListPageProps {
 	people: ReviewPeople;
 }
 
+function resultsState(
+	isLoading: boolean,
+	rows: ReviewObservation[],
+	onClearFilters: (() => void) | undefined,
+): ObservationResultsState {
+	if (isLoading) {
+		return { status: "loading" };
+	}
+	if (rows.length > 0) {
+		return { status: "ready", observations: rows };
+	}
+	return onClearFilters
+		? { status: "empty", filtered: true, onClearFilters }
+		: { status: "empty", filtered: false };
+}
+
 export function ObservationsListPage({
 	workspaceSlug,
 	search,
@@ -55,17 +75,6 @@ export function ObservationsListPage({
 	const hasFilter = hasObservationFilter(search);
 	const reset = () => onSearchChange(clearedObservationFilters());
 	const patchFilter = (patch: Partial<ObservationsSearch>) => onSearchChange({ ...patch, page: 0 });
-	function resultsState(): ObservationResultsState {
-		if (isLoading) {
-			return { status: "loading" };
-		}
-		if (rows.length > 0) {
-			return { status: "ready", observations: rows };
-		}
-		return hasFilter
-			? { status: "empty", filtered: true, onClearFilters: reset }
-			: { status: "empty", filtered: false };
-	}
 
 	return (
 		<section aria-label="Practice review observations" className="space-y-4">
@@ -84,7 +93,7 @@ export function ObservationsListPage({
 				<ObservationResults
 					workspaceSlug={workspaceSlug}
 					practices={practiceRecords}
-					state={resultsState()}
+					state={resultsState(isLoading, rows, hasFilter ? reset : undefined)}
 				/>
 			) : (
 				<QueryErrorAlert error={error} title="Couldn't load observations" onRetry={onRetry} />

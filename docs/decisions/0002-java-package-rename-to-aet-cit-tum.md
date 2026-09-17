@@ -63,4 +63,6 @@ moved, and the package stays `de.tum.cit.aet.hephaestus`.
 - `aet.cit.tum.de` survives as the base package, as the `$id` of the artifact-source and
   practice-catalog JSON schemas (`server/application/src/main/resources/contracts/`,
   `practices/default-catalog.schema.json`, read by `scripts/validate-artifact-source-contracts.ts`),
-  and as a commented example issuer in `server/.env.example` and `docker/.env.example`.
+  as the commented `HEPHAESTUS_AUTH_ISSUER` example in `server/.env.example`, and in
+  `docker/.env.example` as the `APP_HOSTNAME` example (`hephaestus.cit.tum.de`) and as the
+  deployment the `tumaet` legal profile describes (`hephaestus.aet.cit.tum.de`).

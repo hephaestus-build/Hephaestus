@@ -1,10 +1,10 @@
 import { CopyIcon } from "lucide-react";
-import { toast } from "sonner";
 
 import type { AgentJob } from "@/api/types.gen";
 import { formatTokens, JOB_TYPE_LABELS } from "@/components/admin/usage/usage-utils";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { Button } from "@/components/ui/button";
+import { copyToClipboard } from "@/lib/clipboard";
 import { hasText } from "@/lib/text";
 import { modelLabel } from "./job-utils";
 
@@ -19,15 +19,6 @@ export interface ReviewRunCardProps {
  * checks when a review costs more than it should or answers worse than it used to.
  */
 export function ReviewRunCard({ job }: ReviewRunCardProps) {
-	const copyConfiguration = async () => {
-		try {
-			await navigator.clipboard.writeText(JSON.stringify(job.configSnapshot, null, 2));
-			toast.success("Configuration copied");
-		} catch {
-			toast.error("Could not copy to clipboard");
-		}
-	};
-
 	return (
 		<section aria-labelledby="run-card-heading" className="space-y-3">
 			<div className="flex flex-wrap items-center justify-between gap-2">
@@ -37,9 +28,9 @@ export function ReviewRunCard({ job }: ReviewRunCardProps) {
 				<Button
 					variant="outline"
 					size="sm"
-					onClick={() => {
-						void copyConfiguration();
-					}}
+					onClick={() =>
+						copyToClipboard(JSON.stringify(job.configSnapshot, null, 2), "Configuration copied")
+					}
 				>
 					<CopyIcon aria-hidden />
 					Copy configuration

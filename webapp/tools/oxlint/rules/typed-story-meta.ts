@@ -46,6 +46,15 @@ function unwrapped(init: ESTree.Expression) {
 		: init;
 }
 
+/**
+ * A story whose `render` takes no `args` passes the sibling its props at the call, where `tsc`
+ * checks them; `args` beside a `render` reach the sibling through `StoryObj<typeof Sibling>`, whose
+ * props are all optional.
+ */
+function rendersSiblingWithProps(init: ESTree.Expression) {
+	return hasProperty(init, "render") && !hasProperty(init, "args");
+}
+
 function* declarators(program: ESTree.Program) {
 	for (const statement of program.body) {
 		const declaration =
@@ -60,8 +69,9 @@ function* declarators(program: ESTree.Program) {
  * What the rule can see, and its ceiling. A JS plugin gets the syntax tree and no type information
  * (https://oxc.rs/docs/guide/usage/linter/js-plugins), so it checks that a `Meta` names *a*
  * component, never that it names the right one: `satisfies Meta<typeof SomeOtherThing>` passes here
- * and only `tsc` catches it. For the same reason the named form is recognised by the identifier
- * `meta`, which is the CSF convention rather than anything the tree states.
+ * and only `tsc` catches it. For the same reason a meta that states no type at all is recognised
+ * by the identifier `meta`, the CSF convention, while the story check keys on the file's
+ * `satisfies Meta<…>` declarations under whatever name each carries.
  */
 export const typedStoryMeta = defineRule({
 	meta: {
@@ -72,15 +82,15 @@ export const typedStoryMeta = defineRule({
 		},
 		messages: {
 			untyped:
-				"This `meta` names a `component` but is typed as a bare `Meta`, so its `args` are never checked against that component's props and Storybook's generated controls drift with them. Type it `Meta<typeof TheComponent>`.",
+				"Write `satisfies Meta<typeof TheComponent>` so this `meta`'s `args` are checked against the component's props.",
 			unchecked:
-				"This `meta` carries no type, so nothing checks its `args` against the component's props and `StoryObj<typeof meta>` infers from an object nobody constrained. End it `satisfies Meta<typeof TheComponent>`.",
+				"End this `meta` with `satisfies Meta<typeof TheComponent>` so its `args` are checked against the component's props and `StoryObj<typeof meta>` infers from a checked object.",
 			asserted:
-				"`as` asserts where `satisfies` checks: an object asserted `as Meta<typeof X>` may carry an `arg` the component has no prop for, or omit one it requires. Write `satisfies Meta<typeof X>`.",
+				"Write `satisfies Meta<typeof X>` instead of `as Meta<typeof X>`, which asserts rather than checks and lets through an `arg` the component has no prop for.",
 			annotated:
-				"`const meta: Meta<typeof X>` widens `typeof meta` to `Meta<typeof X>`, whose args are all optional, so `StoryObj<typeof meta>` no longer sees which args this meta supplies and a story that omits a required prop type-checks. Write `const meta = { … } satisfies Meta<typeof X>`.",
+				"Write `const meta = { … } satisfies Meta<typeof X>` instead of annotating it, since the annotation widens `typeof meta` to all-optional args and a story that omits a required prop type-checks.",
 			storyOfComponent:
-				"`StoryObj<typeof X>` makes every arg optional, so a story that omits a required prop type-checks. Write `StoryObj<typeof meta>`: it subtracts the args the meta supplies and requires the rest.",
+				"Write `StoryObj<typeof meta>`, which requires every arg the meta does not supply, or a `render` with no `args` that passes the sibling its props at the call, since `StoryObj<typeof X>` makes every arg optional.",
 		},
 	},
 	create(context) {
@@ -107,12 +117,10 @@ export const typedStoryMeta = defineRule({
 			Program(node) {
 				for (const declarator of declarators(node)) {
 					if (
-						declarator.id.type !== "Identifier" ||
-						declarator.init?.type !== "TSSatisfiesExpression"
+						declarator.id.type === "Identifier" &&
+						declarator.init?.type === "TSSatisfiesExpression" &&
+						asMetaReference(declarator.init.typeAnnotation)
 					) {
-						continue;
-					}
-					if (asMetaReference(declarator.init.typeAnnotation)) {
 						metaNames.add(declarator.id.name);
 						hasComponentMeta ||= namesComponent(declarator.init.expression);
 					}
@@ -139,9 +147,7 @@ export const typedStoryMeta = defineRule({
 					}
 					return;
 				}
-				// A story with its own `render` may draw a sibling of the meta's component, whose args
-				// are that sibling's; whether it does is a type question this rule cannot ask.
-				if (node.init && !hasProperty(node.init, "render")) {
+				if (node.init && !rendersSiblingWithProps(node.init)) {
 					checkStoryArgument(node.id.typeAnnotation?.typeAnnotation);
 				}
 				// `node.id.typeAnnotation` rather than `annotation`: `const meta: StoryObj = …` states a

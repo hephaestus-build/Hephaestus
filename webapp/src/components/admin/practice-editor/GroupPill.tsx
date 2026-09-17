@@ -1,8 +1,10 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import { CircleDashed } from "lucide-react";
 
 import { cn } from "cn";
-import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
+import {
+	getGroupVisual,
+	UNASSIGNED_GROUP_VISUAL,
+} from "@/components/practice-vocabulary/group-visuals";
 import { hasText } from "@/lib/text";
 
 const groupPillVariants = cva("flex shrink-0 items-center justify-center", {
@@ -34,11 +36,7 @@ export function GroupPill({
 	size,
 	className,
 }: GroupPillProps) {
-	const visual = hasText(slug)
-		? getGroupVisual(icon, color)
-		: // oxlint-disable-next-line shadcn/no-unknown-classes -- The plugin mistakes this destructured record for a cn class map.
-			{ Icon: CircleDashed, pill: "bg-muted text-muted-foreground" };
-	const { Icon, pill } = visual;
+	const { Icon, pill } = hasText(slug) ? getGroupVisual(icon, color) : UNASSIGNED_GROUP_VISUAL;
 	const label = name ?? "Unassigned";
 
 	return (

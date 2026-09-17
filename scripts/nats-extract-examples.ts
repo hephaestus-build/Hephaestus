@@ -4,6 +4,7 @@ import process from "node:process";
 
 import {
 	AckPolicy,
+	type Consumer,
 	type ConsumerConfig,
 	type ConsumerMessages,
 	DeliverPolicy,
@@ -221,6 +222,7 @@ class ExampleCollector {
 			this.skippedByFilter += 1;
 			return;
 		}
+		this.matched += 1;
 		if (!withinWindow(msg, this.options.since, this.options.until)) {
 			this.skippedByTime += 1;
 			return;
@@ -242,11 +244,7 @@ class ExampleCollector {
 		if (!allowedActions) {
 			return false;
 		}
-		if (allowedActions.size > 0 && !allowedActions.has((action ?? "").toLowerCase())) {
-			return false;
-		}
-		this.matched += 1;
-		return true;
+		return allowedActions.size === 0 || allowedActions.has((action ?? "").toLowerCase());
 	}
 
 	/** The name to write under, or nothing when the example already exists and duplicates are off. */
@@ -299,9 +297,7 @@ function isFetchTimeout(error: unknown): boolean {
 
 /** Feeds every message the consumer yields to the collector until the stream runs dry. */
 async function drain(
-	consumer: {
-		fetch: (options: { max_messages: number; expires: number }) => Promise<ConsumerMessages>;
-	},
+	consumer: Pick<Consumer, "fetch">,
 	options: ExtractOptions,
 	collector: ExampleCollector,
 	logger: Logger,

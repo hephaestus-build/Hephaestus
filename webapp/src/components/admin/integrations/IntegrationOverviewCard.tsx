@@ -104,6 +104,8 @@ export function IntegrationOverviewCard({
 				<OverviewBody
 					workspaceSlug={workspaceSlug}
 					entry={entry}
+					detailTo={detailTo}
+					isConnectionActive={isConnectionActive}
 					status={status}
 					isStatusLoading={isStatusLoading}
 					isStatusError={isStatusError}
@@ -142,24 +144,30 @@ export function IntegrationOverviewCard({
 	);
 }
 
+interface OverviewBodyProps {
+	workspaceSlug: string;
+	entry: IntegrationCatalogEntry;
+	detailTo: (typeof DETAIL_ROUTE)[IntegrationCatalogEntry["kind"]];
+	isConnectionActive: boolean;
+	status: ConnectionSyncStatus | undefined;
+	isStatusLoading: boolean;
+	isStatusError: boolean;
+	statusError: unknown;
+	onRetryStatus: (() => void) | undefined;
+}
+
 function OverviewBody({
 	workspaceSlug,
 	entry,
+	detailTo,
+	isConnectionActive,
 	status,
 	isStatusLoading,
 	isStatusError,
 	statusError,
 	onRetryStatus,
-}: Omit<
-	IntegrationOverviewCardProps,
-	"isTriggering" | "onSync" | "isStatusLoading" | "isStatusError"
-> & {
-	isStatusLoading: boolean;
-	isStatusError: boolean;
-}) {
+}: OverviewBodyProps) {
 	const now = useNow();
-	const detailTo = DETAIL_ROUTE[entry.kind];
-	const isConnectionActive = entry.connectionState === "ACTIVE";
 	const isScm = entry.kind === "GITHUB" || entry.kind === "GITLAB";
 
 	if (!entry.connected) {

@@ -85,12 +85,9 @@ review in the originating branch.
 
 ## Update — 2026-09-17
 
-Not implemented: `workspace.WorkspaceMembership` is `@EmbeddedId (workspaceId, userId)` with a
-`@ManyToOne` to `integration.scm.domain.user.User`, and
-`server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.sql` has no
-`workspace_membership.account_id`.
-[ADR 0017](0017-replace-keycloak-with-spring-native-auth.md) § Update 2026-09-17 has the schema,
-including the name the `ExternalActor` rename § Decision anticipates. Two names in § Context:
+Not implemented; [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md) § Update 2026-09-17
+has the schema, including the name the `ExternalActor` rename § Decision anticipates. Two names in
+§ Context:
 
 - The auto-heal is `workspace.context.WorkspaceMembershipAutoSeeder`, called from
   `WorkspaceContextFilter` and gated by `hephaestus.workspace.auto-seed-membership`, which
