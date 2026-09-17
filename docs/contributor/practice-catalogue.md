@@ -286,10 +286,16 @@ script, shared review instructions and developer guidance. Check these seams exp
   their expectation.
 
 Keep the cases and evaluation evidence with the relevant test or benchmark, and explain the change
-in the pull request. Do not add keyword-count or heading-presence tests as a proxy for semantic
-quality. Schema and fixture tests prove loading and faithful presentation; evidence-based case review
-and model evaluation are separate checks. Changing shared preambles affects every entry that uses
-them, so inspect all affected work types and preserve the existing workspace-adoption boundary.
+in the pull request. Every bundled practice is written in the decision-procedure shape of
+[Writing effective practices](/admin/writing-practices#write-the-criteria-as-a-decision-procedure),
+and `CatalogCriteriaShapeTest` checks that shape (the sections, their order, the size bound). That
+test proves consistency of form — the one thing a small model needs to apply every practice the same
+way — and nothing about semantic quality: keyword counts and heading presence are never a proxy for
+that. Schema and fixture tests prove loading and faithful presentation; evidence-based case review
+and model evaluation are separate checks. The shared preambles are one artifact-framing paragraph
+each; the grounding rules live once, in the shared review instructions. Changing a preamble affects
+every entry that uses it, so inspect all affected work types and preserve the existing
+workspace-adoption boundary.
 
 Create workspace-specific practices through the admin UI or API so validation, ordering, revisions,
 and audit behavior remain intact.
