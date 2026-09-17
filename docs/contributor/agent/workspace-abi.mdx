@@ -237,9 +237,12 @@ the native Pi tools `read`, `grep`, `find`, `ls`, `write`, `edit` and `bash`, pl
 for the measuring turns and, when composition was requested, `report_feedback` and `report_summary` for
 the composition turn. The two feedback tools store nothing until the server has admitted the recorded
 observations. `report_observation` and `report_feedback` take a list — several observations or units in
-one call, each stored or refused on its own with the reason. The schema offers the array and nothing
-else: offered a JSON string as well, a smaller model took that form half the time and lost count of
-its braces, and the SDK's own schema error is the better answer. A citation's quote is optional: by
+one call, each stored or refused on its own with the reason — and accept that list as a JSON string as
+well as an array, because a smaller model sends the string form often and, offered the array alone,
+re-sends the same string against the SDK's schema error indefinitely. A string with a closing brace too
+many or too few is repaired where the repair is unambiguous and checked field by field afterwards; one
+that does not parse is refused with the parse error. A turn that calls the recording tool many times
+without recording anything is ended. A citation's quote is optional: by
 coordinates alone, the runner records the cited lines and echoes them back. A quote given with a diff
 marker, a `[L<n>]` prefix, a non-breaking space read as a space, or a JSON string's text read without
 its escapes is recorded as the artifact's own bytes, because admission verifies those bytes; a quote

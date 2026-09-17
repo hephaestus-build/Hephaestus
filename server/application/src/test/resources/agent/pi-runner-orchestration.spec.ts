@@ -266,8 +266,11 @@ if (scenario) {
 								writeFileSync(join(cwd, "out", "stray.txt"), "left by a session");
 								return;
 							}
-							// A list sent as a string that is not JSON is refused with the parse error, never
-							// silently emptied.
+							// A list sent as a string with one closing brace too many is repaired and read; one
+							// that is not JSON is refused with the parse error, never silently emptied.
+							const oneBraceTooMany = `${JSON.stringify([observation("test-practice", "Sent as a string with an extra brace")]).slice(0, -1)}}]`;
+							const repaired = await report.execute("o-00", { observations: oneBraceTooMany });
+							record(`repaired:${JSON.stringify(repaired)}`);
 							await report
 								.execute("o-0", { observations: "[{not json" })
 								.then(() => record("unparsed:accepted"))
@@ -491,6 +494,10 @@ if (scenario) {
 							break;
 						case "batch": {
 							assert.equal(child.status, 0, child.stderr);
+							assert.match(
+								events.find((event) => event.startsWith("repaired:")) ?? "",
+								/#1 test-practice: stored \(negative\)/,
+							);
 							assert.match(
 								events.find((event) => event.startsWith("unparsed:")) ?? "",
 								/observations refused — the list arrived as a string that is not a JSON array/,
