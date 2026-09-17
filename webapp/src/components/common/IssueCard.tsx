@@ -33,7 +33,7 @@ export interface IssueCardProps {
 	/** Optional className to apply to the card */
 	className?: string;
 	/** Provider type for rendering correct icons */
-	providerType?: ProviderType;
+	providerType: ProviderType;
 }
 
 const NO_LABELS: readonly LabelInfo[] = [];
@@ -56,7 +56,7 @@ export function IssueCard({
 	rightContent,
 	onClick,
 	className,
-	providerType = "GITHUB",
+	providerType,
 }: IssueCardProps) {
 	// Determine the PR state icon and color based on provider
 	const effectiveState = isMerged === true ? "MERGED" : (state ?? "OPEN");

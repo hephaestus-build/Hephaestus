@@ -1,6 +1,6 @@
 # ADR 0003: Spring Modulith 2.0 adoption with two empirical shared kernels
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-09-17 — kernel and named-interface names corrected)
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -94,3 +94,23 @@ OPEN-or-named-interface choice; or a `@NamedInterface`-narrowed module accumulat
 enough cross-module imports to warrant flipping it to `Type.OPEN`; or Spring
 Modulith 2.x introduces a deployment-unit concept that supersedes the role-flag
 pattern in ADR 0005.
+
+## Update — 2026-09-17
+
+Corrects the names in § Decision and § Consequences; the shape decided there is unchanged.
+
+- The `gitprovider` kernel became `integration/scm` in [ADR 0015](0015-unified-integration-framework.md).
+  `Type.OPEN` today is declared on `config`, `integration`, `integration/core`, `integration/scm`,
+  `integration/scm/github`, `integration/scm/gitlab` and `integration/slack` (`package-info.java`
+  under `server/application/src/main/java/de/tum/cit/aet/hephaestus/`).
+- `practices::finding` is `practices::observation` ([ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md)
+  renamed the entity); `practices` also exposes `feedback`, `feedback-approval`, `reaction` and
+  `autonomy`. `core` exposes `exception`, `security`, `proxy`, `runtime`, `event` as decided, plus
+  `web`, `webhook`, `release`, `settings-spi`, `config-audit-spi`, `auth-spi`, `auth-ratelimit`,
+  `current-account`, `worker-hub`, `worker-auth` and `worker-protocol`. `workspace` exposes
+  `context`, `authorization`, `spi`, `settings` as decided, plus `dto` and `events`.
+- The verification entry point is `ApplicationModules.of(Application.class, …)` in
+  `server/application/src/test/java/de/tum/cit/aet/hephaestus/architecture/ModulithVerificationTest.java`;
+  there is no `HephaestusApplication` class. `Application.java`, `SecurityConfig.java`,
+  `WebConfig.java` and `OpenAPIConfiguration.java` remain in the root package; `SecurityUtils` is in
+  `core/security/`.

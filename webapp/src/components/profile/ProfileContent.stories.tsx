@@ -25,6 +25,7 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
+		providerType: "GITHUB",
 		isLoading: false,
 		username: "johndoe",
 		currUserIsDashboardUser: true,

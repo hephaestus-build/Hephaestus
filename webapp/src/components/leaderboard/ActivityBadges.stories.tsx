@@ -58,6 +58,7 @@ const meta = {
 	component: ActivityBadges,
 	tags: ["autodocs"],
 	args: {
+		providerType: "GITHUB",
 		reviewedPullRequests: basePullRequests,
 		approvals: 3,
 		changeRequests: 1,

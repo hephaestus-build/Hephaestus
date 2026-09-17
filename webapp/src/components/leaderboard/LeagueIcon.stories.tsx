@@ -32,7 +32,7 @@ const meta = {
 } satisfies Meta<typeof LeagueIcon>;
 
 export default meta;
-type Story = StoryObj<typeof LeagueIcon>;
+type Story = StoryObj<typeof meta>;
 
 export const NotRanked: Story = {
 	args: {

@@ -8,9 +8,11 @@ ruleTester.run("typed-story-meta", typedStoryMeta, {
 		"const meta = { parameters: { docs: { description: { component: 'All icons.' } } } } satisfies Meta;",
 		"const meta = { ...base } satisfies Meta;",
 		"const story = { component: Button } satisfies StoryObj;",
-		// The annotation spelling.
-		"const meta: Meta<typeof Button> = { component: Button };",
+		// The annotation spelling is fine where no component is named.
 		"const meta: Meta = { parameters: { layout: 'centered' } };",
+		"type Story = StoryObj<typeof meta>;",
+		"type Story = SB.StoryObj<typeof meta>;",
+		"type Story = StoryObj;",
 		"const meta: StoryObj = { component: Button };",
 		// An untyped object that is not a `meta` belongs to whoever declared it.
 		"const preset = { component: Button };",
@@ -48,8 +50,21 @@ ruleTester.run("typed-story-meta", typedStoryMeta, {
 			errors: [{ messageId: "untyped" }],
 		},
 		{
+			// Annotated, so `typeof meta` is `Meta`: the stories lose the args it supplies.
+			code: "const meta: Meta<typeof Button> = { component: Button };",
+			errors: [{ messageId: "annotated", line: 1, column: 13, endColumn: 32 }],
+		},
+		{
 			code: "const meta: Meta = { parameters: { layout: 'centered' }, component: Button };",
-			errors: [{ messageId: "untyped" }],
+			errors: [{ messageId: "annotated" }],
+		},
+		{
+			code: "type Story = StoryObj<typeof Button>;",
+			errors: [{ messageId: "storyOfComponent", line: 1, column: 23, endColumn: 36 }],
+		},
+		{
+			code: "type Story = StoryObj<ButtonProps>;",
+			errors: [{ messageId: "storyOfComponent" }],
 		},
 		{
 			code: "const meta = { component: Button } as Meta<typeof Button>;",

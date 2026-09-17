@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 
 import { NoWorkspace } from "./NoWorkspace";
 
-const meta: Meta<typeof NoWorkspace> = {
+const meta = {
 	component: NoWorkspace,
 	parameters: {
 		layout: "centered",
@@ -13,10 +13,10 @@ const meta: Meta<typeof NoWorkspace> = {
 		},
 	},
 	tags: ["autodocs"],
-};
+} satisfies Meta<typeof NoWorkspace>;
 
 export default meta;
-type Story = StoryObj<typeof NoWorkspace>;
+type Story = StoryObj<typeof meta>;
 
 /**
  * Default presentation.

@@ -34,7 +34,7 @@ export interface LeaderboardTableProps {
 	renderUserLink?: (username: string, children: ReactNode) => ReactNode;
 	renderTeamLink?: (teamId: number, children: ReactNode) => ReactNode;
 	teamLabelsById?: Record<number, string>;
-	providerType?: ProviderType;
+	providerType: ProviderType;
 	leaguesEnabled?: boolean;
 }
 
@@ -48,7 +48,7 @@ export function LeaderboardTable({
 	renderUserLink,
 	renderTeamLink,
 	teamLabelsById,
-	providerType = "GITHUB",
+	providerType,
 	leaguesEnabled = true,
 }: LeaderboardTableProps) {
 	if (isLoading) {

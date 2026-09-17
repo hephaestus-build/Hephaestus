@@ -27,7 +27,7 @@ export interface ActivityBadgesProps {
 	highlightReviews?: boolean;
 	className?: string;
 	isLoading?: boolean;
-	providerType?: ProviderType;
+	providerType: ProviderType;
 }
 
 const NO_PULL_REQUESTS: readonly ReviewedPullRequest[] = [];
@@ -47,7 +47,7 @@ export function ActivityBadges({
 	highlightReviews = false,
 	className,
 	isLoading = false,
-	providerType = "GITHUB",
+	providerType,
 }: ActivityBadgesProps) {
 	const counts: Record<ActivityBadgeKey, number> = {
 		changeRequests,

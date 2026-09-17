@@ -10,6 +10,7 @@ import { LeaderboardLegend } from "./LeaderboardLegend";
  */
 const meta = {
 	component: LeaderboardLegend,
+	args: { providerType: "GITHUB" },
 	tags: ["autodocs"],
 	parameters: {
 		layout: "centered",

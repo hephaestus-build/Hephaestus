@@ -35,7 +35,7 @@ export const typedStoryMeta = defineRule({
 		type: "problem",
 		docs: {
 			description:
-				"A story `meta` naming a `component` is checked against it, by `satisfies Meta<typeof That>`. A gallery meta that names no component is the one case a bare `Meta` is right.",
+				"A story `meta` naming a `component` is checked against it, by `satisfies Meta<typeof That>`, and its stories are `StoryObj<typeof meta>`. A gallery meta that names no component is the one case a bare `Meta` is right.",
 		},
 		messages: {
 			untyped:
@@ -44,27 +44,19 @@ export const typedStoryMeta = defineRule({
 				"This `meta` carries no type, so nothing checks its `args` against the component's props and `StoryObj<typeof meta>` infers from an object nobody constrained. End it `satisfies Meta<typeof TheComponent>`.",
 			asserted:
 				"`as` asserts where `satisfies` checks: an object asserted `as Meta<typeof X>` may carry an `arg` the component has no prop for, or omit one it requires. Write `satisfies Meta<typeof X>`.",
+			annotated:
+				"`const meta: Meta<typeof X>` widens `typeof meta` to `Meta`, so `StoryObj<typeof meta>` no longer sees which args this meta supplies and a story that omits a required prop type-checks. Write `const meta = { … } satisfies Meta<typeof X>`.",
+			storyOfComponent:
+				"`StoryObj<typeof X>` makes every arg optional, so a story that omits a required prop type-checks. Write `StoryObj<typeof meta>`: it subtracts the args the meta supplies and requires the rest.",
 		},
 	},
 	create(context) {
-		/** A stated `Meta` with no type argument pins nothing about the component it names. */
-		const checkStatedType = (
-			meta: ESTree.TSTypeReference,
-			value: ESTree.Expression | null | undefined,
-		) => {
-			if (meta.typeArguments) {
-				return;
-			}
-			if (value && namesComponent(value)) {
-				context.report({ node: value, messageId: "untyped" });
-			}
-		};
-
 		return {
+			/** A stated `Meta` with no type argument pins nothing about the component it names. */
 			TSSatisfiesExpression(node) {
 				const meta = asMetaReference(node.typeAnnotation);
-				if (meta) {
-					checkStatedType(meta, node.expression);
+				if (meta && !meta.typeArguments && namesComponent(node.expression)) {
+					context.report({ node: node.expression, messageId: "untyped" });
 				}
 			},
 			TSAsExpression(node) {
@@ -76,7 +68,9 @@ export const typedStoryMeta = defineRule({
 			VariableDeclarator(node) {
 				const annotation = asMetaReference(node.id.typeAnnotation?.typeAnnotation);
 				if (annotation) {
-					checkStatedType(annotation, node.init);
+					if (node.init && namesComponent(node.init)) {
+						context.report({ node: annotation, messageId: "annotated" });
+					}
 					return;
 				}
 				// `node.id.typeAnnotation` rather than `annotation`: `const meta: StoryObj = …` states a
@@ -86,6 +80,29 @@ export const typedStoryMeta = defineRule({
 				}
 				if (node.init && namesComponent(node.init)) {
 					context.report({ node: node.init, messageId: "unchecked" });
+				}
+			},
+			// `type Story = StoryObj<typeof meta>` is the CSF convention; any other argument loses the
+			// subtraction of the meta's args that makes a missing required prop a type error.
+			TSTypeAliasDeclaration(node) {
+				const { typeAnnotation } = node;
+				if (typeAnnotation.type !== "TSTypeReference") {
+					return;
+				}
+				const { typeName } = typeAnnotation;
+				const isStoryObj =
+					(typeName.type === "Identifier" && typeName.name === "StoryObj") ||
+					(typeName.type === "TSQualifiedName" && typeName.right.name === "StoryObj");
+				const [argument] = typeAnnotation.typeArguments?.params ?? [];
+				if (!isStoryObj || argument === undefined) {
+					return;
+				}
+				const ofMeta =
+					argument.type === "TSTypeQuery" &&
+					argument.exprName.type === "Identifier" &&
+					argument.exprName.name === "meta";
+				if (!ofMeta) {
+					context.report({ node: argument, messageId: "storyOfComponent" });
 				}
 			},
 			// CSF3 lets the meta leave as the default export directly, under no name to recognise it by.

@@ -21,6 +21,7 @@ const meta = {
 	},
 	decorators: [withStandardPage],
 	tags: ["autodocs"],
+	args: { providerType: "GITHUB" },
 } satisfies Meta<typeof ProfilePage>;
 
 export default meta;

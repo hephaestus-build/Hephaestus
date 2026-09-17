@@ -1,6 +1,6 @@
 # ADR 0012: Cross-instance identity safety on sync paths
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-09-17 — definitive-404 removal narrowed by [ADR 0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md))
 **Date:** 2026-05-25
 
 ## Context
@@ -188,3 +188,19 @@ exception is reusable).
 - `RepositoryNotFoundOnGitProviderException` — the new definitive-404 signal
 - ADR-0011 — predecessor in the same defect family
   (`integration_identity` not wired from sync)
+
+## Update — 2026-09-17
+
+Supersedes § Decision "For defect 2" on what a definitive 404 does.
+`GithubDataSyncService` (`integration/scm/github/sync/`) still catches
+`RepositoryNotFoundOnGitProviderException`, but removes the monitor only for a legacy row with no
+`native_id`; a monitor with a stable native id is preserved and retried, because a name-404 for a
+repository whose id still resolves upstream is a rename or transfer, which
+[ADR 0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md) § (e) heals by
+`(native_id, provider_id)`. The transient-failure branch (`Optional.empty()` leaves the row) is
+unchanged.
+
+Name correction for § Decision "For defect 1": the type parameter is `IdentityProviderType`
+(`integration/core/connection/IdentityProviderType.java`), so the method is
+`OrganizationRepository.findByLoginIgnoreCaseAndProvider_Type(String, IdentityProviderType)`;
+`GitProviderType` no longer exists. The unscoped `findByLoginIgnoreCase(String)` is still absent.

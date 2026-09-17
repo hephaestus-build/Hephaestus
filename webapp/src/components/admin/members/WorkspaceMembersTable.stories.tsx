@@ -127,7 +127,7 @@ const mockUsers: ExtendedUserTeams[] = [
 	},
 ];
 
-const meta: Meta<typeof WorkspaceMembersTable> = {
+const meta = {
 	component: WorkspaceMembersTable,
 	parameters: {
 		layout: "fullscreen",
@@ -139,7 +139,7 @@ const meta: Meta<typeof WorkspaceMembersTable> = {
 		view: { q: "", team: "all", sort: "name", desc: false, page: 0, size: 10 },
 		onViewChange: fn(),
 	},
-};
+} satisfies Meta<typeof WorkspaceMembersTable>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

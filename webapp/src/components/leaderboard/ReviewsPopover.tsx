@@ -20,13 +20,13 @@ const LINK_CLASS_NAME = "rounded-md px-3 py-2";
 export interface ReviewsPopoverProps {
 	reviewedPullRequests: readonly ReviewedPullRequest[];
 	highlight?: boolean;
-	providerType?: ProviderType;
+	providerType: ProviderType;
 }
 
 export function ReviewsPopover({
 	reviewedPullRequests,
 	highlight = false,
-	providerType = "GITHUB",
+	providerType,
 }: ReviewsPopoverProps) {
 	const isCopyingRef = useRef(false);
 	const hasReviews = reviewedPullRequests.length > 0;

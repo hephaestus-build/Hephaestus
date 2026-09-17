@@ -39,7 +39,7 @@ afterEach(() => {
 async function openCopyAction() {
 	render(
 		<>
-			<ReviewsPopover reviewedPullRequests={reviews} />
+			<ReviewsPopover providerType="GITHUB" reviewedPullRequests={reviews} />
 			<Toaster />
 		</>,
 	);
@@ -77,6 +77,7 @@ it("reports denied access without success and permits retry", async () => {
 it("leaves work without a safe URL readable but not navigable or copyable", async () => {
 	render(
 		<ReviewsPopover
+			providerType="GITHUB"
 			reviewedPullRequests={[
 				{
 					...reviews[0],
@@ -104,6 +105,7 @@ it("copies only usable links while retaining rows with missing URLs", async () =
 	writeText.mockResolvedValue();
 	render(
 		<ReviewsPopover
+			providerType="GITHUB"
 			reviewedPullRequests={[
 				...reviews,
 				{ id: 2, number: 2, title: "Review work", isDraft: false, isMerged: false, state: "OPEN" },

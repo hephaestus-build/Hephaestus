@@ -9,6 +9,7 @@ import { ReviewActivityCard, type ReviewActivityCardProps } from "./ReviewActivi
 /** The same projection `ReviewActivitySection` makes for each of its rows. */
 function cardArgs(activity: ProfileReviewActivity): ReviewActivityCardProps {
 	return {
+		providerType: "GITHUB",
 		isLoading: false,
 		state: activity.state,
 		submittedAt: activity.submittedAt,

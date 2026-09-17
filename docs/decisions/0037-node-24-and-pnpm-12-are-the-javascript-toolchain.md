@@ -1,6 +1,6 @@
 # ADR 0037: Node.js 24 and pnpm 12 are the JavaScript toolchain
 
-**Status:** Accepted (amended 2026-09-03 — see the update below)
+**Status:** Accepted (amended 2026-09-03 — [0040](0040-vite-plus-is-the-command-surface.md) makes Vite+ the command surface; 2026-09-17 — the pins have moved)
 **Date:** 2026-08-30
 **Supersedes:** [ADR 0033](0033-bun-is-the-javascript-runtime-and-package-manager.md)
 **Builds on:** [ADR 0036](0036-agent-runtime-runs-on-node-24.md), which moved the sandbox runtime first
@@ -51,3 +51,12 @@ rollback line is an exact pnpm 11 pin rather than a partial toolchain rollback.
 [ADR 0040](0040-vite-plus-is-the-command-surface.md) supersedes the "one command surface" of
 § Consequences: Vite+ (`vp`) is the command surface, and pnpm stays the package manager behind
 `vp install`. The runtime pin, lockfile and install policy decided here are unchanged.
+
+## Update — 2026-09-17: the pins have moved
+
+Corrects the version numbers in § Decision, which were the pins on the day of the decision. The rule
+stands: `package.json#packageManager` and `#devEngines` are authoritative and fail on drift, and
+Renovate moves them. On 2026-09-17 they name Node.js 24.20.0 and pnpm 12.3.4; the agent image
+(`docker/agents/pi/Dockerfile`) and the toolchain action follow the same pins. `pnpm peers check`
+is not run by any task or workflow; the typecheck, build and test gates remain the compatibility
+verdict, and `pnpm-workspace.yaml#allowBuilds` names the packages that may run a build script.

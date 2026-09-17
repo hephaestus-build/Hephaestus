@@ -48,7 +48,7 @@ const mockPullRequests = [
 	},
 ] satisfies PullRequestInfo[];
 
-const meta: Meta<typeof ReviewsPopover> = {
+const meta = {
 	component: ReviewsPopover,
 	tags: ["autodocs"],
 	argTypes: {
@@ -57,7 +57,8 @@ const meta: Meta<typeof ReviewsPopover> = {
 	parameters: {
 		layout: "centered",
 	},
-};
+	args: { providerType: "GITHUB" },
+} satisfies Meta<typeof ReviewsPopover>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

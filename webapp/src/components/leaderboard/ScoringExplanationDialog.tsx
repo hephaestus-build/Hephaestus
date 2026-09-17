@@ -12,13 +12,13 @@ import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-ter
 interface ScoringExplanationDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	providerType?: ProviderType;
+	providerType: ProviderType;
 }
 
 export function ScoringExplanationDialog({
 	open,
 	onOpenChange,
-	providerType = "GITHUB",
+	providerType,
 }: ScoringExplanationDialogProps) {
 	const terms = getProviderTerms(providerType);
 

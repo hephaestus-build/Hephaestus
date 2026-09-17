@@ -82,3 +82,16 @@ dev-login PR stays.
 WorkOS/Auth0/Logto/Clerk multi-tenant guides; GitHub org-roles & GitLab admin/members docs (instance
 admins reach any group without membership — the model the super-admin elevation adopts). See the design
 review in the originating branch.
+
+## Update — 2026-09-17
+
+Not implemented. `workspace.WorkspaceMembership` is still `@EmbeddedId (workspaceId, userId)` with a
+`@ManyToOne` to `integration.scm.domain.user.User`, and
+`server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.sql` has no
+`workspace_membership.account_id`. Two names in § Context moved: the auto-heal is
+`workspace.context.WorkspaceMembershipAutoSeeder`, gated by
+`hephaestus.workspace.auto-seed-membership` (default `false`) and called from `WorkspaceContextFilter`;
+the SPI is `core.auth.spi.AccountWorkspaceMembershipQuery` with
+`workspace.AccountWorkspaceMembershipQueryAdapter`. The `ExternalActor` rename § Decision
+anticipates never happened ([ADR 0017](0017-replace-keycloak-with-spring-native-auth.md) § Update
+2026-09-17).

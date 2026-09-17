@@ -16,6 +16,7 @@ import { IssueCard, type IssueCardProps } from "./IssueCard";
 /** The same projection `OpenPullRequestsSection` makes for each of its rows. */
 function cardArgs(pullRequest: PullRequestInfo): IssueCardProps {
 	return {
+		providerType: "GITHUB",
 		isLoading: false,
 		additions: pullRequest.additions,
 		deletions: pullRequest.deletions,
@@ -144,6 +145,7 @@ export const ClosedPullRequest: Story = {
  */
 export const Loading: Story = {
 	args: {
+		providerType: "GITHUB",
 		isLoading: true,
 	},
 };

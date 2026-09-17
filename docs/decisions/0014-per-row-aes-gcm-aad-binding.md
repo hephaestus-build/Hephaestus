@@ -1,6 +1,6 @@
 # ADR 0014: Per-row AES-GCM AAD binds ciphertext to record identity
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-09-17 — key rotation realised with a per-row key version)
 **Date:** 2026-05-25
 
 ## Context
@@ -151,3 +151,22 @@ Re-open this decision if any of the following land:
 - AWS KMS — Encryption Context: https://docs.aws.amazon.com/kms/latest/developerguide/encrypt_context.html
 - NIST SP 800-38D — GCM/GMAC: https://csrc.nist.gov/pubs/sp/800/38/d/final
 - Pass-9 commit: `420dee0d5`
+
+## Update — 2026-09-17
+
+Amends the key-rotation consequence and corrects one path. The blob format, the AAD layout and the
+`(workspaceId, kind, instanceKey, columnFqn)` binding are unchanged
+(`integration/core/connection/EncryptionContext.java`, `CredentialBundleConverter.java`).
+
+- **Rotation is no longer a single bulk re-encrypt under one key.** `connection.credentials_key_version`
+  records which key encrypted a row; `CredentialBundleConverter` holds the active key
+  (`hephaestus.security.credential-encryption-key`, `…-version`) and an optional prior key
+  (`hephaestus.security.prior-credential-encryption-key`, `…-version`) and decrypts each row with the
+  version the row names. `CredentialRotationService` (server role, gated by
+  `hephaestus.security.credential-rotation-enabled`) re-encrypts rows in batches under the same AAD.
+  The operator procedure is `docs/admin/credential-key-rotation.mdx`. There is still no KEK/DEK envelope.
+- **Path.** `1780313973588_changelog.xml` is archived at
+  `docs/db/archive/v0.77.4/changelog/1780313973588_changelog.xml`; the shipped chain starts at
+  `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.xml`
+  (`docs/contributor/database-migration.mdx`). `WorkspaceConnectionBackfillChange` remains in
+  `integration/core/connection/migration/` for the archived migration test.

@@ -1,6 +1,6 @@
 # ADR 0029: Separate measurement from intervention and derive level from channel
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-09-17 — `basedOn` names this run's observations only)
 **Date:** 2026-08-16
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0021](0021-observations-feedback-synthesis-seam.md), [ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md), [ADR 0007](0007-sandbox-spi-shape.md)
@@ -137,3 +137,13 @@ results and recovery distinguishable.
 
 - Hattie & Timperley, [*The Power of Feedback*](https://doi.org/10.3102/003465430298487), 2007.
 - Sadler, [*Formative assessment and the design of instructional systems*](https://doi.org/10.1007/BF00117714), 1989.
+
+## Update — 2026-09-17: `basedOn` names this run's observations only
+
+Supersedes the `basedOn` rule in § Composition contract. #1537 (2026-08-27) removed the
+`prior:<practiceSlug>` reference: `basedOn` now names only admitted observations from the current
+run, and at least one must belong to the unit's `practiceSlug`
+(`validateFeedbackEvidence` in `pi-runner-composition.ts`; `ComposedFeedbackUnit` in
+`agent.handler.composition`). Feedback that rests on the record rather than on this run is expressed
+through the history staged for the composer, not through a `basedOn` entry. #1519 (2026-08-25) added
+`alreadySaid` to the `IN_CHAT` `notes` object. Everything else in that section stands.

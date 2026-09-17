@@ -2,8 +2,10 @@
 
 ## Status
 
-Accepted. Supersedes [ADR 0030](0030-agent-runtime-is-typescript-on-bun.md) for the sandbox image.
-[ADR 0033](0033-bun-is-the-javascript-runtime-and-package-manager.md) still governs repository tooling.
+Accepted (amended 2026-09-17 — the image installs the SDK with pnpm). Supersedes
+[ADR 0030](0030-agent-runtime-is-typescript-on-bun.md) for the sandbox image. Repository tooling is
+governed by [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md), which superseded
+[ADR 0033](0033-bun-is-the-javascript-runtime-and-package-manager.md).
 
 ## Context
 
@@ -58,3 +60,18 @@ process grant makes Docker isolation and environment minimization load-bearing c
 - [Official Node Docker image](https://github.com/nodejs/docker-node/blob/main/README.md)
 - [npm `ignore-scripts` configuration](https://docs.npmjs.com/cli/v11/using-npm/config#ignore-scripts)
 - [Docker resource constraints](https://docs.docker.com/engine/containers/resource_constraints/)
+
+## Update — 2026-09-17: the image installs the SDK with pnpm
+
+Supersedes the install sentence of § Decision and the last sentence of § Consequences.
+
+Since #1728 (2026-09-02), `docker/agents/pi/Dockerfile` installs the Pi SDK in a
+`ghcr.io/pnpm/pnpm` build stage with `pnpm install --prod --frozen-lockfile --ignore-scripts` from
+`docker/agents/pi/package.json`, `pnpm-lock.yaml` and `pnpm-workspace.yaml`, then copies
+`/opt/pi-sdk` into the `node:24-slim` runtime stage. The runtime stage removes npm, npx, Corepack,
+Yarn and pnpm and fails the build if any of them survives on the filesystem, so the shipped image
+still carries Node and no package manager. The other build checks, the runner flags and the
+runtime-contract label (`SandboxLayout.RUNTIME_CONTRACT_VERSION = 2`) are unchanged.
+
+"Bun remains the repository package manager and tooling runtime" was superseded by
+[ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) on 2026-08-30.

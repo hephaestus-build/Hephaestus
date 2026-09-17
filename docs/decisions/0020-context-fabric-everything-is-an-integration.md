@@ -1,6 +1,6 @@
 # ADR 0020: Context Fabric — everything is an integration, only practice review and mentor are native
 
-**Status:** Accepted (amended 2026-08-04, 2026-08-30 and 2026-09-03 — see the updates below)
+**Status:** Accepted (amended 2026-08-04, 2026-08-30, 2026-09-03 and 2026-09-17 — see the updates below)
 **Date:** 2026-06-12
 **Authors:** Hephaestus maintainers
 **Builds on:** [ADR 0015](0015-unified-integration-framework.md) (the integration framework and `Connection` aggregate), [ADR 0004](0004-sql-layer-tenancy-via-statement-inspector.md) (SQL-layer tenancy), [ADR 0014](0014-per-row-aes-gcm-aad-binding.md) (per-row AAD), [ADR 0007](0007-sandbox-spi-shape.md) (the agent sandbox / `ContentSource` seam)
@@ -400,3 +400,30 @@ it, and selective erasure stops being a deployment-approval consideration tied t
 [ADR 0041](0041-compose-1x-kubernetes-2.md) supersedes what remains of § CAS and final filesystem
 layout, the 2026-08-04 update's § Filesystem layout (finalises §1/§2), and § Decision register's
 retained-payload entries. One job folder per attempt, rendered at job start, replaces them.
+
+## Update — 2026-09-17
+
+Corrects § Shipped slice and § CAS and final filesystem layout against the code, and records one
+revisit trigger.
+
+- Of the three cross-context files, only `linked_work_items.json` still exists
+  (`agent.context.providers.LinkedWorkItemContentSource`, source kind `scm.linked-work-items`).
+  `branch_graph.json` and `test_presence.json` have no producer; `keeps-the-test-suite-honest` declares
+  `scm.repository.tree` (`RepositoryTreeContentSource`) as its source in
+  `server/application/src/main/resources/practices/default-catalog.json`, and
+  `branches-from-the-integration-branch` is withdrawn as the 2026-08-04 update says.
+- `PullRequestReviewHandler.ALLOWED_INTERNAL_CONTEXT_PATHS` and `METADATA_LEVEL_PRACTICES` do not exist.
+  `filterByDiffScope` keeps an observation whose citation names any `sourceKind` other than
+  `scm.pull-request.diff`; the 2026-08-04 update's declared-source admission replaced the path allowlist.
+- `SandboxSpec.symlinks`, `SandboxWorkspaceManager.injectSymlinks` and the `/workspace/blobs/scm/repo`
+  mount do not exist. The sandbox layout is `agent.runtime.SandboxLayout`: everything below
+  `/workspace/inputs/` (`inputs/sources/`, `inputs/context/`, `inputs/manifest.json`), as the
+  2026-08-04 update states. `ContentSource` has no `connectorId()`; a provider declares its catalogued
+  kinds through `EvidenceSource.sourceKinds()` (`agent.context.EvidenceSource extends ContentSource`).
+- `integration.core.fabric.FabricLayout` (`sources/`, `cas/`, `jobs/` under `hephaestus.fabric.root`),
+  `ContentAddressedStore` and `FabricGarbageCollector` still exist in the pre-cutover code; their
+  replacement is what the 2026-08-30 and 2026-09-03 updates decide.
+- **Revisit trigger §9 fired.** [ADR 0004](0004-sql-layer-tenancy-via-statement-inspector.md) made
+  `throw` the default in every profile on 2026-08-30. No Row-Level Security has been added
+  (`db/changelog/` contains no `ROW LEVEL SECURITY`), and no decision on it is recorded; the
+  controller layer plus the throwing inspector remain the boundary.

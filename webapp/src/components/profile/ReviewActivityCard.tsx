@@ -83,7 +83,7 @@ export interface ReviewActivityCardProps {
 	};
 	repositoryName?: string;
 	score?: number;
-	providerType?: ProviderType;
+	providerType: ProviderType;
 }
 
 export function ReviewActivityCard({
@@ -93,7 +93,7 @@ export function ReviewActivityCard({
 	htmlUrl,
 	pullRequest,
 	score,
-	providerType = "GITHUB",
+	providerType,
 }: ReviewActivityCardProps) {
 	const stateStyle = REVIEW_STATE_STYLES[state] ?? UNKNOWN_STATE_STYLE;
 	const StateIcon = stateStyle.icon ?? getPullRequestStateIcon(providerType, "OPEN").icon;

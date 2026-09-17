@@ -25,7 +25,7 @@ const meta = {
 } satisfies Meta<typeof FormattedTitle>;
 
 export default meta;
-type Story = StoryObj<typeof FormattedTitle>;
+type Story = StoryObj<typeof meta>;
 
 /**
  * Basic title with no code segments.

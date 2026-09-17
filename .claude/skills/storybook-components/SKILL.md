@@ -35,8 +35,10 @@ write a guideline that repeats one.
 The house rules are registered in `webapp/tools/oxlint/index.ts` — read it rather than trusting a
 list, since a rule can be added without this file changing. Those that reach a story file:
 
-- `hephaestus/typed-story-meta` — a `meta` naming a `component` must be `satisfies Meta<typeof X>`; a
-  gallery meta naming no component may be bare `Meta`.
+- `hephaestus/typed-story-meta` — a `meta` naming a `component` must be `satisfies Meta<typeof X>`
+  (not annotated `: Meta<typeof X>`, which widens `typeof meta`) and its stories
+  `StoryObj<typeof meta>`, so a story that omits a required prop is a type error; a gallery meta
+  naming no component may be bare `Meta`.
 - `hephaestus/play-must-assert` — a `play` that never reaches an assertion. It reads a `getBy*` used
   as a click target as an assertion, so it holds only the floor; whether the play checks the
   **outcome** is still a review question.

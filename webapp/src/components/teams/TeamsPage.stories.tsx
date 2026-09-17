@@ -123,17 +123,17 @@ const mockTeams: TeamInfo[] = [
 	},
 ];
 
-const meta: Meta<typeof TeamsPage> = {
+const meta = {
 	component: TeamsPage,
 	tags: ["autodocs"],
 	parameters: {
 		layout: "fullscreen",
 	},
 	decorators: [withStandardPage],
-};
+} satisfies Meta<typeof TeamsPage>;
 
 export default meta;
-type Story = StoryObj<typeof TeamsPage>;
+type Story = StoryObj<typeof meta>;
 
 export const WithTeams: Story = {
 	args: {

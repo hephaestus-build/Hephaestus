@@ -10,7 +10,7 @@ import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-ter
 import { type ActivityBadgeMetadata, getActivityBadgeMetadata } from "./activity-badge-metadata";
 import { ScoringExplanationDialog } from "./ScoringExplanationDialog";
 
-export function LeaderboardLegend({ providerType = "GITHUB" }: { providerType?: ProviderType }) {
+export function LeaderboardLegend({ providerType }: { providerType: ProviderType }) {
 	const [showScoringModal, setShowScoringModal] = useState(false);
 	const badges = getActivityBadgeMetadata(providerType);
 	const scoredBadges = badges.filter((badge) => badge.countsTowardScore);

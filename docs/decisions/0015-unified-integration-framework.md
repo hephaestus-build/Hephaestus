@@ -1,6 +1,6 @@
 # ADR 0015: Unified integration framework — package layout and SPI surface
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-05-27 for Phase 1-4 restructure; 2026-09-17 — see the update below)
 **Date:** 2026-05-26
 **Authors:** Felix T.J. Dietrich
 
@@ -196,3 +196,23 @@ Negative:
   scale — the current shape is per-vendor rows in `connection` plus
   per-subject rows in `feedback_post`. A scale-out would need a dedicated
   link table, not a generic graph.
+
+## Update — 2026-09-17
+
+Corrects names and paths in § Decision and § Consequences; the layout and the SPI axes stand.
+
+- `integration/core/feedback/` and `FeedbackPost` were deleted on 2026-07-01 (#1331). Cross-vendor
+  feedback identity is `practices/feedback/Feedback` and `FeedbackPlacement.posted_comment_ref`
+  ([ADR 0021](0021-observations-feedback-synthesis-seam.md),
+  [ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md)); the third Revisit-trigger
+  bullet's `feedback_post` table does not exist.
+- `GitProvider` / `GitProviderType` are `IdentityProvider` / `IdentityProviderType`
+  (`integration/core/connection/`, table `identity_provider`).
+- `WorkspaceCapabilityResolver` exists nowhere in the repository; capability resolution is
+  `IntegrationManifestRegistry.capabilitiesFor(IntegrationKind)` in `integration/core/framework/`.
+- `integration/core/` also holds `egress`, `fabric`, `graphql`, `metrics`, `signal` and `sync`;
+  `integration/outline/` is the fourth adapter ([ADR 0023](0023-outline-documentation-integration.md));
+  `integration/identity/connect/` holds `RegistrationToGitProviderResolver`.
+- `1780313973588_changelog.xml` is archived at `docs/db/archive/v0.77.4/changelog/`; the shipped
+  chain starts at `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.xml`
+  ([ADR 0014](0014-per-row-aes-gcm-aad-binding.md) § Update 2026-09-17).

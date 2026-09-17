@@ -7,7 +7,7 @@ import { ScoringExplanationDialog } from "./ScoringExplanationDialog";
  * Dialog component that explains the leaderboard scoring system in detail.
  * Provides transparency about how points are calculated from different activities.
  */
-const meta: Meta<typeof ScoringExplanationDialog> = {
+const meta = {
 	component: ScoringExplanationDialog,
 	tags: ["autodocs"],
 	parameters: {
@@ -24,6 +24,7 @@ const meta: Meta<typeof ScoringExplanationDialog> = {
 		},
 	},
 	args: {
+		providerType: "GITHUB",
 		onOpenChange: fn(),
 	},
 	decorators: [
@@ -33,7 +34,7 @@ const meta: Meta<typeof ScoringExplanationDialog> = {
 			</div>
 		),
 	],
-};
+} satisfies Meta<typeof ScoringExplanationDialog>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

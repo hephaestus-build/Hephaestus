@@ -16,7 +16,7 @@ import type { LeaderboardSortType } from "./SortFilter";
 export type LeaderboardVariant = "INDIVIDUAL" | "TEAM";
 
 interface LeaderboardPageProps {
-	providerType?: ProviderType;
+	providerType: ProviderType;
 	leaderboard?: LeaderboardEntry[];
 	isLoading: boolean;
 	currentUser?: UserInfo;
@@ -42,7 +42,7 @@ interface LeaderboardPageProps {
 }
 
 export function LeaderboardPage({
-	providerType = "GITHUB",
+	providerType,
 	leaderboard,
 	isLoading,
 	currentUser,

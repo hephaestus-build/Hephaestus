@@ -12,7 +12,7 @@ import { ProfileContent } from "./ProfileContent";
 import { ProfileHeader } from "./ProfileHeader";
 
 interface ProfileProps {
-	providerType?: ProviderType;
+	providerType: ProviderType;
 	profileData?: Profile;
 	activityMonitorData?: ProfileActivityMonitor;
 	activityMonitorError?: unknown;
@@ -36,7 +36,7 @@ interface ProfileProps {
 }
 
 export function ProfilePage({
-	providerType = "GITHUB",
+	providerType,
 	profileData,
 	activityMonitorData,
 	activityMonitorError,

@@ -1,6 +1,6 @@
 # ADR 0002: Rename Java base package to `de.tum.cit.aet.hephaestus`
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-09-17 — revisit trigger fired, package kept)
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -50,3 +50,13 @@ all 1,121 Java source files in one mechanical commit.
 
 A future chair reorganisation, or a decision to move the deploy domain (which would close
 the package-vs-host-URL gap noted above).
+
+## Update — 2026-09-17
+
+The revisit trigger fired: the deploy domain moved. The hosted deployment is `https://hephaestus.build`
+and the GitHub organisation is `hephaestus-build`; no host under `ase.cit.tum.de` or `aet.cit.tum.de`
+is configured anywhere in the repository. The decision stands — the base package is still
+`de.tum.cit.aet.hephaestus` and no rename is planned. This supersedes the last bullet of
+§ Consequences: `hephaestus.host-url` in `server/application/src/main/resources/application.yml`
+defaults to `${APPLICATION_HOST_URL:http://localhost:4200}` and carries no TUM hostname, so the
+package-vs-host-URL gap that bullet describes no longer exists in configuration.

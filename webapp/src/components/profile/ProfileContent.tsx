@@ -16,7 +16,7 @@ import { ProfileTimeframePicker } from "./ProfileTimeframePicker";
 import { ReviewActivitySection } from "./ReviewActivitySection";
 
 export interface ProfileContentProps {
-	providerType?: ProviderType;
+	providerType: ProviderType;
 	activityMonitorData?: ProfileActivityMonitor;
 	activityMonitorFilters: ActivityMonitorFilters;
 	onActivityMonitorFiltersChange: (filters: ActivityMonitorFilters) => void;
@@ -48,7 +48,7 @@ export const ZERO_ACTIVITY_STATS: ProfileActivityStats = {
 };
 
 export function ProfileContent({
-	providerType = "GITHUB",
+	providerType,
 	activityMonitorData,
 	activityMonitorFilters,
 	onActivityMonitorFiltersChange,

@@ -177,17 +177,18 @@ const mockTeamOptions = [
 	{ value: "Design", label: "Design" },
 ];
 
-const meta: Meta<typeof LeaderboardPage> = {
+const meta = {
 	component: LeaderboardPage,
 	parameters: {
 		layout: "fullscreen",
 	},
 	decorators: [withStandardPage],
 	tags: ["autodocs"],
-};
+	args: { providerType: "GITHUB" },
+} satisfies Meta<typeof LeaderboardPage>;
 
 export default meta;
-type Story = StoryObj<typeof LeaderboardPage>;
+type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	args: {
