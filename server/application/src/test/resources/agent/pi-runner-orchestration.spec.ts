@@ -252,10 +252,12 @@ if (scenario) {
 								.catch((error: unknown) =>
 									record(`unparsed:${error instanceof Error ? error.message : String(error)}`),
 								);
-							// The ordinary turn: two observations in one call, one of them refused.
+							// The ordinary turn: two observations in one call, one of them refused. The first names
+							// no side; the runner records the side the text is found on.
+							const { side: _side, ...sideless } = changeCitation;
 							const reply = await report.execute("o-1", {
 								observations: [
-									observation("test-practice", "Unsafe authentication call"),
+									observation("test-practice", "Unsafe authentication call", sideless),
 									observation("test-practice", "A quote that is not in the change", {
 										...changeCitation,
 										quote: "+ somethingElse();",
@@ -478,10 +480,9 @@ if (scenario) {
 							);
 							// The quote was copied with its diff marker; what is recorded is the line's content,
 							// which is what admission reads out of the blob.
-							assert.match(
-								readFileSync(join(cwd, "out/review-state.json"), "utf8"),
-								/"quote": " insecure\(\);"/,
-							);
+							const reviewState = readFileSync(join(cwd, "out/review-state.json"), "utf8");
+							assert.match(reviewState, /"quote": " insecure\(\);"/);
+							assert.match(reviewState, /"side": "NEW"/);
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}

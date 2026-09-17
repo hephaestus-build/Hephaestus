@@ -245,7 +245,12 @@ export function normalizeEvidence(
 					"work/change/diff.patch with its repository path and OLD/NEW side, or cite metadata.json " +
 					"(scm.pull-request.core) for the pull request's own facts",
 			);
-		if (sourceKind === "scm.pull-request.diff" && declaredSide !== "OLD" && declaredSide !== "NEW")
+		if (
+			sourceKind === "scm.pull-request.diff" &&
+			declaredSide !== null &&
+			declaredSide !== "OLD" &&
+			declaredSide !== "NEW"
+		)
 			throw new Error("diff evidence citation side must be OLD or NEW");
 		if (sourceKind !== "scm.pull-request.diff" && declaredSide !== null)
 			throw new Error("non-diff evidence citation must not specify side");
@@ -582,6 +587,18 @@ export function resolveQuote(
 	citation: NormalizedCitation,
 	content: string,
 ): ResolvedQuote | { mismatch: string } {
+	const resolved = resolveQuoteText(citation, content);
+	// Admission refuses a blank quote, so a citation of blank lines is refused here, with the reason.
+	if ("quote" in resolved && resolved.quote.trim() === "") {
+		return { mismatch: "the cited lines are blank; cite a line that has text" };
+	}
+	return resolved;
+}
+
+function resolveQuoteText(
+	citation: NormalizedCitation,
+	content: string,
+): ResolvedQuote | { mismatch: string } {
 	const quote = citation.quote.replace(/\r?\n$/, "");
 	if (citation.sourceKind !== "scm.pull-request.diff") {
 		const lines = content.split(/(?<=\n)/);
@@ -766,9 +783,17 @@ function diffLinesOf(citation: NormalizedCitation, content: string): Map<number,
  * is recorded is the line's own bytes.
  */
 function quotesDiffLine(diffLine: string, quoted: string): boolean {
-	const line = squash(diffLine);
+	if (diffLine.length === 0) return false;
+	const content = squash(diffLine.slice(1));
 	const quote = squash(quoted);
-	return diffLine.length > 0 && (line === quote || squash(diffLine.slice(1)) === quote);
+	return (
+		squash(diffLine) === quote ||
+		content === quote ||
+		// A marker the quote carries that is not the line's own: a blank added line read as "+" where
+		// the diff shows a blank context line, for instance. The coordinate pins the line; markers are
+		// presentation.
+		(/^[+\- ]/.test(quoted) && content === squash(quoted.slice(1)))
+	);
 }
 
 /** Horizontal whitespace, including the non-breaking kinds, is presentation. */

@@ -31,6 +31,7 @@ import {
 	dedupeKeyForObservation,
 	describeVocabulary,
 	isRecord,
+	type NormalizedCitation,
 	type NormalizedObservation,
 	normalizeObservation,
 	resolveQuote,
@@ -89,17 +90,17 @@ function listOrEmpty<T>(items: T[] | undefined): T[] {
 }
 
 /**
- * A list a tool was handed, whether as the array the schema asks for or as that array serialised
- * into a string: a smaller model does the latter often enough that refusing it would only cost the
- * turn a retry with the same content.
+ * A list a tool was handed. The schema asks for the array and offers nothing else: when it also
+ * offered the array serialised into a string, a smaller model took that form half the time and lost
+ * count of its braces in a long single line, so the SDK's own schema error ("must be array") is the
+ * better answer. A string that does parse is still taken, and one that does not is answered with the
+ * parse error rather than an empty list a session would read as success.
  */
 function submittedList(value: unknown): { items: unknown[] } | { error: string } {
 	if (typeof value === "string") {
 		try {
 			return { items: jsonArray(parseJson(value)) };
 		} catch (error) {
-			// An unparseable string is answered with the parse error, never with an empty list: a
-			// session told only "nothing recorded" concludes its observation was stored.
 			return {
 				error: `the list arrived as a string that is not a JSON array (${errorText(error)}); send the array itself, not a string`,
 			};
@@ -108,14 +109,9 @@ function submittedList(value: unknown): { items: unknown[] } | { error: string }
 	return { items: jsonArray(value) };
 }
 
-/** The schema for such a list: the array, or the same array as a JSON string. */
-function listSchema(items: unknown, what: string) {
-	return {
-		anyOf: [
-			{ type: "array", minItems: 1, maxItems: 10, items },
-			{ type: "string", minLength: 2, description: `The ${what} as a JSON-encoded array` },
-		],
-	};
+/** The schema for such a list. */
+function listSchema(items: unknown) {
+	return { type: "array", minItems: 1, maxItems: 10, items };
 }
 
 interface PracticeIndexEntry {
@@ -649,7 +645,7 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 		const resolved =
 			content === null
 				? { mismatch: "no such file in the checkout" }
-				: resolveQuote(citation, content);
+				: resolveOnEitherSide(citation, content);
 		if ("mismatch" in resolved) {
 			throw new Error(
 				`citation does not match ${citation.path}:${citation.startLine}-${citation.endLine} ` +
@@ -671,6 +667,31 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 		citation.quote = resolved.quote;
 	}
 	return { observation, notes };
+}
+
+/**
+ * A change citation that names no side is tried on NEW first, then OLD, and records the side its
+ * text was found on; a side that was named is the only one tried. Admission requires the side, so
+ * one is recorded either way.
+ */
+function resolveOnEitherSide(
+	citation: NormalizedCitation,
+	content: string,
+): ReturnType<typeof resolveQuote> {
+	if (citation.sourceKind !== "scm.pull-request.diff" || citation.side !== undefined) {
+		return resolveQuote(citation, content);
+	}
+	const onNew = resolveQuote({ ...citation, side: "NEW" }, content);
+	if ("quote" in onNew) {
+		citation.side = "NEW";
+		return onNew;
+	}
+	const onOld = resolveQuote({ ...citation, side: "OLD" }, content);
+	if ("quote" in onOld) {
+		citation.side = "OLD";
+		return onOld;
+	}
+	return { mismatch: `${onNew.mismatch} (no side was named; NEW was tried, then OLD)` };
 }
 
 function excerptOf(text: string): string {
@@ -701,6 +722,12 @@ let measurementClosed = false;
 const refusals = new Map<string, number>();
 const blockedPractices = new Set<string>();
 
+function countRefusal(slug: string): void {
+	const count = (refusals.get(slug) ?? 0) + 1;
+	refusals.set(slug, count);
+	if (count >= MAX_REFUSALS_PER_PRACTICE) blockedPractices.add(slug);
+}
+
 function slugOf(raw: unknown): string {
 	return isRecord(raw) && typeof raw.practiceSlug === "string" ? raw.practiceSlug : "unknown";
 }
@@ -722,9 +749,7 @@ function record(raw: unknown): Recorded {
 	try {
 		validated = normalizeAndValidateObservation(raw);
 	} catch (error) {
-		const count = (refusals.get(slug) ?? 0) + 1;
-		refusals.set(slug, count);
-		if (count >= MAX_REFUSALS_PER_PRACTICE) blockedPractices.add(slug);
+		countRefusal(slug);
 		return { kind: "refused", slug, reason: errorText(error) };
 	}
 	const { observation, notes } = validated;
@@ -816,7 +841,7 @@ function buildReportObservationTool() {
 			additionalProperties: false,
 			required: ["observations"],
 			properties: {
-				observations: listSchema(observationSchema, "observations"),
+				observations: listSchema(observationSchema),
 			},
 		},
 		execute: (_toolCallId, params): Promise<AgentToolResult<ReportObservationDetails>> => {
@@ -835,6 +860,9 @@ function buildReportObservationTool() {
 			}
 			const submitted = submittedList(isRecord(params) ? params.observations : null);
 			if ("error" in submitted) {
+				// Counted against every practice of the turn, so a session that keeps sending the same
+				// unparseable string runs out of tries like any other refusal.
+				for (const slug of currentTurnSlugs) countRefusal(slug);
 				logRefusal("(unparsed list)", submitted.error);
 				return Promise.reject(new Error(`observations refused — ${submitted.error}`));
 			}
@@ -1348,137 +1376,134 @@ function buildFeedbackTool(
 			additionalProperties: false,
 			required: ["units"],
 			properties: {
-				units: listSchema(
-					{
-						type: "object",
-						additionalProperties: false,
-						required: ["channel", "practiceSlug", "basedOn", "action"],
-						properties: {
-							channel: {
-								type: "string",
-								enum: enabledChannels,
-								description:
-									"Which surface this unit is for. Each has its own level and its own rules.",
-							},
-							practiceSlug: {
-								type: "string",
-								enum: practiceSlugs,
-								description:
-									"The primary practice whose intervention this unit advances. Related observations may support it.",
-							},
-							basedOn: {
-								type: "array",
-								minItems: 1,
-								items: { type: "string", minLength: 1 },
-								description:
-									"What this rests on: admitted observation ids from this run. Include related practices only when they describe the same underlying event.",
-							},
-							action: {
-								type: "string",
-								enum: ACTIONS,
-								description:
-									"NEW to say something; SUPERSEDE to replace a message that is queued and unread; " +
-									"WITHHOLD to record, with a reason, that you decided to stay quiet.",
-							},
-							supersedesThreadKey: {
-								type: "string",
-								maxLength: 64,
-								description:
-									"Required for SUPERSEDE: the threadKey of an entry in the task-declared prepared-feedback file. " +
-									"You may not name a key that is not in that file.",
-							},
-							withholdReason: { type: "string", enum: WITHHOLD_REASONS },
-							title: {
-								type: "string",
-								maxLength: 255,
-								description: "Names the issue in a few words. Never names the person.",
-							},
-							body: {
-								type: "string",
-								maxLength: 8000,
-								description:
-									"IN_APP only: explain the cross-artifact work pattern grounded in current observations; never quote a line or claim change over time from the pre-run history. Markdown, read verbatim.",
-							},
-							nextStep: {
-								type: "string",
-								maxLength: 2000,
-								description:
-									"IN_CONTEXT: one edit before merging. IN_APP: one repeatable habit for the next piece of work. Name the missing decision, not a heading/template unless the practice requires one; never provide paste-ready prose.",
-							},
-							notes: {
-								type: "object",
-								additionalProperties: false,
-								required: ["situation", "capability", "evidenceSummary", "inConversationSignal"],
-								description:
-									"IN_CHAT only. Notes TO the mentor, which composes the whole turn itself, later, " +
-									"with the live conversation in front of it. Write what it needs to know, never a " +
-									"sentence for it to say: anything phrased as a line of dialogue will be spoken, and " +
-									"will sound like a script.",
-								properties: {
-									situation: {
-										type: "string",
-										maxLength: 4000,
-										description:
-											"What you saw: factual, specific, the artifacts named. Your words about them, " +
-											"not words for them - third person, never addressed to the developer as 'you', " +
-											"and never a judgement of the person.",
-									},
-									capability: {
-										type: "string",
-										maxLength: 2000,
-										description:
-											"The understanding or self-check this conversation should support. State the capability, not a solution such as a required heading/template, and not a question, script, diagnosis, or fixed tactic.",
-									},
-									evidenceSummary: {
-										type: "string",
-										maxLength: 4000,
-										description:
-											"A concise account of the artifacts and observations that ground this note. " +
-											"Summarise rather than inventing a quote; the original observation evidence is " +
-											"staged separately for the mentor to inspect.",
-									},
-									inConversationSignal: {
-										type: "string",
-										maxLength: 2000,
-										description:
-											"A sign detectable before the conversation ends: a distinction, decision, question, or self-check the developer can articulate. Not a promise, future artifact, message text, or compliance target.",
-									},
-									alreadySaid: {
-										type: "string",
-										maxLength: 2000,
-										description:
-											"Optional. Where this has already been put to the developer and what has moved without help, from the feedback history. Omit it when the history has nothing on this practice: absent means nothing has been said yet, which the mentor reads differently from nothing to say.",
-									},
+				units: listSchema({
+					type: "object",
+					additionalProperties: false,
+					required: ["channel", "practiceSlug", "basedOn", "action"],
+					properties: {
+						channel: {
+							type: "string",
+							enum: enabledChannels,
+							description:
+								"Which surface this unit is for. Each has its own level and its own rules.",
+						},
+						practiceSlug: {
+							type: "string",
+							enum: practiceSlugs,
+							description:
+								"The primary practice whose intervention this unit advances. Related observations may support it.",
+						},
+						basedOn: {
+							type: "array",
+							minItems: 1,
+							items: { type: "string", minLength: 1 },
+							description:
+								"What this rests on: admitted observation ids from this run. Include related practices only when they describe the same underlying event.",
+						},
+						action: {
+							type: "string",
+							enum: ACTIONS,
+							description:
+								"NEW to say something; SUPERSEDE to replace a message that is queued and unread; " +
+								"WITHHOLD to record, with a reason, that you decided to stay quiet.",
+						},
+						supersedesThreadKey: {
+							type: "string",
+							maxLength: 64,
+							description:
+								"Required for SUPERSEDE: the threadKey of an entry in the task-declared prepared-feedback file. " +
+								"You may not name a key that is not in that file.",
+						},
+						withholdReason: { type: "string", enum: WITHHOLD_REASONS },
+						title: {
+							type: "string",
+							maxLength: 255,
+							description: "Names the issue in a few words. Never names the person.",
+						},
+						body: {
+							type: "string",
+							maxLength: 8000,
+							description:
+								"IN_APP only: explain the cross-artifact work pattern grounded in current observations; never quote a line or claim change over time from the pre-run history. Markdown, read verbatim.",
+						},
+						nextStep: {
+							type: "string",
+							maxLength: 2000,
+							description:
+								"IN_CONTEXT: one edit before merging. IN_APP: one repeatable habit for the next piece of work. Name the missing decision, not a heading/template unless the practice requires one; never provide paste-ready prose.",
+						},
+						notes: {
+							type: "object",
+							additionalProperties: false,
+							required: ["situation", "capability", "evidenceSummary", "inConversationSignal"],
+							description:
+								"IN_CHAT only. Notes TO the mentor, which composes the whole turn itself, later, " +
+								"with the live conversation in front of it. Write what it needs to know, never a " +
+								"sentence for it to say: anything phrased as a line of dialogue will be spoken, and " +
+								"will sound like a script.",
+							properties: {
+								situation: {
+									type: "string",
+									maxLength: 4000,
+									description:
+										"What you saw: factual, specific, the artifacts named. Your words about them, " +
+										"not words for them - third person, never addressed to the developer as 'you', " +
+										"and never a judgement of the person.",
+								},
+								capability: {
+									type: "string",
+									maxLength: 2000,
+									description:
+										"The understanding or self-check this conversation should support. State the capability, not a solution such as a required heading/template, and not a question, script, diagnosis, or fixed tactic.",
+								},
+								evidenceSummary: {
+									type: "string",
+									maxLength: 4000,
+									description:
+										"A concise account of the artifacts and observations that ground this note. " +
+										"Summarise rather than inventing a quote; the original observation evidence is " +
+										"staged separately for the mentor to inspect.",
+								},
+								inConversationSignal: {
+									type: "string",
+									maxLength: 2000,
+									description:
+										"A sign detectable before the conversation ends: a distinction, decision, question, or self-check the developer can articulate. Not a promise, future artifact, message text, or compliance target.",
+								},
+								alreadySaid: {
+									type: "string",
+									maxLength: 2000,
+									description:
+										"Optional. Where this has already been put to the developer and what has moved without help, from the feedback history. Omit it when the history has nothing on this practice: absent means nothing has been said yet, which the mentor reads differently from nothing to say.",
 								},
 							},
-							placement: {
-								description:
-									"IN_CONTEXT only. DIFF places a note at one verified observation citation. " +
-									"ARTIFACT places it in the issue or change summary without inventing a line.",
-								oneOf: placementKinds.map((kind) =>
-									kind === "DIFF"
-										? {
-												type: "object",
-												additionalProperties: false,
-												required: ["kind", "observationId", "citationIndex"],
-												properties: {
-													kind: { type: "string", enum: ["DIFF"] },
-													observationId: { type: "string", minLength: 1 },
-													citationIndex: { type: "integer", minimum: 0 },
-												},
-											}
-										: {
-												type: "object",
-												additionalProperties: false,
-												required: ["kind"],
-												properties: { kind: { type: "string", enum: ["ARTIFACT"] } },
+						},
+						placement: {
+							description:
+								"IN_CONTEXT only. DIFF places a note at one verified observation citation. " +
+								"ARTIFACT places it in the issue or change summary without inventing a line.",
+							oneOf: placementKinds.map((kind) =>
+								kind === "DIFF"
+									? {
+											type: "object",
+											additionalProperties: false,
+											required: ["kind", "observationId", "citationIndex"],
+											properties: {
+												kind: { type: "string", enum: ["DIFF"] },
+												observationId: { type: "string", minLength: 1 },
+												citationIndex: { type: "integer", minimum: 0 },
 											},
-								),
-							},
+										}
+									: {
+											type: "object",
+											additionalProperties: false,
+											required: ["kind"],
+											properties: { kind: { type: "string", enum: ["ARTIFACT"] } },
+										},
+							),
 						},
 					},
-					"units",
-				),
+				}),
 			},
 		},
 		// Nothing here waits on anything; Pi takes the result as a promise either way.

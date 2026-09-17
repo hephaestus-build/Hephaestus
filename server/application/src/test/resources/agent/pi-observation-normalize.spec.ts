@@ -157,9 +157,16 @@ void test("citation requires an exact artifact path and quote", () => {
 });
 
 void test("citation side is present exactly for pull-request diffs", () => {
+	// A diff citation may leave the side out; the runner records the side the text is found on.
 	const missingDiffSide = baseObservation();
 	delete onlyCitation(missingDiffSide.evidence.citations).side;
-	assert.throws(() => normalizeObservation(missingDiffSide), /side must be OLD or NEW/);
+	assert.equal(
+		"side" in onlyCitation(normalizeObservation(missingDiffSide).evidence.citations),
+		false,
+	);
+	const wrongSide = baseObservation();
+	onlyCitation(wrongSide.evidence.citations).side = "BOTH";
+	assert.throws(() => normalizeObservation(wrongSide), /side must be OLD or NEW/);
 
 	const nonDiffSide = baseObservation();
 	onlyCitation(nonDiffSide.evidence.citations).sourceKind = "scm.pull-request.core";
@@ -268,6 +275,27 @@ void test("a matching diff quote is recorded as the content its lines carry, mar
 	assert.deepEqual(resolveQuote({ ...cited, quote: "" }, diff), {
 		quote: "    -flag --now\n  next",
 	});
+	// A marker the quote carries that is not the line's own: a blank context line read as an added one.
+	const blankContext =
+		"diff --git a/a.md b/a.md\n+++ b/a.md\n@@ -9,2 +10,2 @@\n[L10] +text\n[L11]  \n";
+	assert.deepEqual(
+		resolveQuote(
+			{ ...citation, path: "a.md", startLine: 10, endLine: 11, quote: "+text\n+" },
+			blankContext,
+		),
+		{ quote: "text\n" },
+	);
+	// Blank lines cannot be evidence: admission refuses a blank quote, so the runner does too.
+	const blankDiff = "diff --git a/a.md b/a.md\n+++ b/a.md\n@@ -9,0 +10,2 @@\n[L10] +\n[L11] +\n";
+	assert.match(
+		mismatch(
+			resolveQuote(
+				{ ...citation, path: "a.md", startLine: 10, endLine: 11, quote: "\n" },
+				blankDiff,
+			),
+		),
+		/cited lines are blank/,
+	);
 	assert.match(mismatch(resolveQuote({ ...cited, quote: "", endLine: 12 }, diff)), /no \[L12\]/);
 	// What does not match is refused with what the line reads.
 	assert.match(
