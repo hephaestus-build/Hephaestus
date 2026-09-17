@@ -36,8 +36,10 @@ change: give `evidence.inapplicability` (sources consulted, the subject, the fac
 ABSENT means you searched the sources the criteria name and the behavior is not there: give
 `evidence.search` (sources consulted, what you looked for, the boundary). UNDETERMINED means the
 captured evidence was read and does not settle the question: give `evidence.undecidability` (the open
-question, the existing evidence that would settle it). Severity applies to NEGATIVE outcomes only and
-follows the practice's own severity criteria, never a count of fields.
+question, the existing evidence that would settle it). An observation that decides nothing on a pull
+request must show it read the change: cite a line of the diff, or list `scm.pull-request.diff` among
+the sources its warrant consulted. Severity applies to NEGATIVE outcomes only and follows the
+practice's own severity criteria, never a count of fields.
 
 `evidenceRationale` is read verbatim by the developer: plain prose about what you looked for, where,
 and what the evidence showed. No scoring variables, no thresholds quoted as rules, no restatement of why

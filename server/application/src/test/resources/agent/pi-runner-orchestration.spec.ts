@@ -270,6 +270,42 @@ if (scenario) {
 								writeFileSync(join(cwd, "out", "stray.txt"), "left by a session");
 								return;
 							}
+							// An observation that decides nothing must show it read the change, as admission demands.
+							const undecided = (consulted: string[]) => ({
+								practiceSlug: "test-practice",
+								summary: "Nothing to assess in this change",
+								assessmentStatus: "NOT_APPLICABLE",
+								presence: null,
+								assessment: null,
+								severity: null,
+								evidenceRationale: "The change touches only metadata.",
+								evidence: {
+									citations: [
+										{
+											sourceKind: "scm.pull-request.core",
+											artifactPath: "evidence/metadata.json",
+											path: "evidence/metadata.json",
+											startLine: 1,
+											quote: '"title": "Add login"',
+										},
+									],
+									inapplicability: {
+										consulted,
+										subject: "authentication calls",
+										ruledOutBy: "no code changed",
+									},
+								},
+							});
+							await report
+								.execute("o-na", { observations: [undecided(["scm.pull-request.core"])] })
+								.then(() => record("undecided:accepted"))
+								.catch((error: unknown) =>
+									record(`undecided:${error instanceof Error ? error.message : String(error)}`),
+								);
+							const consultedDiff = await report.execute("o-na2", {
+								observations: [undecided(["scm.pull-request.core", "scm.pull-request.diff"])],
+							});
+							record(`undecided-consulted:${JSON.stringify(consultedDiff)}`);
 							// A list sent as a string with one closing brace too many is repaired and read; one
 							// that is not JSON is refused with the parse error, never silently emptied.
 							const oneBraceTooMany = `${JSON.stringify([observation("test-practice", "Sent as a string with an extra brace")]).slice(0, -1)}}]`;
@@ -503,6 +539,14 @@ if (scenario) {
 						case "batch": {
 							assert.equal(child.status, 0, child.stderr);
 							assert.match(
+								events.find((event) => event.startsWith("undecided:")) ?? "",
+								/must show it read the change/,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("undecided-consulted:")) ?? "",
+								/#1 test-practice: stored\./,
+							);
+							assert.match(
 								events.find((event) => event.startsWith("repaired:")) ?? "",
 								/#1 test-practice: stored \(negative\)/,
 							);
@@ -551,7 +595,10 @@ if (scenario) {
 							);
 							assert.equal(events.filter((event) => event.startsWith("create:")).length, 1);
 							const second = readFileSync(join(cwd, "prompt-2.md"), "utf8");
-							assert.match(second, /## Recorded so far\n- test-practice: PRESENT\/BAD/);
+							assert.match(
+								second,
+								/## Recorded so far\n(- test-practice: .*\n)*- test-practice: PRESENT\/BAD/,
+							);
 							assert.match(second, /No observation was recorded for: second-practice/);
 							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
 							break;

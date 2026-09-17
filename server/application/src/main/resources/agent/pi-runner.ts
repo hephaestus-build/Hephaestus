@@ -666,6 +666,20 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 		availableSourceKinds,
 	);
 	validateInapplicabilityScope(observation, availableSourceKinds);
+	// Admission refuses a review whose observations decide nothing and never touched the change; an
+	// observation that decides nothing therefore shows it read the change — by a citation of it, or
+	// by naming it among the sources its warrant consulted — unless one already recorded did.
+	if (
+		observation.assessmentStatus !== "ASSESSED" &&
+		availableSourceKinds.has(DIFF_SOURCE) &&
+		![...reviewState.observations, observation].some(readTheChange)
+	) {
+		throw new Error(
+			"an observation that decides nothing must show it read the change: cite a line of " +
+				`${CHANGE_ROOT}/diff.patch (sourceKind ${DIFF_SOURCE}), or list ${DIFF_SOURCE} among the ` +
+				"sources consulted in evidence.search or evidence.inapplicability",
+		);
+	}
 	for (const citation of observation.evidence.citations) {
 		// A repository citation is read from the checkout — the working tree at HEAD, or the blob at the
 		// named revision through its .git — so the session gets its correction here, by the same rule
@@ -742,6 +756,20 @@ function resolveOnEitherSide(
 
 function excerptOf(text: string): string {
 	return JSON.stringify(text.length > 160 ? `${text.slice(0, 160)}…` : text);
+}
+
+const DIFF_SOURCE = "scm.pull-request.diff";
+
+/** Whether an observation cites the change or names it among the sources its warrant consulted. */
+function readTheChange(observation: NormalizedObservation): boolean {
+	if (observation.evidence.citations.some((citation) => citation.sourceKind === DIFF_SOURCE)) {
+		return true;
+	}
+	const consulted = [
+		...(observation.evidence.search?.consulted ?? []),
+		...(observation.evidence.inapplicability?.consulted ?? []),
+	];
+	return consulted.includes(DIFF_SOURCE);
 }
 
 /** What a repository read returns for a file that is not text: git's own rule, a NUL in the opening bytes. */
