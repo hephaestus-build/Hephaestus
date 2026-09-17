@@ -60,7 +60,12 @@ sequenceDiagram
   in turns: the first turn carries the brief — the captured records and the change view, already in
   context with line coordinates — and each turn carries one catalog group of practices with their criteria
   inlined. Observations go through `report_observation` in batches; a refused one is answered per item and
-  a practice past eight refusals is reported as not reached. What was recorded is repeated at the top of
+  a practice past eight refusals is reported as not reached. The schema the SDK validates a call against
+  is documentation only — the SDK's check is all or nothing, and one wrong field must not discard the
+  other observations in the call — so every rule is applied per item by the runner's normalizer,
+  including the cells a practice's Judge section rules out (`- PRESENT/GOOD and ABSENT/GOOD: no ordinary
+  case.`). A turn aborted at its share of the budget is awaited until the session is idle before the
+  next turn is sent. What was recorded is repeated at the top of
   every later turn and appended to `work/notes/review.md`, so it survives context compaction. After
   admission the same session composes feedback in one more turn, with the admitted observations and the
   history inlined. There is no reconnaissance session, no fork per practice group and no retry session:

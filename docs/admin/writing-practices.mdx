@@ -105,7 +105,10 @@ this shape, in this order. The bundled catalog follows it, and `CatalogCriteriaS
 5. **Judge** — the four matrix cells and the two unassessed statuses, each with the condition that
    selects it, in the order the model should test them. State the common confusion explicitly
    ("searched everything and found nothing is ABSENT, not UNDETERMINED"). One observation per practice
-   unless the criteria say otherwise.
+   unless the criteria say otherwise. Decide every cell. A cell that has no case for this practice is
+   written exactly as `- PRESENT/GOOD and ABSENT/GOOD: no ordinary case.` — the review reads that
+   line and refuses an observation in such a cell, which is what keeps a model that reads GOOD as
+   "the outcome is good" from recording the absence of an undesirable behavior as a lapse.
 6. **Severity** — for negative outcomes only, by consequence, with the usual band named first.
 7. **Grounding** — what to cite for each cell, and the claims never to make (a build ran, an author's
    intent).

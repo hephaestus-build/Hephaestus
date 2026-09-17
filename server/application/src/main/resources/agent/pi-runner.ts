@@ -27,7 +27,10 @@ import {
 	PRESENCE_VALUES,
 	PRESENCE_DESCRIPTIONS,
 	ASSESSMENT_VALUES,
+	ASSESSMENT_DESCRIPTIONS,
 	SEVERITY_VALUES,
+	SEVERITY_DESCRIPTIONS,
+	cellsRuledOut,
 	deriveOutcome,
 	dedupeKeyForObservation,
 	describeVocabulary,
@@ -113,36 +116,78 @@ function submittedList(value: unknown): { items: unknown[] } | { error: string }
 }
 
 /**
- * The text with its closing brackets balanced: a closer that closes nothing, or closes the wrong
- * thing, is dropped, and a closer still owed at the end is appended. Strings are stepped over, so a
- * brace inside a quote is never touched. Any other fault is left for the parser to name.
+ * The text with its closing brackets balanced, as far as the shape of a JSON list decides it. A closer
+ * that closes nothing, or closes the wrong thing, is dropped. A `}` at an item's depth followed by
+ * `, "key":` was one brace too many on a nested object — the key belongs to the item — and is dropped.
+ * A `, {` inside an object is an item starting where an object was never closed — an object's members
+ * are keys, never a bare object — and the closers owed down to the list are inserted before the
+ * comma. A closer still owed at the end is appended. Strings are stepped over, so a brace inside a
+ * quote is never touched. Any other fault is left for the parser to name.
  */
 function repairedClosers(text: string): string {
 	const owed: string[] = [];
-	const dropped = new Set<number>();
+	let out = "";
+	let changed = false;
 	let inString = false;
 	let escaped = false;
 	for (let index = 0; index < text.length; index++) {
-		const char = text[index];
+		const char = text[index] ?? "";
 		if (inString) {
+			out += char;
 			if (escaped) escaped = false;
 			else if (char === "\\") escaped = true;
 			else if (char === '"') inString = false;
 			continue;
 		}
-		if (char === '"') inString = true;
-		else if (char === "{" || char === "[") owed.push(char === "{" ? "}" : "]");
-		else if (char === "}" || char === "]") {
-			if (owed.at(-1) === char) owed.pop();
-			else dropped.add(index);
+		if (char === '"') {
+			inString = true;
+		} else if (char === "{" || char === "[") {
+			if (char === "{" && owed.at(-1) === "}" && owed.includes("]")) {
+				const comma = out.trimEnd().length - 1;
+				if (out[comma] === ",") {
+					let closers = "";
+					while (owed.at(-1) === "}") closers += owed.pop();
+					out = out.slice(0, comma) + closers + out.slice(comma);
+					changed = true;
+				}
+			}
+			owed.push(char === "{" ? "}" : "]");
+		} else if (char === "}" || char === "]") {
+			if (owed.at(-1) !== char) {
+				changed = true;
+				continue;
+			}
+			if (char === "}" && owed.length === 2 && owed[0] === "]" && keyFollows(text, index + 1)) {
+				changed = true;
+				continue;
+			}
+			owed.pop();
 		}
+		out += char;
 	}
-	if (inString || (dropped.size === 0 && owed.length === 0)) return text;
-	let kept = "";
-	for (let index = 0; index < text.length; index++) {
-		if (!dropped.has(index)) kept += text[index];
+	if (inString || (!changed && owed.length === 0)) return text;
+	return out.trimEnd() + owed.toReversed().join("");
+}
+
+/** Whether `, "key":` is what comes next — a member of an object, not the next item of a list. */
+function keyFollows(text: string, from: number): boolean {
+	let index = from;
+	const skipSpace = () => {
+		while (index < text.length && /\s/.test(text[index] ?? "")) index++;
+	};
+	skipSpace();
+	if (text[index] !== ",") return false;
+	index++;
+	skipSpace();
+	if (text[index] !== '"') return false;
+	index++;
+	while (index < text.length && text[index] !== '"') {
+		if (text[index] === "\\") index++;
+		index++;
 	}
-	return kept.trimEnd() + owed.toReversed().join("");
+	index++;
+	skipSpace();
+	return text[index] === ":";
 }
 
 /** The schema for such a list: the array, or the same array as a JSON string. */
@@ -570,12 +615,12 @@ const observationSchema = {
 		assessment: {
 			type: ["string", "null"],
 			enum: [...ASSESSMENT_VALUES, null],
-			description: "GOOD or BAD only when ASSESSED; otherwise null.",
+			description: `Only when ASSESSED, otherwise null. ${describeVocabulary(ASSESSMENT_VALUES, ASSESSMENT_DESCRIPTIONS)}`,
 		},
 		severity: {
 			type: ["string", "null"],
 			enum: [...SEVERITY_VALUES, null],
-			description: "Required for BAD, null otherwise.",
+			description: `Only for a NEGATIVE outcome, otherwise null. ${describeVocabulary(SEVERITY_VALUES, SEVERITY_DESCRIPTIONS)}`,
 		},
 		evidence: {
 			...evidenceSchema,
@@ -655,10 +700,24 @@ interface Validated {
 }
 
 function normalizeAndValidateObservation(rawObservation: unknown): Validated {
-	const observation = normalizeObservation(rawObservation);
+	const observation = normalizeObservation(
+		rawObservation,
+		ruledOutCellsOf(slugOf(rawObservation).toLowerCase().replace(/_/g, "-")),
+	);
 	const notes: string[] = [];
 	if (!admittedPractices.has(observation.practiceSlug))
 		throw new Error(`unknown practice '${observation.practiceSlug}'`);
+	// The manifest says which source staged an artifact; a citation that names the artifact under
+	// another source kind is read as the manifest reads it, and the correction is echoed back.
+	for (const citation of observation.evidence.citations) {
+		const staged = artifactSources.get(citation.artifactPath);
+		if (staged !== undefined && staged !== citation.sourceKind) {
+			notes.push(
+				`${citation.artifactPath} is staged by ${staged}, not ${citation.sourceKind}; recorded as ${staged}`,
+			);
+			citation.sourceKind = staged;
+		}
+	}
 	validateEvidenceSources(observation, availableSourceKinds, artifactSources);
 	validateSearchScope(
 		observation,
@@ -930,6 +989,48 @@ function logRefusal(slug: string, reason: string): void {
 /** The practices the current turn asked about; a recorded result for one of them is what the turn owes. */
 let currentTurnSlugs: readonly string[] = [];
 
+/** JSON Schema keywords that refuse; what they say is applied per observation instead. */
+const RULE_KEYWORDS = new Set([
+	"required",
+	"additionalProperties",
+	"minLength",
+	"maxLength",
+	"minItems",
+	"maxItems",
+	"pattern",
+	"minimum",
+	"maximum",
+]);
+
+/**
+ * The schema as the session reads it, with the shape and the documentation and none of the rules.
+ * The SDK validates a call against its schema before the tool runs, and that check is all or
+ * nothing: one summary a few characters long in one of six observations and the whole call is
+ * refused, the other five with it, after a generation that took minutes. The tool's contract is per
+ * item — each observation is stored or refused with its own reason — so every rule the schema
+ * stated is applied by normalizeAndValidateObservation, one observation at a time, and the
+ * vocabulary an enum listed is kept in the description.
+ */
+function documentedShape(schema: unknown): unknown {
+	if (Array.isArray(schema)) return schema.map(documentedShape);
+	if (!isRecord(schema)) return schema;
+	const out: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(schema)) {
+		if (RULE_KEYWORDS.has(key)) continue;
+		if (key === "enum" && Array.isArray(value)) {
+			const listed = value.map((item) => (item === null ? "null" : String(item))).join(", ");
+			const description = typeof schema.description === "string" ? schema.description : "";
+			if (!description.includes(listed.split(", ")[0] ?? "")) {
+				out.description = description ? `${description} One of: ${listed}.` : `One of: ${listed}.`;
+			}
+			continue;
+		}
+		if (key === "description" && typeof out.description === "string") continue;
+		out[key] = documentedShape(value);
+	}
+	return out;
+}
+
 function buildReportObservationTool() {
 	return defineTool({
 		name: "report_observation",
@@ -940,10 +1041,9 @@ function buildReportObservationTool() {
 			"refused on its own, with the reason.",
 		parameters: {
 			type: "object",
-			additionalProperties: false,
 			required: ["observations"],
 			properties: {
-				observations: listSchema(observationSchema, "observations"),
+				observations: documentedShape(listSchema(observationSchema, "observations")),
 			},
 		},
 		execute: (_toolCallId, params): Promise<AgentToolResult<ReportObservationDetails>> => {
@@ -2049,23 +2149,42 @@ function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
 	return { elapsed, timer, state };
 }
 
-/** Timers request cancellation; the owning finally block drains events before disposal. */
-function abortSession(session: AgentSession) {
+/**
+ * Timers request cancellation; the returned promise settles once the session is idle again. The SDK
+ * refuses a prompt while the aborted call is still ending, so a turn that aborts waits for this
+ * before the next turn is sent — otherwise every later turn fails as "already processing".
+ */
+function abortSession(session: AgentSession): Promise<void> {
 	session.clearQueue();
-	void session.abort().catch((error) => {
+	return session.abort().catch((error) => {
 		console.error(`[pi-runner] session abort failed: ${errorText(error)}`);
 	});
 }
 
+/** How long an aborted turn waits for the session to go idle before the next turn is sent. */
+const ABORT_SETTLE_MS = 30_000;
+
+function criteriaFileOf(slug: string): string | null {
+	const file = `${dirname(INPUT_PATHS.practiceIndex)}/${slug}.md`;
+	return existsSync(file) ? readFileSync(file, "utf8").trim() : null;
+}
+
+const ruledOutCells = new Map<string, Set<string>>();
+/** The cells the practice's Judge section rules out, read once from its criteria. */
+function ruledOutCellsOf(slug: string): Set<string> {
+	let cells = ruledOutCells.get(slug);
+	if (!cells) {
+		cells = cellsRuledOut(criteriaFileOf(slug) ?? "");
+		ruledOutCells.set(slug, cells);
+	}
+	return cells;
+}
+
 /** The criteria of the turn's practices, inlined: the turn carries what it asks about. */
 function criteriaOf(slugs: readonly string[]): string {
-	const practiceRoot = dirname(INPUT_PATHS.practiceIndex);
 	return slugs
 		.map((slug) => {
-			const file = `${practiceRoot}/${slug}.md`;
-			const criteria = existsSync(file)
-				? readFileSync(file, "utf8").trim()
-				: "(criteria file missing)";
+			const criteria = criteriaFileOf(slug) ?? "(criteria file missing)";
 			const exhaustive = [...(practiceExhaustiveSources.get(slug) ?? [])];
 			const scope =
 				exhaustive.length > 0
@@ -2178,7 +2297,7 @@ async function main() {
 						console.error(
 							`[pi-runner] ${label}: ${count} report_observation calls without a record — aborting this turn`,
 						);
-						abortSession(activeSession);
+						void abortSession(activeSession);
 					}
 				}
 			}
@@ -2299,10 +2418,11 @@ async function main() {
 				)
 				.catch((err) => console.error(`[pi-runner] steer failed: ${errorText(err)}`));
 		}, share.softMs);
+		let aborting: Promise<void> | undefined;
 		const hard = scheduleDeadline(share.hardMs, () => {
 			hardAborted = true;
 			console.error(`[pi-runner] ${label}: share exhausted — aborting this turn`);
-			abortSession(session);
+			aborting = abortSession(session);
 		});
 		try {
 			await Promise.race([session.prompt(text), hard.elapsed]);
@@ -2313,6 +2433,19 @@ async function main() {
 		} finally {
 			clearTimeout(softTimer);
 			clearTimeout(hard.timer);
+			if (aborting) {
+				const settled = await Promise.race([
+					aborting.then(() => true),
+					new Promise<boolean>((resolve) => {
+						setTimeout(() => resolve(false), ABORT_SETTLE_MS);
+					}),
+				]);
+				if (!settled) {
+					console.error(
+						`[pi-runner] ${label}: the aborted call has not ended after ${ABORT_SETTLE_MS}ms`,
+					);
+				}
+			}
 			trace.hardAborted = hard.state.expired;
 			closeTurnTrace(trace);
 		}
@@ -2411,7 +2544,7 @@ async function main() {
 				console.error(
 					`[pi-runner] Composition timeout — preserving observations and composed units so far`,
 				);
-				abortSession(session);
+				void abortSession(session);
 			});
 			const trace = openTurnTrace("composition");
 			try {

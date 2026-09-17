@@ -28,6 +28,9 @@ class CatalogCriteriaShapeTest extends BaseUnitTest {
 
     static final int MAX_CRITERIA_CHARS = 8_000;
 
+    /** The four assessed cells; the Judge section decides each, as ordinary or as "no ordinary case". */
+    static final List<String> CELLS = List.of("PRESENT/GOOD", "PRESENT/BAD", "ABSENT/GOOD", "ABSENT/BAD");
+
     @Test
     @DisplayName("every bundled practice opens with its behavior focus and carries the sections in order")
     void bundledPracticesFollowTheShape() throws IOException {
@@ -53,11 +56,27 @@ class CatalogCriteriaShapeTest extends BaseUnitTest {
                 if (criteria.length() > MAX_CRITERIA_CHARS) {
                     failures.add(slug + ": " + criteria.length() + " characters, over " + MAX_CRITERIA_CHARS);
                 }
+                // The runner refuses a cell the Judge section rules out, so a section that leaves a cell
+                // unnamed leaves the session free to record the clean bill of an undesirable behaviour
+                // as GOOD — the lapse it is not.
+                String judge = sectionOf(criteria, "## Judge");
+                for (String cell : CELLS) {
+                    if (!judge.contains(cell)) {
+                        failures.add(slug + ": the Judge section does not decide " + cell);
+                    }
+                }
             }
         }
         assertThat(failures)
                 .as("bundled practices off the decision-procedure shape")
                 .isEmpty();
+    }
+
+    private static String sectionOf(String criteria, String heading) {
+        int start = criteria.indexOf("\n" + heading);
+        if (start < 0) return "";
+        int end = criteria.indexOf("\n## ", start + 1);
+        return end < 0 ? criteria.substring(start) : criteria.substring(start, end);
     }
 
     private static JsonNode catalogue() throws IOException {

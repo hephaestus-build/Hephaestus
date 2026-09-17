@@ -252,17 +252,16 @@ export function normalizeEvidence(
 			declaredSide !== "NEW"
 		)
 			throw new Error("diff evidence citation side must be OLD or NEW");
-		if (sourceKind !== "scm.pull-request.diff" && declaredSide !== null)
-			throw new Error("non-diff evidence citation must not specify side");
+		// A side on anything but a quote of the change says nothing; surplus, dropped rather than refused.
 		if (!Number.isSafeInteger(startLine) || startLine <= 0 || startLine > 2147483647)
 			throw new Error("evidence citation startLine must be a positive integer");
 		if (!Number.isSafeInteger(endLine) || endLine < startLine || endLine > 2147483647)
 			throw new Error("evidence citation endLine must be >= startLine");
 		// An empty quote is a citation by coordinates alone; resolveQuote fills it from the artifact.
-		// Only the two checks above can let a side through, so this is a re-reading of what they proved
-		// rather than a second rule: anything else already threw.
 		const side: DiffSide | null =
-			declaredSide === "OLD" || declaredSide === "NEW" ? declaredSide : null;
+			sourceKind === "scm.pull-request.diff" && (declaredSide === "OLD" || declaredSide === "NEW")
+				? declaredSide
+				: null;
 		return {
 			sourceKind,
 			artifactPath,
@@ -330,6 +329,11 @@ function parseVocabulary<T extends string>(values: readonly T[], value: unknown,
 	return admitted;
 }
 
+/** A field left out, or written as the word "null", says the same as null. */
+function nullish(value: unknown): boolean {
+	return value == null || (typeof value === "string" && /^(?:null|none)?$/i.test(value.trim()));
+}
+
 export type Outcome = "POSITIVE" | "NEGATIVE";
 
 export function deriveOutcome(
@@ -356,14 +360,26 @@ type ObservationAssessment =
 			severity: null;
 	  };
 
-function parseAssessment(fields: Record<string, unknown>): ObservationAssessment {
+function parseAssessment(
+	fields: Record<string, unknown>,
+	practiceSlug: string,
+	ruledOut: ReadonlySet<string>,
+): ObservationAssessment {
+	// A presence value written as the status names a presence and nothing else; it is read as such
+	// unless the presence field says otherwise.
+	const status =
+		typeof fields.assessmentStatus === "string" ? fields.assessmentStatus.toUpperCase() : null;
+	const statusAsPresence = PRESENCE_VALUES.find((value) => value === status);
+	if (statusAsPresence && (nullish(fields.presence) || fields.presence === statusAsPresence)) {
+		fields = { ...fields, assessmentStatus: "ASSESSED", presence: statusAsPresence };
+	}
 	const assessmentStatus = parseVocabulary(
 		ASSESSMENT_STATUS_VALUES,
 		fields.assessmentStatus,
 		"assessmentStatus",
 	);
 	if (assessmentStatus !== "ASSESSED") {
-		if (fields.presence !== null || fields.assessment !== null || fields.severity !== null)
+		if (!nullish(fields.presence) || !nullish(fields.assessment) || !nullish(fields.severity))
 			throw new Error(
 				"Unassessed observations require explicit null presence, assessment and severity",
 			);
@@ -371,15 +387,32 @@ function parseAssessment(fields: Record<string, unknown>): ObservationAssessment
 	}
 	const presence = parseVocabulary(PRESENCE_VALUES, fields.presence, "presence");
 	const assessment = parseVocabulary(ASSESSMENT_VALUES, fields.assessment, "assessment");
+	// Before the severity is asked for: a cell the practice rules out is a wrong cell, and asking for
+	// a severity first would have the session decorate the wrong cell rather than leave it.
+	refuseRuledOutCell(practiceSlug, presence, assessment, ruledOut);
 	// A severity beside a POSITIVE outcome says nothing wrong; it is surplus and dropped, not refused.
 	if (deriveOutcome(presence, assessment) === "POSITIVE") {
 		return { assessmentStatus, presence, assessment, severity: null };
 	}
+	if (nullish(fields.severity))
+		throw new Error(
+			`${presence}/${assessment} is a NEGATIVE outcome and needs a severity: one of ${SEVERITY_VALUES.join(", ")}`,
+		);
 	const severity = parseVocabulary(SEVERITY_VALUES, fields.severity, "severity");
 	return { assessmentStatus, presence, assessment, severity };
 }
 
-export function normalizeObservation(observation: unknown): NormalizedObservation {
+/** The summary heads the developer's practice page; a phrase, not the rationale. */
+export const MAX_SUMMARY_CHARS = 160;
+
+/**
+ * @param ruledOut the cells the practice's Judge section rules out, from {@link cellsRuledOut}; an
+ *   assessed observation in one of them is refused before anything else about it is asked for.
+ */
+export function normalizeObservation(
+	observation: unknown,
+	ruledOut: ReadonlySet<string> = new Set(),
+): NormalizedObservation {
 	if (!isRecord(observation)) throw new Error("observation must be an object");
 	const allowed = new Set([
 		"practiceSlug",
@@ -397,7 +430,7 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 	const practiceSlug = trimmedText(observation.practiceSlug).toLowerCase().replace(/_/g, "-");
 	const title = trimmedText(observation.summary);
 	const reasoning = trimmedText(observation.evidenceRationale);
-	const result = parseAssessment(observation);
+	const result = parseAssessment(observation, practiceSlug, ruledOut);
 	const { assessmentStatus, presence } = result;
 	if (!practiceSlug) throw new Error("practiceSlug is required");
 	if (!title) throw new Error("summary is required");
@@ -407,6 +440,10 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 		throw new Error(
 			"summary must say what was observed as a short phrase, not one word — e.g. " +
 				"'Debug print left in the request handler'",
+		);
+	if (title.length > MAX_SUMMARY_CHARS)
+		throw new Error(
+			`summary must be at most ${MAX_SUMMARY_CHARS} characters; this one is ${title.length}. Name the behavior, and keep the reasons for the rationale`,
 		);
 	if (!reasoning) throw new Error("evidenceRationale is required");
 	const externalEvidence: Record<string, unknown> = isRecord(observation.evidence)
@@ -471,10 +508,21 @@ export function validateEvidenceSources(
 		}
 		const artifactSource = artifactSources.get(citation.artifactPath);
 		if (artifactSource !== sourceKind) {
+			if (artifactSource === undefined) {
+				// The change view under work/ is derived in the container from the checkout, so a quote
+				// of it is a quote of the change: the pinned range is the artifact, the diff its lines.
+				const derived = citation.artifactPath.startsWith("work/")
+					? " The change view under work/ is derived here and is not an artifact: quote a changed line " +
+						"from work/change/diff.patch as scm.pull-request.diff with the pinned change.json as " +
+						"artifactPath, or the pull request record (metadata.json) as scm.pull-request.core."
+					: "";
+				throw new Error(
+					`artifact '${citation.artifactPath}' was not staged; the staged artifacts are: ` +
+						`${[...artifactSources.keys()].toSorted().join(", ")}.${derived}`,
+				);
+			}
 			throw new Error(
-				artifactSource === undefined
-					? `artifact '${citation.artifactPath}' was not staged; copy an artifact path from the task-declared manifest`
-					: `artifact '${citation.artifactPath}' belongs to evidence source '${artifactSource}', not '${sourceKind}'`,
+				`artifact '${citation.artifactPath}' belongs to evidence source '${artifactSource}', not '${sourceKind}'`,
 			);
 		}
 	}
@@ -534,6 +582,49 @@ export function validateSearchScope(
  * have been read, so claiming to have read them is the inapplicability-shaped version of citing evidence
  * we never had.
  */
+const CELL = String.raw`(?:PRESENT|ABSENT)\/(?:GOOD|BAD)`;
+const RULED_OUT_LINE = new RegExp(
+	String.raw`^-\s*(${CELL}(?:\s*(?:and|,|or)\s*${CELL})*)\s*(?:\([A-Z]+\))?\s*:\s*no ordinary case\b`,
+	"i",
+);
+
+/**
+ * The cells a practice's own Judge section rules out, as "- PRESENT/GOOD and ABSENT/GOOD: no
+ * ordinary case". A practice whose behaviour in focus is undesirable has no GOOD cell: its absence is
+ * ABSENT/BAD, the positive outcome, and a session that reads GOOD as "the outcome is good" records the
+ * clean bill as a lapse. The criteria are the one home of that decision, so the guard is read from
+ * them; a practice whose Judge section names no such line is not guarded.
+ */
+export function cellsRuledOut(criteria: string): Set<string> {
+	const judge = criteria.split(/^## Judge\s*$/m)[1]?.split(/^## /m)[0] ?? "";
+	const cells = new Set<string>();
+	for (const line of judge.split("\n")) {
+		const match = RULED_OUT_LINE.exec(line.trim());
+		if (!match) continue;
+		for (const cell of match[1]?.match(new RegExp(CELL, "g")) ?? []) cells.add(cell.toUpperCase());
+	}
+	return cells;
+}
+
+/** An assessed observation lands in a cell its practice names; the ruled-out ones are refused. */
+function refuseRuledOutCell(
+	practiceSlug: string,
+	presence: Presence,
+	assessment: Assessment,
+	ruledOut: ReadonlySet<string>,
+): void {
+	const cell = `${presence}/${assessment}`;
+	if (!ruledOut.has(cell)) return;
+	const all = ["PRESENT/GOOD", "PRESENT/BAD", "ABSENT/GOOD", "ABSENT/BAD"];
+	const ordinary = all.filter((candidate) => !ruledOut.has(candidate));
+	throw new Error(
+		`${cell} is no ordinary case for '${practiceSlug}' — its Judge section names ` +
+			`${ordinary.join(" and ")}. assessment says whether the behaviour in focus is desirable, ` +
+			`not whether the outcome is good: an undesirable behaviour that is absent is ABSENT/BAD, the ` +
+			`positive outcome. Record the cell the evidence supports`,
+	);
+}
+
 export function validateInapplicabilityScope(
 	observation: NormalizedObservation,
 	availableSourceKinds: ReadonlySet<string>,

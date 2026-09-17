@@ -64,6 +64,7 @@ function observation(slug: string, summary: string, citation: unknown = changeCi
 interface CustomTool {
 	name: string;
 	description: string;
+	parameters: unknown;
 	execute: (id: string, input: unknown) => Promise<unknown>;
 }
 
@@ -85,6 +86,8 @@ if (scenario) {
 	);
 	const manager = { getSessionFile: () => undefined, getSessionId: () => "test-session" };
 	let prompts = 0;
+	/** The overrun scenario's first prompt ends only when the runner aborts it, like a call in flight. */
+	let releasePrompt: (() => void) | undefined;
 	mock.module("@earendil-works/pi-coding-agent", {
 		namedExports: {
 			defineTool: (tool: unknown) => tool,
@@ -120,7 +123,16 @@ if (scenario) {
 						sessionManager: manager,
 						subscribe: () => () => {},
 						clearQueue() {},
-						abort: () => Promise.resolve(record("abort")),
+						abort: () => {
+							record("abort");
+							// The aborted call ends a moment later, and abort() settles once it has.
+							return new Promise<void>((resolve) => {
+								setTimeout(() => {
+									releasePrompt?.();
+									resolve();
+								}, 50);
+							});
+						},
 						dispose: () => record("dispose"),
 						steer: () => Promise.resolve(record("steer")),
 						async prompt(text: string) {
@@ -129,6 +141,16 @@ if (scenario) {
 							writeFileSync(join(cwd, `prompt-${prompts}.md`), text);
 							if (scenario === "budget") {
 								now += 20_000;
+								return;
+							}
+							// Like the SDK: a prompt while the last one is still ending is refused, and the
+							// aborted call ends only when abort() is called.
+							if (releasePrompt) throw new Error("Agent is already processing.");
+							if (scenario === "overrun" && prompts === 1) {
+								await new Promise<void>((resolve) => {
+									releasePrompt = resolve;
+								});
+								releasePrompt = undefined;
 								return;
 							}
 							if (text.includes("## This turn")) {
@@ -173,14 +195,26 @@ if (scenario) {
 								return;
 							}
 							if (text.includes("## Unfinished practices")) {
+								const unfinished = scenario === "overrun" ? "test-practice" : "second-practice";
 								const reply = await tool("report_observation").execute("o-3", {
-									observations: [observation("second-practice", "Recorded on the finishing turn")],
+									observations: [observation(unfinished, "Recorded on the finishing turn")],
 								});
 								record(`finish:${JSON.stringify(reply)}`);
 								return;
 							}
 							const report = tool("report_observation");
 							assert.match(report.description, /local review state/);
+							// The SDK checks a call against this schema all or nothing, so it carries the shape and
+							// the vocabulary and no rule: a rule is applied per observation, by the tool.
+							const schema = JSON.stringify(report.parameters);
+							for (const keyword of ["maxLength", "additionalProperties", "enum", "pattern"]) {
+								assert.ok(
+									!schema.includes(`"${keyword}"`),
+									`${keyword} in ${schema.slice(0, 200)}`,
+								);
+							}
+							assert.match(schema, /One of: evidence\/change\.json, evidence\/metadata\.json/);
+							assert.match(schema, /One of: OLD, NEW/);
 							if (scenario === "refusal-cap") {
 								const wrong = observation("test-practice", "Wrong quote", {
 									...changeCitation,
@@ -311,6 +345,25 @@ if (scenario) {
 							const oneBraceTooMany = `${JSON.stringify([observation("test-practice", "Sent as a string with an extra brace")]).slice(0, -1)}}]`;
 							const repaired = await report.execute("o-00", { observations: oneBraceTooMany });
 							record(`repaired:${JSON.stringify(repaired)}`);
+							// One brace too many on a nested object closes the item before its last member: the
+							// member that follows belongs to the item, so the early closer is what goes.
+							const intact = JSON.stringify([
+								observation("test-practice", "Sent as a string closed one brace early"),
+							]);
+							const early = intact.replace(',"evidence":{', '},"evidence":{');
+							assert.notEqual(early, intact);
+							const earlyReply = await report.execute("o-01", { observations: early });
+							record(`repaired-early:${JSON.stringify(earlyReply)}`);
+							// One brace too few: the next item starts inside the first one's evidence object. An
+							// object's members are keys, never a bare object, so the closers owed are inserted.
+							const two = JSON.stringify([
+								observation("test-practice", "First of two, its evidence left open"),
+								observation("test-practice", "Second of two, starting inside the first"),
+							]);
+							const unclosed = two.replace('}]}},{"practiceSlug"', '}]},{"practiceSlug"');
+							assert.notEqual(unclosed, two);
+							const unclosedReply = await report.execute("o-02", { observations: unclosed });
+							record(`repaired-unclosed:${JSON.stringify(unclosedReply)}`);
 							await report
 								.execute("o-0", { observations: "[{not json" })
 								.then(() => record("unparsed:accepted"))
@@ -327,6 +380,13 @@ if (scenario) {
 										...changeCitation,
 										quote: "+ somethingElse();",
 									}),
+									observation("test-practice", "A summary that runs on ".repeat(8).trim()),
+									// The artifact is the pinned change; the source kind named is not the one that
+									// staged it. The manifest decides, and the correction is echoed.
+									observation("test-practice", "Cited under the wrong source kind", {
+										...changeCitation,
+										sourceKind: "scm.pull-request.core",
+									}),
 								],
 							});
 							record(`batch:${JSON.stringify(reply)}`);
@@ -342,6 +402,7 @@ if (scenario) {
 		"setup",
 		"session-init",
 		"budget",
+		"overrun",
 		"batch",
 		"finish",
 		"refusal-cap",
@@ -353,6 +414,7 @@ if (scenario) {
 				setup: "does not start a session when setup exhausts the budget",
 				"session-init": "fails cleanly when the session cannot be created",
 				budget: "aborts a turn that runs past its share and reports the practices as not reached",
+				overrun: "waits for an aborted turn to end before the next turn is sent",
 				batch: "stores several observations from one call and answers per item",
 				finish: "asks once more, in the same session, for the practices no turn recorded",
 				"refusal-cap": "stops accepting a practice after eight refused submissions",
@@ -494,7 +556,7 @@ if (scenario) {
 								PI_ORCHESTRATION_SCENARIO: stage,
 								PI_RUNNER_CWD: cwd,
 								PI_CODING_AGENT_DIR: cwd,
-								AGENT_BUDGET_MS: "10000",
+								AGENT_BUDGET_MS: stage === "overrun" ? "3000" : "10000",
 								LLM_PROXY_URL: "https://unused.invalid",
 								LLM_PROXY_TOKEN: "test-token",
 							},
@@ -536,6 +598,20 @@ if (scenario) {
 							assert.ok(!events.includes("prompt:2"), events.join("\n"));
 							reached({ "test-practice": "NOT_REACHED" });
 							break;
+						case "overrun": {
+							// The first turn is aborted at its share; the finishing turn is sent after the abort
+							// has settled, in the same session, and records the practice.
+							assert.equal(child.status, 0, child.stderr);
+							const order = events.filter((event) =>
+								["prompt:1", "steer", "abort", "prompt:2"].includes(event),
+							);
+							assert.deepEqual(order.slice(0, 4), ["prompt:1", "steer", "abort", "prompt:2"]);
+							assert.match(events.find((event) => event.startsWith("finish:")) ?? "", /stored/);
+							assert.match(child.stderr, /share exhausted — aborting this turn/);
+							assert.doesNotMatch(child.stderr, /already processing/);
+							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
 						case "batch": {
 							assert.equal(child.status, 0, child.stderr);
 							assert.match(
@@ -551,6 +627,14 @@ if (scenario) {
 								/#1 test-practice: stored \(negative\)/,
 							);
 							assert.match(
+								events.find((event) => event.startsWith("repaired-early:")) ?? "",
+								/#1 test-practice: stored \(negative\)/,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("repaired-unclosed:")) ?? "",
+								/#1 test-practice: stored \(negative\)[\s\S]*#2 test-practice: stored \(negative\)/,
+							);
+							assert.match(
 								events.find((event) => event.startsWith("unparsed:")) ?? "",
 								/observations refused — the list arrived as a string that is not a JSON array/,
 							);
@@ -559,6 +643,14 @@ if (scenario) {
 							assert.match(
 								reply,
 								/#2 test-practice: refused — .*not in the diff|#2 test-practice: refused/,
+							);
+							assert.match(
+								reply,
+								/#3 test-practice: refused — summary must be at most 160 characters/,
+							);
+							assert.match(
+								reply,
+								/#4 test-practice: stored \(negative\)\.\\n {3}evidence\/change\.json is staged by scm\.pull-request\.diff, not scm\.pull-request\.core; recorded as scm\.pull-request\.diff/,
 							);
 							assert.match(reply, /Every practice of this turn has a recorded result/);
 							// One session, one measuring turn, no composition requested.

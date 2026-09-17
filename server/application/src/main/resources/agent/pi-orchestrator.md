@@ -96,7 +96,7 @@ directory of `preparedFeedback`.
 - `work/change/diff.patch` — (PR) `git diff` base..head, renames detected, every hunk line prefixed `[L<n>]`
 - `work/change/files.json`, `work/change/diff_stat.txt`, `work/change/commits.json` — (PR) changed files with status letters, `git diff --stat`, commits base..head oldest first; `git show <sha>` in `<repositoryRoot>` gives one commit's diff
 - `<contextRoot>/change.json` — (PR) the pinned `base_sha` and `head_sha`; the artifact a change citation names, never a file to quote
-- `<contextRoot>/metadata.json` — the record as the provider holds it: title, body, author, branches, state, labels
+- `<contextRoot>/metadata.json` — the record as the provider holds it: title, body, author, branches, state, labels, and for a PR the `created_at`, `closed_at` and `merged_at` moments it recorded
 - `<contextRoot>/description.md` — (PR, ISSUE) the description as written, line by line
 - `<contextRoot>/comments.json` — the discussion (for a PR, its line-anchored review comments)
 - `<contextRoot>/review_threads.json`, `<contextRoot>/general_comments.json` — (PR) review threads with state and decisions; the non-inline conversation, Hephaestus's own notes filtered out

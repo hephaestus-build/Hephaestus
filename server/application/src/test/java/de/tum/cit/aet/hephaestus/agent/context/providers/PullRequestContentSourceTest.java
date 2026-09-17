@@ -173,8 +173,10 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             PullRequest pr = new PullRequest();
             pr.setTitle("Fix authentication bug");
             pr.setBody("This PR fixes the login issue");
-            pr.setState(Issue.State.OPEN);
+            pr.setState(Issue.State.MERGED);
             pr.setAdditions(10);
+            pr.setCreatedAt(Instant.parse("2026-04-09T12:39:13Z"));
+            pr.setMergedAt(Instant.parse("2026-04-09T14:47:18Z"));
             User author = new User();
             author.setLogin("testuser");
             pr.setAuthor(author);
@@ -190,6 +192,11 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(metadataJson.get("title").asString()).isEqualTo("Fix authentication bug");
             assertThat(metadataJson.get("author").asString()).isEqualTo("testuser");
             assertThat(metadataJson.get("additions").asInt()).isEqualTo(10);
+            // The dated moments a review places the merge against; a moment the provider never
+            // recorded is left out rather than written as null.
+            assertThat(metadataJson.get("created_at").asString()).isEqualTo("2026-04-09T12:39:13Z");
+            assertThat(metadataJson.get("merged_at").asString()).isEqualTo("2026-04-09T14:47:18Z");
+            assertThat(metadataJson.has("closed_at")).isFalse();
         }
 
         @Test

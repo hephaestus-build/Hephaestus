@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
@@ -243,6 +244,11 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             result.put("state", pullRequest.getState().name());
         }
         result.put("is_draft", pullRequest.isDraft());
+        // The moments a review places the state of the work against: a merge before the last thread
+        // was resolved is a different fact from one after it, and only a dated record can tell them apart.
+        putInstant(result, "created_at", pullRequest.getCreatedAt());
+        putInstant(result, "closed_at", pullRequest.getClosedAt());
+        putInstant(result, "merged_at", pullRequest.getMergedAt());
         result.put("additions", pullRequest.getAdditions());
         result.put("deletions", pullRequest.getDeletions());
         result.put("changed_files", pullRequest.getChangedFiles());
@@ -251,6 +257,10 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         }
 
         return result;
+    }
+
+    private static void putInstant(ObjectNode node, String field, @Nullable Instant instant) {
+        if (instant != null) node.put(field, instant.toString());
     }
 
     private CommentCapture loadComments(long pullRequestId) {

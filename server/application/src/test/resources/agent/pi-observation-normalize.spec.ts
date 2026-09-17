@@ -8,7 +8,9 @@ import {
 	citationMatchesArtifact,
 	describeCitationMismatch,
 	dedupeKeyForObservation,
+	cellsRuledOut,
 	describeVocabulary,
+	MAX_SUMMARY_CHARS,
 	type NormalizedCitation,
 	normalizeObservation as normalizeFinalObservation,
 	normalizeEvidence,
@@ -132,6 +134,43 @@ void test("a one-word summary is refused, because it names nothing on the practi
 	assert.equal(normalizeObservation(baseObservation({ summary: "No tests" })).summary, "No tests");
 });
 
+void test("a field left out, or written as the word null, reads as null", () => {
+	const notApplicable = {
+		assessmentStatus: "NOT_APPLICABLE",
+		evidence: {
+			citations: baseObservation().evidence.citations,
+			inapplicability: {
+				consulted: ["scm.pull-request.diff"],
+				subject: "settings",
+				ruledOutBy: "no code",
+			},
+		},
+	};
+	assert.equal(
+		normalizeObservation(
+			baseObservation({ ...notApplicable, presence: "null", assessment: "None", severity: "" }),
+		).presence,
+		null,
+	);
+	const { presence: _p, assessment: _a, severity: _s, ...omitted } = baseObservation(notApplicable);
+	assert.equal(normalizeObservation(omitted).assessmentStatus, "NOT_APPLICABLE");
+	assert.throws(
+		() => normalizeObservation(baseObservation({ severity: "null" })),
+		/PRESENT\/BAD is a NEGATIVE outcome and needs a severity: one of CRITICAL, MAJOR, MINOR, INFO/,
+	);
+});
+
+void test("a summary longer than the practice page shows is refused, on its own", () => {
+	const long = "The handler swallows the error ".repeat(6).trim();
+	assert.ok(long.length > MAX_SUMMARY_CHARS);
+	assert.throws(
+		() => normalizeObservation(baseObservation({ summary: long })),
+		new RegExp(`at most ${MAX_SUMMARY_CHARS} characters; this one is ${long.length}`),
+	);
+	const atTheLimit = "x ".repeat(MAX_SUMMARY_CHARS / 2).trim();
+	assert.equal(normalizeObservation(baseObservation({ summary: atTheLimit })).summary, atTheLimit);
+});
+
 void test("genuinely invalid enum still rejected after normalization", () => {
 	const invalid = baseObservation();
 	invalid.presence = "MAYBE";
@@ -168,9 +207,10 @@ void test("citation side is present exactly for pull-request diffs", () => {
 	onlyCitation(wrongSide.evidence.citations).side = "BOTH";
 	assert.throws(() => normalizeObservation(wrongSide), /side must be OLD or NEW/);
 
+	// A side on anything but a quote of the change says nothing: surplus, dropped rather than refused.
 	const nonDiffSide = baseObservation();
 	onlyCitation(nonDiffSide.evidence.citations).sourceKind = "scm.pull-request.core";
-	assert.throws(() => normalizeObservation(nonDiffSide), /must not specify side/);
+	assert.equal("side" in onlyCitation(normalizeObservation(nonDiffSide).evidence.citations), false);
 });
 
 void test("a citation must name a source this run staged, and the artifact that source produced", () => {
@@ -208,8 +248,20 @@ void test("a citation must name a source this run staged, and the artifact that 
 		/belongs to evidence source 'scm\.pull-request\.core', not 'scm\.pull-request\.diff'/,
 	);
 	assert.throws(
-		() => validateEvidenceSources(observation, new Set(["scm.pull-request.diff"]), new Map()),
-		/was not staged.*task-declared manifest/,
+		() =>
+			validateEvidenceSources(
+				observation,
+				new Set(["scm.pull-request.diff"]),
+				new Map([["inputs/context/change.json", "scm.pull-request.diff"]]),
+			),
+		/was not staged; the staged artifacts are: inputs\/context\/change\.json\.$/,
+	);
+	// The change view is derived in the container; a citation of it is told what the artifact is.
+	const derived = normalizeObservation(baseObservation());
+	onlyCitation(derived.evidence.citations).artifactPath = "work/change/files.json";
+	assert.throws(
+		() => validateEvidenceSources(derived, new Set(["scm.pull-request.diff"]), new Map()),
+		/work\/ is derived here and is not an artifact: quote a changed line from work\/change\/diff\.patch/,
 	);
 });
 
@@ -461,7 +513,7 @@ void test("contradictory axes are rejected, not silently corrected", () => {
 	assert.equal(normalizeObservation(baseObservation({ assessment: "GOOD" })).severity, null);
 	assert.throws(
 		() => normalizeObservation(baseObservation({ severity: null })),
-		/invalid severity/,
+		/PRESENT\/BAD is a NEGATIVE outcome and needs a severity/,
 	);
 	assert.throws(
 		() => normalizeObservation(baseObservation({ presence: null })),
@@ -1075,5 +1127,87 @@ void test("the pinned change file is not a quotable artifact; the refusal names 
 				},
 			}),
 		/not quotable.*work\/change\/diff\.patch.*metadata\.json/,
+	);
+});
+
+void test("the cells a practice's Judge section rules out are read from its criteria", () => {
+	const criteria = [
+		"BEHAVIOR FOCUS: an added line ships an insecure default.",
+		"## Judge",
+		"Walk every sink class first; then test the cells in this order.",
+		"- PRESENT/GOOD and ABSENT/GOOD: no ordinary case. An insecure default is never desirable.",
+		"- PRESENT/BAD (NEGATIVE): a concrete added setting whose exposure is inappropriate.",
+		"- ABSENT/BAD (POSITIVE): you walked every sink class and none was touched insecurely.",
+		"## Severity",
+		"- PRESENT/BAD: no ordinary case here would be a different section and is not read.",
+	].join("\n");
+	assert.deepEqual([...cellsRuledOut(criteria)], ["PRESENT/GOOD", "ABSENT/GOOD"]);
+	assert.deepEqual([...cellsRuledOut("## Judge\n- ABSENT/BAD: no ordinary case.")], ["ABSENT/BAD"]);
+	assert.equal(cellsRuledOut("# A practice\nCriteria without a Judge section.").size, 0);
+});
+
+void test("an observation in a ruled-out cell is refused with the cells the practice names", () => {
+	const ruledOut = new Set(["PRESENT/GOOD", "ABSENT/GOOD"]);
+	const absent = (assessment: string) =>
+		baseObservation({
+			presence: "ABSENT",
+			assessment,
+			severity: assessment === "GOOD" ? "MINOR" : null,
+			evidence: {
+				citations: baseObservation().evidence.citations,
+				search: {
+					consulted: ["scm.pull-request.diff"],
+					lookedFor: "an insecure default",
+					boundary: "the diff",
+				},
+			},
+		});
+	// The clean bill a session meant as positive, written as GOOD: recorded, it would be a lapse. It
+	// is refused before a severity is asked for, so the session corrects the cell, not the decoration.
+	assert.throws(
+		() =>
+			normalizeObservation(
+				baseObservation({ presence: "ABSENT", assessment: "GOOD", severity: null }),
+				ruledOut,
+			),
+		/ABSENT\/GOOD is no ordinary case for 'writes-focused-pull-requests' — its Judge section names PRESENT\/BAD and ABSENT\/BAD\. assessment says whether the behaviour in focus is desirable/,
+	);
+	assert.equal(normalizeObservation(absent("BAD"), ruledOut).assessment, "BAD");
+	// Nothing to judge: an abstention lands in no cell, and an unguarded practice refuses nothing.
+	normalizeObservation(
+		baseObservation({
+			assessmentStatus: "NOT_APPLICABLE",
+			presence: null,
+			assessment: null,
+			severity: null,
+			evidence: {
+				citations: baseObservation().evidence.citations,
+				inapplicability: {
+					consulted: ["scm.pull-request.diff"],
+					subject: "settings",
+					ruledOutBy: "no code",
+				},
+			},
+		}),
+		ruledOut,
+	);
+	assert.equal(normalizeObservation(absent("GOOD")).assessment, "GOOD");
+});
+
+void test("a presence written as the status is read as an assessed observation", () => {
+	assert.equal(
+		normalizeObservation(baseObservation({ assessmentStatus: "PRESENT", presence: undefined }))
+			.presence,
+		"PRESENT",
+	);
+	assert.equal(
+		normalizeObservation(baseObservation({ assessmentStatus: "present", presence: "PRESENT" }))
+			.assessmentStatus,
+		"ASSESSED",
+	);
+	assert.throws(
+		() =>
+			normalizeObservation(baseObservation({ assessmentStatus: "PRESENT", presence: "ABSENT" })),
+		/invalid assessmentStatus 'PRESENT'/,
 	);
 });
