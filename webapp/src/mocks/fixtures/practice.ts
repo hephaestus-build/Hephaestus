@@ -125,7 +125,7 @@ const relatedWorkSource = {
 	description:
 		"Other work items in the same workspace, supplied so a change can be read against related work.",
 	selectionScope:
-		"Up to 200 issues and 200 pull requests across at most 25 visible repositories, excluding the work item under review. Beyond any of those limits the capture is reported as PARTIAL.",
+		"Up to 200 issues and 200 pull requests across at most 25 visible repositories, the work item under review among them. Beyond any of those limits the capture is reported as PARTIAL.",
 	privacyClass: "PERSONAL",
 	requiredQuality: "ANY_CAPTURE",
 	supportsExhaustiveEvidence: true,
@@ -217,9 +217,9 @@ export const mockPracticeDefinitionOptions = {
 					sourceKind: "scm.pull-request.diff",
 					displayName: "Code changes",
 					description:
-						"The code changes the pull request introduces, as a unified diff annotated with line numbers.",
+						"The change the pull request introduces: the pinned base and head commits, from which the review derives the diff.",
 					selectionScope:
-						"The complete provider-qualified base-to-head diff for one pull request, pinned by both commit identities. It is streamed without a content-size cutoff alongside a NUL-delimited changed-path index covering binary files, mode-only changes and renames. GitLab records the review diff base; providers that record the target tip require its merge base with the reviewed head. A verified range with no changes is complete and empty. A diff that cannot be captured is a collection error, never a silently truncated diff.",
+						"The base and head commit of one pull request, both pinned, both present in the captured repository. GitLab records the review diff base; providers that record the target tip require its merge base with the reviewed head. The diff itself, its statistics, the changed paths and the commits are derived inside the review from the captured repository with git, so nothing about the change is truncated or rendered before the review reads it. A quote of the change names a side of that range and a repository path; it is verified against the blob at that side's commit and refused when the path is not one the change touches. A pinned range with no changes is complete and empty. A range that cannot be pinned is a collection error.",
 					privacyClass: "INTERNAL",
 					requiredQuality: "COMPLETE",
 					supportsExhaustiveEvidence: true,
@@ -269,9 +269,9 @@ export const mockPracticeDefinitionOptions = {
 					sourceKind: "scm.linked-work-items",
 					displayName: "Linked work items",
 					description:
-						"Issues the pull request states it addresses, resolved from its description, branch name, and commit subjects.",
+						"Issues the pull request refers to by number in its description, branch name or commit subjects, as this repository stores them.",
 					selectionScope:
-						"Issues resolved from closing references, the branch name, and up to 500 commit subjects. Resolution cannot establish that it found every link the work actually has, so this source is never reported as COMPLETE. References to work outside this repository are reported as unresolved rather than as incomplete evidence.",
+						"Issues whose number appears in the description, the branch name, or the commit subjects of the pinned range, with each issue's title, state, body, labels and sub-issue counts. How a reference is worded is not recorded; the review reads that from the same description, branch and commits. A number scan cannot establish that it found every link the work actually has, so this source is never reported as COMPLETE. References to work outside this repository are reported as unresolved rather than as incomplete evidence.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "ANY_CAPTURE",
 					supportsExhaustiveEvidence: false,
@@ -303,7 +303,7 @@ export const mockPracticeDefinitionOptions = {
 					description:
 						"The issue record: title, description, author, state, labels, and assignees.",
 					selectionScope:
-						"One issue, selected by the job, with its own fields and its rendered description.",
+						"One issue, selected by the job, with its own fields and its description as the provider holds it.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "COMPLETE",
 					supportsExhaustiveEvidence: true,
@@ -370,7 +370,7 @@ export const mockPracticeDefinitionOptions = {
 					description:
 						"The written document a review is about: its prose, title, collection, author, and upstream timestamps.",
 					selectionScope:
-						"One mirrored document, selected by the job, rendered whole. A document removed upstream or evicted from the local mirror is reported as UNAVAILABLE rather than as a document that said nothing.",
+						"One mirrored document, selected by the job: its body as the wiki holds it, and its title, collection, authors and timestamps beside it. A document removed upstream or evicted from the local mirror is reported as UNAVAILABLE rather than as a document that said nothing.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "COMPLETE",
 					supportsExhaustiveEvidence: true,
