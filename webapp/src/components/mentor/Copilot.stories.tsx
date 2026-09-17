@@ -143,6 +143,13 @@ function CopilotPreview({
 
 export const Default: Story = {
 	render: () => <CopilotPreview messages={[]} votes={[]} inputPlaceholder="Ask me anything…" />,
+	play: async ({ canvas }) => {
+		// Button sizes a child svg to 16px unless a `size-*` class says otherwise; the mark fills the pill.
+		const launcher = canvas.getByRole("button", { name: "Open Heph, AI mentor" });
+		const mark = launcher.querySelector("svg");
+		await expect(mark).not.toBeNull();
+		await expect(mark?.getBoundingClientRect().width).toBe(56);
+	},
 };
 
 export const WithConversation: Story = {

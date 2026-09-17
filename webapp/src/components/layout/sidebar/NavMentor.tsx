@@ -31,7 +31,8 @@ export function NavMentor({ workspaceSlug }: { workspaceSlug: string }) {
 							/>
 						}
 					>
-						<HephIcon className="-mx-1.5" size={30} pad={5} strokeWidth={1.5} />
+						{/* `!`: SidebarMenuButton sizes every descendant svg to `size-4`; the mark is larger than a nav icon. */}
+						<HephIcon className="-mx-1 size-7!" pad={5} strokeWidth={1.5} />
 						<span className="flex items-center gap-2">
 							Heph
 							<Badge variant="muted">

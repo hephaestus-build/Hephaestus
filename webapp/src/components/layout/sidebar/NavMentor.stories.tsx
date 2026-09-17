@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { expect } from "storybook/test";
 
 import { NavMentor } from "./NavMentor";
 import { withSidebarFrame } from "./sidebar-story-frame";
@@ -37,7 +38,15 @@ type Story = StoryObj<typeof meta>;
 /**
  * Default view of the mentor navigation with hover chevron indicator.
  */
-export const Default: Story = {};
+export const Default: Story = {
+	play: async ({ canvas }) => {
+		// SidebarMenuButton sizes every descendant svg to 16px; the mark is larger than a nav icon.
+		const link = canvas.getByRole("link", { name: /Heph/u });
+		const mark = link.querySelector("svg");
+		await expect(mark).not.toBeNull();
+		await expect(mark?.getBoundingClientRect().width).toBe(28);
+	},
+};
 
 /**
  * Shows the mentor navigation in hover state, revealing the chevron arrow.
