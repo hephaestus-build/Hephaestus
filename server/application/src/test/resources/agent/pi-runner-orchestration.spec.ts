@@ -224,6 +224,28 @@ if (scenario) {
 								record("citation:refused");
 								await cite("src/Auth.java", "insecure();");
 								record("citation:stored");
+								// A citation at a revision in the history is read through .git; a wrong line is
+								// corrected there too, and an unknown revision is refused.
+								const historySha = readFileSync(join(cwd, "history-sha"), "utf8");
+								const atRevision = (revision: string, startLine: number) =>
+									report.execute("o-2", {
+										observations: [
+											observation("test-practice", `At revision ${startLine}`, {
+												sourceKind: "scm.repository.tree",
+												artifactPath: "repos/primary/.git/HEAD",
+												path: "src/Auth.java",
+												revision,
+												startLine,
+												quote: "insecure();",
+											}),
+										],
+									});
+								const relocated: unknown = await atRevision(historySha, 3);
+								record(
+									`citation:history:${typeof relocated === "object" && relocated !== null && "details" in relocated && typeof relocated.details === "object" && relocated.details !== null && "inserted" in relocated.details ? String(relocated.details.inserted) : "?"}`,
+								);
+								await assert.rejects(atRevision("b".repeat(40), 2), /no such file at revision/);
+								record("citation:history-refused");
 								// Coordinates alone: the runner records the line and echoes what it recorded.
 								const echoed: unknown = await cite("src/Auth.java", "", "Cited by line alone");
 								const firstContent: unknown =
@@ -331,13 +353,33 @@ if (scenario) {
 						);
 					}
 					if (stage === "tree-citation") {
-						mkdirSync(join(cwd, "repos/primary/.git"), { recursive: true });
+						// A real checkout with one commit in its history, so a citation at a revision is read
+						// through .git like admission reads it.
 						mkdirSync(join(cwd, "repos/primary/src"), { recursive: true });
-						writeFileSync(join(cwd, "repos/primary/.git/HEAD"), `${"a".repeat(40)}\n`);
 						writeFileSync(
 							join(cwd, "repos/primary/src/Auth.java"),
 							"class Auth {\n  insecure();\n}\n",
 						);
+						const git = (...args: string[]) =>
+							spawnSync("git", ["-C", join(cwd, "repos/primary"), ...args], {
+								encoding: "utf8",
+								env: {
+									...process.env,
+									GIT_AUTHOR_NAME: "t",
+									GIT_AUTHOR_EMAIL: "t@t",
+									GIT_COMMITTER_NAME: "t",
+									GIT_COMMITTER_EMAIL: "t@t",
+								},
+							});
+						git("init", "-q");
+						git("add", ".");
+						git("commit", "-q", "-m", "first");
+						writeFileSync(
+							join(cwd, "repos/primary/src/Auth.java"),
+							"class Auth {\n  insecure();\n  more();\n}\n",
+						);
+						git("commit", "-q", "-am", "second");
+						writeFileSync(join(cwd, "history-sha"), git("rev-parse", "HEAD~1").stdout.trim());
 					}
 					writeFileSync(
 						join(cwd, "evidence/manifest.json"),
@@ -518,6 +560,8 @@ if (scenario) {
 								[
 									"citation:refused",
 									"citation:stored",
+									"citation:history:1",
+									"citation:history-refused",
 									'citation:echo:   src/Auth.java:2-2 recorded "  insecure();"',
 								],
 								child.stderr,

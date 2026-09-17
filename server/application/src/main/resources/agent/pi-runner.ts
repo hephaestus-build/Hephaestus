@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 
@@ -626,25 +627,25 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 	);
 	validateInapplicabilityScope(observation, availableSourceKinds);
 	for (const citation of observation.evidence.citations) {
-		// A historical repository citation is verified against the immutable capture by admission, so it
-		// must carry its quote; one at the captured HEAD is read from the checkout so the session gets
-		// its correction here. A quote of the change is read from the diff this container derived.
-		if (citation.sourceKind === "scm.repository.tree" && citation.revision !== undefined) {
-			if (!citation.quote.trim())
-				throw new Error(
-					`a citation at revision ${citation.revision} needs its quote; only the checkout at HEAD can be cited by coordinates alone`,
-				);
-			continue;
-		}
+		// A repository citation is read from the checkout — the working tree at HEAD, or the blob at the
+		// named revision through its .git — so the session gets its correction here, by the same rule
+		// admission applies. A quote of the change is read from the diff this container derived.
 		const content =
 			citation.sourceKind === "scm.repository.tree"
-				? readCheckoutFile(citation.path)
+				? citation.revision === undefined
+					? readCheckoutFile(citation.path)
+					: readRevisionFile(citation.path, citation.revision)
 				: citation.sourceKind === "scm.pull-request.diff"
 					? readFileSync(`${CWD}/${CHANGE_ROOT}/diff.patch`, "utf8")
 					: readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
 		const resolved =
 			content === null
-				? { mismatch: "no such file in the checkout" }
+				? {
+						mismatch:
+							citation.revision === undefined
+								? "no such file in the checkout"
+								: `no such file at revision ${citation.revision} in the checkout's history`,
+					}
 				: resolveOnEitherSide(citation, content);
 		if ("mismatch" in resolved) {
 			throw new Error(
@@ -696,6 +697,20 @@ function resolveOnEitherSide(
 
 function excerptOf(text: string): string {
 	return JSON.stringify(text.length > 160 ? `${text.slice(0, 160)}…` : text);
+}
+
+/** The blob at a repository-relative path in a revision of the checkout's history, or null. */
+function readRevisionFile(path: string, revision: string): string | null {
+	if (path.startsWith("/") || path.split("/").includes("..")) return null;
+	const child = spawnSync(
+		"git",
+		["-C", INPUT_PATHS.repositoryRoot, "--no-pager", "show", `${revision}:${path}`],
+		{
+			maxBuffer: 64 * 1024 * 1024,
+			env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" },
+		},
+	);
+	return child.status === 0 ? child.stdout.toString("utf8") : null;
 }
 
 /** The file at a repository-relative path in the checkout, or null when there is none. */

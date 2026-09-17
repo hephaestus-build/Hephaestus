@@ -60,7 +60,7 @@ what the cited lines actually read: copy from that.
   (`changed_files`) or `work/change/files.json`.
 - The repository: `sourceKind` `scm.repository.tree`, `artifactPath` the manifest's `.git/HEAD`, a
   repository-relative `path`, lines of the file at the reviewed commit; `revision` optionally names a
-  full commit SHA from its history (then the quote is required).
+  full commit SHA from its history, and the file is then read at that commit.
 - Everything else: the captured file under `<contextRoot>` or `<historyRoot>`, with `path` naming the
   file or the record inside it. Quote the description from `description.md` and a linked issue from
   `linked_work_items/<n>.md`, never from an escaped `body` string in a JSON file.
