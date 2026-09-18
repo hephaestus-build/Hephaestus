@@ -439,11 +439,16 @@ export function normalizeObservation(
 	if (unknownFields.length)
 		throw new Error(`unknown observation field(s): ${unknownFields.join(", ")}`);
 	const practiceSlug = trimmedText(observation.practiceSlug).toLowerCase().replace(/_/g, "-");
+	// Named before the cell is parsed: an item with no slug is usually not an observation at all (a
+	// wrapper, a fragment), and "invalid presence" would send the session looking at the wrong field.
+	if (!practiceSlug)
+		throw new Error(
+			`practiceSlug is required: each item of observations is one observation object (received keys: ${Object.keys(observation).join(", ") || "none"})`,
+		);
 	const title = trimmedText(observation.summary);
 	const reasoning = trimmedText(observation.evidenceRationale);
 	const result = parseAssessment(observation, practiceSlug, ruledOut);
 	const { assessmentStatus, presence } = result;
-	if (!practiceSlug) throw new Error("practiceSlug is required");
 	if (!title) throw new Error("summary is required");
 	// The summary is what the developer reads on their practice page, above the practice's own name and
 	// with no evidence beside it, so a single word there ("Test") names nothing the practice did not.

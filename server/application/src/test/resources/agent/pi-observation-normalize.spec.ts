@@ -119,6 +119,14 @@ void test("a line-number refusal names what was received, and an omitted line as
 	);
 });
 
+void test("an item with no practiceSlug is refused as not an observation, before its cell is read", () => {
+	assert.throws(
+		() => normalizeObservation({ summary: "PR mixes unrelated changes" }),
+		/practiceSlug is required: each item of observations is one observation object \(received keys: summary\)/,
+	);
+	assert.throws(() => normalizeObservation({}), /received keys: none/);
+});
+
 void test("mixed-case enums up-case", () => {
 	const out = normalizeObservation(
 		baseObservation({ presence: "Present", assessment: "Good", severity: null }),
