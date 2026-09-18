@@ -87,6 +87,38 @@ void test("lowercase enums + underscored slug normalize and are accepted (not dr
 	assert.equal(out.severity, "MAJOR");
 });
 
+void test("a line-number refusal names what was received, and an omitted line as omitted", () => {
+	const cited = (lines: Record<string, unknown>) =>
+		baseObservation({
+			evidence: {
+				citations: [
+					{
+						sourceKind: "scm.pull-request.diff",
+						artifactPath: "inputs/context/diff.patch",
+						path: "src/Auth.java",
+						side: "NEW",
+						quote: "+ insecure();",
+						...lines,
+					},
+				],
+			},
+		});
+	assert.throws(() => normalizeObservation(cited({})), /startLine is required: the 1-based line/);
+	assert.throws(() => normalizeObservation(cited({ startLine: null })), /startLine is required/);
+	assert.throws(
+		() => normalizeObservation(cited({ startLine: 0 })),
+		/startLine must be a positive integer, received 0; lines are 1-based/,
+	);
+	assert.throws(
+		() => normalizeObservation(cited({ startLine: "ten" })),
+		/received "ten"; lines are 1-based/,
+	);
+	assert.throws(
+		() => normalizeObservation(cited({ startLine: 10, endLine: 4 })),
+		/endLine must be an integer >= startLine, received 4 with startLine 10/,
+	);
+});
+
 void test("mixed-case enums up-case", () => {
 	const out = normalizeObservation(
 		baseObservation({ presence: "Present", assessment: "Good", severity: null }),

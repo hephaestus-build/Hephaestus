@@ -567,8 +567,19 @@ const evidenceSchema = {
 						description:
 							"For repository text: artifactPath names the captured .git/HEAD, path is repository-relative, and revision optionally selects a full commit SHA; omission means the captured HEAD.",
 					},
-					startLine: { type: "integer", minimum: 1, maximum: 2147483647 },
-					endLine: { type: "integer", minimum: 1, maximum: 2147483647 },
+					startLine: {
+						type: "integer",
+						minimum: 1,
+						maximum: 2147483647,
+						description:
+							"The 1-based line of the quoted text in the artifact; for a quote of the change, the [L<n>] coordinate of work/change/diff.patch.",
+					},
+					endLine: {
+						type: "integer",
+						minimum: 1,
+						maximum: 2147483647,
+						description: "The last line of the quote, at least startLine; omitted means one line.",
+					},
 					quote: {
 						type: "string",
 						description:

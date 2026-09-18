@@ -253,10 +253,21 @@ export function normalizeEvidence(
 		)
 			throw new Error("diff evidence citation side must be OLD or NEW");
 		// A side on anything but a quote of the change says nothing; surplus, dropped rather than refused.
+		// Number(undefined) is NaN and Number(null) is 0: an omitted line must be named as omitted, not
+		// as a bad integer, or the session cannot tell which of the two it did.
+		if (nullish(fields.startLine) || fields.startLine === "")
+			throw new Error(
+				"evidence citation startLine is required: the 1-based line of the quoted text in the artifact " +
+					"(for a quote of the change, the [L<n>] coordinate of work/change/diff.patch)",
+			);
 		if (!Number.isSafeInteger(startLine) || startLine <= 0 || startLine > 2147483647)
-			throw new Error("evidence citation startLine must be a positive integer");
+			throw new Error(
+				`evidence citation startLine must be a positive integer, received ${JSON.stringify(fields.startLine)}; lines are 1-based`,
+			);
 		if (!Number.isSafeInteger(endLine) || endLine < startLine || endLine > 2147483647)
-			throw new Error("evidence citation endLine must be >= startLine");
+			throw new Error(
+				`evidence citation endLine must be an integer >= startLine, received ${JSON.stringify(fields.endLine)} with startLine ${startLine}`,
+			);
 		// An empty quote is a citation by coordinates alone; resolveQuote fills it from the artifact.
 		const side: DiffSide | null =
 			sourceKind === "scm.pull-request.diff" && (declaredSide === "OLD" || declaredSide === "NEW")
