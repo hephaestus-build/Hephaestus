@@ -13,6 +13,12 @@ const LANG_PATTERNS: Record<string, Array<[string, RegExp]>> = {
 		["preconditionFailure", /\bpreconditionFailure\s*\(/],
 		["assertionFailure", /\bassertionFailure\s*\(/],
 		["force-unwrap", /[A-Za-z0-9_)\]]!(\.|\s|$|\))/],
+		// The closed list the criteria decide the occasion by continues with the traps that are not
+		// spelled with a bang: a subscript whose index is not a literal, a lossy numeric conversion of
+		// a runtime value, and a division or modulo by a non-literal.
+		["subscript with a non-literal index", /[A-Za-z_][A-Za-z0-9_.]*\[\s*[A-Za-z_(][^\]\n]*\]/],
+		["lossy numeric conversion", /\b(U?Int(8|16|32|64)?)\(\s*[A-Za-z_(]/],
+		["division or modulo by a non-literal", /\S\s[/%]\s[A-Za-z_(]/],
 	],
 	ts: [
 		["process.exit", /\bprocess\.exit\s*\(/],
