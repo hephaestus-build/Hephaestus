@@ -2336,6 +2336,11 @@ async function main() {
 				// transcript shows a session that simply stopped answering — the one thing a reader
 				// cannot diagnose afterwards.
 				const rawStopReason = event.message.rawStopReason;
+				// A call the provider answered with an error the SDK does not retry — no deployment for
+				// the model, a rejected key, a gateway fault — is as much a provider failure as one it gave
+				// up retrying: nothing about the work was read. Counted so a review that recorded nothing
+				// is queued again rather than recorded as a review that found nothing.
+				if (stopReason === "error" && measuring) providerFailures++;
 				const failure =
 					stopReason === "error" || stopReason === "length"
 						? `, error=${event.message.errorMessage ?? "none given"}${rawStopReason ? `, rawStopReason=${rawStopReason}` : ""}`

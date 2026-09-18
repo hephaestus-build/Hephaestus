@@ -88,6 +88,8 @@ if (scenario) {
 	let prompts = 0;
 	/** The overrun scenario's first prompt ends only when the runner aborts it, like a call in flight. */
 	let releasePrompt: (() => void) | undefined;
+	/** The session's event handler, so a scenario can emit what the SDK would. */
+	let emit: (event: unknown) => void = () => {};
 	mock.module("@earendil-works/pi-coding-agent", {
 		namedExports: {
 			defineTool: (tool: unknown) => tool,
@@ -121,7 +123,10 @@ if (scenario) {
 					session: {
 						state: { messages: [] },
 						sessionManager: manager,
-						subscribe: () => () => {},
+						subscribe(handler: (event: unknown) => void) {
+							emit = handler;
+							return () => {};
+						},
 						clearQueue() {},
 						abort: () => {
 							record("abort");
@@ -141,6 +146,19 @@ if (scenario) {
 							writeFileSync(join(cwd, `prompt-${prompts}.md`), text);
 							if (scenario === "budget") {
 								now += 20_000;
+								return;
+							}
+							if (scenario === "provider-error") {
+								// The provider answers every call with an error the SDK does not retry.
+								emit({
+									type: "message_end",
+									message: {
+										role: "assistant",
+										stopReason: "error",
+										errorMessage: "404: No available model deployments for model 'm' for this key",
+										content: [],
+									},
+								});
 								return;
 							}
 							// Like the SDK: a prompt while the last one is still ending is refused, and the
@@ -403,6 +421,7 @@ if (scenario) {
 		"session-init",
 		"budget",
 		"overrun",
+		"provider-error",
 		"batch",
 		"finish",
 		"refusal-cap",
@@ -415,6 +434,8 @@ if (scenario) {
 				"session-init": "fails cleanly when the session cannot be created",
 				budget: "aborts a turn that runs past its share and reports the practices as not reached",
 				overrun: "waits for an aborted turn to end before the next turn is sent",
+				"provider-error":
+					"a provider error the SDK does not retry is a failure of the provider, not a review that found nothing",
 				batch: "stores several observations from one call and answers per item",
 				finish: "asks once more, in the same session, for the practices no turn recorded",
 				"refusal-cap": "stops accepting a practice after eight refused submissions",
@@ -596,6 +617,15 @@ if (scenario) {
 							assert.ok(events.includes("prompt:1"), child.stderr);
 							assert.ok(events.includes("abort"), child.stderr);
 							assert.ok(!events.includes("prompt:2"), events.join("\n"));
+							reached({ "test-practice": "NOT_REACHED" });
+							break;
+						case "provider-error":
+							// Exit 76: the server queues the review again instead of recording a failure.
+							assert.equal(child.status, 76, child.stderr);
+							assert.match(
+								child.stderr,
+								/UNREACHABLE: this review reached no practice, and \d+ model call\(s\)/,
+							);
 							reached({ "test-practice": "NOT_REACHED" });
 							break;
 						case "overrun": {
