@@ -2196,10 +2196,13 @@ async function settleSession(
 			setTimeout(() => resolve(false), maxMs);
 		}),
 	]);
-	const waited = ((Date.now() - started) / 1000).toFixed(1);
-	console.error(
-		`[pi-runner] ${label}: waited ${waited}s for the session to go idle${idle ? "" : " — still busy"}`,
-	);
+	// The run flag clears a beat after the prompt resolves; a wait that short is not worth a line.
+	const waitedMs = Date.now() - started;
+	if (!idle || waitedMs >= 1000) {
+		console.error(
+			`[pi-runner] ${label}: waited ${(waitedMs / 1000).toFixed(1)}s for the session to go idle${idle ? "" : " — still busy"}`,
+		);
+	}
 	return idle;
 }
 
