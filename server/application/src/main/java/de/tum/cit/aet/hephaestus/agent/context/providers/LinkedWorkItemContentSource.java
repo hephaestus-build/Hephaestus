@@ -202,7 +202,11 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
 
     private static byte[] asText(Issue issue) {
         String body = issue.getBody() == null ? "" : issue.getBody();
-        return ("# " + issue.getTitle() + "\n\n" + body).getBytes(StandardCharsets.UTF_8);
+        // The dates as a quotable line, so a review can cite the opening or the close from the text it reads.
+        String dates = "Opened " + (issue.getCreatedAt() == null ? "at an unknown time" : issue.getCreatedAt())
+                + (issue.getClosedAt() == null ? "" : ", closed " + issue.getClosedAt())
+                + (issue.getState() == null ? "" : ", state " + issue.getState().name()) + ".";
+        return ("# " + issue.getTitle() + "\n\n" + dates + "\n\n" + body).getBytes(StandardCharsets.UTF_8);
     }
 
     private ObjectNode toItem(Issue issue) {
@@ -212,6 +216,12 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         if (issue.getState() != null) node.put("state", issue.getState().name());
         node.put("url", issue.getHtmlUrl());
         node.put("body", issue.getBody());
+        // When the issue was opened and closed: a practice about working issue-first reads the opening
+        // against the change's first commit, and one about the close reads the closing against the merge.
+        if (issue.getCreatedAt() != null)
+            node.put("createdAt", issue.getCreatedAt().toString());
+        if (issue.getClosedAt() != null)
+            node.put("closedAt", issue.getClosedAt().toString());
         ArrayNode labels = node.putArray("labels");
         Set<Label> labelSet = issue.getLabels();
         if (labelSet != null) {

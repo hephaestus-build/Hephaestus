@@ -117,7 +117,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                         org.mockito.Mockito.mock(
                                 de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
                         org.mockito.Mockito.mock(FeedbackLedgerRecorder.class)),
-                observationRepository);
+                observationRepository,
+                InContextDeliveryGateFixtures.noRecurrence());
     }
 
     @Test

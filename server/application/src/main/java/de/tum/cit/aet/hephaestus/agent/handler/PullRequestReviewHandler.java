@@ -58,6 +58,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     private final FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter;
     private final InContextDeliveryGate inContextDeliveryGate;
     private final ObservationRepository observationRepository;
+    private final RecurringLapses recurringLapses;
 
     PullRequestReviewHandler(
             JsonMapper objectMapper,
@@ -69,7 +70,8 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             FeedbackDeliveryService feedbackService,
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter,
             InContextDeliveryGate inContextDeliveryGate,
-            ObservationRepository observationRepository) {
+            ObservationRepository observationRepository,
+            RecurringLapses recurringLapses) {
         this.objectMapper = objectMapper;
         this.practiceCatalogInjector = practiceCatalogInjector;
         this.preparation = preparation;
@@ -80,6 +82,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         this.feedbackResponseSuppressionFilter = feedbackResponseSuppressionFilter;
         this.inContextDeliveryGate = inContextDeliveryGate;
         this.observationRepository = observationRepository;
+        this.recurringLapses = recurringLapses;
     }
 
     @Override
@@ -113,6 +116,14 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         metadata.put("target_branch", submissionRequest.baseRefName());
         metadata.put("title", pullRequestData.title());
         metadata.put("body", pullRequestData.body());
+        // Who this author-run is about and who merged: a MERGER practice is reviewed only when they are
+        // the same person (PracticeCatalogInjector.attributable), so the two ids travel with the job.
+        if (pullRequestData.authorId() != null) {
+            metadata.put(PracticeCatalogInjector.AUTHOR_ID_METADATA_KEY, pullRequestData.authorId());
+        }
+        if (pullRequestData.mergedById() != null) {
+            metadata.put(PracticeCatalogInjector.MERGED_BY_ID_METADATA_KEY, pullRequestData.mergedById());
+        }
         // When present, the catalog injector materialises ONLY the practices bound to this signal, so an
         // authoring practice is not re-litigated on a fixup push. Null = run the full focus set.
         if (submissionRequest.triggerSignal() != null) {
@@ -211,16 +222,16 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     }
 
     private void deliverAdmitted(AgentJob job) {
-        List<PracticeDetectionResultParser.ValidatedObservation> scopedObservations =
-                observationRepository
-                        .findByAgentJobId(job.getId(), job.getWorkspace().getId())
-                        .stream()
-                        .map(observation -> {
-                            CitationVerification.requireVerified(job, observation.getEvidence());
-                            return validated(observation);
-                        })
-                        .toList();
+        List<de.tum.cit.aet.hephaestus.practices.model.Observation> persisted = observationRepository.findByAgentJobId(
+                job.getId(), job.getWorkspace().getId());
+        List<PracticeDetectionResultParser.ValidatedObservation> scopedObservations = persisted.stream()
+                .map(observation -> {
+                    CitationVerification.requireVerified(job, observation.getEvidence());
+                    return validated(observation);
+                })
+                .toList();
         if (scopedObservations.isEmpty()) throw new JobDeliveryException("Admitted observation set is empty");
+        Set<String> recurring = recurringLapses.recurringSlugs(persisted);
         if (feedbackService.recoverAutomaticPackageIfPresent(job)) return;
         List<PracticeDetectionResultParser.ValidatedObservation> eligible = feedbackResponseSuppressionFilter
                 .evaluate(job, scopedObservations)
@@ -251,11 +262,13 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                     .toList();
             feedbackService.recordProposal(
                     job,
-                    DeliveryComposer.composeAdmitted(reviewPackage, ArtifactKinds.PULL_REQUEST, why, units, lead),
+                    DeliveryComposer.composeAdmitted(
+                            reviewPackage, ArtifactKinds.PULL_REQUEST, why, units, lead, recurring),
                     reviewPackage);
             return;
         }
-        var content = DeliveryComposer.composeAdmitted(deliverable, ArtifactKinds.PULL_REQUEST, why, units, lead);
+        var content =
+                DeliveryComposer.composeAdmitted(deliverable, ArtifactKinds.PULL_REQUEST, why, units, lead, recurring);
         Set<String> contributingPracticeSlugs = deliverable.stream()
                 .map(PracticeDetectionResultParser.ValidatedObservation::practiceSlug)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());

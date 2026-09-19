@@ -174,9 +174,12 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
 
         assertThat(files).containsKey(OUTPUT);
         JsonNode root = objectMapper.readTree(files.get(OUTPUT));
-        // The listing and which artifact is under review; no guidance and no tallies.
+        // The listing, which artifact is under review, and whether the project labels its issues; no guidance.
         assertThat(root.propertyNames())
-                .containsExactlyInAnyOrder("repository", "focal", "issues", "pullRequests", "truncated");
+                .containsExactlyInAnyOrder("repository", "focal", "labelScheme", "issues", "pullRequests", "truncated");
+        // Mocked counts: a project with no labelling convention reads as zero labelled and no kinds in use.
+        assertThat(root.get("labelScheme").get("issuesLabelled").asLong()).isZero();
+        assertThat(root.get("labelScheme").get("labelsInUse")).isEmpty();
         assertThat(root.get("repository").asString()).isEqualTo("acme/widgets");
         assertThat(root.get("focal").get("type").asString()).isEqualTo("scm.issue");
         assertThat(root.get("focal").get("number").asInt()).isEqualTo(99);

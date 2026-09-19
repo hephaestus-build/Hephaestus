@@ -105,7 +105,9 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                         "uses-structured-concurrency-safely",
                         "ships-a-preview-with-each-new-view",
                         "declares-permissions-truthfully-at-point-of-use",
-                        "uses-adaptive-colors-for-every-appearance");
+                        "uses-adaptive-colors-for-every-appearance",
+                        "avoids-insecure-defaults-and-over-broad-permissions",
+                        "validates-and-escapes-untrusted-input");
     }
 
     /**

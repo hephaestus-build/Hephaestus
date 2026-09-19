@@ -21,4 +21,11 @@ public enum ActorRole {
 
     /** Responded to the artifact — the only relation a practice about reviewing can be about. */
     REVIEWER,
+    /**
+     * Landed the artifact — the relation a practice about the act of merging is about. A review is
+     * filed against one person; a MERGER practice is reviewed in an author's review when the author is
+     * the one who merged, and withheld otherwise, so a lapse at the merge is never filed against someone
+     * who did not merge.
+     */
+    MERGER,
 }

@@ -65,6 +65,7 @@ public class IssueReviewHandler implements JobTypeHandler {
     private final ObservationRepository observationRepository;
     private final PracticeFeedbackDispatchService dispatchService;
     private final FeedbackDeliveryService feedbackDeliveryService;
+    private final RecurringLapses recurringLapses;
 
     IssueReviewHandler(
             JsonMapper objectMapper,
@@ -81,7 +82,8 @@ public class IssueReviewHandler implements JobTypeHandler {
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter,
             ObservationRepository observationRepository,
             PracticeFeedbackDispatchService dispatchService,
-            FeedbackDeliveryService feedbackDeliveryService) {
+            FeedbackDeliveryService feedbackDeliveryService,
+            RecurringLapses recurringLapses) {
         this.objectMapper = objectMapper;
         this.preparation = preparation;
         this.practiceCatalogInjector = practiceCatalogInjector;
@@ -97,6 +99,7 @@ public class IssueReviewHandler implements JobTypeHandler {
         this.observationRepository = observationRepository;
         this.dispatchService = dispatchService;
         this.feedbackDeliveryService = feedbackDeliveryService;
+        this.recurringLapses = recurringLapses;
     }
 
     @Override
@@ -192,15 +195,15 @@ public class IssueReviewHandler implements JobTypeHandler {
     public void deliver(AgentJob job) {
         if (ObservationAdmissionService.observationsWereRefused(job)) return;
         ObservationAdmissionService.requireMatchingCompositionDigest(job);
-        List<PracticeDetectionResultParser.ValidatedObservation> observations =
-                observationRepository
-                        .findByAgentJobId(job.getId(), job.getWorkspace().getId())
-                        .stream()
-                        .map(observation -> {
-                            CitationVerification.requireVerified(job, observation.getEvidence());
-                            return validated(observation);
-                        })
-                        .toList();
+        List<de.tum.cit.aet.hephaestus.practices.model.Observation> persisted = observationRepository.findByAgentJobId(
+                job.getId(), job.getWorkspace().getId());
+        List<PracticeDetectionResultParser.ValidatedObservation> observations = persisted.stream()
+                .map(observation -> {
+                    CitationVerification.requireVerified(job, observation.getEvidence());
+                    return validated(observation);
+                })
+                .toList();
+        Set<String> recurring = recurringLapses.recurringSlugs(persisted);
         if (feedbackDeliveryService.recoverAutomaticPackageIfPresent(job)) return;
         List<PracticeDetectionResultParser.ValidatedObservation> eligible =
                 feedbackResponseSuppressionFilter.evaluate(job, observations).deliverable();
@@ -229,11 +232,11 @@ public class IssueReviewHandler implements JobTypeHandler {
                     .toList();
             feedbackLedgerRecorder.recordProposal(
                     job,
-                    DeliveryComposer.composeAdmitted(reviewPackage, ArtifactKinds.ISSUE, why, units, lead),
+                    DeliveryComposer.composeAdmitted(reviewPackage, ArtifactKinds.ISSUE, why, units, lead, recurring),
                     reviewPackage);
             return;
         }
-        var note = DeliveryComposer.composeAdmitted(loudEnough, ArtifactKinds.ISSUE, why, units, lead);
+        var note = DeliveryComposer.composeAdmitted(loudEnough, ArtifactKinds.ISSUE, why, units, lead, recurring);
         postIssueNote(
                 job,
                 note,

@@ -2867,7 +2867,7 @@ export type PracticeBinding = {
   /**
    * Whose conduct this review judges; omit for AUTHOR
    */
-  subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER';
+  subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
 };
 
 /**

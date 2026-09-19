@@ -43,8 +43,11 @@ class DeliveryComposer {
             Set.of("describe-what-and-why", "commits-are-atomic-and-cohesive", "commit-subjects-explain-each-change");
     private static final Set<String> EPIC_STRUCTURE_PRACTICES =
             Set.of("issue-scoped-to-single-concern", "issue-has-checkable-outcome");
-    private static final Map<String, String> CO_OCCURRENCE_REDUNDANT_TO_PREFERRED =
-            Map.ofEntries(Map.entry("ready-and-traceable-handoff", "ships-tests-with-the-change"));
+    private static final Map<String, String> CO_OCCURRENCE_REDUNDANT_TO_PREFERRED = Map.ofEntries(
+            Map.entry("ready-and-traceable-handoff", "ships-tests-with-the-change"),
+            // Both are negative on a merge that left the linked issue's checklist untouched; the one about
+            // the work itself carries the message, the bookkeeping one is the same fact said twice.
+            Map.entry("merge-confirms-the-linked-issue-outcome", "honours-linked-issue-acceptance-criteria"));
 
     private static String repoRelative(String path) {
         return path.startsWith(REPO_MOUNT_RELATIVE) ? path.substring(REPO_MOUNT_RELATIVE.length()) : path;
@@ -83,6 +86,22 @@ class DeliveryComposer {
             Map<String, String> whyBySlug,
             List<ComposedFeedbackUnit> composed,
             @Nullable String lead) {
+        return composeAdmitted(observations, artifact, whyBySlug, composed, lead, Set.of());
+    }
+
+    /**
+     * @param recurringSlugs practices this developer has already been told about on several earlier
+     *     pieces of work ({@link RecurringLapses}); a non-blocking lapse in one of them is named in one
+     *     line instead of explained again, and does not spend the improvement cap
+     */
+    @Nullable
+    static DeliveryContent composeAdmitted(
+            @Nullable List<ValidatedObservation> observations,
+            ArtifactKind artifact,
+            Map<String, String> whyBySlug,
+            List<ComposedFeedbackUnit> composed,
+            @Nullable String lead,
+            Set<String> recurringSlugs) {
         if (observations == null || observations.isEmpty()) {
             return null;
         }
@@ -110,6 +129,16 @@ class DeliveryComposer {
             dedupDropped.addAll(identityDiff(before, negatives));
         }
 
+        // A habit the developer already heard about on earlier work is named, not re-explained: the full
+        // explanation lives on the practice page, and repeating it on every change teaches people to stop
+        // reading. A blocking lapse is still explained in full whatever its history.
+        List<ValidatedObservation> recurring = negatives.stream()
+                .filter(f -> recurringSlugs.contains(f.practiceSlug()))
+                .filter(f -> f.severity() != Severity.CRITICAL && f.severity() != Severity.MAJOR)
+                .toList();
+        if (!recurring.isEmpty()) {
+            negatives = identityDiff(negatives, recurring);
+        }
         // Every blocking (CRITICAL/MAJOR) observation is kept; only the non-blocking tail is capped (see
         // capImprovementTail). The capped list, not the raw one, flows into the partition and diff notes
         // below, so a dropped nudge leaves no inline comment either.
@@ -125,6 +154,13 @@ class DeliveryComposer {
             improvementOverflow = (int) (improvementTotal - MAX_IMPROVEMENT_SUGGESTIONS);
         }
 
+        if (negatives.isEmpty() && !recurring.isEmpty()) {
+            Rendering rendering = new Rendering(whyBySlug, emittedWhy, ComposedNotes.claim(recurring, composed), lead);
+            var sb = new StringBuilder(1024);
+            sb.append(openingOf(rendering));
+            appendRecurring(sb, recurring);
+            return new DeliveryContent(sb.toString(), List.of(), withheldObservations(dedupDropped, capDropped));
+        }
         if (negatives.isEmpty()) {
             // Ranked best-attested first, so the strengths that survive the cap are the ones we saw in the
             // most of the work, and so a practice's single composed message is claimed by its widest
@@ -168,6 +204,11 @@ class DeliveryComposer {
         summarised.sort(ObservationOrder.worstFirstUnstored());
 
         String mrNote = composeMrNote(summarised, improvementOverflow, rendering);
+        if (!recurring.isEmpty()) {
+            var sb = new StringBuilder(mrNote);
+            appendRecurring(sb, recurring);
+            mrNote = sb.toString();
+        }
         List<DiffNote> diffNotes = placed.notes();
 
         return new DeliveryContent(mrNote, diffNotes, withheldObservations(dedupDropped, capDropped));
@@ -279,6 +320,8 @@ class DeliveryComposer {
     private static final int STRENGTH_BUDGET = 280;
 
     private static final int LEAD_BUDGET = 240;
+    /** A recurring lapse gets its one sentence; the explanation already lives on the practice page. */
+    private static final int RECURRING_BUDGET = 200;
 
     /**
      * The opening sits where a reader trusts the message most, so it is held to a narrower contract than a
@@ -404,6 +447,18 @@ class DeliveryComposer {
         }
 
         return sb.toString();
+    }
+
+    /** One line per recurring lapse: the observation's own sentence, then where the pattern is explained. */
+    static void appendRecurring(StringBuilder sb, List<ValidatedObservation> recurring) {
+        sb.append("**Still open from your earlier changes**\n\n");
+        for (ValidatedObservation f : recurring) {
+            String sentence =
+                    clampToSentenceBudget(sanitizeStudentText(f.summary()).strip(), RECURRING_BUDGET);
+            sb.append("- ").append(sentence).append("\n");
+        }
+        sb.append(
+                "\nThese came up on several of your recent changes, so they are only named here; your practice page has the pattern and what good looks like.\n\n");
     }
 
     private static void appendExpanded(

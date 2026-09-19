@@ -209,8 +209,13 @@ enrols people. How a membership row comes to exist is
 [Who counts as a person](/admin/practice-review#who-counts-as-a-person). `SELECTED` is validated against
 the same population, so a person who is not an eligible member cannot be selected.
 
-The review subject for pull requests, merge requests, and issues is their author, and
-`ReviewSubjectStatus` records which of four things it turned out to be:
+The review subject for pull requests, merge requests, and issues is their author, and a reviewer run
+is about the reviewer it names. A practice may declare another relation as its `subject`: `REVIEWER`
+for the review practices, `MERGER` for a practice about the act of merging. A review is filed against one
+person, so a `MERGER` practice is reviewed in an author run only when the author is the one who merged
+(`merged_by` is staged in `metadata.json`) and is withheld otherwise — a lapse at the merge is never filed
+against someone who did not merge. `ReviewSubjectStatus` records which of four things the subject turned
+out to be:
 `RESOLVED_LINKED_HUMAN`, `MISSING`, `NON_HUMAN`, or `UNLINKED`. Only the first can be matched against the
 person axis; the other three are never expanded to the whole eligible population. This makes coverage an
 operator-selected population while preserving the recipient's delivery preference as a separate veto.

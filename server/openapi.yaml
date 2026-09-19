@@ -12271,6 +12271,7 @@ components:
           - AUTHOR
           - ASSIGNEE
           - REVIEWER
+          - MERGER
       required:
       - needs
       - signals

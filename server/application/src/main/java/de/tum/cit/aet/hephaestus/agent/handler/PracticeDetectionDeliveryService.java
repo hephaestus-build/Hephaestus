@@ -444,11 +444,7 @@ public class PracticeDetectionDeliveryService {
     private void enforceAttribution(ValidatedObservation observation, PracticeRevision revision, AgentJob job) {
         ActorRole subject =
                 PracticeBinding.subjectRoleOf(revision.getBindings(), PracticeCatalogInjector.signalOf(job));
-        JsonNode metadata = job.getMetadata();
-        boolean reviewerRun = metadata != null
-                && metadata.path("about_user_id").isNumber()
-                && "REVIEWER".equals(metadata.path("subject_role").asString());
-        if ((subject == ActorRole.AUTHOR && !reviewerRun) || (subject == ActorRole.REVIEWER && reviewerRun)) {
+        if (PracticeCatalogInjector.subjectNameable(subject, job.getMetadata())) {
             return;
         }
         throw new JobDeliveryException("Observation is about a " + subject

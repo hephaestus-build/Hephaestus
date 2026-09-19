@@ -75,7 +75,7 @@ public class PullRequestArtifactDescriptor implements ArtifactDescriptor {
 
     @Override
     public Set<ActorRole> roles() {
-        return Set.of(ActorRole.AUTHOR, ActorRole.ASSIGNEE, ActorRole.REVIEWER);
+        return Set.of(ActorRole.AUTHOR, ActorRole.ASSIGNEE, ActorRole.REVIEWER, ActorRole.MERGER);
     }
 
     @Override

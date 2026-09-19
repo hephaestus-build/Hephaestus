@@ -49,4 +49,13 @@ final class InContextDeliveryGateFixtures {
         lenient().when(repository.findById(anyLong())).thenReturn(Optional.empty());
         return repository;
     }
+
+    /** A developer with no habit on record: every practice is explained in full. */
+    static RecurringLapses noRecurrence() {
+        var lapses = org.mockito.Mockito.mock(RecurringLapses.class);
+        org.mockito.Mockito.lenient()
+                .when(lapses.recurringSlugs(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Set.of());
+        return lapses;
+    }
 }

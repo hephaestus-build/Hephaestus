@@ -158,6 +158,16 @@ public class WorkspaceInventoryContentSource implements EvidenceSource {
             focal.put("number", focalNumber);
         }
 
+        // Whether the project labels its issues at all, and with what: a practice about triage judges an
+        // unlabelled issue against the convention the project actually keeps, never against one it has not.
+        ObjectNode labels = root.putObject("labelScheme");
+        labels.put("issuesTotal", issueRepository.countIssuesByRepositoryId(repositoryId));
+        labels.put("issuesLabelled", issueRepository.countLabelledIssuesByRepositoryId(repositoryId));
+        ArrayNode inUse = labels.putArray("labelsInUse");
+        for (String name : issueRepository.findLabelNamesInUseByRepositoryId(repositoryId)) {
+            inUse.add(name);
+        }
+
         ArrayNode issuesArr = root.putArray("issues");
         int issuesEmitted = emit(issuesArr, issues, false);
         ArrayNode prsArr = root.putArray("pullRequests");

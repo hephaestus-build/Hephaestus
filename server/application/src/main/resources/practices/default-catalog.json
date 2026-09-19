@@ -860,7 +860,56 @@
 									"sourceKind": "scm.repository.tree",
 									"stance": "CONTEXTUAL"
 								}
-							]
+							],
+							"appliesWhen": {
+								"absentSays": "the added lines build no query, command, path, URL or markup from a value",
+								"anyOf": [
+									{
+										"diffContains": [
+											"URL(string",
+											"URLRequest",
+											"URLComponents",
+											"query",
+											"Query",
+											"SELECT ",
+											"INSERT ",
+											"UPDATE ",
+											"DELETE ",
+											"WHERE ",
+											"exec(",
+											"eval(",
+											"Process(",
+											"system(",
+											"popen",
+											"subprocess",
+											"os.system",
+											"Runtime.getRuntime",
+											"ProcessBuilder",
+											"innerHTML",
+											"dangerouslySetInnerHTML",
+											"document.write",
+											"readLine",
+											"argv",
+											"stdin",
+											"TextField",
+											"SecureField",
+											"request.",
+											"req.",
+											"params",
+											"form",
+											"WebView",
+											"WKWebView",
+											"loadHTMLString",
+											"FileManager",
+											"Path(",
+											"path:",
+											"appendingPathComponent",
+											"sh -c",
+											"bash"
+										]
+									}
+								]
+							}
 						}
 					],
 					"precomputeScript": "practices/precompute/validates-and-escapes-untrusted-input.ts",
@@ -888,7 +937,70 @@
 									"sourceKind": "scm.repository.tree",
 									"stance": "CONTEXTUAL"
 								}
-							]
+							],
+							"appliesWhen": {
+								"absentSays": "the added lines touch no transport, origin, permission, file-mode, auth, credential, logging or debug setting",
+								"anyOf": [
+									{
+										"diffContains": [
+											"http://",
+											"https://",
+											"Info.plist",
+											"entitlements",
+											"NSAppTransportSecurity",
+											"AllowsArbitraryLoads",
+											"CORS",
+											"Origin",
+											"Access-Control",
+											"chmod",
+											"0777",
+											"0666",
+											"verify",
+											"trust",
+											"allow",
+											"debug",
+											"DEBUG",
+											"token",
+											"Token",
+											"secret",
+											"Secret",
+											"password",
+											"Password",
+											"apiKey",
+											"api_key",
+											"API_KEY",
+											"Authorization",
+											"Bearer",
+											"Keychain",
+											"keychain",
+											"UserDefaults",
+											"permission",
+											"Permission",
+											"uses-permission",
+											"auth",
+											"print(",
+											"NSLog(",
+											"Logger",
+											"logger.",
+											"console.",
+											"System.out",
+											"logging."
+										]
+									},
+									{
+										"changedPathMatches": [
+											"**/Info.plist",
+											"**/*.entitlements",
+											"**/AndroidManifest.xml",
+											"**/*.env",
+											"**/*.env.*",
+											"**/*.xcconfig",
+											"**/project.yml",
+											"**/*.plist"
+										]
+									}
+								]
+							}
 						}
 					],
 					"precomputeScript": "practices/precompute/avoids-insecure-defaults-and-over-broad-permissions.ts",
@@ -1236,7 +1348,7 @@
 				},
 				{
 					"slug": "triages-the-issue-with-labels-and-ownership",
-					"name": "Classify issues for triage",
+					"name": "Classify the issue the way the project classifies issues",
 					"on": [
 						{
 							"signals": [
@@ -1252,9 +1364,9 @@
 						}
 					],
 					"precomputeScript": "practices/precompute/triages-the-issue-with-labels-and-ownership.ts",
-					"whyItMatters": "When work needs to move through a shared triage queue, useful classification helps the right people find and route it without repeatedly reopening every issue.",
-					"whatGoodLooksLike": "An issue carries the classification its actual triage workflow needs, without redundant labels or administrative fields that do not help anyone act.",
-					"criteria": "BEHAVIOR FOCUS: classification that serves a coordination need the issue itself demonstrates — a native type, a meaningful label, ownership or planning context that lets a shared queue route the work.\n\n## The standard\nJudge whether the issue's classification serves an observable coordination need, not whether every metadata field is filled. A native issue type or a meaningful label can help a shared queue route and group work; ownership or planning context can do the same. They are means, never requirements in themselves. Good: the classification the demonstrated routing or grouping need calls for is present, and nothing redundant is demanded on top — a native type or an existing workflow that already serves the purpose is enough. Bad: the issue itself states a coordination need and a specific classification that would meet it is missing, with a practical routing consequence. Do not prescribe assignees, milestones, priorities or a particular taxonomy without that context, and do not invent a team convention.\n\n## Occasion\nThis is a gate. First establish the need from the captured issue: an explicit request to classify or route it, a documented shared triage workflow quoted in its body, or a concrete routing ambiguity described there. A substantive task alone does not establish this occasion; neither missing labels nor the number of people in a project proves a coordination problem. Record NOT_APPLICABLE, name the fact, and stop — never ABSENT — when the issue shows no such need, including a self-contained course or individual task without a shared triage requirement. When required issue metadata is unavailable, report a collection gap and record no observation.\n\n## Sources\n1. The title and the WHOLE body (`inputs/context/description.md`): the request to classify, the quoted triage workflow, or the described routing ambiguity. It establishes the coordination need; it never establishes what metadata the issue carries. An image: its caption and the sentence around it. An external link: nothing.\n2. The metadata (`inputs/context/metadata.json`): the native type, labels, assignees, milestone and other planning fields. It establishes what classification is present. Empty metadata is not itself a defect, and a label such as `stale` proves neither neglect nor that the issue needs an owner.\n\n## Judge\nTest the cells in this order.\n- PRESENT/GOOD (POSITIVE): the available native type, meaningful label, ownership or planning context satisfies the demonstrated routing or grouping need.\n- PRESENT/BAD: no ordinary case.\n- ABSENT/GOOD (NEGATIVE): a quoted coordination need AND a specific missing classification that prevents that need from being met. Describe the practical routing consequence, not merely the empty field.\n- ABSENT/BAD: no ordinary case.\n- UNDETERMINED: no ordinary case. Metadata read in full that lacks the needed classification is ABSENT, not UNDETERMINED; metadata you could not read is a collection gap.\nOne observation per review, over the whole issue. Prefer no observation over a metadata reminder without a demonstrated consequence.\n\n## Severity\nNegatives only; always MINOR and never above it — non-blocking feedback about routing, not a merge gate.\n\n## Grounding\nQuote the body line that establishes the coordination need and the captured metadata that is present or missing. For ABSENT/GOOD, the citations show both the quoted need and the metadata fields searched. Never infer intent, and never assess whether the work is worth doing. Describe the routing consequence for the work, never the person.\n\n## Defer\nProblem framing belongs to `issue-states-an-actionable-problem`, scope to `issue-scoped-to-single-concern`, and the definition of done to `issue-has-checkable-outcome`. Here only: does the classification serve the coordination need the issue shows?"
+					"whyItMatters": "A label kind the project filters and groups by — type, priority, size — routes the issue to the board column, the person and the sprint it belongs to. An issue outside that scheme is the one nobody's filter shows, so it waits.",
+					"whatGoodLooksLike": "In a project that labels its issues, each issue carries one label of every kind the project uses (`type::`, `priority::`, `size::`), and an owner or milestone where the project assigns them, so every view of the queue sees it.",
+					"criteria": "BEHAVIOR FOCUS: the issue carries the classification the project's own convention gives every issue — the label kinds the project uses, and an owner or milestone where the project assigns them.\n\n## The standard\nJudge whether this issue follows the labelling convention the project actually keeps, not whether every metadata field is filled. A project has a convention when its issues carry labels as a rule — most issues labelled, with a recognisable scheme such as scoped labels (`type::Bug`, `priority::Major`, `size::S`) or a stable set of kinds. Within such a project, an issue that carries one label of each kind the scheme uses is classified; one that carries none, or misses a kind the scheme gives every issue, is not, and the queue that filters or groups by that kind does not see it. Ownership and milestones follow the same rule: judged only where the project assigns them as a rule. A native issue type that stands for a label kind satisfies that kind. Never demand a classification the project does not use.\n\n## Occasion\nThis is a gate. Record NOT_APPLICABLE, name the fact, and stop — never ABSENT — when the project keeps no labelling convention: the inventory's `labelScheme` shows fewer than a third of the project's issues labelled and no scoped label kind in use, or the inventory was not captured. A project whose issues are labelled as a rule is the occasion, whatever the issue's own text says about routing. When required issue metadata is unavailable, report a collection gap and record no observation.\n\n## Sources\n1. The inventory (`inputs/context/project_inventory.json`, `labelScheme`: `issuesTotal`, `issuesLabelled`, `labelsInUse`): whether the project labels its issues as a rule and which kinds it uses — a scoped kind is the text before `::`. It establishes the convention; it never establishes this issue's labels.\n2. The metadata (`inputs/context/metadata.json`): this issue's native type, labels, assignees and milestone. It establishes what classification is present. A label such as `stale` is not a kind of the scheme.\n3. The title and body (`inputs/context/description.md`): a stated request to classify or route, which raises severity, never the occasion.\n\n## Judge\nTest the cells in this order.\n- PRESENT/GOOD (POSITIVE): the issue carries a label of each kind the scheme uses, or a native type standing for one, and an owner or milestone where the project assigns them as a rule. Quote the labels and the scheme.\n- PRESENT/BAD: no ordinary case.\n- ABSENT/GOOD (NEGATIVE): the project labels its issues as a rule and this issue carries no label of a kind the scheme uses — none at all, or a kind every other issue carries is missing. Quote `labelsInUse` and the issue's `labels`.\n- ABSENT/BAD: no ordinary case.\n- UNDETERMINED: no ordinary case. Metadata read in full that lacks the kind is ABSENT; metadata you could not read is a collection gap.\nOne observation per review, over the whole issue.\n\n## Severity\nNegatives only; never above MINOR — non-blocking feedback about routing, not a merge gate. MINOR: no label at all in a labelled project, or the body asks to be routed and no label answers it. INFO: one kind of several missing.\n\n## Grounding\nQuote the scheme from `labelScheme.labelsInUse`, the issue's `labels` array as captured, and the counts that establish the convention. Never infer a convention from the number of people in a project; never assess whether the work is worth doing.\n\n## Defer\nProblem framing belongs to `issue-states-an-actionable-problem`, scope to `issue-scoped-to-single-concern`, and the definition of done to `issue-has-checkable-outcome`. Here only: is the issue classified the way this project classifies its issues?"
 				},
 				{
 					"slug": "issue-closed-with-unmet-outcome",
@@ -1374,6 +1486,64 @@
 					"whyItMatters": "A reviewer's ask answered with 'later' and nothing else is a promise that evaporates at the merge. Turning a deferred ask into a tracked issue, or getting the reviewer's explicit agreement to drop it, keeps the review's value after the thread is resolved.",
 					"whatGoodLooksLike": "Every review ask the author does not address in the change is either turned into an issue the thread links, or explicitly waived by the reviewer; nothing is resolved with a bare 'will do later'.",
 					"criteria": "BEHAVIOR FOCUS: a review ask the author defers rather than addresses is turned into tracked work or explicitly waived by the reviewer, never resolved on a bare promise.\n\n## The standard\nJudge one thing: when a reviewer asked for something in a thread and the author did not do it in this change, what happened to the ask at the merge? A deferral is tracked when the thread, the body or a comment names an issue for it (`#number`, a link, \"tracked in …\") or the reviewer explicitly agrees to drop it (\"fine to skip\", \"not needed\", an approval after the author's stated reason). A deferral is bare when the ask is resolved or the change merged with only \"later\", \"next PR\", \"will do\" or silence. Judge only asks the author deferred; an ask the author addressed in the diff, or answered with a reason the reviewer accepted, is not a deferral.\n\n## Occasion\nThis is a gate. Record NOT_APPLICABLE, name the fact, and stop — never ABSENT — when: the pull request is not merged; no review thread was captured, or no thread contains an ask the author left unaddressed in the change — every ask was addressed in the diff or answered with a reason the reviewer accepted. A question that requests no change (\"what is this for?\") is not an ask, whether or not it was answered. A merged change with at least one deferred ask is the occasion.\n\n## Sources\n1. The review threads (`inputs/context/review_threads.json`): each thread's comments with authors and dates, its resolution, and what the author replied. They establish which asks were made, which were answered, and with what words. A resolution flag establishes nothing about the substance.\n2. The diff (`work/change/diff.patch`): whether an ask was addressed in the change — the file and line the thread anchors to, read as changed or not. It establishes addressed versus not; it never establishes a waiver.\n3. The body and the discussion (`inputs/context/description.md`, `inputs/context/general_comments.json`): a follow-up list, an issue reference for the deferral, or the reviewer's agreement. They establish tracking or a waiver when quotable.\n4. The linked work items (`inputs/context/linked_work_items/<n>.md`) when captured: an issue that names the deferred ask. It establishes the tracking; its absence establishes nothing when a comment names an issue by number.\nIf the change merged but the threads are absent or truncated, report a collection gap and record no observation.\n\n## Judge\nTest the cells in this order.\n- PRESENT/GOOD (POSITIVE): every deferred ask is tracked by a named issue or explicitly waived by the reviewer. Quote the ask and the tracking reference or the waiver.\n- PRESENT/BAD: no ordinary case.\n- ABSENT/GOOD (NEGATIVE): at least one ask was deferred on a bare promise or in silence — resolved or merged past with no issue and no reviewer waiver. Quote the ask and the author's last word on it, or note the silence.\n- ABSENT/BAD: no ordinary case.\n- UNDETERMINED: the thread's last word could be a waiver or a deferral and the reviewer's approval carries no comment; name the fact that would settle it.\nOne observation per review, on the single most consequential bare deferral when there are several.\n\n## Severity\nNegatives only; never above MAJOR on this alone — non-blocking. MINOR, the usual band: a small ask (a rename, a comment, a nit) deferred bare. MAJOR: a correctness, safety or test ask deferred on a bare promise and the change merged. Identical evidence yields identical severity.\n\n## Grounding\nQuote the reviewer's ask and the author's reply verbatim with their authors and dates, and the issue reference or waiver when there is one. Never infer a waiver from an approval alone, and never claim an ask was addressed without the changed line that addresses it.\n\n## Defer\nWhether the author replied to comments at all belongs to `engaging-with-inline-review-comments`; a thread left unresolved at the merge belongs to `merged-past-unresolved-review-threads`. Here only: where did the deferred asks go?"
+				},
+				{
+					"slug": "merges-only-after-approval",
+					"name": "Merge only after someone else approved",
+					"on": [
+						{
+							"signals": [
+								"scm.pull_request.merged"
+							],
+							"needs": [
+								{
+									"sourceKind": "scm.pull-request.core",
+									"stance": "REQUIRED"
+								},
+								{
+									"sourceKind": "scm.review-threads",
+									"stance": "REQUIRED"
+								},
+								{
+									"sourceKind": "scm.general-review-comments",
+									"stance": "CONTEXTUAL"
+								}
+							],
+							"subject": "MERGER"
+						}
+					],
+					"whyItMatters": "A change merged before anyone approved it skips the one check the team agreed on: a second pair of eyes before the code is everyone's. It is also how a reviewer's outstanding request for changes gets buried. Waiting for the approval, and re-requesting it after a rework, is what keeps the review real.",
+					"whatGoodLooksLike": "The person who merges does so after an approval from someone other than the author that is still current — no later request for changes, no dismissal — and after a rework asks for the approval again before merging.",
+					"criteria": "BEHAVIOR FOCUS: the merge happens after a current approval from someone other than the author, and never over an outstanding request for changes.\n\n## The standard\nJudge one thing about the moment this pull request merged: was there, at that moment, an approval from someone other than the author that still stood? An approval stands when it was submitted before the merge, was not dismissed, and no later decision by the same reviewer asked for changes. A request for changes stands when it was submitted before the merge and no later approval by the same reviewer replaced it. Merging with a standing approval and no standing request for changes is the practice; merging with none, or over a standing request for changes, is the lapse. Judge the decisions as recorded, never whether the review was thorough — that belongs to the review practices. The subject is the person who merged; when that person is not the author, this review says nothing.\n\n## Occasion\nThis is a gate. Record NOT_APPLICABLE, name the fact, and stop — never ABSENT — when: the pull request is not merged; or the repository plainly works without review — no reviewer was requested, no review decision or review thread exists on this pull request, and the inventory shows a single-person project. A pull request with a reviewer requested, a review decision or a review comment is the occasion.\n\n## Sources\n1. The pull request record (`inputs/context/metadata.json`): `merged_at`, `merged_by`, `author`. It establishes who merged and when. When `merged_by` is absent or differs from `author`, record no observation: the review cannot name the merger.\n2. The review decisions (`inputs/context/review_threads.json`, `reviewDecisions`: `state`, `author`, `submittedAt`, `dismissed`) and the threads: each decision with its author and time. They establish which approvals and requests stood at the merge. A `truncated` record is a collection gap for this practice.\n3. The inventory (`inputs/context/project_inventory.json`): whether other people work in this project, for the occasion only.\nIf `merged_at` or the decisions are unavailable, report a collection gap and record no observation.\n\n## Judge\nTest the cells in this order.\n- PRESENT/GOOD (POSITIVE): at least one APPROVED decision by someone other than the author, submitted before `merged_at`, not dismissed and not followed by a CHANGES_REQUESTED from the same reviewer; and no other reviewer's CHANGES_REQUESTED still standing. Quote the approval and the merge time.\n- PRESENT/BAD: no ordinary case.\n- ABSENT/GOOD (NEGATIVE): merged with no standing approval from another person, or over a standing request for changes. Quote the merge time and the decisions that stood, or the absence of any.\n- ABSENT/BAD: no ordinary case.\n- UNDETERMINED: the decisions record is truncated or a decision carries no time; name what is missing.\nOne observation per review.\n\n## Severity\nNegatives only; never above MAJOR on this alone — non-blocking. MINOR, the usual band: merged with no approval where a reviewer was requested and had not answered. MAJOR: merged over a standing request for changes, or after an approval was dismissed and not renewed. Identical evidence yields identical severity.\n\n## Grounding\nQuote `merged_at`, `merged_by` and each decision as recorded with its `author`, `state` and `submittedAt`. Never infer an approval from a comment or a thumbs-up; never treat the author's own approval as one.\n\n## Defer\nWhether review threads were resolved belongs to `merged-past-unresolved-review-threads`; whether the pipeline was green has no source here. Here only: did someone else approve before the merge?"
+				},
+				{
+					"slug": "plans-the-work-in-an-issue-first",
+					"name": "Plan the work in an issue before starting it",
+					"on": [
+						{
+							"signals": [
+								"scm.pull_request.opened",
+								"scm.pull_request.ready"
+							],
+							"needs": [
+								{
+									"sourceKind": "scm.pull-request.core",
+									"stance": "REQUIRED"
+								},
+								{
+									"sourceKind": "scm.linked-work-items",
+									"stance": "REQUIRED"
+								},
+								{
+									"sourceKind": "scm.pull-request.diff",
+									"stance": "REQUIRED"
+								}
+							]
+						}
+					],
+					"whyItMatters": "An issue written before the first commit is a plan: it says what will be built and how anyone will know it is done, and it can be discussed before the code exists. An issue created after the work is finished, to give the merge request something to close, is paperwork — the decision it should have recorded was made in the code.",
+					"whatGoodLooksLike": "The issue the change implements exists before the change's first commit, states what is to be done, and the branch and merge request are opened from it.",
+					"criteria": "BEHAVIOR FOCUS: the issue the change implements was opened before the work on the change began.\n\n## The standard\nJudge one thing: did the issue this pull request implements exist before the work started? The work starts at the change's first commit (`work/change/commits.json`, the earliest `authoredAt`), or at the pull request's creation when the commits carry no dates. The issue's opening is its `createdAt` in the linked work item. An issue opened before the first commit is a plan the work followed; an issue opened after it is a record written to fit the work. A gap of minutes counts as before — opening the issue and branching in one sitting is working issue-first. Judge only the order of the two dates, never the quality of the issue or of the change.\n\n## Occasion\nThis is a gate. Record NOT_APPLICABLE, name the fact, and stop — never ABSENT — when: no linked work item was captured, or none is an issue this pull request implements (adopted with a closing keyword, in the title, or by the branch); or the change is of a kind that answers no issue by convention — a release, a bot dependency update, a revert. Whether an issue is linked at all belongs to `links-the-change-to-its-issue`; here the linked issue is the occasion.\n\n## Sources\n1. The linked work item (`inputs/context/linked_work_items/<n>.md`, its opening line `Opened <time>`, and `linked_work_items.json`, `createdAt`): when the issue was opened. It establishes the plan's date.\n2. The commits (`work/change/commits.json`, `authoredAt`): when the work began. The earliest authored commit of the range establishes it; a rebased history keeps the author dates, so it is the author date, not the commit date, that is read.\n3. The pull request record (`inputs/context/metadata.json`, `created_at`): the fallback start when the commits carry no dates.\nIf the linked item carries no opening time, or the commits are absent, report a collection gap and record no observation.\n\n## Judge\nTest the cells in this order.\n- PRESENT/GOOD (POSITIVE): the issue's `createdAt` is earlier than the first commit's `authoredAt` (or the pull request's creation when no commit is dated). Quote both times.\n- PRESENT/BAD (NEGATIVE): the issue was opened after the work began — its `createdAt` is later than the first commit's author date. Quote both times.\n- ABSENT/GOOD and ABSENT/BAD: no ordinary case. A change with no issue is decided by `links-the-change-to-its-issue`.\n- UNDETERMINED: the two times are within the same minute and the record cannot order them; name both.\nOne observation per review, on the issue the change adopts (the closing reference, else the title's, else the branch's).\n\n## Severity\nNegatives only; never above MINOR on this alone — non-blocking. MINOR: the issue was opened after the first commit. INFO: the issue was opened after the first commit but before the pull request, within the same day. Identical evidence yields identical severity.\n\n## Grounding\nQuote the linked item's `Opened <time>` line and the earliest commit's `authoredAt` (or `created_at`). Never infer an order from issue and pull request numbers; never read a commit date where an author date exists.\n\n## Defer\nWhether the change names its issue belongs to `links-the-change-to-its-issue`; whether the issue states a checkable outcome belongs to `issue-has-checkable-outcome`. Here only: was the plan written before the work?"
 				}
 			]
 		},

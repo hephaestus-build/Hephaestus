@@ -106,7 +106,8 @@ public class JobTypeHandlerConfiguration {
             PracticeDetectionDeliveryService deliveryService,
             FeedbackDeliveryService feedbackService,
             InContextDeliveryGate inContextDeliveryGate,
-            ObservationRepository observationRepository) {
+            ObservationRepository observationRepository,
+            RecurringLapses recurringLapses) {
         return new PullRequestReviewHandler(
                 objectMapper,
                 practiceCatalogInjector,
@@ -117,7 +118,8 @@ public class JobTypeHandlerConfiguration {
                 feedbackService,
                 feedbackResponseSuppressionFilter,
                 inContextDeliveryGate,
-                observationRepository);
+                observationRepository,
+                recurringLapses);
     }
 
     @Bean
@@ -135,7 +137,8 @@ public class JobTypeHandlerConfiguration {
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter,
             ObservationRepository observationRepository,
             PracticeFeedbackDispatchService dispatchService,
-            FeedbackDeliveryService feedbackDeliveryService) {
+            FeedbackDeliveryService feedbackDeliveryService,
+            RecurringLapses recurringLapses) {
         return new IssueReviewHandler(
                 objectMapper,
                 preparation,
@@ -151,7 +154,8 @@ public class JobTypeHandlerConfiguration {
                 feedbackResponseSuppressionFilter,
                 observationRepository,
                 dispatchService,
-                feedbackDeliveryService);
+                feedbackDeliveryService,
+                recurringLapses);
     }
 
     @Bean

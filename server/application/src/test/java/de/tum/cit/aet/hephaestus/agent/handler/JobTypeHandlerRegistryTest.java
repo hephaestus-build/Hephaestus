@@ -69,7 +69,8 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                         org.mockito.Mockito.mock(
                                 de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
                         org.mockito.Mockito.mock(FeedbackLedgerRecorder.class)),
-                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class));
+                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
+                InContextDeliveryGateFixtures.noRecurrence());
     }
 
     private JobTypeHandler issueReviewHandler() {
@@ -94,7 +95,8 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 org.mockito.Mockito.mock(FeedbackResponseSuppressionFilter.class),
                 org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
                 org.mockito.Mockito.mock(PracticeFeedbackDispatchService.class),
-                org.mockito.Mockito.mock(FeedbackDeliveryService.class));
+                org.mockito.Mockito.mock(FeedbackDeliveryService.class),
+                InContextDeliveryGateFixtures.noRecurrence());
     }
 
     private JobTypeHandler conversationReviewHandler() {

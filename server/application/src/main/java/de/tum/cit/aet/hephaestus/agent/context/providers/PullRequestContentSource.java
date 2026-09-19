@@ -255,6 +255,11 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         if (pullRequest.getAuthor() != null) {
             result.put("author", pullRequest.getAuthor().getLogin());
         }
+        // Who landed it: a practice about the act of merging reads this beside merged_at and the
+        // approvals in review_threads.json, and says nothing when the two people differ.
+        if (pullRequest.getMergedBy() != null) {
+            result.put("merged_by", pullRequest.getMergedBy().getLogin());
+        }
 
         return result;
     }

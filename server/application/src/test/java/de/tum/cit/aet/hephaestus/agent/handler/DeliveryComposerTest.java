@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -306,6 +307,76 @@ class DeliveryComposerTest extends BaseUnitTest {
             Severity.MINOR,
             null,
             "The body lists what changed but not why."));
+
+    @Test
+    void shouldNameARecurringLapseInOneLineAndExplainTheRestInFull() {
+        ValidatedObservation habit = negativeObservation(
+                "describe-what-and-why",
+                "The description says what changed but not why.",
+                Severity.MINOR,
+                null,
+                null,
+                "Only the what.");
+        ValidatedObservation fresh = negativeObservation(
+                "ships-tests-with-the-change",
+                "The new parser ships with no test.",
+                Severity.MINOR,
+                null,
+                null,
+                "No test file in the change.");
+        String note = note(DeliveryComposer.composeAdmitted(
+                List.of(habit, fresh),
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(),
+                null,
+                Set.of("describe-what-and-why")));
+
+        assertThat(note).contains("The new parser ships with no test.");
+        assertThat(note)
+                .contains("**Still open from your earlier changes**")
+                .contains("- The description says what changed but not why.");
+        // The habit is named once, in the compact list, after the lapse that is new to this developer.
+        assertThat(note).containsOnlyOnce("The description says what changed but not why.");
+        assertThat(note.indexOf("Still open")).isGreaterThan(note.indexOf("The new parser"));
+    }
+
+    @Test
+    void shouldStillExplainARecurringLapseInFullWhenItBlocks() {
+        ValidatedObservation blocking = negativeObservation(
+                "avoids-insecure-defaults-and-over-broad-permissions",
+                "An API key is committed in Config.swift.",
+                Severity.MAJOR,
+                null,
+                null,
+                "The literal on line 4 is a live key.");
+        String note = note(DeliveryComposer.composeAdmitted(
+                List.of(blocking),
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(),
+                null,
+                Set.of("avoids-insecure-defaults-and-over-broad-permissions")));
+        assertThat(note).contains("An API key is committed in Config.swift.").doesNotContain("Still open");
+    }
+
+    @Test
+    void shouldNotSpendTheImprovementCapOnRecurringLapses() {
+        List<ValidatedObservation> observations = new java.util.ArrayList<>();
+        observations.add(negativeObservation(
+                "describe-what-and-why", "No why in the description.", Severity.MINOR, null, null, "r1"));
+        for (String slug : List.of(
+                "commit-subjects-explain-each-change",
+                "commits-are-atomic-and-cohesive",
+                "states-how-to-verify-the-change")) {
+            observations.add(
+                    negativeObservation(slug, humanizeTitle(slug) + " is missing.", Severity.MINOR, null, null, "r"));
+        }
+        String note = note(DeliveryComposer.composeAdmitted(
+                observations, ArtifactKinds.PULL_REQUEST, Map.of(), List.of(), null, Set.of("describe-what-and-why")));
+        // Three fresh minors fit the cap exactly once the habit is set aside; nothing is "not shown".
+        assertThat(note).doesNotContain("not shown").contains("- No why in the description.");
+    }
 
     private static String noteWithLead(List<ValidatedObservation> observations, String lead) {
         return note(
