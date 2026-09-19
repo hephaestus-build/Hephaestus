@@ -2167,6 +2167,9 @@ function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
  */
 function abortSession(session: AgentSession): Promise<void> {
 	session.clearQueue();
+	// A compaction in flight is a model call of its own that `abort()` leaves running, and the
+	// session is not idle until it ends; the next turn compacts again if it must, inside its own share.
+	session.abortCompaction();
 	return session.abort().catch((error) => {
 		console.error(`[pi-runner] session abort failed: ${errorText(error)}`);
 	});
@@ -2174,6 +2177,31 @@ function abortSession(session: AgentSession): Promise<void> {
 
 /** How long an aborted turn waits for the session to go idle before the next turn is sent. */
 const ABORT_SETTLE_MS = 30_000;
+
+/**
+ * Waits up to `maxMs` for the session to go idle; true once it is. A prompt sent to a busy session
+ * is refused outright, so a turn that cannot wait its predecessor out is skipped rather than lost
+ * together with every turn after it.
+ */
+async function settleSession(
+	session: AgentSession,
+	label: string,
+	maxMs: number,
+): Promise<boolean> {
+	if (!session.isStreaming) return true;
+	const started = Date.now();
+	const idle = await Promise.race([
+		session.waitForIdle().then(() => true),
+		new Promise<boolean>((resolve) => {
+			setTimeout(() => resolve(false), maxMs);
+		}),
+	]);
+	const waited = ((Date.now() - started) / 1000).toFixed(1);
+	console.error(
+		`[pi-runner] ${label}: waited ${waited}s for the session to go idle${idle ? "" : " — still busy"}`,
+	);
+	return idle;
+}
 
 function criteriaFileOf(slug: string): string | null {
 	const file = `${dirname(INPUT_PATHS.practiceIndex)}/${slug}.md`;
@@ -2423,6 +2451,11 @@ async function main() {
 			hardAborted = true;
 			return false;
 		}
+		if (!(await settleSession(session, label, share.hardMs))) {
+			console.error(`[pi-runner] ${label}: session still busy — skipped`);
+			hardAborted = true;
+			return false;
+		}
 		const trace = openTurnTrace(label);
 		const softTimer = setTimeout(() => {
 			softTimeoutFired = true;
@@ -2449,19 +2482,7 @@ async function main() {
 		} finally {
 			clearTimeout(softTimer);
 			clearTimeout(hard.timer);
-			if (aborting) {
-				const settled = await Promise.race([
-					aborting.then(() => true),
-					new Promise<boolean>((resolve) => {
-						setTimeout(() => resolve(false), ABORT_SETTLE_MS);
-					}),
-				]);
-				if (!settled) {
-					console.error(
-						`[pi-runner] ${label}: the aborted call has not ended after ${ABORT_SETTLE_MS}ms`,
-					);
-				}
-			}
+			if (aborting) await settleSession(session, label, ABORT_SETTLE_MS);
 			trace.hardAborted = hard.state.expired;
 			closeTurnTrace(trace);
 		}
@@ -2563,6 +2584,12 @@ async function main() {
 			});
 			const trace = openTurnTrace("composition");
 			try {
+				if (
+					!(await settleSession(session, "composition", compositionMs)) ||
+					deadline.state.expired
+				) {
+					throw new Error("the session was still busy when the composition budget ran out");
+				}
 				await Promise.race([
 					session.prompt(
 						`${instructions}\n\n${buildCompositionTurn(compositionRequest, admittedObservations, notReached)}`,

@@ -88,6 +88,19 @@ if (scenario) {
 	let prompts = 0;
 	/** The overrun scenario's first prompt ends only when the runner aborts it, like a call in flight. */
 	let releasePrompt: (() => void) | undefined;
+	/** A threshold compaction in flight: a model call of its own, which abort() alone does not end. */
+	let compacting = false;
+	let idleWaiters: (() => void)[] = [];
+	const settleIdle = () => {
+		if (releasePrompt || compacting) return;
+		for (const resolve of idleWaiters) resolve();
+		idleWaiters = [];
+	};
+	const waitForIdle = () =>
+		new Promise<void>((resolve) => {
+			idleWaiters.push(resolve);
+			settleIdle();
+		});
 	/** The session's event handler, so a scenario can emit what the SDK would. */
 	let emit: (event: unknown) => void = () => {};
 	mock.module("@earendil-works/pi-coding-agent", {
@@ -128,15 +141,22 @@ if (scenario) {
 							return () => {};
 						},
 						clearQueue() {},
+						get isStreaming() {
+							return releasePrompt !== undefined || compacting;
+						},
+						waitForIdle,
+						abortCompaction() {
+							if (!compacting) return;
+							record("abort-compaction");
+							compacting = false;
+							settleIdle();
+						},
 						abort: () => {
 							record("abort");
-							// The aborted call ends a moment later, and abort() settles once it has.
-							return new Promise<void>((resolve) => {
-								setTimeout(() => {
-									releasePrompt?.();
-									resolve();
-								}, 50);
-							});
+							// The aborted call ends a moment later, and abort() settles once the session is
+							// idle — which a compaction still in flight keeps it from being.
+							setTimeout(() => releasePrompt?.(), 50);
+							return waitForIdle();
 						},
 						dispose: () => record("dispose"),
 						steer: () => Promise.resolve(record("steer")),
@@ -165,10 +185,14 @@ if (scenario) {
 							// aborted call ends only when abort() is called.
 							if (releasePrompt) throw new Error("Agent is already processing.");
 							if (scenario === "overrun" && prompts === 1) {
+								// The turn crossed the compaction threshold: the session is compacting when the
+								// share runs out.
+								compacting = true;
 								await new Promise<void>((resolve) => {
 									releasePrompt = resolve;
 								});
 								releasePrompt = undefined;
+								settleIdle();
 								return;
 							}
 							if (text.includes("## This turn")) {
@@ -433,7 +457,8 @@ if (scenario) {
 				setup: "does not start a session when setup exhausts the budget",
 				"session-init": "fails cleanly when the session cannot be created",
 				budget: "aborts a turn that runs past its share and reports the practices as not reached",
-				overrun: "waits for an aborted turn to end before the next turn is sent",
+				overrun:
+					"ends a compaction with the aborted turn and waits for the session before the next turn is sent",
 				"provider-error":
 					"a provider error the SDK does not retry is a failure of the provider, not a review that found nothing",
 				batch: "stores several observations from one call and answers per item",
@@ -629,13 +654,20 @@ if (scenario) {
 							reached({ "test-practice": "NOT_REACHED" });
 							break;
 						case "overrun": {
-							// The first turn is aborted at its share; the finishing turn is sent after the abort
-							// has settled, in the same session, and records the practice.
+							// The first turn is aborted at its share, which ends the compaction it was in; the
+							// finishing turn is sent once the session is idle, in the same session, and records
+							// the practice.
 							assert.equal(child.status, 0, child.stderr);
 							const order = events.filter((event) =>
-								["prompt:1", "steer", "abort", "prompt:2"].includes(event),
+								["prompt:1", "steer", "abort-compaction", "abort", "prompt:2"].includes(event),
 							);
-							assert.deepEqual(order.slice(0, 4), ["prompt:1", "steer", "abort", "prompt:2"]);
+							assert.deepEqual(order.slice(0, 5), [
+								"prompt:1",
+								"steer",
+								"abort-compaction",
+								"abort",
+								"prompt:2",
+							]);
 							assert.match(events.find((event) => event.startsWith("finish:")) ?? "", /stored/);
 							assert.match(child.stderr, /share exhausted — aborting this turn/);
 							assert.doesNotMatch(child.stderr, /already processing/);
