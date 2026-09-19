@@ -2495,7 +2495,6 @@ async function main() {
 	const measureDurationMs = Date.now() - startMs;
 	const measureUsage = extractUsageFromSession({}, streamUsage);
 	accumulateUsage(null, measureUsage);
-	let prevUsage: UsageReport | null = measureUsage;
 	runnerDebug.attempts.push({
 		label: "measure",
 		durationMs: measureDurationMs,
@@ -2579,8 +2578,7 @@ async function main() {
 				persistComposedFeedback();
 			}
 			const combinedUsage = extractUsageFromSession(session.state, streamUsage);
-			accumulateUsage(prevUsage, combinedUsage);
-			prevUsage = combinedUsage;
+			accumulateUsage(measureUsage, combinedUsage);
 			persistUsage();
 		}
 	}
