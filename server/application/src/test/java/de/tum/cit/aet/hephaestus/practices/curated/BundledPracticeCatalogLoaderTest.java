@@ -83,7 +83,9 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
      * The declarations that stop us spending a model call on a question the staged evidence already
      * answers. Pinned by slug because the value of each is measured — on the corpus these were written
      * against, they account for the great majority of every {@code NOT_APPLICABLE} ever recorded — and a
-     * declaration dropped in an edit would restore that cost in silence.
+     * declaration dropped in an edit would restore that cost in silence. The iOS practices are gated on a
+     * Swift file in the change for the same reason: on a repository with no Swift in it they would be
+     * asked on every change and answer nothing.
      */
     @Test
     void shouldShipTheSubjectDeclarationsThatKeepPracticesFromBeingAskedForNothing() {
@@ -96,7 +98,13 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                 .containsExactlyInAnyOrder(
                         "changes-dependencies-deliberately",
                         "keeps-the-test-suite-honest",
-                        "engaging-with-inline-review-comments");
+                        "engaging-with-inline-review-comments",
+                        "keeps-views-free-of-networking-and-persistence",
+                        "owns-state-at-the-right-level",
+                        "makes-ui-accessible-by-default",
+                        "uses-structured-concurrency-safely",
+                        "ships-a-preview-with-each-new-view",
+                        "declares-permissions-truthfully-at-point-of-use");
     }
 
     /**

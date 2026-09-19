@@ -262,8 +262,13 @@ standard as an experiment or a convention as a proven outcome.
    practice's own feature extraction lives: it runs inside the review container, receives the parsed
    diff, the artifact metadata, the captured context directory and the derived change directory
    (`work/change/`), and reads them through the supplied library under `docker/agents/precompute/lib/`
-   (`context.ts`, `change.ts`, `references.ts`, `grep.ts`, `files.ts`, …). Nothing practice-specific is
-   computed on the server.
+   (`context.ts`, `change.ts`, `references.ts`, `grep.ts`, `files.ts`, `swift-views.ts`, `swift-scan.ts`,
+   …). Nothing practice-specific is computed on the server.
+   A practice about one technology — SwiftUI state, an Android manifest, a Spring transaction — is its
+   own practice in a group named for that technology, gated with `appliesWhen` on the files that carry
+   it (`ios-app-craft` runs on `**/*.swift`), never a variant folded into a general practice: the gate
+   keeps it silent on every other repository, the group lets a workspace adopt or exclude the whole
+   technology at once, and a second technology is a second group with the same shape.
 6. Add or update focused automated-review tests, including required-source skipping and valid-empty evidence.
 7. Review the admin presentation and a representative piece of delivered feedback.
 
