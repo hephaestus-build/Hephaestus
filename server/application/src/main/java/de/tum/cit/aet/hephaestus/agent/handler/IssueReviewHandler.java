@@ -195,7 +195,7 @@ public class IssueReviewHandler implements JobTypeHandler {
     public void deliver(AgentJob job) {
         if (ObservationAdmissionService.observationsWereRefused(job)) return;
         ObservationAdmissionService.requireMatchingCompositionDigest(job);
-        List<de.tum.cit.aet.hephaestus.practices.model.Observation> persisted = observationRepository.findByAgentJobId(
+        List<Observation> persisted = observationRepository.findByAgentJobId(
                 job.getId(), job.getWorkspace().getId());
         List<PracticeDetectionResultParser.ValidatedObservation> observations = persisted.stream()
                 .map(observation -> {

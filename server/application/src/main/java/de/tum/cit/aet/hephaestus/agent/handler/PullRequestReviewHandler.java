@@ -222,7 +222,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     }
 
     private void deliverAdmitted(AgentJob job) {
-        List<de.tum.cit.aet.hephaestus.practices.model.Observation> persisted = observationRepository.findByAgentJobId(
+        List<Observation> persisted = observationRepository.findByAgentJobId(
                 job.getId(), job.getWorkspace().getId());
         List<PracticeDetectionResultParser.ValidatedObservation> scopedObservations = persisted.stream()
                 .map(observation -> {
