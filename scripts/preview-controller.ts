@@ -22,6 +22,12 @@ interface PullRequestFile {
 	readonly sha?: string;
 }
 
+interface TreeEntry {
+	readonly path: string;
+	readonly type: string;
+	readonly sha: string;
+}
+
 interface Deployment {
 	readonly environment: string;
 	readonly id: number;
@@ -41,8 +47,17 @@ export interface GitHubApi {
 		readonly pulls: {
 			readonly get: ApiMethod<PullRequest>;
 		};
+		readonly git: {
+			readonly getTree: ApiMethod<{
+				readonly tree: readonly TreeEntry[];
+				readonly truncated: boolean;
+			}>;
+		};
 		readonly repos: {
-			readonly compareCommitsWithBasehead: ApiMethod<{ files?: PullRequestFile[] }>;
+			readonly compareCommitsWithBasehead: ApiMethod<{
+				readonly base_commit: { readonly sha: string };
+				readonly merge_base_commit: { readonly sha: string };
+			}>;
 			readonly getContent: ApiMethod<{ sha?: string }>;
 			readonly createDeployment: ApiMethod<Deployment>;
 			readonly createDeploymentStatus: ApiMethod<unknown>;
@@ -112,9 +127,48 @@ async function branchHasBlob(
 	}
 }
 
+/**
+ * Every path a commit holds, by blob.
+ *
+ * `compareCommitsWithBasehead` reports at most 300 files and sets no flag when it cut the list, so
+ * on a large branch it cannot answer either question this controller asks of a diff. A recursive
+ * tree is the whole tree at one commit and says when it was truncated, so what comes back is
+ * either complete or known not to be.
+ */
+async function blobsAt(
+	github: GitHubApi,
+	owner: string,
+	repo: string,
+	sha: string,
+): Promise<Map<string, string>> {
+	const tree = await github.rest.git.getTree({ owner, repo, tree_sha: sha, recursive: "1" });
+	if (tree.data.truncated) {
+		throw new Error(
+			`The tree at ${sha} is larger than one Git Trees response carries, so the paths a preview ` +
+				`is admitted on cannot be listed.`,
+		);
+	}
+	return new Map(
+		tree.data.tree.filter((entry) => entry.type === "blob").map((entry) => [entry.path, entry.sha]),
+	);
+}
+
+/**
+ * The paths that differ between two trees, carrying the blob the second one holds. A rename is two
+ * paths here where a comparison counts one file, which is what a guard watching a directory has to
+ * see. Sorted, so a reason naming one of them names the same one on every run.
+ */
+function changedBlobs(base: Map<string, string>, head: Map<string, string>): PullRequestFile[] {
+	const paths = [...new Set([...base.keys(), ...head.keys()])].toSorted();
+	return paths
+		.filter((path) => base.get(path) !== head.get(path))
+		.map((path) => {
+			const sha = head.get(path);
+			return sha === undefined ? { filename: path } : { filename: path, sha };
+		});
+}
+
 const TRUSTED_ASSOCIATIONS = new Set(["COLLABORATOR", "MEMBER", "OWNER"]);
-// GitHub's comparison endpoint reports at most this many files and gives no truncation flag.
-const COMPARE_FILE_LIMIT = 300;
 const DEFAULT_MAX_ACTIVE = 3;
 
 /** One night's sweep. Reached only if teardown has been failing, which is when a bound matters. */
@@ -205,18 +259,16 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 
 	// Compared against the default branch rather than this pull request's own base: a stacked layer's
 	// diff hides whatever the layers beneath it changed, and those commits are in the head that
-	// Coolify deploys.
+	// Coolify deploys. The comparison is here for the two commits it names — the point the branches
+	// diverged, and the default branch's tip at that moment — so both checks below read one snapshot
+	// and neither depends on the file list it cuts at 300.
 	const comparison = await github.rest.repos.compareCommitsWithBasehead({
 		owner,
 		repo,
 		basehead: `${defaultBranch}...${pull.head.sha}`,
 	});
-	const files = comparison.data.files ?? [];
-	if (files.length >= COMPARE_FILE_LIMIT) {
-		return skip(
-			`PR #${number} changes ${files.length}+ files, too many for GitHub to report in one comparison, so deployment policy cannot be verified.`,
-		);
-	}
+	const divergedAt = await blobsAt(github, owner, repo, comparison.data.merge_base_commit.sha);
+	const files = changedBlobs(divergedAt, await blobsAt(github, owner, repo, pull.head.sha));
 	const protectedFile = files.find(
 		(file) =>
 			file.filename.startsWith("docker/preview/") ||
@@ -250,22 +302,16 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 
 	// A preview restores the default branch's database into an application built from this branch, so
 	// a branch missing one of the default branch's migrations runs against a database built from a
-	// changelog other than its own. Checking that here costs one comparison and can name the reason
-	// on the pull request. Leaving it to the deployment costs the deployment, and the failure it
-	// reports says only that the preview did not come up.
+	// changelog other than its own. Checking that here costs one more tree read and can name the
+	// reason on the pull request. Leaving it to the deployment costs the deployment, and the
+	// failure it reports says only that the preview did not come up.
 	//
 	// It sits after the checks above on purpose: a head that already has a live preview needs no
 	// deployment, and refusing here would replace a working preview's comment with a refusal.
-	const behind = await github.rest.repos.compareCommitsWithBasehead({
-		owner,
-		repo,
-		basehead: `${pull.head.sha}...${defaultBranch}`,
-	});
-	const behindFiles = behind.data.files ?? [];
-	// The comparison reports at most COMPARE_FILE_LIMIT files and flags no truncation. A response at
-	// that count may be complete or cut off, and nothing distinguishes them, so it cannot be read as
-	// "no migration is missing".
-	//
+	const behindFiles = changedBlobs(
+		divergedAt,
+		await blobsAt(github, owner, repo, comparison.data.base_commit.sha),
+	);
 	// What these messages may claim is bounded by what is actually known. Two mechanisms are, each
 	// reproduced by booting a released branch image against a database restored from the default
 	// branch. A branch from before a changelog was rewritten does not find its changeset ids
@@ -280,24 +326,17 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 	// queries is harmless, and two changelogs can reach one schema by different text. So the reason
 	// names the mechanisms as what branches in this state have run into, never as what this branch
 	// is guaranteed to hit.
-	if (behindFiles.length >= COMPARE_FILE_LIMIT) {
-		return skip(
-			`PR #${number} is ${behindFiles.length} files behind ${defaultBranch}, the most one GitHub ` +
-				`comparison reports, so whether this branch still carries ${defaultBranch}'s ` +
-				`migrations cannot be checked. A preview restores ${defaultBranch}'s database, and ` +
-				`branches behind on schema have failed to start against it. Merge ${defaultBranch} ` +
-				`in; the next push previews automatically.`,
-		);
-	}
 	for (const file of behindFiles) {
 		if (!isSchemaChange(file.filename)) continue;
-		// The comparison says what the default branch changed since the branches diverged; it says
+		// A path the default branch no longer holds is not one this branch can be missing.
+		if (file.sha === undefined) continue;
+		// The diff says what the default branch changed since the branches diverged; it says
 		// nothing about this branch's tree. A cherry-picked or independently applied migration is
 		// present here under a different commit, so the blob decides, not the ancestry.
 		//
 		// A differing blob is still only unverifiable, never proof: two changelogs can reach the same
 		// schema by different text. So the reason reports what branches in this state have run into
-		// and stops short of asserting a mismatch this comparison cannot demonstrate.
+		// and stops short of asserting a mismatch this diff cannot demonstrate.
 		if (await branchHasBlob(github, owner, repo, pull.head.sha, file)) continue;
 		return skip(
 			`PR #${number} does not have ${defaultBranch}'s \`${file.filename}\`. A preview restores ` +
