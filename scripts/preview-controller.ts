@@ -128,12 +128,9 @@ async function branchHasBlob(
 }
 
 /**
- * Every path a commit holds, by blob.
- *
- * `compareCommitsWithBasehead` reports at most 300 files and sets no flag when it cut the list, so
- * on a large branch it cannot answer either question this controller asks of a diff. A recursive
- * tree is the whole tree at one commit and says when it was truncated, so what comes back is
- * either complete or known not to be.
+ * Every path a commit holds, by blob. Not `compareCommitsWithBasehead`: that reports at most 300
+ * files and sets no flag when it cut the list, so a large branch could not be checked at all. A
+ * tree is the whole commit and says when it was truncated.
  */
 async function blobsAt(
 	github: GitHubApi,
@@ -155,8 +152,8 @@ async function blobsAt(
 
 /**
  * The paths that differ between two trees, carrying the blob the second one holds. A rename is two
- * paths here where a comparison counts one file, which is what a guard watching a directory has to
- * see. Sorted, so a reason naming one of them names the same one on every run.
+ * paths here where a comparison counts one file, so a file leaving a guarded directory is seen.
+ * Sorted, so a reason naming one of them names the same one every run.
  */
 function changedBlobs(base: Map<string, string>, head: Map<string, string>): PullRequestFile[] {
 	const paths = [...new Set([...base.keys(), ...head.keys()])].toSorted();
@@ -259,9 +256,8 @@ const resolve = async ({ github, context, core }: ControllerInput): Promise<void
 
 	// Compared against the default branch rather than this pull request's own base: a stacked layer's
 	// diff hides whatever the layers beneath it changed, and those commits are in the head that
-	// Coolify deploys. The comparison is here for the two commits it names — the point the branches
-	// diverged, and the default branch's tip at that moment — so both checks below read one snapshot
-	// and neither depends on the file list it cuts at 300.
+	// Coolify deploys. Read for the two commits it names, so both checks below diff from one
+	// snapshot: the point the branches diverged, and the default branch's tip at that moment.
 	const comparison = await github.rest.repos.compareCommitsWithBasehead({
 		owner,
 		repo,

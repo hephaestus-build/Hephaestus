@@ -94,9 +94,8 @@ const makeGitHub = ({
 			get: () => Promise.resolve({ data: resolvedPull }),
 		},
 		git: {
-			// The controller diffs trees, so the fixtures are trees. The branches diverge from
-			// `baseFiles`, empty unless a test is about something leaving a tree, which makes `files`
-			// what this head added and `behindFiles` what the default branch added since.
+			// The branches diverge from `baseFiles`, empty unless a test is about something leaving a
+			// tree, so `files` is what this head added and `behindFiles` what the default branch did.
 			getTree: (params: Record<string, unknown>) => {
 				const trees: Record<string, { filename: string; sha?: string }[]> = {
 					[MERGE_BASE_SHA]: baseFiles,
@@ -120,9 +119,8 @@ const makeGitHub = ({
 		},
 		repos: {
 			compareCommitsWithBasehead: (params) => {
-				// One comparison, read for the two commits it names. The direction matters: `main...head`
-				// makes the merge base the point this branch left the default branch, which is what both
-				// the policy check and the schema check are diffed from.
+				// The direction matters: `main...head` makes the merge base the point this branch left
+				// the default branch, which is what both checks are diffed from.
 				assert.equal(params.basehead, `main...${resolvedPull.head.sha}`);
 				return Promise.resolve({
 					data: {
@@ -236,8 +234,6 @@ void describe("preview controller admission", () => {
 	});
 
 	void it("admits a branch with more files than one comparison reports", async () => {
-		// A comparison stops at 300 files and says nothing about having stopped, so a large branch
-		// could not be cleared at all. The trees it diffs instead are whole.
 		const core = makeCore();
 		await resolve({
 			github: makeGitHub({
@@ -268,8 +264,7 @@ void describe("preview controller admission", () => {
 	});
 
 	void it("refuses a head that took a file out of the deployment control plane", async () => {
-		// A comparison counts a rename as one file and names where it landed. Two trees show both
-		// ends, which is what a guard over a directory has to see.
+		// A comparison counts a rename as one file and names only where it landed.
 		const core = makeCore();
 		await resolve({
 			github: makeGitHub({
@@ -891,9 +886,6 @@ void describe("preview schema drift", () => {
 	});
 
 	void it("checks the schema of a branch further behind than a comparison reports", async () => {
-		// The volume the default branch moved on is not the question, and a comparison that stops at
-		// 300 files could not tell one from the other. The tree carries every path, so the migration
-		// among them is still found.
 		const core = makeCore();
 		await resolve({
 			github: makeGitHub({
