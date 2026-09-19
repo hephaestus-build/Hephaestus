@@ -82,6 +82,12 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
     /** An issue number opening a branch-slug segment: {@code 18-foo}, {@code feat/18-foo}. */
     private static final Pattern BRANCH_REF = Pattern.compile("(?:^|/)(\\d{1,7})-");
 
+    /**
+     * An HTML comment is not rendered, and neither provider links an issue from inside one: a
+     * template's {@code <!-- Example: #12 -->} is the template's text, not the author's reference.
+     */
+    private static final Pattern HTML_COMMENT = Pattern.compile("<!--.*?-->", Pattern.DOTALL);
+
     private final ObjectMapper objectMapper;
     private final PullRequestRepository pullRequestRepository;
     private final IssueRepository issueRepository;
@@ -145,7 +151,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
                             .orElse(null);
 
             Set<Integer> numbers = new LinkedHashSet<>();
-            collect(NUMBER_REF, pullRequest == null ? null : pullRequest.getBody(), numbers);
+            collect(NUMBER_REF, pullRequest == null ? null : withoutHtmlComments(pullRequest.getBody()), numbers);
             collect(
                     BRANCH_REF,
                     firstNonBlank(
@@ -232,6 +238,10 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         if (issue.getSubIssuesTotal() != null) node.put("subIssuesTotal", issue.getSubIssuesTotal());
         if (issue.getSubIssuesCompleted() != null) node.put("subIssuesCompleted", issue.getSubIssuesCompleted());
         return node;
+    }
+
+    private static @Nullable String withoutHtmlComments(@Nullable String text) {
+        return text == null ? null : HTML_COMMENT.matcher(text).replaceAll("");
     }
 
     private static void collect(Pattern pattern, @Nullable String text, Set<Integer> numbers) {

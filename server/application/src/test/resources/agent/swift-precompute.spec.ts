@@ -189,7 +189,13 @@ void test("a change with no reference anywhere says what it scanned and what the
 		const referenced = await script(
 			join(root, "repo"),
 			new Map(),
-			{ ...metadata, title: "Add the map", body: "Closes #4", source_branch: "4-add-the-map" },
+			{
+				...metadata,
+				title: "Add the map",
+				// The template's commented example is not the author's reference.
+				body: "<!-- Example: Closes #12 -->\nCloses #4",
+				source_branch: "4-add-the-map",
+			},
 			join(root, "context"),
 		);
 		assert.equal(referenced.metrics.referencesFound, 1);

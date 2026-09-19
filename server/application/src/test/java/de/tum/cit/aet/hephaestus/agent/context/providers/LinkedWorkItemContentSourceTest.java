@@ -269,6 +269,25 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldIgnoreAReferenceInsideAnHtmlComment() throws Exception {
+            // A merge request template's commented example, kept verbatim by most authors of one cohort:
+            // not rendered, so not the author's reference.
+            pullRequestWithBody(
+                    "<!-- MR title format: #<IssueNumber>: <Short description> — Example: #12: Add login -->\n"
+                            + "Closes #7");
+            when(issueRepository.findByRepositoryIdAndNumber(eq(REPO_ID), anyInt()))
+                    .thenAnswer(inv -> {
+                        int number = inv.getArgument(1);
+                        return Optional.of(issue(number, "Issue", ""));
+                    });
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(itemNumbers(root)).containsExactly(7);
+            verify(issueRepository, never()).findByRepositoryIdAndNumber(REPO_ID, 12);
+        }
+
+        @Test
         void shouldKeepASentencePeriodAndRejectAVersionAColourAndAUnit() throws Exception {
             pullRequestWithBody(
                     "This work relates to #42. It bumps version #1.2, uses colour #1a2b and a #42px margin.");
