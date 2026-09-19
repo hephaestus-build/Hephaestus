@@ -1,6 +1,9 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
@@ -19,6 +22,10 @@ import org.springframework.validation.annotation.Validated;
  *                            twenty colleagues' merge requests. 0 disables it.
  * @param reactionSuppression avoid redelivering an observation the developer disputed or marked not applicable.
  *                            Off by default; responses apply to the exact observations bound to feedback.
+ * @param samplingTemperature the sampling temperature every model call of a practice review is made
+ *                            with, or null for the model's own default. A review is a classification
+ *                            against fixed criteria, and the same work should land in the same cell
+ *                            on every run; a low temperature is what buys that consistency.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.practice-review")
@@ -26,4 +33,5 @@ public record PracticeReviewProperties(
         @DefaultValue("false") boolean deliverToMerged,
         @Min(0) @DefaultValue("15") int cooldownMinutes,
         @Min(0) @DefaultValue("5") int maxRequestsPerRequesterPerHour,
-        @DefaultValue("false") boolean reactionSuppression) {}
+        @DefaultValue("false") boolean reactionSuppression,
+        @Nullable @DecimalMin("0.0") @DecimalMax("2.0") Double samplingTemperature) {}

@@ -34,7 +34,7 @@ export function EvidenceFileBlock({
 		<figure className="min-w-0 overflow-hidden rounded-md border">
 			<figcaption
 				className={cn(
-					"flex min-w-0 items-center gap-2 bg-code-header px-2.5 py-1.5",
+					"flex min-w-0 flex-wrap items-center gap-2 bg-code-header px-2.5 py-1.5",
 					isOpen && hasSnippet && "border-b",
 				)}
 			>
@@ -71,6 +71,11 @@ export function EvidenceFileBlock({
 							className={cn("size-3.5 transition-transform", isOpen && "rotate-180")}
 						/>
 					</button>
+				)}
+				{location.revision && (
+					<p className="min-w-0 basis-full text-xs break-all text-muted-foreground">
+						Commit <code>{location.revision}</code>
+					</p>
 				)}
 			</figcaption>
 			{location.redacted && (

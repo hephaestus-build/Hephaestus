@@ -27,7 +27,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Map<String, String> FULL_CONTEXT_ASSIGNMENTS = Map.ofEntries(
             assignment("testconfig.BaseIntegrationTest", "base"),
-            assignment("agent.job.AgentJobControllerIntegrationTest", "execution-capture-enabled"),
+            assignment("agent.handler.ObservationAdmissionConcurrencyIntegrationTest", "admission-race"),
             assignment("agent.job.DeferredIssueEventIntegrationTest", "issue-event-transaction"),
             assignment("agent.job.IssueUpdateCoalescerIntegrationTest", "issue-coalescer-transaction"),
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"),
@@ -48,7 +48,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Map<String, String> FULL_CONTEXT_JUSTIFICATIONS = Map.ofEntries(
             Map.entry("base", "shared PostgreSQL, HTTP, security, and application acceptance context"),
-            Map.entry("execution-capture-enabled", "enabled private capture must not expose raw archives over HTTP"),
+            Map.entry(
+                    "admission-race",
+                    "real proxied observation admission with a held verification and bounded database lock waits"),
             Map.entry(
                     "issue-event-transaction",
                     "real transactional event listener with controlled workspace resolution"),
@@ -83,7 +85,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "testconfig.RealAuthIntegrationTest");
 
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
-            "agent.job.AgentJobControllerIntegrationTest",
             "agent.job.IssueUpdateCoalescerIntegrationTest",
             "core.auth.dev.DevLoginIntegrationTest",
             "integration.outline.OutlineFrameworkRegistrationIntegrationTest",

@@ -29,6 +29,7 @@ export interface NormalizedCitation {
 	artifactPath: string;
 	path: string;
 	side?: DiffSide;
+	revision?: string;
 	startLine: number;
 	endLine: number;
 	quote: string;
@@ -219,38 +220,65 @@ export function normalizeEvidence(
 		const artifactPath = typeof fields.artifactPath === "string" ? fields.artifactPath : "";
 		const path = typeof fields.path === "string" ? fields.path : "";
 		const declaredSide = fields.side == null ? null : trimmedText(fields.side).toUpperCase();
+		const revision = fields.revision == null ? null : trimmedText(fields.revision);
+		if (
+			revision !== null &&
+			(sourceKind !== "scm.repository.tree" || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(revision))
+		)
+			throw new Error("historical citations require scm.repository.tree and a full commit SHA");
 		const startLine = Number(fields.startLine);
 		const endLine = fields.endLine == null ? startLine : Number(fields.endLine);
-		const quote = typeof fields.quote === "string" ? fields.quote : "";
+		const quote = withoutCoordinates(
+			typeof fields.quote === "string" ? fields.quote : "",
+			startLine,
+		);
 		if (!sourceKind) throw new Error("evidence citation sourceKind is required");
 		if (!artifactPath.trim()) throw new Error("evidence citation artifactPath is required");
+		if (sourceKind === "scm.repository.tree" && !artifactPath.endsWith("/.git/HEAD"))
+			throw new Error(
+				"repository citations must use the captured .git/HEAD artifact and a repository-relative path",
+			);
 		if (!path.trim()) throw new Error("evidence citation path is required");
-		if (sourceKind === "scm.pull-request.diff" && declaredSide !== "OLD" && declaredSide !== "NEW")
-			throw new Error("diff evidence citation side must be OLD or NEW");
-		if (sourceKind !== "scm.pull-request.diff" && declaredSide !== null)
-			throw new Error("non-diff evidence citation must not specify side");
-		if (!Number.isSafeInteger(startLine) || startLine <= 0 || startLine > 2147483647)
-			throw new Error("evidence citation startLine must be a positive integer");
-		if (!Number.isSafeInteger(endLine) || endLine < startLine || endLine > 2147483647)
-			throw new Error("evidence citation endLine must be >= startLine");
+		if (sourceKind === "scm.pull-request.diff" && /(^|\/)change\.json$/.test(path))
+			throw new Error(
+				"change.json pins the reviewed range and is not quotable: quote a changed line from " +
+					"work/change/diff.patch with its repository path and OLD/NEW side, or cite metadata.json " +
+					"(scm.pull-request.core) for the pull request's own facts",
+			);
 		if (
-			!quote
-				.replaceAll("\u001c", "")
-				.replaceAll("\u001d", "")
-				.replaceAll("\u001e", "")
-				.replaceAll("\u001f", "")
-				.trim()
+			sourceKind === "scm.pull-request.diff" &&
+			declaredSide !== null &&
+			declaredSide !== "OLD" &&
+			declaredSide !== "NEW"
 		)
-			throw new Error("evidence citation quote is required");
-		// Only the two checks above can let a side through, so this is a re-reading of what they proved
-		// rather than a second rule: anything else already threw.
+			throw new Error("diff evidence citation side must be OLD or NEW");
+		// A side on anything but a quote of the change says nothing; surplus, dropped rather than refused.
+		// Number(undefined) is NaN and Number(null) is 0: an omitted line must be named as omitted, not
+		// as a bad integer, or the session cannot tell which of the two it did.
+		if (nullish(fields.startLine) || fields.startLine === "")
+			throw new Error(
+				"evidence citation startLine is required: the 1-based line of the quoted text in the artifact " +
+					"(for a quote of the change, the [L<n>] coordinate of work/change/diff.patch)",
+			);
+		if (!Number.isSafeInteger(startLine) || startLine <= 0 || startLine > 2147483647)
+			throw new Error(
+				`evidence citation startLine must be a positive integer, received ${JSON.stringify(fields.startLine)}; lines are 1-based`,
+			);
+		if (!Number.isSafeInteger(endLine) || endLine < startLine || endLine > 2147483647)
+			throw new Error(
+				`evidence citation endLine must be an integer >= startLine, received ${JSON.stringify(fields.endLine)} with startLine ${startLine}`,
+			);
+		// An empty quote is a citation by coordinates alone; resolveQuote fills it from the artifact.
 		const side: DiffSide | null =
-			declaredSide === "OLD" || declaredSide === "NEW" ? declaredSide : null;
+			sourceKind === "scm.pull-request.diff" && (declaredSide === "OLD" || declaredSide === "NEW")
+				? declaredSide
+				: null;
 		return {
 			sourceKind,
 			artifactPath,
 			path,
 			...(side == null ? {} : { side }),
+			...(revision == null ? {} : { revision }),
 			startLine,
 			endLine,
 			quote,
@@ -312,6 +340,11 @@ function parseVocabulary<T extends string>(values: readonly T[], value: unknown,
 	return admitted;
 }
 
+/** A field left out, or written as the word "null", says the same as null. */
+function nullish(value: unknown): boolean {
+	return value == null || (typeof value === "string" && /^(?:null|none)?$/i.test(value.trim()));
+}
+
 export type Outcome = "POSITIVE" | "NEGATIVE";
 
 export function deriveOutcome(
@@ -338,14 +371,26 @@ type ObservationAssessment =
 			severity: null;
 	  };
 
-function parseAssessment(fields: Record<string, unknown>): ObservationAssessment {
+function parseAssessment(
+	fields: Record<string, unknown>,
+	practiceSlug: string,
+	ruledOut: ReadonlySet<string>,
+): ObservationAssessment {
+	// A presence value written as the status names a presence and nothing else; it is read as such
+	// unless the presence field says otherwise.
+	const status =
+		typeof fields.assessmentStatus === "string" ? fields.assessmentStatus.toUpperCase() : null;
+	const statusAsPresence = PRESENCE_VALUES.find((value) => value === status);
+	if (statusAsPresence && (nullish(fields.presence) || fields.presence === statusAsPresence)) {
+		fields = { ...fields, assessmentStatus: "ASSESSED", presence: statusAsPresence };
+	}
 	const assessmentStatus = parseVocabulary(
 		ASSESSMENT_STATUS_VALUES,
 		fields.assessmentStatus,
 		"assessmentStatus",
 	);
 	if (assessmentStatus !== "ASSESSED") {
-		if (fields.presence !== null || fields.assessment !== null || fields.severity !== null)
+		if (!nullish(fields.presence) || !nullish(fields.assessment) || !nullish(fields.severity))
 			throw new Error(
 				"Unassessed observations require explicit null presence, assessment and severity",
 			);
@@ -353,15 +398,32 @@ function parseAssessment(fields: Record<string, unknown>): ObservationAssessment
 	}
 	const presence = parseVocabulary(PRESENCE_VALUES, fields.presence, "presence");
 	const assessment = parseVocabulary(ASSESSMENT_VALUES, fields.assessment, "assessment");
+	// Before the severity is asked for: a cell the practice rules out is a wrong cell, and asking for
+	// a severity first would have the session decorate the wrong cell rather than leave it.
+	refuseRuledOutCell(practiceSlug, presence, assessment, ruledOut);
+	// A severity beside a POSITIVE outcome says nothing wrong; it is surplus and dropped, not refused.
 	if (deriveOutcome(presence, assessment) === "POSITIVE") {
-		if (fields.severity !== null) throw new Error("POSITIVE outcome requires null severity");
 		return { assessmentStatus, presence, assessment, severity: null };
 	}
+	if (nullish(fields.severity))
+		throw new Error(
+			`${presence}/${assessment} is a NEGATIVE outcome and needs a severity: one of ${SEVERITY_VALUES.join(", ")}`,
+		);
 	const severity = parseVocabulary(SEVERITY_VALUES, fields.severity, "severity");
 	return { assessmentStatus, presence, assessment, severity };
 }
 
-export function normalizeObservation(observation: unknown): NormalizedObservation {
+/** The summary heads the developer's practice page; a phrase, not the rationale. */
+export const MAX_SUMMARY_CHARS = 160;
+
+/**
+ * @param ruledOut the cells the practice's Judge section rules out, from {@link cellsRuledOut}; an
+ *   assessed observation in one of them is refused before anything else about it is asked for.
+ */
+export function normalizeObservation(
+	observation: unknown,
+	ruledOut: ReadonlySet<string> = new Set(),
+): NormalizedObservation {
 	if (!isRecord(observation)) throw new Error("observation must be an object");
 	const allowed = new Set([
 		"practiceSlug",
@@ -377,11 +439,16 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 	if (unknownFields.length)
 		throw new Error(`unknown observation field(s): ${unknownFields.join(", ")}`);
 	const practiceSlug = trimmedText(observation.practiceSlug).toLowerCase().replace(/_/g, "-");
+	// Named before the cell is parsed: an item with no slug is usually not an observation at all (a
+	// wrapper, a fragment), and "invalid presence" would send the session looking at the wrong field.
+	if (!practiceSlug)
+		throw new Error(
+			`practiceSlug is required: each item of observations is one observation object (received keys: ${Object.keys(observation).join(", ") || "none"})`,
+		);
 	const title = trimmedText(observation.summary);
 	const reasoning = trimmedText(observation.evidenceRationale);
-	const result = parseAssessment(observation);
+	const result = parseAssessment(observation, practiceSlug, ruledOut);
 	const { assessmentStatus, presence } = result;
-	if (!practiceSlug) throw new Error("practiceSlug is required");
 	if (!title) throw new Error("summary is required");
 	// The summary is what the developer reads on their practice page, above the practice's own name and
 	// with no evidence beside it, so a single word there ("Test") names nothing the practice did not.
@@ -389,6 +456,10 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 		throw new Error(
 			"summary must say what was observed as a short phrase, not one word — e.g. " +
 				"'Debug print left in the request handler'",
+		);
+	if (title.length > MAX_SUMMARY_CHARS)
+		throw new Error(
+			`summary must be at most ${MAX_SUMMARY_CHARS} characters; this one is ${title.length}. Name the behavior, and keep the reasons for the rationale`,
 		);
 	if (!reasoning) throw new Error("evidenceRationale is required");
 	const externalEvidence: Record<string, unknown> = isRecord(observation.evidence)
@@ -398,9 +469,6 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 	const unknownEvidence = Object.keys(externalEvidence).filter((key) => !evidenceFields.has(key));
 	if (unknownEvidence.length)
 		throw new Error(`unknown evidence field(s): ${unknownEvidence.join(", ")}`);
-	const branchCount = ["search", "inapplicability", "undecidability"].filter(
-		(key) => externalEvidence[key] != null,
-	).length;
 	const expectedBranch: string | null =
 		presence === "ABSENT"
 			? "search"
@@ -409,15 +477,17 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 				: assessmentStatus === "UNDETERMINED"
 					? "undecidability"
 					: null;
-	if (
-		(expectedBranch == null && branchCount !== 0) ||
-		(expectedBranch != null && (branchCount !== 1 || externalEvidence[expectedBranch] == null))
-	) {
-		throw new Error(
-			`evidence must carry exactly ${expectedBranch ?? "citations"} for this outcome`,
-		);
-	}
-	const evidence = normalizeEvidence(externalEvidence, assessmentStatus, presence);
+	// A branch the outcome does not call for is surplus, not a contradiction: a search recorded beside
+	// a PRESENT claim says nothing wrong, so it is dropped rather than refused. The branch the outcome
+	// does call for is checked by normalizeEvidence, which names what is missing.
+	const evidence = normalizeEvidence(
+		{
+			citations: externalEvidence.citations,
+			...(expectedBranch == null ? {} : { [expectedBranch]: externalEvidence[expectedBranch] }),
+		},
+		assessmentStatus,
+		presence,
+	);
 	const out: NormalizedObservation = {
 		practiceSlug,
 		summary: title,
@@ -430,7 +500,10 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 
 export function dedupeKeyForObservation(observation: NormalizedObservation): string {
 	const citations = observation.evidence.citations
-		.map((citation) => `${citation.path}:${citation.startLine}-${citation.endLine}`)
+		.map(
+			(citation) =>
+				`${citation.revision ?? ""}:${citation.path}:${citation.startLine}-${citation.endLine}`,
+		)
 		.join(",");
 	return `${observation.practiceSlug}|${observation.summary}|${citations}`;
 }
@@ -451,10 +524,21 @@ export function validateEvidenceSources(
 		}
 		const artifactSource = artifactSources.get(citation.artifactPath);
 		if (artifactSource !== sourceKind) {
+			if (artifactSource === undefined) {
+				// The change view under work/ is derived in the container from the checkout, so a quote
+				// of it is a quote of the change: the pinned range is the artifact, the diff its lines.
+				const derived = citation.artifactPath.startsWith("work/")
+					? " The change view under work/ is derived here and is not an artifact: quote a changed line " +
+						"from work/change/diff.patch as scm.pull-request.diff with the pinned change.json as " +
+						"artifactPath, or the pull request record (metadata.json) as scm.pull-request.core."
+					: "";
+				throw new Error(
+					`artifact '${citation.artifactPath}' was not staged; the staged artifacts are: ` +
+						`${[...artifactSources.keys()].toSorted().join(", ")}.${derived}`,
+				);
+			}
 			throw new Error(
-				artifactSource === undefined
-					? `artifact '${citation.artifactPath}' was not staged; copy an artifact path from the task-declared manifest`
-					: `artifact '${citation.artifactPath}' belongs to evidence source '${artifactSource}', not '${sourceKind}'`,
+				`artifact '${citation.artifactPath}' belongs to evidence source '${artifactSource}', not '${sourceKind}'`,
 			);
 		}
 	}
@@ -514,6 +598,49 @@ export function validateSearchScope(
  * have been read, so claiming to have read them is the inapplicability-shaped version of citing evidence
  * we never had.
  */
+const CELL = String.raw`(?:PRESENT|ABSENT)\/(?:GOOD|BAD)`;
+const RULED_OUT_LINE = new RegExp(
+	String.raw`^-\s*(${CELL}(?:\s*(?:and|,|or)\s*${CELL})*)\s*(?:\([A-Z]+\))?\s*:\s*no ordinary case\b`,
+	"i",
+);
+
+/**
+ * The cells a practice's own Judge section rules out, as "- PRESENT/GOOD and ABSENT/GOOD: no
+ * ordinary case". A practice whose behaviour in focus is undesirable has no GOOD cell: its absence is
+ * ABSENT/BAD, the positive outcome, and a session that reads GOOD as "the outcome is good" records the
+ * clean bill as a lapse. The criteria are the one home of that decision, so the guard is read from
+ * them; a practice whose Judge section names no such line is not guarded.
+ */
+export function cellsRuledOut(criteria: string): Set<string> {
+	const judge = criteria.split(/^## Judge\s*$/m)[1]?.split(/^## /m)[0] ?? "";
+	const cells = new Set<string>();
+	for (const line of judge.split("\n")) {
+		const match = RULED_OUT_LINE.exec(line.trim());
+		if (!match) continue;
+		for (const cell of match[1]?.match(new RegExp(CELL, "g")) ?? []) cells.add(cell.toUpperCase());
+	}
+	return cells;
+}
+
+/** An assessed observation lands in a cell its practice names; the ruled-out ones are refused. */
+function refuseRuledOutCell(
+	practiceSlug: string,
+	presence: Presence,
+	assessment: Assessment,
+	ruledOut: ReadonlySet<string>,
+): void {
+	const cell = `${presence}/${assessment}`;
+	if (!ruledOut.has(cell)) return;
+	const all = ["PRESENT/GOOD", "PRESENT/BAD", "ABSENT/GOOD", "ABSENT/BAD"];
+	const ordinary = all.filter((candidate) => !ruledOut.has(candidate));
+	throw new Error(
+		`${cell} is no ordinary case for '${practiceSlug}' — its Judge section names ` +
+			`${ordinary.join(" and ")}. assessment says whether the behaviour in focus is desirable, ` +
+			`not whether the outcome is good: an undesirable behaviour that is absent is ABSENT/BAD, the ` +
+			`positive outcome. Record the cell the evidence supports`,
+	);
+}
+
 export function validateInapplicabilityScope(
 	observation: NormalizedObservation,
 	availableSourceKinds: ReadonlySet<string>,
@@ -535,25 +662,199 @@ export function validateInapplicabilityScope(
 /** How much of a diff line a refusal quotes back; enough to see the difference, not the whole line. */
 const MISMATCH_EXCERPT_CHARS = 160;
 
+/** The most a citation by coordinates alone may record; beyond it, the model names a fragment. */
+const COORDINATE_QUOTE_MAX_CHARS = 2000;
+
 /** Whether an observation's citation is really in the artifact it names. */
 export function citationMatchesArtifact(citation: NormalizedCitation, content: string): boolean {
 	return describeCitationMismatch(citation, content) === null;
 }
 
-/**
- * Why a citation does not match, in one phrase, or null when it does. A refusal that only says "does
- * not match" leaves the session guessing at which of the coordinate, the side and the text was wrong,
- * and leaves a reader of the transcript guessing at the same thing. The rule itself is unchanged:
- * every quote is still read out of the artifact it names.
- */
+/** Why a citation does not match, in one phrase, or null when it does. */
 export function describeCitationMismatch(
 	citation: NormalizedCitation,
 	content: string,
 ): string | null {
-	if (citation.sourceKind !== "scm.pull-request.diff") {
-		const found = content.includes(citation.quote);
-		return found ? null : "that text is not in the artifact";
+	const resolved = resolveQuote(citation, content);
+	return "mismatch" in resolved ? resolved.mismatch : null;
+}
+
+/**
+ * The quote a citation records, read out of the artifact it names, or why none could be. A quote is
+ * evidence that the model read these lines, so what is recorded is always the artifact's own bytes:
+ * a quote copied with a diff marker, with a non-breaking space read as a space, or as the text a
+ * JSON string spells with escapes, is the same reading, and is recorded as the artifact spells it.
+ * An empty quote cites by coordinates alone and records the cited lines. Admission verifies the
+ * recorded bytes against the artifact, so this is what makes the two checks agree.
+ *
+ * <p>A refusal says which of the coordinate, the side and the text was wrong, and shows what the
+ * cited lines hold, so the next attempt can be copied from them.
+ */
+export function resolveQuote(
+	citation: NormalizedCitation,
+	content: string,
+): ResolvedQuote | { mismatch: string } {
+	const resolved = resolveQuoteText(citation, content);
+	// Admission refuses a blank quote, so a citation of blank lines is refused here, with the reason.
+	if ("quote" in resolved && resolved.quote.trim() === "") {
+		return { mismatch: "the cited lines are blank; cite a line that has text" };
 	}
+	return resolved;
+}
+
+function resolveQuoteText(
+	citation: NormalizedCitation,
+	content: string,
+): ResolvedQuote | { mismatch: string } {
+	const quote = citation.quote.replace(/\r?\n$/, "");
+	if (citation.sourceKind !== "scm.pull-request.diff") {
+		const lines = content.split(/(?<=\n)/);
+		if (citation.startLine > lines.length) {
+			return {
+				mismatch: `the artifact has ${lines.length} line(s), so there is no [L${citation.startLine}]`,
+			};
+		}
+		const citedText = lines
+			.slice(citation.startLine - 1, citation.endLine)
+			.join("")
+			.replace(/\n$/, "");
+		const where = `[L${citation.startLine}]${citation.endLine === citation.startLine ? "" : `-[L${citation.endLine}]`}`;
+		if (quote === "") {
+			return citedText.length > COORDINATE_QUOTE_MAX_CHARS
+				? {
+						mismatch: `${where} is ${citedText.length} characters; cite fewer lines or quote a fragment of them`,
+					}
+				: { quote: citedText };
+		}
+		const found = findAsWritten(citedText, quote);
+		if (found !== null) return { quote: found };
+		// The text is real but the coordinates are not: a file read without line numbers is cited by
+		// a guess. When the quote occurs exactly once in the artifact, that is where it is recorded.
+		const elsewhere = locateAsWritten(content, quote);
+		if (elsewhere.length === 1 && elsewhere[0] !== undefined) return elsewhere[0];
+		if (elsewhere.length > 1) {
+			return {
+				mismatch: `${where} does not hold that text; it occurs at ${elsewhere.map((hit) => `[L${hit.startLine}]`).join(", ")} — cite the one you mean`,
+			};
+		}
+		// A body serialized into one JSON line reads as one line, escapes and all: the excerpt shows
+		// it, and the hint says how to quote it, since a quote spanning its line breaks is never found.
+		const hint = citedText.includes("\\n")
+			? "; this is a JSON string whose line breaks are the two characters \\n, so quote a fragment from between two of them, or spell them as the line does"
+			: "";
+		return { mismatch: `${where} reads ${excerpt(citedText)}, not ${excerpt(quote)}${hint}` };
+	}
+	const citedLines = diffLinesOf(citation, content);
+	if (typeof citedLines === "string") return { mismatch: citedLines };
+	const citedLineCount = citation.endLine - citation.startLine + 1;
+	const quoteLines = quote === "" ? null : quote.split(/\r\n|\r|\n/);
+	const spanMatches = quoteLines === null || quoteLines.length === citedLineCount;
+	const atCited = spanMatches
+		? diffLinesMatch(citedLines, citation.startLine, citedLineCount, quoteLines)
+		: {
+				mismatch: `the quote is ${quoteLines.length} line(s) and the citation covers ${citedLineCount}`,
+			};
+	if ("text" in atCited) {
+		return quoteLines === null && atCited.text.length > COORDINATE_QUOTE_MAX_CHARS
+			? {
+					mismatch: `[L${citation.startLine}]-[L${citation.endLine}] is ${atCited.text.length} characters; cite fewer lines or quote a fragment of them`,
+				}
+			: { quote: atCited.text };
+	}
+	// The text may be real with the coordinates guessed, or the span miscounted: when the quoted
+	// block occurs exactly once on that side of that path, it is recorded there.
+	if (quoteLines !== null) {
+		const found = [...citedLines.keys()].flatMap((start) => {
+			const match = diffLinesMatch(citedLines, start, quoteLines.length, quoteLines);
+			return "text" in match ? [{ start, text: match.text }] : [];
+		});
+		const only = found[0];
+		if (found.length === 1 && only !== undefined) {
+			return {
+				quote: only.text,
+				startLine: only.start,
+				endLine: only.start + quoteLines.length - 1,
+			};
+		}
+		if (found.length > 1) {
+			return {
+				mismatch: `[L${citation.startLine}] does not hold that text on the ${citation.side ?? "NEW"} side of ${citation.path}; it occurs at ${found.map((hit) => `[L${hit.start}]`).join(", ")} — cite the one you mean`,
+			};
+		}
+	}
+	return atCited;
+}
+
+/** A quote as recorded, with corrected coordinates when the text was found elsewhere than cited. */
+export interface ResolvedQuote {
+	quote: string;
+	startLine?: number;
+	endLine?: number;
+}
+
+/**
+ * The diff's lines from `start` matched against the quote's lines, one each: the content they carry
+ * when every line matches, or why not. With no quote, the lines are simply read.
+ */
+function diffLinesMatch(
+	citedLines: ReadonlyMap<number, string>,
+	start: number,
+	count: number,
+	quoteLines: readonly string[] | null,
+): { text: string } | { mismatch: string } {
+	const recorded: string[] = [];
+	for (let index = 0; index < count; index++) {
+		const lineNumber = start + index;
+		const diffLine = citedLines.get(lineNumber);
+		if (diffLine === undefined) {
+			return { mismatch: `the diff has no [L${lineNumber}] on that side of that path` };
+		}
+		const quoteLine = quoteLines?.[index];
+		if (
+			quoteLine !== undefined &&
+			!quotesDiffLine(diffLine, withoutOwnCoordinate(quoteLine, lineNumber))
+		) {
+			return { mismatch: `[L${lineNumber}] reads ${excerpt(diffLine)}, not ${excerpt(quoteLine)}` };
+		}
+		recorded.push(diffLine.slice(1));
+	}
+	return { text: recorded.join("\n") };
+}
+
+/**
+ * The text as the artifact writes it, when the quote is a reading of it: verbatim, or with the
+ * escapes a JSON string uses, or with a non-breaking space where the quote has a space. Null when
+ * the text holds no such reading.
+ */
+/** Every place the quote occurs in the whole artifact, as written there, with its line range. */
+function locateAsWritten(content: string, quote: string): ResolvedQuote[] {
+	const hits: ResolvedQuote[] = [];
+	for (const candidate of [quote, JSON.stringify(quote).slice(1, -1)]) {
+		for (const match of content.matchAll(asWrittenPattern(candidate, "g"))) {
+			const startLine = content.slice(0, match.index).split("\n").length;
+			const endLine = startLine + match[0].split("\n").length - 1;
+			if (!hits.some((hit) => hit.startLine === startLine)) {
+				hits.push({ quote: match[0], startLine, endLine });
+			}
+		}
+	}
+	return hits;
+}
+
+function findAsWritten(text: string, quote: string): string | null {
+	for (const candidate of [quote, JSON.stringify(quote).slice(1, -1)]) {
+		if (text.includes(candidate)) return candidate;
+		const match = asWrittenPattern(candidate).exec(text);
+		if (match) return match[0];
+	}
+	return null;
+}
+
+/**
+ * The annotated diff's lines on the cited side of the cited path, by line number, or why they could
+ * not be read.
+ */
+function diffLinesOf(citation: NormalizedCitation, content: string): Map<number, string> | string {
 	let oldPath: string | null = null;
 	let newPath: string | null = null;
 	const citedLines = new Map<number, string>();
@@ -579,29 +880,68 @@ export function describeCitationMismatch(
 			if (side === citation.side && path === citation.path) citedLines.set(lineNumber, line);
 		}
 	}
-	// Match Java String.lines(): CR/LF delimiters, without the final terminator's empty item.
-	const quoteLines = citation.quote.split(/\r\n|\r|\n/);
-	if (quoteLines.at(-1) === "") quoteLines.pop();
-	const citedLineCount = citation.endLine - citation.startLine + 1;
-	if (quoteLines.length !== citedLineCount) {
-		return `the quote is ${quoteLines.length} line(s) and the citation covers ${citedLineCount}`;
-	}
-	for (const [index, quoteLine] of quoteLines.entries()) {
-		const lineNumber = citation.startLine + index;
-		const diffLine = citedLines.get(lineNumber);
-		if (diffLine === undefined) {
-			return `the diff has no [L${lineNumber}] on the ${citation.side ?? "NEW"} side of ${citation.path}`;
-		}
-		if (!quotesDiffLine(diffLine, quoteLine)) {
-			return `[L${lineNumber}] reads ${excerpt(diffLine)}, not ${excerpt(quoteLine)}`;
-		}
-	}
-	return null;
+	return citedLines;
 }
 
-/** Match server admission: exact displayed diff text or its text without the single diff marker. */
+/**
+ * Whether a quote is the diff line it claims: as displayed, or without the marker, or with its
+ * horizontal whitespace read differently. The coordinate has already pinned which line is compared,
+ * so two lines cannot be confused by spacing; the text is what a citation proves was read, and what
+ * is recorded is the line's own bytes.
+ */
 function quotesDiffLine(diffLine: string, quoted: string): boolean {
-	return diffLine.length > 0 && (diffLine === quoted || diffLine.slice(1) === quoted);
+	if (diffLine.length === 0) return false;
+	const content = squash(diffLine.slice(1));
+	const quote = squash(quoted);
+	return (
+		squash(diffLine) === quote ||
+		content === quote ||
+		// A marker the quote carries that is not the line's own: a blank added line read as "+" where
+		// the diff shows a blank context line, for instance. The coordinate pins the line; markers are
+		// presentation.
+		(/^[+\- ]/.test(quoted) && content === squash(quoted.slice(1)))
+	);
+}
+
+/** Horizontal whitespace, including the non-breaking kinds, is presentation. */
+const HORIZONTAL_SPACE = "[ \\t\\u00a0\\u2007\\u202f]";
+
+function squash(text: string): string {
+	return text.replace(new RegExp(`${HORIZONTAL_SPACE}+`, "g"), "");
+}
+
+/** A regex that finds the quote as the artifact may write it: the same characters, spacing aside. */
+function asWrittenPattern(candidate: string, flags = ""): RegExp {
+	const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	return new RegExp(
+		escaped
+			.replace(new RegExp(`${HORIZONTAL_SPACE}+`, "g"), `${HORIZONTAL_SPACE}*`)
+			.replace(/\r?\n/g, `${HORIZONTAL_SPACE}*\\r?\\n${HORIZONTAL_SPACE}*`),
+		flags,
+	);
+}
+
+/**
+ * The quote without the `[L<n>] ` coordinates the brief and the diff view print in front of every
+ * line. A coordinate that names the line it sits on is presentation, copied along with the text;
+ * one that does not is left in place, so a mismatch is reported as the text it is.
+ */
+export function withoutCoordinates(quote: string, startLine: number): string {
+	if (!Number.isSafeInteger(startLine)) return quote;
+	return quote
+		.split(/(?<=\r\n|\r|\n)/)
+		.map((line, index) => {
+			const ending = line.match(/\r\n|\r|\n$/)?.[0] ?? "";
+			const text = ending ? line.slice(0, -ending.length) : line;
+			return withoutOwnCoordinate(text, startLine + index) + ending;
+		})
+		.join("");
+}
+
+/** A copied annotation must agree with the cited coordinate. */
+function withoutOwnCoordinate(quoteLine: string, lineNumber: number): string {
+	const [, quotedNumber, quotedText] = quoteLine.match(/^\[L(\d+)] ([\s\S]*)$/) ?? [];
+	return quotedText !== undefined && quotedNumber === String(lineNumber) ? quotedText : quoteLine;
 }
 
 /** One line as evidence in a refusal: quoted, and cut where a reader has already seen the difference. */

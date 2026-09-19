@@ -1,6 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 
-import type { ModelRuntime, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
+import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
+
+/** One model as {@link ModelRuntime.registerProvider} takes it; the extension-facing type omits sampling. */
+export type RegisteredModel = NonNullable<
+	Extract<Parameters<ModelRuntime["registerProvider"]>[1], { models?: unknown }>["models"]
+>[number];
 
 import { errorText } from "./pi-error-text.ts";
 
@@ -53,7 +58,7 @@ export function loadProviderConfig(cwd = DEFAULT_WORKSPACE_ROOT): ProviderConfig
 }
 
 export function registerHephaestusProvider(
-	modelRuntime: ModelRuntime,
+	modelRuntime: Pick<ModelRuntime, "registerProvider">,
 	config: ProviderConfig | null,
 	env: Record<string, string | undefined> = process.env,
 ): boolean {
@@ -63,7 +68,14 @@ export function registerHephaestusProvider(
 		return false;
 	}
 
-	const model: ProviderModelConfig = {
+	// The operator's review temperature, when set: a review classifies work against fixed criteria,
+	// and the same work should land in the same cell on every run.
+	const temperature = Number(env.LLM_SAMPLING_TEMPERATURE);
+	const samplingParams =
+		env.LLM_SAMPLING_TEMPERATURE !== undefined && Number.isFinite(temperature)
+			? { temperature }
+			: undefined;
+	const model: RegisteredModel = {
 		id: config.modelId,
 		name: config.modelId,
 		reasoning: Boolean(config.supportsReasoning),
@@ -71,6 +83,7 @@ export function registerHephaestusProvider(
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		contextWindow: config.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
 		maxTokens: config.maxOutputTokens ?? DEFAULT_MAX_TOKENS,
+		...(samplingParams ? { samplingParams } : {}),
 	};
 	modelRuntime.registerProvider("hephaestus", {
 		name: "Hephaestus Gateway",

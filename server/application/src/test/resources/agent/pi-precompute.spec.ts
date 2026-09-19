@@ -14,9 +14,8 @@ import { join } from "node:path";
 import { mock, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-const imageRoot = fileURLToPath(
-	new URL("../../../../../../docker/agents/precompute", import.meta.url),
-);
+const repositoryRoot = fileURLToPath(new URL("../../../../../../", import.meta.url));
+const imageRoot = join(repositoryRoot, "docker/agents/precompute");
 
 const scenarioRoot = process.env.PRECOMPUTE_SCENARIO_ROOT;
 if (scenarioRoot) {
@@ -25,9 +24,19 @@ if (scenarioRoot) {
 			spawnSync(command: string, args: string[]) {
 				assert.equal(command, process.execPath);
 				// Substitute only the image installation prefix; execute the real runner and permissions.
+				// The library's dependencies are the toolchain's here, where the image installs its own
+				// under its prefix, and resolution probes every ancestor's node_modules on the way up.
+				const toolchain = [
+					join(repositoryRoot, "docker/agents/node_modules"),
+					join(repositoryRoot, "docker/node_modules"),
+					realpathSync(join(repositoryRoot, "node_modules")),
+				].map((path) => `--allow-fs-read=${path}`);
+				const index = args.indexOf("--permission") + 1;
 				return spawnSync(
 					command,
-					args.map((arg) => arg.replace("/opt/precompute", imageRoot)),
+					args
+						.map((arg) => arg.replace("/opt/precompute", imageRoot))
+						.toSpliced(index, 0, ...toolchain),
 					{ stdio: "inherit" },
 				);
 			},
@@ -48,19 +57,21 @@ if (scenarioRoot) {
 			const scripts = "catalog/scripts";
 			mkdirSync(join(root, context), { recursive: true });
 			mkdirSync(join(root, scripts), { recursive: true });
+			// The change view pi-change.ts derived before this step; the runner reads the diff from it.
+			mkdirSync(join(root, "work/change"), { recursive: true });
 			writeFileSync(
-				join(root, context, "diff.patch"),
+				join(root, "work/change/diff.patch"),
 				"diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -0,0 +1 @@\n[L1] +line\n",
 			);
 			writeFileSync(
 				join(root, scripts, "example.ts"),
 				`import { readFileSync } from "node:fs";
 import { parseDiff } from "../lib/diff-parser.ts";
-export default (repo, diff, metadata, context) => ({
+export default (repo, diff, metadata, context, change) => ({
  hints: [], directions: [], metrics: {
   files: diff.size,
   addedLine: Number(diff.get("a").addedLines.get(1) === "line"),
-  parsed: parseDiff(readFileSync(context + "/diff.patch", "utf8")).size,
+  parsed: parseDiff(readFileSync(change + "/diff.patch", "utf8")).size,
   context: Number(readFileSync(context + "/marker", "utf8")),
   repo: Number(readFileSync(repo + "/marker", "utf8")),
   metadata: metadata.marker

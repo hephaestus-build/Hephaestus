@@ -32,7 +32,8 @@ sequenceDiagram
     W->>W: capture evidence, build the manifest, decide readiness
     W->>DB: write evidence_snapshot and review_readiness
     W->>SB: start the container, stage inputs
-    SB->>W: model calls, through the worker's own LLM proxy
+    SB->>SB: derive the change view, run precompute, build the brief
+    SB->>W: model calls, through the worker's own LLM proxy (one session, one turn per practice group)
     SB->>W: submit observations for admission
     W->>DB: validate and persist admitted observations
     W-->>SB: return the durable observation projection and digest
@@ -49,12 +50,26 @@ sequenceDiagram
 - **The `agent_job` table is the queue.** There is no broker between server and worker. Submission is one
   row containing metadata and an idempotency key. NATS carries webhook ingress upstream and is not part of
   the review queue.
-- **Evidence capture runs on the claiming worker, not on the server.** The worker reads the repository clone
-  from its own disk, so a worker without checkout enabled or without the fabric volume records a degraded
-  tree in the manifest.
+- **Evidence capture runs on the claiming worker, not on the server.** The worker snapshots the repository
+  from its own mirror: with checkout disabled the manifest records the tree as not collected, and a
+  repository with no mirror on that worker is recorded as unavailable.
 - **`evidence_snapshot` and `review_readiness` are written before the container starts**, in their own
   transaction, and a failed write fails the run before any model cost accrues. The result is a separate,
   later transaction.
+- **One session per review, inside the sandbox.** `pi-runner.ts` opens one model session and drives it
+  in turns: the first turn carries the brief — the captured records and the change view, already in
+  context with line coordinates — and each turn carries one catalog group of practices with their criteria
+  inlined. Observations go through `report_observation` in batches; a refused one is answered per item and
+  a practice past eight refusals is reported as not reached. The schema the SDK validates a call against
+  is documentation only — the SDK's check is all or nothing, and one wrong field must not discard the
+  other observations in the call — so every rule is applied per item by the runner's normalizer,
+  including the cells a practice's Judge section rules out (`- PRESENT/GOOD and ABSENT/GOOD: no ordinary
+  case.`). A turn aborted at its share of the budget is awaited until the session is idle before the
+  next turn is sent. What was recorded is repeated at the top of
+  every later turn and appended to `work/notes/review.md`, so it survives context compaction. After
+  admission the same session composes feedback in one more turn, with the admitted observations and the
+  history inlined. There is no reconnaissance session, no fork per practice group and no retry session:
+  a practice no turn recorded gets one finishing turn in the same session.
 - **The worker posts public feedback.** Parsing, persistence, composition, and provider delivery remain on
   the worker after sandbox execution.
 - **Control never returns to the server between claim and completion.** The only server-to-worker push is
@@ -76,8 +91,10 @@ The durable boundaries, which the implementation may reschedule freely behind:
 - **Observations** — the agent reports through `report_observation`; server admission validates it, and
   persistence assigns an occurrence identity and a separate evidence-location grouping key.
 - **Feedback** — after admission, the same agent session reports through `report_feedback` in a closed
-  intervention phase;
-  server admission validates the result without invalidating completed measurement. Admitted feedback,
+  intervention phase; the runner refuses a practice-page card unless the practice is NEGATIVE on as many
+  distinct pieces of work as the composition request's `minDistinctArtifacts`, counting this work and
+  the staged history, so one occurrence stays a note on the work.
+  Server admission validates the result without invalidating completed measurement. Admitted feedback,
   server suppressions, replacements, and placements enter the ledger; a model `WITHHOLD` remains only in
   the bounded job output. The seam itself is
   [ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md).

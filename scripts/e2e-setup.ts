@@ -429,13 +429,15 @@ async function main(): Promise<void> {
 			enabled: true,
 			...pricing,
 		});
+		// A practice review always runs on an internal network and the server rejects allowInternet
+		// for it; a host-run server reaches that network via SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID.
 		for (const purpose of ["PRACTICE_REVIEW", "MENTOR"])
 			await api("PUT", `/workspaces/${config.workspaceSlug}/agents/${purpose}`, {
 				workspaceModelId: modelId,
 				enabled: true,
 				timeoutSeconds: 1200,
 				maxConcurrentJobs: 1,
-				allowInternet: true,
+				allowInternet: purpose === "MENTOR",
 			});
 		const agents = array(
 			await api("GET", `/workspaces/${config.workspaceSlug}/agents`),

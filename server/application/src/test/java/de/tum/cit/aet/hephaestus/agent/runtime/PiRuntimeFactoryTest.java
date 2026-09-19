@@ -298,7 +298,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
     class CommandAssembly {
 
         @Test
-        @DisplayName("Practice profile contributes bounded permission flags and no per-process env")
+        @DisplayName("Practice profile permits native tools without granting subprocesses to mentor")
         void runtimeFlagsForPractice() {
             String body = factory.build(spec("openai-completions", "gpt-x", false))
                     .command()
@@ -308,7 +308,8 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
 
             assertThat(body.substring(nodeIdx, scriptIdx))
                     .contains("--max-old-space-size=256")
-                    .contains("--permission");
+                    .doesNotContain("--permission", "--allow-child-process", "--allow-fs-");
+            assertThat(MENTOR.runtimeFlags()).doesNotContain("--allow-child-process");
             int lastAmp = body.lastIndexOf("&&", nodeIdx);
             int sliceStart = lastAmp >= 0 ? lastAmp + 2 : 0;
             assertThat(body.substring(sliceStart, nodeIdx)).isBlank();
@@ -319,27 +320,25 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
          * create first accepts its own {@code mkdir} and denies every write inside it.
          */
         @Test
-        void shouldCreateEveryDirectoryTheRunnerIsGrantedBeforeNodeStarts() {
-            for (PiRunnerProfile profile : List.of(PRACTICE, MENTOR)) {
-                String body = factory.build(spec(profile)).command().get(2);
-                // The precompute step runs its own `node` first, with a grant of its own.
-                int runner = body.lastIndexOf("node ");
-                int mkdir = body.indexOf("mkdir -p ");
-                assertThat(mkdir).isNotNegative();
-                assertThat(runner).isGreaterThan(mkdir);
+        void shouldCreateEveryDirectoryTheMentorIsGrantedBeforeNodeStarts() {
+            PiRunnerProfile profile = MENTOR;
+            String body = factory.build(spec(profile)).command().get(2);
+            int runner = body.lastIndexOf("node ");
+            int mkdir = body.indexOf("mkdir -p ");
+            assertThat(mkdir).isNotNegative();
+            assertThat(runner).isGreaterThan(mkdir);
 
-                String staging = body.substring(mkdir, runner);
-                List<String> granted = Pattern.compile("--allow-fs-write=(\\S+)")
-                        .matcher(body.substring(runner))
-                        .results()
-                        .map(match -> match.group(1))
-                        .toList();
-                assertThat(granted).isNotEmpty();
-                for (String directory : granted) {
-                    assertThat(staging)
-                            .as("%s creates %s before node starts", profile.runnerScript(), directory)
-                            .contains(" " + directory + " ");
-                }
+            String staging = body.substring(mkdir, runner);
+            List<String> granted = Pattern.compile("--allow-fs-write=(\\S+)")
+                    .matcher(body.substring(runner))
+                    .results()
+                    .map(match -> match.group(1))
+                    .toList();
+            assertThat(granted).isNotEmpty();
+            for (String directory : granted) {
+                assertThat(staging)
+                        .as("%s creates %s before node starts", profile.runnerScript(), directory)
+                        .contains(" " + directory + " ");
             }
         }
 

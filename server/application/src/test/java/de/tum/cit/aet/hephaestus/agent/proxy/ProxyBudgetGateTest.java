@@ -63,7 +63,11 @@ class ProxyBudgetGateTest extends BaseUnitTest {
                 spentSoFarUsd == null
                         ? null
                         : new ProxyRouting.BilledAttempt(
-                                LlmUsageSourceType.AGENT_JOB, UUID.randomUUID(), 0, new BigDecimal(spentSoFarUsd)));
+                                LlmUsageSourceType.AGENT_JOB,
+                                UUID.randomUUID(),
+                                0,
+                                new BigDecimal(spentSoFarUsd),
+                                "worker-1"));
     }
 
     @Nested

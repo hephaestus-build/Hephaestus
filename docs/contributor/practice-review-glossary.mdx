@@ -34,7 +34,7 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Source contract**                 | A versioned catalog defining each source and the meaning of its states.                                                                                                                                                                    | integration version                                               |
 | **Artifact source**                 | A registered logical input that can supply evidence.                                                                                                                                                                                       | file, mount, cache                                                |
 | **Materialization**                 | A file, database projection, cache entry, or tool result representing a source for one use.                                                                                                                                                | source kind                                                       |
-| **Job folder**                      | The directory the owning worker renders for one review attempt and deletes once the result is admitted: permitted context areas as files plus a working copy of each permitted repository.                                                 | workspace mount, evidence store, content-addressed store          |
+| **Job folder**                      | The directory the owning worker renders for one review attempt: permitted context areas as files plus a working copy of each permitted repository. [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion) owns its lifetime.                                                 | workspace mount, evidence store, content-addressed store          |
 | **Source kind**                     | A stable identifier for one logical source, such as pull request details.                                                                                                                                                                  | file type                                                         |
 | **Artifact kind**                   | The family of reviewed work a practice is about, such as `scm.pull_request`. Derived from a binding's signals, never stated separately.                                                                                                    | work type, artifact type                                          |
 | **Known limitation**                | A claim the evidence cannot support even when every requirement passes.                                                                                                                                                                    | blind spot, caveat                                                |
@@ -209,8 +209,13 @@ enrols people. How a membership row comes to exist is
 [Who counts as a person](/admin/practice-review#who-counts-as-a-person). `SELECTED` is validated against
 the same population, so a person who is not an eligible member cannot be selected.
 
-The review subject for pull requests, merge requests, and issues is their author, and
-`ReviewSubjectStatus` records which of four things it turned out to be:
+The review subject for pull requests, merge requests, and issues is their author, and a reviewer run
+is about the reviewer it names. A practice may declare another relation as its `subject`: `REVIEWER`
+for the review practices, `MERGER` for a practice about the act of merging. A review is filed against one
+person, so a `MERGER` practice is reviewed in an author run only when the author is the one who merged
+(`merged_by` is staged in `metadata.json`) and is withheld otherwise — a lapse at the merge is never filed
+against someone who did not merge. `ReviewSubjectStatus` records which of four things the subject turned
+out to be:
 `RESOLVED_LINKED_HUMAN`, `MISSING`, `NON_HUMAN`, or `UNLINKED`. Only the first can be matched against the
 person axis; the other three are never expanded to the whole eligible population. This makes coverage an
 operator-selected population while preserving the recipient's delivery preference as a separate veto.
@@ -377,7 +382,7 @@ bound to the feedback the developer received.
 | Occurrence state             | —                                  | `SignalState`                              | `artifact_signal.state`                                                       |
 | Source-use purpose           | `purpose`                          | `SourceUsePurpose`                         | source-use decisions                                                          |
 | Source absence state         | `supportedAbsenceStates`           | `SourceAbsenceState`                       | source catalog                                                                |
-| Materialization              | `artifacts`                        | `SourceArtifact`                           | manifest and content-addressed storage metadata                               |
+| Materialization              | `artifacts`                        | `SourceArtifact`                           | manifest and the attempt's staged input files                                 |
 | Practice autonomy            | `autonomy`                         | `PracticeAutonomy`                         | `practice.autonomy`, `practice_group.autonomy` (both nullable)                 |
 | Effective autonomy           | `autonomy.effective`               | `EffectiveAutonomy`                        | resolved, never stored                                                        |
 | Autonomy source              | `autonomy.source`                  | `AutonomySource`                           | resolved, never stored                                                        |
@@ -455,6 +460,4 @@ evidence, and neither contributes to the assessed-result denominator.
 7. Describe autonomy as release authority, never as loudness or reach. It does not affect the public **Profile** page.
 8. Never write bare **binding**. Two unrelated things carry the word — a *practice binding* (an occasion
    a practice is reviewed on, `PracticeBinding`) and a *model binding* (a workspace's AI model for a
-   purpose, `WorkspaceAgentBinding`) — and they send an operator to different screens. A reason code,
-   label, or javadoc that says only "binding" has already lost that distinction, which is why the reason
-   code for a missing AI model is `REVIEW_MODEL_UNBOUND` and names the thing it means.
+   purpose, `WorkspaceAgentBinding`). Use `REVIEW_MODEL_UNBOUND` for a missing AI model.

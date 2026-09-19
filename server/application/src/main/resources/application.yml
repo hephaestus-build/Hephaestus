@@ -131,7 +131,7 @@ management:
                 # checks this bounded budget against registered mappings and rejects raw URI tags.
                 max-uri-tags: 256
     tracing:
-        # Opt in separately from private execution archives; raw prompts never enter span attributes.
+        # Raw prompts never enter span attributes.
         sampling:
             probability: ${TRACING_SAMPLING_PROBABILITY:0.0}
         export:
@@ -398,16 +398,12 @@ hephaestus:
     # ═══════════════════════════════════════════════════════════════════════════
     fabric:
         root: ${HEPHAESTUS_FABRIC_ROOT:/data/git-repos}
-        gc-retention-days: ${HEPHAESTUS_FABRIC_GC_RETENTION_DAYS:30}
 
     git:
+        max-concurrent-ingestions: ${GIT_MAX_CONCURRENT_INGESTIONS:2}
         enabled: ${GIT_CHECKOUT_ENABLED:false}
-        # Bounds on one repository-tree capture. The defaults are the numbers the shipped
-        # scm.repository.tree source contract promises; a tree that exceeds them is staged up to the
-        # bound and reported PARTIAL, never COMPLETE.
-        tree-max-files: ${GIT_TREE_MAX_FILES:20000}
-        tree-max-total-size: ${GIT_TREE_MAX_TOTAL_SIZE:32MB}
-        tree-max-file-size: ${GIT_TREE_MAX_FILE_SIZE:10MB}
+        # A repository whose checkout and history exceed this is refused whole; nothing is captured in part.
+        max-snapshot-bytes: ${GIT_MAX_SNAPSHOT_BYTES:8589934592}
 
     webapp:
         url: ${HEPHAESTUS_WEBAPP_URL:${APPLICATION_HOST_URL:http://localhost:4200}}
@@ -476,9 +472,6 @@ hephaestus:
     # Controls the detection gate for the practice-aware PR review agent.
     # The gate decides whether to submit an agent job for a PR event.
     practice-review:
-        # Private prompts, source files and native Pi sessions; enable only with appropriate retention/access controls.
-        execution-capture:
-            enabled: ${PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED:false}
         # whether to deliver feedback to already-merged PRs
         deliver-to-merged: ${PRACTICE_REVIEW_DELIVER_TO_MERGED:false}
         # minimum minutes between reviews for the same PR (0 = no cooldown)
@@ -491,6 +484,10 @@ hephaestus:
         # Stop redelivering an observation the developer disputed or marked not-applicable.
         # Responses apply only to the exact observations bound to the feedback.
         reaction-suppression: ${PRACTICE_REVIEW_REACTION_SUPPRESSION:false}
+        # The sampling temperature of every model call in a practice review; unset means the model's
+        # own default. A review classifies work against fixed criteria, so a low value keeps the same
+        # work landing in the same cell run after run.
+        sampling-temperature: ${PRACTICE_REVIEW_SAMPLING_TEMPERATURE:}
         # Fleet-wide limits on backfill campaigns (ReviewBackfillProperties). max-window and
         # max-artifacts are the spend guard rails: a campaign wider than either is refused at preflight,
         # before anything is confirmed and before anything is paid for.
@@ -526,7 +523,6 @@ hephaestus:
             app-server-container-id: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:}
             # OCI runtime: null=runc (default), "runsc"=gVisor (recommended for production)
             container-runtime: ${SANDBOX_DOCKER_CONTAINER_RUNTIME:}
-            cli: ${SANDBOX_DOCKER_CLI:docker}
             owner: ${SANDBOX_DOCKER_OWNER:default}
         max-concurrent-containers: ${SANDBOX_MAX_CONCURRENT:5}
         container-stop-timeout-seconds: ${SANDBOX_STOP_TIMEOUT:10}
@@ -535,8 +531,6 @@ hephaestus:
             port: ${SANDBOX_API_PORT:8081}
             max-request-bytes: ${SANDBOX_API_MAX_REQUEST_BYTES:4194304}
             requests-per-minute: ${SANDBOX_API_REQUESTS_PER_MINUTE:120}
-        max-directory-bytes: ${SANDBOX_MAX_DIRECTORY_BYTES:1073741824}  # 1 GB
-        max-directory-entries: ${SANDBOX_MAX_DIRECTORY_ENTRIES:500000}
         default-resource-limits:
             memory-bytes: ${SANDBOX_MEMORY_BYTES:4294967296}  # 4 GB (includes tmpfs)
             cpus: ${SANDBOX_CPUS:2.0}

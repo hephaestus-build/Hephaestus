@@ -18,6 +18,7 @@
 		"@types/node": "24.13.3",
 		"@types/npm-package-arg": "6.1.4",
 		"@types/pg": "8.23.1",
+		"@types/ws": "8.18.1",
 		"ajv": "8.20.0",
 		"ajv-formats": "3.0.1",
 		"commander": "15.0.0",
@@ -30,6 +31,7 @@
 		"mdast-util-mdx": "3.0.0",
 		"mermaid": "11.17.2",
 		"micromark-extension-mdxjs": "3.0.0",
+		"minimatch": "10.2.5",
 		"mprocs": "0.9.6",
 		"npm-package-arg": "14.0.0",
 		"oxfmt": "catalog:",
@@ -39,6 +41,7 @@
 		"surge": "0.44.0",
 		"typescript": "7.0.2",
 		"vite-plus": "0.3.0",
+		"ws": "8.21.3",
 		"yaml": "2.9.0"
 	},
 	"devEngines": {

@@ -59,7 +59,7 @@ export const EvidenceAcrossSources: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("3 passages from 3 sources.");
 		canvas.getByRole("heading", { name: "The code changes", level: 4 });
-		canvas.getByRole("heading", { name: "Files in the repository", level: 4 });
+		canvas.getByRole("heading", { name: "Files and history in the repository", level: 4 });
 		canvas.getByRole("heading", { name: "Review threads on the code", level: 4 });
 		await expect(canvas.queryByText(/scm\.pull-request/)).not.toBeInTheDocument();
 	},

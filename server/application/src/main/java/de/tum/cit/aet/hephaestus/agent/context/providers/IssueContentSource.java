@@ -42,7 +42,6 @@ import tools.jackson.databind.node.ObjectNode;
  * <ul>
  *   <li>{@code metadata.json} — issue metadata (state, labels, assignees, milestone, sub-issue rollup)</li>
  *   <li>{@code comments.json} — the ordered discussion thread</li>
- *   <li>{@code issue_summary.md} — a single AI-readable rendering of the issue + thread</li>
  * </ul>
  *
  * <p>An issue that is missing, tombstoned, or changed since its review was admitted makes the source
@@ -178,41 +177,10 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
                     .sorted()
                     .forEach(assignees::add);
             writeJson(files, "metadata.json", meta);
-            StringBuilder md = new StringBuilder(512);
-            md.append("# Issue #")
-                    .append(issue.getNumber())
-                    .append(" — ")
-                    .append(issue.getTitle())
-                    .append("\n\n");
-            md.append("- **State:** ").append(issue.getState());
-            if (issue.getStateReason() != null)
-                md.append(" (").append(issue.getStateReason()).append(")");
-            md.append("\n");
-            md.append("- **Repository:** ").append(repoFullName).append("\n");
-            if (issue.getIssueType() != null) {
-                md.append("- **Type:** ").append(issue.getIssueType().getName()).append("\n");
-            }
-            if (!issue.getLabels().isEmpty()) {
-                md.append("- **Labels:** ")
-                        .append(String.join(
-                                ", ",
-                                issue.getLabels().stream()
-                                        .map(l -> l.getName())
-                                        .sorted()
-                                        .toList()))
-                        .append("\n");
-            }
-            if (issue.getSubIssuesTotal() != null && issue.getSubIssuesTotal() > 0) {
-                md.append("- **Sub-issues:** ")
-                        .append(issue.getSubIssuesCompleted() != null ? issue.getSubIssuesCompleted() : 0)
-                        .append("/")
-                        .append(issue.getSubIssuesTotal())
-                        .append(" completed\n");
-            }
-            md.append("\n## Description\n\n")
-                    .append(issue.getBody() != null ? issue.getBody() : "_(empty)_")
-                    .append("\n");
-            files.put(OUTPUT_PREFIX + "issue_summary.md", md.toString().getBytes(StandardCharsets.UTF_8));
+            // The description as written, for quoting; metadata.json carries it escaped, for programs.
+            files.put(
+                    OUTPUT_PREFIX + "description.md",
+                    (issue.getBody() == null ? "" : issue.getBody()).getBytes(StandardCharsets.UTF_8));
             completeness.put(CORE, SourceCompleteness.COMPLETE);
             if (issue.getLastSyncAt() != null) {
                 observedAt.put(CORE, issue.getLastSyncAt());
@@ -264,7 +232,9 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
 
     private void writeJson(Map<String, byte[]> files, String name, Object node) {
         try {
-            files.put(OUTPUT_PREFIX + name, objectMapper.writeValueAsBytes(node));
+            files.put(
+                    OUTPUT_PREFIX + name,
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(node));
         } catch (Exception e) {
             throw new JobPreparationException("Failed to serialize " + name + ": " + e.getMessage(), e);
         }

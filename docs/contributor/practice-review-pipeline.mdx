@@ -188,6 +188,16 @@ unavailable, redacted, errored — with a typed reason) and how a practice's sta
 a readiness decision is the whole subject of the
 [artifact-source contract](./artifact-source-contract.mdx), which is versioned and validated at startup.
 
+Capture projects; it does not interpret. A source reaches the sandbox as the stored record shaped into
+JSON, or as a checkout — never as a summary, a count, an excerpt or a diff computed on the server. The
+change a pull request review is about is captured as its pinned `base_sha` and `head_sha`
+(`inputs/context/change.json`) beside the checkout, and the container derives the patch, its statistics,
+the changed files and the commits from that checkout with `git` before the model runs
+(`pi-change.ts`, under `work/change/`). Practice-specific extraction lives in the practices' precompute
+scripts, which run in the same container on the same files. The server reads the change only to
+decide which practices have their declared subject in it (readiness) and to verify what comes back
+(admission) — see the [workspace ABI](./agent/workspace-abi.mdx) for the layout.
+
 Do not restate that contract here. The one fact this page owns is where the readiness verdict lands:
 `agent_job.review_readiness`, its own `jsonb` column, split out from `evidence_snapshot` because a snapshot
 carries one entry per staged file and a TOASTed `jsonb` has no partial read.
@@ -205,6 +215,11 @@ expectation; each observation identifies the behavior whose presence and desirab
 Status-specific warrants and citations are enforced both inside the sandbox and by the server.
 Capture failure remains a readiness decision and creates no observation. Unassessed statuses do not
 create positive or negative feedback and do not move the assessed-result trend denominator.
+
+Admission is single-flight per attempt. Verifying a historical citation reads the attempt's repository
+snapshot, so a runner that repeats a submission whose answer did not arrive joins the admission already
+running and receives its answer; a repeat carrying a different payload is refused as a conflict, and an
+attempt that was already admitted answers with the recorded result.
 
 Identity is assigned at persistence, not in the sandbox: an occurrence key dedupes within a run
 (`insertIfAbsent`, `ON CONFLICT DO NOTHING`), and a recurrence key groups the evidence location across runs.

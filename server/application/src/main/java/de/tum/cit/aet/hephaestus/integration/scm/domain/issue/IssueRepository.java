@@ -190,6 +190,23 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
     List<Issue> findIssueInventoryByRepositoryId(@Param("repositoryId") long repositoryId, Pageable pageable);
 
     /**
+     * How many of a repository's issues carry at least one label, and which label names are in use — the
+     * two facts that say whether the project has a labelling convention at all, without fetching the label
+     * collection of every inventory row.
+     */
+    @Query("SELECT COUNT(DISTINCT i.id) FROM Issue i JOIN i.labels l "
+            + "WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId AND i.deletedAt IS NULL")
+    long countLabelledIssuesByRepositoryId(@Param("repositoryId") long repositoryId);
+
+    @Query(
+            "SELECT COUNT(i) FROM Issue i WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId AND i.deletedAt IS NULL")
+    long countIssuesByRepositoryId(@Param("repositoryId") long repositoryId);
+
+    @Query("SELECT DISTINCT l.name FROM Issue i JOIN i.labels l "
+            + "WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId AND i.deletedAt IS NULL ORDER BY l.name")
+    List<String> findLabelNamesInUseByRepositoryId(@Param("repositoryId") long repositoryId);
+
+    /**
      * Nullifies milestone references on all issues that reference the given milestone.
      * <p>
      * This is a direct database update that doesn't rely on Hibernate's collection state.

@@ -223,7 +223,7 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("inject writes index.json, the per-slug + bundled criteria, and skips blank precompute scripts")
+    @DisplayName("inject writes index.json and the per-slug criteria, and skips blank precompute scripts")
     void injectWritesCatalogArtifactsAndSkipsBlankPrecompute() {
         Practice withScript = practice("authoring", ScmSignals.PULL_REQUEST_OPENED);
         withScript.setPrecomputeScript("export default () => ({});");
@@ -242,11 +242,11 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
         // is what the run staged, and inputs/manifest.json is where that is stated, once.
         assertThat(index).contains("readsSources").contains("scm.pull-request.diff");
         assertThat(index).doesNotContain("allowedSources");
-        // Per-slug criteria + the all-criteria bundle are present.
-        assertThat(files).containsKey(md("authoring")).containsKey(md("retrospective"));
-        String bundle =
-                new String(files.get(SandboxLayout.PRACTICES_PREFIX + "all-criteria.md"), StandardCharsets.UTF_8);
-        assertThat(bundle).contains("# authoring").contains("# retrospective");
+        // Per-slug criteria only: the model reads each practice's own file, so there is no bundle to drift.
+        assertThat(files)
+                .containsKey(md("authoring"))
+                .containsKey(md("retrospective"))
+                .doesNotContainKey(SandboxLayout.PRACTICES_PREFIX + "all-criteria.md");
         // Only the populated precompute script is written; the blank one is skipped.
         assertThat(files).containsKey(SandboxLayout.PRECOMPUTE_PREFIX + "practices/authoring.ts");
         assertThat(files).doesNotContainKey(SandboxLayout.PRECOMPUTE_PREFIX + "practices/retrospective.ts");

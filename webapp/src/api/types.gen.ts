@@ -1397,6 +1397,7 @@ export type EvidenceCitation = {
   path: string;
   quote?: string;
   quoteRedacted: boolean;
+  revision?: string;
   side?: 'OLD' | 'NEW';
   sourceKind: string;
   startLine: number;
@@ -2866,7 +2867,7 @@ export type PracticeBinding = {
   /**
    * Whose conduct this review judges; omit for AUTHOR
    */
-  subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER';
+  subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
 };
 
 /**

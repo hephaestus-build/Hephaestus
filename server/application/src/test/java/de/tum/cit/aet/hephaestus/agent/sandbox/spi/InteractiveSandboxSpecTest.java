@@ -28,7 +28,6 @@ class InteractiveSandboxSpecTest extends BaseUnitTest {
                 new NetworkPolicy(true, null, null),
                 new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofMinutes(1)),
                 SecurityProfile.DEFAULT,
-                Map.of(),
                 Map.of());
     }
 
@@ -85,7 +84,6 @@ class InteractiveSandboxSpecTest extends BaseUnitTest {
                 new NetworkPolicy(true, null, null),
                 new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofMinutes(1)),
                 SecurityProfile.DEFAULT,
-                Map.of(),
                 Map.of());
         cmd.set(0, "/bin/sh");
         cmd.add("-c");

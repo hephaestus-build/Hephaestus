@@ -155,7 +155,7 @@ export const EverySource: Story = {
 				"The pull request itself",
 				"The code changes",
 				"Comments on the pull request",
-				"Files in the repository",
+				"Files and history in the repository",
 				"The issue itself",
 				"Comments on the issue",
 				"The document itself",
@@ -261,5 +261,16 @@ export const Mobile: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByRole("heading", { name: "The code changes", level: 4 });
 		await expectNoPageOverflow();
+	},
+};
+
+export const HistoricalSource: Story = {
+	args: {
+		evidence: {
+			citations: [citation("scm.repository.tree", { revision: "b".repeat(40) })],
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("b".repeat(40))).toBeVisible();
 	},
 };

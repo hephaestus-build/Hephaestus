@@ -111,7 +111,17 @@ export const OnlyThePendingCardIsFrozen: Story = {
 export const AdvancedDisclosure: Story = {
 	play: async ({ canvas }) => {
 		await openPracticeReviewAdvanced(canvas);
-		purposeCard(canvas, "Practice reviews").getByLabelText("Timeout (seconds)");
+		const card = purposeCard(canvas, "Practice reviews");
+		card.getByLabelText("Timeout (seconds)");
+		await expect(card.queryByRole("switch", { name: "Internet access" })).toBeNull();
+	},
+};
+
+export const HephAdvancedOffersInternetAccess: Story = {
+	play: async ({ canvas }) => {
+		const card = purposeCard(canvas, "Heph");
+		await userEvent.click(card.getByRole("button", { name: /Advanced/ }));
+		await expect(card.getByRole("switch", { name: "Internet access" })).not.toBeChecked();
 	},
 };
 

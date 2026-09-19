@@ -91,7 +91,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     private ProxyRouting.BilledAttempt attempt(UUID turnId) {
-        return new ProxyRouting.BilledAttempt(LlmUsageSourceType.MENTOR_TURN, turnId, 0, BigDecimal.ZERO);
+        return new ProxyRouting.BilledAttempt(LlmUsageSourceType.MENTOR_TURN, turnId, 0, BigDecimal.ZERO, null);
     }
 
     private void accumulate(UUID turnId, ProxyTokenUsage usage) {

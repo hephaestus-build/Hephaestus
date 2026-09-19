@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.ContainerSecurityPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerClientOperations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.LiveSandboxGateway;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxLabels;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxNetworkManager;
@@ -81,6 +82,7 @@ class DockerInteractiveSandboxLiveTest {
     private DockerClient dockerClient;
     private DockerClientOperations dockerOps;
     private SandboxNetworkManager networkManager;
+    private LiveSandboxGateway gateway;
     private SandboxWorkspaceManager workspaceManager;
     private SandboxContainerManager containerManager;
     private ContainerSecurityPolicy securityPolicy;
@@ -100,9 +102,10 @@ class DockerInteractiveSandboxLiveTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        SandboxProperties sandboxProperties = new SandboxProperties(5, 10, 60, 209_715_200L, 500_000, null);
+        gateway = new LiveSandboxGateway();
+        SandboxProperties sandboxProperties = new SandboxProperties(5, 10, 60, null);
         var dockerProperties = new DockerSandboxProperties(
-                "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
+                "unix:///var/run/docker.sock", false, null, null, gateway.containerId(), "default");
         // Tight TTL so idle eviction tests don't have to wait minutes.
         InteractiveSandboxProperties interactiveProperties = new InteractiveSandboxProperties(
                 /* idleTtlSeconds */ 2,
@@ -128,7 +131,7 @@ class DockerInteractiveSandboxLiveTest {
         containerManager =
                 new SandboxContainerManager(dockerOps, image -> {}, sandboxProperties, "default", dockerWaitExecutor);
         networkManager = new SandboxNetworkManager(dockerOps, dockerProperties);
-        workspaceManager = new SandboxWorkspaceManager(dockerOps);
+        workspaceManager = new SandboxWorkspaceManager();
         securityPolicy = new ContainerSecurityPolicy(dockerProperties, null);
         meterRegistry = new SimpleMeterRegistry();
         metrics = new InteractiveSandboxMetrics(meterRegistry);
@@ -147,14 +150,17 @@ class DockerInteractiveSandboxLiveTest {
                 MAPPER,
                 dockerWaitExecutor,
                 dockerProperties,
-                8080,
-                proxyCredentialRegistry);
+                gateway.port(),
+                proxyCredentialRegistry,
+                gateway.sessions(),
+                dockerOps);
 
         runnerBytes = Files.readAllBytes(Path.of("src/main/resources/agent/pi-mentor-runner.ts"));
     }
 
     @AfterEach
     void cleanup() throws Exception {
+        if (gateway != null) gateway.close();
         if (registry != null) {
             registry.shutdown();
         }
@@ -195,11 +201,10 @@ class DockerInteractiveSandboxLiveTest {
                 AGENT_PI_IMAGE,
                 List.of("node", "/workspace/.runner/pi-mentor-runner.ts"),
                 Map.of(),
-                new NetworkPolicy(true, null, null),
+                new NetworkPolicy(true, null, "live-gateway-token"),
                 new ResourceLimits(512 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(5)),
                 sec,
-                Map.of(".runner/pi-mentor-runner.ts", runnerBytes),
-                Map.of());
+                Map.of(".runner/pi-mentor-runner.ts", runnerBytes));
     }
 
     private InteractiveSandboxSpec buildSpecWithProxyRoute(
@@ -219,8 +224,7 @@ class DockerInteractiveSandboxLiveTest {
                 new NetworkPolicy(true, null, minted),
                 base.resourceLimits(),
                 base.securityProfile(),
-                base.inputFiles(),
-                base.volumeMounts());
+                base.inputFiles());
     }
 
     private static InteractiveSandboxSpec withContextSnapshot(InteractiveSandboxSpec base, String snapshot) {
@@ -236,8 +240,7 @@ class DockerInteractiveSandboxLiveTest {
                 base.networkPolicy(),
                 base.resourceLimits(),
                 base.securityProfile(),
-                inputs,
-                base.volumeMounts());
+                inputs);
     }
 
     private static JsonNode ping() {
@@ -530,11 +533,10 @@ class DockerInteractiveSandboxLiveTest {
                     AGENT_PI_IMAGE,
                     List.of("node", "/workspace/.runner/pi-mentor-runner.ts"),
                     Map.of(),
-                    new NetworkPolicy(true, null, null),
+                    new NetworkPolicy(true, null, "live-gateway-token"),
                     new ResourceLimits(512 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(5)),
                     sec,
-                    Map.of(".runner/pi-mentor-runner.ts", runnerBytes),
-                    Map.of());
+                    Map.of(".runner/pi-mentor-runner.ts", runnerBytes));
             AttachedSandbox sb = adapter.attach(piSpec);
             assertThat(((DockerAttachedSandboxAdapter) sb).state()).isEqualTo(AttachedSandboxState.ATTACHED);
             sb.close(Duration.ofSeconds(2));
@@ -560,8 +562,7 @@ class DockerInteractiveSandboxLiveTest {
                     base.networkPolicy(),
                     base.resourceLimits(),
                     base.securityProfile(),
-                    base.inputFiles(),
-                    base.volumeMounts());
+                    base.inputFiles());
             Assertions.assertThatThrownBy(() -> adapter.attach(brokenSpec))
                     .isInstanceOf(InteractiveSandboxException.class);
             // Must distinguish runner-crash from flow-control timeout for dashboards.
@@ -606,8 +607,7 @@ class DockerInteractiveSandboxLiveTest {
                 plan.networkPolicy(),
                 ResourceLimits.DEFAULT,
                 SecurityProfile.DEFAULT,
-                plan.inputFiles(),
-                Map.of());
+                plan.inputFiles());
     }
 
     @Nested

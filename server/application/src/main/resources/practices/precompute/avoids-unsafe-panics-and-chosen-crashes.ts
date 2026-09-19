@@ -2,6 +2,8 @@
 // in the diff, across languages. These are CANDIDATES to investigate — the LLM decides whether each is a
 // real, unsafe crash a realistic input/state can trigger. General by design: a per-language pattern table
 // keyed off the file extension, NOT a Swift-only scan. Adding a language = adding a row, no engine change.
+import { isCommentLine } from "../lib/declarations.ts";
+import { languageOf } from "../lib/languages.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 // language key -> [human label, regex] of deliberate-crash / force-unwrap constructs in ADDED code.
@@ -13,12 +15,18 @@ const LANG_PATTERNS: Record<string, Array<[string, RegExp]>> = {
 		["preconditionFailure", /\bpreconditionFailure\s*\(/],
 		["assertionFailure", /\bassertionFailure\s*\(/],
 		["force-unwrap", /[A-Za-z0-9_)\]]!(\.|\s|$|\))/],
+		// The closed list the criteria decide the occasion by continues with the traps that are not
+		// spelled with a bang: a subscript whose index is not a literal, a lossy numeric conversion of
+		// a runtime value, and a division or modulo by a non-literal.
+		["subscript with a non-literal index", /[A-Za-z_][A-Za-z0-9_.]*\[\s*[A-Za-z_(][^\]\n]*\]/],
+		["lossy numeric conversion", /\b(U?Int(8|16|32|64)?)\(\s*[A-Za-z_(]/],
+		["division or modulo by a non-literal", /\S\s[/%]\s[A-Za-z_(]/],
 	],
-	ts: [
+	typescript: [
 		["process.exit", /\bprocess\.exit\s*\(/],
 		["non-null assertion", /[A-Za-z0-9_)\]]![.;)\s]/],
 	],
-	js: [["process.exit", /\bprocess\.exit\s*\(/]],
+	javascript: [["process.exit", /\bprocess\.exit\s*\(/]],
 	python: [
 		["sys.exit", /\bsys\.exit\s*\(/],
 		["os._exit", /\bos\._exit\s*\(/],
@@ -56,6 +64,12 @@ const LANG_PATTERNS: Record<string, Array<[string, RegExp]>> = {
 		["exit(", /\bexit\s*\(/],
 		["assert(", /\bassert\s*\(/],
 	],
+	// Objective-C is C with Cocoa's assertion macros, not Swift: no bang operators to find.
+	"objective-c": [
+		["abort(", /\babort\s*\(/],
+		["exit(", /\bexit\s*\(/],
+		["NSAssert", /\bNS(?:C)?Assert\s*\(/],
+	],
 	csharp: [
 		["Environment.Exit", /\bEnvironment\.Exit\s*\(/],
 		["Environment.FailFast", /\bEnvironment\.FailFast\s*\(/],
@@ -65,50 +79,6 @@ const LANG_PATTERNS: Record<string, Array<[string, RegExp]>> = {
 	],
 };
 
-// extension -> language key. One source of truth for both pattern lookup and comment syntax.
-const EXT_LANG: Record<string, string> = {
-	swift: "swift",
-	m: "swift",
-	mm: "swift",
-	ts: "ts",
-	tsx: "ts",
-	mts: "ts",
-	cts: "ts",
-	js: "js",
-	jsx: "js",
-	mjs: "js",
-	cjs: "js",
-	py: "python",
-	go: "go",
-	java: "java",
-	kt: "kotlin",
-	kts: "kotlin",
-	rs: "rust",
-	rb: "ruby",
-	c: "c",
-	h: "c",
-	cc: "c",
-	cpp: "c",
-	cxx: "c",
-	hpp: "c",
-	cs: "csharp",
-};
-
-function langOf(path: string): string | null {
-	const ext = path.split(".").pop()?.toLowerCase() ?? "";
-	return EXT_LANG[ext] ?? null;
-}
-
-// Strip the obvious comment forms so we don't flag a pattern that only appears inside a comment.
-function isComment(trimmed: string): boolean {
-	return (
-		trimmed.startsWith("//") ||
-		trimmed.startsWith("#") ||
-		trimmed.startsWith("*") ||
-		trimmed.startsWith("/*")
-	);
-}
-
 export default function avoidsUnsafePanicsAndChosenCrashes(
 	_repo: string,
 	diffFiles: Map<string, DiffFile>,
@@ -117,13 +87,12 @@ export default function avoidsUnsafePanicsAndChosenCrashes(
 	const hints: Hint[] = [];
 	const byLang: Record<string, number> = {};
 	for (const [path, df] of diffFiles) {
-		const lang = langOf(path);
+		const lang = languageOf(path);
 		if (!lang) continue;
 		const patterns = LANG_PATTERNS[lang];
 		if (!patterns) continue;
 		for (const [line, content] of df.addedLines) {
-			const trimmed = content.trimStart();
-			if (isComment(trimmed)) continue;
+			if (isCommentLine(content, lang)) continue;
 			for (const [name, re] of patterns) {
 				if (re.test(content)) {
 					hints.push({

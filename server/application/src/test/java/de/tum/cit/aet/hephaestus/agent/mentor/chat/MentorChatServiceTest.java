@@ -989,7 +989,6 @@ class MentorChatServiceTest extends BaseUnitTest {
                 null,
                 ResourceLimits.DEFAULT,
                 SecurityProfile.DEFAULT,
-                Map.of(),
                 Map.of());
     }
 

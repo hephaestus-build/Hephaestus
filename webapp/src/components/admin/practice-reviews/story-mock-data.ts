@@ -172,13 +172,13 @@ function practiceFixture(
 				mode: "LANGUAGE_MODEL",
 			},
 			knownLimitations: [],
-			sourceContractVersion: "1.0.0",
+			sourceContractVersion: "1.2.0",
 			whenEvidenceIsInsufficient: "SKIP_AUTOMATED_REVIEW",
 		},
 		automatedReviewValidation: {
 			policyDigest: "sha256:0",
 			reviewRuleFingerprint: "rule:1",
-			sourceContractVersion: "1.0.0",
+			sourceContractVersion: "1.2.0",
 			status: "AUTHOR_DECLARED",
 		},
 	};
@@ -323,7 +323,7 @@ const diff = (
 	quote: string,
 ): EvidenceCitation => ({
 	sourceKind: "scm.pull-request.diff",
-	artifactPath: "inputs/context/diff.patch",
+	artifactPath: "inputs/context/change.json",
 	path,
 	side: "NEW",
 	startLine,

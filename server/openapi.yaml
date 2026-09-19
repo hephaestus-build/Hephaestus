@@ -10218,6 +10218,8 @@ components:
           type: string
         quoteRedacted:
           type: boolean
+        revision:
+          type: string
         side:
           type: string
           enum:
@@ -12269,6 +12271,7 @@ components:
           - AUTHOR
           - ASSIGNEE
           - REVIEWER
+          - MERGER
       required:
       - needs
       - signals
@@ -12279,7 +12282,7 @@ components:
         sourceContractVersion:
           type: string
           description: Source contract these options describe
-          example: 1.0.0
+          example: 1.2.0
         workTypes:
           type: array
           items:

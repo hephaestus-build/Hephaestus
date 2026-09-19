@@ -2,9 +2,15 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
@@ -19,14 +25,18 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import tools.jackson.databind.JsonNode;
@@ -37,6 +47,10 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
 
     private static final long REPO_ID = 123L;
     private static final long PR_ID = 456L;
+    private static final RepositoryKey KEY = new RepositoryKey(99L, REPO_ID);
+    private static final String HEAD = "abc123def456";
+    private static final String BASE = "a".repeat(40);
+    private static final SourceKind KIND = new SourceKind("scm.linked-work-items");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -50,14 +64,18 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
     private GitRepositoryManager gitRepositoryManager;
 
     @Mock
-    private GitDiffOperations gitDiffOperations;
+    private ReviewRepositoryPreparer repositoryPreparer;
 
     private LinkedWorkItemContentSource provider;
 
     @BeforeEach
     void setUp() {
         provider = new LinkedWorkItemContentSource(
-                objectMapper, pullRequestRepository, issueRepository, gitRepositoryManager, gitDiffOperations);
+                objectMapper, pullRequestRepository, issueRepository, gitRepositoryManager, repositoryPreparer);
+        lenient()
+                .when(repositoryPreparer.prepare(any()))
+                .thenReturn(new ReviewRepositoryPreparer.PreparedReview(KEY, HEAD, BASE));
+        lenient().when(repositoryPreparer.authorize(any())).thenReturn(KEY);
         // Git disabled by default; the commit-subject scan must no-op. Individual tests enable it.
         lenient().when(gitRepositoryManager.isEnabled()).thenReturn(false);
     }
@@ -68,7 +86,8 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         metadata.put("pull_request_id", PR_ID);
         metadata.put("source_branch", "feature/auth-fix");
         metadata.put("target_branch", "main");
-        metadata.put("commit_sha", "abc123def456");
+        metadata.put("base_ref_oid", BASE);
+        metadata.put("commit_sha", HEAD);
         return metadata;
     }
 
@@ -91,72 +110,39 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         return issue;
     }
 
-    @Test
-    void preservesTemplateExamplesAndAuthoredInlineReferencesAsTextCandidates() throws Exception {
-        String body =
-                "- [ ] Related issue is linked (e.g., `Closes #12`)\nImplemented the requested fix: `Closes #42`.";
+    private void pullRequestWithBody(String body) {
         var pr = new PullRequest();
         pr.setBody(body);
+        pr.setHeadRefName("feature/auth-fix");
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 12))
-                .thenReturn(Optional.of(issue(12, "Example", "")));
-        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42))
-                .thenReturn(Optional.of(issue(42, "Requested fix", "")));
-        var capture = provider.capture(request(sampleMetadata()), Set.of(new SourceKind("scm.linked-work-items")));
-        var items = objectMapper
-                .readTree(capture.files().get("inputs/context/linked_work_items.json"))
-                .get("workItems");
-        assertThat(items).hasSize(2);
-        for (var item : items) {
-            assertThat(item.get("referenceKind").asString()).isEqualTo("TEXT_MENTION");
-            assertThat(item.has("closingKeyword")).isFalse();
-            assertThat(item.has("authorAdopted")).isFalse();
-            assertThat(item.get("matchedClosingKeyword").asBoolean()).isTrue();
-        }
-        assertThat(items.get(0).get("mentions").get(0).get("excerpt").asString())
-                .isEqualTo(body.split("\n")[0]);
-        assertThat(items.get(1).get("mentions").get(0).get("excerpt").asString())
-                .isEqualTo(body.split("\n")[1]);
     }
 
-    @Test
-    void templateClosingExampleDoesNotHideLaterAuthoredBareMention() throws Exception {
-        String example = "Example: `Closes #12`.";
-        String authored = "For the intended check, follow the acceptance criteria in #12.";
-        var pr = new PullRequest();
-        pr.setBody(example + "\n" + authored);
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 12)).thenReturn(Optional.of(issue(12, "Work", "")));
-        var capture = provider.capture(request(sampleMetadata()), provider.sourceKinds());
-        var item = objectMapper
-                .readTree(capture.files().get("inputs/context/linked_work_items.json"))
-                .get("workItems")
-                .get(0);
-        assertThat(item.get("matchedClosingKeyword").asBoolean()).isTrue();
-        assertThat(item.get("mentions")).hasSize(2);
-        assertThat(item.get("mentions").get(0).get("excerpt").asString()).isEqualTo(example);
-        assertThat(item.get("mentions").get(1).get("excerpt").asString()).isEqualTo(authored);
+    private void commitSubjects(String... subjects) {
+        when(gitRepositoryManager.isEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+                    Consumer<String> consumer = invocation.getArgument(3);
+                    for (String subject : subjects) consumer.accept(subject);
+                    return null;
+                })
+                .when(gitRepositoryManager)
+                .forEachCommitSubject(eq(KEY), eq(BASE), eq(HEAD), any());
     }
 
-    @Test
-    void candidateContextsHaveBoundedExactExcerpts() throws Exception {
-        var pr = new PullRequest();
-        String body = "prefix ".repeat(100) + "Closes #42" + " suffix".repeat(100);
-        pr.setBody(body);
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.of(issue(42, "Work", "")));
-        var capture = provider.capture(request(sampleMetadata()), Set.of(new SourceKind("scm.linked-work-items")));
-        var mention = objectMapper
-                .readTree(capture.files().get("inputs/context/linked_work_items.json"))
-                .get("workItems")
-                .get(0)
-                .get("mentions")
-                .get(0);
-        String excerpt = mention.get("excerpt").asString();
-        assertThat(excerpt.length()).isLessThanOrEqualTo(240);
-        assertThat(excerpt).contains("Closes #42");
-        assertThat(body).contains(excerpt);
-        assertThat(mention.get("excerptTruncated").asBoolean()).isTrue();
+    private JsonNode payload(ObjectNode metadata) throws Exception {
+        var captured = provider.capture(request(metadata), Set.of(KIND));
+        assertThat(captured.files()).containsKey(LinkedWorkItemContentSource.OUTPUT_FILE);
+        return objectMapper.readTree(captured.files().get(LinkedWorkItemContentSource.OUTPUT_FILE));
+    }
+
+    private static List<Integer> numbers(JsonNode array) {
+        return array.valueStream().map(JsonNode::asInt).toList();
+    }
+
+    private static List<Integer> itemNumbers(JsonNode root) {
+        return root.get("workItems")
+                .valueStream()
+                .map(item -> item.get("number").asInt())
+                .toList();
     }
 
     @Test
@@ -169,314 +155,356 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         assertThat(provider.required()).isFalse();
     }
 
-    @Test
-    void resolvesClosingRefFromBodyWithAcceptanceCriteriaExcerpt() throws Exception {
-        PullRequest pr = new PullRequest();
-        pr.setBody("This MR is part of the auth epic.\n\nCloses #42");
-        pr.setHeadRefName("feature/auth-fix");
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+    @Nested
+    class Payload {
 
-        Label backend = new Label();
-        backend.setName("backend");
-        Issue linked = issue(42, "Add token refresh", "Acceptance criteria: the session must refresh silently.");
-        linked.setLabels(Set.of(backend));
-        linked.setSubIssuesTotal(3);
-        linked.setSubIssuesCompleted(1);
-        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.of(linked));
+        @Test
+        void shouldWriteWhatTheRepositoryKnowsAboutEachReferencedIssue() throws Exception {
+            pullRequestWithBody("This MR is part of the auth epic.\n\nCloses #42");
+            Label backend = new Label();
+            backend.setName("backend");
+            Issue linked = issue(42, "Add token refresh", "Acceptance criteria: the session must refresh silently.");
+            linked.setLabels(Set.of(backend));
+            linked.setSubIssuesTotal(3);
+            linked.setSubIssuesCompleted(1);
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.of(linked));
 
-        Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(request(sampleMetadata()), files);
+            JsonNode root = payload(sampleMetadata());
 
-        assertThat(files).containsKey("inputs/context/linked_work_items.json");
-        JsonNode root = objectMapper.readTree(files.get("inputs/context/linked_work_items.json"));
-        JsonNode items = root.get("workItems");
-        assertThat(items).hasSize(1);
-        JsonNode item = items.get(0);
-        assertThat(item.get("number").asInt()).isEqualTo(42);
-        assertThat(item.get("title").asString()).isEqualTo("Add token refresh");
-        assertThat(item.get("state").asString()).isEqualTo("OPEN");
-        assertThat(item.get("url").asString()).isEqualTo("https://example.com/issues/42");
-        assertThat(item.get("matchedClosingKeyword").asBoolean()).isTrue();
-        assertThat(item.get("bodyExcerpt").asString()).contains("Acceptance criteria");
-        assertThat(item.get("labels").get(0).asString()).isEqualTo("backend");
-        assertThat(item.get("subIssuesTotal").asInt()).isEqualTo(3);
-        assertThat(item.get("subIssuesCompleted").asInt()).isEqualTo(1);
-
-        JsonNode resolvedFrom = root.get("resolvedFrom");
-        assertThat(resolvedFrom.get(0).asString()).isEqualTo("body");
-    }
-
-    @Test
-    void bareMentionIsNotClosing() throws Exception {
-        PullRequest pr = new PullRequest();
-        pr.setBody("Related to #7 — see context.");
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 7))
-                .thenReturn(Optional.of(issue(7, "Background", "Some background")));
-
-        Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(request(sampleMetadata()), files);
-
-        JsonNode root = objectMapper.readTree(files.get("inputs/context/linked_work_items.json"));
-        assertThat(root.get("workItems").get(0).get("matchedClosingKeyword").asBoolean())
-                .isFalse();
-    }
-
-    @Test
-    void bareMentionEndingASentenceWithAPeriodIsResolved() throws Exception {
-        // "This relates to #42." — the trailing sentence period must NOT swallow the reference, while a
-        // version like #1.2 (digit after the dot) is still rejected.
-        PullRequest pr = new PullRequest();
-        pr.setBody("This work relates to #42. It also touches the version bump #1.2 which is not an issue.");
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42))
-                .thenReturn(Optional.of(issue(42, "Trailing period ref", "Some body")));
-
-        Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(request(sampleMetadata()), files);
-
-        assertThat(files).containsKey("inputs/context/linked_work_items.json");
-        JsonNode root = objectMapper.readTree(files.get("inputs/context/linked_work_items.json"));
-        JsonNode items = root.get("workItems");
-        // Exactly #42 resolves; the version-looking #1.2 is rejected (and #1 was never looked up).
-        assertThat(items).hasSize(1);
-        assertThat(items.get(0).get("number").asInt()).isEqualTo(42);
-        assertThat(items.get(0).get("matchedClosingKeyword").asBoolean()).isFalse();
-    }
-
-    @Test
-    void resolvesIssueIdFromBranchSlugWhenNoBodyRef() throws Exception {
-        PullRequest pr = new PullRequest();
-        pr.setBody("No references in body.");
-        pr.setHeadRefName("feat/18-improve-logging");
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 18))
-                .thenReturn(Optional.of(issue(18, "Improve logging", "criteria")));
-
-        ObjectNode metadata = sampleMetadata();
-        metadata.put("source_branch", "feat/18-improve-logging");
-
-        Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(request(metadata), files);
-
-        JsonNode root = objectMapper.readTree(files.get("inputs/context/linked_work_items.json"));
-        assertThat(root.get("workItems").get(0).get("number").asInt()).isEqualTo(18);
-        assertThat(root.get("resolvedFrom").toString()).contains("branch");
-    }
-
-    @Test
-    void excerptIsCappedAtTheConfiguredWindow() throws Exception {
-        PullRequest pr = new PullRequest();
-        pr.setBody("Fixes #5");
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-        String longBody = "x".repeat(2000);
-        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 5))
-                .thenReturn(Optional.of(issue(5, "Big", longBody)));
-
-        Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(request(sampleMetadata()), files);
-
-        JsonNode root = objectMapper.readTree(files.get("inputs/context/linked_work_items.json"));
-        assertThat(root.get("workItems").get(0).get("bodyExcerpt").asString())
-                .hasSize(LinkedWorkItemContentSource.EXCERPT_CHARS);
-    }
-
-    @Test
-    void keepsEveryLinkedIssueRatherThanTheFirstFew() throws Exception {
-        StringBuilder body = new StringBuilder();
-        for (int i = 1; i <= 20; i++) {
-            body.append("Closes #").append(i).append(' ');
+            assertThat(root.propertyNames())
+                    .containsExactlyInAnyOrder("workItems", "unresolvedReferences", "truncated");
+            JsonNode items = root.get("workItems");
+            assertThat(items).hasSize(1);
+            JsonNode item = items.get(0);
+            assertThat(item.propertyNames())
+                    .containsExactlyInAnyOrder(
+                            "number",
+                            "title",
+                            "state",
+                            "url",
+                            "body",
+                            "labels",
+                            "subIssuesTotal",
+                            "subIssuesCompleted");
+            assertThat(item.get("number").asInt()).isEqualTo(42);
+            assertThat(item.get("title").asString()).isEqualTo("Add token refresh");
+            assertThat(item.get("state").asString()).isEqualTo("OPEN");
+            assertThat(item.get("url").asString()).isEqualTo("https://example.com/issues/42");
+            assertThat(item.get("body").asString())
+                    .isEqualTo("Acceptance criteria: the session must refresh silently.");
+            assertThat(item.get("labels").get(0).asString()).isEqualTo("backend");
+            assertThat(item.get("subIssuesTotal").asInt()).isEqualTo(3);
+            assertThat(item.get("subIssuesCompleted").asInt()).isEqualTo(1);
+            assertThat(root.get("unresolvedReferences")).isEmpty();
+            assertThat(root.get("truncated").asBoolean()).isFalse();
         }
-        PullRequest pr = new PullRequest();
-        pr.setBody(body.toString());
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-        when(issueRepository.findByRepositoryIdAndNumber(eq(REPO_ID), anyInt())).thenAnswer(inv -> {
-            int n = inv.getArgument(1);
-            return Optional.of(issue(n, "Issue " + n, "criteria " + n));
-        });
 
-        Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(request(sampleMetadata()), files);
+        @Test
+        void shouldWriteEachResolvedIssueAsTextForQuoting() {
+            pullRequestWithBody("Closes #42 and mentions #999");
+            Issue linked = issue(42, "Add token refresh", "## Acceptance criteria\n- [ ] refreshes silently\n");
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.of(linked));
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 999)).thenReturn(Optional.empty());
 
-        // A collector does not decide how many linked issues a reviewer can hold; it reports what the
-        // work actually links to.
-        JsonNode root = objectMapper.readTree(files.get("inputs/context/linked_work_items.json"));
-        assertThat(root.get("workItems")).hasSize(20);
-        assertThat(root.get("truncated").asBoolean()).isFalse();
+            linked.setCreatedAt(java.time.Instant.parse("2026-04-01T09:00:00Z"));
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(KIND));
+
+            // The body as written, title first, then the dates as one quotable line, so a line of it can
+            // be cited by number; nothing for a reference this repository does not resolve.
+            assertThat(captured.files())
+                    .containsOnlyKeys(
+                            LinkedWorkItemContentSource.OUTPUT_FILE,
+                            LinkedWorkItemContentSource.ITEMS_PREFIX + "42.md");
+            assertThat(new String(
+                            captured.files().get(LinkedWorkItemContentSource.ITEMS_PREFIX + "42.md"),
+                            java.nio.charset.StandardCharsets.UTF_8))
+                    .isEqualTo("# Add token refresh\n\nOpened 2026-04-01T09:00:00Z, state OPEN.\n\n"
+                            + "## Acceptance criteria\n- [ ] refreshes silently\n");
+        }
+
+        @Test
+        void shouldWriteTheWholeIssueBodyRatherThanAnExcerpt() throws Exception {
+            pullRequestWithBody("Fixes #5");
+            String longBody = "x".repeat(2000);
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 5))
+                    .thenReturn(Optional.of(issue(5, "Big", longBody)));
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(root.get("workItems").get(0).get("body").asString()).isEqualTo(longBody);
+        }
+
+        @Test
+        void shouldListUnresolvedNumbersRatherThanClaimingTheyAreIssues() throws Exception {
+            pullRequestWithBody("Closes #999 and relates to #42");
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 999)).thenReturn(Optional.empty());
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42))
+                    .thenReturn(Optional.of(issue(42, "Known", "")));
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(itemNumbers(root)).containsExactly(42);
+            assertThat(numbers(root.get("unresolvedReferences"))).containsExactly(999);
+        }
     }
 
-    @Test
-    void recordsPartialEmptyWhenCommitReferencesCannotBeScanned() throws Exception {
-        PullRequest pr = new PullRequest();
-        pr.setBody("A clean description with no issue references.");
-        pr.setHeadRefName("feature/no-refs");
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+    @Nested
+    class NumberExtraction {
 
-        ObjectNode metadata = sampleMetadata();
-        metadata.put("source_branch", "feature/no-refs");
+        @Test
+        void shouldReadEveryHashNumberFromTheBodyWhateverWordsSurroundIt() throws Exception {
+            pullRequestWithBody("- [ ] Related issue is linked (e.g., `Closes #12`)\n"
+                    + "Implemented the requested fix: `Closes #42`.\n"
+                    + "Related to #7 — see context.");
+            when(issueRepository.findByRepositoryIdAndNumber(eq(REPO_ID), anyInt()))
+                    .thenAnswer(inv -> {
+                        int number = inv.getArgument(1);
+                        return Optional.of(issue(number, "Issue", ""));
+                    });
 
-        var captured = provider.capture(request(metadata), provider.sourceKinds());
+            JsonNode root = payload(sampleMetadata());
 
-        assertThat(captured.files()).containsKey("inputs/context/linked_work_items.json");
-        assertThat(captured.contentStates()).containsValue(SourceContentState.EMPTY);
-        assertThat(captured.completeness()).containsValue(SourceCompleteness.PARTIAL);
+            assertThat(itemNumbers(root)).containsExactly(12, 42, 7);
+        }
+
+        @Test
+        void shouldIgnoreAReferenceInsideAnHtmlComment() throws Exception {
+            // A merge request template's commented example, kept verbatim by most authors of one cohort:
+            // not rendered, so not the author's reference.
+            pullRequestWithBody(
+                    "<!-- MR title format: #<IssueNumber>: <Short description> — Example: #12: Add login -->\n"
+                            + "Closes #7");
+            when(issueRepository.findByRepositoryIdAndNumber(eq(REPO_ID), anyInt()))
+                    .thenAnswer(inv -> {
+                        int number = inv.getArgument(1);
+                        return Optional.of(issue(number, "Issue", ""));
+                    });
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(itemNumbers(root)).containsExactly(7);
+            verify(issueRepository, never()).findByRepositoryIdAndNumber(REPO_ID, 12);
+        }
+
+        @Test
+        void shouldKeepASentencePeriodAndRejectAVersionAColourAndAUnit() throws Exception {
+            pullRequestWithBody(
+                    "This work relates to #42. It bumps version #1.2, uses colour #1a2b and a #42px margin.");
+            when(issueRepository.findByRepositoryIdAndNumber(eq(REPO_ID), anyInt()))
+                    .thenAnswer(inv -> {
+                        int number = inv.getArgument(1);
+                        return Optional.of(issue(number, "Issue", ""));
+                    });
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(root.get("workItems")).hasSize(1);
+            assertThat(root.get("workItems").get(0).get("number").asInt()).isEqualTo(42);
+            verify(issueRepository, never()).findByRepositoryIdAndNumber(REPO_ID, 1);
+        }
+
+        @Test
+        void shouldReadTheIssueNumberOpeningABranchSegment() throws Exception {
+            pullRequestWithBody("No references in body.");
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 18))
+                    .thenReturn(Optional.of(issue(18, "Improve logging", "criteria")));
+            ObjectNode metadata = sampleMetadata();
+            metadata.put("source_branch", "feat/18-improve-logging");
+
+            JsonNode root = payload(metadata);
+
+            assertThat(root.get("workItems").get(0).get("number").asInt()).isEqualTo(18);
+        }
+
+        @Test
+        void shouldReadCommitSubjectsWhenGitIsEnabled() throws Exception {
+            pullRequestWithBody("Implementation only.");
+            commitSubjects("fix: resolve crash, fixes #77");
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 77))
+                    .thenReturn(Optional.of(issue(77, "Crash on launch", "criteria")));
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(root.get("workItems").get(0).get("number").asInt()).isEqualTo(77);
+        }
+
+        @Test
+        void shouldResolveAReferenceAfterFiveHundredCommitSubjects() throws Exception {
+            pullRequestWithBody("No issue references.");
+            String[] subjects = new String[502];
+            Arrays.fill(subjects, "ordinary change");
+            subjects[501] = "Fixes #77";
+            commitSubjects(subjects);
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 77))
+                    .thenReturn(Optional.of(issue(77, "Crash", "criteria")));
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(root.get("workItems").get(0).get("number").asInt()).isEqualTo(77);
+        }
     }
 
-    @Test
-    void unresolvedReferenceMakesCapturePartial() throws Exception {
-        PullRequest pr = new PullRequest();
-        pr.setBody("Closes #999");
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 999)).thenReturn(Optional.empty());
+    @Nested
+    class Bounds {
 
-        var captured = provider.capture(request(sampleMetadata()), provider.sourceKinds());
+        @Test
+        void shouldKeepEveryLinkedIssueBelowTheMemoryBound() throws Exception {
+            StringBuilder body = new StringBuilder();
+            for (int i = 1; i <= 20; i++) body.append("Closes #").append(i).append(' ');
+            pullRequestWithBody(body.toString());
+            when(issueRepository.findByRepositoryIdAndNumber(eq(REPO_ID), anyInt()))
+                    .thenAnswer(inv -> {
+                        int number = inv.getArgument(1);
+                        return Optional.of(issue(number, "Issue", ""));
+                    });
 
-        assertThat(captured.completeness()).containsValue(SourceCompleteness.PARTIAL);
-        assertThat(objectMapper
-                        .readTree(captured.files().get(LinkedWorkItemContentSource.OUTPUT_FILE))
-                        .path("workItems"))
-                .isEmpty();
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(root.get("workItems")).hasSize(20);
+            assertThat(root.get("truncated").asBoolean()).isFalse();
+        }
+
+        @Test
+        void shouldTruncateAtTheMemoryBoundAndSaySo() throws Exception {
+            int max = LinkedWorkItemContentSource.MAX_ITEMS;
+            StringBuilder body = new StringBuilder();
+            for (int i = 1; i <= max + 1; i++) body.append('#').append(i).append(' ');
+            pullRequestWithBody(body.toString());
+            when(issueRepository.findByRepositoryIdAndNumber(eq(REPO_ID), anyInt()))
+                    .thenAnswer(inv -> {
+                        int number = inv.getArgument(1);
+                        return Optional.of(issue(number, "Issue", ""));
+                    });
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(root.get("workItems")).hasSize(max);
+            assertThat(root.get("truncated").asBoolean()).isTrue();
+            verify(issueRepository, never()).findByRepositoryIdAndNumber(REPO_ID, max + 1);
+        }
     }
 
-    @Test
-    void missingMetadataIsACollectionError() {
-        var job = new AgentJob();
-        var req = new ContextRequest.PracticeReviewRequest(job);
+    @Nested
+    class CaptureState {
 
-        assertThatExceptionOfType(EvidenceCollectionException.class)
-                .isThrownBy(() -> provider.capture(req, provider.sourceKinds()));
+        @Test
+        void shouldReportPartialAndEmptyWhenNothingResolves() {
+            pullRequestWithBody("A clean description with no issue references.");
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(KIND));
+
+            assertThat(captured.files()).containsKey(LinkedWorkItemContentSource.OUTPUT_FILE);
+            assertThat(captured.contentStates()).containsEntry(KIND, SourceContentState.EMPTY);
+            assertThat(captured.completeness()).containsEntry(KIND, SourceCompleteness.PARTIAL);
+        }
+
+        @Test
+        void shouldReportEmptyWhenTheOnlyReferenceIsUnresolved() throws Exception {
+            pullRequestWithBody("Closes #999");
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 999)).thenReturn(Optional.empty());
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(KIND));
+
+            assertThat(captured.completeness()).containsEntry(KIND, SourceCompleteness.PARTIAL);
+            assertThat(captured.contentStates()).containsEntry(KIND, SourceContentState.EMPTY);
+            JsonNode root = objectMapper.readTree(captured.files().get(LinkedWorkItemContentSource.OUTPUT_FILE));
+            assertThat(root.path("workItems")).isEmpty();
+            assertThat(numbers(root.path("unresolvedReferences"))).containsExactly(999);
+        }
+
+        @Test
+        void anExhaustiveScanFindingNothingIsStillNotComplete() {
+            pullRequestWithBody("No issue references.");
+            commitSubjects("ordinary change");
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(KIND));
+
+            // A link the author never wrote in the description, branch name or a commit subject is
+            // invisible to this scan, so even an exhaustive one stays PARTIAL rather than COMPLETE.
+            assertThat(captured.completeness()).containsEntry(KIND, SourceCompleteness.PARTIAL);
+            assertThat(captured.contentStates()).containsEntry(KIND, SourceContentState.EMPTY);
+        }
+
+        @Test
+        void shouldReportNonEmptyWhenAnItemResolves() {
+            pullRequestWithBody("Closes #42");
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42))
+                    .thenReturn(Optional.of(issue(42, "Known", "")));
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(KIND));
+
+            assertThat(captured.contentStates()).containsEntry(KIND, SourceContentState.NON_EMPTY);
+        }
     }
 
-    @Test
-    void missingRepositoryIdIsACollectionError() {
-        ObjectNode metadata = objectMapper.createObjectNode();
-        metadata.put("pull_request_id", PR_ID);
+    @Nested
+    class Failures {
 
-        assertThatExceptionOfType(EvidenceCollectionException.class)
-                .isThrownBy(() -> provider.capture(request(metadata), provider.sourceKinds()));
+        @Test
+        void missingMetadataIsACollectionError() {
+            var job = new AgentJob();
+            var req = new ContextRequest.PracticeReviewRequest(job);
+
+            assertThatExceptionOfType(EvidenceCollectionException.class)
+                    .isThrownBy(() -> provider.capture(req, provider.sourceKinds()));
+        }
+
+        @Test
+        void missingRepositoryIdIsACollectionError() {
+            ObjectNode metadata = objectMapper.createObjectNode();
+            metadata.put("pull_request_id", PR_ID);
+
+            assertThatExceptionOfType(EvidenceCollectionException.class)
+                    .isThrownBy(() -> provider.capture(request(metadata), provider.sourceKinds()));
+        }
+
+        @Test
+        void reportsCollectionErrorWhenRepositoryQueryFails() {
+            pullRequestWithBody("Closes #42");
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenThrow(new RuntimeException("DB down"));
+
+            Map<String, byte[]> files = new LinkedHashMap<>();
+            assertThatExceptionOfType(EvidenceCollectionException.class)
+                    .isThrownBy(() -> provider.contribute(request(sampleMetadata()), files));
+            assertThat(files).isEmpty();
+        }
+
+        @Test
+        void shouldReportCommitScanFailureInsteadOfEmptyEvidence() {
+            when(gitRepositoryManager.isEnabled()).thenReturn(true);
+            doThrow(new IllegalStateException("JGit failed"))
+                    .when(gitRepositoryManager)
+                    .forEachCommitSubject(eq(KEY), eq(BASE), eq(HEAD), any());
+
+            assertThatExceptionOfType(EvidenceCollectionException.class)
+                    .isThrownBy(() -> provider.capture(request(sampleMetadata()), provider.sourceKinds()));
+        }
     }
 
-    @Test
-    void reportsCollectionErrorWhenRepositoryQueryFails() {
-        PullRequest pr = new PullRequest();
-        pr.setBody("Closes #42");
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenThrow(new RuntimeException("DB down"));
+    @Nested
+    class Authorization {
 
-        Map<String, byte[]> files = new LinkedHashMap<>();
-        assertThatExceptionOfType(EvidenceCollectionException.class)
-                .isThrownBy(() -> provider.contribute(request(sampleMetadata()), files));
-        assertThat(files).isEmpty();
-    }
+        @Test
+        void shouldOnlyAuthorizeWhenGitIsDisabled() {
+            pullRequestWithBody("Closes #42");
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42))
+                    .thenReturn(Optional.of(issue(42, "Known", "")));
 
-    @Test
-    void resolvesFromCommitSubjectsWhenGitEnabled() throws Exception {
-        // No body/branch refs — the only signal is the commit subject.
-        PullRequest pr = new PullRequest();
-        pr.setBody("Implementation only.");
-        pr.setHeadRefName("feature/plain");
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+            provider.capture(request(sampleMetadata()), Set.of(KIND));
 
-        when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.isRepositoryCloned(REPO_ID)).thenReturn(true);
-        when(gitRepositoryManager.getRepositoryPath(REPO_ID)).thenReturn(java.nio.file.Path.of("/tmp/repo/123"));
-        when(gitDiffOperations.resolveDiffRange(
-                        java.nio.file.Path.of("/tmp/repo/123"), "main", "feature/plain", "abc123def456"))
-                .thenReturn(new String[] {"base", "head"});
-        var commit = new GitRepositoryManager.CommitInfo(
-                "sha1",
-                "fix: resolve crash, fixes #77",
-                null,
-                "Author",
-                "author@example.com",
-                java.time.Instant.now(),
-                "Author",
-                "author@example.com",
-                java.time.Instant.now(),
-                1,
-                0,
-                1,
-                List.of(),
-                List.of());
-        when(gitRepositoryManager.walkCommits(REPO_ID, "base", "head", 501)).thenReturn(List.of(commit));
-        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 77))
-                .thenReturn(Optional.of(issue(77, "Crash on launch", "criteria")));
+            verify(repositoryPreparer).authorize(any());
+            verify(repositoryPreparer, never()).prepare(any());
+            verify(gitRepositoryManager, never()).forEachCommitSubject(any(), any(), any(), any());
+        }
 
-        ObjectNode metadata = sampleMetadata();
-        metadata.put("source_branch", "feature/plain");
+        @Test
+        void shouldRejectUnauthorizedDatabaseCaptureWhenGitIsDisabled() {
+            when(repositoryPreparer.authorize(any())).thenThrow(new IllegalStateException("Unauthorized repository"));
 
-        Map<String, byte[]> files = new LinkedHashMap<>();
-        provider.contribute(request(metadata), files);
-
-        JsonNode root = objectMapper.readTree(files.get("inputs/context/linked_work_items.json"));
-        assertThat(root.get("workItems").get(0).get("number").asInt()).isEqualTo(77);
-        assertThat(root.get("workItems").get(0).get("matchedClosingKeyword").asBoolean())
-                .isTrue();
-        assertThat(root.get("resolvedFrom").toString()).contains("commits");
-    }
-
-    @Test
-    void anExhaustiveScanFindingNothingIsStillNotComplete() throws Exception {
-        PullRequest pr = new PullRequest();
-        pr.setBody("No issue references.");
-        pr.setHeadRefName("feature/plain");
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-        when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.isRepositoryCloned(REPO_ID)).thenReturn(true);
-        var repoPath = java.nio.file.Path.of("/tmp/repo/123");
-        when(gitRepositoryManager.getRepositoryPath(REPO_ID)).thenReturn(repoPath);
-        when(gitDiffOperations.resolveDiffRange(repoPath, "main", "feature/plain", "abc123def456"))
-                .thenReturn(new String[] {"base", "head"});
-        when(gitRepositoryManager.walkCommits(REPO_ID, "base", "head", 501)).thenReturn(List.of());
-
-        ObjectNode metadata = sampleMetadata();
-        metadata.put("source_branch", "feature/plain");
-        var captured = provider.capture(request(metadata), provider.sourceKinds());
-
-        // A link the author never wrote in the description, branch name or a commit subject is invisible
-        // to this scan, so even an exhaustive one stays PARTIAL rather than COMPLETE.
-        assertThat(captured.completeness()).containsValue(SourceCompleteness.PARTIAL);
-        assertThat(captured.contentStates()).containsValue(SourceContentState.EMPTY);
-        assertThat(objectMapper
-                        .readTree(captured.files().get(LinkedWorkItemContentSource.OUTPUT_FILE))
-                        .path("workItems"))
-                .isEmpty();
-    }
-
-    @Test
-    void aTruncatedCommitScanIsAlsoPartial() {
-        PullRequest pr = new PullRequest();
-        pr.setBody("No issue references.");
-        pr.setHeadRefName("feature/plain");
-        when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-        when(gitRepositoryManager.isEnabled()).thenReturn(true);
-        when(gitRepositoryManager.isRepositoryCloned(REPO_ID)).thenReturn(true);
-        var repoPath = java.nio.file.Path.of("/tmp/repo/123");
-        when(gitRepositoryManager.getRepositoryPath(REPO_ID)).thenReturn(repoPath);
-        when(gitDiffOperations.resolveDiffRange(repoPath, "main", "feature/plain", "abc123def456"))
-                .thenReturn(new String[] {"base", "head"});
-        var commit = new GitRepositoryManager.CommitInfo(
-                "sha",
-                "ordinary change",
-                null,
-                "Author",
-                "author@example.com",
-                java.time.Instant.EPOCH,
-                "Author",
-                "author@example.com",
-                java.time.Instant.EPOCH,
-                1,
-                0,
-                1,
-                List.of(),
-                List.of());
-        when(gitRepositoryManager.walkCommits(REPO_ID, "base", "head", 501))
-                .thenReturn(java.util.Collections.nCopies(501, commit));
-
-        ObjectNode metadata = sampleMetadata();
-        metadata.put("source_branch", "feature/plain");
-
-        assertThat(provider.capture(request(metadata), provider.sourceKinds()).completeness())
-                .containsValue(SourceCompleteness.PARTIAL);
+            assertThatExceptionOfType(EvidenceCollectionException.class)
+                    .isThrownBy(() -> provider.capture(request(sampleMetadata()), provider.sourceKinds()));
+            verifyNoInteractions(pullRequestRepository, issueRepository);
+        }
     }
 }

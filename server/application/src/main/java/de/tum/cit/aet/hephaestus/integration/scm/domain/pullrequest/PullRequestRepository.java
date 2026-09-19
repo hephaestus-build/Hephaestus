@@ -67,7 +67,8 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     @Query("""
         SELECT p FROM PullRequest p
         LEFT JOIN FETCH p.author
-        LEFT JOIN FETCH p.repository
+        LEFT JOIN FETCH p.repository r
+        LEFT JOIN FETCH r.provider
         WHERE p.id = :id
         """)
     Optional<PullRequest> findByIdWithAuthorAndRepository(@Param("id") Long id);

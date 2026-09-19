@@ -110,7 +110,7 @@ class AgentJobServiceTest extends BaseUnitTest {
                 handlerRegistry,
                 objectMapper,
                 transactionTemplate,
-                new PracticeReviewProperties(false, 15, 5, false),
+                new PracticeReviewProperties(false, 15, 5, false, null),
                 practiceRepository,
                 llmBudgetService,
                 llmModelResolver,
@@ -590,6 +590,7 @@ class AgentJobServiceTest extends BaseUnitTest {
             pr.setHeadRefOid("abc123");
             pr.setHeadRefName("feature/test");
             pr.setBaseRefName("main");
+            pr.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
             Repository repo = new Repository();
             repo.setId(100L);
             repo.setNameWithOwner("owner/repo");

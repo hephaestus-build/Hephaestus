@@ -99,7 +99,9 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
                         "validates-inputs-and-edge-cases-at-the-boundary",
                         "avoids-unsafe-panics-and-chosen-crashes",
                         "validates-and-escapes-untrusted-input",
-                        "avoids-insecure-defaults-and-over-broad-permissions");
+                        "avoids-insecure-defaults-and-over-broad-permissions",
+                        // I/O inside a view is the behaviour, so a view that delegates is a positive absence.
+                        "keeps-views-free-of-networking-and-persistence");
         assertThat(exhaustive.get("merged-past-unresolved-review-threads"))
                 .containsExactly(new SourceKind("scm.review-threads"));
         assertThat(exhaustive.get("issue-closed-with-unmet-outcome"))
@@ -109,6 +111,8 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
         assertThat(exhaustive.get("handles-errors-instead-of-swallowing-them"))
                 .containsExactly(new SourceKind("scm.pull-request.diff"));
         assertThat(exhaustive.get("validates-and-escapes-untrusted-input"))
+                .containsExactly(new SourceKind("scm.pull-request.diff"));
+        assertThat(exhaustive.get("keeps-views-free-of-networking-and-persistence"))
                 .containsExactly(new SourceKind("scm.pull-request.diff"));
     }
 }
