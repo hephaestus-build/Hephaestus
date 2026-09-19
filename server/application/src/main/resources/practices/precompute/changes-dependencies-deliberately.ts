@@ -193,6 +193,14 @@ const ECOSYSTEMS: Ecosystem[] = [
 		},
 	},
 	{
+		// XcodeGen project.yml: a package is declared under `packages:` as a url line followed by a
+		// constraint line; the pairing across lines is done in collectXcodeGenDeps, so parse() is
+		// unused here as it is for Maven.
+		isManifest: (b) => b === "project.yml" || b === "project.yaml",
+		lockfiles: ["Package.resolved"],
+		parse: () => null,
+	},
+	{
 		// Go modules
 		isManifest: (b) => b === "go.mod",
 		lockfiles: ["go.sum"],
@@ -273,6 +281,43 @@ function collectMavenDeps(df: DiffFile, side: "added" | "removed"): Map<string, 
 	return out;
 }
 
+// XcodeGen pairs a `url:` line with the constraint line that follows it (`from:`, `exactVersion:`,
+// `majorVersion:`, `minorVersion:`, `branch:`, `revision:`), within the same window Maven uses.
+const reXcodeGenUrl = /^\s*url:\s*(\S+)/;
+const reXcodeGenBound =
+	/^\s*(from|exactVersion|majorVersion|minorVersion|branch|revision):\s*(\S+)/;
+function collectXcodeGenDeps(df: DiffFile, side: "added" | "removed"): Map<string, string> {
+	const out = new Map<string, string>();
+	const lines = side === "added" ? df.addedLines : df.removedLines;
+	const ordered = [...lines.entries()].toSorted((a, b) => a[0] - b[0]);
+	let pendingName: string | null = null;
+	let pendingLine = 0;
+	for (const [ln, content] of ordered) {
+		const [, url] = reXcodeGenUrl.exec(content) ?? [];
+		if (url !== undefined) {
+			pendingName =
+				url
+					.split("/")
+					.pop()
+					?.replace(/\.git$/, "") ?? url;
+			pendingLine = ln;
+			out.set(pendingName, "");
+			continue;
+		}
+		const [, kind, bound] = reXcodeGenBound.exec(content) ?? [];
+		if (
+			kind !== undefined &&
+			bound !== undefined &&
+			pendingName !== null &&
+			ln - pendingLine <= MVN_PAIR_WINDOW
+		) {
+			out.set(pendingName, `${kind}:${bound}`);
+			pendingName = null;
+		}
+	}
+	return out;
+}
+
 export default function changesDependenciesDeliberately(
 	repoPath: string,
 	diffFiles: Map<string, DiffFile>,
@@ -311,8 +356,15 @@ export default function changesDependenciesDeliberately(
 		changedManifests.add(path);
 
 		const isMaven = base === "pom.xml";
-		const added = isMaven ? collectMavenDeps(df, "added") : collectDeps(df, eco, "added");
-		const removed = isMaven ? collectMavenDeps(df, "removed") : collectDeps(df, eco, "removed");
+		const isXcodeGen = base === "project.yml" || base === "project.yaml";
+		const collect = (side: "added" | "removed") =>
+			isMaven
+				? collectMavenDeps(df, side)
+				: isXcodeGen
+					? collectXcodeGenDeps(df, side)
+					: collectDeps(df, eco, side);
+		const added = collect("added");
+		const removed = collect("removed");
 
 		// helper to find the diff line for a dependency name on a given side (for hint placement). Match on a
 		// quote/word/coordinate boundary, not a bare substring, so a prefix-sharing sibling (react vs
