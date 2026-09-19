@@ -2,10 +2,12 @@
 // files, placed in its enclosing type. The rules (local values @State, shared models observed once,
 // edits through Binding, derived values computed) are the review's to apply; the script enumerates
 // the declarations so none is missed and counts a model created inside a view type as a lead.
-import { scanSwift, type SwiftPattern } from "../lib/swift-scan.ts";
+import { scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
-const STATE_DECLARATIONS: readonly SwiftPattern[] = [
+const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/;
+
+const STATE_DECLARATIONS: readonly SourcePattern[] = [
 	["@State creating an object", /@State(?:Object)?\b[^=]*=\s*[A-Z][A-Za-z0-9_]*\s*\(/],
 	["@State", /@State\b/],
 	["@StateObject", /@StateObject\b/],
@@ -30,8 +32,13 @@ export default async function ownsStateAtTheRightLevel(
 	diffFiles: Map<string, DiffFile>,
 	_metadata: PullRequestMetadata,
 ) {
-	const scan = await scanSwift(repoPath, diffFiles, STATE_DECLARATIONS, { maxHints: 60 });
-	const inViews = scan.hints.filter((h) => h.flags.inViewType === true);
+	const scan = await scanAddedLines(repoPath, diffFiles, {
+		languages: ["swift"],
+		patterns: STATE_DECLARATIONS,
+		scope: SWIFTUI_VIEW,
+		maxHints: 60,
+	});
+	const inViews = scan.hints.filter((h) => h.flags.inScope === true);
 	const objectsCreatedInViews = inViews.filter(
 		(h) => h.pattern === "@State creating an object" || h.pattern === "@StateObject",
 	).length;

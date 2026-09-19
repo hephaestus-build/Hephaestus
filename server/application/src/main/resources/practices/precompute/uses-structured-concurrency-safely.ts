@@ -2,10 +2,12 @@
 // files, placed in its enclosing type. A `Task {` inside a view, a detached task, a dispatch queue and
 // an `.onAppear` are leads; whether the work must outlive the view, and whether a mutation lands on the
 // main actor, is the review's to decide from the checkout.
-import { scanSwift, type SwiftPattern } from "../lib/swift-scan.ts";
+import { countLabel, scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
-const CONCURRENCY: readonly SwiftPattern[] = [
+const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/;
+
+const CONCURRENCY: readonly SourcePattern[] = [
 	["Task.detached", /\bTask\.detached\b/],
 	["stored task handle", /(?:let|var)\s+\w+\s*(?::\s*Task<[^>]*>)?\s*=\s*Task\s*[{(]/],
 	["Task { }", /\bTask\s*(?:\(priority:[^)]*\))?\s*\{/],
@@ -24,10 +26,15 @@ export default async function usesStructuredConcurrencySafely(
 	diffFiles: Map<string, DiffFile>,
 	_metadata: PullRequestMetadata,
 ) {
-	const scan = await scanSwift(repoPath, diffFiles, CONCURRENCY, { maxHints: 60 });
-	const count = (label: string) => scan.hints.filter((h) => h.pattern === label).length;
+	const scan = await scanAddedLines(repoPath, diffFiles, {
+		languages: ["swift"],
+		patterns: CONCURRENCY,
+		scope: SWIFTUI_VIEW,
+		maxHints: 60,
+	});
+	const count = (label: string) => countLabel(scan, label);
 	const unstructuredInViews = scan.hints.filter(
-		(h) => h.pattern === "Task { }" && h.flags.inViewType === true,
+		(h) => h.pattern === "Task { }" && h.flags.inScope === true,
 	).length;
 	const metrics = {
 		concurrencyLinesAdded: scan.hints.length,

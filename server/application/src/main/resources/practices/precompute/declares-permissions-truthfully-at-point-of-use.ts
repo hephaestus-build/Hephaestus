@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { globFilesSync } from "../lib/files.ts";
-import { scanSwift, type SwiftPattern } from "../lib/swift-scan.ts";
+import { scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 // capability label -> [pattern in Swift, usage keys that declare it]
@@ -58,12 +58,12 @@ const CAPABILITIES: readonly [string, RegExp, string[]][] = [
 	["LocalNetwork", /\bNWBrowser\b|\bNetService\b/, ["NSLocalNetworkUsageDescription"]],
 ];
 
-const REQUEST: readonly SwiftPattern[] = [
+const REQUEST: readonly SourcePattern[] = [
 	[
 		"authorization request",
 		/\brequest(?:WhenInUse|Always)?Authorization\b|\brequestAccess\b|\brequestTrackingAuthorization\b|\bPHPhotoLibrary\.requestAuthorization\b/,
 	],
-	...CAPABILITIES.map(([label, re]): SwiftPattern => [`capability ${label}`, re]),
+	...CAPABILITIES.map(([label, re]): SourcePattern => [`capability ${label}`, re]),
 ];
 
 const USAGE_KEY = /\b(NS\w+UsageDescription)\b/g;
@@ -96,7 +96,10 @@ export default async function declaresPermissionsTruthfullyAtPointOfUse(
 	diffFiles: Map<string, DiffFile>,
 	_metadata: PullRequestMetadata,
 ) {
-	const scan = await scanSwift(repoPath, diffFiles, REQUEST);
+	const scan = await scanAddedLines(repoPath, diffFiles, {
+		languages: ["swift"],
+		patterns: REQUEST,
+	});
 	const hints: Hint[] = [...scan.hints];
 	// Usage keys the change itself adds, in any file.
 	const keysInChange = new Map<string, { file: string; line: number }>();
@@ -145,7 +148,7 @@ export default async function declaresPermissionsTruthfullyAtPointOfUse(
 	const requests = scan.hints.filter((h) => h.pattern === "authorization request");
 	if (requests.length > 0) {
 		directions.push(
-			`${requests.length} authorization request(s) added — for each, read the enclosingType flag and the call chain to see whether it runs from the feature or from launch.`,
+			`${requests.length} authorization request(s) added — for each, read the enclosing flag and the call chain to see whether it runs from the feature or from launch.`,
 		);
 	}
 	return {

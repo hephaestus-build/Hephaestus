@@ -2,10 +2,10 @@
 // closed list in the criteria asks about — icon-only controls, images, fixed-size fonts, height caps,
 // colour-only state — and the accessibility modifiers added alongside them. The review reads the view
 // chain; the script counts what there is to read and how many labels arrived with it.
-import { scanSwift, type SwiftPattern } from "../lib/swift-scan.ts";
+import { countLabel, scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
-const INTERFACE_LINES: readonly SwiftPattern[] = [
+const INTERFACE_LINES: readonly SourcePattern[] = [
 	[
 		"accessibility modifier",
 		/\.accessibility(?:Label|Hint|Hidden|AddTraits|Value|Identifier)\s*\(/,
@@ -36,8 +36,12 @@ export default async function makesUiAccessibleByDefault(
 	diffFiles: Map<string, DiffFile>,
 	_metadata: PullRequestMetadata,
 ) {
-	const scan = await scanSwift(repoPath, diffFiles, INTERFACE_LINES, { maxHints: 60 });
-	const count = (label: string) => scan.hints.filter((h) => h.pattern === label).length;
+	const scan = await scanAddedLines(repoPath, diffFiles, {
+		languages: ["swift"],
+		patterns: INTERFACE_LINES,
+		maxHints: 60,
+	});
+	const count = (label: string) => countLabel(scan, label);
 	const metrics = {
 		interfaceLinesAdded: scan.hints.length,
 		symbolImages: count("Image(systemName:)"),

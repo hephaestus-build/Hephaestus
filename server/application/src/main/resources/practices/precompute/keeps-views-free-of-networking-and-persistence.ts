@@ -3,10 +3,13 @@
 // (`@Query`, `modelContext.insert`) is the framework's own and is not listed. Each is a candidate the review places;
 // a `load()` call on a store is not I/O in the view, and the script says which type a line lies in so
 // the review does not have to find the declaration itself.
-import { scanSwift, type SwiftPattern } from "../lib/swift-scan.ts";
+import { scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
-const IO_IN_VIEW: readonly SwiftPattern[] = [
+/** A SwiftUI view: a type conforming to `View`, or an `App`/`Scene`, which also declare a body. */
+const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/;
+
+const IO_IN_VIEW: readonly SourcePattern[] = [
 	["URLSession request", /\bURLSession\b|\bURLRequest\s*\(/],
 	["JSON coding", /\bJSON(?:Decoder|Encoder)\s*\(/],
 	["Core Data fetch", /\bNSFetchRequest\b|\.fetch\s*\(\s*NSFetchRequest/],
@@ -20,24 +23,29 @@ export default async function keepsViewsFreeOfNetworkingAndPersistence(
 	diffFiles: Map<string, DiffFile>,
 	_metadata: PullRequestMetadata,
 ) {
-	const scan = await scanSwift(repoPath, diffFiles, IO_IN_VIEW, { onlyInViews: true });
+	const scan = await scanAddedLines(repoPath, diffFiles, {
+		languages: ["swift"],
+		patterns: IO_IN_VIEW,
+		scope: SWIFTUI_VIEW,
+		onlyInScope: true,
+	});
 	const directions: string[] = [];
 	if (scan.hints.length > 0) {
 		directions.push(
-			`${scan.hints.length} I/O call(s) added inside or possibly inside a view type — read each hint's enclosingType; a line placed in a store or model is not the view's I/O.`,
+			`${scan.hints.length} I/O call(s) added inside or possibly inside a view type — read each hint's enclosing type; a line placed in a store or model is not the view's I/O.`,
 		);
 	}
 	if (scan.filesWithoutCheckout > 0) {
 		directions.push(
-			`${scan.filesWithoutCheckout} Swift file(s) could not be read from the checkout; their hints carry enclosingType=unknown and need the diff context to place.`,
+			`${scan.filesWithoutCheckout} Swift file(s) could not be read from the checkout; their hints carry enclosing=unknown and need the diff context to place.`,
 		);
 	}
 	return {
 		hints: scan.hints,
 		metrics: {
 			ioCallsInViews: scan.hints.length,
-			viewLinesAdded: scan.viewLinesAdded,
-			swiftLinesAdded: scan.swiftLinesAdded,
+			viewLinesAdded: scan.linesInScope,
+			swiftLinesAdded: scan.linesAdded,
 			filesWithoutCheckout: scan.filesWithoutCheckout,
 		},
 		directions,

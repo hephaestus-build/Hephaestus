@@ -258,19 +258,41 @@ standard as an experiment or a convention as a proven outcome.
    editor completion and CI validation, and Git history is the bundled version history. Declare the one
    occasion as `on` — a bare signal name is shorthand for a binding on that signal reading the
    artifact kind's default evidence. Reference any precompute script explicitly; a script must be named
-   after the practice slug, and an unreferenced one fails validation. A precompute script is where a
-   practice's own feature extraction lives: it runs inside the review container, receives the parsed
-   diff, the artifact metadata, the captured context directory and the derived change directory
-   (`work/change/`), and reads them through the supplied library under `docker/agents/precompute/lib/`
-   (`context.ts`, `change.ts`, `references.ts`, `grep.ts`, `files.ts`, `swift-views.ts`, `swift-scan.ts`,
-   …). Nothing practice-specific is computed on the server.
-   A practice about one technology — SwiftUI state, an Android manifest, a Spring transaction — is its
-   own practice in a group named for that technology, gated with `appliesWhen` on the files that carry
-   it (`ios-app-craft` runs on `**/*.swift`), never a variant folded into a general practice: the gate
-   keeps it silent on every other repository, the group lets a workspace adopt or exclude the whole
-   technology at once, and a second technology is a second group with the same shape.
+   after the practice slug, and an unreferenced one fails validation. What a script is and what the
+   library owns is in [Precompute scripts](#precompute-scripts) below.
 6. Add or update focused automated-review tests, including required-source skipping and valid-empty evidence.
 7. Review the admin presentation and a representative piece of delivered feedback.
+
+### Precompute scripts
+
+A precompute script is a practice's own feature extraction. It runs inside the review container,
+receives the parsed diff, the artifact metadata, the captured context directory and the derived
+change directory (`work/change/`), and returns hints, metrics and directions. Nothing
+practice-specific is computed on the server. Four rules decide what goes where:
+
+1. **A script enumerates the occasion and places the candidates; the model judges.** The purity
+   test forbids the observation vocabulary in a script, and a hint says "line 42 matched
+   `URLSession request` inside `struct EventList: View`", never that this is a lapse. A script earns
+   its place by recall (every candidate listed, so none is missed across twenty files) and by facts
+   the model cannot cheaply derive — an enclosing type, a manifest paired with its lock line, an
+   inventory scanned for an open issue.
+2. **The script owns the closed list; the library owns the mechanics.** The list of constructs a
+   practice judges by is written in its criteria and mirrored as the script's patterns — one
+   practice, one list, two readers. The library under `docker/agents/precompute/lib/` is
+   language-neutral: `languages.ts` (what a path is), `declarations.ts` (the declaration a line
+   lies in, for the brace languages, from a syntax table), `source-scan.ts` (the walk over added
+   lines with placing and a test-file skip), `references.ts`, `context.ts`, `change.ts`, `grep.ts`,
+   `files.ts`. A technology enters the library as a syntax row and an extension, never as a helper
+   named for it; what makes a SwiftUI view a view (`/\b(?:View|App|Scene)\b/` on the supertypes)
+   is the practice's own fact and stays in its script.
+3. **No parser until a measurement asks for one.** The syntax-table matcher and a tree-sitter
+   grammar name the same innermost declaration on 99.1 % of the 99k Swift lines of one cohort, and
+   most of the rest is the grammar failing on recent syntax. A grammar per language is a wasm the
+   sandbox carries and a currency to chase; the matcher is a row and a test. A construct a line
+   scan cannot see — a modifier chain across lines, a closure nested in another — is left to the
+   model, which reads the checkout, and the script says so in its directions.
+4. **Unknown is a value.** A file the checkout does not carry, or a language with no syntax row,
+   places its lines as `unknown` and counts them; a script never guesses a placing it cannot read.
 
 ### Review the effective definition
 

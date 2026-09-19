@@ -79,7 +79,7 @@ void test("an I/O call is placed in the type that encloses it: the view's counts
 			metadata,
 		);
 		assert.deepEqual(
-			result.hints.map((h) => [h.line, h.pattern, h.flags.enclosingType]),
+			result.hints.map((h) => [h.line, h.pattern, h.flags.enclosing]),
 			[
 				[8, "URLSession request", "struct EventList"],
 				[9, "JSON coding", "struct EventList"],
@@ -101,7 +101,7 @@ void test("without a checkout the placing is unknown, and the hint is still repo
 			metadata,
 		);
 		assert.equal(result.metrics.filesWithoutCheckout, 1);
-		assert.ok(result.hints.every((h) => h.flags.enclosingType === "unknown"));
+		assert.ok(result.hints.every((h) => h.flags.enclosing === "unknown"));
 		// The store's call is a candidate too when nothing says which type it lies in.
 		assert.equal(result.hints.length, 3);
 	} finally {
@@ -194,6 +194,75 @@ void test("a change with no reference anywhere says what it scanned and what the
 		);
 		assert.equal(referenced.metrics.referencesFound, 1);
 		assert.equal(referenced.metrics.closingReferences, 1);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a print beside an existing logger is a lead, a print under a scripts path is marked as tool output", async () => {
+	const { root, script } = await stage("logs-through-the-platform-logger");
+	try {
+		writeFileSync(
+			join(root, "repo/App/Log.swift"),
+			'import OSLog\nlet logger = Logger(subsystem: "app", category: "app")\n',
+		);
+		const result = await script(
+			join(root, "repo"),
+			new Map([
+				whole(
+					"App/Store.swift",
+					'final class Store {\n    func load() {\n        print("loading")\n        logger.info("loaded")\n    }\n}\n',
+				),
+				whole("scripts/report.py", 'print("done")\n'),
+			]),
+			metadata,
+		);
+		assert.deepEqual(result.metrics, {
+			printsAdded: 2,
+			loggerCallsAdded: 1,
+			printsInToolPaths: 1,
+			checkoutHasLogger: 1,
+		});
+		assert.deepEqual(
+			result.hints.map((h) => [h.pattern, h.flags.kind, h.flags.toolPath]),
+			[
+				["swift:print(", "print", false],
+				["swift:Logger", "logger", false],
+				["python:print(", "print", true],
+			],
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a literal and a named asset color are told apart, and the asset's dark appearance is read from the catalog", async () => {
+	const { root, script } = await stage("uses-adaptive-colors-for-every-appearance");
+	try {
+		mkdirSync(join(root, "repo/App/Assets.xcassets/Card.colorset"), { recursive: true });
+		writeFileSync(
+			join(root, "repo/App/Assets.xcassets/Card.colorset/Contents.json"),
+			'{"colors":[{"idiom":"universal","color":{}},{"appearances":[{"appearance":"luminosity","value":"dark"}],"idiom":"universal","color":{}}]}',
+		);
+		const source =
+			'struct Card: View {\n    var body: some View {\n        Text("x")\n            .foregroundStyle(.white)\n            .background(Color("Card"))\n            .padding()\n            .background(Color(red: 1, green: 1, blue: 1))\n    }\n}\n';
+		writeFileSync(join(root, "repo/App/Card.swift"), source);
+		const result = await script(
+			join(root, "repo"),
+			new Map([whole("App/Card.swift", source)]),
+			metadata,
+		);
+		assert.equal(result.metrics.literalColors, 2);
+		assert.equal(result.metrics.adaptiveColors, 1);
+		assert.equal(result.metrics.singleAppearanceAssets, 0);
+		assert.deepEqual(
+			result.hints.map((h) => [h.line, h.pattern, h.flags.hasDarkAppearance ?? null]),
+			[
+				[4, "literal white/black", null],
+				[5, "named asset", true],
+				[7, "literal RGB", null],
+			],
+		);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

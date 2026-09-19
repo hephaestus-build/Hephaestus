@@ -104,7 +104,8 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                         "makes-ui-accessible-by-default",
                         "uses-structured-concurrency-safely",
                         "ships-a-preview-with-each-new-view",
-                        "declares-permissions-truthfully-at-point-of-use");
+                        "declares-permissions-truthfully-at-point-of-use",
+                        "uses-adaptive-colors-for-every-appearance");
     }
 
     /**

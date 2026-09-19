@@ -1,8 +1,8 @@
-import { isSwiftSource } from "../lib/swift-scan.ts";
 // Precompute HINTS for ships-a-preview-with-each-new-view: the view types this change declares and the
 // previews it adds, per file. The pairing is a fact the review checks; whether a preview's data is
 // representative is the review's to read.
-import { isSwiftComment } from "../lib/swift-views.ts";
+import { isCommentLine } from "../lib/declarations.ts";
+import { isTestPath, languageOf } from "../lib/languages.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 const VIEW_DECLARATION =
@@ -19,11 +19,11 @@ export default function shipsAPreviewWithEachNewView(
 	let previewsAdded = 0;
 	let filesWithNewViewAndNoPreview = 0;
 	for (const [path, df] of diffFiles) {
-		if (!isSwiftSource(path)) continue;
+		if (languageOf(path) !== "swift" || isTestPath(path)) continue;
 		let views = 0;
 		let previews = 0;
 		for (const [line, content] of df.addedLines) {
-			if (isSwiftComment(content)) continue;
+			if (isCommentLine(content, "swift")) continue;
 			const view = VIEW_DECLARATION.exec(content);
 			if (view) {
 				views++;

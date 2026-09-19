@@ -7,5 +7,6 @@ the issue to the merge: whether the change names the issue it implements, whethe
 that issue's stated outcome confirmed, and whether a review ask the author deferred was turned into
 tracked work or explicitly waived. A new group, Building iOS apps well, reviews SwiftUI code — I/O kept
 out of views, state owned where it belongs, an interface a screen reader can use, structured
-concurrency, a preview with each new view, and permissions declared truthfully — and runs only on
-changes that touch Swift files. The tracking group is now named "Tracking work from issue to merge", and "Point the issue at its context" sits with the other issue-writing practices in "Writing issues a maintainer can act on".
+concurrency, a preview with each new view, permissions declared truthfully, and colors that hold in
+both appearances — and runs only on changes that touch Swift files. "Log through the platform logger,
+not print" joins the code-craftsmanship group for every language the review reads. The tracking group is now named "Tracking work from issue to merge", and "Point the issue at its context" sits with the other issue-writing practices in "Writing issues a maintainer can act on".
