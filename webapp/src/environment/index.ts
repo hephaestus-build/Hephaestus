@@ -73,18 +73,20 @@ const deploymentEnvironment = env("SENTRY_ENVIRONMENT") || "local";
  * given a pull request by a host that happens to be named this way.
  */
 const previewPullRequest = ((): number | undefined => {
-	if (deploymentEnvironment !== "preview") return undefined;
+	if (deploymentEnvironment !== "preview") {
+		return undefined;
+	}
 	try {
 		const [label] = new URL(env("APPLICATION_CLIENT_URL")).hostname.split(".");
-		const match = /^pr-?(\d+)$/.exec(label ?? "");
-		return match ? Number.parseInt(match[1] ?? "", 10) : undefined;
+		const number = /^pr-?(?<number>\d+)$/u.exec(label ?? "")?.groups?.number;
+		return number === undefined ? undefined : Number.parseInt(number, 10);
 	} catch {
 		return undefined;
 	}
 })();
 
 const environment = {
-	version: env("APPLICATION_VERSION").replace(/^v/, "") || "DEV",
+	version: env("APPLICATION_VERSION").replace(/^v/u, "") || "DEV",
 	deployment: {
 		environment: deploymentEnvironment,
 		name: DEPLOYMENT_NAMES[deploymentEnvironment] ?? "Local",

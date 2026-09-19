@@ -21,7 +21,9 @@ export function placeCuratedPractice(
 	position: number,
 ): CuratedCatalog {
 	const moved = catalog.practices.find((practice) => practice.slug === practiceSlug);
-	if (!moved) return catalog;
+	if (!moved) {
+		return catalog;
+	}
 	const sourceGroupSlug = moved.groupSlug ?? null;
 	const source = orderedPractices(catalog, sourceGroupSlug).filter(
 		(practice) => practice.slug !== practiceSlug,
@@ -33,12 +35,12 @@ export function placeCuratedPractice(
 	destination.splice(Math.max(0, Math.min(position, destination.length)), 0, moved);
 
 	const placements = new Map<string, { groupSlug: string | null; position: number }>();
-	source.forEach((practice, index) =>
-		placements.set(practice.slug, { groupSlug: sourceGroupSlug, position: index }),
-	);
-	destination.forEach((practice, index) =>
-		placements.set(practice.slug, { groupSlug, position: index }),
-	);
+	for (const [index, practice] of source.entries()) {
+		placements.set(practice.slug, { groupSlug: sourceGroupSlug, position: index });
+	}
+	for (const [index, practice] of destination.entries()) {
+		placements.set(practice.slug, { groupSlug, position: index });
+	}
 	const destinationGroupOffered =
 		groupSlug === null ||
 		catalog.groups.find((group) => group.slug === groupSlug)?.status.offered === true;
@@ -47,7 +49,9 @@ export function placeCuratedPractice(
 		...catalog,
 		practices: catalog.practices.map((practice) => {
 			const placement = placements.get(practice.slug);
-			if (!placement) return practice;
+			if (!placement) {
+				return practice;
+			}
 			return {
 				...practice,
 				groupSlug: placement.groupSlug ?? undefined,
@@ -83,6 +87,5 @@ export function orderedPracticeSlugs(catalog: CuratedCatalog, groupSlug: string 
 function orderedPractices(catalog: CuratedCatalog, groupSlug: string | null) {
 	return catalog.practices
 		.filter((practice) => (practice.groupSlug ?? null) === groupSlug)
-		.slice()
 		.sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
 }

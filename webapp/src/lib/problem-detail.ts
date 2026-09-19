@@ -63,7 +63,7 @@ export function problemStatusOf(err: unknown): number | undefined {
 	if (typeof direct === "number" && Number.isInteger(direct)) {
 		return direct;
 	}
-	const response = err.response;
+	const { response } = err;
 	if (isRecord(response)) {
 		const nested = response.status;
 		if (typeof nested === "number" && Number.isInteger(nested)) {

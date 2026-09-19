@@ -4,8 +4,12 @@ import { memberName } from "../property.ts";
 
 /** Both play signatures reach the element: `({ canvasElement })` and `(context)`. */
 const rootName = (root: ESTree.Node): string | undefined => {
-	if (root.type === "Identifier") return root.name;
-	if (root.type === "MemberExpression") return memberName(root);
+	if (root.type === "Identifier") {
+		return root.name;
+	}
+	if (root.type === "MemberExpression") {
+		return memberName(root);
+	}
 	return undefined;
 };
 
@@ -24,10 +28,14 @@ export const noWithinCanvasElement = defineRule({
 	create(context) {
 		return {
 			CallExpression(node) {
-				if (node.callee.type !== "Identifier" || node.callee.name !== "within") return;
+				if (node.callee.type !== "Identifier" || node.callee.name !== "within") {
+					return;
+				}
 
 				const [root] = node.arguments;
-				if (!root || rootName(root) !== "canvasElement") return;
+				if (!root || rootName(root) !== "canvasElement") {
+					return;
+				}
 
 				context.report({ node: root, messageId: "redundant" });
 			},

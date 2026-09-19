@@ -1,6 +1,6 @@
 # ADR 0001: Flat top-level layout
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-09-17 — `server/` is a two-module Gradle root per [0032](0032-generated-clients-build-boundary.md))
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -52,3 +52,22 @@ Adopt option 1 (flat top-level). `server/application-server/` → `server/`.
 
 The repo grows to 5+ top-level deployables, or someone proposes a non-trivial `services/`
 reorganisation with concrete scaling justification.
+
+## Update — 2026-09-17
+
+Corrects § Decision and § Consequences on where the code lives and what is shipped from it.
+
+- `server/` is a Gradle multi-project root with two modules, `server/application/` and
+  `server/generated-clients/` (`server/settings.gradle.kts`); the nesting is the build boundary
+  [ADR 0032](0032-generated-clients-build-boundary.md) decided and
+  [ADR 0043](0043-gradle-java-build.md) builds, not the organisational nesting this ADR removed.
+- The repository root also carries `scripts/`, `docker/` and `load-tests/`.
+- Four images are published (`.github/workflows/cicd.yml`, `ci-docker-build.yml`):
+  `application-server` from `server/`, `webapp` from `webapp/Dockerfile`, `postgres` from
+  `docker/postgres/Dockerfile` and `agent-pi` from `docker/agents/pi/Dockerfile`; the two under
+  `docker/` are build contexts, not top-level siblings.
+- The `generate:api:application-server` script is `generate:api:specs` and `generate:api:client`
+  (`vite.config.ts`).
+- The image name is corrected in [ADR 0008](0008-webhook-runtime-role.md) § Update 2026-09-17; the
+  Compose service names `application-server` and `webhook-server` stand (`docker/compose.app.yaml`,
+  `docker/compose.core.yaml`).

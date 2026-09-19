@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { SyncJob } from "@/api/types.gen";
-import { expectSettledVisible } from "@/test/overlay";
+import { expectSettledVisible } from "@/stories/overlay";
 
 import { SyncJobsTable } from "./SyncJobsTable";
 
@@ -149,7 +149,7 @@ export const TypeCarriesTrigger: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("columnheader", { name: "Trigger" })).toBeNull();
 		await expect(canvas.getAllByText("Reconciliation", { exact: false }).length).toBeGreaterThan(0);
-		await expect(canvas.getAllByText(/· scheduled/i).length).toBeGreaterThan(0);
+		await expect(canvas.getAllByText(/· scheduled/iu).length).toBeGreaterThan(0);
 	},
 };
 
@@ -157,10 +157,12 @@ export const TypeCarriesTrigger: Story = {
 export const StartedRevealsAbsoluteTime: Story = {
 	args: { jobs },
 	play: async ({ canvas }) => {
-		const [firstRelativeStart] = canvas.getAllByText(/ago$/);
-		if (!firstRelativeStart) throw new Error("No row rendered a relative start time");
+		const [firstRelativeStart] = canvas.getAllByText(/ago$/u);
+		if (!firstRelativeStart) {
+			throw new Error("No row rendered a relative start time");
+		}
 		await userEvent.hover(firstRelativeStart);
-		await expectSettledVisible(await screen.findByText(/\d{4}, \d{2}:\d{2}:\d{2}$/));
+		await expectSettledVisible(await screen.findByText(/\d{4}, \d{2}:\d{2}:\d{2}$/u));
 	},
 };
 
@@ -168,8 +170,8 @@ export const StartedRevealsAbsoluteTime: Story = {
 export const ErrorHover: Story = {
 	args: { jobs: allStatuses },
 	play: async ({ canvas }) => {
-		await userEvent.hover(canvas.getByRole("button", { name: /error for job 10/i }));
-		await expectSettledVisible(await screen.findByText(/rate limit exceeded after 3 retries/i));
+		await userEvent.hover(canvas.getByRole("button", { name: /error for job 10/iu }));
+		await expectSettledVisible(await screen.findByText(/rate limit exceeded after 3 retries/iu));
 	},
 };
 
@@ -183,8 +185,8 @@ export const ExpandProgressDetail: Story = {
 					phase: "pullRequests",
 					currentStep: "Backfilling ls1intum/Artemis — issues #4812 → #3200",
 					currentRepository: "ls1intum/Artemis",
-					unitsCompleted: 1_612,
-					unitsTotal: 4_812,
+					unitsCompleted: 1612,
+					unitsTotal: 4812,
 				},
 			},
 			failedJob,
@@ -192,9 +194,9 @@ export const ExpandProgressDetail: Story = {
 	},
 	play: async ({ canvas }) => {
 		// Only the job with a progress report is expandable.
-		await expect(canvas.getAllByRole("button", { name: /show details for job/i })).toHaveLength(1);
-		await userEvent.click(canvas.getByRole("button", { name: /show details for job 3/i }));
-		await expectSettledVisible(await canvas.findByText(/backfilling ls1intum\/artemis/i));
+		await expect(canvas.getAllByRole("button", { name: /show details for job/iu })).toHaveLength(1);
+		await userEvent.click(canvas.getByRole("button", { name: /show details for job 3/iu }));
+		await expectSettledVisible(await canvas.findByText(/backfilling ls1intum\/artemis/iu));
 		canvas.getByText("Pull requests");
 	},
 };
@@ -212,6 +214,6 @@ export const FirstPage: Story = {
 	args: { jobs, page: 0, totalPages: 4, onPageChange: fn() },
 	play: async ({ canvas }) => {
 		canvas.getByRole("navigation", { name: "pagination" });
-		await expect(canvas.queryByText(/Page \d+ of \d+/)).toBeNull();
+		await expect(canvas.queryByText(/Page \d+ of \d+/u)).toBeNull();
 	},
 };

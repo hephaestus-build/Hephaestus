@@ -1,6 +1,6 @@
 # ADR 0017: Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs)
 
-**Status:** Accepted
+**Status:** Accepted (amended post-merge — Stage B-2 login model; 2026-09-17 — data model corrected against the schema)
 **Date:** 2026-05-28
 **Authors:** Felix T.J. Dietrich
 **Supersedes (Stage A):** [ADR 0016](0016-unified-identity-keycloak-as-truth.md)
@@ -115,3 +115,28 @@ These are settled, evidence-backed decisions — not open follow-ups. Each was p
 - [Descope — nOAuth (2023)](https://www.descope.com/blog/post/noauth) — account-takeover via mutable email claim; the threat model this ADR's `(provider, subject)` lookup discipline blocks.
 The scope list, dependency pins and PR composition this decision was executed against are recorded in
 the pull request that implemented it, not in a separate plan.
+
+## Update — 2026-09-17
+
+Corrects § Decision "Data-model split", "JWT format" and "GDPR" against the schema in
+`server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.sql`.
+
+- The class is `integration.scm.domain.user.User` (table `user`), not `ExternalActor`;
+  `identity_link.external_actor_id` points at it without a foreign key, and `docs/auth-glossary.md`
+  uses "external actor" for it in prose.
+- `workspace_membership` is keyed `PRIMARY KEY (user_id, workspace_id)` with
+  `fk_workspace_membership_user → user(id)`, and `workspace.WorkspaceMembership` maps a
+  `@ManyToOne User`; `WorkspaceContextFilter` resolves the account's SCM users through
+  `workspace.CurrentAccountUsers` to reach a membership. The `account_id` re-key is
+  [ADR 0019](0019-workspace-membership-keyed-on-account.md), Proposed.
+- The join key is `identity_link (provider_id, subject)`, unique together with the team
+  (`uq_identity_link_provider_subject_team`; the `IdentityLink` row of `docs/auth-glossary.md`
+  spells the index), and `provider_id` references `identity_provider`
+  (`integration.core.connection.IdentityProvider`), not `git_provider`.
+- There is no `oauth_authorized_client` table. `core.auth.AccountHardDeleteSweeper` deletes
+  `identity_link`, `account_feature`, `issued_jwt` and `account_export` explicitly and keeps the
+  `account` row as a `DELETED` tombstone; it does not touch `workspace_membership`, which is not
+  keyed on the account.
+- The issuer is `hephaestus.auth.issuer` (`${HEPHAESTUS_AUTH_ISSUER:http://localhost:8080}` in
+  `application.yml`), not a fixed `https://hephaestus.aet.cit.tum.de`;
+  `core.auth.web.WellKnownController` serves the public keys at `/.well-known/jwks.json`.

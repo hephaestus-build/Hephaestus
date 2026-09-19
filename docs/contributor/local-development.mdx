@@ -55,8 +55,7 @@ Run the same checks from the shell with:
 ```bash
 vp run check:agents          # Format check, lint, and both typechecks outside the webapp
 vp run fix:agents            # check:agents, applying every safe fix
-vp run check:webapp          # The SPA's format and lint checks
-vp run typecheck:webapp      # The SPA's typecheck — a separate leg, not part of check:webapp
+vp run check:webapp          # The SPA's format and lint checks; the lint is type-aware and type-checks
 vp run check                 # Complete local quality gate
 ```
 

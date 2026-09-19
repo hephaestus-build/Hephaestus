@@ -23,8 +23,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import { ACCOUNT_DELETED_NOTICE_KEY } from "@/integrations/auth/account-deleted-notice";
-import { useAuth } from "@/integrations/auth/AuthContext";
+import { hasText } from "@/lib/text";
+import { ACCOUNT_DELETED_NOTICE_KEY } from "@/runtime/auth/account-deleted-notice";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 const DELETE_CONFIRM_PHRASE = "delete my account";
 
@@ -90,25 +91,29 @@ function DataExportRow() {
 		enabled: exportId !== null,
 		refetchInterval: (query) => {
 			const status = query.state.data?.status?.toUpperCase();
-			const stillWorking = status && EXPORT_IN_PROGRESS.has(status);
-			if (!stillWorking || requestedAt === null) return stillWorking ? 2000 : false;
+			const stillWorking = hasText(status) && EXPORT_IN_PROGRESS.has(status);
+			if (!stillWorking || requestedAt === null) {
+				return stillWorking ? 2000 : false;
+			}
 			return query.state.dataUpdatedAt - requestedAt < MAX_EXPORT_WAIT_MS ? 2000 : false;
 		},
 	});
 
 	const status = statusQuery.data?.status?.toUpperCase();
-	const inProgress = exportId !== null && status && EXPORT_IN_PROGRESS.has(status);
+	const inProgress = exportId !== null && hasText(status) && EXPORT_IN_PROGRESS.has(status);
 	// Polling gave up while the export was still working — let the user retry rather than spin forever.
 	const isStalled =
-		Boolean(inProgress) &&
+		inProgress &&
 		requestedAt !== null &&
 		statusQuery.dataUpdatedAt - requestedAt >= MAX_EXPORT_WAIT_MS;
-	const isPreparing = !isStalled && (requestExport.isPending || Boolean(inProgress));
+	const isPreparing = !isStalled && (requestExport.isPending || inProgress);
 	const isReady = status === "READY";
 	const isFailed = status === "FAILED" || status === "EXPIRED" || isStalled;
 
 	const handleDownload = async () => {
-		if (exportId === null) return;
+		if (exportId === null) {
+			return;
+		}
 		setIsDownloading(true);
 		try {
 			const response = await downloadDataExport({
@@ -130,29 +135,34 @@ function DataExportRow() {
 			const anchor = document.createElement("a");
 			anchor.href = url;
 			anchor.download = "hephaestus-export.json";
-			document.body.appendChild(anchor);
+			document.body.append(anchor);
 			anchor.click();
 			anchor.remove();
 			URL.revokeObjectURL(url);
 		} catch {
 			toast.error("Failed to download export. Please try again later.");
-		} finally {
-			setIsDownloading(false);
 		}
+		setIsDownloading(false);
 	};
 
 	let statusText = "";
-	if (requestExport.isPending) statusText = "Requesting export…";
-	else if (isPreparing) statusText = "Preparing your export… this can take a moment.";
-	else if (isReady) statusText = "Your export is ready to download.";
-	else if (isStalled) statusText = "This is taking longer than expected. Please try again.";
-	else if (isFailed) statusText = "The export could not be prepared. Please try again.";
+	if (requestExport.isPending) {
+		statusText = "Requesting export…";
+	} else if (isPreparing) {
+		statusText = "Preparing your export… this can take a moment.";
+	} else if (isReady) {
+		statusText = "Your export is ready to download.";
+	} else if (isStalled) {
+		statusText = "This is taking longer than expected. Please try again.";
+	} else if (isFailed) {
+		statusText = "The export could not be prepared. Please try again.";
+	}
 
 	return (
 		<div className="flex items-start justify-between gap-6 py-2">
-			<div className="space-y-1 flex-1">
+			<div className="flex-1 space-y-1">
 				<h3 className="text-base font-medium">Export my data</h3>
-				<p className="text-sm text-muted-foreground leading-relaxed">
+				<p className="text-sm leading-relaxed text-muted-foreground">
 					Download a copy of your personal data (GDPR Art. 20) as a JSON file.
 				</p>
 				{statusText && (
@@ -163,7 +173,13 @@ function DataExportRow() {
 			</div>
 			<div className="mt-1 flex shrink-0 gap-2">
 				{isReady ? (
-					<Button variant="outline" onClick={() => void handleDownload()} disabled={isDownloading}>
+					<Button
+						variant="outline"
+						onClick={() => {
+							void handleDownload();
+						}}
+						disabled={isDownloading}
+					>
 						{isDownloading ? <Spinner className="mr-1.5" /> : null}
 						Download
 					</Button>
@@ -208,21 +224,29 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 		// The server requires the confirmation header to equal the caller's own account id
 		// (a deliberate "you know who you are" guard against forged/CSRF-style deletes).
 		const userId = getUserId();
-		if (!confirmed || !userId) return;
+		if (!confirmed || !hasText(userId)) {
+			return;
+		}
 		deleteAccount.mutate({ headers: { "X-Confirm-Delete": userId } });
 	};
 
 	return (
 		<div className="flex items-start justify-between gap-6 py-2">
-			<div className="space-y-1 flex-1">
+			<div className="flex-1 space-y-1">
 				<h3 className="text-base font-medium">Delete account</h3>
-				<p className="text-sm text-muted-foreground leading-relaxed">
-					Permanently delete your account and erase your personal data (GDPR Art. 17). You'll be
+				<p className="text-sm leading-relaxed text-muted-foreground">
+					Permanently delete your account and erase your personal data (GDPR Art. 17). You’ll be
 					signed out on all devices immediately, and the account is scheduled for permanent deletion
-					after a ~48-hour cooldown. It can't be recovered from here.
+					after a ~48-hour cooldown. It can’t be recovered from here.
 				</p>
 			</div>
-			<AlertDialog onOpenChange={(open) => !open && setConfirmText("")}>
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!open) {
+						setConfirmText("");
+					}
+				}}
+			>
 				<AlertDialogTrigger
 					render={
 						<Button
@@ -239,7 +263,7 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 						<AlertDialogTitle>Delete your account?</AlertDialogTitle>
 						<AlertDialogDescription>
 							This signs you out on all devices immediately and disables your account, then
-							permanently deletes it and your data after a ~48-hour cooldown. It can't be undone
+							permanently deletes it and your data after a ~48-hour cooldown. It can’t be undone
 							from here. To confirm, type{" "}
 							<span className="font-medium text-foreground">{DELETE_CONFIRM_PHRASE}</span> below.
 						</AlertDialogDescription>
@@ -262,8 +286,8 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={handleConfirm}
-							disabled={!confirmed || !getUserId() || deleteAccount.isPending}
-							className="bg-destructive hover:bg-destructive/90"
+							disabled={!confirmed || !hasText(getUserId()) || deleteAccount.isPending}
+							variant="destructive"
 						>
 							{deleteAccount.isPending ? "Deleting…" : "Delete account"}
 						</AlertDialogAction>

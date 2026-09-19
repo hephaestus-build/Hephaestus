@@ -1,7 +1,9 @@
 const PLACEHOLDER_PREFIX = "WEB_ENV_";
 
 export function sanitizeEnvironmentValue(value?: string | boolean): string {
-	if (typeof value === "boolean") return value ? "true" : "false";
+	if (typeof value === "boolean") {
+		return value ? "true" : "false";
+	}
 	const trimmed = value?.trim() ?? "";
 	return trimmed.startsWith(PLACEHOLDER_PREFIX) ? "" : trimmed;
 }

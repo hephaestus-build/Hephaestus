@@ -1,6 +1,6 @@
 # ADR 0035: Pull request previews are label-gated and driven from the default branch
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-09-03 #1719 — agent execution host superseded by [0041](0041-compose-1x-kubernetes-2.md); 2026-09-17 — previews only for pull requests targeting `main`, and the concurrency groups)
 **Date:** 2026-08-28
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) (the runtime the controller is written for)
@@ -191,3 +191,21 @@ socket is unsafe. A preview may still use a neutralized copy of staging for the 
 model, but job-folder rendering, repository mirrors, provider credentials, and agent bindings are
 restricted to fixture workspaces. There is no separate less-restricted “non-agent preview” mode.
 Label admission is unchanged, and the Coolify production path is deleted in 2.0.
+
+## Update — 2026-09-17: previews only for pull requests targeting `main`, and the concurrency groups
+
+Supersedes two parts of § Decision; both stay standing as the record.
+
+- The base-branch filter of rejected option 5 is in place: `deploy-preview.yml` and
+  `cleanup-preview.yml` trigger on `pull_request_target` with `branches: [main]`, so a pull request
+  gets a preview only while it targets `main` and a stacked layer becomes eligible when it is
+  retargeted (`docs/contributor/ci-cd.mdx` § Preview deployments). Option 5's security argument
+  stands — the filter withholds no secret and fork exclusion is the boundary; it keeps the
+  privileged workflows anchored to the protected branch at the stacked-preview cost the option priced.
+- There is no single lifecycle group and no `queue: max`: deploy runs serialize in
+  `hephaestus-preview-admission` with `cancel-in-progress: false` (`deploy-preview.yml`), so
+  admission counting cannot race another deploy; cleanup and the nightly reconcile's per-pull-request
+  jobs serialize in `hephaestus-preview-lifecycle-<number>` (`cleanup-preview.yml`,
+  `reconcile-previews.yml`) and the reconcile's inventory step in `preview-reconcile-inventory`.
+  Deploy and cleanup of different pull requests may run at once; of the first revisit trigger, only
+  `PREVIEW_MAX_ACTIVE` bounding the shared host stands.

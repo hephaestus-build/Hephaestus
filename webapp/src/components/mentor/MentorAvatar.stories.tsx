@@ -56,7 +56,7 @@ export const Large: Story = {
  */
 export const CustomStyle: Story = {
 	args: {
-		className: "border-2 border-blue-500 shadow-lg",
+		className: "border-2 border-brand shadow-lg",
 	},
 };
 
@@ -65,12 +65,12 @@ export const CustomStyle: Story = {
  */
 export const ChatExample: Story = {
 	render: () => (
-		<div className="flex items-start gap-3 p-4 max-w-md">
+		<div className="flex max-w-md items-start gap-3 p-4">
 			<MentorAvatar />
 			<div className="flex-1 space-y-1">
-				<div className="bg-muted p-3 rounded-lg">
+				<div className="rounded-lg bg-muted p-3">
 					<p className="text-sm">
-						Hello! I'm your friendly mentor bot. How can I help you learn something new today?
+						Hello! I’m your friendly mentor bot. How can I help you learn something new today?
 					</p>
 				</div>
 				<p className="text-xs text-muted-foreground">Just now</p>

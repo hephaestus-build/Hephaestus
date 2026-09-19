@@ -34,9 +34,8 @@ async function report(needs: unknown, verdict = "success") {
 			rendered.push([label, url]);
 			return output;
 		},
-		write: () => {
+		write: async () => {
 			rendered.push("written");
-			return Promise.resolve();
 		},
 	};
 	const completed: unknown = runInNewContext(`(async () => { ${String(script)} })()`, {
@@ -52,13 +51,15 @@ async function report(needs: unknown, verdict = "success") {
 }
 
 void test("the status-writing summary remains checkout-free and uses native workflow data", () => {
-	assert.match(String(summary.get("uses")), /^actions\/github-script@/);
+	assert.match(String(summary.get("uses")), /^actions\/github-script@/u);
 	assert.equal(summary.getIn(["env", "NEEDS"]), `\${{ toJSON(needs) }}`);
 	assert.equal(summary.getIn(["env", "VERDICT"]), `\${{ steps.evaluate.outputs.status }}`);
 	assert.equal(summary.get("if"), "always()");
-	for (const item of steps.items)
-		if (isMap(item))
-			assert.doesNotMatch(String(item.get("uses")), /checkout|setup-toolchain|^\.\//);
+	for (const item of steps.items) {
+		if (isMap(item)) {
+			assert.doesNotMatch(String(item.get("uses")), /checkout|setup-toolchain|^\.\//u);
+		}
+	}
 	assert.equal(workflow.getIn(["jobs", "all-ci-passed", "permissions", "contents"]), undefined);
 });
 
@@ -68,7 +69,9 @@ void test("the summary includes every job and counts actual skips without invent
 	const needs = Object.fromEntries(jobs.items.map((name) => [String(name), { result: "skipped" }]));
 	needs["future-job"] = { result: "success" };
 	const text = await report(needs);
-	for (const name of Object.keys(needs)) assert.ok(text.includes(name));
+	for (const name of Object.keys(needs)) {
+		assert.ok(text.includes(name));
+	}
 	assert.ok(text.includes(`${jobs.items.length} of ${jobs.items.length + 1} jobs skipped`));
 	assert.ok(text.includes("Job conditions determine why"));
 	assert.ok(!text.includes("All workflows ran"));
@@ -86,25 +89,26 @@ void test("selection flags report PostgreSQL and false values without labelling 
 			},
 		},
 	});
-	for (const expected of ["postgres-image", "webapp", "false", "unfiltered", "Selection flags"])
+	for (const expected of ["postgres-image", "webapp", "false", "unfiltered", "Selection flags"]) {
 		assert.ok(text.includes(expected));
+	}
 	assert.ok(!text.includes("private-commit-value"));
 	assert.ok(!text.includes("Components Changed"));
 });
 
 void test("a missing verdict and a failure never render as success", async () => {
-	assert.ok((await report({ Build: { result: "failure" } }, "failure")).includes("CI failed"));
-	assert.ok(
-		(await report({ Build: { result: "cancelled" } }, "")).includes("did not produce a verdict"),
-	);
-	assert.ok(
-		(await report({ Build: { result: "success" } })).includes("All required checks passed"),
-	);
+	const failed = await report({ Build: { result: "failure" } }, "failure");
+	assert.ok(failed.includes("CI failed"));
+	const unverdicted = await report({ Build: { result: "cancelled" } }, "");
+	assert.ok(unverdicted.includes("did not produce a verdict"));
+	const passed = await report({ Build: { result: "success" } });
+	assert.ok(passed.includes("All required checks passed"));
 });
 
 void test("malformed job data fails instead of rendering a misleading report", async () => {
-	for (const needs of [null, [], { Build: null }, { Build: { result: "unknown" } }])
+	for (const needs of [null, [], { Build: null }, { Build: { result: "unknown" } }]) {
 		await assert.rejects(report(needs));
+	}
 });
 
 void test("a cancellation verdict is distinct from a missing verdict", async () => {

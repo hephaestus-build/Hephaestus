@@ -4,11 +4,11 @@ import { WorkflowIcon } from "lucide-react";
 import type { AgentJob, Practice, ReviewFeedback, ReviewObservation } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	REVIEW_STATUS_DEFS,
 	RESULT_PROCESSING_DEFS,
 } from "@/components/practice-vocabulary/review-status-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import {
 	Empty,
 	EmptyDescription,
@@ -94,9 +94,9 @@ export function ReviewRunDetailPage({
 		/>
 	);
 
-	if (isLoading)
+	if (isLoading) {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				{/* The shape the run resolves into, not a centred spinner in a fixed-height box: that box
 				    is a guaranteed jump, because nothing about 16rem matches what arrives. */}
@@ -114,9 +114,10 @@ export function ReviewRunDetailPage({
 				</div>
 			</article>
 		);
+	}
 	if (error != null || !job) {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				<QueryErrorAlert error={error} title="Couldn't load this review" onRetry={onRetry} />
 			</article>
@@ -128,7 +129,7 @@ export function ReviewRunDetailPage({
 		reviewEndedEarly && isEmptyResult(observations) && isEmptyResult(feedback);
 
 	return (
-		<article className="min-w-0 max-w-4xl space-y-8">
+		<article className="max-w-4xl min-w-0 space-y-8">
 			{breadcrumbs}
 			<ReviewDetailHeader
 				chips={
@@ -165,12 +166,12 @@ export function ReviewRunDetailPage({
 			</div>
 
 			{endedWithoutOutput ? (
-				<Empty className="border">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
 							<WorkflowIcon />
 						</EmptyMedia>
-						<EmptyTitle>Review couldn't be completed</EmptyTitle>
+						<EmptyTitle>Review couldn’t be completed</EmptyTitle>
 						<EmptyDescription>
 							This review ended before it produced observations or feedback.
 						</EmptyDescription>

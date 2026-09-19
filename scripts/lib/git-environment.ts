@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 
 /**
  * The variables git exports to a hook so that the commands the hook runs find the repository it is
@@ -26,7 +26,9 @@ export const GIT_REPOSITORY_VARIABLES = [
  */
 export function environmentWithoutGitRepository(): NodeJS.ProcessEnv {
 	const environment: NodeJS.ProcessEnv = { ...process.env };
-	for (const name of GIT_REPOSITORY_VARIABLES) environment[name] = undefined;
+	for (const name of GIT_REPOSITORY_VARIABLES) {
+		environment[name] = undefined;
+	}
 	return environment;
 }
 
@@ -37,8 +39,11 @@ export function environmentWithoutGitRepository(): NodeJS.ProcessEnv {
  */
 export function environmentForGitFixture(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 	const environment: NodeJS.ProcessEnv = { ...process.env };
-	for (const name of Object.keys(environment))
-		if (name.startsWith("GIT_")) environment[name] = undefined;
+	for (const name of Object.keys(environment)) {
+		if (name.startsWith("GIT_")) {
+			environment[name] = undefined;
+		}
+	}
 	return {
 		...environment,
 		GIT_CONFIG_GLOBAL: emptyGlobalConfiguration(),
@@ -52,9 +57,9 @@ let emptyConfiguration: string | undefined;
 /** `/dev/null` is not readable as a config file on every platform the tests run on, so: a file. */
 function emptyGlobalConfiguration(): string {
 	if (emptyConfiguration === undefined) {
-		const directory = mkdtempSync(join(tmpdir(), "git-fixture-config-"));
+		const directory = mkdtempSync(path.join(tmpdir(), "git-fixture-config-"));
 		process.once("exit", () => rmSync(directory, { recursive: true, force: true }));
-		emptyConfiguration = join(directory, "gitconfig");
+		emptyConfiguration = path.join(directory, "gitconfig");
 		writeFileSync(emptyConfiguration, "");
 	}
 	return emptyConfiguration;

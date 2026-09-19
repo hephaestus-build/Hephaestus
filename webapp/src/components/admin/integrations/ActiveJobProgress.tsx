@@ -2,6 +2,7 @@ import type { SyncJob } from "@/api/types.gen";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
+import { hasText } from "@/lib/text";
 
 import { JOB_TYPE_LABEL, jobProgress, phaseLabel } from "./sync-format";
 
@@ -17,7 +18,9 @@ export interface ActiveJobProgressProps {
  * first batch lands), and that path stays a spinner rather than inventing a denominator.
  */
 export function ActiveJobProgress({ job }: ActiveJobProgressProps) {
-	if (!job) return null;
+	if (!job) {
+		return null;
+	}
 
 	const processed = job.itemsProcessed ?? 0;
 	const total = job.itemsTotal;
@@ -37,7 +40,7 @@ export function ActiveJobProgress({ job }: ActiveJobProgressProps) {
 							aria-label="Sync progress"
 							getAriaValueText={() =>
 								`${processed.toLocaleString()} of ${total.toLocaleString()} items${
-									currentStep ? `, ${currentStep}` : ""
+									hasText(currentStep) ? `, ${currentStep}` : ""
 								}`
 							}
 						/>
@@ -48,16 +51,16 @@ export function ActiveJobProgress({ job }: ActiveJobProgressProps) {
 				) : (
 					<>
 						<Spinner className="size-4 shrink-0" />
-						{!currentStep && <span>{JOB_TYPE_LABEL[job.type]} running…</span>}
+						{!hasText(currentStep) && <span>{JOB_TYPE_LABEL[job.type]} running…</span>}
 					</>
 				)}
-				{phase && (
+				{hasText(phase) && (
 					<Badge variant="secondary" className="shrink-0">
 						{phaseLabel(phase)}
 					</Badge>
 				)}
 			</div>
-			{currentStep && (
+			{hasText(currentStep) && (
 				<p className="truncate" title={currentStep}>
 					{currentStep}
 				</p>

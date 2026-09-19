@@ -27,38 +27,41 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import path from "node:path";
 import { after, test } from "node:test";
 
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { unpassedTasks } from "./report-task-run.ts";
 
-const REPO_ROOT = resolve(import.meta.dirname, "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const ARGV = 'node -e "console.log(JSON.stringify(process.argv.slice(1)))" --';
 const PROBE_ENV = 'node -e "console.log(JSON.stringify([process.env.PROBE ?? null]))"';
 
-const workspace = mkdtempSync(join(tmpdir(), "runner-contract-"));
-mkdirSync(join(workspace, "node_modules"));
-for (const entry of ["vite-plus", "oxfmt", ".bin"])
+const workspace = mkdtempSync(path.join(tmpdir(), "runner-contract-"));
+mkdirSync(path.join(workspace, "node_modules"));
+for (const entry of ["vite-plus", "oxfmt", ".bin"]) {
 	symlinkSync(
-		join(REPO_ROOT, "node_modules", entry),
-		join(workspace, "node_modules", entry),
+		path.join(REPO_ROOT, "node_modules", entry),
+		path.join(workspace, "node_modules", entry),
 		process.platform === "win32" ? "junction" : "dir",
 	);
-writeFileSync(join(workspace, "pnpm-workspace.yaml"), "packages:\n  - .\n");
+}
+writeFileSync(path.join(workspace, "pnpm-workspace.yaml"), "packages:\n  - .\n");
 writeFileSync(
-	join(workspace, "package.json"),
+	path.join(workspace, "package.json"),
 	`${JSON.stringify(
 		{ name: "runner-contract", private: true, type: "module", scripts: { leaf: `${ARGV} leaf` } },
 		null,
 		"\t",
 	)}\n`,
 );
-mkdirSync(join(workspace, "fixtures"));
-for (const name of ["a.json", "b.json"]) writeFileSync(join(workspace, "fixtures", name), "{}\n");
+mkdirSync(path.join(workspace, "fixtures"));
+for (const name of ["a.json", "b.json"]) {
+	writeFileSync(path.join(workspace, "fixtures", name), "{}\n");
+}
 // The formatter probes write what they format, so they run in a directory no other task declares.
-const probeRoot = join(workspace, "root-probe");
-mkdirSync(join(probeRoot, "nested", "deep"), { recursive: true });
+const probeRoot = path.join(workspace, "root-probe");
+mkdirSync(path.join(probeRoot, "nested", "deep"), { recursive: true });
 // Written as data, so a quote inside a command never has to survive a second layer of quoting.
 const tasks = {
 	order: {
@@ -98,7 +101,7 @@ const tasks = {
 	},
 };
 writeFileSync(
-	join(workspace, "vite.config.ts"),
+	path.join(workspace, "vite.config.ts"),
 	`import { defineConfig } from "vite-plus";\nexport default defineConfig({ run: { tasks: ${JSON.stringify(tasks, null, "\t")} } });\n`,
 );
 
@@ -148,11 +151,11 @@ const UNFORMATTED_JSON = '{"probe":true}';
 const UNFORMATTED_TYPESCRIPT = "export default {probe:true}";
 
 void test("an oxfmt root pattern paired with !*/** reaches no subdirectory", () => {
-	const root = join(probeRoot, "root.json");
-	const rootTypeScript = join(probeRoot, "root.ts");
+	const root = path.join(probeRoot, "root.json");
+	const rootTypeScript = path.join(probeRoot, "root.ts");
 	// `.code-workspace` is the one extension in the root set oxfmt has to recognise as JSON.
-	const rootWorkspace = join(probeRoot, "root.code-workspace");
-	const nested = join(probeRoot, "nested", "out-of-scope.json");
+	const rootWorkspace = path.join(probeRoot, "root.code-workspace");
+	const nested = path.join(probeRoot, "nested", "out-of-scope.json");
 	writeFileSync(root, UNFORMATTED_JSON);
 	writeFileSync(rootTypeScript, UNFORMATTED_TYPESCRIPT);
 	writeFileSync(rootWorkspace, UNFORMATTED_JSON);
@@ -167,8 +170,8 @@ void test("an oxfmt root pattern paired with !*/** reaches no subdirectory", () 
 });
 
 void test("an oxfmt pattern containing a slash is anchored and reaches no deeper", () => {
-	const nested = join(probeRoot, "nested", "in-scope.json");
-	const deeper = join(probeRoot, "nested", "deep", "out-of-scope.json");
+	const nested = path.join(probeRoot, "nested", "in-scope.json");
+	const deeper = path.join(probeRoot, "nested", "deep", "out-of-scope.json");
 	writeFileSync(nested, UNFORMATTED_JSON);
 	writeFileSync(deeper, UNFORMATTED_JSON);
 
@@ -211,13 +214,15 @@ void test("a task runs its dependencies first; a group runs them and fails when 
 });
 
 void test("a task caches only when it runs its command itself", () => {
-	for (const task of ["delegating", "owning", "executing"]) run([task]);
+	for (const task of ["delegating", "owning", "executing"]) {
+		run([task]);
+	}
 	const delegating = run(["delegating"]).output;
 	const owning = run(["owning"]).output;
 	const executing = run(["executing"]).output;
-	assert.doesNotMatch(delegating, /cache hit/, delegating);
-	assert.doesNotMatch(executing, /cache hit/, executing);
-	assert.match(owning, /cache hit/, owning);
+	assert.doesNotMatch(delegating, /cache hit/u, delegating);
+	assert.doesNotMatch(executing, /cache hit/u, executing);
+	assert.match(owning, /cache hit/u, owning);
 });
 
 void test(
@@ -225,9 +230,9 @@ void test(
 	{ skip: process.platform === "win32" && "automatic tracking misses a new file on Windows" },
 	() => {
 		run(["tracking"]);
-		assert.match(run(["tracking"]).output, /cache hit/);
-		writeFileSync(join(workspace, "fixtures", "c.json"), "{}\n");
-		assert.doesNotMatch(run(["tracking"]).output, /cache hit/);
+		assert.match(run(["tracking"]).output, /cache hit/u);
+		writeFileSync(path.join(workspace, "fixtures", "c.json"), "{}\n");
+		assert.doesNotMatch(run(["tracking"]).output, /cache hit/u);
 	},
 );
 

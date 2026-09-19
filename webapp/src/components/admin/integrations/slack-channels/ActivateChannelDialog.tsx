@@ -35,7 +35,9 @@ export function ActivateChannelDialog({
 	const label = channel ? (channel.channelName ?? channel.slackChannelId) : "";
 
 	async function confirm() {
-		if (!channel) return;
+		if (!channel) {
+			return;
+		}
 		setSubmitting(true);
 		try {
 			await onConfirm(channel);
@@ -43,9 +45,8 @@ export function ActivateChannelDialog({
 		} catch {
 			// Rejection = keep the dialog open. The mutation's onError already surfaced the
 			// toast, so swallow here rather than let it escape as an unhandled rejection.
-		} finally {
-			setSubmitting(false);
 		}
+		setSubmitting(false);
 	}
 
 	return (
@@ -59,7 +60,7 @@ export function ActivateChannelDialog({
 					<DialogDescription>Activating #{label} will:</DialogDescription>
 				</DialogHeader>
 
-				<ul className="text-muted-foreground list-disc space-y-1.5 pl-5 text-sm">
+				<ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
 					<li>
 						<strong>Post a visible announcement</strong> in the channel so everyone knows AI
 						mentoring is on.
@@ -69,7 +70,7 @@ export function ActivateChannelDialog({
 						forward-only).
 					</li>
 					<li>
-						Let any member <strong>opt out</strong> individually from the app's Home tab.
+						Let any member <strong>opt out</strong> individually from the app’s Home tab.
 					</li>
 				</ul>
 
@@ -77,7 +78,12 @@ export function ActivateChannelDialog({
 					<DialogClose render={<Button variant="outline" disabled={submitting} />}>
 						Cancel
 					</DialogClose>
-					<Button onClick={() => void confirm()} disabled={submitting}>
+					<Button
+						onClick={() => {
+							void confirm();
+						}}
+						disabled={submitting}
+					>
 						{submitting ? "Activating…" : "Activate monitoring"}
 					</Button>
 				</DialogFooter>

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { asDate } from "@/lib/dates";
+import { hasText } from "@/lib/text";
 
 import { ConsentStateBadge } from "./consent-terms";
 
@@ -72,7 +73,9 @@ export function ChannelHistorySheet({
 						<QueryErrorAlert
 							error={error}
 							title="Could not load the consent history"
-							onRetry={() => void refetch()}
+							onRetry={() => {
+								void refetch();
+							}}
 						/>
 					)}
 
@@ -108,23 +111,19 @@ function HistoryEntry({ event }: { event: SlackChannelConsentEvent }) {
 	// `null` drops the date and keeps the transition: a stand-in instant would read as a recorded one.
 	const createdAt = asDate(event.createdAt);
 	return (
-		<Item
-			render={<li />}
-			size="sm"
-			className="items-start rounded-none border-x-0 border-t-0 border-b border-border last:border-b-0"
-		>
+		<Item render={<li />} size="sm" variant="row" className="items-start">
 			<ItemContent>
 				<ItemTitle className="gap-1.5">
 					{event.fromState && (
 						<>
 							<ConsentStateBadge state={event.fromState} />
-							<ArrowRightIcon className="text-muted-foreground size-3.5" aria-hidden />
+							<ArrowRightIcon className="size-3.5 text-muted-foreground" aria-hidden />
 						</>
 					)}
 					<ConsentStateBadge state={event.toState} />
 				</ItemTitle>
 				{createdAt && <ItemDescription>{format(createdAt, "PPpp")}</ItemDescription>}
-				{event.reason && (
+				{hasText(event.reason) && (
 					<ItemDescription className="text-foreground">{event.reason}</ItemDescription>
 				)}
 			</ItemContent>

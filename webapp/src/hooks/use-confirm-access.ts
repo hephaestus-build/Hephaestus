@@ -4,8 +4,9 @@ import {
 	listIdentityProvidersOptions,
 	listLinkedIdentitiesOptions,
 } from "@/api/@tanstack/react-query.gen";
-import { authClient } from "@/integrations/auth/auth-client";
 import { isSignInProvider } from "@/lib/sign-in-providers";
+import { hasText } from "@/lib/text";
+import { authClient } from "@/runtime/auth/auth-client";
 
 export function useConfirmAccess(enabled: boolean) {
 	const [instanceProviders, linkedIdentities] = useQueries({
@@ -17,7 +18,7 @@ export function useConfirmAccess(enabled: boolean) {
 
 	const linkedTypes = new Set(
 		(linkedIdentities.data ?? []).flatMap((identity) =>
-			identity.providerType ? [identity.providerType.toUpperCase()] : [],
+			hasText(identity.providerType) ? [identity.providerType.toUpperCase()] : [],
 		),
 	);
 

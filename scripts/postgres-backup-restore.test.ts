@@ -6,7 +6,7 @@ import { asArray, asRecord, asStringArray } from "./lib/json.ts";
 import { loadTasks } from "./lib/task-graph.ts";
 
 function preparation(args: string[], imageExists = true): (readonly string[])[] {
-	const script = new URL("./postgres-backup-restore-test.ts", import.meta.url).href;
+	const script = new URL("postgres-backup-restore-test.ts", import.meta.url).href;
 	const result = spawnSync(process.execPath, ["--input-type=module"], {
 		input: `
 import childProcess from "node:child_process";
@@ -47,7 +47,7 @@ await test("local drill builds one PostgreSQL image and lets Gradle prepare its 
 	assert.equal(commands.filter((command) => command[1] === "build").length, 1);
 	const gradle = commands.filter((command) => command[0] === "node");
 	assert.equal(gradle.length, 1);
-	assert.ok(gradle[0]?.includes(":application:liquibaseUpdate"));
+	assert.ok(gradle[0]?.includes(":application:liquibaseUpdate") === true);
 	assert.equal(commands.filter((command) => command[1] === "rmi").length, 1);
 });
 

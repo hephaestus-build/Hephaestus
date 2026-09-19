@@ -79,7 +79,7 @@ export const Default: Story = {
 		await expect(canvas.queryByText("GITLAB")).not.toBeInTheDocument();
 		// The env-seeded row carries the "seeded" badge; the admin-created ones do not.
 		canvas.getByText("seeded");
-		canvas.getByRole("button", { name: /Copy redirect URI for GitHub/i });
+		canvas.getByRole("button", { name: /Copy redirect URI for GitHub/iu });
 	},
 };
 
@@ -87,9 +87,9 @@ export const Default: Story = {
 export const RowBusy: Story = {
 	args: { mutatingIds: new Set(["github"]) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /Edit GitHub/i })).toBeDisabled();
-		await expect(canvas.getByRole("button", { name: /Edit ACME GitLab/i })).toBeEnabled();
-		await expect(canvas.getByRole("switch", { name: /Disable GitHub/i })).toHaveAttribute(
+		await expect(canvas.getByRole("button", { name: /Edit GitHub/iu })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /Edit ACME GitLab/iu })).toBeEnabled();
+		await expect(canvas.getByRole("switch", { name: /Disable GitHub/iu })).toHaveAttribute(
 			"aria-busy",
 			"true",
 		);
@@ -99,7 +99,7 @@ export const RowBusy: Story = {
 /** Deleting is a destructive, irreversible action: one hoisted dialog, destructive confirm button. */
 export const ConfirmDelete: Story = {
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Delete ACME Outline/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /Delete ACME Outline/iu }));
 		const dialog = await screen.findByRole("alertdialog");
 		await expect(within(dialog).getByRole("heading")).toHaveTextContent("Delete “ACME Outline”?");
 
@@ -117,7 +117,7 @@ export const DeletePending: Story = {
 	play: async ({ canvas }) => {
 		// The row's delete trigger is disabled mid-mutation, so open the dialog on a quiet row and
 		// assert the busy affordance on the mutating row instead.
-		await expect(canvas.getByRole("button", { name: /Delete ACME Outline/i })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /Delete ACME Outline/iu })).toBeDisabled();
 	},
 };
 
@@ -125,8 +125,8 @@ export const DeletePending: Story = {
 export const Empty: Story = {
 	args: { providers: [] },
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/No login providers yet/i);
-		await userEvent.click(canvas.getByRole("button", { name: /Add provider/i }));
+		canvas.getByText(/No login providers yet/iu);
+		await userEvent.click(canvas.getByRole("button", { name: /Add provider/iu }));
 		await expect(args.onAdd).toHaveBeenCalled();
 	},
 };
@@ -139,9 +139,9 @@ export const ErrorState: Story = {
 		error: { detail: "Upstream database unavailable." },
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/Could not load login providers/i);
-		canvas.getByText(/Upstream database unavailable/i);
-		await userEvent.click(canvas.getByRole("button", { name: /Retry/i }));
+		canvas.getByText(/Could not load login providers/iu);
+		canvas.getByText(/Upstream database unavailable/iu);
+		await userEvent.click(canvas.getByRole("button", { name: /Retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalled();
 	},
 };

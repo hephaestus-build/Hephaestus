@@ -25,15 +25,23 @@ const USD_RATE = new Intl.NumberFormat("en-US", {
 });
 
 export function formatCostUsd(value: number | undefined): string {
-	if (value == null) return "—";
-	if (value === 0) return "$0";
-	if (value > 0 && value < 0.005) return "<$0.01";
+	if (value == null) {
+		return "—";
+	}
+	if (value === 0) {
+		return "$0";
+	}
+	if (value > 0 && value < 0.005) {
+		return "<$0.01";
+	}
 	return USD.format(value);
 }
 
 /** A cap someone typed, rendered the way they typed it: `$50`, not `$50.00`. */
 export function formatCapUsd(value: number | undefined): string {
-	if (value == null) return "—";
+	if (value == null) {
+		return "—";
+	}
 	// Two formatters, not one with `maximumFractionDigits: 2`: that one emits "$49.5" for a
 	// half-dollar cap, and a single decimal reads as a typo in a column of money.
 	return Number.isInteger(value) ? USD_WHOLE.format(value) : USD.format(value);

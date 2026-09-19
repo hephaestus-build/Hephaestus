@@ -58,23 +58,23 @@ export const Sizes: StoryObj = {
 		<div className="flex gap-8">
 			<div>
 				<LeagueGoldIcon size="sm" />
-				<div className="mt-2 text-xs text-center text-muted-foreground">Small</div>
+				<div className="mt-2 text-center text-xs text-muted-foreground">Small</div>
 			</div>
 			<div>
 				<LeagueGoldIcon size="default" />
-				<div className="mt-2 text-xs text-center text-muted-foreground">Default</div>
+				<div className="mt-2 text-center text-xs text-muted-foreground">Default</div>
 			</div>
 			<div>
 				<LeagueGoldIcon size="lg" />
-				<div className="mt-2 text-xs text-center text-muted-foreground">Large</div>
+				<div className="mt-2 text-center text-xs text-muted-foreground">Large</div>
 			</div>
 			<div>
 				<LeagueGoldIcon size="max" />
-				<div className="mt-2 text-xs text-center text-muted-foreground">Max</div>
+				<div className="mt-2 text-center text-xs text-muted-foreground">Max</div>
 			</div>
 			<div className="w-76">
 				<LeagueGoldIcon size="full" />
-				<div className="mt-2 text-xs text-center text-muted-foreground">Full</div>
+				<div className="mt-2 text-center text-xs text-muted-foreground">Full</div>
 			</div>
 		</div>
 	),

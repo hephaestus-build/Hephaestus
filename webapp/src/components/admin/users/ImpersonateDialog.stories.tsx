@@ -46,6 +46,6 @@ export const Pending: Story = {
 	args: { isPending: true },
 	play: async () => {
 		await screen.findByRole("dialog");
-		await expect(screen.getByRole("button", { name: /impersonate/i })).toBeDisabled();
+		await expect(screen.getByRole("button", { name: /impersonate/iu })).toBeDisabled();
 	},
 };

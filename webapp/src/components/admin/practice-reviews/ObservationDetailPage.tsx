@@ -4,9 +4,9 @@ import { MessageSquareTextIcon } from "lucide-react";
 import type { GetPracticeReviewObservationResponse, Practice } from "@/api/types.gen";
 import { MissingRecordEmpty } from "@/components/common/MissingRecordEmpty";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { deliveryOutcome } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { withholdingReasonSentence } from "@/components/practice-vocabulary/withholding-defs";
 import {
 	Empty,
@@ -16,6 +16,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
+import { hasText } from "@/lib/text";
 
 import { ObservationEvidence } from "./ObservationEvidence";
 import { type ObservationsSearch, reviewScopeSearch } from "./review-search";
@@ -71,18 +72,19 @@ export function ObservationDetailPage({
 		/>
 	);
 
-	if (isLoading)
+	if (isLoading) {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				<div className="flex min-h-64 items-center justify-center">
 					<Spinner className="size-7" />
 				</div>
 			</article>
 		);
-	if (error) {
+	}
+	if (error != null) {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				<QueryErrorAlert error={error} title="Couldn't load this observation" onRetry={onRetry} />
 			</article>
@@ -90,7 +92,7 @@ export function ObservationDetailPage({
 	}
 	if (!observation) {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				<MissingRecordEmpty title="This observation hasn't loaded" onRetry={onRetry} />
 			</article>
@@ -99,7 +101,7 @@ export function ObservationDetailPage({
 	const artifactSlug = reviewArtifactTypeSlug(observation.artifact.type);
 
 	return (
-		<article className="min-w-0 max-w-4xl space-y-8">
+		<article className="max-w-4xl min-w-0 space-y-8">
 			{breadcrumbs}
 			<ReviewDetailHeader
 				chips={
@@ -154,12 +156,12 @@ export function ObservationDetailPage({
 				</ReviewFact>
 			</ReviewFactGrid>
 
-			{observation.evidenceRationale && (
+			{hasText(observation.evidenceRationale) && (
 				<section aria-labelledby="reasoning-heading" className="space-y-2">
 					<h3 id="reasoning-heading" className="text-lg font-semibold">
 						Why this was raised
 					</h3>
-					<p className="whitespace-pre-wrap text-sm leading-relaxed">
+					<p className="text-sm leading-relaxed whitespace-pre-wrap">
 						{observation.evidenceRationale}
 					</p>
 				</section>
@@ -180,7 +182,7 @@ export function ObservationDetailPage({
 					Feedback from this observation
 				</h3>
 				{observation.feedback.length === 0 ? (
-					<Empty className="border">
+					<Empty variant="outlined">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<MessageSquareTextIcon />

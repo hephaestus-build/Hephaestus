@@ -6,6 +6,7 @@ import {
 	autonomyTotal,
 } from "@/lib/practice-autonomy";
 
+import { buildAutonomyFixture, scaleFixture } from "./fixtures";
 import {
 	countOverrides,
 	groupPracticesByGroup,
@@ -13,7 +14,6 @@ import {
 	reviewableByHephaestus,
 	UNASSIGNED_GROUP_KEY,
 } from "./practice-autonomy-model";
-import { buildAutonomyFixture, scaleFixture } from "./story-mock-data";
 
 const fixture = buildAutonomyFixture({
 	workspaceDefault: "HUMAN_APPROVAL",

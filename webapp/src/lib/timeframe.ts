@@ -16,6 +16,8 @@ import {
 	subWeeks,
 } from "date-fns";
 
+import { hasText } from "@/lib/text";
+
 export type TimeframePreset =
 	| "all-activity"
 	| "this-week"
@@ -32,7 +34,8 @@ export interface LeaderboardSchedule {
 }
 
 export const DEFAULT_SCHEDULE: LeaderboardSchedule = {
-	day: 1, // Monday
+	// Monday
+	day: 1,
 	hour: 9,
 	minute: 0,
 };
@@ -104,41 +107,30 @@ export function getDateRangeForPreset(
 	now.setSeconds(0, 0);
 
 	switch (preset) {
-		case "all-activity":
+		case "all-activity": {
 			return {
 				after: new Date(0),
 				before: undefined,
 			};
+		}
 
 		case "this-week": {
 			const weekStart = getLeaderboardWeekStart(now, schedule);
-			return {
-				after: weekStart,
-				before: undefined, // Open-ended to show activity "so far"
-			};
+			return { after: weekStart, before: undefined };
 		}
 
 		case "last-week": {
 			const lastWeekStart = getLastLeaderboardWeekStart(now, schedule);
 			const lastWeekEnd = getLeaderboardWeekEnd(lastWeekStart);
-			return {
-				after: lastWeekStart,
-				before: lastWeekEnd, // Bounded - it's a completed week
-			};
+			return { after: lastWeekStart, before: lastWeekEnd };
 		}
 
 		case "this-month": {
-			return {
-				after: startOfMonth(now),
-				before: undefined, // Open-ended
-			};
+			return { after: startOfMonth(now), before: undefined };
 		}
 
 		case "last-month": {
-			return {
-				after: startOfMonth(subMonths(now, 1)),
-				before: startOfMonth(now), // Bounded - completed month
-			};
+			return { after: startOfMonth(subMonths(now, 1)), before: startOfMonth(now) };
 		}
 
 		case "custom": {
@@ -150,9 +142,10 @@ export function getDateRangeForPreset(
 				};
 			}
 			if (customRange.to) {
+				// Exclusive end
 				return {
 					after: startOfDay(customRange.from),
-					before: addDays(startOfDay(customRange.to), 1), // Exclusive end
+					before: addDays(startOfDay(customRange.to), 1),
 				};
 			}
 			// Only start date provided - open-ended
@@ -183,18 +176,24 @@ export function formatDateRangeForApi(range: { after: Date; before: Date | undef
  */
 export function formatDropdownLabel(preset: TimeframePreset): string {
 	switch (preset) {
-		case "all-activity":
+		case "all-activity": {
 			return "All time";
-		case "this-week":
+		}
+		case "this-week": {
 			return "This week";
-		case "last-week":
+		}
+		case "last-week": {
 			return "Last week";
-		case "this-month":
+		}
+		case "this-month": {
 			return "This month";
-		case "last-month":
+		}
+		case "last-month": {
 			return "Last month";
-		case "custom":
+		}
+		case "custom": {
 			return "Custom range";
+		}
 	}
 }
 
@@ -208,12 +207,15 @@ export function detectPresetFromDates(
 	schedule: LeaderboardSchedule = DEFAULT_SCHEDULE,
 	enableAllActivity = false,
 ): TimeframePreset {
-	if (!afterStr) {
-		return beforeStr ? "custom" : enableAllActivity ? "all-activity" : "this-week";
+	if (!hasText(afterStr)) {
+		if (hasText(beforeStr)) {
+			return "custom";
+		}
+		return enableAllActivity ? "all-activity" : "this-week";
 	}
 
 	const after = parseISO(afterStr);
-	const before = beforeStr ? parseISO(beforeStr) : undefined;
+	const before = hasText(beforeStr) ? parseISO(beforeStr) : undefined;
 
 	// All time is open-ended; a bounded epoch range is still a custom selection.
 	if (enableAllActivity && !before && isEqual(after, new Date(0))) {

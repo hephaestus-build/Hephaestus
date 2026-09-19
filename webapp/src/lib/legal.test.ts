@@ -78,17 +78,23 @@ describe("isSafeLegalHref / isSafeLegalImageSrc", () => {
 	});
 });
 
+function requestUrl(input: string | URL | Request): string {
+	if (typeof input === "string") {
+		return input;
+	}
+	return input instanceof URL ? input.href : input.url;
+}
+
 describe("resolveLegalContent", () => {
-	const originalFetch = globalThis.fetch;
 	let requestedUrls: string[] = [];
 
 	beforeEach(() => {
 		requestedUrls = [];
-		globalThis.fetch = vi.fn();
+		vi.spyOn(globalThis, "fetch");
 	});
 
 	afterEach(() => {
-		globalThis.fetch = originalFetch;
+		vi.restoreAllMocks();
 	});
 
 	interface MockedFile {
@@ -106,7 +112,7 @@ describe("resolveLegalContent", () => {
 		directories: Record<string, MockedFile> = {},
 	) {
 		vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
-			const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+			const url = requestUrl(input);
 			requestedUrls.push(url);
 			const mounted = Object.entries(directories).find(([prefix]) => url.startsWith(prefix));
 			const {

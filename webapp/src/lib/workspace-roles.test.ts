@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { hasMinimumWorkspaceRole, type WorkspaceRole } from "./workspace-roles";
 
 describe("hasMinimumWorkspaceRole", () => {
-	const cases: Array<[WorkspaceRole | undefined | null, WorkspaceRole, boolean]> = [
+	const cases: [WorkspaceRole | undefined | null, WorkspaceRole, boolean][] = [
 		["OWNER", "MEMBER", true],
 		["OWNER", "ADMIN", true],
 		["OWNER", "OWNER", true],

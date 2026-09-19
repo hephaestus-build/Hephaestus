@@ -38,7 +38,7 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
 		<DialogPrimitive.Backdrop
 			data-slot="dialog-overlay"
 			className={cn(
-				"data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs fixed inset-0 isolate z-50",
+				"fixed inset-0 isolate z-50 bg-black/10 duration-100 data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0 supports-backdrop-filter:backdrop-blur-xs",
 				className,
 			)}
 			{...props}
@@ -60,7 +60,7 @@ function DialogContent({
 			<DialogPrimitive.Popup
 				data-slot="dialog-content"
 				className={cn(
-					"bg-background data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 ring-foreground/10 grid max-w-[calc(100%-2rem)] gap-4 rounded-xl p-4 text-sm ring-1 duration-100 sm:max-w-sm fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none",
+					"fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-background p-4 text-sm ring-1 ring-foreground/10 duration-100 outline-none data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 sm:max-w-sm",
 					// `svh`, not `dvh`: mobile browser chrome collapses while scrolling, and `dvh` would
 					// resize the dialog under the user's finger.
 					"max-h-[calc(100svh-2rem)] overflow-y-auto overscroll-contain",
@@ -89,7 +89,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
 		// `shrink-0`: `DialogBody` is `flex-1` off a zero basis, so the header is what would be squashed.
 		<div
 			data-slot="dialog-header"
-			className={cn("gap-2 flex shrink-0 flex-col", className)}
+			className={cn("flex shrink-0 flex-col gap-2", className)}
 			{...props}
 		/>
 	);
@@ -133,7 +133,7 @@ function DialogFooter({
 		<div
 			data-slot="dialog-footer"
 			className={cn(
-				"bg-muted/50 -mx-4 -mb-4 rounded-b-xl border-t p-4 flex shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+				"-mx-4 -mb-4 flex shrink-0 flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
 				className,
 			)}
 			{...props}
@@ -161,7 +161,7 @@ function DialogDescription({ className, ...props }: DialogPrimitive.Description.
 		<DialogPrimitive.Description
 			data-slot="dialog-description"
 			className={cn(
-				"text-muted-foreground *:[a]:hover:text-foreground text-sm *:[a]:underline *:[a]:underline-offset-3",
+				"text-sm text-muted-foreground *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
 				className,
 			)}
 			{...props}

@@ -8,12 +8,12 @@ import type {
 } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { DeliveryPolicyTrace } from "@/components/practice-trace/DeliveryPolicyTrace";
 import { DeliveryTrace } from "@/components/practice-vocabulary/DeliveryTrace";
 import { codeCitationLocator } from "@/components/practice-vocabulary/evidence-source-defs";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
 import { PLACEMENT_DEFS } from "@/components/practice-vocabulary/placement-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import {
 	Empty,
 	EmptyDescription,
@@ -22,6 +22,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
+import { hasText } from "@/lib/text";
 import { APPROVAL_DECISION_DEFS } from "./approval-decision-defs";
 import { FeedbackBody } from "./FeedbackBody";
 import { proposalRejectionReasonLabel } from "./proposal-rejection-vocabulary";
@@ -73,18 +74,19 @@ export function FeedbackDetailPage({
 		/>
 	);
 
-	if (state.status === "loading")
+	if (state.status === "loading") {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				<div className="flex min-h-64 items-center justify-center">
 					<Spinner className="size-7" />
 				</div>
 			</article>
 		);
+	}
 	if (state.status === "error") {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{breadcrumbs}
 				<QueryErrorAlert
 					error={state.error}
@@ -94,23 +96,25 @@ export function FeedbackDetailPage({
 			</article>
 		);
 	}
-	const feedback = state.feedback;
+	const { feedback } = state;
 	const subjectDiffers = feedback.subject && feedback.subject.id !== feedback.recipient?.id;
 	const artifactSlug = feedback.artifact
 		? reviewArtifactTypeSlug(feedback.artifact.type)
 		: undefined;
-	const anchoredPlacements = feedback.placements.filter((placement) => placement.anchorPath);
+	const anchoredPlacements = feedback.placements.filter((placement) =>
+		hasText(placement.anchorPath),
+	);
 	const packageSize = feedback.proposedPlacements.length;
-	const deliveredPlacements = feedback.placements.filter(
-		(placement) => placement.postedCommentRef,
+	const deliveredPlacements = feedback.placements.filter((placement) =>
+		hasText(placement.postedCommentRef),
 	).length;
 	const deliveryInProgress =
 		feedback.deliveryState === "PREPARED" ||
 		(feedback.deliveryState === "PARTIALLY_DELIVERED" && !feedback.suppressionReason);
-	const approval = feedback.approval;
+	const { approval } = feedback;
 
 	return (
-		<article className="min-w-0 max-w-4xl space-y-8">
+		<article className="max-w-4xl min-w-0 space-y-8">
 			{breadcrumbs}
 			<ReviewDetailHeader
 				title={`Feedback for ${subjectLabel(feedback.recipient)}`}
@@ -125,10 +129,10 @@ export function FeedbackDetailPage({
 			/>
 
 			<ReviewFactGrid>
-				<ReviewFact label={subjectDiffers ? "Addressed to" : "Developer"}>
+				<ReviewFact label={subjectDiffers === true ? "Addressed to" : "Developer"}>
 					<div className="space-y-1">
 						<ReviewPerson person={feedback.recipient} />
-						{subjectDiffers && <ReviewPerson person={feedback.subject} prefix="About" />}
+						{subjectDiffers === true && <ReviewPerson person={feedback.subject} prefix="About" />}
 					</div>
 				</ReviewFact>
 				<ReviewFact label="Reviewed work">
@@ -199,7 +203,7 @@ export function FeedbackDetailPage({
 						</ul>
 					</div>
 				)}
-				{feedback.replacesId && (
+				{hasText(feedback.replacesId) && (
 					<p className="text-sm text-muted-foreground">
 						<Link
 							to="/w/$workspaceSlug/admin/practices/reviews/delivery/$feedbackId"
@@ -218,7 +222,7 @@ export function FeedbackDetailPage({
 					What it was based on
 				</h3>
 				{feedback.observations.length === 0 ? (
-					<Empty className="border">
+					<Empty variant="outlined">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<ScanSearchIcon />
@@ -286,7 +290,9 @@ export function FeedbackDetailPage({
 }
 
 function ApprovalAudit({ approval }: { approval: FeedbackApproval }) {
-	if (!approval.decision) return null;
+	if (!approval.decision) {
+		return null;
+	}
 	const rejected = approval.decision === "REJECTED";
 	return (
 		<div className="rounded-lg border p-3 text-sm">
@@ -304,22 +310,22 @@ function ApprovalAudit({ approval }: { approval: FeedbackApproval }) {
 						</dd>
 					</>
 				) : null}
-				{approval.actorAccountId != null ? (
+				{approval.actorAccountId == null ? null : (
 					<>
 						<dt className="font-medium text-foreground">Reviewer</dt>
 						<dd>Account {approval.actorAccountId}</dd>
 					</>
-				) : null}
+				)}
 				{rejected && approval.rejectionReason ? (
 					<>
 						<dt className="font-medium text-foreground">Reason</dt>
 						<dd>{proposalRejectionReasonLabel(approval.rejectionReason)}</dd>
 					</>
 				) : null}
-				{rejected && approval.rejectionNote ? (
+				{rejected && hasText(approval.rejectionNote) ? (
 					<>
 						<dt className="font-medium text-foreground">Note</dt>
-						<dd className="min-w-0 whitespace-pre-wrap break-words">{approval.rejectionNote}</dd>
+						<dd className="min-w-0 break-words whitespace-pre-wrap">{approval.rejectionNote}</dd>
 					</>
 				) : null}
 			</dl>
@@ -329,7 +335,9 @@ function ApprovalAudit({ approval }: { approval: FeedbackApproval }) {
 
 function anchorLabel(placement: ReviewPlacement): string {
 	const { anchorPath, anchorStartLine, anchorEndLine } = placement;
-	if (!anchorPath || !anchorStartLine) return anchorPath ?? "";
+	if (!hasText(anchorPath) || anchorStartLine === undefined) {
+		return anchorPath ?? "";
+	}
 	return codeCitationLocator({
 		path: anchorPath,
 		startLine: anchorStartLine,

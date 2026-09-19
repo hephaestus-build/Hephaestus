@@ -8,7 +8,7 @@ import {
 	mockPracticeDefinitionOptions,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
-import { expectNoOverflowingElement } from "@/test/reflow";
+import { expectNoOverflowingElement } from "@/stories/reflow";
 
 import { HephaestusVersionPanel } from "./HephaestusVersionPanel";
 
@@ -31,7 +31,6 @@ const shipped = {
 };
 
 const meta = {
-	title: "Instance admin/Practice catalog/Hephaestus default panel",
 	component: HephaestusVersionPanel,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -71,7 +70,7 @@ export const Customized: Story = {
 export const UpdateChangesReviewBehavior: Story = {
 	args: { status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }), shipped },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/would change review rules/)).toBeVisible();
+		await expect(canvas.getByText(/would change review rules/u)).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Review Hephaestus update" }));
 		await expect(await canvas.findByText("The updated default criteria.")).toBeVisible();
 		await expect(canvas.getByText("How it is reviewed")).toBeVisible();
@@ -82,7 +81,7 @@ export const UpdateChangesReviewBehavior: Story = {
 		await expect(canvas.getAllByText("AI-supported mentoring").length).toBeGreaterThan(0);
 		await expect(canvas.getAllByText("Pull request details").length).toBeGreaterThan(0);
 		await expect(
-			canvas.getByText(/Nobody has measured how often this practice is right/),
+			canvas.getByText(/Nobody has measured how often this practice is right/u),
 		).toBeVisible();
 		await expect(
 			canvas.getByText("Repository evidence does not establish behavior in a deployed runtime."),
@@ -96,7 +95,7 @@ export const UpdateChangesReviewBehavior: Story = {
 export const WordingOnlyUpdate: Story = {
 	args: { status: status({ state: "UPDATE_WAITING", changeKind: "WORDING" }), shipped },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/review rules would stay the same/i)).toBeVisible();
+		await expect(canvas.getByText(/review rules would stay the same/iu)).toBeVisible();
 	},
 };
 
@@ -113,9 +112,9 @@ export const GroupAppearanceUpdate: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText(/would change the group's name, description, icon, or color/),
+			canvas.getByText(/would change the group's name, description, icon, or color/u),
 		).toBeVisible();
-		await expect(canvas.queryByText(/detect/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/detect/u)).not.toBeInTheDocument();
 	},
 };
 

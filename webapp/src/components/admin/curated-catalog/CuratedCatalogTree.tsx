@@ -1,16 +1,16 @@
 import { GripVertical, MoreHorizontal } from "lucide-react";
 
 import type { CuratedGroup, CuratedPracticeSummary } from "@/api/types.gen";
-import { automatedReviewLimitationLabel } from "@/components/admin/practice-catalog/evidence-presentation";
-import { GroupPill } from "@/components/admin/practice-catalog/GroupPill";
+import { automatedReviewLimitationLabel } from "@/components/admin/practice-editor/evidence-presentation";
+import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
 import {
 	type ActionTriggerRef,
 	type CatalogEntryMoveActions,
 	type CatalogMoveActions,
 	SortableCatalogTree,
 	UNASSIGNED_CATALOG_BUCKET,
-} from "@/components/admin/practice-catalog/SortableCatalogTree";
-import { DetailStackLink } from "@/components/core/detail-drawer/DetailStackLink";
+} from "@/components/admin/practice-editor/SortableCatalogTree";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +28,7 @@ import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/i
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { artifactKindLabel } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 import { curatedGroupLevel, curatedPracticeLevel } from "./curated-catalog-search";
 import { CuratedEntryBadges } from "./CuratedEntryBadges";
@@ -83,12 +84,18 @@ export function CuratedCatalogTree({
 	const treePractices: TreePractice[] = practices.map((practice) => ({
 		...practice,
 		groupSlug:
-			practice.groupSlug && knownGroups.has(practice.groupSlug) ? practice.groupSlug : undefined,
+			hasText(practice.groupSlug) && knownGroups.has(practice.groupSlug)
+				? practice.groupSlug
+				: undefined,
 		displayOrder: practice.position,
 		missingGroupSlug:
-			practice.groupSlug && !knownGroups.has(practice.groupSlug) ? practice.groupSlug : undefined,
+			hasText(practice.groupSlug) && !knownGroups.has(practice.groupSlug)
+				? practice.groupSlug
+				: undefined,
 		moveSourceGroupSlug:
-			practice.groupSlug && !knownGroups.has(practice.groupSlug) ? practice.groupSlug : undefined,
+			hasText(practice.groupSlug) && !knownGroups.has(practice.groupSlug)
+				? practice.groupSlug
+				: undefined,
 	}));
 	const blockedBuckets = canReorder
 		? new Set<string>()
@@ -136,7 +143,9 @@ export function CuratedCatalogTree({
 			)}
 			renderEntryPreview={(practice) => <PracticeDragPreview practice={practice} />}
 			getEmptyLabel={(groupSlug, total) => {
-				if (total > 0) return "No matching practices.";
+				if (total > 0) {
+					return "No matching practices.";
+				}
 				return groupSlug === null ? "Nothing unassigned." : "No practices here.";
 			}}
 		/>
@@ -234,10 +243,10 @@ function PracticeDetails({ practice }: { practice: TreePractice }) {
 	const reviewLimitation = automatedReviewLimitationLabel(practice.automatedReview);
 	return (
 		<ItemContent className="min-w-0">
-			<ItemTitle className="w-full min-w-0 line-clamp-none">
+			<ItemTitle className="line-clamp-none w-full min-w-0">
 				<DetailStackLink
 					entry={curatedPracticeLevel(practice.slug)}
-					className="break-words rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 				>
 					{practice.name}
 				</DetailStackLink>
@@ -247,7 +256,7 @@ function PracticeDetails({ practice }: { practice: TreePractice }) {
 				{reviewLimitation && <Badge variant="outline">{reviewLimitation}</Badge>}
 				{parentUnavailable && (
 					<Badge variant="outline">
-						{practice.missingGroupSlug
+						{hasText(practice.missingGroupSlug)
 							? "Group no longer exists"
 							: "Excluded because its group is excluded"}
 					</Badge>
@@ -277,23 +286,22 @@ function PracticeActions({
 	onStatusChange: (practice: CuratedPracticeSummary, offered: boolean) => void;
 	onExclude: (practice: CuratedPracticeSummary) => void;
 }) {
-	const group = practice.groupSlug
+	const group = hasText(practice.groupSlug)
 		? groups.find((candidate) => candidate.slug === practice.groupSlug)
 		: undefined;
 	const parentUnavailable = Boolean(practice.missingGroupSlug) || group?.status.offered === false;
-	const includeLabel = practice.missingGroupSlug
-		? "Move to Unassigned or an included group first"
-		: parentUnavailable
-			? "Include when its group is included"
-			: "Include for workspaces";
-	const switchLabel = practice.missingGroupSlug
-		? `${practice.name} cannot be included until it is moved out of the missing group`
-		: parentUnavailable
-			? practice.status.offered
-				? `${practice.name} is excluded because its group is excluded`
-				: `${practice.name} is not offered to workspaces`
-			: `Offer ${practice.name} to workspaces`;
-	const persistedPractice = practice.missingGroupSlug
+	let includeLabel = "Include for workspaces";
+	let switchLabel = `Offer ${practice.name} to workspaces`;
+	if (hasText(practice.missingGroupSlug)) {
+		includeLabel = "Move to Unassigned or an included group first";
+		switchLabel = `${practice.name} cannot be included until it is moved out of the missing group`;
+	} else if (parentUnavailable) {
+		includeLabel = "Include when its group is included";
+		switchLabel = practice.status.offered
+			? `${practice.name} is excluded because its group is excluded`
+			: `${practice.name} is not offered to workspaces`;
+	}
+	const persistedPractice = hasText(practice.missingGroupSlug)
 		? { ...practice, groupSlug: practice.missingGroupSlug }
 		: practice;
 	return (
@@ -393,17 +401,12 @@ function PracticeActions({
 
 function PracticeDragPreview({ practice }: { practice: TreePractice }) {
 	return (
-		<Item
-			aria-hidden="true"
-			variant="outline"
-			size="xs"
-			className="flex-nowrap bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/10"
-		>
+		<Item aria-hidden="true" variant="overlay" size="xs" className="flex-nowrap">
 			<div className="flex size-8 shrink-0 items-center justify-center text-muted-foreground">
 				<GripVertical className="size-4" />
 			</div>
 			<ItemContent className="min-w-0">
-				<ItemTitle className="break-words line-clamp-none">{practice.name}</ItemTitle>
+				<ItemTitle className="line-clamp-none break-words">{practice.name}</ItemTitle>
 				<ItemDescription>{artifactKindLabel(practice.artifactKind)}</ItemDescription>
 			</ItemContent>
 		</Item>

@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Outlet, redirect, useMatchRoute } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 
 import { adminGetInstanceSettingsOptions } from "@/api/@tanstack/react-query.gen";
 import { SilentModeBanner } from "@/components/admin/instance/SilentModeBanner";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { isAppAdmin, resolveCurrentUser } from "@/integrations/auth/guard";
+import { isAppAdmin, resolveCurrentUser } from "@/runtime/auth/guard";
 
 /**
  * The client is not a security boundary — every `/admin` endpoint is enforced server-side by
@@ -26,17 +27,22 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminLayout() {
 	const settingsQuery = useQuery(adminGetInstanceSettingsOptions());
 	// The settings page owns this query's error; a second alert here would just stack on it.
-	const onSettingsPage = !!useMatchRoute()({ to: "/admin/settings" });
-	const topStrip = settingsQuery.data?.silentModeEngaged ? (
-		<SilentModeBanner settings={settingsQuery.data} />
-	) : settingsQuery.isError && !onSettingsPage ? (
+	const onSettingsPage = useMatchRoute()({ to: "/admin/settings" }) !== false;
+	let topStrip: ReactNode = null;
+	if (settingsQuery.data?.silentModeEngaged === true) {
+		topStrip = <SilentModeBanner settings={settingsQuery.data} />;
+	} else if (settingsQuery.isError && !onSettingsPage) {
 		// Unknown delivery state is not "delivering": say so rather than silently showing nothing.
-		<QueryErrorAlert
-			error={settingsQuery.error}
-			title="Couldn't load the instance delivery state"
-			onRetry={() => void settingsQuery.refetch()}
-		/>
-	) : null;
+		topStrip = (
+			<QueryErrorAlert
+				error={settingsQuery.error}
+				title="Couldn't load the instance delivery state"
+				onRetry={() => {
+					void settingsQuery.refetch();
+				}}
+			/>
+		);
+	}
 	return (
 		<>
 			{topStrip ? <div className="mx-auto mb-6 w-full max-w-6xl">{topStrip}</div> : null}

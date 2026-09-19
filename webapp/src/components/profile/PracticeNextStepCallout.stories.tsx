@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { PracticeNextStepCallout } from "./PracticeNextStepCallout";
 
 const meta = {
-	title: "Profile/Practice next step callout",
 	component: PracticeNextStepCallout,
 	parameters: {
 		layout: "padded",

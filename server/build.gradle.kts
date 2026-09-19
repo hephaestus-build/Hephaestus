@@ -1,11 +1,7 @@
 import io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension
 
-// Two build plugins put vulnerable libraries on the script classpath, and both are at their latest
-// release: the GraphQL codegen plugin brings `graphql-java` 20.2 (fixed in 20.9), and the OpenAPI
-// Generator brings `handlebars` 4.3.1 (fixed in 4.5.2). Neither reaches a shipped image — they run
-// only while generating clients — but they are the repository's only open Dependabot alerts. Each
-// is
-// forced inside the line its plugin compiled against, so the API those plugins call does not move.
+// Keep the code generators' transitive security fixes within the API lines their plugins use.
+// These dependencies run at build time and do not reach the application image.
 buildscript {
     configurations.classpath {
         resolutionStrategy {

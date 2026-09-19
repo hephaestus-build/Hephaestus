@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import { hasText } from "@/lib/text";
 
 export interface DateRangeFacetProps {
 	/**
@@ -23,8 +24,12 @@ export interface DateRangeFacetProps {
 }
 
 function rangeLabel(range: DateRange): string | undefined {
-	if (!range.from) return undefined;
-	if (!range.to) return `From ${format(range.from, "MMM d, yyyy")}`;
+	if (!range.from) {
+		return undefined;
+	}
+	if (!range.to) {
+		return `From ${format(range.from, "MMM d, yyyy")}`;
+	}
 	return `${format(range.from, "MMM d")} – ${format(range.to, "MMM d, yyyy")}`;
 }
 
@@ -38,17 +43,17 @@ export function DateRangeFacet({ title, value, onChange }: DateRangeFacetProps) 
 						variant="outline"
 						size="sm"
 						className="h-8 border-dashed font-normal"
-						aria-label={applied ? `${title}: ${applied}` : title}
+						aria-label={hasText(applied) ? `${title}: ${applied}` : title}
 					>
 						<CalendarIcon aria-hidden />
 						{title}
-						{applied && (
+						{hasText(applied) && (
 							<>
 								<Separator
 									orientation="vertical"
 									className="mx-0.5 data-[orientation=vertical]:h-4"
 								/>
-								<Badge variant="secondary" className="rounded-sm px-1 font-normal">
+								<Badge variant="secondary" size="xs">
 									{applied}
 								</Badge>
 							</>
@@ -69,7 +74,7 @@ export function DateRangeFacet({ title, value, onChange }: DateRangeFacetProps) 
 				/>
 				{/* The way out every other facet in the toolbar has: without it a picked range can only be
 				    replaced by picking another, never removed. */}
-				{applied && (
+				{hasText(applied) && (
 					<>
 						<Separator />
 						<Button

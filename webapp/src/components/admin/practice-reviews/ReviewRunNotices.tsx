@@ -1,7 +1,7 @@
 import type { AgentJob } from "@/api/types.gen";
-import { holdReasonCopy, jobWait } from "@/components/admin/ai/job-utils";
 import { useNow } from "@/components/common/use-now";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { holdReasonCopy, jobWait } from "./job-utils";
 
 export interface ReviewRunNoticesProps {
 	job: AgentJob;

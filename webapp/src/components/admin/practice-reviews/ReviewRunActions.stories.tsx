@@ -1,15 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
 
-import {
-	mockJobFailedResultProcessing,
-	mockJobRunning,
-} from "@/components/admin/ai/story-mock-data";
+import { mockJobFailedResultProcessing, mockJobRunning } from "./fixtures";
 
 import { ReviewRunActions } from "./ReviewRunActions";
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Review actions",
 	component: ReviewRunActions,
 	parameters: {
 		layout: "centered",

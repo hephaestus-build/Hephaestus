@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { type ReactNode, useState } from "react";
 import { fn, screen, userEvent, within } from "storybook/test";
 
-import { expectControlOnScreen, expectDialogFitsViewport } from "@/test/reflow";
+import { expectControlOnScreen, expectDialogFitsViewport } from "@/stories/reflow";
 
 import { ConfirmDialog, type ConfirmDialogProps } from "./ConfirmDialog";
 
@@ -75,8 +75,8 @@ export const LongName: Story = {
 	},
 	play: async () => {
 		await expectDialogFitsViewport();
-		await expectControlOnScreen(screen.getByRole("button", { name: /^cancel$/i }));
-		await expectControlOnScreen(screen.getByRole("button", { name: /^delete$/i }));
+		await expectControlOnScreen(screen.getByRole("button", { name: /^cancel$/iu }));
+		await expectControlOnScreen(screen.getByRole("button", { name: /^delete$/iu }));
 	},
 };
 

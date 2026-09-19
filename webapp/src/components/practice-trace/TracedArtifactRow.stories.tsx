@@ -3,7 +3,7 @@ import { expect } from "storybook/test";
 
 import { ItemGroup } from "@/components/ui/item";
 
-import { tracedArtifact } from "./story-mock-data";
+import { tracedArtifact } from "./fixtures";
 import { TracedArtifactRow } from "./TracedArtifactRow";
 
 const pullRequestRow = tracedArtifact(1423);
@@ -15,7 +15,6 @@ const unlinkableConversation = tracedArtifact(88);
  * are kept apart on purpose: how much was recorded, and how much of it started a review.
  */
 const meta = {
-	title: "Practice trace/Traced artifact row",
 	component: TracedArtifactRow,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -61,7 +60,7 @@ export const UnlinkableArtifact: Story = {
 		await expect(link).toHaveAttribute("href", "/w/demo/reviews/chat.conversation_thread/88");
 		// The kind rides in the accessible name, not only in the icon: this row's title happens to be
 		// the word "Conversation" too, and only one of the two is readable without sight.
-		await expect(link).toHaveAccessibleName(/Conversation/);
+		await expect(link).toHaveAccessibleName(/Conversation/u);
 	},
 };
 

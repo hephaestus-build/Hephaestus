@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen } from "storybook/test";
 
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { LoginPage } from "./LoginPage";
 
@@ -25,15 +25,15 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async () => {
 		await expect(await screen.findByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
-		await expect(screen.getByRole("link", { name: /privacy notice/i })).toHaveAttribute(
+		await expect(screen.getByRole("link", { name: /privacy notice/iu })).toHaveAttribute(
 			"href",
 			"/privacy",
 		);
-		await expect(screen.getByRole("link", { name: /imprint/i })).toHaveAttribute(
+		await expect(screen.getByRole("link", { name: /imprint/iu })).toHaveAttribute(
 			"href",
 			"/imprint",
 		);
-		await expect(screen.getByRole("link", { name: /privacy notice/i })).toHaveAttribute(
+		await expect(screen.getByRole("link", { name: /privacy notice/iu })).toHaveAttribute(
 			"target",
 			"_blank",
 		);

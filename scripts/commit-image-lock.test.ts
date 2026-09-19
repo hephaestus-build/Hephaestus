@@ -12,7 +12,7 @@ import {
 
 const commit = "c".repeat(40);
 const digest = `sha256:${"1".repeat(64)}`;
-const resolver = () => Promise.resolve(digest);
+const resolver = async () => digest;
 
 await test("a commit channel pins every image the stacks actually read", async () => {
 	const inventory = await readInventory(
@@ -23,12 +23,17 @@ await test("a commit channel pins every image the stacks actually read", async (
 	const referenced = new Set<string>();
 	for (const stack of ["app", "core", "proxy"]) {
 		const file = readFileSync(new URL(`../docker/compose.${stack}.yaml`, import.meta.url), "utf8");
-		for (const [, name] of file.matchAll(/\$\{(HEPHAESTUS_IMAGE_[A-Z0-9_]+)/g))
-			if (name) referenced.add(name);
+		for (const match of file.matchAll(/\$\{(?<name>HEPHAESTUS_IMAGE_[A-Z0-9_]+)/gu)) {
+			const name = match.groups?.name;
+			if (name !== undefined) {
+				referenced.add(name);
+			}
+		}
 	}
 	assert.ok(referenced.size > 0, "the stacks reference no images at all");
-	for (const name of referenced)
+	for (const name of referenced) {
 		assert.ok(name in images, `${name} is read by a stack but not pinned for a commit deploy`);
+	}
 });
 
 await test("an upstream image is pinned as the commit pins it, not looked up", async () => {
@@ -36,9 +41,9 @@ await test("an upstream image is pinned as the commit pins it, not looked up", a
 		images: [],
 		upstream: [{ name: "nginx", repository: "docker.io/library/nginx", digest }],
 	});
-	const images = await resolveImages(inventory, commit, "o", () =>
-		Promise.reject(new Error("upstream must not be resolved from a registry")),
-	);
+	const images = await resolveImages(inventory, commit, "o", async () => {
+		throw new Error("upstream must not be resolved from a registry");
+	});
 	assert.equal(images.HEPHAESTUS_IMAGE_NGINX, `docker.io/library/nginx@${digest}`);
 });
 
@@ -48,9 +53,9 @@ await test("a first-party image is taken from this commit's own build", async ()
 		parseInventory({ images: ["application-server"], upstream: [] }),
 		commit,
 		"hephaestus-build",
-		(repository, at) => {
+		async (repository, at) => {
 			seen.push(`${repository}@${at}`);
-			return Promise.resolve(digest);
+			return digest;
 		},
 	);
 	assert.deepEqual(seen, [`ghcr.io/hephaestus-build/application-server@${commit}`]);
@@ -63,14 +68,14 @@ await test("a first-party image is taken from this commit's own build", async ()
 await test("anything that is not a digest is refused rather than deployed", async () => {
 	const inventory = parseInventory({ images: ["webapp"], upstream: [] });
 	await assert.rejects(
-		resolveImages(inventory, commit, "o", () => Promise.resolve("main")),
-		/did not resolve to a digest/,
+		resolveImages(inventory, commit, "o", async () => "main"),
+		/did not resolve to a digest/u,
 	);
-	await assert.rejects(resolveImages(inventory, "abc", "o", resolver), /expected a full commit/);
+	await assert.rejects(resolveImages(inventory, "abc", "o", resolver), /expected a full commit/u);
 	assert.throws(
 		() =>
 			parseInventory({ images: [], upstream: [{ name: "n", repository: "r", digest: "latest" }] }),
-		/not pinned by digest/,
+		/not pinned by digest/u,
 	);
 });
 

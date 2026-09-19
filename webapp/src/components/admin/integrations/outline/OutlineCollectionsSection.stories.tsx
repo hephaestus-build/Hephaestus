@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, fn } from "storybook/test";
 
 import type { OutlineCollection } from "@/api/types.gen";
-import { daysBefore, minutesBefore } from "@/components/common/story-clock";
+import { daysBefore, minutesBefore } from "@/stories/story-clock";
 
 import { OutlineCollectionsSection } from "./OutlineCollectionsSection";
 
@@ -69,10 +69,10 @@ const decisions: OutlineCollection = {
 export const Empty: Story = {
 	args: { collections: [] },
 	play: async ({ canvas }) => {
-		canvas.getByText(/no collections mirrored yet/i);
-		await expect(canvas.getAllByRole("button", { name: /add collection/i }).length).toBeGreaterThan(
-			1,
-		);
+		canvas.getByText(/no collections mirrored yet/iu);
+		await expect(
+			canvas.getAllByRole("button", { name: /add collection/iu }).length,
+		).toBeGreaterThan(1);
 	},
 };
 
@@ -86,14 +86,14 @@ export const Populated: Story = {
 	args: { collections: [engineering, decisions] },
 	play: async ({ canvas }) => {
 		canvas.getByText("Engineering");
-		canvas.getByText(/up to date/i);
-		canvas.getByText(/syncing…/i);
+		canvas.getByText(/up to date/iu);
+		canvas.getByText(/syncing…/iu);
 
 		await expect(
-			canvas.queryByRole("columnheader", { name: /documents/i }),
+			canvas.queryByRole("columnheader", { name: /documents/iu }),
 		).not.toBeInTheDocument();
 		await expect(
-			canvas.queryByRole("columnheader", { name: /last synced/i }),
+			canvas.queryByRole("columnheader", { name: /last synced/iu }),
 		).not.toBeInTheDocument();
 		await expect(canvas.queryByText("87")).not.toBeInTheDocument();
 	},
@@ -112,9 +112,9 @@ export const LoadError: Story = {
 		onRetry: fn(),
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText(/no collections mirrored yet/i)).not.toBeInTheDocument();
-		canvas.getByText(/couldn't load the mirrored collections/i);
-		canvas.getByText(/outline sync is unavailable/i);
-		canvas.getByRole("button", { name: /^retry$/i });
+		await expect(canvas.queryByText(/no collections mirrored yet/iu)).not.toBeInTheDocument();
+		canvas.getByText(/couldn't load the mirrored collections/iu);
+		canvas.getByText(/outline sync is unavailable/iu);
+		canvas.getByRole("button", { name: /^retry$/iu });
 	},
 };

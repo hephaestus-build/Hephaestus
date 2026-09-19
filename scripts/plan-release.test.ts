@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { after, test } from "node:test";
 
 import { environmentForGitFixture } from "./lib/git-environment.ts";
@@ -38,7 +38,7 @@ void test("cuts nothing on an ordinary feature merge", () => {
 	// planner that cut one here would cut a release on every merge.
 	const plan = planRelease(SHA, "0.74.0", RELEASED);
 	assert.equal(plan.kind, "skip");
-	assert.match(plan.reason, /v0\.74\.0 is already published/);
+	assert.match(plan.reason, /v0\.74\.0 is already published/u);
 	assert.deepEqual(releaseOutputs(plan), { released: "false" });
 });
 
@@ -87,7 +87,7 @@ void test("resumes a draft that targets this commit", () => {
 void test("refuses a draft that targets another commit", () => {
 	const plan = planRelease(SHA, "0.75.0", [...RELEASED, draft("v0.75.0", OTHER_SHA)]);
 	assert.equal(plan.kind, "refuse");
-	assert.match(plan.reason, /delete the draft to re-cut v0\.75\.0 here/);
+	assert.match(plan.reason, /delete the draft to re-cut v0\.75\.0 here/u);
 });
 
 void test("cuts nothing once the release publishes, whatever it targets", () => {
@@ -103,19 +103,19 @@ void test("refuses a version that is not newer than the latest published release
 	// A rollback of package.json cannot promote X.Y and latest back onto older code.
 	const plan = planRelease(SHA, "0.73.5", RELEASED);
 	assert.equal(plan.kind, "refuse");
-	assert.match(plan.reason, /not newer than the latest published release v0\.74\.0/);
+	assert.match(plan.reason, /not newer than the latest published release v0\.74\.0/u);
 });
 
 void test("refuses when nothing published exists to follow", () => {
 	const plan = planRelease(SHA, "0.75.0", [draft("v0.75.0", SHA)]);
 	assert.equal(plan.kind, "refuse");
-	assert.match(plan.reason, /no published release to follow/);
+	assert.match(plan.reason, /no published release to follow/u);
 });
 
 void test("refuses a version that is not a released version shape", () => {
 	const plan = planRelease(SHA, "0.75.0-rc.1", RELEASED);
 	assert.equal(plan.kind, "refuse");
-	assert.match(plan.reason, /is not major\.minor\.patch/);
+	assert.match(plan.reason, /is not major\.minor\.patch/u);
 });
 
 void test("ignores prereleases and drafts when picking the release to follow", () => {
@@ -142,11 +142,13 @@ void test("orders the published releases by version, not by listing order", () =
 const repositories: string[] = [];
 
 after(() => {
-	for (const repo of repositories) rmSync(repo, { recursive: true, force: true });
+	for (const repo of repositories) {
+		rmSync(repo, { recursive: true, force: true });
+	}
 });
 
 void test("reads schema migrations from the diff between the two releases", async () => {
-	const repo = mkdtempSync(join(tmpdir(), "plan-release-"));
+	const repo = mkdtempSync(path.join(tmpdir(), "plan-release-"));
 	repositories.push(repo);
 	const git = (...args: string[]): string =>
 		execFileSync("git", args, {
@@ -159,24 +161,24 @@ void test("reads schema migrations from the diff between the two releases", asyn
 	git("init", "--quiet", "--initial-branch=main");
 	git("config", "user.email", "test@example.invalid");
 	git("config", "user.name", "Test");
-	mkdirSync(join(repo, changelog), { recursive: true });
-	writeFileSync(join(repo, changelog, "master.xml"), "<databaseChangeLog/>\n");
+	mkdirSync(path.join(repo, changelog), { recursive: true });
+	writeFileSync(path.join(repo, changelog, "master.xml"), "<databaseChangeLog/>\n");
 	git("add", "-A");
 	git("commit", "--quiet", "-m", "release");
 	git("tag", "v0.74.0");
-	writeFileSync(join(repo, "README.md"), "# Nothing schema-shaped\n");
+	writeFileSync(path.join(repo, "README.md"), "# Nothing schema-shaped\n");
 	git("add", "-A");
 	git("commit", "--quiet", "-m", "docs");
 	// A git hook exports GIT_DIR at the repository being pushed. Leaking it here would read that
 	// repository's history instead of this one's, and git fails outright when it names nothing.
-	process.env.GIT_DIR = join(repo, "not-a-git-directory");
+	process.env.GIT_DIR = path.join(repo, "not-a-git-directory");
 	try {
 		assert.equal(await hasSchemaMigrations("v0.74.0", "HEAD", repo), false);
 	} finally {
 		delete process.env.GIT_DIR;
 	}
 
-	writeFileSync(join(repo, changelog, "0.75.0.xml"), "<databaseChangeLog/>\n");
+	writeFileSync(path.join(repo, changelog, "0.75.0.xml"), "<databaseChangeLog/>\n");
 	git("add", "-A");
 	git("commit", "--quiet", "-m", "feat: a migration");
 	assert.equal(await hasSchemaMigrations("v0.74.0", "HEAD", repo), true);

@@ -1,4 +1,3 @@
-import { isStaticToolUIPart } from "ai";
 import { AnimatePresence, motion } from "motion/react";
 import { type InputHTMLAttributes, useState } from "react";
 import { Streamdown } from "streamdown";
@@ -6,13 +5,12 @@ import { Streamdown } from "streamdown";
 import { cn } from "cn";
 import type { ChatMessageVote } from "@/api/types.gen";
 import { MarkdownCode } from "@/components/common/MarkdownCode";
-import type { ChatMessage, ChatTools } from "@/lib/types";
+import type { ChatMessage } from "@/lib/types";
 
 import { MentorAvatar } from "./MentorAvatar";
 import { MessageActions } from "./MessageActions";
 import { MessageEditor } from "./MessageEditor";
 import { PreviewAttachment } from "./PreviewAttachment";
-import type { PartRendererMap } from "./renderers/types";
 import { sanitizeMessageText } from "./sanitize-message-text";
 
 export interface MessageProps {
@@ -26,11 +24,12 @@ export interface MessageProps {
 	onVote?: (messageId: string, isUpvote: boolean) => void;
 	className?: string;
 	initialEditMode?: boolean;
-	partRenderers?: PartRendererMap;
 }
 
 function MarkdownTaskCheckbox(props: InputHTMLAttributes<HTMLInputElement>) {
-	return <input {...props} aria-label={props.checked ? "Completed task" : "Incomplete task"} />;
+	return (
+		<input {...props} aria-label={props.checked === true ? "Completed task" : "Incomplete task"} />
+	);
 }
 
 const MESSAGE_MARKDOWN_COMPONENTS = {
@@ -49,7 +48,6 @@ export function PreviewMessage({
 	onVote,
 	className,
 	initialEditMode = false,
-	partRenderers,
 }: MessageProps) {
 	const [mode, setMode] = useState<"view" | "edit">(initialEditMode ? "edit" : "view");
 
@@ -61,7 +59,7 @@ export function PreviewMessage({
 		<AnimatePresence>
 			<motion.div
 				className={cn(
-					"w-full max-w-3xl px-4 group/message",
+					"group/message w-full max-w-3xl px-4",
 					{
 						"pl-16": isArtifact && message.role === "user" && mode !== "edit",
 					},
@@ -73,7 +71,7 @@ export function PreviewMessage({
 			>
 				<div
 					className={cn(
-						"flex gap-4 w-full group-data-[role=user]/message:ml-auto group-data-[role=user]/message:max-w-2xl",
+						"flex w-full gap-4 group-data-[role=user]/message:ml-auto group-data-[role=user]/message:max-w-2xl",
 						{
 							"w-full": mode === "edit",
 							"group-data-[role=user]/message:w-fit": mode !== "edit",
@@ -82,7 +80,7 @@ export function PreviewMessage({
 				>
 					{message.role === "assistant" && <MentorAvatar streaming={isLoading} />}
 
-					<div className="flex flex-col gap-4 w-full">
+					<div className="flex w-full flex-col gap-4">
 						{attachmentsFromMessage.length > 0 && (
 							<div className="flex flex-row justify-end gap-2">
 								{attachmentsFromMessage.map((attachment) => (
@@ -108,7 +106,7 @@ export function PreviewMessage({
 										<div
 											key={key}
 											className={cn("flex flex-col gap-4", {
-												"self-end w-fit min-w-0 bg-primary text-primary-foreground px-3 py-2 rounded-xl ml-5":
+												"ml-5 w-fit min-w-0 self-end rounded-xl bg-primary px-3 py-2 text-primary-foreground":
 													message.role === "user",
 											})}
 										>
@@ -120,7 +118,7 @@ export function PreviewMessage({
 								}
 
 								return (
-									<div key={key} className="flex flex-row gap-2 items-start">
+									<div key={key} className="flex flex-row items-start gap-2">
 										<div className="size-8" />
 
 										<MessageEditor
@@ -134,18 +132,6 @@ export function PreviewMessage({
 										/>
 									</div>
 								);
-							}
-
-							if (isStaticToolUIPart<ChatTools>(part)) {
-								const Renderer = partRenderers?.[part.type];
-								return Renderer ? (
-									<Renderer
-										key={part.toolCallId || key}
-										message={message}
-										part={part}
-										variant={variant}
-									/>
-								) : null;
 							}
 
 							return null;
@@ -163,7 +149,6 @@ export function PreviewMessage({
 								vote={vote}
 								isLoading={isLoading}
 								isInEditMode={mode === "edit"}
-								variant={variant}
 								onCopy={(text) => onCopy?.(text)}
 								onVote={
 									message.role === "assistant"
@@ -180,30 +165,30 @@ export function PreviewMessage({
 	);
 }
 
-export const ThinkingMessage = () => {
+export function ThinkingMessage() {
 	const role = "assistant";
 
 	return (
 		<motion.div
-			className="w-full mx-auto max-w-3xl px-4 group/message min-h-96"
+			className="group/message mx-auto min-h-96 w-full max-w-3xl px-4"
 			initial={{ y: 5 }}
 			animate={{ y: 0 }}
 			data-role={role}
 		>
 			<div
 				className={cn(
-					"flex gap-4 group-data-[role=user]/message:px-3 w-full group-data-[role=user]/message:w-fit group-data-[role=user]/message:ml-auto group-data-[role=user]/message:max-w-2xl group-data-[role=user]/message:py-2 rounded-xl",
+					"flex w-full gap-4 rounded-xl group-data-[role=user]/message:ml-auto group-data-[role=user]/message:w-fit group-data-[role=user]/message:max-w-2xl group-data-[role=user]/message:px-3 group-data-[role=user]/message:py-2",
 					{
 						"group-data-[role=user]/message:bg-muted": true,
 					},
 				)}
 			>
-				<MentorAvatar streaming={true} />
+				<MentorAvatar streaming />
 
-				<div className="flex flex-col gap-2 w-full">
+				<div className="flex w-full flex-col gap-2">
 					<div className="flex flex-col gap-4 text-muted-foreground">Hmm...</div>
 				</div>
 			</div>
 		</motion.div>
 	);
-};
+}

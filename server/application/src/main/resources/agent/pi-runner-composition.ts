@@ -29,7 +29,9 @@ export interface ComposedFeedbackEnvelope {
 
 /** Unevaluated practices support neither positive nor negative claims. */
 export function notReachedNote(notReached: readonly string[]): string {
-	if (notReached.length === 0) return "";
+	if (notReached.length === 0) {
+		return "";
+	}
 	const subject =
 		notReached.length === 1 ? "one of its practices" : `${notReached.length} of its practices`;
 	return (
@@ -44,8 +46,9 @@ export function validateFeedbackEvidence(
 	observationPractices: ReadonlyMap<string, string>,
 ): string | null {
 	const unknown = basedOn.find((id) => !observationPractices.has(id));
-	if (unknown)
+	if (unknown !== undefined) {
 		return `Evidence '${unknown}' does not name an admitted observation from this run; skipped.`;
+	}
 	if (!basedOn.some((id) => observationPractices.get(id) === primaryPractice)) {
 		return `At least one basedOn observation must belong to the primary practice '${primaryPractice}'; skipped.`;
 	}
@@ -61,7 +64,9 @@ export function undeliverableUnits(
 		),
 	);
 	return (envelope?.units ?? []).filter((unit) => {
-		if (unit.action !== "SUPERSEDE") return false;
+		if (unit.action !== "SUPERSEDE") {
+			return false;
+		}
 		const target = unit.supersedesThreadKey;
 		return (
 			target === undefined ||

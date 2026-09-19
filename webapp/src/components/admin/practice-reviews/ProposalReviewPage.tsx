@@ -2,11 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { CheckIcon, CircleXIcon, ScanSearchIcon } from "lucide-react";
 import { useId, useState } from "react";
 import type { GetPracticeReviewFeedbackResponse, Practice } from "@/api/types.gen";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
 import { placementLabel } from "@/components/practice-vocabulary/placement-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +28,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { hasText } from "@/lib/text";
 import {
 	PROPOSAL_REJECTION_REASONS,
 	type ProposalRejectionReason,
@@ -62,22 +63,22 @@ export function ProposalReviewPage({
 	onReject,
 }: ProposalReviewPageProps) {
 	const place = DELIVERY_PLACE_DEFS[feedback.channel];
-	const proposedPlacements = feedback.proposedPlacements;
+	const { proposedPlacements } = feedback;
 	const packageUnavailable = proposedPlacements.length === 0;
 	const summary = proposedPlacements.find((placement) => placement.type === "SUMMARY");
 	const inline = proposedPlacements.filter((placement) => placement.type === "INLINE");
 	const packageSummary = `${summary ? "1 summary" : "No summary"} and ${inline.length} ${
 		inline.length === 1 ? "line comment" : "line comments"
 	}`;
-	const placements = Array.from(
-		new Set(
+	const placements = [
+		...new Set(
 			proposedPlacements.map((placement) => placementLabel(feedback.channel, placement.type)),
 		),
-	);
+	];
 	const subjectDiffers = feedback.subject && feedback.subject.id !== feedback.recipient?.id;
 
 	return (
-		<article className="min-w-0 max-w-4xl space-y-8">
+		<article className="max-w-4xl min-w-0 space-y-8">
 			<ReviewBreadcrumbs
 				workspaceSlug={workspaceSlug}
 				section={{
@@ -108,10 +109,10 @@ export function ProposalReviewPage({
 			/>
 
 			<ReviewFactGrid>
-				<ReviewFact label={subjectDiffers ? "Addressed to" : "Developer"}>
+				<ReviewFact label={subjectDiffers === true ? "Addressed to" : "Developer"}>
 					<div className="space-y-1">
 						<ReviewPerson person={feedback.recipient} />
-						{subjectDiffers && <ReviewPerson person={feedback.subject} prefix="About" />}
+						{subjectDiffers === true && <ReviewPerson person={feedback.subject} prefix="About" />}
 					</div>
 				</ReviewFact>
 				<ReviewFact label="Reviewed work">
@@ -135,9 +136,9 @@ export function ProposalReviewPage({
 						)}
 					</div>
 				</ReviewFact>
-				{feedback.reviewedRevision && (
+				{hasText(feedback.reviewedRevision) && (
 					<ReviewFact label="Reviewed revision">
-						<code className="break-all text-xs">{feedback.reviewedRevision}</code>
+						<code className="text-xs break-all">{feedback.reviewedRevision}</code>
 					</ReviewFact>
 				)}
 			</ReviewFactGrid>
@@ -168,7 +169,7 @@ export function ProposalReviewPage({
 					</p>
 				</div>
 				{feedback.observations.length === 0 ? (
-					<Empty className="border">
+					<Empty variant="outlined">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<ScanSearchIcon />
@@ -304,7 +305,11 @@ function RejectFeedbackPopover({
 						variant="destructive"
 						size="sm"
 						disabled={disabled || !reason}
-						onClick={() => reason && onReject(feedbackId, reason, note.trim() || undefined)}
+						onClick={() => {
+							if (reason) {
+								onReject(feedbackId, reason, note.trim() || undefined);
+							}
+						}}
 					>
 						Reject feedback
 					</Button>

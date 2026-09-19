@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { LoginProviderView } from "@/api/types.gen";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules.
@@ -29,17 +30,14 @@ function renderLoginProvidersRoute() {
 
 describe("instance login providers route", () => {
 	it("keeps each provider's toggle pending independently when two run at once", async () => {
-		let releaseSlowToggle: (() => void) | undefined;
-		const slowToggle = new Promise<void>((resolve) => {
-			releaseSlowToggle = resolve;
-		});
+		const slowToggle = deferred();
 		let slowToggleCalls = 0;
 		const providers = [provider("github", "GitHub"), provider("gitlab", "GitLab")];
 		server.use(
 			http.get("*/admin/login-providers", () => HttpResponse.json(providers)),
 			http.patch("*/admin/login-providers/github", async () => {
 				slowToggleCalls += 1;
-				await slowToggle;
+				await slowToggle.promise;
 				return HttpResponse.json({ ...providers[0], enabled: false });
 			}),
 			http.patch("*/admin/login-providers/gitlab", () =>
@@ -70,8 +68,12 @@ describe("instance login providers route", () => {
 			false,
 		);
 
-		releaseSlowToggle?.();
-		await waitFor(() => expect(slowToggleCalls).toBe(1));
+		slowToggle.resolve();
+		await waitFor(() =>
+			expect(screen.getByRole("switch", { name: "Disable GitHub" }).getAttribute("aria-busy")).toBe(
+				"false",
+			),
+		);
 	});
 
 	it("asks for a fresh sign-in when a provider change is refused, and recovers its own load failure", async () => {
@@ -96,9 +98,8 @@ describe("instance login providers route", () => {
 		);
 
 		await screen.findByRole("dialog", { name: "Confirm access" });
-		expect((await screen.findByRole("alert")).textContent).toContain(
-			"Could not load sign-in options",
-		);
+		const alert = await screen.findByRole("alert");
+		expect(alert.textContent).toContain("Could not load sign-in options");
 
 		server.use(
 			http.get("*/identity-providers", () =>
@@ -108,7 +109,9 @@ describe("instance login providers route", () => {
 			),
 		);
 		fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-		expect(await screen.findByRole("button", { name: "Continue with Team GitLab" })).not.toBeNull();
+		await expect(
+			screen.findByRole("button", { name: "Continue with Team GitLab" }),
+		).resolves.not.toBeNull();
 
 		fireEvent.click(screen.getByRole("button", { name: "Close" }));
 		await waitFor(() =>

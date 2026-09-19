@@ -4,7 +4,7 @@ import type {
 	DeliveryPolicyTrace as DeliveryPolicyTraceData,
 } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	Accordion,
 	AccordionContent,
@@ -12,6 +12,7 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { hasText } from "@/lib/text";
 import {
 	DELIVERY_AUTONOMY_LABELS,
 	DELIVERY_CHECK_LABELS,
@@ -31,7 +32,9 @@ export interface DeliveryPolicyTraceProps {
 }
 
 export function DeliveryPolicyTrace({ evaluations }: DeliveryPolicyTraceProps) {
-	if (evaluations.length === 0) return null;
+	if (evaluations.length === 0) {
+		return null;
+	}
 	const denied = evaluations.some((evaluation) => !evaluation.allowed);
 
 	return (
@@ -51,7 +54,7 @@ export function DeliveryPolicyTrace({ evaluations }: DeliveryPolicyTraceProps) {
 										{DELIVERY_SURFACE_LABELS[evaluation.surface]} ·{" "}
 										{DELIVERY_STAGE_LABELS[evaluation.stage]}
 									</span>
-									<span className="block font-normal text-muted-foreground text-xs">
+									<span className="block text-xs font-normal text-muted-foreground">
 										<RelativeTime value={evaluation.evaluatedAt} tooltip={false} />
 									</span>
 								</span>
@@ -68,11 +71,11 @@ export function DeliveryPolicyTrace({ evaluations }: DeliveryPolicyTraceProps) {
 								{evaluation.decisiveReason && (
 									<p className="text-xs">{DELIVERY_REASON_SENTENCES[evaluation.decisiveReason]}</p>
 								)}
-								<p className="min-w-0 break-words text-xs text-muted-foreground">
+								<p className="min-w-0 text-xs break-words text-muted-foreground">
 									{scopeSentence(evaluation.facts)}
 								</p>
 								<PolicyFacts facts={evaluation.facts} />
-								<p className="min-w-0 break-all text-xs text-muted-foreground">
+								<p className="min-w-0 text-xs break-all text-muted-foreground">
 									Policy revision {evaluation.admittedRevision}
 									{evaluation.evaluatedRevision == null
 										? ""
@@ -99,9 +102,21 @@ export function DeliveryPolicyTrace({ evaluations }: DeliveryPolicyTraceProps) {
 	);
 }
 
+function applicable(value: boolean | undefined) {
+	if (value == null) {
+		return "not applicable";
+	}
+	return value ? "yes" : "no";
+}
+
+function summarisePractices(practices: string[] | undefined) {
+	if (practices == null) {
+		return "not recorded";
+	}
+	return practices.length === 0 ? "none" : practices.join(", ");
+}
+
 function PolicyFacts({ facts }: { facts: DeliveryPolicyFactsSnapshot }) {
-	const applicable = (value: boolean | undefined) =>
-		value == null ? "not applicable" : value ? "yes" : "no";
 	const practices = facts.contributingPractices?.map((practice) => {
 		const autonomy = practice.autonomy
 			? DELIVERY_AUTONOMY_LABELS[practice.autonomy]
@@ -118,10 +133,7 @@ function PolicyFacts({ facts }: { facts: DeliveryPolicyFactsSnapshot }) {
 		["Repository matched", applicable(facts.repositoryMatched)],
 		["Branch matched", applicable(facts.branchMatched)],
 		["Person matched", applicable(facts.personMatched)],
-		[
-			"Contributing practices",
-			practices == null ? "not recorded" : practices.length === 0 ? "none" : practices.join(", "),
-		],
+		["Contributing practices", summarisePractices(practices)],
 	] as const;
 
 	return (
@@ -138,7 +150,7 @@ function PolicyFacts({ facts }: { facts: DeliveryPolicyFactsSnapshot }) {
 
 function scopeSentence(facts: DeliveryPolicyFactsSnapshot): string {
 	const NOT_APPLICABLE = "not applicable";
-	const where = facts.baseBranch
+	const where = hasText(facts.baseBranch)
 		? `${facts.repository ?? "no repository"} / ${facts.baseBranch}`
 		: (facts.repository ?? "no repository");
 	const repositories =

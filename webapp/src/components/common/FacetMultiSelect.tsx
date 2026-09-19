@@ -17,6 +17,7 @@ import {
 	useComboboxFilter,
 } from "@/components/ui/combobox";
 import { Separator } from "@/components/ui/separator";
+import { hasText } from "@/lib/text";
 
 export interface FacetOption<TValue extends string | number = string> {
 	value: TValue;
@@ -66,7 +67,9 @@ export function toFacetOptions<TValue extends string>(
 ): FacetOption<TValue>[] {
 	const options: FacetOption<TValue>[] = [];
 	for (const value in labels) {
-		options.push({ value, label: labels[value] });
+		if (Object.hasOwn(labels, value)) {
+			options.push({ value, label: labels[value] });
+		}
 	}
 	return options;
 }
@@ -99,7 +102,9 @@ export function FacetMultiSelect<TValue extends string | number>({
 			isItemEqualToValue={(option, value) => option.value === value.value}
 			onValueChange={(next: FacetOption<TValue>[]) => onChange(next.map((option) => option.value))}
 			filter={(option, query) =>
-				contains(option, query, (o) => (o.description ? `${o.label} ${o.description}` : o.label))
+				contains(option, query, (o) =>
+					hasText(o.description) ? `${o.label} ${o.description}` : o.label,
+				)
 			}
 			itemToStringLabel={(option) => option.label}
 			disabled={disabled}
@@ -127,7 +132,7 @@ export function FacetMultiSelect<TValue extends string | number>({
 									className="mx-0.5 data-[orientation=vertical]:h-4"
 								/>
 								{selectedOptions.length > MAX_INLINE_CHIPS ? (
-									<Badge variant="secondary" className="rounded-sm px-1 font-normal">
+									<Badge variant="secondary" size="xs">
 										{selectedOptions.length} selected
 									</Badge>
 								) : (
@@ -135,7 +140,8 @@ export function FacetMultiSelect<TValue extends string | number>({
 										<Badge
 											key={option.value}
 											variant="secondary"
-											className="hidden max-w-36 rounded-sm px-1 font-normal sm:inline-flex"
+											size="xs"
+											className="hidden max-w-36 sm:inline-flex"
 										>
 											{option.icon && <option.icon aria-hidden className={option.iconClassName} />}
 											<span className="truncate">{option.label}</span>
@@ -143,7 +149,7 @@ export function FacetMultiSelect<TValue extends string | number>({
 									))
 								)}
 								{selectedOptions.length <= MAX_INLINE_CHIPS && (
-									<Badge variant="secondary" className="rounded-sm px-1 font-normal sm:hidden">
+									<Badge variant="secondary" size="xs" className="sm:hidden">
 										{selectedOptions.length} selected
 									</Badge>
 								)}
@@ -191,8 +197,8 @@ export function FacetMultiSelect<TValue extends string | number>({
 							)}
 							<span className="min-w-0 truncate">
 								{option.label}
-								{option.description && (
-									<span className="text-muted-foreground ml-1.5 text-xs">{option.description}</span>
+								{hasText(option.description) && (
+									<span className="ml-1.5 text-xs text-muted-foreground">{option.description}</span>
 								)}
 							</span>
 						</ComboboxItem>

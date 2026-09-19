@@ -22,7 +22,7 @@ await test("rejects missing and duplicate inventory entries", () => {
 	);
 	assert.throws(
 		() => validateInventory({ images: ["server", "server"], upstream: [] }, ""),
-		/duplicates/,
+		/duplicates/u,
 	);
-	assert.throws(() => validateInventory({ images: [], upstream: [{}] }, ""), /malformed upstream/);
+	assert.throws(() => validateInventory({ images: [], upstream: [{}] }, ""), /malformed upstream/u);
 });

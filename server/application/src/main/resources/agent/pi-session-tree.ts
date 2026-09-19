@@ -1,5 +1,7 @@
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 
+import { hasText } from "./pi-text.ts";
+
 export interface SessionFork {
 	key: string;
 	sessionFile: string;
@@ -37,7 +39,7 @@ export function reconnaissanceSeed(
 	}
 	const checkpointEntryId = sessionManager.getLeafId();
 	const seedSessionFile = sessionManager.getSessionFile();
-	if (!checkpointEntryId || !seedSessionFile) {
+	if (!hasText(checkpointEntryId) || !hasText(seedSessionFile)) {
 		throw new Error("Shared reconnaissance produced no persistent checkpoint");
 	}
 	return { seedSessionFile, checkpointEntryId };
@@ -51,7 +53,7 @@ export function forkSessions({
 }: ForkSessionsOptions): SessionFork[] {
 	const uniqueKeys = new Set<string>();
 	for (const key of keys) {
-		if (!key || uniqueKeys.has(key)) {
+		if (key === "" || uniqueKeys.has(key)) {
 			throw new Error(`Keys must be non-empty and unique: ${key}`);
 		}
 		uniqueKeys.add(key);
@@ -63,7 +65,7 @@ export function forkSessions({
 		// start from a newly opened view of the immutable seed.
 		const seed = SessionManager.open(seedSessionFile, sessionDir);
 		const sessionFile = seed.createBranchedSession(checkpointEntryId);
-		if (!sessionFile) {
+		if (!hasText(sessionFile)) {
 			throw new Error("Persistent Pi session fork did not produce a session file");
 		}
 		forks.push({ key, sessionFile });

@@ -1,5 +1,5 @@
 import { LibraryIcon, PlusIcon } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type { OutlineCollection } from "@/api/types.gen";
 import { IntegrationCardHeading } from "@/components/admin/integrations/IntegrationCardHeading";
@@ -22,7 +22,7 @@ import { AddCollectionDialog } from "./AddCollectionDialog";
 import { OutlineCollectionRow, type OutlineMirrorState } from "./OutlineCollectionRow";
 import { RemoveCollectionAlertDialog } from "./RemoveCollectionAlertDialog";
 
-export type { OutlineMirrorState };
+export type { OutlineMirrorState } from "./OutlineCollectionRow";
 
 /** Shared by the loading and loaded states so the header doesn't materialise on resolve. */
 function CollectionsTableHeader() {
@@ -83,6 +83,77 @@ export function OutlineCollectionsSection({
 	const [removeCollection, setRemoveCollection] = useState<OutlineCollection | null>(null);
 
 	const hasCollections = collections.length > 0;
+	const failed = error != null;
+
+	let content: ReactNode;
+	if (isLoading) {
+		content = (
+			<Table>
+				<CollectionsTableHeader />
+				<TableRowsSkeleton columns={["w-36", "w-16", "w-20", null]} rows={3} />
+			</Table>
+		);
+	} else if (failed) {
+		content = (
+			<QueryErrorAlert
+				error={error}
+				title="We couldn't load the mirrored collections"
+				onRetry={onRetry}
+			/>
+		);
+	} else if (hasCollections) {
+		content = (
+			<Table>
+				<CollectionsTableHeader />
+				<TableBody>
+					{collections.map((collection) => (
+						<OutlineCollectionRow
+							key={collection.collectionId}
+							collection={collection}
+							onPause={(c) =>
+								swallow(
+									onUpdateCollectionState({
+										collectionId: c.collectionId,
+										state: "PAUSED",
+									}),
+								)
+							}
+							onResume={(c) =>
+								swallow(
+									onUpdateCollectionState({
+										collectionId: c.collectionId,
+										state: "ENABLED",
+									}),
+								)
+							}
+							onRemove={setRemoveCollection}
+						/>
+					))}
+				</TableBody>
+			</Table>
+		);
+	} else {
+		content = (
+			<Empty>
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<LibraryIcon />
+					</EmptyMedia>
+					<EmptyTitle>No collections mirrored yet</EmptyTitle>
+					<EmptyDescription>
+						Pick the Outline collections whose documents should reach practice reviews. Only what
+						you select is read.
+					</EmptyDescription>
+				</EmptyHeader>
+				<EmptyContent>
+					<Button size="sm" onClick={() => setAddOpen(true)}>
+						<PlusIcon className="size-4" />
+						Add collection
+					</Button>
+				</EmptyContent>
+			</Empty>
+		);
+	}
 
 	return (
 		<div className="space-y-6">
@@ -102,68 +173,7 @@ export function OutlineCollectionsSection({
 					</CardAction>
 				</CardHeader>
 
-				<CardContent className="space-y-4">
-					{isLoading ? (
-						<Table>
-							<CollectionsTableHeader />
-							<TableRowsSkeleton columns={["w-36", "w-16", "w-20", null]} rows={3} />
-						</Table>
-					) : error ? (
-						<QueryErrorAlert
-							error={error}
-							title="We couldn't load the mirrored collections"
-							onRetry={onRetry}
-						/>
-					) : hasCollections ? (
-						<Table>
-							<CollectionsTableHeader />
-							<TableBody>
-								{collections.map((collection) => (
-									<OutlineCollectionRow
-										key={collection.collectionId}
-										collection={collection}
-										onPause={(c) =>
-											swallow(
-												onUpdateCollectionState({
-													collectionId: c.collectionId,
-													state: "PAUSED",
-												}),
-											)
-										}
-										onResume={(c) =>
-											swallow(
-												onUpdateCollectionState({
-													collectionId: c.collectionId,
-													state: "ENABLED",
-												}),
-											)
-										}
-										onRemove={setRemoveCollection}
-									/>
-								))}
-							</TableBody>
-						</Table>
-					) : (
-						<Empty>
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<LibraryIcon />
-								</EmptyMedia>
-								<EmptyTitle>No collections mirrored yet</EmptyTitle>
-								<EmptyDescription>
-									Pick the Outline collections whose documents should reach practice reviews. Only
-									what you select is read.
-								</EmptyDescription>
-							</EmptyHeader>
-							<EmptyContent>
-								<Button size="sm" onClick={() => setAddOpen(true)}>
-									<PlusIcon className="size-4" />
-									Add collection
-								</Button>
-							</EmptyContent>
-						</Empty>
-					)}
-				</CardContent>
+				<CardContent className="space-y-4">{content}</CardContent>
 			</Card>
 
 			<AddCollectionDialog
@@ -176,7 +186,9 @@ export function OutlineCollectionsSection({
 			<RemoveCollectionAlertDialog
 				collection={removeCollection}
 				onOpenChange={(open) => {
-					if (!open) setRemoveCollection(null);
+					if (!open) {
+						setRemoveCollection(null);
+					}
 				}}
 				onConfirm={onRemoveCollection}
 			/>

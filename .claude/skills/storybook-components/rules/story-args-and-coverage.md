@@ -30,7 +30,7 @@ not open that as work.
 - **`autodocs` publishes the `component`'s props.** If the stories render a test harness rather than
   the component, either point `component` at the real component or drop `autodocs` — do not publish the
   harness's props as if they were the API. A file that opts out says why in its meta
-  (`webapp/src/components/admin/practice-catalog/SortableCatalogTree.stories.tsx`).
+  (`webapp/src/components/admin/practice-editor/SortableCatalogTree.stories.tsx`).
 - **`layout: "centered"` for an isolated component, `"fullscreen"` for a page-level one.** The default
   padded layout gives a page-level story a margin production does not have, which is how a full-bleed
   header or a sticky footer comes to look right in Storybook and wrong in the app.
@@ -42,7 +42,7 @@ not open that as work.
 `fn()` in `meta.args` unreachable: it can never be asserted and the Actions panel is permanently empty,
 while the file looks well instrumented. To find it: for each `fn()` in `meta.args`, grep the file for a
 JSX attribute of the same name that is **not** `{...args}`.
-`webapp/src/components/admin/practice-catalog/OccasionLifecycle.stories.tsx` shows the shape that stays
+`webapp/src/components/admin/practice-editor/OccasionLifecycle.stories.tsx` shows the shape that stays
 instrumented: it spreads `{...args}` and patches only the props it holds state for.
 
 ## `argTypes` where a prop is explorable, and nowhere else

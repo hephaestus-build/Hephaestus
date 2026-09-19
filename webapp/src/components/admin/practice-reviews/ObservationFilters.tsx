@@ -8,13 +8,14 @@ import {
 import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
+import { statusFacetOptions } from "@/components/common/status-def";
 import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import { statusFacetOptions } from "@/components/practice-vocabulary/status-def";
 import { fromDateRange, toDateRange } from "@/lib/date-range-search";
 import { nonEmpty } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 
 import { AppliedFacetPills, facetPills } from "./AppliedFacetPills";
 import { ObservationSortSelect } from "./ObservationSortSelect";
@@ -67,7 +68,10 @@ export function hasObservationFilter(search: ObservationsSearch): boolean {
 	);
 }
 
-type NamedGroup = { slug: string; name: string };
+interface NamedGroup {
+	slug: string;
+	name: string;
+}
 
 export function groupFacetOptions(groups: readonly NamedGroup[] | undefined): FacetOption[] {
 	return (groups ?? []).map((group) => ({ value: group.slug, label: group.name }));
@@ -212,7 +216,7 @@ export function ObservationFilters({
 					),
 				]}
 			/>
-			{search.agentJobId && (
+			{hasText(search.agentJobId) && (
 				<ReferenceFilterPill
 					label="Review"
 					value={search.agentJobId}

@@ -4,10 +4,10 @@ import { ScrollTextIcon } from "lucide-react";
 import {
 	type ConfigAuditSearch,
 	workspaceAuditSearchSchema,
-} from "@/components/admin/audit-shared/audit-search";
-import { WorkspaceConfigAuditPanel } from "@/components/admin/config-audit/ConfigAuditPanel";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+} from "@/components/admin/audit/audit-search";
+import { WorkspaceConfigAuditPanel } from "@/components/admin/audit/ConfigAuditPanel";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { workspaceAdminHead } from "@/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/audit")({
@@ -21,8 +21,9 @@ function WorkspaceAuditPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
 
-	const patchSearch = (patch: Partial<ConfigAuditSearch>) =>
+	const patchSearch = (patch: Partial<ConfigAuditSearch>) => {
 		void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true });
+	};
 
 	return (
 		<PageLayout>

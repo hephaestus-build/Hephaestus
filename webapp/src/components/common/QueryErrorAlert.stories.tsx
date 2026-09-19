@@ -32,9 +32,9 @@ export const ServiceUnavailable: Story = {
 		error: { status: 503, detail: "The GitHub API is unavailable." },
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/github api is unavailable/i);
-		canvas.getByText(/on our side/i);
-		await userEvent.click(canvas.getByRole("button", { name: /retry/i }));
+		canvas.getByText(/github api is unavailable/iu);
+		canvas.getByText(/on our side/iu);
+		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalledTimes(1);
 	},
 };
@@ -48,9 +48,9 @@ export const Forbidden: Story = {
 		error: { status: 403, detail: "You are not an admin of this workspace." },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/not an admin of this workspace/i);
-		canvas.getByText(/ask an admin for access/i);
-		await expect(canvas.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+		canvas.getByText(/not an admin of this workspace/iu);
+		canvas.getByText(/ask an admin for access/iu);
+		await expect(canvas.queryByRole("button", { name: /retry/iu })).not.toBeInTheDocument();
 	},
 };
 
@@ -60,8 +60,8 @@ export const NotFound: Story = {
 		error: { status: 404, detail: "This connection no longer exists." },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/deleted or moved/i);
-		await expect(canvas.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+		canvas.getByText(/deleted or moved/iu);
+		await expect(canvas.queryByRole("button", { name: /retry/iu })).not.toBeInTheDocument();
 	},
 };
 
@@ -75,8 +75,8 @@ export const Conflict: Story = {
 		error: { status: 409, detail: "A sync is already running for this connection." },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/a sync is already running/i);
-		await expect(canvas.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+		canvas.getByText(/a sync is already running/iu);
+		await expect(canvas.queryByRole("button", { name: /retry/iu })).not.toBeInTheDocument();
 	},
 };
 
@@ -88,8 +88,8 @@ export const RateLimited: Story = {
 	play: async ({ canvas }) => {
 		// The server's detail carries no terminal punctuation; the alert must terminate it before
 		// appending guidance rather than run the two together as "Rate limit exceeded Too many…".
-		canvas.getByText(/Rate limit exceeded\. Too many requests/);
-		canvas.getByRole("button", { name: /retry/i });
+		canvas.getByText(/Rate limit exceeded\. Too many requests/u);
+		canvas.getByRole("button", { name: /retry/iu });
 	},
 };
 
@@ -99,8 +99,8 @@ export const Unauthorized: Story = {
 		error: { status: 401, title: "Unauthorized" },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/session has expired/i);
-		await expect(canvas.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+		canvas.getByText(/session has expired/iu);
+		await expect(canvas.queryByRole("button", { name: /retry/iu })).not.toBeInTheDocument();
 	},
 };
 
@@ -112,8 +112,8 @@ export const BadRequest: Story = {
 		error: { status: 400, detail: "nameWithOwner must be in owner/name form." },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/owner\/name form/i);
-		await expect(canvas.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+		canvas.getByText(/owner\/name form/iu);
+		await expect(canvas.queryByRole("button", { name: /retry/iu })).not.toBeInTheDocument();
 	},
 };
 
@@ -126,8 +126,8 @@ export const NetworkFailure: Story = {
 		error: new TypeError("Failed to fetch"),
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/check your connection/i);
-		canvas.getByRole("button", { name: /retry/i });
+		canvas.getByText(/check your connection/iu);
+		canvas.getByRole("button", { name: /retry/iu });
 	},
 };
 
@@ -155,7 +155,7 @@ export const NoServerDetail: Story = {
 		error: { status: 500 },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/^Something went wrong on our side/);
+		canvas.getByText(/^Something went wrong on our side/u);
 	},
 };
 
@@ -166,6 +166,6 @@ export const NoRetryHandler: Story = {
 		onRetry: undefined,
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("button", { name: /retry/iu })).not.toBeInTheDocument();
 	},
 };

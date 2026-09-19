@@ -1,0 +1,78 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+
+	// The React layer, extended by the two trees that render: `webapp/` and `docs/`. It adds to
+	// `.oxlintrc.json` and never repeats it. A tree restates `settings.react.version` itself, since
+	// `settings` does not travel through `extends`.
+
+	"plugins": ["react", "jsx-a11y"],
+
+	"rules": {
+		// A component is a function declaration, so it has a display name and hoists; the one a
+		// factory returns is a named function expression for the same display name.
+		"react/function-component-definition": [
+			"error",
+			{ "namedComponents": "function-declaration", "unnamedComponents": "function-expression" },
+		],
+		"react/prefer-function-component": "error",
+		// `FC` annotates the binding rather than the props, so it only reaches an arrow assigned to a
+		// `const`; its call signature returns `ReactNode | Promise<ReactNode>`, so an accidentally
+		// `async` component type-checks; and it has nowhere to bind a type parameter, so a generic
+		// component cannot be spelled with it at all.
+		"typescript/no-restricted-types": [
+			"error",
+			{
+				"types": {
+					"FC": "Annotate the props parameter instead: `function Thing({ a }: ThingProps)`.",
+					"React.FC": "Annotate the props parameter instead: `function Thing({ a }: ThingProps)`.",
+					"FunctionComponent": "Annotate the props parameter instead.",
+					"React.FunctionComponent": "Annotate the props parameter instead.",
+				},
+			},
+		],
+		// The React Compiler's own diagnostics. Where it runs (`webapp/vite.shared.ts`), a component
+		// it cannot lower runs unmemoised with no signal of its own, so each bailout is reported where
+		// it happens; where it does not, they report what would keep it from running.
+		"react/todo": "error",
+		"react/rule-suppression": "error",
+		"react/syntax": "error",
+		"react/unsupported-syntax": "error",
+		"react-hooks/rules-of-hooks": "error",
+		"react/display-name": "error",
+		// A `{}` default prop is a new object every render, so an effect keyed on it re-runs every
+		// render; a module-level constant is the same default with one identity.
+		"react/no-object-type-as-default-prop": "error",
+		// A form button without a type submits the form on Enter from any field.
+		"react/button-has-type": "error",
+		"react/checked-requires-onchange-or-readonly": "error",
+		"react/no-deriving-state-in-effects": "error",
+		"react/no-danger": "error",
+		"react/no-clone-element": "error",
+		"react/no-react-children": "error",
+		"react/no-unknown-property": "error",
+		"react/jsx-no-target-blank": "error",
+		"react/jsx-no-useless-fragment": "error",
+		"react/jsx-curly-brace-presence": ["error", { "props": "never", "children": "never" }],
+		"react/jsx-boolean-value": "error",
+		"react/jsx-pascal-case": "error",
+		"react/jsx-fragments": "error",
+		"react/self-closing-comp": "error",
+		// A bare `'` or `"` in JSX text is the typewriter character; the copy wants `’` and `“ ”`, which
+		// the rule does not report. A stray `>` or `}` renders as text, which is the bug it exists for.
+		"react/no-unescaped-entities": "error",
+		// TanStack Table column defs are `cell: ({ row }) => <Badge …/>` — a component passed as a prop.
+		"react/no-unstable-nested-components": ["error", { "allowAsProps": true }],
+		// `webapp/AGENTS.md` § Testing states the query priority. A `data-testid` skips straight past it, and
+		// the accessible name it stands in for is the thing a screen reader needs anyway.
+		"react/forbid-dom-props": ["error", { "forbid": ["data-testid"] }],
+		// React 19's automatic JSX runtime.
+		"react/react-in-jsx-scope": "off",
+		// `onStop={mentorChat.stop}` forwards a method already named for what it does; the `handleStop`
+		// alias the rule asks for is a second name for the same function.
+		"react/jsx-handler-names": "off",
+		// `const [x] = useState(() => …)` is React's own spelling for a value computed once; the rule
+		// reads the missing setter as a mistake.
+		"react/hook-use-state": "off",
+		"jsx-a11y/anchor-ambiguous-text": "error",
+	},
+}

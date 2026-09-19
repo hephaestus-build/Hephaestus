@@ -44,10 +44,10 @@ void describe("planSubjects", () => {
 	});
 
 	void test("rejects an inventory that could name something other than an image", () => {
-		assert.throws(() => planSubjects({ images: ["web app"] }, "ghcr.io/x", "main"), /malformed/);
-		assert.throws(() => planSubjects({ images: [] }, "ghcr.io/x", "main"), /no images/);
-		assert.throws(() => planSubjects({ images: [7] }, "ghcr.io/x", "main"), /must be a string/);
-		assert.throws(() => planSubjects({}, "ghcr.io/x", "main"), /must be an array/);
+		assert.throws(() => planSubjects({ images: ["web app"] }, "ghcr.io/x", "main"), /malformed/u);
+		assert.throws(() => planSubjects({ images: [] }, "ghcr.io/x", "main"), /no images/u);
+		assert.throws(() => planSubjects({ images: [7] }, "ghcr.io/x", "main"), /must be a string/u);
+		assert.throws(() => planSubjects({}, "ghcr.io/x", "main"), /must be an array/u);
 	});
 });
 
@@ -99,14 +99,14 @@ void describe("selectPlatformDigest", () => {
 	});
 
 	void test("rejects a document that is not a manifest at all", () => {
-		assert.throws(() => selectPlatformDigest("nope", PLATFORM), /must be a JSON object/);
+		assert.throws(() => selectPlatformDigest("nope", PLATFORM), /must be a JSON object/u);
 	});
 });
 
 void describe("isImageIndex", () => {
 	void test("malformed index declarations never become a single-manifest fallback", () => {
 		for (const manifests of [null, {}, "invalid", 42]) {
-			assert.throws(() => isImageIndex({ manifests }), /must be an array/);
+			assert.throws(() => isImageIndex({ manifests }), /must be an array/u);
 		}
 	});
 
@@ -126,7 +126,7 @@ void describe("isImageIndex", () => {
 	});
 
 	void test("rejects a document that is not a manifest at all", () => {
-		assert.throws(() => isImageIndex("nope"), /must be a JSON object/);
+		assert.throws(() => isImageIndex("nope"), /must be a JSON object/u);
 	});
 });
 

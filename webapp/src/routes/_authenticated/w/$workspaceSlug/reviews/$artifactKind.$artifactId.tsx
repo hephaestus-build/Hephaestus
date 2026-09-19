@@ -8,9 +8,9 @@ import {
 	requestPracticeReviewMutation,
 } from "@/api/@tanstack/react-query.gen";
 import { TracePage } from "@/components/practice-trace/TracePage";
-import { workspaceMembershipQueryOptions } from "@/integrations/auth/guard";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
+import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/reviews/$artifactKind/$artifactId",
@@ -42,7 +42,9 @@ function ReviewActivityDetailRoute() {
 	const requestReview = useMutation({
 		...requestPracticeReviewMutation(),
 		onSuccess: (outcome, { path, body }) => {
-			if (outcome.status !== "SUBMITTED") return;
+			if (outcome.status !== "SUBMITTED") {
+				return;
+			}
 			void queryClient.invalidateQueries({
 				queryKey: getArtifactTraceQueryKey({
 					path: { ...path, artifactKind: body.artifactKind, artifactId: body.artifactId },
@@ -63,7 +65,9 @@ function ReviewActivityDetailRoute() {
 			trace={trace.data}
 			isLoading={trace.isLoading}
 			error={trace.isError ? trace.error : undefined}
-			onRetry={() => void trace.refetch()}
+			onRetry={() => {
+				void trace.refetch();
+			}}
 			onRequestReview={() =>
 				requestReview.mutate({ path: { workspaceSlug }, body: { artifactKind, artifactId } })
 			}

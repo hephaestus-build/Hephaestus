@@ -6,6 +6,8 @@ import {
 	MessagesSquareIcon,
 } from "lucide-react";
 
+import { hasText } from "@/lib/text";
+
 /**
  * Artifact kinds are an open vocabulary — a `<domain>.<kind>` string named by the owning server
  * module, so the generated client types one as `string`. These are the kinds the UI can label;
@@ -47,12 +49,16 @@ export function isKnownArtifactKind(kind: string | null | undefined): kind is Kn
 }
 
 export function artifactKindLabel(kind: string | undefined): string {
-	if (!kind) return "Reviewed work";
+	if (!hasText(kind)) {
+		return "Reviewed work";
+	}
 	return isKnownArtifactKind(kind) ? ARTIFACT_KIND_LABELS[kind] : kind;
 }
 
 export function artifactKindPluralLabel(kind: string | undefined): string {
-	if (!kind) return "Reviewed work";
+	if (!hasText(kind)) {
+		return "Reviewed work";
+	}
 	return isKnownArtifactKind(kind) ? ARTIFACT_KIND_PLURAL_LABELS[kind] : kind;
 }
 
@@ -73,7 +79,9 @@ const ARTIFACT_KIND_INLINE_LABELS: Record<KnownArtifactKind, { one: string; many
  * a kind the server added before this build stays legible instead of vanishing from the total.
  */
 export function artifactKindCountLabel(kind: string | undefined, count: number): string {
-	if (!kind || !isKnownArtifactKind(kind)) return `${count} ${kind ?? "reviewed work"}`;
+	if (!hasText(kind) || !isKnownArtifactKind(kind)) {
+		return `${count} ${kind ?? "reviewed work"}`;
+	}
 	const labels = ARTIFACT_KIND_INLINE_LABELS[kind];
 	return `${count} ${count === 1 ? labels.one : labels.many}`;
 }
@@ -90,5 +98,5 @@ const ARTIFACT_KIND_ICONS: Record<KnownArtifactKind, LucideIcon> = {
  * borrows the icon of a kind it is not.
  */
 export function artifactKindIcon(kind: string | undefined): LucideIcon {
-	return kind && isKnownArtifactKind(kind) ? ARTIFACT_KIND_ICONS[kind] : FileTextIcon;
+	return hasText(kind) && isKnownArtifactKind(kind) ? ARTIFACT_KIND_ICONS[kind] : FileTextIcon;
 }

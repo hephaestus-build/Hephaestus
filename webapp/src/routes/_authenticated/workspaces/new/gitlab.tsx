@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon, OctagonXIcon } from "lucide-react";
-import { useEffect, useReducer, useRef } from "react";
+import { type ReactNode, useEffect, useReducer, useRef } from "react";
 import { toast } from "sonner";
 
 import {
@@ -12,23 +12,23 @@ import {
 	listWorkspacesQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceListItem } from "@/api/types.gen";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
-import { ConfigureWorkspaceStep } from "@/components/workspace/create-workspace/ConfigureWorkspaceStep";
-import { ConnectGitLabStep } from "@/components/workspace/create-workspace/ConnectGitLabStep";
-import { workspaceDetailsSchema } from "@/components/workspace/create-workspace/schemas";
-import { SelectGroupStep } from "@/components/workspace/create-workspace/SelectGroupStep";
+import { ConfigureWorkspaceStep } from "@/components/create-workspace/ConfigureWorkspaceStep";
+import { ConnectGitLabStep } from "@/components/create-workspace/ConnectGitLabStep";
+import { workspaceDetailsSchema } from "@/components/create-workspace/schemas";
+import { SelectGroupStep } from "@/components/create-workspace/SelectGroupStep";
 import {
 	createInitialWizardState,
 	WizardContext,
 	type WizardStep,
 	wizardReducer,
-} from "@/components/workspace/create-workspace/wizard-context";
-import { WizardStepIndicator } from "@/components/workspace/create-workspace/WizardStepIndicator";
-import { useAuth } from "@/integrations/auth/AuthContext";
+} from "@/components/create-workspace/wizard-context";
+import { WizardStepIndicator } from "@/components/create-workspace/WizardStepIndicator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { isRecord } from "@/lib/is-record";
-import { firstNonBlank } from "@/lib/text";
+import { firstNonBlank, hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/workspaces/new/gitlab")({
 	component: GitLabWizardPage,
@@ -53,7 +53,7 @@ function BackToProviders() {
 	return (
 		<Link
 			to="/workspaces/new"
-			className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6"
+			className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
 		>
 			<ArrowLeftIcon className="size-3.5" />
 			Back
@@ -70,9 +70,9 @@ function NoGitLabProviderNotice({ isAppAdmin }: { isAppAdmin: boolean }) {
 		<div className="mx-auto w-full max-w-2xl">
 			<BackToProviders />
 			<div className="space-y-4">
-				<h1 className="text-2xl font-semibold tracking-tight">GitLab sign-in isn't configured</h1>
+				<h1 className="text-2xl font-semibold tracking-tight">GitLab sign-in isn’t configured</h1>
 				<p className="text-muted-foreground">
-					This instance has no GitLab login provider, so a GitLab account can't be linked yet.
+					This instance has no GitLab login provider, so a GitLab account can’t be linked yet.
 					{isAppAdmin
 						? " Add one to enable GitLab sign-in."
 						: " Ask an instance admin to add one (Instance admin → Login providers)."}
@@ -92,6 +92,13 @@ function NoGitLabProviderNotice({ isAppAdmin }: { isAppAdmin: boolean }) {
  * identity provider that attaches the identity to the current account. When more than one GitLab
  * instance is configured, the user picks which instance to link (no arbitrary default).
  */
+function linkLabel(displayName: string, linked: boolean, multiple: boolean) {
+	if (linked) {
+		return `${displayName} — already linked`;
+	}
+	return multiple ? `Link ${displayName}` : "Link GitLab account";
+}
+
 function GitLabLinkPrompt({
 	providers,
 	linkedServerUrls,
@@ -124,17 +131,31 @@ function GitLabLinkPrompt({
 								disabled={linked}
 								onClick={() => linkAccount(provider.registrationId)}
 							>
-								{linked
-									? `${provider.displayName} — already linked`
-									: multiple
-										? `Link ${provider.displayName}`
-										: "Link GitLab account"}
+								{linkLabel(provider.displayName, linked, multiple)}
 							</Button>
 						);
 					})}
 				</div>
 			</div>
 		</div>
+	);
+}
+
+/** Keyed on the step, so each step's heading mounts fresh and takes focus for a screen reader to announce. */
+function StepHeading({ children }: { children: ReactNode }) {
+	const headingRef = useRef<HTMLHeadingElement>(null);
+	useEffect(() => {
+		headingRef.current?.focus();
+	}, []);
+	return (
+		<h1
+			id="wizard-heading"
+			ref={headingRef}
+			tabIndex={-1}
+			className="text-2xl font-semibold tracking-tight outline-none"
+		>
+			{children}
+		</h1>
 	);
 }
 
@@ -157,7 +178,9 @@ function GitLabWizardPage() {
 		staleTime: 5 * 60 * 1000,
 	});
 	const gitlabProviders: GitLabProvider[] = (identityProviders ?? []).flatMap((p) => {
-		if (p.providerType !== "GITLAB" || !p.registrationId) return [];
+		if (p.providerType !== "GITLAB" || !hasText(p.registrationId)) {
+			return [];
+		}
 		return [
 			{
 				registrationId: p.registrationId,
@@ -167,10 +190,12 @@ function GitLabWizardPage() {
 		];
 	});
 	const linkedGitlabServerUrls = new Set(
-		linkedProviders.flatMap((p) => (p.type === "GITLAB" && p.serverUrl ? [p.serverUrl] : [])),
+		linkedProviders.flatMap((p) =>
+			p.type === "GITLAB" && hasText(p.serverUrl) ? [p.serverUrl] : [],
+		),
 	);
 
-	const gitlabEnabled = !!providers?.gitlab;
+	const gitlabEnabled = Boolean(providers?.gitlab);
 	const defaultServerUrl = providers?.gitlab?.defaultServerUrl;
 
 	const [state, dispatch] = useReducer(wizardReducer, defaultServerUrl, (url) =>
@@ -178,8 +203,6 @@ function GitLabWizardPage() {
 	);
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
-	const headingRef = useRef<HTMLHeadingElement>(null);
-
 	const stepAnnouncement = `Step ${state.step} of 3: ${STEP_META[state.step].title}`;
 
 	// No `onError`: the alert is rendered off `listGroups.isError` beside step 1's server URL and
@@ -220,14 +243,11 @@ function GitLabWizardPage() {
 			workspaceSlug: state.workspaceSlug,
 		}).success;
 
-	// Focus moves to the new step's heading so a screen reader announces where the wizard now is.
-	useEffect(() => {
-		headingRef.current?.focus();
-	}, [state.step]);
-
 	const handleNext = () => {
 		if (state.step === 1 && canAdvanceFromStep1) {
-			if (listGroups.isPending) return;
+			if (listGroups.isPending) {
+				return;
+			}
 			listGroups.mutate(
 				{
 					body: {
@@ -248,12 +268,16 @@ function GitLabWizardPage() {
 
 	const handleBack = () => {
 		// Reset stale mutation state so old errors don't persist after back-navigation
-		if (state.step === 2) listGroups.reset();
+		if (state.step === 2) {
+			listGroups.reset();
+		}
 		dispatch({ type: "GO_BACK" });
 	};
 
 	const handleSubmit = () => {
-		if (!canSubmit || !state.selectedGroup || createWorkspace.isPending) return;
+		if (!canSubmit || !state.selectedGroup || createWorkspace.isPending) {
+			return;
+		}
 		createWorkspace.mutate({
 			body: {
 				workspaceSlug: state.workspaceSlug,
@@ -318,22 +342,15 @@ function GitLabWizardPage() {
 
 			<Link
 				to="/workspaces/new"
-				className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6"
+				className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
 				aria-label="Back to provider selection"
 			>
 				<ArrowLeftIcon className="size-3.5" />
 				Back
 			</Link>
 
-			<div className="space-y-1.5 mb-6">
-				<h1
-					id="wizard-heading"
-					ref={headingRef}
-					tabIndex={-1}
-					className="text-2xl font-semibold tracking-tight outline-none"
-				>
-					{meta.title}
-				</h1>
+			<div className="mb-6 space-y-1.5">
+				<StepHeading key={state.step}>{meta.title}</StepHeading>
 				<p className="text-muted-foreground">{meta.description}</p>
 			</div>
 
@@ -357,7 +374,7 @@ function GitLabWizardPage() {
 				</Alert>
 			)}
 
-			<div className="flex justify-end gap-2 mt-6">
+			<div className="mt-6 flex justify-end gap-2">
 				{state.step > 1 && (
 					<Button
 						variant="outline"

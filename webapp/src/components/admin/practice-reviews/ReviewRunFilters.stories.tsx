@@ -14,7 +14,6 @@ import { ReviewRunFilters } from "./ReviewRunFilters";
  * a filter an act of memory: matching a word here to a tag there.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Review run filters",
 	component: ReviewRunFilters,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],
@@ -60,7 +59,7 @@ export const Filtered: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("2 reviews match your filters.");
 		canvas.getByRole("button", { name: "Requested: Jul 28 – Jul 29, 2026" });
-		canvas.getByRole("button", { name: /Reset/ });
+		canvas.getByRole("button", { name: /Reset/u });
 	},
 };
 
@@ -92,14 +91,14 @@ export const ChoosingAStatus: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
 		const listbox = await screen.findByRole("listbox");
-		await userEvent.click(within(listbox).getByRole("option", { name: /Failed/ }));
+		await userEvent.click(within(listbox).getByRole("option", { name: /Failed/u }));
 
 		await expect(args.onPatch).toHaveBeenCalledWith({ status: "FAILED" });
 		await expect(canvas.getByRole("combobox")).toHaveTextContent("Failed");
 		// Wait for the popup to finish leaving. The accessibility check runs when the play function
 		// returns, and a listbox caught mid-exit has already been detached from the label that names
 		// it — which under a loaded test pool is long enough to be audited.
-		await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+		await waitFor(async () => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
 	},
 };
 
@@ -111,7 +110,7 @@ export const ChoosingAStatus: Story = {
 export const ResettingClearsEveryField: Story = {
 	args: { search: { status: "FAILED", from: "2026-07-28", to: "2026-07-29" }, total: 2 },
 	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Reset/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Reset/u }));
 		await expect(args.onReset).toHaveBeenCalledTimes(1);
 	},
 };
