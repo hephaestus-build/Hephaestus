@@ -68,7 +68,11 @@ export function useConnectionSync({
 }: ConnectionSyncOptions) {
 	const queryClient = useQueryClient();
 	const livePushUnavailable = useLivePushUnavailable();
-	const [jobsPage, setJobsPage] = useState(0);
+	const [pagination, setPagination] = useState({ connectionId, page: 0 });
+	const jobsPage = pagination.connectionId === connectionId ? pagination.page : 0;
+	if (pagination.connectionId !== connectionId) {
+		setPagination({ connectionId, page: 0 });
+	}
 	const hasConnection = connectionId != null;
 	const path = { workspaceSlug, connectionId: connectionId ?? -1 };
 
@@ -91,7 +95,6 @@ export function useConnectionSync({
 		...listConnectionSyncJobsOptions({ path, query: { page: jobsPage, size: JOBS_PAGE_SIZE } }),
 		enabled: hasConnection,
 		refetchInterval: syncPollInterval(hasActiveJob, livePushUnavailable),
-		placeholderData: (previousData) => previousData,
 	});
 
 	const invalidateSyncActivity = () => {
@@ -209,7 +212,7 @@ export function useConnectionSync({
 			},
 			page: jobsPage,
 			totalPages: jobsQuery.data?.totalPages ?? 1,
-			onPageChange: setJobsPage,
+			onPageChange: (page: number) => setPagination({ connectionId, page }),
 		} satisfies SyncJobsTableProps,
 	};
 }

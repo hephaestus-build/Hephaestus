@@ -39,7 +39,7 @@
 		"pg": "8.23.0",
 		"surge": "0.44.0",
 		"typescript": "7.0.2",
-		"vite-plus": "0.3.1",
+		"vite-plus": "0.3.2",
 		"yaml": "2.9.0"
 	},
 	"devEngines": {

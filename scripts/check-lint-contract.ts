@@ -1,6 +1,6 @@
 /**
- * A rule that stops firing after a Vite+ or oxlint bump fails nothing on its own, so this lints one
- * known-bad fixture per rule through the pinned Vite+, and known-good ones the theme must accept.
+ * Exercises house rules, design-system policy and type checking through the pinned Vite+,
+ * using invalid fixtures and valid theme usage.
  * The scratch project stays outside the repo so it cannot invalidate webapp task fingerprints.
  */
 import assert from "node:assert/strict";
@@ -265,6 +265,23 @@ const fixtures: Fixture[] = [
 		code: "typescript(no-unsafe-assignment)",
 		source: 'const unsafe: string = JSON.parse("null"); void unsafe;',
 	},
+	{
+		path: "src/lint-contract-boolean.ts",
+		code: "typescript(strict-boolean-expressions)",
+		source:
+			'export function label(value?: string) { if (value) { return value; } return "empty"; }',
+	},
+	{
+		path: "src/lint-contract-exhaustive.ts",
+		code: "typescript(switch-exhaustiveness-check)",
+		source:
+			'export function label(value: "ready" | "failed") { switch (value) { case "ready": return "Ready"; default: return "Unknown"; } }',
+	},
+	{
+		path: "src/lint-contract-type-error.ts",
+		code: "typescript(TS2322)",
+		source: 'export const count: number = "not a number";',
+	},
 	// `no-restricted-imports` options replace rather than merge, so every override that sets the rule
 	// restates the `react` entry; one fixture per override scope proves none has dropped it.
 	...["src/lib", "src/stores", "src/components/ui", "src/components", "src"].map((scope) => ({
@@ -391,7 +408,7 @@ void test("vp lint preserves house rules, design-system checks and type-aware di
 	}
 });
 
-void test("webapp and docs use the same global lint policy", () => {
+void test("webapp and docs use the same lint engine options", () => {
 	assert.deepEqual(effectiveLintOptions("docs"), effectiveLintOptions("webapp"));
 });
 

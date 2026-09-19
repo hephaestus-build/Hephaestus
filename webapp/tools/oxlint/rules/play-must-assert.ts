@@ -61,7 +61,7 @@ export const playMustAssert = defineRule({
 		type: "problem",
 		docs: {
 			description:
-				"A story's `play` function must end in an assertion. Without one it passes as long as nothing throws, which proves the clicks landed and not that they did anything.",
+				"A story’s `play` function must contain a recognised assertion or delegate to another story’s play.",
 		},
 		messages: {
 			noAssertion:

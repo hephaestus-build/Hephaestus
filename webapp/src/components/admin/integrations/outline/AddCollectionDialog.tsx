@@ -113,8 +113,17 @@ export function AddCollectionDialog({
 	const total = selectedIds.length;
 
 	return (
-		<Dialog open={open} onOpenChange={handleOpenChange}>
-			<DialogContent className="sm:max-w-lg">
+		<Dialog
+			open={open}
+			onOpenChange={(next, details) => {
+				if (!next && submitting) {
+					details.cancel();
+					return;
+				}
+				handleOpenChange(next);
+			}}
+		>
+			<DialogContent className="sm:max-w-lg" showCloseButton={!submitting}>
 				<DialogHeader>
 					<DialogTitle>Add collections to mirror</DialogTitle>
 					<DialogDescription>

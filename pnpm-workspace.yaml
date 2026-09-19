@@ -30,8 +30,8 @@ allowBuilds:
 
 # The tools vite-plus bundles, at the versions it bundles; `vp run sync:toolchain-pins` writes them.
 catalog:
-  oxfmt: 0.66.0
-  oxlint: 1.81.0
+  oxfmt: 0.67.0
+  oxlint: 1.82.0
   oxlint-tsgolint: 7.0.2001
   "@oxlint/plugins": 1.79.0
   vitest: 4.1.11
@@ -39,7 +39,7 @@ catalog:
   "@vitest/browser-playwright": 4.1.11
   "@vitest/coverage-v8": 4.1.11
   "@vitest/runner": 4.1.11
-  vite: npm:@voidzero-dev/vite-plus-core@0.3.1
+  vite: npm:@voidzero-dev/vite-plus-core@0.3.2
 
 overrides:
   mermaid: 11.17.2
