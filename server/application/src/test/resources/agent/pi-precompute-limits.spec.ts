@@ -60,6 +60,12 @@ void test("production precompute limits", { skip: process.platform !== "linux" }
 			// satisfies no such grant.
 			const root = realpathSync(mkdtempSync(path.join(tmpdir(), "precompute-limits-")));
 			try {
+				// A version-manager shim needs the caller’s environment; the sandbox must execute Node itself.
+				writeFileSync(
+					path.join(root, "node"),
+					`#!/bin/sh\n[ "\${PRECOMPUTE_TEST_SECRET:-}" = test-only ] || exit 97\nexec ${JSON.stringify(process.execPath)} "$@"\n`,
+					{ mode: 0o755 },
+				);
 				writeFileSync(
 					path.join(root, "pi-precompute.ts"),
 					`import { writeFileSync } from "node:fs";\nconst root = process.argv[2]; const output = root + "/work/precompute-out";\n${scenario.code}\n`,
@@ -75,7 +81,11 @@ void test("production precompute limits", { skip: process.platform !== "linux" }
 						process.execPath,
 					],
 					{
-						env: { ...process.env, PRECOMPUTE_TEST_SECRET: "test-only" },
+						env: {
+							...process.env,
+							PATH: `${root}${path.delimiter}${process.env.PATH ?? ""}`,
+							PRECOMPUTE_TEST_SECRET: "test-only",
+						},
 						encoding: "utf8",
 						timeout: 5000,
 					},
