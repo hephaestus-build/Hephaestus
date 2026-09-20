@@ -3,15 +3,15 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Building2 } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 import { z } from "zod";
-import { withSessionMutationLock } from "@/integrations/auth/session-mutation";
+import { withSessionMutationLock } from "@/runtime/auth/session-mutation";
 
 import { adminListWorkspacesOptions, impersonateMutation } from "@/api/@tanstack/react-query.gen";
 import type { AdminWorkspaceView } from "@/api/types.gen";
 import { ImpersonateDialog } from "@/components/admin/users/ImpersonateDialog";
 import { AdminWorkspacesTable } from "@/components/admin/workspaces/AdminWorkspacesTable";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
-import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -44,7 +44,7 @@ function AdminWorkspacesPage() {
 					ws.providerType,
 				]
 					.filter(Boolean)
-					.some((field) => field?.toLowerCase().includes(term)),
+					.some((field) => field?.toLowerCase().includes(term) === true),
 			)
 		: all;
 
@@ -56,25 +56,26 @@ function AdminWorkspacesPage() {
 				description="View every workspace on this instance and its ownership and status."
 			/>
 
-			<div className="relative w-full sm:max-w-sm">
+			<InputGroup className="w-full sm:max-w-sm">
 				<Label htmlFor="admin-workspaces-search" className="sr-only">
 					Search workspaces
 				</Label>
-				<Building2 className="absolute left-3 top-2.5 size-4 text-muted-foreground" aria-hidden />
-				<Input
+				<InputGroupAddon>
+					<Building2 aria-hidden />
+				</InputGroupAddon>
+				<InputGroupInput
 					id="admin-workspaces-search"
 					type="search"
 					placeholder="Search by name, slug, owner, provider, or status…"
 					value={search}
-					onChange={(event) =>
+					onChange={(event) => {
 						void navigate({
 							search: { q: event.target.value || undefined },
 							replace: true,
-						})
-					}
-					className="pl-9"
+						});
+					}}
 				/>
-			</div>
+			</InputGroup>
 
 			<AdminWorkspacesTable
 				workspaces={workspaces}
@@ -89,12 +90,12 @@ function AdminWorkspacesPage() {
 
 			<ImpersonateDialog
 				user={
-					impersonateTarget?.ownerAccountId != null
-						? {
+					impersonateTarget?.ownerAccountId == null
+						? null
+						: {
 								id: impersonateTarget.ownerAccountId,
 								displayName: impersonateTarget.ownerLogin ?? impersonateTarget.displayName,
 							}
-						: null
 				}
 				defaultReason={
 					impersonateTarget
@@ -114,8 +115,10 @@ function AdminWorkspacesPage() {
 					}
 				}}
 				onConfirm={(user, reason) => {
-					if (user.id == null || impersonateTarget == null) return;
-					const workspaceSlug = impersonateTarget.workspaceSlug;
+					if (user.id == null || impersonateTarget == null) {
+						return;
+					}
+					const { workspaceSlug } = impersonateTarget;
 					impersonate.mutate(
 						{ body: { targetAccountId: user.id, reason } },
 						{

@@ -25,8 +25,8 @@ void describe("the Version PR's CI branch", () => {
 	});
 
 	void test("refuses a configuration that names no base branch", () => {
-		assert.throws(() => versionBranch({}), /baseBranch must be a string/);
-		assert.throws(() => versionBranch({ baseBranch: "" }), /declares no baseBranch/);
+		assert.throws(() => versionBranch({}), /baseBranch must be a string/u);
+		assert.throws(() => versionBranch({ baseBranch: "" }), /declares no baseBranch/u);
 	});
 });
 
@@ -51,14 +51,15 @@ void describe("dispatching CI for a Version PR head", () => {
 			parseRuns({ workflow_runs: [{ head_sha: SHA, id: 1, conclusion: "success" }] }),
 			[{ headSha: SHA, conclusion: "success" }],
 		);
-		assert.throws(() => parseRuns({}), /workflow_runs must be an array/);
-		assert.throws(() => parseRuns({ workflow_runs: [{ id: 1 }] }), /head_sha must be a string/);
+		assert.throws(() => parseRuns({}), /workflow_runs must be an array/u);
+		assert.throws(() => parseRuns({ workflow_runs: [{ id: 1 }] }), /head_sha must be a string/u);
 	});
 });
 
 void test("cancelled and approval-blocked validation recover without retrying real failures", () => {
-	for (const conclusion of ["cancelled", "action_required"])
+	for (const conclusion of ["cancelled", "action_required"]) {
 		assert.equal(needsDispatch(SHA, [{ headSha: SHA, conclusion }]), true);
+	}
 	assert.equal(
 		needsDispatch(SHA, [
 			{ headSha: SHA, conclusion: "action_required" },
@@ -66,8 +67,9 @@ void test("cancelled and approval-blocked validation recover without retrying re
 		]),
 		false,
 	);
-	for (const conclusion of [null, "success", "failure"])
+	for (const conclusion of [null, "success", "failure"]) {
 		assert.equal(needsDispatch(SHA, [{ headSha: SHA, conclusion }]), false);
+	}
 });
 
 void test("a missing Version branch is distinct from a malformed API response", () => {
@@ -75,10 +77,10 @@ void test("a missing Version branch is distinct from a malformed API response", 
 	const ref = { ref: "refs/heads/changeset-release/main", object: { sha: SHA } };
 	assert.equal(parseBranchHead([ref], "changeset-release/main"), SHA);
 	assert.equal(parseBranchHead([ref], "changeset-release/ma"), undefined);
-	assert.throws(() => parseBranchHead({ message: "API unavailable" }, "main"), /matching refs/);
+	assert.throws(() => parseBranchHead({ message: "API unavailable" }, "main"), /matching refs/u);
 	assert.throws(
 		() => parseBranchHead([{ ...ref, object: {} }], "changeset-release/main"),
-		/branch sha/,
+		/branch sha/u,
 	);
 });
 
@@ -87,7 +89,7 @@ void test(
 	{ skip: process.platform === "win32" },
 	async (context) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "version-pr-"));
-		context.after(() => rm(directory, { recursive: true, force: true }));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
 		await mkdir(path.join(directory, ".changeset"));
 		await writeFile(
 			path.join(directory, ".changeset/config.json"),
@@ -104,7 +106,7 @@ printf '[]'
 		);
 		const result = spawnSync(
 			process.execPath,
-			[fileURLToPath(new URL("./dispatch-version-pr-ci.ts", import.meta.url))],
+			[fileURLToPath(new URL("dispatch-version-pr-ci.ts", import.meta.url))],
 			{
 				cwd: directory,
 				env: {
@@ -116,6 +118,6 @@ printf '[]'
 			},
 		);
 		assert.equal(result.status, 0, result.stderr);
-		assert.match(result.stdout, /No changeset-release\/release#2026% branch/);
+		assert.match(result.stdout, /No changeset-release\/release#2026% branch/u);
 	},
 );

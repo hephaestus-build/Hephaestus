@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
 
-import { artifactTrace, documentArtifactTrace, untouchedArtifactTrace } from "./story-mock-data";
+import { artifactTrace, documentArtifactTrace, untouchedArtifactTrace } from "./fixtures";
 import { TraceHeader } from "./TraceHeader";
 
 /**
@@ -11,7 +11,6 @@ import { TraceHeader } from "./TraceHeader";
  * which those are, so being wrong in this direction costs a missing button rather than a broken one.
  */
 const meta = {
-	title: "Practice trace/Header",
 	component: TraceHeader,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -28,12 +27,12 @@ type Story = StoryObj<typeof meta>;
 export const PullRequest: Story = {
 	play: async ({ args, canvas }) => {
 		await expect(
-			canvas.getByRole("heading", { name: /Member-facing review activity/ }),
+			canvas.getByRole("heading", { name: /Member-facing review activity/u }),
 		).toBeVisible();
 		// The kind is named for a reader; the wire id never reaches the page.
 		await expect(canvas.getByText("Pull or merge request")).toBeVisible();
 		await expect(canvas.queryByText("scm.pull_request")).not.toBeInTheDocument();
-		await expect(canvas.getByRole("link", { name: /Open the original/ })).toHaveAttribute(
+		await expect(canvas.getByRole("link", { name: /Open the original/u })).toHaveAttribute(
 			"href",
 			"https://github.com/ls1intum/Hephaestus/pull/1423",
 		);
@@ -81,7 +80,9 @@ export const UnlinkableArtifact: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("link", { name: /Open the original/ })).not.toBeInTheDocument();
+		await expect(
+			canvas.queryByRole("link", { name: /Open the original/u }),
+		).not.toBeInTheDocument();
 		await expect(canvas.queryByText("#1423")).not.toBeInTheDocument();
 		await expect(canvas.queryByRole("button", { name: "Review this now" })).not.toBeInTheDocument();
 	},

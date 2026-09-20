@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -11,21 +11,23 @@ import type { DiffFile } from "../../../../../../docker/agents/precompute/lib/ty
 const repositoryRoot = fileURLToPath(new URL("../../../../../../", import.meta.url));
 
 async function stage() {
-	const root = mkdtempSync(join(tmpdir(), "dependency-precompute-"));
-	mkdirSync(join(root, "practices"));
-	mkdirSync(join(root, "repo"), { recursive: true });
-	writeFileSync(join(root, "package.json"), '{"type":"module"}\n');
-	symlinkSync(join(repositoryRoot, "docker/agents/precompute/lib"), join(root, "lib"));
-	const staged = join(root, "practices/changes-dependencies-deliberately.ts");
+	const root = mkdtempSync(path.join(tmpdir(), "dependency-precompute-"));
+	mkdirSync(path.join(root, "practices"));
+	mkdirSync(path.join(root, "repo"), { recursive: true });
+	writeFileSync(path.join(root, "package.json"), '{"type":"module"}\n');
+	symlinkSync(path.join(repositoryRoot, "docker/agents/precompute/lib"), path.join(root, "lib"));
+	const staged = path.join(root, "practices/changes-dependencies-deliberately.ts");
 	cpSync(
-		join(
+		path.join(
 			repositoryRoot,
 			"server/application/src/main/resources/practices/precompute/changes-dependencies-deliberately.ts",
 		),
 		staged,
 	);
 	const mod: unknown = await import(staged);
-	if (!isPracticeModule(mod)) throw new Error("script does not export a default function");
+	if (!isPracticeModule(mod)) {
+		throw new Error("script does not export a default function");
+	}
 	return { root, script: mod.default };
 }
 
@@ -38,9 +40,9 @@ const metadata = {
 	commit_sha: "abc123",
 };
 
-function diffFile(path: string, added: string[], removed: string[] = []): DiffFile {
+function diffFile(file: string, added: string[], removed: string[] = []): DiffFile {
 	return {
-		path,
+		path: file,
 		addedLines: new Map(added.map((line, i) => [10 + i, line])),
 		removedLines: new Map(removed.map((line, i) => [10 + i, line])),
 		hunks: [],
@@ -51,7 +53,7 @@ void test("an XcodeGen project.yml is a dependency manifest: a package's url and
 	const { root, script } = await stage();
 	try {
 		const result = await script(
-			join(root, "repo"),
+			path.join(root, "repo"),
 			new Map([
 				[
 					"project.yml",

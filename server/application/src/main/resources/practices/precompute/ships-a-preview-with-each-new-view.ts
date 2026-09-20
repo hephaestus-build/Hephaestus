@@ -6,8 +6,8 @@ import { isTestPath, languageOf } from "../lib/languages.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 const VIEW_DECLARATION =
-	/^\s*(?:@\w+\s+)*(?:(?:public|private|fileprivate|internal)\s+)?struct\s+([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*:\s*[^{]*\bView\b/;
-const PREVIEW = /^\s*#Preview\b|:\s*PreviewProvider\b/;
+	/^\s*(?:@\w+\s+)*(?:(?:public|private|fileprivate|internal)\s+)?struct\s+(?<name>[A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*:\s*[^{]*\bView\b/u;
+const PREVIEW = /^\s*#Preview\b|:\s*PreviewProvider\b/u;
 
 export default function shipsAPreviewWithEachNewView(
 	_repoPath: string,
@@ -19,24 +19,28 @@ export default function shipsAPreviewWithEachNewView(
 	let previewsAdded = 0;
 	let filesWithNewViewAndNoPreview = 0;
 	for (const [path, df] of diffFiles) {
-		if (languageOf(path) !== "swift" || isTestPath(path)) continue;
+		if (languageOf(path) !== "swift" || isTestPath(path)) {
+			continue;
+		}
 		let views = 0;
 		let previews = 0;
 		for (const [line, content] of df.addedLines) {
-			if (isCommentLine(content, "swift")) continue;
+			if (isCommentLine(content, "swift")) {
+				continue;
+			}
 			const view = VIEW_DECLARATION.exec(content);
 			if (view) {
-				views++;
+				views += 1;
 				hints.push({
 					file: path,
 					line,
 					pattern: "new view type",
 					context: content.trim().slice(0, 160),
 					inDiff: true,
-					flags: { name: view[1] ?? "" },
+					flags: { name: view.groups?.name ?? "" },
 				});
 			} else if (PREVIEW.test(content)) {
-				previews++;
+				previews += 1;
 				hints.push({
 					file: path,
 					line,
@@ -49,7 +53,9 @@ export default function shipsAPreviewWithEachNewView(
 		}
 		newViews += views;
 		previewsAdded += previews;
-		if (views > 0 && previews === 0) filesWithNewViewAndNoPreview++;
+		if (views > 0 && previews === 0) {
+			filesWithNewViewAndNoPreview += 1;
+		}
 	}
 	const directions: string[] = [];
 	if (newViews > 0) {

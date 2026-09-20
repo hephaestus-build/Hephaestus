@@ -1,6 +1,6 @@
 # ADR 0008: Webhook as a third runtime role (`webhook-server` container)
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-08-22 — webhook ingestion cannot fail silently; 2026-09-17 — receiver surface corrected)
 **Date:** 2026-05-20
 **Authors:** Webhook substrate epic (#1110)
 
@@ -420,3 +420,29 @@ This ADR records why; that page records what to do.
 Spring Modulith Moments is disabled: its auto-configuration enables scheduling independently of
 `ServerSchedulingConfig`, and Hephaestus does not consume its calendar events. The runtime-role
 switch remains the single owner of scheduled work; API contract introspection disables it as well.
+
+## Update — 2026-09-17
+
+Corrects § Decision and § Consequences on the receiver's code and routes; the role, the gates and the
+2026-08-22 decisions stand.
+
+- The routes are one `WebhookController` at `POST /webhooks/{kind}` (`integration/core/webhook/`),
+  the shape [ADR 0015](0015-unified-integration-framework.md) decided; Traefik forwards
+  `PathPrefix(/webhooks)` to `webhook-server` without strip-prefix (`docker/compose.core.yaml`), and
+  `IntegrationCutoverPinsTest` (`server/application/src/test/java/de/tum/cit/aet/hephaestus/architecture/`)
+  fails the build when `/github`, `/gitlab`, `/slack` or `/outline` is a route. This supersedes the
+  "Endpoints `/gitlab` and `/github`" bullet of § Consequences.
+- `HmacVerifier`, `GitLabTokenVerifier`, `GitLabSubjectBuilder`, `GitHubSubjectBuilder` and
+  `DedupIdResolver` exist nowhere under `server/application/src/main`: signature checks are the
+  per-vendor `WebhookSignatureVerifier` implementations (`GithubWebhookSignatureVerifier`,
+  `GitlabWebhookSignatureVerifier`, `SlackWebhookSignatureVerifier`,
+  `OutlineWebhookSignatureVerifier`, each under its adapter's `webhook/` package), subject grammar is
+  the `SubjectParser` / `SubjectKeyDeriver` SPI in `integration/core/spi/`, and the pipeline is
+  `WebhookIngestPipeline` and `JetStreamPublisher` in `integration/core/webhook/`.
+- `workspace.GitLabWebhookService` is `integration.scm.gitlab.workspace.GitLabWebhookService`.
+- `HexEncodingArchTest` and `LocaleSafetyArchTest` scope `..integration.core.webhook..`.
+- The JaCoCo rule in `server/application/build.gradle.kts` requires 0.70 branch coverage on
+  `integration.core.webhook` and the GitHub, GitLab and Outline `webhook` packages and 0.60 on
+  `integration.slack.webhook`, not 0.95.
+- The container runs `ghcr.io/hephaestus-build/application-server`, pinned by the release lock as
+  `HEPHAESTUS_IMAGE_APPLICATION_SERVER` ([ADR 0034](0034-signed-release-image-lock.md)).

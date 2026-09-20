@@ -2,7 +2,7 @@ import { CircleAlertIcon, InfoIcon, OctagonAlertIcon, TriangleAlertIcon } from "
 
 import type { ReviewObservation } from "@/api/types.gen";
 
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type Severity = NonNullable<ReviewObservation["severity"]>;
 

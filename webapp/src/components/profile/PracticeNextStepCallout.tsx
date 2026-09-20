@@ -18,8 +18,8 @@ export function PracticeNextStepCallout({
 				<LightbulbIcon className="size-3.5" aria-hidden />
 			</span>
 			<div className="flex min-w-0 flex-col gap-1">
-				<p className="text-xs font-medium leading-4 text-muted-foreground">{label}</p>
-				<div className="text-pretty text-sm leading-5">{children}</div>
+				<p className="text-xs leading-4 font-medium text-muted-foreground">{label}</p>
+				<div className="text-sm leading-5 text-pretty">{children}</div>
 			</div>
 		</div>
 	);

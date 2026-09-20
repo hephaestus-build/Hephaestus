@@ -19,7 +19,9 @@ export async function* fragments(
 ): AsyncGenerator<Fragment> {
 	let start = true;
 	for await (const chunk of source) {
-		if (!Buffer.isBuffer(chunk)) throw new Error("Output must be bytes");
+		if (!Buffer.isBuffer(chunk)) {
+			throw new Error("Output must be bytes");
+		}
 		let offset = 0;
 		let end: number;
 		while ((end = chunk.indexOf(separator, offset)) !== -1) {
@@ -42,12 +44,16 @@ export async function* records(
 	let pending: Buffer[] = [];
 	for await (const fragment of fragments(source, separator)) {
 		pending.push(fragment.bytes);
-		if (!fragment.end) continue;
+		if (!fragment.end) {
+			continue;
+		}
 		yield {
 			bytes: pending.length === 1 ? fragment.bytes : Buffer.concat(pending),
 			terminated: true,
 		};
 		pending = [];
 	}
-	if (pending.length !== 0) yield { bytes: Buffer.concat(pending), terminated: false };
+	if (pending.length > 0) {
+		yield { bytes: Buffer.concat(pending), terminated: false };
+	}
 }

@@ -29,7 +29,9 @@ export interface ComposedFeedbackEnvelope {
 
 /** Unevaluated practices support neither positive nor negative claims. */
 export function notReachedNote(notReached: readonly string[]): string {
-	if (notReached.length === 0) return "";
+	if (notReached.length === 0) {
+		return "";
+	}
 	const subject =
 		notReached.length === 1 ? "one of its practices" : `${notReached.length} of its practices`;
 	return (
@@ -44,7 +46,7 @@ export function validateFeedbackEvidence(
 	observationPractices: ReadonlyMap<string, string>,
 ): string | null {
 	const unknown = basedOn.find((id) => !observationPractices.has(id));
-	if (unknown) {
+	if (unknown !== undefined) {
 		// The ids of this practice's own observations are named, so the correction is one edit away:
 		// a session that wrote a digest or a citation here is looking at the wrong field.
 		const own = [...observationPractices]
@@ -71,7 +73,9 @@ export function undeliverableUnits(
 		),
 	);
 	return (envelope?.units ?? []).filter((unit) => {
-		if (unit.action !== "SUPERSEDE") return false;
+		if (unit.action !== "SUPERSEDE") {
+			return false;
+		}
 		const target = unit.supersedesThreadKey;
 		return (
 			target === undefined ||

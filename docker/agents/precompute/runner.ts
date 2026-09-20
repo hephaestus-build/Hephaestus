@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -27,7 +28,7 @@ const { values } = parseArgs({
 	},
 });
 
-if (!values.repo) {
+if (values.repo === undefined || values.repo === "") {
 	console.error(
 		"Usage: node runner.ts --repo <path> --diff <path> [--metadata <path>] [--context <dir>] [--change <dir>] [--output <dir>]",
 	);
@@ -50,18 +51,18 @@ const contextDir = values.context ?? "";
 const changeDir = values.change ?? "";
 
 let diffFiles = new Map<string, DiffFile>();
-if (values.diff) {
+if (values.diff !== undefined && values.diff !== "") {
 	try {
 		const diffContent = await readFile(values.diff, "utf8");
 		diffFiles = parseDiff(diffContent);
 		console.error(`Parsed diff: ${diffFiles.size} files`);
-	} catch (e) {
-		console.error(`Could not parse diff: ${String(e)}`);
+	} catch (error) {
+		console.error(`Could not parse diff: ${String(error)}`);
 	}
 }
 
 let metadata: ArtifactMetadata = {};
-if (values.metadata) {
+if (values.metadata !== undefined && values.metadata !== "") {
 	try {
 		const parsed: unknown = JSON.parse(await readFile(values.metadata, "utf8"));
 		if (isJsonObject(parsed)) {
@@ -69,8 +70,8 @@ if (values.metadata) {
 		} else {
 			console.error(`Metadata ${values.metadata} is not a JSON object; scripts will see {}`);
 		}
-	} catch (e) {
-		console.error(`Could not load metadata: ${String(e)}`);
+	} catch (error) {
+		console.error(`Could not load metadata: ${String(error)}`);
 	}
 }
 
@@ -79,7 +80,7 @@ const practiceModules: [string, string][] = [];
 
 if (existsSync(practicesDir)) {
 	for (const file of globFilesSync("*.ts", practicesDir)) {
-		const slug = file.replace(/\.ts$/, "");
+		const slug = file.replace(/\.ts$/u, "");
 		practiceModules.push([slug, `${practicesDir}/${file}`]);
 	}
 }
@@ -109,17 +110,17 @@ function messageOf(error: unknown): string {
  * Reject an asynchronous practice that exceeds its budget. This cannot preempt synchronous work.
  */
 async function withTimeout<T>(work: T | Promise<T>): Promise<T> {
-	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timer = new AbortController();
 	try {
-		return await Promise.race([
-			work,
-			new Promise<never>((_, reject) => {
-				timer = setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs);
-			}),
-		]);
+		return await Promise.race([work, timeoutAfter(timeoutMs, timer.signal)]);
 	} finally {
-		clearTimeout(timer);
+		timer.abort();
 	}
+}
+
+async function timeoutAfter(ms: number, signal: AbortSignal): Promise<never> {
+	await delay(ms, undefined, { signal });
+	throw new Error(`Timeout after ${ms}ms`);
 }
 
 function validateResult(result: unknown, slug: string): PracticeResult {
@@ -148,9 +149,9 @@ const results = await Promise.allSettled(
 			const elapsed = Date.now() - start;
 			console.error(`  ok ${slug}: ${result.hints.length} hints (${elapsed}ms)`);
 			return result;
-		} catch (e) {
+		} catch (error) {
 			const elapsed = Date.now() - start;
-			const message = messageOf(e);
+			const message = messageOf(error);
 			console.error(`  FAIL ${slug}: ${message} (${elapsed}ms)`);
 			return {
 				practice: slug,

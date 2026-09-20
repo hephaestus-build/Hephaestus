@@ -20,7 +20,9 @@ export function CuratedCatalogSummary({
 		summary.updatesChangingWordingOnly +
 		summary.updatesChangingPresentation;
 	const changes = updates + removedDefaultsToReview;
-	if (changes === 0) return null;
+	if (changes === 0) {
+		return null;
+	}
 
 	return (
 		<div className="flex flex-wrap items-center gap-2 rounded-lg border border-warning/50 bg-warning/5 p-4 text-sm">

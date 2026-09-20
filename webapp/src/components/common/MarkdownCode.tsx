@@ -9,17 +9,21 @@ import {
 
 import { cn } from "cn";
 
+import { hasText } from "@/lib/text";
+
 type MarkdownCodeProps = JSX.IntrinsicElements["code"] &
 	ExtraProps & {
 		"data-block"?: string;
 	};
 
-const LANGUAGE_PATTERN = /language-([^\s]+)/;
-const START_LINE_PATTERN = /startLine=(\d+)/;
-const NO_LINE_NUMBERS_PATTERN = /\bnoLineNumbers\b/;
+const LANGUAGE_PATTERN = /language-(?<language>\S+)/u;
+const START_LINE_PATTERN = /startLine=(?<line>\d+)/u;
+const NO_LINE_NUMBERS_PATTERN = /\bnoLineNumbers\b/u;
 
 function codeText(children: ReactNode): string {
-	if (typeof children === "string") return children;
+	if (typeof children === "string") {
+		return children;
+	}
 	if (
 		isValidElement<{ children?: ReactNode }>(children) &&
 		typeof children.props.children === "string"
@@ -50,14 +54,15 @@ export function MarkdownCode({
 	}
 
 	const code = codeText(children);
-	const language = className?.match(LANGUAGE_PATTERN)?.[1] ?? "";
+	const language = LANGUAGE_PATTERN.exec(className ?? "")?.groups?.language ?? "";
 	const meta =
 		typeof node?.properties.metastring === "string" ? node.properties.metastring : undefined;
-	const startLineDigits = meta?.match(START_LINE_PATTERN)?.[1];
+	const startLineDigits = START_LINE_PATTERN.exec(meta ?? "")?.groups?.line;
 	const parsedStartLine =
 		startLineDigits === undefined ? undefined : Number.parseInt(startLineDigits, 10);
-	const startLine = parsedStartLine && parsedStartLine >= 1 ? parsedStartLine : undefined;
-	const lineNumbers = !meta || !NO_LINE_NUMBERS_PATTERN.test(meta);
+	const startLine =
+		parsedStartLine !== undefined && parsedStartLine >= 1 ? parsedStartLine : undefined;
+	const lineNumbers = !hasText(meta) || !NO_LINE_NUMBERS_PATTERN.test(meta);
 
 	return (
 		<CodeBlock

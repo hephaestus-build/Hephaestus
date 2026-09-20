@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -30,12 +30,12 @@ function git(repository: string, ...args: string[]): string {
 
 /** A repository with a base, a two-commit branch that renames a file and adds a test, merged nowhere. */
 function repositoryWithChange() {
-	const root = mkdtempSync(join(tmpdir(), "pi-change-"));
-	const repo = join(root, "repo");
+	const root = mkdtempSync(path.join(tmpdir(), "pi-change-"));
+	const repo = path.join(root, "repo");
 	mkdirSync(repo);
 	git(repo, "init", "-q", "-b", "main");
 	writeFileSync(
-		join(repo, "app.ts"),
+		path.join(repo, "app.ts"),
 		"export const a = 1;\nexport const b = 2;\nexport const c = 3;\n",
 	);
 	git(repo, "add", ".");
@@ -43,13 +43,13 @@ function repositoryWithChange() {
 	const base = git(repo, "rev-parse", "HEAD");
 	git(repo, "mv", "app.ts", "lib.ts");
 	writeFileSync(
-		join(repo, "lib.ts"),
+		path.join(repo, "lib.ts"),
 		"export const a = 1;\nexport const b = 20;\nexport const c = 3;\n",
 	);
 	git(repo, "add", ".");
 	git(repo, "commit", "-q", "-m", "Rename app to lib\n\nRefs #7");
-	writeFileSync(join(repo, "lib.test.ts"), "test('b', () => {});\n");
-	writeFileSync(join(repo, "Wördle.md"), "# Wördle\n");
+	writeFileSync(path.join(repo, "lib.test.ts"), "test('b', () => {});\n");
+	writeFileSync(path.join(repo, "Wördle.md"), "# Wördle\n");
 	git(repo, "add", ".");
 	git(repo, "commit", "-q", "-m", "Add a test");
 	const head = git(repo, "rev-parse", "HEAD");
@@ -91,7 +91,7 @@ void test("name-status records carry the old path of a rename and commits keep t
 	]);
 	const commits = parseCommits(
 		Buffer.from(
-			`${"a".repeat(40)}\0${"b".repeat(40)}\0Ada\0t1\0Ada\0t2\0Subject\n\nBody\n\u001e${"c".repeat(40)}\0${"a".repeat(40)} ${"d".repeat(40)}\0Bob\0t3\0Bob\0t4\0Merge\n\u001e`,
+			`${"a".repeat(40)}\0${"b".repeat(40)}\0Ada\0t1\0Ada\0t2\0Subject\n\nBody\n\u001E${"c".repeat(40)}\0${"a".repeat(40)} ${"d".repeat(40)}\0Bob\0t3\0Bob\0t4\0Merge\n\u001E`,
 		),
 	);
 	assert.deepEqual(
@@ -106,24 +106,29 @@ void test("name-status records carry the old path of a rename and commits keep t
 void test("derives the change view from a real checkout with git", () => {
 	const { root, repo, base, head } = repositoryWithChange();
 	try {
-		mkdirSync(join(root, "context"));
+		mkdirSync(path.join(root, "context"));
 		writeFileSync(
-			join(root, "context/change.json"),
+			path.join(root, "context/change.json"),
 			JSON.stringify({ base_sha: base, head_sha: head }),
 		);
-		const change = readChange(join(root, "context"));
+		const change = readChange(path.join(root, "context"));
 		assert.deepEqual(change, { base, head });
 		writeChangeView(root, repo, change);
 
-		const diff = readFileSync(join(root, "work/change/diff.patch"), "utf8");
-		assert.match(diff, /rename from app\.ts\nrename to lib\.ts/);
-		assert.match(diff, /\[L2\] -export const b = 2;\n\[L2\] \+export const b = 20;/);
-		assert.match(diff, /\[L1\] \+test\('b', \(\) => \{\}\);/);
+		const diff = readFileSync(path.join(root, "work/change/diff.patch"), "utf8");
+		assert.match(diff, /rename from app\.ts\nrename to lib\.ts/u);
+		assert.match(diff, /\[L2\] -export const b = 2;\n\[L2\] \+export const b = 20;/u);
+		assert.match(diff, /\[L1\] \+test\('b', \(\) => \{\}\);/u);
 		// A path outside ASCII is printed as itself, never as git's quoted octal rendering.
-		assert.match(diff, /^\+\+\+ b\/Wördle\.md$/m);
-		assert.match(readFileSync(join(root, "work/change/diff_stat.txt"), "utf8"), /3 files changed/);
+		assert.match(diff, /^\+\+\+ b\/Wördle\.md$/mu);
+		assert.match(
+			readFileSync(path.join(root, "work/change/diff_stat.txt"), "utf8"),
+			/3 files changed/u,
+		);
 
-		const files: unknown = JSON.parse(readFileSync(join(root, "work/change/files.json"), "utf8"));
+		const files: unknown = JSON.parse(
+			readFileSync(path.join(root, "work/change/files.json"), "utf8"),
+		);
 		assert.deepEqual(files, {
 			files: [
 				{ status: "A", path: "Wördle.md" },
@@ -132,7 +137,7 @@ void test("derives the change view from a real checkout with git", () => {
 			],
 		});
 		const commits: unknown = JSON.parse(
-			readFileSync(join(root, "work/change/commits.json"), "utf8"),
+			readFileSync(path.join(root, "work/change/commits.json"), "utf8"),
 		);
 		assert.ok(typeof commits === "object" && commits !== null);
 		const list: unknown = Reflect.get(commits, "commits");
@@ -150,15 +155,15 @@ void test("derives the change view from a real checkout with git", () => {
 });
 
 void test("a review without a captured change derives nothing", () => {
-	const root = mkdtempSync(join(tmpdir(), "pi-change-none-"));
+	const root = mkdtempSync(path.join(tmpdir(), "pi-change-none-"));
 	try {
-		mkdirSync(join(root, "context"));
-		assert.equal(readChange(join(root, "context")), null);
+		mkdirSync(path.join(root, "context"));
+		assert.equal(readChange(path.join(root, "context")), null);
 		writeFileSync(
-			join(root, "context/change.json"),
+			path.join(root, "context/change.json"),
 			JSON.stringify({ base_sha: "nope", head_sha: "x" }),
 		);
-		assert.throws(() => readChange(join(root, "context")), /full commit ids/);
+		assert.throws(() => readChange(path.join(root, "context")), /full commit ids/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

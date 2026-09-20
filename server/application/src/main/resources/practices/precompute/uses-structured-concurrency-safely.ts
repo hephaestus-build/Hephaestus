@@ -5,20 +5,20 @@
 import { countLabel, scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
-const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/;
+const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/u;
 
 const CONCURRENCY: readonly SourcePattern[] = [
-	["Task.detached", /\bTask\.detached\b/],
-	["stored task handle", /(?:let|var)\s+\w+\s*(?::\s*Task<[^>]*>)?\s*=\s*Task\s*[{(]/],
-	["Task { }", /\bTask\s*(?:\(priority:[^)]*\))?\s*\{/],
-	[".task modifier", /\.task\s*(?:\(id:[^)]*\))?\s*\{/],
-	[".onAppear", /\.onAppear\s*\{/],
-	["DispatchQueue", /\bDispatchQueue\b/],
-	["@MainActor", /@MainActor\b/],
-	["MainActor.run", /\bMainActor\.run\b/],
-	["actor declaration", /^\s*(?:\w+\s+)*actor\s+\w+/],
-	["async function", /\bfunc\s+\w+[^{]*\basync\b/],
-	["await", /\bawait\b/],
+	["Task.detached", /\bTask\.detached\b/u],
+	["stored task handle", /(?:let|var)\s+\w+\s*(?::\s*Task<[^>]*>)?\s*=\s*Task\s*[{(]/u],
+	["Task { }", /\bTask\s*(?:\(priority:[^)]*\))?\s*\{/u],
+	[".task modifier", /\.task\s*(?:\(id:[^)]*\))?\s*\{/u],
+	[".onAppear", /\.onAppear\s*\{/u],
+	["DispatchQueue", /\bDispatchQueue\b/u],
+	["@MainActor", /@MainActor\b/u],
+	["MainActor.run", /\bMainActor\.run\b/u],
+	["actor declaration", /^\s*(?:\w+\s+)*actor\s+\w+/u],
+	["async function", /\bfunc\s+\w+[^{]*\basync\b/u],
+	["await", /\bawait\b/u],
 ];
 
 export default async function usesStructuredConcurrencySafely(

@@ -8,38 +8,38 @@ const browserAction = await readFile(".github/actions/setup-browsers/action.yml"
 function actionStep(name: string): string {
 	const marker = `    - name: ${name}\n`;
 	const start = cacheAction.indexOf(marker);
-	assert.ok(start >= 0);
+	assert.ok(start !== -1);
 	const end = cacheAction.indexOf("\n    - name:", start + marker.length);
-	return cacheAction.slice(start, end < 0 ? undefined : end);
+	return cacheAction.slice(start, end === -1 ? undefined : end);
 }
 
 await describe("CI cache policy", async () => {
 	await test("only trusted default-branch runs publish Gradle caches", async () => {
 		const setup = actionStep("Set up Gradle");
-		assert.match(setup, /gradle\/actions\/setup-gradle@[a-f0-9]{40}/);
-		assert.match(setup, /cache-read-only:.*github.ref != format/);
-		assert.match(setup, /github.event.repository.default_branch/);
+		assert.match(setup, /gradle\/actions\/setup-gradle@[a-f0-9]{40}/u);
+		assert.match(setup, /cache-read-only:.*github.ref != format/u);
+		assert.match(setup, /github.event.repository.default_branch/u);
 		assert.match(
 			setup,
-			/!contains\(fromJSON\('\["push","schedule","workflow_dispatch"\]'\), github.event_name\)/,
+			/!contains\(fromJSON\('\["push","schedule","workflow_dispatch"\]'\), github.event_name\)/u,
 		);
-		assert.match(setup, /validate-wrappers: true/);
-		assert.match(setup, /cache-provider: enhanced/);
-		assert.doesNotMatch(cacheAction, /~\/\.m2|target\//);
+		assert.match(setup, /validate-wrappers: true/u);
+		assert.match(setup, /cache-provider: enhanced/u);
+		assert.doesNotMatch(cacheAction, /~\/\.m2|target\//u);
 		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
 		const e2e = build.slice(build.indexOf("\n  webapp-e2e:"));
-		assert.match(e2e, /uses: actions\/setup-java@/);
-		assert.doesNotMatch(e2e, /setup-caches/);
+		assert.match(e2e, /uses: actions\/setup-java@/u);
+		assert.doesNotMatch(e2e, /setup-caches/u);
 	});
 
 	await test("browser consumers share one cache-and-install action", () => {
 		assert.match(
 			browserAction,
-			/key: \${{ runner\.os }}-playwright-\${{ steps\.playwright\.outputs\.version }}/,
+			/key: \$\{\{ runner\.os \}\}-playwright-\$\{\{ steps\.playwright\.outputs\.version \}\}/u,
 		);
-		assert.doesNotMatch(browserAction, /restore-keys:/);
-		assert.match(browserAction, /playwright install chromium/);
-		assert.match(browserAction, /node scripts\/install-browser-deps\.ts/);
-		assert.doesNotMatch(browserAction, /--with-deps/);
+		assert.doesNotMatch(browserAction, /restore-keys:/u);
+		assert.match(browserAction, /playwright install chromium/u);
+		assert.match(browserAction, /node scripts\/install-browser-deps\.ts/u);
+		assert.doesNotMatch(browserAction, /--with-deps/u);
 	});
 });

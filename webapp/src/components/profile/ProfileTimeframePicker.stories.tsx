@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, waitFor } from "storybook/test";
 
-import { STORY_NOW } from "@/components/common/story-clock";
 import { DEFAULT_SCHEDULE, formatDateRangeForApi, getDateRangeForPreset } from "@/lib/timeframe";
 import { Stateful } from "@/stories/stateful";
+import { STORY_NOW } from "@/stories/story-clock";
 
 import { ProfileTimeframePicker } from "./ProfileTimeframePicker";
 
@@ -44,7 +44,7 @@ export const Default: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Timeframe" }));
 		await userEvent.click(await screen.findByRole("option", { name: "All time" }));
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(canvas.getByRole("combobox", { name: "Timeframe" })).toHaveTextContent("All time"),
 		);
 	},
@@ -146,7 +146,7 @@ export const AllPresets: Story = {
 						<ProfileTimeframePicker
 							afterDate={after}
 							beforeDate={before}
-							enableAllActivity={true}
+							enableAllActivity
 							schedule={DEFAULT_SCHEDULE}
 						/>
 					</div>

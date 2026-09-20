@@ -3,21 +3,24 @@ import { readContextJson } from "../lib/context.ts";
 import { isJsonObject } from "../lib/practice-contract.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
-const CLOSE_KEYWORD = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b/gi;
+const CLOSE_KEYWORD = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b/giu;
 // "closes #12", "fixes GH-12", "resolves group/proj#12" — capture the trailing issue number.
-const CLOSE_REF = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+(?:[\w./~-]*[#!]|GH-)(\d+)/gi;
+const CLOSE_REF =
+	/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+(?:[\w./~-]*[#!]|GH-)(?<number>\d+)/giu;
 // Full issue/MR URLs on either host: .../issues/12, .../-/issues/12.
-const ISSUE_URL = /https?:\/\/[^\s)]+?\/(?:-\/)?issues\/(\d+)/gi;
+const ISSUE_URL = /https?:\/\/[^\s)]+?\/(?:-\/)?issues\/(?<number>\d+)/giu;
 // Issue number embedded in a branch name: feature/123-foo, issue-123, 123-fix-thing, bugfix/GH-123.
-const BRANCH_REF = /(?:^|[/_-])(?:issue[-_]?|gh[-_]?|#)?(\d{1,6})(?:[-_/]|$)/gi;
+const BRANCH_REF = /(?:^|[/_-])(?:issue[-_]?|gh[-_]?|#)?(?<number>\d{1,6})(?:[-_/]|$)/giu;
 
 // Every pattern below is global and captures the issue number in group 1; matchAll iterates a clone,
 // so the shared module-level regexes keep a lastIndex of 0 between calls.
 function collect(re: RegExp, text: string, into: Set<string>): void {
-	if (!text) return;
+	if (!text) {
+		return;
+	}
 	re.lastIndex = 0;
 	for (const match of text.matchAll(re)) {
-		into.add(`#${match[1]}`);
+		into.add(`#${match.groups?.number ?? ""}`);
 	}
 }
 
@@ -43,7 +46,9 @@ function optionalRef(value: unknown): number | string | undefined {
 // how many items the connector linked, which is a fact about the tracker, not about how much of each
 // entry this side could read.
 function toLinkedWorkItem(entry: unknown): LinkedWorkItem {
-	if (!isJsonObject(entry)) return {};
+	if (!isJsonObject(entry)) {
+		return {};
+	}
 	return {
 		number: optionalRef(entry.number),
 		iid: optionalRef(entry.iid),
@@ -55,21 +60,29 @@ function toLinkedWorkItem(entry: unknown): LinkedWorkItem {
 
 // Unwrap whatever shape linked_work_items.json carries into a flat item list (or null if not a usable object).
 function unwrapLinkedItems(data: unknown): LinkedWorkItem[] | null {
-	if (Array.isArray(data)) return data.map(toLinkedWorkItem);
-	if (!isJsonObject(data)) return null;
+	if (Array.isArray(data)) {
+		return data.map(toLinkedWorkItem);
+	}
+	if (!isJsonObject(data)) {
+		return null;
+	}
 	// The SCM connector wraps items under `workItems`; check it FIRST, then host-general fallbacks.
-	if (Array.isArray(data.workItems)) return data.workItems.map(toLinkedWorkItem);
-	if (Array.isArray(data.items)) return data.items.map(toLinkedWorkItem);
+	if (Array.isArray(data.workItems)) {
+		return data.workItems.map(toLinkedWorkItem);
+	}
+	if (Array.isArray(data.items)) {
+		return data.items.map(toLinkedWorkItem);
+	}
 	return [toLinkedWorkItem(data)];
 }
 
 // A checkable acceptance-criteria artifact: an AC/DoD heading or a "- [ ]" checklist in the issue body.
 function acFacts(body: string): { heading: boolean; boxes: number } {
 	const heading =
-		/(acceptance criteria|definition of done|\bDoD\b|done when|expected (?:outcome|result|behaviou?r))/i.test(
+		/(?:acceptance criteria|definition of done|\bDoD\b|done when|expected (?:outcome|result|behaviou?r))/iu.test(
 			body,
 		);
-	const boxes = (body.match(/^[\s>]*[-*]\s+\[[ xX]\]/gm) ?? []).length;
+	const boxes = (body.match(/^[\s>]*[-*]\s+\[[ xX]\]/gmu) ?? []).length;
 	return { heading, boxes };
 }
 
@@ -108,7 +121,7 @@ export default async function honoursLinkedIssueAcceptanceCriteria(
 	if (linked) {
 		for (const i of linked) {
 			const f = acFacts((i.body ?? i.description ?? "").trim());
-			acHeading = acHeading || f.heading;
+			acHeading ||= f.heading;
 			acBoxes += f.boxes;
 		}
 	}
@@ -137,13 +150,13 @@ export default async function honoursLinkedIssueAcceptanceCriteria(
 		directions.push(
 			`No linked_work_items.json was projected into context — the linked issue's body and its acceptance-criteria block are NOT visible here, so this practice cannot be assessed from the diff alone.`,
 		);
-	} else if (!linkedIssueBodyPresent) {
+	} else if (linkedIssueBodyPresent === true) {
 		directions.push(
-			`Linked-issue context exists but carries no issue body — there is no quotable acceptance-criteria text to map the change against.`,
+			`Candidate issue facts: bodyPresent=true, acceptanceCriteriaBlockPresent=${hasCheckableAcBlock} (heading=${acHeading}, checkboxes=${acBoxes}) — these are text facts, not applicability. Confirm an authored closing claim in the original mention context before mapping criteria to done or deferred.`,
 		);
 	} else {
 		directions.push(
-			`Candidate issue facts: bodyPresent=true, acceptanceCriteriaBlockPresent=${hasCheckableAcBlock} (heading=${acHeading}, checkboxes=${acBoxes}) — these are text facts, not applicability. Confirm an authored closing claim in the original mention context before mapping criteria to done or deferred.`,
+			`Linked-issue context exists but carries no issue body — there is no quotable acceptance-criteria text to map the change against.`,
 		);
 	}
 
@@ -155,9 +168,9 @@ export default async function honoursLinkedIssueAcceptanceCriteria(
 			branchRefCount: branchRefs.length,
 			hasBranchRef: hasBranchRef ? 1 : 0,
 			closingKeywordHits: keywordHits,
-			linkedItemsFilePresent: linked !== null ? 1 : 0,
+			linkedItemsFilePresent: linked === null ? 0 : 1,
 			linkedIssueCount: linked?.length ?? 0,
-			linkedIssueBodyPresent: linkedIssueBodyPresent ? 1 : 0,
+			linkedIssueBodyPresent: linkedIssueBodyPresent === true ? 1 : 0,
 			acceptanceCriteriaBlockPresent: hasCheckableAcBlock ? 1 : 0,
 			acceptanceCriteriaCheckboxes: acBoxes,
 		},

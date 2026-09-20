@@ -9,6 +9,7 @@
  */
 import { appendFileSync } from "node:fs";
 import { text } from "node:stream/consumers";
+import { isSet } from "./lib/env.ts";
 
 /**
  * SGR escapes, which the runner emits whenever colour is forced on — `FORCE_COLOR` is set in some
@@ -27,8 +28,8 @@ const ANSI = /\u001B\[[0-9;]*m/gu;
  */
 export function unpassedTasks(report: string): string[] {
 	const plain = report.replaceAll(ANSI, "");
-	const names = [...plain.matchAll(/^\s*\[\d+\] [^#\n]+#(\S+): \$ [^\n]*✗/gmu)].flatMap(
-		([, task]) => (task === undefined ? [] : [task]),
+	const names = [...plain.matchAll(/^\s*\[\d+\] [^#\n]+#(?<task>\S+): \$ [^\n]*✗/gmu)].flatMap(
+		({ groups }) => (groups?.task === undefined ? [] : [groups.task]),
 	);
 	return [...new Set(names)];
 }
@@ -36,9 +37,12 @@ export function unpassedTasks(report: string): string[] {
 if (import.meta.main) {
 	const report = await text(process.stdin);
 	const unpassed = unpassedTasks(report);
-	for (const task of unpassed)
+	for (const task of unpassed) {
 		console.log(`::error::${task} did not pass. Reproduce with: vp run ${task}`);
+	}
 	const summary = process.env.GITHUB_STEP_SUMMARY;
-	if (summary) appendFileSync(summary, `\n\`\`\`text\n${report.trim()}\n\`\`\`\n`);
+	if (isSet(summary)) {
+		appendFileSync(summary, `\n\`\`\`text\n${report.trim()}\n\`\`\`\n`);
+	}
 	process.exitCode = unpassed.length === 0 ? 0 : 1;
 }

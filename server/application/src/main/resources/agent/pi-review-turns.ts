@@ -23,8 +23,12 @@ export function planTurns(practices: readonly TurnPractice[], maxPerTurn = 6): R
 	const seen = new Set<string>();
 	const byGroup = new Map<string, string[]>();
 	for (const practice of practices) {
-		if (!practice.slug.trim()) throw new Error("a practice needs a slug");
-		if (seen.has(practice.slug)) throw new Error(`duplicate practice slug: ${practice.slug}`);
+		if (!practice.slug.trim()) {
+			throw new Error("a practice needs a slug");
+		}
+		if (seen.has(practice.slug)) {
+			throw new Error(`duplicate practice slug: ${practice.slug}`);
+		}
 		seen.add(practice.slug);
 		const group = practice.group?.trim();
 		const key = group === undefined || group === "" ? practice.slug : group;

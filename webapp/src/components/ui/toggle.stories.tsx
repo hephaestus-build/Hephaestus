@@ -111,7 +111,9 @@ async function expectOneChannelPerState(canvas: StoryContext["canvas"]) {
 async function expectSegmentsJoinOnce(canvas: StoryContext["canvas"]) {
 	const toolbar = canvas.getByRole("toolbar", { name: "Filter practices" });
 	const [first, second, third] = within(toolbar).getAllByRole("button");
-	if (!first || !second || !third) throw new Error("The segmented run needs three segments");
+	if (!first || !second || !third) {
+		throw new Error("The segmented run needs three segments");
+	}
 
 	// One pixel of overlap per seam, so two neighbouring one-pixel borders read as one line rather
 	// than as a two-pixel rule, and the selected segment keeps a border on all four sides.

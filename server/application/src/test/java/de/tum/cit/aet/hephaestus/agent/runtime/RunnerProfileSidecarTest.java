@@ -19,7 +19,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 /**
  * A runner script imports its sidecars with relative specifiers, so Node resolves them from the
  * staged directory rather than the classpath: one missing from a profile is not a compile error and
- * not a boot failure, but ERR_MODULE_NOT_FOUND inside the sandbox on every job it runs.
+ * not a boot failure, but ERR_MODULE_NOT_FOUND inside the sandbox on every job it runs. A sidecar's
+ * own imports resolve the same way, so the walk follows them, descending into a module only the
+ * first time {@code reached} admits it, which is what ends the walk on an import cycle.
  */
 @Tag("unit")
 class RunnerProfileSidecarTest {
@@ -33,20 +35,23 @@ class RunnerProfileSidecarTest {
     @ParameterizedTest
     @MethodSource("profiles")
     void shouldStageEverySidecarItsRunnerImports(PiRunnerProfile profile) throws IOException {
+        Set<String> reached = new LinkedHashSet<>();
+        collectRelativeImports(profile.runnerScript(), reached);
         assertThat(profile.sidecarScripts())
                 .as("sidecars staged beside %s", profile.runnerScript())
-                .containsAll(relativeImportsOf(profile.runnerScript()));
+                .containsAll(reached);
     }
 
-    private static Set<String> relativeImportsOf(String script) throws IOException {
+    private static void collectRelativeImports(String script, Set<String> reached) throws IOException {
         try (InputStream in = RunnerProfileSidecarTest.class.getResourceAsStream("/agent/" + script)) {
             assertThat(in).as("%s is on the classpath", script).isNotNull();
             Matcher matcher = RELATIVE_IMPORT.matcher(new String(in.readAllBytes(), StandardCharsets.UTF_8));
-            Set<String> imports = new LinkedHashSet<>();
             while (matcher.find()) {
-                imports.add(matcher.group(1));
+                String imported = matcher.group(1);
+                if (reached.add(imported)) {
+                    collectRelativeImports(imported, reached);
+                }
             }
-            return imports;
         }
     }
 }

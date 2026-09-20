@@ -1,6 +1,6 @@
 import deepEqual from "fast-deep-equal";
 import { AlertCircle, ChevronDownIcon, Loader2Icon } from "lucide-react";
-import { useId, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import type {
 	PracticeReviewCoveragePreview,
 	PracticeReviewSettings,
@@ -148,28 +148,51 @@ export function PracticeReviewCoverageSettings({
 		}
 	};
 	const review = async () => {
-		if (conflicted) return;
+		if (conflicted) {
+			return;
+		}
 		const scope = draft;
 		const etag = sourceEtag;
 		setWorkflow({ status: "checking" });
 		try {
 			const result = await preview(scope);
-			if (result.widens)
+			if (result.widens) {
 				setWorkflow({ status: "confirm", preview: result, scope, sourceEtag: etag });
-			else await save(scope, etag);
+			} else {
+				await save(scope, etag);
+			}
 		} catch {
 			setWorkflow({ status: "error", action: "preview" });
 		}
 	};
 
+	let reviewButtonContent: ReactNode;
+	if (workflow.status === "checking") {
+		reviewButtonContent = (
+			<>
+				<Loader2Icon className="animate-spin" aria-hidden />
+				Checking impact…
+			</>
+		);
+	} else if (workflow.status === "saving") {
+		reviewButtonContent = (
+			<>
+				<Loader2Icon className="animate-spin" aria-hidden />
+				Saving…
+			</>
+		);
+	} else {
+		reviewButtonContent = "Review changes";
+	}
+
 	return (
 		<section className="space-y-6" aria-labelledby="reviewed-work-heading">
 			{unsavedChanges.dialog}
 			<div className="space-y-1">
-				<h2 id="reviewed-work-heading" className="font-semibold text-lg">
+				<h2 id="reviewed-work-heading" className="text-lg font-semibold">
 					What gets reviewed
 				</h2>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					A review starts only when both the repository and linked person it evaluates are covered.
 					That person is usually the author; reviewer practices use the reviewer. About{" "}
 					{settings.coverageSummary.recentReviewVolume} review jobs entered the queue in this
@@ -375,30 +398,24 @@ export function PracticeReviewCoverageSettings({
 					<Button
 						className="min-w-36"
 						disabled={!dirty || busy || conflicted}
-						onClick={() => void review()}
+						onClick={() => {
+							void review();
+						}}
 					>
-						{workflow.status === "checking" ? (
-							<>
-								<Loader2Icon className="animate-spin" aria-hidden />
-								Checking impact…
-							</>
-						) : workflow.status === "saving" ? (
-							<>
-								<Loader2Icon className="animate-spin" aria-hidden />
-								Saving…
-							</>
-						) : (
-							"Review changes"
-						)}
+						{reviewButtonContent}
 					</Button>
 				</div>
 			</div>
 
 			<AlertDialog
 				open={workflow.status === "confirm"}
-				onOpenChange={(open) => !open && setWorkflow({ status: "editing" })}
+				onOpenChange={(open) => {
+					if (!open) {
+						setWorkflow({ status: "editing" });
+					}
+				}}
 			>
-				<AlertDialogContent className="min-w-0 max-w-[calc(100vw-2rem)] overflow-hidden sm:max-w-lg">
+				<AlertDialogContent className="max-w-[calc(100vw-2rem)] min-w-0 overflow-hidden sm:max-w-lg">
 					<AlertDialogHeader>
 						<AlertDialogTitle>Widen review coverage?</AlertDialogTitle>
 						<AlertDialogDescription>
@@ -432,7 +449,9 @@ function withPersistedOptions<TValue extends string | number>(
 	unknown: (value: TValue) => FacetOption<TValue>,
 	unavailable: (value: TValue) => FacetOption<TValue>,
 ): FacetOption<TValue>[] {
-	if (state.status !== "ready") return selected.map(unknown);
+	if (state.status !== "ready") {
+		return selected.map(unknown);
+	}
 	return [
 		...state.options,
 		...selected
@@ -444,29 +463,29 @@ function withPersistedOptions<TValue extends string | number>(
 function CoverageWorkflowStatus({ workflow, dirty }: { workflow: Workflow; dirty: boolean }) {
 	if (workflow.status === "error") {
 		return (
-			<p role="alert" className="max-w-md text-destructive text-sm">
+			<p role="alert" className="max-w-md text-sm text-destructive">
 				{workflow.action === "preview"
 					? "Couldn't estimate the impact. Your draft is unchanged; try again."
 					: "Couldn't save the coverage. Your draft is unchanged; try again."}
 			</p>
 		);
 	}
+	let status = dirty ? "You have unsaved coverage changes." : "Coverage is up to date.";
+	if (workflow.status === "checking") {
+		status = "Checking impact…";
+	} else if (workflow.status === "saving") {
+		status = "Saving coverage…";
+	}
 	return (
-		<p role="status" className="max-w-md text-muted-foreground text-sm">
-			{workflow.status === "checking"
-				? "Checking impact…"
-				: workflow.status === "saving"
-					? "Saving coverage…"
-					: dirty
-						? "You have unsaved coverage changes."
-						: "Coverage is up to date."}
+		<p role="status" className="max-w-md text-sm text-muted-foreground">
+			{status}
 		</p>
 	);
 }
 
 function CoverageImpact({ preview }: { preview: PracticeReviewCoveragePreview }) {
 	return (
-		<div className="min-w-0 space-y-2 break-words text-sm">
+		<div className="min-w-0 space-y-2 text-sm break-words">
 			<p>
 				Monitored repositories covered: <strong>{preview.current.coveredRepositories}</strong>
 				{" → "}
@@ -478,8 +497,8 @@ function CoverageImpact({ preview }: { preview: PracticeReviewCoveragePreview })
 				{" → "}
 				<strong>{preview.proposed.coveredPeople}</strong> of {preview.proposed.eligiblePeople}
 			</p>
-			<p className="text-muted-foreground text-xs">
-				For scale, {preview.proposed.recentReviewVolume} review jobs entered this workspace's queue
+			<p className="text-xs text-muted-foreground">
+				For scale, {preview.proposed.recentReviewVolume} review jobs entered this workspace’s queue
 				during the last {preview.proposed.estimateWindowDays} days.
 			</p>
 		</div>
@@ -516,11 +535,21 @@ function CoverageLabel({
 	return (
 		<div className="flex items-baseline justify-between gap-3">
 			<FieldTitle id={id}>{label}</FieldTitle>
-			<span className="text-muted-foreground text-sm">
+			<span className="text-sm text-muted-foreground">
 				{covered} of {total} {noun}
 			</span>
 		</div>
 	);
+}
+
+function scopeDescription(monitored: boolean, baseBranches: string[]): string {
+	if (!monitored) {
+		return "This workspace no longer syncs this repository, so nothing in it is reviewed.";
+	}
+	if (baseBranches.length === 0) {
+		return "Every base branch";
+	}
+	return `Only ${baseBranches.join(", ")}`;
 }
 
 function RepositoryScopeRow({
@@ -548,11 +577,7 @@ function RepositoryScopeRow({
 						{monitored ? null : <Badge variant="warning">Not monitored</Badge>}
 					</ItemTitle>
 					<ItemDescription className="break-all">
-						{monitored
-							? baseBranches.length === 0
-								? "Every base branch"
-								: `Only ${baseBranches.join(", ")}`
-							: "This workspace no longer syncs this repository, so nothing in it is reviewed."}
+						{scopeDescription(monitored, baseBranches)}
 					</ItemDescription>
 				</ItemContent>
 				<ItemActions>
@@ -601,7 +626,9 @@ function BaseBranchEditor({
 	const descriptionId = `${id}-description`;
 	const errorId = `${id}-error`;
 	const add = () => {
-		if (trimmed.length === 0 || duplicate) return;
+		if (trimmed.length === 0 || duplicate) {
+			return;
+		}
 		onChange([...values, trimmed]);
 		setDraft("");
 	};

@@ -1,9 +1,9 @@
 import type { Meta, StoryContext, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent } from "storybook/test";
 import type { DeliveryPolicyTrace as DeliveryPolicyTraceData } from "@/api/types.gen";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { DeliveryPolicyTrace } from "./DeliveryPolicyTrace";
-import { deniedDeliveryPolicyEvaluation } from "./story-mock-data";
+import { deniedDeliveryPolicyEvaluation } from "./fixtures";
 
 const allowedEvaluation: DeliveryPolicyTraceData = {
 	...deniedDeliveryPolicyEvaluation,
@@ -74,7 +74,6 @@ async function openEvaluation(canvas: StoryContext["canvas"], name: RegExp) {
 }
 
 const meta = {
-	title: "Workspace admin/Practices/Trace/Delivery policy",
 	component: DeliveryPolicyTrace,
 	tags: ["autodocs"],
 	args: { evaluations: [deniedDeliveryPolicyEvaluation] },
@@ -86,7 +85,7 @@ type Story = StoryObj<typeof meta>;
 export const Denied: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { name: "Why this was not sent" })).toBeVisible();
-		await openEvaluation(canvas, /In-context feedback · Final delivery/);
+		await openEvaluation(canvas, /In-context feedback · Final delivery/u);
 		await expect(await canvas.findByText("In-context feedback · Final delivery")).toBeVisible();
 		await expect(
 			canvas.getByText("Policy revision 4, evaluated as revision 5 · Resolver 1"),
@@ -102,7 +101,7 @@ export const Allowed: Story = {
 	args: { evaluations: [allowedEvaluation] },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { name: "Delivery checks" })).toBeVisible();
-		await openEvaluation(canvas, /In-context feedback · Final delivery/);
+		await openEvaluation(canvas, /In-context feedback · Final delivery/u);
 		await expect(await canvas.findByText("In-context feedback · Final delivery")).toBeVisible();
 		await expect(canvas.getByText("Allowed")).toBeVisible();
 		await expect(
@@ -123,24 +122,24 @@ export const NoEvaluations: Story = {
 export const BroadCoverage: Story = {
 	args: { evaluations: [openScopeEvaluation] },
 	play: async ({ canvas }) => {
-		await openEvaluation(canvas, /In-app feedback · Automatic authorization/);
-		const scope = await canvas.findByText(/^Scope:/);
+		await openEvaluation(canvas, /In-app feedback · Automatic authorization/u);
+		const scope = await canvas.findByText(/^Scope:/u);
 		await expect(scope).toHaveTextContent("Repositories: all monitored");
 		await expect(scope).toHaveTextContent("People: all eligible");
 		await expect(scope).toHaveTextContent("Subject: author is not a workspace member");
-		await expect(scope.textContent).not.toMatch(/_/);
-		await expect(canvas.getByText(/^In-app feedback · Automatic authorization/)).toBeVisible();
+		await expect(scope.textContent).not.toMatch(/_/u);
+		await expect(canvas.getByText(/^In-app feedback · Automatic authorization/u)).toBeVisible();
 	},
 };
 
 export const NoCoverageRecorded: Story = {
 	args: { evaluations: [conversationEvaluation] },
 	play: async ({ canvas }) => {
-		await openEvaluation(canvas, /Conversation feedback · Composition/);
-		await expect(await canvas.findByText(/^Scope:/)).toHaveTextContent(
+		await openEvaluation(canvas, /Conversation feedback · Composition/u);
+		await expect(await canvas.findByText(/^Scope:/u)).toHaveTextContent(
 			"Scope: no repository · Repositories: not applicable · People: not applicable · Subject: not applicable",
 		);
-		await expect(canvas.getByText(/^Conversation feedback · Composition/)).toBeVisible();
+		await expect(canvas.getByText(/^Conversation feedback · Composition/u)).toBeVisible();
 	},
 };
 
@@ -162,7 +161,7 @@ export const Reflow: Story = {
 		chromatic: { viewports: [320] },
 	},
 	play: async ({ canvas }) => {
-		await openEvaluation(canvas, /In-app feedback · Automatic authorization/);
+		await openEvaluation(canvas, /In-app feedback · Automatic authorization/u);
 		await expect(await canvas.findByText("Current review coverage")).toBeVisible();
 		await expectNoPageOverflow();
 	},

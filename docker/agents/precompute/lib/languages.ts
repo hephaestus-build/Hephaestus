@@ -41,7 +41,7 @@ export function languageOf(path: string): string | null {
 /** A test file by the conventions of the common toolchains: a test directory or a test suffix. */
 export function isTestPath(path: string): boolean {
 	return (
-		/(?:^|\/)(?:tests?|__tests__|spec|specs|uitests?|androidTest|testing)\//i.test(path) ||
-		/(?:\.test|\.spec|Tests?|_test|_spec)\.[a-z]+$/.test(path)
+		/(?:^|\/)(?:tests?|__tests__|spec|specs|uitests?|androidTest|testing)\//iu.test(path) ||
+		/(?:\.test|\.spec|Tests?|_test|_spec)\.[a-z]+$/u.test(path)
 	);
 }

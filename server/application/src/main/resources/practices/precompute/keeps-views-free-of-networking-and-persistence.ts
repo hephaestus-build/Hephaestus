@@ -7,15 +7,15 @@ import { scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
 /** A SwiftUI view: a type conforming to `View`, or an `App`/`Scene`, which also declare a body. */
-const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/;
+const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/u;
 
 const IO_IN_VIEW: readonly SourcePattern[] = [
-	["URLSession request", /\bURLSession\b|\bURLRequest\s*\(/],
-	["JSON coding", /\bJSON(?:Decoder|Encoder)\s*\(/],
-	["Core Data fetch", /\bNSFetchRequest\b|\.fetch\s*\(\s*NSFetchRequest/],
-	["UserDefaults access", /\bUserDefaults\b/],
-	["FileManager access", /\bFileManager\b/],
-	["Data(contentsOf:)", /\bData\(contentsOf:/],
+	["URLSession request", /\bURLSession\b|\bURLRequest\s*\(/u],
+	["JSON coding", /\bJSON(?:Decoder|Encoder)\s*\(/u],
+	["Core Data fetch", /\bNSFetchRequest\b|\.fetch\s*\(\s*NSFetchRequest/u],
+	["UserDefaults access", /\bUserDefaults\b/u],
+	["FileManager access", /\bFileManager\b/u],
+	["Data(contentsOf:)", /\bData\(contentsOf:/u],
 ];
 
 export default async function keepsViewsFreeOfNetworkingAndPersistence(

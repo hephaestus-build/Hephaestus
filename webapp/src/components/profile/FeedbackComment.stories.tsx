@@ -3,7 +3,6 @@ import { expect, fn } from "storybook/test";
 import { FeedbackComment } from "./FeedbackComment";
 
 const meta = {
-	title: "Profile/Review runs/Feedback comment",
 	component: FeedbackComment,
 	parameters: {
 		layout: "padded",

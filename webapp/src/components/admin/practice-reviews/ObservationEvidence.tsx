@@ -11,6 +11,7 @@ import {
 	groupCitationsBySource,
 } from "@/components/practice-vocabulary/evidence-source-defs";
 import { Badge } from "@/components/ui/badge";
+import { hasText } from "@/lib/text";
 
 export interface ObservationEvidenceProps {
 	evidence: ObservationEvidenceData | null | undefined;
@@ -55,7 +56,9 @@ export function ObservationEvidence({ evidence, detector }: ObservationEvidenceP
 
 function summaryLine(citations: number, sources: number): string {
 	const passages = citations === 1 ? "One passage" : `${citations} passages`;
-	if (sources === 1) return `${passages} from one source.`;
+	if (sources === 1) {
+		return `${passages} from one source.`;
+	}
 	return `${passages} from ${sources} sources.`;
 }
 
@@ -76,7 +79,7 @@ function EvidenceSourceSection({
 				</span>
 				<div className="min-w-0 flex-1">
 					<h4 className="text-sm font-medium break-words">{def.label}</h4>
-					<p className="text-xs text-muted-foreground break-words">{def.description}</p>
+					<p className="text-xs break-words text-muted-foreground">{def.description}</p>
 				</div>
 				<span className="shrink-0 text-xs text-muted-foreground">
 					{citations.length === 1 ? "1 passage" : `${citations.length} passages`}
@@ -92,7 +95,7 @@ function EvidenceSourceSection({
 						{citation.quoteRedacted ? (
 							<RedactedQuote fromSecretScanner={fromSecretScanner} />
 						) : (
-							<pre className="overflow-x-auto p-3 text-xs whitespace-pre-wrap break-words">
+							<pre className="overflow-x-auto p-3 text-xs break-words whitespace-pre-wrap">
 								{citation.quote}
 							</pre>
 						)}
@@ -122,7 +125,7 @@ function CitationHeader({
 					{DIFF_SIDE_LABELS[citation.side]}
 				</Badge>
 			)}
-			{citation.revision && (
+			{hasText(citation.revision) && (
 				<p className="min-w-0 basis-full text-xs break-all text-muted-foreground">
 					Commit <code>{citation.revision}</code>
 				</p>

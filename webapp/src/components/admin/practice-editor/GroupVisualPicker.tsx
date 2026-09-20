@@ -1,0 +1,171 @@
+import { Check, Search } from "lucide-react";
+import { useId, useState } from "react";
+
+import { cn } from "cn";
+import { Button } from "@/components/ui/button";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { hasText } from "@/lib/text";
+
+import {
+	COLOR_KEYS,
+	DEFAULT_GROUP_COLOR,
+	DEFAULT_GROUP_ICON,
+	getGroupVisual,
+	ICON_NAMES,
+	iconComponent,
+	iconLabel,
+	iconSearchText,
+	PILL,
+} from "@/components/practice-vocabulary/group-visuals";
+
+export interface GroupVisualPickerProps {
+	id?: string;
+	describedBy?: string;
+	name: string;
+	icon?: string | null;
+	color?: string | null;
+	onChange: (patch: { icon?: string; color?: string }) => void;
+	disabled?: boolean;
+}
+
+export function GroupVisualPicker({
+	id,
+	describedBy,
+	name,
+	icon,
+	color,
+	onChange,
+	disabled,
+}: GroupVisualPickerProps) {
+	const activeIcon = icon ?? DEFAULT_GROUP_ICON;
+	const activeColor = color ?? DEFAULT_GROUP_COLOR;
+	const { Icon: EffectiveIcon, pill } = getGroupVisual(icon, color);
+	const [query, setQuery] = useState("");
+	const [open, setOpen] = useState(false);
+	const colorLabelId = useId();
+	const iconLabelId = useId();
+
+	const q = query.trim().toLowerCase();
+	const filteredIcons = q ? ICON_NAMES.filter((n) => iconSearchText(n).includes(q)) : ICON_NAMES;
+
+	return (
+		<Popover
+			open={disabled !== true && open}
+			onOpenChange={(nextOpen) => {
+				if (disabled !== true) {
+					setOpen(nextOpen);
+				}
+			}}
+		>
+			<PopoverTrigger
+				render={
+					<Button
+						id={id}
+						variant="ghost"
+						size="icon-sm"
+						disabled={disabled}
+						aria-describedby={describedBy}
+						aria-label={
+							hasText(id) ? undefined : `Edit the icon and color for ${name || "practice group"}`
+						}
+					>
+						<span className={cn("flex size-6 items-center justify-center rounded-md", pill)}>
+							<EffectiveIcon className="size-4" aria-hidden="true" />
+						</span>
+					</Button>
+				}
+			/>
+			{disabled !== true && (
+				<PopoverContent className="w-72 space-y-3" aria-label="Icon and color">
+					<div className="space-y-1.5">
+						<p id={colorLabelId} className="text-xs text-muted-foreground">
+							Color
+						</p>
+						<ToggleGroup
+							variant="chip"
+							disabled={disabled}
+							value={[activeColor]}
+							onValueChange={(value) => {
+								if (hasText(value[0])) {
+									onChange({ color: value[0] });
+								}
+							}}
+							spacing={1}
+							role="toolbar"
+							aria-labelledby={colorLabelId}
+							className="grid w-full grid-cols-7 gap-1.5"
+						>
+							{COLOR_KEYS.map((key) => (
+								<ToggleGroupItem
+									key={key}
+									value={key}
+									aria-label={key}
+									disabled={disabled}
+									className={cn("size-7 min-w-0 border-black/10 dark:border-white/15", PILL[key])}
+								>
+									{activeColor === key && <Check className="size-3.5" aria-hidden="true" />}
+								</ToggleGroupItem>
+							))}
+						</ToggleGroup>
+					</div>
+
+					<div className="space-y-1.5">
+						<p id={iconLabelId} className="text-xs text-muted-foreground">
+							Icon
+						</p>
+						<InputGroup>
+							<InputGroupAddon>
+								<Search aria-hidden />
+							</InputGroupAddon>
+							<InputGroupInput
+								value={query}
+								onChange={(e) => setQuery(e.target.value)}
+								placeholder="Search icons…"
+								aria-label="Search icons"
+								autoComplete="off"
+								disabled={disabled}
+							/>
+						</InputGroup>
+						{filteredIcons.length === 0 ? (
+							<p className="py-6 text-center text-xs text-muted-foreground">
+								No icons match “{query}”.
+							</p>
+						) : (
+							<ToggleGroup
+								variant="filled"
+								disabled={disabled}
+								value={[activeIcon]}
+								onValueChange={(value) => {
+									if (hasText(value[0])) {
+										onChange({ icon: value[0] });
+									}
+								}}
+								spacing={1}
+								role="toolbar"
+								aria-labelledby={iconLabelId}
+								className="grid max-h-44 w-full grid-cols-7 gap-1 overflow-y-auto pr-1"
+							>
+								{filteredIcons.map((iconName) => {
+									const Icon = iconComponent(iconName);
+									return (
+										<ToggleGroupItem
+											key={iconName}
+											value={iconName}
+											aria-label={iconLabel(iconName)}
+											disabled={disabled}
+											className="size-8 min-w-0"
+										>
+											<Icon className="size-4" aria-hidden="true" />
+										</ToggleGroupItem>
+									);
+								})}
+							</ToggleGroup>
+						)}
+					</div>
+				</PopoverContent>
+			)}
+		</Popover>
+	);
+}

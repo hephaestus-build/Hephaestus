@@ -48,9 +48,13 @@ export interface SourceScanOptions {
 }
 
 function place(decls: Declaration[] | null, line: number, scope: RegExp | undefined): Placement {
-	if (decls === null) return { enclosing: "unknown", supertypes: "", inScope: null };
+	if (decls === null) {
+		return { enclosing: "unknown", supertypes: "", inScope: null };
+	}
 	const decl = enclosingDeclaration(decls, line);
-	if (!decl) return { enclosing: "file scope", supertypes: "", inScope: false };
+	if (!decl) {
+		return { enclosing: "file scope", supertypes: "", inScope: false };
+	}
 	return {
 		enclosing: `${decl.kind} ${decl.name}`,
 		supertypes: decl.supertypes,
@@ -66,20 +70,34 @@ export async function scanAddedLines(
 	const scan: SourceScan = { hints: [], linesAdded: 0, linesInScope: 0, filesWithoutCheckout: 0 };
 	for (const [path, df] of diffFiles) {
 		const language = languageOf(path);
-		if (!language || !options.languages.includes(language)) continue;
-		if (!options.includeTests && isTestPath(path)) continue;
+		if (language === null || !options.languages.includes(language)) {
+			continue;
+		}
+		if (options.includeTests !== true && isTestPath(path)) {
+			continue;
+		}
 		const decls = hasDeclarationSyntax(language)
 			? await declarationsOf(repoPath, path, language)
 			: null;
-		if (decls === null) scan.filesWithoutCheckout++;
+		if (decls === null) {
+			scan.filesWithoutCheckout += 1;
+		}
 		for (const [line, content] of df.addedLines) {
-			if (isCommentLine(content, language)) continue;
-			scan.linesAdded++;
+			if (isCommentLine(content, language)) {
+				continue;
+			}
+			scan.linesAdded += 1;
 			const placement = place(decls, line, options.scope);
-			if (placement.inScope) scan.linesInScope++;
-			if (options.onlyInScope && placement.inScope === false) continue;
+			if (placement.inScope === true) {
+				scan.linesInScope += 1;
+			}
+			if (options.onlyInScope === true && placement.inScope === false) {
+				continue;
+			}
 			for (const [label, re] of options.patterns) {
-				if (!re.test(content)) continue;
+				if (!re.test(content)) {
+					continue;
+				}
 				scan.hints.push({
 					file: path,
 					line,

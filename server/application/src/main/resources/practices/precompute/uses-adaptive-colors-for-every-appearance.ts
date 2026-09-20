@@ -3,28 +3,28 @@
 // color whether its colorset carries a dark appearance. The role a literal plays — content over a fill,
 // or a background that bakes in one appearance — is the review's to read from the modifier chain.
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import { globFilesSync } from "../lib/files.ts";
 import { countLabel, scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
-const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/;
+const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/u;
 
 const COLORS: readonly SourcePattern[] = [
-	["literal white/black", /\bColor\.(?:white|black)\b|[:(,]\s*\.(?:white|black)\b/],
+	["literal white/black", /\bColor\.(?:white|black)\b|[:(,]\s*\.(?:white|black)\b/u],
 	[
 		"literal RGB",
-		/\bColor\s*\(\s*(?:red|hue|\.sRGB|\.displayP3)|\bUIColor\s*\(\s*red:|\bColor\s*\(\s*hex:|\bColor\s*\(\s*"#|\bColor\s*\(\s*uiColor:\s*\.(?:white|black)/,
+		/\bColor\s*\(\s*(?:red|hue|\.sRGB|\.displayP3)|\bUIColor\s*\(\s*red:|\bColor\s*\(\s*hex:|\bColor\s*\(\s*"#|\bColor\s*\(\s*uiColor:\s*\.(?:white|black)/u,
 	],
-	["gray literal", /\bColor\.gray\b|[:(,]\s*\.gray\b|\bColor\s*\(\s*\.systemGray\d?\s*\)/],
+	["gray literal", /\bColor\.gray\b|[:(,]\s*\.gray\b|\bColor\s*\(\s*\.systemGray\d?\s*\)/u],
 	[
 		"semantic",
-		/\.(?:primary|secondary|tertiary|quaternary)\b|Color\s*\(\s*\.(?:systemBackground|secondarySystemBackground|tertiarySystemBackground|label|secondaryLabel|systemGroupedBackground|separator)\b/,
+		/\.(?:primary|secondary|tertiary|quaternary)\b|Color\s*\(\s*\.(?:systemBackground|secondarySystemBackground|tertiarySystemBackground|label|secondaryLabel|systemGroupedBackground|separator)\b/u,
 	],
-	["material", /\.(?:ultraThin|thin|regular|thick|ultraThick|bar)Material\b/],
-	["accent", /\.accentColor\b|\.tint\b|\bColor\.accent\b/],
-	["named asset", /\bColor\s*\(\s*"[^"]+"\s*\)|\bColor\s*\(\s*\.[a-z]\w*\s*\)/],
+	["material", /\.(?:ultraThin|thin|regular|thick|ultraThick|bar)Material\b/u],
+	["accent", /\.accentColor\b|\.tint\b|\bColor\.accent\b/u],
+	["named asset", /\bColor\s*\(\s*"[^"]+"\s*\)|\bColor\s*\(\s*\.[a-z]\w*\s*\)/u],
 ];
 
 /** Named asset colors of the checkout and whether each colorset has a dark appearance. */
@@ -38,10 +38,10 @@ async function assetColors(repoPath: string): Promise<Map<string, boolean>> {
 			file
 				.split("/")
 				.at(-2)
-				?.replace(/\.colorset$/, "") ?? "";
+				?.replace(/\.colorset$/u, "") ?? "";
 		try {
-			const text = await readFile(join(repoPath, file), "utf8");
-			found.set(name, /"appearance"\s*:\s*"luminosity"[^}]*"value"\s*:\s*"dark"/.test(text));
+			const text = await readFile(path.join(repoPath, file), "utf8");
+			found.set(name, /"appearance"\s*:\s*"luminosity"[^}]*"value"\s*:\s*"dark"/u.test(text));
 		} catch {
 			// an unreadable colorset is not a fact about its appearances
 		}
@@ -62,10 +62,12 @@ export default async function usesAdaptiveColorsForEveryAppearance(
 	});
 	const assets = await assetColors(repoPath);
 	const hints: Hint[] = scan.hints.map((h) => {
-		if (h.pattern !== "named asset") return h;
+		if (h.pattern !== "named asset") {
+			return h;
+		}
 		const name =
-			/Color\s*\(\s*"([^"]+)"/.exec(h.context)?.[1] ??
-			/Color\s*\(\s*\.(\w+)/.exec(h.context)?.[1] ??
+			/Color\s*\(\s*"(?<name>[^"]+)"/u.exec(h.context)?.groups?.name ??
+			/Color\s*\(\s*\.(?<name>\w+)/u.exec(h.context)?.groups?.name ??
 			"";
 		const dark = [...assets.entries()].find(
 			([n]) => n === name || n.toLowerCase() === name.toLowerCase(),

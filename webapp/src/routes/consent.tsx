@@ -8,8 +8,8 @@ import {
 	getConsentStatusQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import { ConsentPage, type ConsentSubmission } from "@/components/auth/ConsentPage";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { resolveCurrentUser, safeReturnTo } from "@/integrations/auth/guard";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { resolveCurrentUser, safeReturnTo } from "@/runtime/auth/guard";
 
 interface ConsentSearch {
 	returnTo?: string;
@@ -22,25 +22,31 @@ export const Route = createFileRoute("/consent")({
 	}),
 	beforeLoad: async ({ context, search }) => {
 		const user = await resolveCurrentUser(context.queryClient);
-		if (!user)
+		if (!user) {
 			throw redirect({ to: "/login", search: { returnTo: safeReturnTo(search.returnTo) } });
+		}
 		// The page owns retry and sign-out on failure; a loader error would bypass both.
 		const consent = await context.queryClient
 			.query(getConsentStatusOptions({}))
 			.catch(() => undefined);
-		if (consent?.completed) throw redirect({ href: safeReturnTo(search.returnTo) });
+		if (consent?.completed === true) {
+			throw redirect({ href: safeReturnTo(search.returnTo) });
+		}
 	},
 	component: ConsentRoute,
 });
+
+// The setup wording ships in the bundle, so a bundle the server has moved past is replaced by a
+// document load and by nothing the router can do.
+function reload() {
+	window.location.reload();
+}
 
 function ConsentRoute() {
 	const { returnTo } = Route.useSearch();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { logout } = useAuth();
-	// The setup wording ships in the bundle, so a bundle the server has moved past is replaced by a
-	// document load and by nothing the router can do.
-	const reload = () => window.location.reload();
 	const { data, isError, error, refetch } = useQuery(getConsentStatusOptions({}));
 	const mutation = useMutation({
 		...completeFirstLoginConsentMutation(),
@@ -54,31 +60,46 @@ function ConsentRoute() {
 	});
 
 	useEffect(() => {
-		if (data?.completed) void navigate({ href: safeReturnTo(returnTo), replace: true });
+		if (data?.completed === true) {
+			void navigate({ href: safeReturnTo(returnTo), replace: true });
+		}
 	}, [data?.completed, navigate, returnTo]);
 
-	if (isError)
+	if (isError) {
 		return (
 			<ConsentPage
-				state={{ status: "error", error, onRetry: () => void refetch() }}
-				onSignOut={() => void logout()}
+				state={{
+					status: "error",
+					error,
+					onRetry: () => {
+						void refetch();
+					},
+				}}
+				onSignOut={() => {
+					void logout();
+				}}
 				onReload={reload}
 			/>
 		);
-	if (!data)
+	}
+	if (!data) {
 		return (
 			<ConsentPage
 				state={{ status: "loading" }}
-				onSignOut={() => void logout()}
+				onSignOut={() => {
+					void logout();
+				}}
 				onReload={reload}
 			/>
 		);
+	}
 
-	const submission: ConsentSubmission = mutation.isPending
-		? { status: "saving" }
-		: mutation.isError && mutation.variables.body.noticeVersion === data.noticeVersion
-			? { status: "error" }
-			: { status: "idle" };
+	let submission: ConsentSubmission = { status: "idle" };
+	if (mutation.isPending) {
+		submission = { status: "saving" };
+	} else if (mutation.isError && mutation.variables.body.noticeVersion === data.noticeVersion) {
+		submission = { status: "error" };
+	}
 	return (
 		<ConsentPage
 			// Remount when the question changes, not just the wording: a draft "yes" chosen for one
@@ -90,7 +111,9 @@ function ConsentRoute() {
 				submission,
 				onSubmit: (choice) => mutation.mutate({ body: choice }),
 			}}
-			onSignOut={() => void logout()}
+			onSignOut={() => {
+				void logout();
+			}}
 			onReload={reload}
 		/>
 	);

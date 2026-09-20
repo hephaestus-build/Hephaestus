@@ -6,8 +6,9 @@ import { resolvePromotion, type PromotionSources } from "./resolve-promotion.ts"
 const commit = "a".repeat(40);
 const images = { HEPHAESTUS_IMAGE_WEBAPP: `ghcr.io/o/webapp@sha256:${"1".repeat(64)}` };
 const request = { allowRollback: false, freeze: false, refreshDatabaseImage: false };
-const never = (what: string) => (): Promise<never> =>
-	Promise.reject(new Error(`${what} must not be consulted`));
+const never = (what: string) => async (): Promise<never> => {
+	throw new Error(`${what} must not be consulted`);
+};
 const sources: PromotionSources = {
 	compare: never("history"),
 	isDraft: never("the release"),
@@ -18,7 +19,7 @@ await test("a published release is promoted by tag and reported by version", asy
 	assert.deepEqual(
 		await resolvePromotion(
 			{ ...request, release: "v1.2.3", freeze: true },
-			{ ...sources, isDraft: () => Promise.resolve(false) },
+			{ ...sources, isDraft: async () => false },
 		),
 		{ channel: { release: "v1.2.3", allowRollback: false, freeze: true }, version: "1.2.3" },
 	);
@@ -26,14 +27,12 @@ await test("a published release is promoted by tag and reported by version", asy
 
 await test("a draft or a mutable reference is never promoted", async () => {
 	await assert.rejects(
-		resolvePromotion(
-			{ ...request, release: "v1.2.3" },
-			{ ...sources, isDraft: () => Promise.resolve(true) },
-		),
-		/still a draft/,
+		resolvePromotion({ ...request, release: "v1.2.3" }, { ...sources, isDraft: async () => true }),
+		/still a draft/u,
 	);
-	for (const release of ["main", "v1.2", "v01.2.3", "v1.2.3-rc.1"])
-		await assert.rejects(resolvePromotion({ ...request, release }, sources), /immutable vX\.Y\.Z/);
+	for (const release of ["main", "v1.2", "v01.2.3", "v1.2.3-rc.1"]) {
+		await assert.rejects(resolvePromotion({ ...request, release }, sources), /immutable vX\.Y\.Z/u);
+	}
 });
 
 await test("a commit of the default branch is promoted with the digests its build produced", async () => {
@@ -44,11 +43,11 @@ await test("a commit of the default branch is promoted with the digests its buil
 				{ ...request, commit, allowRollback: true },
 				{
 					...sources,
-					compare: (base, head) => {
+					compare: async (base, head) => {
 						compared.push(`${base}...${head}`);
-						return Promise.resolve(status);
+						return status;
 					},
-					images: (at) => Promise.resolve(at === commit ? images : {}),
+					images: async (at) => (at === commit ? images : {}),
 				},
 			),
 			{
@@ -67,34 +66,38 @@ await test("a commit of the default branch is promoted with the digests its buil
 });
 
 await test("a commit outside the default branch is refused before any image is resolved", async () => {
-	for (const status of ["behind", "diverged", "unexpected"])
+	for (const status of ["behind", "diverged", "unexpected"]) {
 		await assert.rejects(
-			resolvePromotion(
-				{ ...request, commit },
-				{ ...sources, compare: () => Promise.resolve(status) },
-			),
-			/not on the default branch/,
+			resolvePromotion({ ...request, commit }, { ...sources, compare: async () => status }),
+			/not on the default branch/u,
 		);
+	}
 	await assert.rejects(
 		resolvePromotion(
 			{ ...request, commit },
-			{ ...sources, compare: () => Promise.reject(new Error("unavailable")) },
+			{
+				...sources,
+				compare: async () => {
+					throw new Error("unavailable");
+				},
+			},
 		),
-		/unavailable/,
+		/unavailable/u,
 	);
 });
 
 await test("a promotion names exactly one target, and a commit is named whole", async () => {
 	await assert.rejects(
 		resolvePromotion({ ...request, release: "v1.2.3", commit }, sources),
-		/not both/,
+		/not both/u,
 	);
-	await assert.rejects(resolvePromotion(request, sources), /Name a release or a commit/);
-	for (const short of [commit.slice(0, 7), "main"])
+	await assert.rejects(resolvePromotion(request, sources), /Name a release or a commit/u);
+	for (const short of [commit.slice(0, 7), "main"]) {
 		await assert.rejects(
 			resolvePromotion({ ...request, commit: short }, sources),
-			/full commit SHA/,
+			/full commit SHA/u,
 		);
+	}
 });
 
 await test("only a commit channel can be asked to take the database image it names", async () => {
@@ -103,8 +106,8 @@ await test("only a commit channel can be asked to take the database image it nam
 			{ ...request, commit, refreshDatabaseImage: true },
 			{
 				...sources,
-				compare: () => Promise.resolve("identical"),
-				images: () => Promise.resolve(images),
+				compare: async () => "identical",
+				images: async () => images,
 			},
 		),
 		{
@@ -122,8 +125,8 @@ await test("only a commit channel can be asked to take the database image it nam
 	await assert.rejects(
 		resolvePromotion(
 			{ ...request, release: "v1.2.3", refreshDatabaseImage: true },
-			{ ...sources, isDraft: () => Promise.resolve(false) },
+			{ ...sources, isDraft: async () => false },
 		),
-		/applies to a commit, not to a release/,
+		/applies to a commit, not to a release/u,
 	);
 });

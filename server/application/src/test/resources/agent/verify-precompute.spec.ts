@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -12,32 +12,34 @@ const repositoryRoot = fileURLToPath(new URL("../../../../../../", import.meta.u
 
 /** Stages the script beside a `lib/` link, as the runner does, with a context root to read. */
 async function stage(context: Record<string, unknown>) {
-	const root = mkdtempSync(join(tmpdir(), "verify-precompute-"));
-	mkdirSync(join(root, "practices"));
-	mkdirSync(join(root, "context"), { recursive: true });
-	writeFileSync(join(root, "package.json"), '{"type":"module"}\n');
-	symlinkSync(join(repositoryRoot, "docker/agents/precompute/lib"), join(root, "lib"));
+	const root = mkdtempSync(path.join(tmpdir(), "verify-precompute-"));
+	mkdirSync(path.join(root, "practices"));
+	mkdirSync(path.join(root, "context"), { recursive: true });
+	writeFileSync(path.join(root, "package.json"), '{"type":"module"}\n');
+	symlinkSync(path.join(repositoryRoot, "docker/agents/precompute/lib"), path.join(root, "lib"));
 	for (const [name, value] of Object.entries(context)) {
-		writeFileSync(join(root, "context", name), JSON.stringify(value));
+		writeFileSync(path.join(root, "context", name), JSON.stringify(value));
 	}
-	const staged = join(root, "practices/states-how-to-verify-the-change.ts");
+	const staged = path.join(root, "practices/states-how-to-verify-the-change.ts");
 	cpSync(
-		join(
+		path.join(
 			repositoryRoot,
 			"server/application/src/main/resources/practices/precompute/states-how-to-verify-the-change.ts",
 		),
 		staged,
 	);
 	const mod: unknown = await import(staged);
-	if (!isPracticeModule(mod)) throw new Error("script does not export a default function");
-	return { root, script: mod.default, contextDir: join(root, "context") };
+	if (!isPracticeModule(mod)) {
+		throw new Error("script does not export a default function");
+	}
+	return { root, script: mod.default, contextDir: path.join(root, "context") };
 }
 
-function changed(path: string, added: string[]): [string, DiffFile] {
+function changed(file: string, added: string[]): [string, DiffFile] {
 	return [
-		path,
+		file,
 		{
-			path,
+			path: file,
 			addedLines: new Map(added.map((line, index) => [index + 1, line])),
 			removedLines: new Map(),
 			hunks: [],
@@ -61,7 +63,7 @@ void test("a diagram-and-README change is named as an occasion-gate kind, with t
 	});
 	try {
 		const result = await script(
-			join(root, "repo"),
+			path.join(root, "repo"),
 			new Map([
 				changed("diagrams/aom.png", ["PNG"]),
 				changed("README.md", ["![AOM](diagrams/aom.png)"]),
@@ -73,12 +75,12 @@ void test("a diagram-and-README change is named as an occasion-gate kind, with t
 		assert.equal(result.metrics.imageFiles, 1);
 		assert.match(
 			result.directions[0] ?? "",
-			/one of the kinds the criteria's Occasion section names/,
+			/one of the kinds the criteria's Occasion section names/u,
 		);
-		assert.match(result.directions.join("\n"), /testing heading .* with no content/);
+		assert.match(result.directions.join("\n"), /testing heading .* with no content/u);
 		assert.match(
 			result.directions.join("\n"),
-			/adopts an issue with a closing keyword \("Closes #4"\)/,
+			/adopts an issue with a closing keyword \("Closes #4"\)/u,
 		);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -89,7 +91,7 @@ void test("a code change with a preview and a filled testing section is reported
 	const { root, script, contextDir } = await stage({});
 	try {
 		const result = await script(
-			join(root, "repo"),
+			path.join(root, "repo"),
 			new Map([
 				changed("App/Views/QuizView.swift", ["struct QuizView: View {", "#Preview { QuizView() }"]),
 				changed("App/Tests/QuizTests.swift", ["func testScore() {}"]),
@@ -104,8 +106,8 @@ void test("a code change with a preview and a filled testing section is reported
 		assert.equal(result.metrics.previewFiles, 1);
 		assert.equal(result.metrics.testingSectionLines, 4);
 		assert.equal(result.metrics.screenshotsInDescription, 1);
-		assert.match(result.directions[0] ?? "", /The practice applies/);
-		assert.match(result.directions.join("\n"), /QuizView\.swift — an ENTRY/);
+		assert.match(result.directions[0] ?? "", /The practice applies/u);
+		assert.match(result.directions.join("\n"), /QuizView\.swift — an ENTRY/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -114,8 +116,8 @@ void test("a code change with a preview and a filled testing section is reported
 void test("an empty range is named as such", async () => {
 	const { root, script, contextDir } = await stage({});
 	try {
-		const result = await script(join(root, "repo"), new Map(), metadata(""), contextDir);
-		assert.match(result.directions[0] ?? "", /empty diff is one of the kinds/);
+		const result = await script(path.join(root, "repo"), new Map(), metadata(""), contextDir);
+		assert.match(result.directions[0] ?? "", /empty diff is one of the kinds/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

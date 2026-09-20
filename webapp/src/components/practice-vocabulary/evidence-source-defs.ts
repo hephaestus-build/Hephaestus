@@ -19,7 +19,7 @@ import {
 
 import type { EvidenceCitation } from "@/api/types.gen";
 
-import type { StatusDef } from "./status-def";
+import type { StatusDef } from "@/components/common/status-def";
 
 /** Code coordinates name source lines; object coordinates belong to serialized context, not the source UI. */
 export type EvidenceLocator = "code" | "object";
@@ -183,7 +183,7 @@ export function codeCitationLocator(span: {
 	endLine?: number;
 }): string {
 	const { path, startLine, endLine } = span;
-	return endLine && endLine > startLine
+	return endLine !== undefined && endLine > startLine
 		? `${path}:${startLine}–${endLine}`
 		: `${path}:${startLine}`;
 }

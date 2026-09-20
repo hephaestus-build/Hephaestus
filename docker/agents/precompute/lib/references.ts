@@ -9,26 +9,28 @@
  * (`#1a2b`), a unit (`#42px`), a version (`#1.2`). A sentence period after the number is still a
  * reference.
  */
-const NUMBER_REF = /#(\d+)(?![\w]|\.[0-9])/g;
+const NUMBER_REF = /#(?<number>\d+)(?![\w]|\.[0-9])/gu;
 
 /** `closes #12`, `Fixes: #7`, `resolved #3`. */
-const CLOSING_REF = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*#(\d+)/gi;
+const CLOSING_REF = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*#(?<number>\d+)/giu;
 
 /** An issue number opening a branch-slug segment: `18-foo`, `feat/18-foo`. */
-const BRANCH_REF = /(?:^|\/)(\d{1,7})-/g;
+const BRANCH_REF = /(?:^|\/)(?<number>\d{1,7})-/gu;
 
 /**
  * An HTML comment is not rendered, and neither provider links an issue from inside one: a template's
  * `<!-- Example: #12 -->` is the template's text, not the author's reference. The server's linked-work-item
  * lookup applies the same rule.
  */
-const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+const HTML_COMMENT = /<!--[\s\S]*?-->/gu;
 
 function numbers(pattern: RegExp, text: string): number[] {
 	const found = new Set<number>();
 	for (const match of text.replace(HTML_COMMENT, "").matchAll(pattern)) {
-		const value = Number(match[1]);
-		if (Number.isSafeInteger(value) && value > 0) found.add(value);
+		const value = Number(match.groups?.number);
+		if (Number.isSafeInteger(value) && value > 0) {
+			found.add(value);
+		}
 	}
 	return [...found];
 }

@@ -30,9 +30,9 @@ import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAcc
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
 import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
-import { useAuth } from "@/integrations/auth/AuthContext";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/settings")({
 	component: RouteComponent,
@@ -50,8 +50,9 @@ function RouteComponent() {
 	// question afresh. The parent guard only runs on navigation, so without this the reader is left on
 	// a page whose controls have quietly gone and whose writes the server has started refusing.
 	useEffect(() => {
-		if (accountConsent?.completed === false)
+		if (accountConsent?.completed === false) {
 			void navigate({ to: "/consent", search: { returnTo: "/settings" }, replace: true });
+		}
 	}, [accountConsent?.completed, navigate]);
 
 	const {
@@ -106,7 +107,9 @@ function RouteComponent() {
 	// Spread-based helper: reads latest cache to avoid stale-closure race under rapid toggling
 	const updateSetting = (patch: Partial<UserSettings>) => {
 		const current = queryClient.getQueryData<UserSettings>(userSettingsQueryKey);
-		if (!current) return;
+		if (!current) {
+			return;
+		}
 		updateSettingsMutation.mutate({
 			body: { ...current, ...patch },
 		});
@@ -183,7 +186,7 @@ function RouteComponent() {
 			});
 			void queryClient.invalidateQueries({ queryKey: slackPreferencesQueryKey });
 			toast.success(
-				updatedWorkspace.channelMessagesAllowed
+				updatedWorkspace.channelMessagesAllowed === true
 					? "Slack channel-message use is on."
 					: "Slack channel-message use is off.",
 			);
@@ -234,7 +237,7 @@ function RouteComponent() {
 		isSlackLinked: Boolean(slackIdentity),
 		canConnectSlack: Boolean(slackProvider?.registrationId),
 		onConnectSlack: () => {
-			if (slackProvider?.registrationId) {
+			if (hasText(slackProvider?.registrationId)) {
 				linkAccount(slackProvider.registrationId, "/settings");
 			}
 		},
@@ -253,14 +256,18 @@ function RouteComponent() {
 			(slackAvailable && slackPreferencesQuery.isLoading),
 		isError: slackAvailable && slackPreferencesQuery.isError,
 		error: slackPreferencesQuery.error,
-		onRetry: () => void slackPreferencesQuery.refetch(),
+		onRetry: () => {
+			void slackPreferencesQuery.refetch();
+		},
 	};
 
 	return (
 		<SettingsPage
 			isLoading={isLoading}
 			settingsError={settingsError}
-			onRetrySettings={() => void refetchSettings()}
+			onRetrySettings={() => {
+				void refetchSettings();
+			}}
 			practiceFeedbackProps={{
 				practiceFeedbackDeliveryEnabled: settings?.practiceFeedbackDeliveryEnabled ?? true,
 				onTogglePracticeFeedback: handlePracticeFeedbackToggle,
@@ -282,7 +289,9 @@ function RouteComponent() {
 				isLoading: consentQuery.isLoading || researchConsentMutation.isPending,
 				isError: consentQuery.isError,
 				error: consentQuery.error,
-				onRetry: () => void consentQuery.refetch(),
+				onRetry: () => {
+					void consentQuery.refetch();
+				},
 			}}
 			linkedAccountsProps={linkedAccountsProps}
 			showSlackPreferencesSection={slackAvailable}

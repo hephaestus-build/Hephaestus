@@ -1,16 +1,16 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
-import { ReviewArtifactLabel, ReviewArtifactLink } from "./ReviewArtifact";
 import {
 	gitlabMergeRequest,
 	outlineDocument,
 	reviewArtifact,
 	slackConversation,
 	trackerIssue,
-} from "./story-mock-data";
+} from "./fixtures";
+import { ReviewArtifactLabel, ReviewArtifactLink } from "./ReviewArtifact";
 
 /**
  * The glyph is the forge, not the kind: the words already say `PR #1423` or `#engineering`, so a
@@ -18,7 +18,6 @@ import {
  * GitLab one.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Reviewed work",
 	component: ReviewArtifactLabel,
 	parameters: { layout: "padded", chromatic: { viewports: [1440] } },
 	tags: ["autodocs"],

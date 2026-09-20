@@ -65,7 +65,7 @@ test.describe("live integration operations", () => {
 		const acceptedResponse = await accepted;
 		expect([200, 202]).toContain(acceptedResponse.status());
 		const jobId = acceptedJobId(await acceptedResponse.json());
-		await expect(page.getByText(/sync started/i)).toBeVisible();
+		await expect(page.getByText(/sync started/iu)).toBeVisible();
 		await expect(page.locator(`[data-job-id="${jobId}"]`)).toBeVisible({ timeout: 15_000 });
 	});
 });

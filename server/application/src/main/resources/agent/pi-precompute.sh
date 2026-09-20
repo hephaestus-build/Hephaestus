@@ -1,7 +1,7 @@
 #!/bin/sh
 
 workspace=${2:-/workspace}
-node=$(command -v node)
+node=$(node -p 'process.execPath')
 stage="$workspace/work/precompute-stage"
 output="$workspace/work/precompute-out"
 log="$workspace/work/precompute-runner.log"

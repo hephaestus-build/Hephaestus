@@ -1,22 +1,22 @@
 import assert from "node:assert/strict";
 import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import path from "node:path";
 import { afterEach, before, describe, it } from "node:test";
 
 import { isPracticeModule } from "./lib/practice-contract.ts";
 import type { DiffFile, PracticeScript } from "./lib/types.ts";
 
-const SCRIPTS_DIR = resolve(
+const SCRIPTS_DIR = path.resolve(
 	import.meta.dirname,
 	"../../../server/application/src/main/resources/practices/precompute",
 );
-const LIB_DIR = resolve(import.meta.dirname, "lib");
+const LIB_DIR = path.resolve(import.meta.dirname, "lib");
 
 const tempDirs: string[] = [];
 
 async function createTempDir(prefix: string): Promise<string> {
-	const dir = await mkdtemp(join(tmpdir(), prefix));
+	const dir = await mkdtemp(path.join(tmpdir(), prefix));
 	tempDirs.push(dir);
 	return dir;
 }
@@ -27,11 +27,11 @@ async function createTempDir(prefix: string): Promise<string> {
  */
 async function loadScript(name: string): Promise<PracticeScript> {
 	const work = await createTempDir(`pc-script-${name}-`);
-	await mkdir(join(work, "practices"), { recursive: true });
-	await writeFile(join(work, "package.json"), '{"type":"module"}\n');
-	await symlink(LIB_DIR, join(work, "lib"));
-	const staged = join(work, "practices", `${name}.ts`);
-	await cp(join(SCRIPTS_DIR, `${name}.ts`), staged);
+	await mkdir(path.join(work, "practices"), { recursive: true });
+	await writeFile(path.join(work, "package.json"), '{"type":"module"}\n');
+	await symlink(LIB_DIR, path.join(work, "lib"));
+	const staged = path.join(work, "practices", `${name}.ts`);
+	await cp(path.join(SCRIPTS_DIR, `${name}.ts`), staged);
 	const mod: unknown = await import(staged);
 	if (!isPracticeModule(mod)) {
 		throw new Error(`${name} does not export a default function`);
@@ -40,12 +40,14 @@ async function loadScript(name: string): Promise<PracticeScript> {
 }
 
 /** A path the diff touched. The scripts under test read the changed paths, not the hunk bodies. */
-function changedFile(path: string): DiffFile {
-	return { path, addedLines: new Map(), removedLines: new Map(), hunks: [] };
+function changedFile(file: string): DiffFile {
+	return { path: file, addedLines: new Map(), removedLines: new Map(), hunks: [] };
 }
 
 afterEach(async () => {
-	await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+	await Promise.all(
+		tempDirs.splice(0).map(async (dir) => rm(dir, { recursive: true, force: true })),
+	);
 });
 
 void describe("ships-tests-with-the-change", () => {
@@ -56,9 +58,9 @@ void describe("ships-tests-with-the-change", () => {
 
 	async function repoWith(files: Record<string, string>): Promise<string> {
 		const repo = await createTempDir("pc-repo-");
-		for (const [path, body] of Object.entries(files)) {
-			const full = join(repo, path);
-			await mkdir(join(full, ".."), { recursive: true });
+		for (const [file, body] of Object.entries(files)) {
+			const full = path.join(repo, file);
+			await mkdir(path.join(full, ".."), { recursive: true });
 			await writeFile(full, body);
 		}
 		return repo;
@@ -217,17 +219,17 @@ void it("linked-work analysis reads only explicitly supplied context, never a re
 	const root = await createTempDir("linked-work-context-");
 	const analyse = await loadScript("honours-linked-issue-acceptance-criteria");
 	try {
-		const legacy = join(root, "inputs", "context");
-		const context = join(root, "areas/linked work");
-		const repo = join(root, "inputs", "sources", "scm", "repo");
+		const legacy = path.join(root, "inputs", "context");
+		const context = path.join(root, "areas/linked work");
+		const repo = path.join(root, "inputs", "sources", "scm", "repo");
 		await mkdir(legacy, { recursive: true });
 		await mkdir(context, { recursive: true });
 		await writeFile(
-			join(legacy, "linked_work_items.json"),
+			path.join(legacy, "linked_work_items.json"),
 			JSON.stringify({ workItems: [{ body: "- [ ] WRONG CONTEXT" }] }),
 		);
 		await writeFile(
-			join(context, "linked_work_items.json"),
+			path.join(context, "linked_work_items.json"),
 			JSON.stringify({ workItems: [{ body: "Acceptance criteria\n- [ ] one\n- [ ] two" }] }),
 		);
 		const metadata = {
@@ -243,7 +245,7 @@ void it("linked-work analysis reads only explicitly supplied context, never a re
 		assert.equal(explicit.metrics.acceptanceCriteriaCheckboxes, 2);
 		const absent = await analyse(repo, new Map(), metadata);
 		assert.equal(absent.metrics.linkedItemsFilePresent, 0);
-		const missing = await analyse(repo, new Map(), metadata, join(root, "missing"));
+		const missing = await analyse(repo, new Map(), metadata, path.join(root, "missing"));
 		assert.equal(missing.metrics.linkedItemsFilePresent, 0);
 	} finally {
 		await rm(root, { recursive: true, force: true });
@@ -264,19 +266,19 @@ void it("issue-reference syntax in templates remains a candidate rather than an 
 	const linked = await loadScript("honours-linked-issue-acceptance-criteria");
 	const result = await linked("unused", new Map(), metadata);
 	assert.equal(result.metrics.issueReferenceSyntaxCandidateCount, 1);
-	assert.match(result.directions.join("\n"), /syntax candidate/);
-	assert.match(result.directions.join("\n"), /before establishing that the author/);
-	assert.doesNotMatch(result.directions.join("\n"), /this change claims to close/);
+	assert.match(result.directions.join("\n"), /syntax candidate/u);
+	assert.match(result.directions.join("\n"), /before establishing that the author/u);
+	assert.doesNotMatch(result.directions.join("\n"), /this change claims to close/u);
 	const traceable = await loadScript("ready-and-traceable-handoff");
 	const trace = await traceable("unused", new Map(), metadata);
 	assert.equal(trace.metrics.issueMentionSyntaxCandidateCount, 1);
 	assert.match(
 		trace.directions.join("\n"),
-		/templates, examples and branch numbers may be unrelated/,
+		/templates, examples and branch numbers may be unrelated/u,
 	);
 	assert.doesNotMatch(
 		trace.directions.join("\n"),
-		/all establish the link|motivating-issue reference IS present/,
+		/all establish the link|motivating-issue reference IS present/u,
 	);
 });
 
@@ -294,11 +296,11 @@ void it("current issue rollups do not establish state at closure or a longitudin
 			body: checked ? "- [x] Expected result" : "- [ ] Expected result",
 		});
 		const directions = result.directions.join("\n");
-		assert.match(directions, /Current captured issue facts/);
-		assert.match(directions, /dated.*closure|closure.*dated/);
+		assert.match(directions, /Current captured issue facts/u);
+		assert.match(directions, /dated.*closure|closure.*dated/u);
 		assert.doesNotMatch(
 			directions,
-			/completed at close|outcome appears confirmed|frame as a lifecycle habit/,
+			/completed at close|outcome appears confirmed|frame as a lifecycle habit/u,
 		);
 		assert.equal(result.metrics.currentSubIssuesOpen, 0);
 		assert.equal("subIssuesOpenAtClose" in result.metrics, false);

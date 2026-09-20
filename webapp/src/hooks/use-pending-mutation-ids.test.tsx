@@ -7,37 +7,41 @@ import {
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { deferred, pending } from "@/test/async";
+
 import { filedUnder, pathNumber, usePendingMutationIds } from "./use-pending-mutation-ids";
 
 /** The shape every generated mutation takes: the path parameters the endpoint is keyed on. */
-type Vars = { path: { id: number } };
+interface Vars {
+	path: { id: number };
+}
 
 const KEY = ["thing"];
 
 function generatedMutation(): UseMutationOptions<void, Error, Vars> {
 	return {
 		mutationKey: ["generated", "its", "own", "key"],
-		mutationFn: (_variables: Vars) => new Promise<void>(() => {}),
+		mutationFn: async (_variables: Vars) => pending<undefined>(),
 	};
 }
 
 function Harness({ releaseFast }: { releaseFast: Promise<void> }) {
 	const slow = useMutation({
 		mutationKey: [...KEY, "slow"],
-		mutationFn: (_variables: Vars) => new Promise<void>(() => {}),
+		mutationFn: async (_variables: Vars) => pending<undefined>(),
 	});
 	const fast = useMutation({
 		mutationKey: [...KEY, "fast"],
-		mutationFn: (_variables: Vars) => releaseFast,
+		mutationFn: async (_variables: Vars) => releaseFast,
 	});
 	const generated = useMutation({
 		...filedUnder([...KEY, "generated"], generatedMutation()),
 	});
 	const foreign = useMutation({
 		mutationKey: [...KEY, "foreign"],
-		mutationFn: (_variables: { body: { note: string } }) => new Promise<void>(() => {}),
+		mutationFn: async (_variables: { body: { note: string } }) => pending<undefined>(),
 	});
-	const pending = usePendingMutationIds(KEY, (variables) => pathNumber(variables, "id"));
+	const pendingIds = usePendingMutationIds(KEY, (variables) => pathNumber(variables, "id"));
 
 	return (
 		<>
@@ -53,23 +57,22 @@ function Harness({ releaseFast }: { releaseFast: Promise<void> }) {
 			<button type="button" onClick={() => foreign.mutate({ body: { note: "hi" } })}>
 				start foreign
 			</button>
-			<output>{[...pending].sort((a, b) => a - b).join(",")}</output>
+			<output>{[...pendingIds].sort((a, b) => a - b).join(",")}</output>
 		</>
 	);
 }
 
 function renderHarness() {
 	const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-	let release: () => void = () => {};
-	const releaseFast = new Promise<void>((resolve) => {
-		release = resolve;
-	});
+	const fast = deferred();
 	render(
 		<QueryClientProvider client={client}>
-			<Harness releaseFast={releaseFast} />
+			<Harness releaseFast={fast.promise} />
 		</QueryClientProvider>,
 	);
-	return () => release();
+	return () => {
+		fast.resolve();
+	};
 }
 
 const pendingIds = () => screen.getByRole("status").textContent;

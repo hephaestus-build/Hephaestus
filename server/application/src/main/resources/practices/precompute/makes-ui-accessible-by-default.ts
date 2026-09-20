@@ -8,27 +8,27 @@ import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 const INTERFACE_LINES: readonly SourcePattern[] = [
 	[
 		"accessibility modifier",
-		/\.accessibility(?:Label|Hint|Hidden|AddTraits|Value|Identifier)\s*\(/,
+		/\.accessibility(?:Label|Hint|Hidden|AddTraits|Value|Identifier)\s*\(/u,
 	],
-	["Label with text", /\bLabel\s*\(\s*"/],
-	["Image(systemName:)", /\bImage\s*\(\s*systemName:/],
-	["Image(asset)", /\bImage\s*\(\s*(?:"|decorative:|[a-z]\w*\.)/],
+	["Label with text", /\bLabel\s*\(\s*"/u],
+	["Image(systemName:)", /\bImage\s*\(\s*systemName:/u],
+	["Image(asset)", /\bImage\s*\(\s*(?:"|decorative:|[a-z]\w*\.)/u],
 	[
 		"fixed-size font",
-		/\.font\s*\(\s*\.system\s*\(\s*size:|\.font\s*\(\s*\.custom\s*\([^)]*size:\s*\d/,
+		/\.font\s*\(\s*\.system\s*\(\s*size:|\.font\s*\(\s*\.custom\s*\([^)]*size:\s*\d/u,
 	],
 	[
 		"semantic font",
-		/\.font\s*\(\s*\.(?:largeTitle|title[23]?|headline|subheadline|body|callout|footnote|caption2?)\b/,
+		/\.font\s*\(\s*\.(?:largeTitle|title[23]?|headline|subheadline|body|callout|footnote|caption2?)\b/u,
 	],
-	["height cap", /\.frame\s*\([^)]*\bheight:\s*\d/],
-	["lineLimit", /\.lineLimit\s*\(\s*\d/],
+	["height cap", /\.frame\s*\([^)]*\bheight:\s*\d/u],
+	["lineLimit", /\.lineLimit\s*\(\s*\d/u],
 	[
 		"colour by state",
-		/\.foregroundStyle\s*\(\s*[^)]*\?\s*\.(?:red|green|orange|yellow)|\.foregroundColor\s*\(\s*[^)]*\?\s*\.(?:red|green|orange|yellow)/,
+		/\.foregroundStyle\s*\(\s*[^)]*\?\s*\.(?:red|green|orange|yellow)|\.foregroundColor\s*\(\s*[^)]*\?\s*\.(?:red|green|orange|yellow)/u,
 	],
-	["Button", /\bButton\s*[({]/],
-	["Toggle", /\bToggle\s*\(/],
+	["Button", /\bButton\s*[({]/u],
+	["Toggle", /\bToggle\s*\(/u],
 ];
 
 export default async function makesUiAccessibleByDefault(

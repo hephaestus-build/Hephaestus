@@ -1,5 +1,11 @@
 import type { DiffFile, DiffHunk } from "./types.ts";
 
+// Hunk header: @@ -oldStart,oldCount +newStart,newCount @@
+// Both counts are omitted from the header when they are 1, so they default; both start line
+// numbers are required for the header to be a hunk header at all.
+const HUNK_HEADER =
+	/^@@\s+-(?<oldStart>\d+)(?:,(?<oldCount>\d+))?\s+\+(?<newStart>\d+)(?:,(?<newCount>\d+))?\s+@@/u;
+
 /**
  * Parse a unified diff (with optional [L<n>] annotations) into structured DiffFile objects.
  * Returns a Map of file path -> DiffFile.
@@ -7,14 +13,17 @@ import type { DiffFile, DiffHunk } from "./types.ts";
 export function parseDiff(diffContent: string): Map<string, DiffFile> {
 	const files = new Map<string, DiffFile>();
 
-	const fileDiffs = diffContent.split(/^diff --git /m).filter(Boolean);
+	// Split on "diff --git" boundaries
+	const fileDiffs = diffContent.split(/^diff --git /mu).filter(Boolean);
 
 	for (const fileDiff of fileDiffs) {
 		const lines = fileDiff.split("\n");
 
 		// Extract file path from "a/path b/path"
-		const filePath = lines[0]?.match(/a\/(.+?)\s+b\/(.+)/)?.[2];
-		if (filePath === undefined) continue;
+		const filePath = /a\/.+?\s+b\/(?<path>.+)/u.exec(lines[0] ?? "")?.groups?.path;
+		if (filePath === undefined) {
+			continue;
+		}
 
 		const addedLines = new Map<number, string>();
 		const removedLines = new Map<number, string>();
@@ -25,11 +34,12 @@ export function parseDiff(diffContent: string): Map<string, DiffFile> {
 		let oldLineNum = 0;
 
 		for (const line of lines) {
-			// Hunk header: @@ -oldStart,oldCount +newStart,newCount @@
-			// Both counts are omitted from the header when they are 1, so they default; both start line
-			// numbers are required for the header to be a hunk header at all.
-			const [, oldStart, oldCount = "1", newStart, newCount = "1"] =
-				line.match(/^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/) ?? [];
+			const {
+				oldStart,
+				oldCount = "1",
+				newStart,
+				newCount = "1",
+			} = HUNK_HEADER.exec(line)?.groups ?? {};
 			if (oldStart !== undefined && newStart !== undefined) {
 				currentHunk = {
 					oldStart: Number.parseInt(oldStart, 10),
@@ -44,27 +54,31 @@ export function parseDiff(diffContent: string): Map<string, DiffFile> {
 				continue;
 			}
 
-			if (!currentHunk) continue;
+			if (!currentHunk) {
+				continue;
+			}
 
 			// Strip [L<n>] annotation if present
-			const stripped = line.replace(/^\[L\d+\]\s*/, "");
+			const stripped = line.replace(/^\[L\d+\]\s*/u, "");
 
 			if (stripped.startsWith("+") && !stripped.startsWith("+++")) {
 				addedLines.set(newLineNum, stripped.slice(1));
 				currentHunk.lines.push(stripped);
-				newLineNum++;
+				newLineNum += 1;
 			} else if (stripped.startsWith("-") && !stripped.startsWith("---")) {
 				removedLines.set(oldLineNum, stripped.slice(1));
 				currentHunk.lines.push(stripped);
-				oldLineNum++;
+				oldLineNum += 1;
 			} else if (!stripped.startsWith("\\")) {
+				// Context line
 				currentHunk.lines.push(stripped);
-				newLineNum++;
-				oldLineNum++;
+				newLineNum += 1;
+				oldLineNum += 1;
 			}
 		}
 
-		const normalizedPath = filePath.replace(/^\.\//, "");
+		// Normalize path: strip leading ./
+		const normalizedPath = filePath.replace(/^\.\//u, "");
 		files.set(normalizedPath, { path: normalizedPath, addedLines, removedLines, hunks });
 	}
 
@@ -77,9 +91,12 @@ export function isInDiff(
 	filePath: string,
 	lineNum: number,
 ): boolean {
+	// Try exact match first, then suffix match
 	const df =
 		diffFiles.get(filePath) ??
 		[...diffFiles.values()].find((f) => filePath.endsWith(f.path) || f.path.endsWith(filePath));
-	if (!df) return false;
+	if (!df) {
+		return false;
+	}
 	return df.addedLines.has(lineNum);
 }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
+import { isSet } from "./lib/env.ts";
 import { isRecord, parseJson } from "./lib/json.ts";
 import { BUNDLED_PINS } from "./lib/toolchain-pins.ts";
 
@@ -14,7 +15,8 @@ const extensions = config.extends;
 
 void test("Gradle artifact updates use the repository JDK and retain human checksum review", async () => {
 	assert.ok(isRecord(config.constraints));
-	assert.equal(config.constraints.java, (await readFile(".java-version", "utf8")).trim());
+	const javaVersion = await readFile(".java-version", "utf8");
+	assert.equal(config.constraints.java, javaVersion.trim());
 	assert.ok(Array.isArray(config.enabledManagers));
 	assert.ok(config.enabledManagers.includes("gradle"));
 	assert.ok(config.enabledManagers.includes("gradle-wrapper"));
@@ -30,7 +32,7 @@ void test("Gradle artifact updates use the repository JDK and retain human check
 					Array.isArray(candidate.prBodyNotes),
 			);
 		assert.ok(rule, `${manager} updates must explain artifact verification`);
-		assert.match(String(rule.prBodyNotes), /local-development#updating-java-dependencies/);
+		assert.match(String(rule.prBodyNotes), /local-development#updating-java-dependencies/u);
 	}
 });
 
@@ -57,7 +59,7 @@ void test("Renovate creates bounded update PRs without a manual dispatch queue",
 	const rules = config.packageRules.filter(isRecord);
 	for (const [updateType, currentVersion] of [
 		["major", undefined],
-		["minor", "/^0\\./"],
+		["minor", String.raw`/^0\./`],
 	]) {
 		const rule = rules.find(
 			(candidate) =>
@@ -113,7 +115,7 @@ void test("every pin of one toolchain version moves in a single pull request", (
 	const rules = config.packageRules.filter(isRecord);
 	const lastUngroupedRule = rules.findLastIndex((rule) => rule.groupName === null);
 	assert.ok(
-		lastUngroupedRule >= 0,
+		lastUngroupedRule !== -1,
 		"high-risk updates must be ungrouped before toolchain groups reinstate them",
 	);
 	for (const [depName, groupName] of [
@@ -190,6 +192,20 @@ void test("vulnerability remediation bypasses normal update latency", () => {
 	});
 });
 
+/** The datasources a manager's match strings extract from a file, through their `datasource` group. */
+function extractedDatasources(matchStrings: string[], content: string): string[] {
+	const datasources: string[] = [];
+	for (const pattern of matchStrings) {
+		for (const match of content.matchAll(new RegExp(pattern, "gmu"))) {
+			const datasource = match.groups?.datasource;
+			if (isSet(datasource)) {
+				datasources.push(datasource);
+			}
+		}
+	}
+	return datasources;
+}
+
 void test("every custom manager reads every file it claims to read", async () => {
 	const sources = new Map<string, string[]>([
 		["Track Dockerfile ARG version pins", ["docker/agents/pi/Dockerfile", "webapp/Dockerfile"]],
@@ -226,8 +242,10 @@ void test("every custom manager reads every file it claims to read", async () =>
 		new Set(sources.keys()),
 	);
 	for (const manager of config.customManagers) {
-		if (typeof manager.description !== "string") throw new TypeError("manager description");
-		const description = manager.description;
+		if (typeof manager.description !== "string") {
+			throw new TypeError("manager description");
+		}
+		const { description } = manager;
 		assert.ok(Array.isArray(manager.matchStrings), `${description} declares no matchStrings`);
 		assert.ok(
 			manager.matchStrings.every((pattern) => typeof pattern === "string"),
@@ -254,28 +272,27 @@ void test("every custom manager reads every file it claims to read", async () =>
 					(pattern) =>
 						pattern.startsWith("/") &&
 						pattern.endsWith("/") &&
-						new RegExp(pattern.slice(1, -1)).test(file),
+						new RegExp(pattern.slice(1, -1), "u").test(file),
 				),
 				`${description} does not select ${file}`,
 			);
 			const content = await readFile(file, "utf8");
 			assert.ok(
-				manager.matchStrings.some((pattern) => new RegExp(pattern, "m").test(content)),
+				manager.matchStrings.some((pattern) => new RegExp(pattern, "mu").test(content)),
 				`${description} no longer extracts a dependency from ${file}`,
 			);
 			// Only dependencies this manager extracts matter; a file may have several managers.
-			for (const pattern of manager.matchStrings)
-				for (const match of content.matchAll(new RegExp(pattern, "gm"))) {
-					const datasource = match.groups?.datasource;
-					if (datasource) datasources.add(datasource);
-				}
+			for (const datasource of extractedDatasources(manager.matchStrings, content)) {
+				datasources.add(datasource);
+			}
 		}
-		if ([...datasources].some((datasource) => RELEASE_TAG_DATASOURCES.has(datasource)))
+		if ([...datasources].some((datasource) => RELEASE_TAG_DATASOURCES.has(datasource))) {
 			assert.ok(
 				manager.extractVersionTemplate === "^v(?<version>.*)$" ||
 					manager.matchStrings.some((pattern) => pattern.includes("(?<extractVersion>")),
 				`${description} reads release tags without stripping their v prefix`,
 			);
+		}
 	}
 });
 
@@ -293,5 +310,5 @@ void test("the tools vite-plus bundles move only with vite-plus", () => {
 		(rule) => Array.isArray(rule.matchDepNames) && rule.matchDepNames.includes("vite-plus"),
 	);
 	assert.ok(bump, "the vite-plus bump must say what to run");
-	assert.match(String(bump.prBodyNotes), /sync:toolchain-pins/);
+	assert.match(String(bump.prBodyNotes), /sync:toolchain-pins/u);
 });

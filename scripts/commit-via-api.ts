@@ -2,7 +2,7 @@
 import { appendFile, readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 
-import { requiredEnv } from "./lib/env.ts";
+import { isSet, requiredEnv } from "./lib/env.ts";
 import { asRecord, asString, at, isRecord } from "./lib/json.ts";
 import { output, type RunOptions } from "./lib/process.ts";
 
@@ -39,29 +39,28 @@ export async function stageChanges(
 		["diff", "--name-only", "--diff-filter=U", "-z", "--", ...paths],
 		options,
 	);
-	if (conflicts)
+	if (conflicts) {
 		throw new Error("Selected paths are unmerged; resolve conflicts before committing");
+	}
 	await output("git", ["add", "-A", "--", ...paths], options);
-	const changed = async (filter: string) =>
-		(
-			await output(
-				"git",
-				[
-					"diff",
-					"--cached",
-					"HEAD",
-					"--no-renames",
-					"--name-only",
-					"-z",
-					`--diff-filter=${filter}`,
-					"--",
-					...paths,
-				],
-				options,
-			)
-		)
-			.split("\0")
-			.filter(Boolean);
+	const changed = async (filter: string): Promise<string[]> => {
+		const names = await output(
+			"git",
+			[
+				"diff",
+				"--cached",
+				"HEAD",
+				"--no-renames",
+				"--name-only",
+				"-z",
+				`--diff-filter=${filter}`,
+				"--",
+				...paths,
+			],
+			options,
+		);
+		return names.split("\0").filter(Boolean);
+	};
 	const [additions, deletions] = await Promise.all([changed("AMT"), changed("D")]);
 	return { additions, deletions };
 }
@@ -104,9 +103,13 @@ async function createCommit(token: string, input: CommitInput): Promise<string> 
 		body: JSON.stringify({ query: COMMIT_MUTATION, variables: { input } }),
 	});
 	const text = await response.text();
-	if (!response.ok) throw new Error(`GitHub answered ${response.status} ${response.statusText}`);
+	if (!response.ok) {
+		throw new Error(`GitHub answered ${response.status} ${response.statusText}`);
+	}
 	const body = asRecord(JSON.parse(text), "GraphQL response");
-	if (body.errors) throw new Error(`createCommitOnBranch refused the commit: ${text}`);
+	if (body.errors != null) {
+		throw new Error(`createCommitOnBranch refused the commit: ${text}`);
+	}
 	const commit = asRecord(
 		at(body, ["data", "createCommitOnBranch", "commit"], "response"),
 		"commit",
@@ -116,6 +119,11 @@ async function createCommit(token: string, input: CommitInput): Promise<string> 
 		? `${asString(signature.state, "signature state")}, signed by GitHub: ${signature.wasSignedByGitHub === true}`
 		: "unsigned";
 	return `${asString(commit.oid, "commit oid")} (${verification})`;
+}
+
+async function currentHead(): Promise<string> {
+	const oid = await output("git", ["rev-parse", "HEAD"]);
+	return oid.trim();
 }
 
 if (import.meta.main) {
@@ -128,18 +136,18 @@ if (import.meta.main) {
 		allowPositionals: true,
 	});
 	const { branch, message } = values;
-	if (!branch || !message) throw new Error("--branch and --message are required");
+	if (!isSet(branch) || !isSet(message)) {
+		throw new Error("--branch and --message are required");
+	}
 	const target: CommitTarget = {
 		repository: requiredEnv(process.env, "GITHUB_REPOSITORY"),
 		branch,
 		headline: message,
-		expectedHeadOid: values["expected-head"] ?? (await output("git", ["rev-parse", "HEAD"])).trim(),
+		expectedHeadOid: values["expected-head"] ?? (await currentHead()),
 	};
 	const changes = await stageChanges(positionals);
 	const changed = changes.additions.length > 0 || changes.deletions.length > 0;
-	if (!changed) {
-		console.log("Selected paths match HEAD; no commit was created.");
-	} else {
+	if (changed) {
 		const contents = new Map(
 			await Promise.all(
 				changes.additions.map(async (path) => [path, await readFile(path)] as const),
@@ -149,7 +157,11 @@ if (import.meta.main) {
 		console.log(
 			`Committed ${await createCommit(token, commitInput(target, contents, changes.deletions))} on ${branch}.`,
 		);
+	} else {
+		console.log("Selected paths match HEAD; no commit was created.");
 	}
-	if (process.env.GITHUB_OUTPUT)
-		await appendFile(process.env.GITHUB_OUTPUT, `changed=${changed}\n`);
+	const githubOutput = process.env.GITHUB_OUTPUT;
+	if (isSet(githubOutput)) {
+		await appendFile(githubOutput, `changed=${changed}\n`);
+	}
 }

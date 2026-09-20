@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
 
 import { isMap, isSeq, parseDocument, type YAMLMap } from "yaml";
@@ -23,7 +23,7 @@ void test("title preflight loads without dependencies and validates the current 
 		"validate-pr",
 		"steps",
 	]);
-	assert.ok(steps.every((step) => !/setup-toolchain|setup-node/.test(String(step.get("uses")))));
+	assert.ok(steps.every((step) => !/setup-toolchain|setup-node/u.test(String(step.get("uses")))));
 	const checkout = steps.find((step) => String(step.get("uses")).startsWith("actions/checkout@"));
 	assert.ok(checkout);
 	assert.equal(checkout.getIn(["with", "persist-credentials"]), false);
@@ -31,14 +31,14 @@ void test("title preflight loads without dependencies and validates the current 
 
 	// The workspace the script runs in is the sparse checkout, and nothing else: a file the workflow
 	// stops fetching has to break this test rather than the pull request that reruns without it.
-	const workspace = await mkdtemp(join(tmpdir(), "title-policy-"));
-	t.after(() => rm(workspace, { recursive: true, force: true }));
-	for (const path of String(checkout.getIn(["with", "sparse-checkout"]))
+	const workspace = await mkdtemp(path.join(tmpdir(), "title-policy-"));
+	t.after(async () => rm(workspace, { recursive: true, force: true }));
+	for (const entry of String(checkout.getIn(["with", "sparse-checkout"]))
 		.trim()
 		.split("\n")) {
-		const file = path.trim();
-		await mkdir(join(workspace, dirname(file)), { recursive: true });
-		await copyFile(file, join(workspace, file));
+		const file = entry.trim();
+		await mkdir(path.join(workspace, path.dirname(file)), { recursive: true });
+		await copyFile(file, path.join(workspace, file));
 	}
 
 	const policy = steps.find((step) => step.get("id") === "policy");
@@ -77,7 +77,7 @@ void test("title preflight loads without dependencies and validates the current 
 	assert.ok(validator);
 	assert.match(
 		String(validator.get("uses")),
-		/^amannn\/action-semantic-pull-request@[a-f0-9]{40}$/,
+		/^amannn\/action-semantic-pull-request@[a-f0-9]{40}$/u,
 	);
 	for (const input of ["types", "scopes", "headerPattern", "subjectPattern"]) {
 		assert.equal(validator.getIn(["with", input]), `\${{ steps.policy.outputs.${input} }}`);
@@ -92,7 +92,7 @@ void test("title preflight loads without dependencies and validates the current 
 	const comment = steps.find((step) => step.getIn(["with", "path"]) !== undefined);
 	assert.ok(comment);
 	assert.equal(comment.getIn(["with", "header"]), "pr-title-lint-error");
-	assert.match(String(explanation.get("run")), /> "\$RUNNER_TEMP\/title-error\.md"/);
+	assert.match(String(explanation.get("run")), /> "\$RUNNER_TEMP\/title-error\.md"/u);
 	assert.equal(comment.getIn(["with", "path"]), `\${{ runner.temp }}/title-error.md`);
 });
 
@@ -118,8 +118,8 @@ void test("body validation uses the current description rather than a stale reru
 	]);
 	const script = steps.find((step) => step.get("id") === "attribution")?.getIn(["with", "script"]);
 	assert.equal(typeof script, "string");
-	const directory = await mkdtemp(join(tmpdir(), "pr-body-"));
-	t.after(() => rm(directory, { recursive: true, force: true }));
+	const directory = await mkdtemp(path.join(tmpdir(), "pr-body-"));
+	t.after(async () => rm(directory, { recursive: true, force: true }));
 	for (const [body, staleBody, valid] of [
 		["A clear description", "Generated with a tool", true],
 		["Generated with a tool", "A clear description", false],

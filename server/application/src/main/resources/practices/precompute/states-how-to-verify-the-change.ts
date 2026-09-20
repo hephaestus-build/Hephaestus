@@ -6,38 +6,42 @@ import { readContextJson } from "../lib/context.ts";
 import { isJsonObject } from "../lib/practice-contract.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
-const IMAGE = /\.(png|jpe?g|gif|svg|webp|pdf)$/i;
-const DIAGRAM_PATH = /(^|\/)(diagrams?|uml|models?|architecture)\//i;
-const DIAGRAM_JSON = /\.(json|drawio|puml|plantuml|mmd)$/i;
-const PROSE = /\.(md|markdown|txt|rst|adoc)$/i;
+const IMAGE = /\.(?:png|jpe?g|gif|svg|webp|pdf)$/iu;
+const DIAGRAM_PATH = /(?:^|\/)(?:diagrams?|uml|models?|architecture)\//iu;
+const DIAGRAM_JSON = /\.(?:json|drawio|puml|plantuml|mmd)$/iu;
+const PROSE = /\.(?:md|markdown|txt|rst|adoc)$/iu;
 const PROJECT_CONFIG =
-	/(^|\/)(project\.yml|project\.yaml|package\.json|Package\.swift|Package\.resolved|Podfile|Cartfile|build\.gradle(\.kts)?|pom\.xml|pyproject\.toml|requirements\.txt|\.gitignore|\.editorconfig|\.swiftlint\.yml|Info\.plist)$/i;
+	/(?:^|\/)(?:project\.yml|project\.yaml|package\.json|Package\.swift|Package\.resolved|Podfile|Cartfile|build\.gradle(?:\.kts)?|pom\.xml|pyproject\.toml|requirements\.txt|\.gitignore|\.editorconfig|\.swiftlint\.yml|Info\.plist)$/iu;
 const TEST_PATH =
-	/(^|\/)(tests?|specs?|__tests__)(\/)|[._-](test|tests|spec|specs)\.[a-z]+$|Tests?\.[a-z0-9]+$|Spec\.[a-z0-9]+$/i;
-const CODE = /\.(swift|ts|tsx|js|jsx|py|java|kt|go|rb|cs|cpp|cc|cxx|c|m|mm|h|hpp|vue|dart|rs)$/i;
-const PREVIEW = /^\+.*(#Preview\b|PreviewProvider\b|\.stories\.[jt]sx?|storiesOf\()/;
-const CLOSING = /\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+[\w./~-]*#\d+/i;
+	/(?:^|\/)(?:tests?|specs?|__tests__)(?:\/)|[._-](?:test|tests|spec|specs)\.[a-z]+$|Tests?\.[a-z0-9]+$|Spec\.[a-z0-9]+$/iu;
+const CODE = /\.(?:swift|ts|tsx|js|jsx|py|java|kt|go|rb|cs|cpp|cc|cxx|c|m|mm|h|hpp|vue|dart|rs)$/iu;
+const PREVIEW = /^\+.*(?:#Preview\b|PreviewProvider\b|\.stories\.[jt]sx?|storiesOf\()/u;
+const CLOSING = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+[\w./~-]*#\d+/iu;
 const TESTING_HEADING =
-	/^#+\s*(testing|test(ing)? instructions|how to test|verification|steps to (test|verify|reproduce))/i;
-const SCREENSHOT = /!\[[^\]]*\]\([^)]*\)/g;
+	/^#+\s*(?:testing|test(?:ing)? instructions|how to test|verification|steps to (?:test|verify|reproduce))/iu;
+const SCREENSHOT = /!\[[^\]]*\]\([^)]*\)/gu;
 
 /** The section under a testing heading, stripped of template comments; empty when it holds nothing. */
 function testingSection(body: string): { heading: string; content: string } | null {
-	const lines = body.split(/\r?\n/);
-	for (let index = 0; index < lines.length; index++) {
+	const lines = body.split(/\r?\n/u);
+	for (let index = 0; index < lines.length; index += 1) {
 		const line = lines[index] ?? "";
-		if (!TESTING_HEADING.test(line)) continue;
-		const level = (/^#+/.exec(line)?.[0] ?? "#").length;
+		if (!TESTING_HEADING.test(line)) {
+			continue;
+		}
+		const level = (/^#+/u.exec(line)?.[0] ?? "#").length;
 		const content: string[] = [];
-		for (let next = index + 1; next < lines.length; next++) {
+		for (let next = index + 1; next < lines.length; next += 1) {
 			const candidate = lines[next] ?? "";
-			const nextLevel = /^(#+)\s/.exec(candidate)?.[1]?.length;
-			if (nextLevel !== undefined && nextLevel <= level) break;
+			const nextLevel = /^(?<hashes>#+)\s/u.exec(candidate)?.groups?.hashes?.length;
+			if (nextLevel !== undefined && nextLevel <= level) {
+				break;
+			}
 			content.push(candidate);
 		}
 		const text = content
 			.join("\n")
-			.replace(/<!--[\s\S]*?-->/g, "")
+			.replaceAll(/<!--[\s\S]*?-->/gu, "")
 			.trim();
 		return { heading: line.trim(), content: text };
 	}
@@ -55,7 +59,8 @@ export default async function statesHowToVerifyTheChange(
 		images: paths.filter((path) => IMAGE.test(path)).length,
 		diagramFiles: paths.filter(
 			(path) =>
-				DIAGRAM_PATH.test(path) || (DIAGRAM_JSON.test(path) && /diagram|aom|uml|model/i.test(path)),
+				DIAGRAM_PATH.test(path) ||
+				(DIAGRAM_JSON.test(path) && /diagram|aom|uml|model/iu.test(path)),
 		).length,
 		prose: paths.filter((path) => PROSE.test(path)).length,
 		projectConfig: paths.filter((path) => PROJECT_CONFIG.test(path)).length,
@@ -97,14 +102,14 @@ export default async function statesHowToVerifyTheChange(
 		directions.push(
 			testing.content.length === 0
 				? `The description has a testing heading ("${testing.heading}") with no content beneath it once template comments are removed: an empty heading is not evidence of anything; read the whole description, the adopted issue, previews and the documented setup.`
-				: `The description has a testing section ("${testing.heading}") with ${testing.content.split(/\r?\n/).filter((line) => line.trim()).length} line(s) of content: read it in description.md and judge whether it names an entry, an action and an expected result.`,
+				: `The description has a testing section ("${testing.heading}") with ${testing.content.split(/\r?\n/u).filter((line) => line.trim()).length} line(s) of content: read it in description.md and judge whether it names an entry, an action and an expected result.`,
 		);
 	} else {
 		directions.push(
 			"The description has no testing heading; guidance may still sit in any section, in an adopted issue, in a preview or test of the patch, or in the documented setup.",
 		);
 	}
-	if (closing) {
+	if (closing !== null) {
 		directions.push(
 			`The description adopts an issue with a closing keyword ("${closing}"); ${linkedItems} linked issue(s) were captured as linked_work_items/<n>.md — its acceptance criteria and steps count as the author's guidance.`,
 		);
@@ -138,7 +143,7 @@ export default async function statesHowToVerifyTheChange(
 			previewFiles: previews.length,
 			screenshotsInDescription: screenshots,
 			testingSectionLines: testing
-				? testing.content.split(/\r?\n/).filter((line) => line.trim()).length
+				? testing.content.split(/\r?\n/u).filter((line) => line.trim()).length
 				: 0,
 			linkedIssues: linkedItems,
 		},

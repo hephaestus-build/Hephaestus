@@ -12,66 +12,69 @@ interface Shapes {
 }
 
 const SCRIPTING: Shapes = {
-	print: [["console.*", /\bconsole\.(?:log|debug|info|warn|error)\s*\(/]],
-	logger: [["logger", /\b(?:log|logger)\.(?:trace|debug|info|warn|error|fatal)\s*\(/]],
+	print: [["console.*", /\bconsole\.(?:log|debug|info|warn|error)\s*\(/u]],
+	logger: [["logger", /\b(?:log|logger)\.(?:trace|debug|info|warn|error|fatal)\s*\(/u]],
 };
 
 // language -> the print-style shapes and the logger shapes the criteria list for it.
 const DIAGNOSTICS: Record<string, Shapes> = {
 	swift: {
 		print: [
-			["print(", /(?:^|[^\w.])print\s*\(/],
-			["debugPrint(", /\bdebugPrint\s*\(/],
-			["dump(", /(?:^|[^\w.])dump\s*\(/],
-			["NSLog(", /\bNSLog\s*\(/],
+			["print(", /(?:^|[^\w.])print\s*\(/u],
+			["debugPrint(", /\bdebugPrint\s*\(/u],
+			["dump(", /(?:^|[^\w.])dump\s*\(/u],
+			["NSLog(", /\bNSLog\s*\(/u],
 		],
 		logger: [
 			[
 				"Logger",
-				/\bLogger\s*\(|\blogger\.(?:trace|debug|info|notice|warning|error|critical|fault|log)\s*\(/,
+				/\bLogger\s*\(|\blogger\.(?:trace|debug|info|notice|warning|error|critical|fault|log)\s*\(/u,
 			],
-			["os_log", /\bos_log\s*\(/],
+			["os_log", /\bos_log\s*\(/u],
 		],
 	},
 	"objective-c": {
 		print: [
-			["NSLog(", /\bNSLog\s*\(/],
-			["printf(", /\bprintf\s*\(/],
+			["NSLog(", /\bNSLog\s*\(/u],
+			["printf(", /\bprintf\s*\(/u],
 		],
-		logger: [["os_log", /\bos_log\s*\(/]],
+		logger: [["os_log", /\bos_log\s*\(/u]],
 	},
 	kotlin: {
 		print: [
-			["println(", /(?:^|[^\w.])println?\s*\(/],
-			["Log with ad-hoc tag", /\bLog\.[dviwe]\s*\(\s*"/],
+			["println(", /(?:^|[^\w.])println?\s*\(/u],
+			["Log with ad-hoc tag", /\bLog\.[dviwe]\s*\(\s*"/u],
 		],
 		logger: [
-			["Timber/Log with shared tag", /\bTimber\.[dviwe]\s*\(|\bLog\.[dviwe]\s*\(\s*(?:TAG|tag)\b/],
-			["logger", /\blog(?:ger)?\.(?:trace|debug|info|warn|error)\s*\(/],
+			["Timber/Log with shared tag", /\bTimber\.[dviwe]\s*\(|\bLog\.[dviwe]\s*\(\s*(?:TAG|tag)\b/u],
+			["logger", /\blog(?:ger)?\.(?:trace|debug|info|warn|error)\s*\(/u],
 		],
 	},
 	java: {
 		print: [
-			["System.out/err", /\bSystem\.(?:out|err)\.print/],
-			["printStackTrace()", /\.printStackTrace\s*\(/],
+			["System.out/err", /\bSystem\.(?:out|err)\.print/u],
+			["printStackTrace()", /\.printStackTrace\s*\(/u],
 		],
 		logger: [
-			["logger", /\b(?:log|logger|LOG|LOGGER)\.(?:trace|debug|info|warn|error|severe|fine)\s*\(/],
+			["logger", /\b(?:log|logger|LOG|LOGGER)\.(?:trace|debug|info|warn|error|severe|fine)\s*\(/u],
 		],
 	},
 	typescript: SCRIPTING,
 	javascript: SCRIPTING,
 	python: {
-		print: [["print(", /(?:^|[^\w.])print\s*\(/]],
+		print: [["print(", /(?:^|[^\w.])print\s*\(/u]],
 		logger: [
-			["logging", /\b(?:logging|logger|log)\.(?:debug|info|warning|error|exception|critical)\s*\(/],
+			[
+				"logging",
+				/\b(?:logging|logger|log)\.(?:debug|info|warning|error|exception|critical)\s*\(/u,
+			],
 		],
 	},
 };
 
 /** Where a print is the program's output rather than a diagnostic: the criteria's exemptions, by path. */
 const TOOL_PATH =
-	/(?:^|\/)(?:scripts?|tools?|bin|cli|Scripts|fastlane|ci)\/|\.(?:sh|mjs|cjs)$|(?:^|\/)main\.(?:py|ts|js)$|Playground|\.playground\//;
+	/(?:^|\/)(?:scripts?|tools?|bin|cli|Scripts|fastlane|ci)\/|\.(?:sh|mjs|cjs)$|(?:^|\/)main\.(?:py|ts|js)$|Playground|\.playground\//u;
 
 export default async function logsThroughThePlatformLogger(
 	repoPath: string,
@@ -97,14 +100,18 @@ export default async function logsThroughThePlatformLogger(
 				flags: { ...hint.flags, kind: isPrint ? "print" : "logger", toolPath: tool },
 			});
 			if (isPrint) {
-				prints++;
-				if (tool) printsInToolPaths++;
-			} else loggers++;
+				prints += 1;
+				if (tool) {
+					printsInToolPaths += 1;
+				}
+			} else {
+				loggers += 1;
+			}
 		}
 	}
 	// Whether the project already logs through a logger: a definition or import in the checkout.
 	const existing = await grep(
-		"\\bLogger\\s*\\(|\\bos_log\\b|\\bTimber\\b|LoggerFactory|import logging|from 'pino'|from \"pino\"|winston",
+		String.raw`\bLogger\s*\(|\bos_log\b|\bTimber\b|LoggerFactory|import logging|from 'pino'|from "pino"|winston`,
 		repoPath,
 		{ maxResults: 5 },
 	);

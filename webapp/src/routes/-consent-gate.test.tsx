@@ -3,26 +3,37 @@ import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { consentIsPending } from "@/integrations/auth/guard";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
+import { consentIsPending } from "@/runtime/auth/guard";
 
 // `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
 vi.setConfig({ testTimeout: 15_000 });
 
 const DEEP_LINK = "/w/acme/mentor/thread-1?message=hi#reply";
 
+function newClient() {
+	return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+}
+
+function noticeAnswered(completed: boolean) {
+	server.use(http.get("*/user/consent", () => HttpResponse.json({ completed })));
+}
+
+async function land(url: string) {
+	server.use(http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])));
+	const router = createRouter({
+		routeTree,
+		history: createMemoryHistory({ initialEntries: [url] }),
+		context: { queryClient: new QueryClient(), auth: undefined },
+	});
+	await router.load();
+	return router.state.location;
+}
+
 describe("consent gate", () => {
-	function newClient() {
-		return new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	}
-
-	function noticeAnswered(completed: boolean) {
-		server.use(http.get("*/user/consent", () => HttpResponse.json({ completed })));
-	}
-
 	it("lets the application load once the notice has been answered", async () => {
 		noticeAnswered(true);
 		await expect(consentIsPending(newClient())).resolves.toBe(false);
@@ -55,17 +66,6 @@ describe("consent gate", () => {
 });
 
 describe("authenticated route gate", () => {
-	async function land(url: string) {
-		server.use(http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])));
-		const router = createRouter({
-			routeTree,
-			history: createMemoryHistory({ initialEntries: [url] }),
-			context: { queryClient: new QueryClient(), auth: undefined },
-		});
-		await router.load();
-		return router.state.location;
-	}
-
 	it("masks the outstanding notice with the requested destination", async () => {
 		server.use(http.get("*/user/consent", () => HttpResponse.json({ completed: false })));
 

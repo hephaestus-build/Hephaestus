@@ -10,7 +10,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { mock, test } from "node:test";
 
 // The runner reads /workspace and the environment at module scope, so each scenario is a child
@@ -67,6 +67,35 @@ function observation(slug: string, summary: string, citation: unknown = changeCi
 	};
 }
 
+/** An observation that decides nothing; it must show it read the change, as admission demands. */
+const undecided = (consulted: string[]) => ({
+	practiceSlug: "test-practice",
+	summary: "Nothing to assess in this change",
+	assessmentStatus: "NOT_APPLICABLE",
+	presence: null,
+	assessment: null,
+	severity: null,
+	evidenceRationale: "The change touches only metadata.",
+	evidence: {
+		citations: [
+			{
+				sourceKind: "scm.pull-request.core",
+				artifactPath: "evidence/metadata.json",
+				path: "evidence/metadata.json",
+				startLine: 1,
+				quote: '"title": "Add login"',
+			},
+		],
+		inapplicability: {
+			consulted,
+			subject: "authentication calls",
+			ruledOutBy: "no code changed",
+		},
+	},
+});
+
+const noHandler = (): undefined => undefined;
+
 interface CustomTool {
 	name: string;
 	description: string;
@@ -75,24 +104,22 @@ interface CustomTool {
 }
 
 const scenario = process.env.PI_ORCHESTRATION_SCENARIO;
-if (scenario) {
+if (scenario !== undefined && scenario !== "") {
 	const cwd = process.env.PI_RUNNER_CWD;
-	assert.ok(cwd);
+	assert.ok(cwd !== undefined && cwd !== "");
 	let now = 1_000_000;
 	mock.method(Date, "now", () => now);
-	const record = (event: string) => appendFileSync(join(cwd, "events"), `${event}\n`);
-	mock.method(globalThis, "fetch", () =>
-		Promise.resolve(
-			Response.json({
-				schemaVersion: 1,
-				admissionDigest: "admitted-digest",
-				observations: [
-					scenario === "compose-quiet"
-						? { ...admittedObservation, outcome: "POSITIVE", assessment: "GOOD", severity: null }
-						: admittedObservation,
-				],
-			}),
-		),
+	const record = (event: string) => appendFileSync(nodePath.join(cwd, "events"), `${event}\n`);
+	mock.method(globalThis, "fetch", async () =>
+		Response.json({
+			schemaVersion: 1,
+			admissionDigest: "admitted-digest",
+			observations: [
+				scenario === "compose-quiet"
+					? { ...admittedObservation, outcome: "POSITIVE", assessment: "GOOD", severity: null }
+					: admittedObservation,
+			],
+		}),
 	);
 	const manager = { getSessionFile: () => undefined, getSessionId: () => "test-session" };
 	let prompts = 0;
@@ -102,75 +129,87 @@ if (scenario) {
 	let compacting = false;
 	let idleWaiters: (() => void)[] = [];
 	const settleIdle = () => {
-		if (releasePrompt || compacting) return;
-		for (const resolve of idleWaiters) resolve();
+		if (releasePrompt || compacting) {
+			return;
+		}
+		for (const resolve of idleWaiters) {
+			resolve();
+		}
 		idleWaiters = [];
 	};
-	const waitForIdle = () =>
-		new Promise<void>((resolve) => {
-			idleWaiters.push(resolve);
-			settleIdle();
-		});
+	const waitForIdle = async () => {
+		const { promise, resolve } = Promise.withResolvers<undefined>();
+		idleWaiters.push(() => resolve(undefined));
+		settleIdle();
+		await promise;
+	};
 	/** The session's event handler, so a scenario can emit what the SDK would. */
-	let emit: (event: unknown) => void = () => {};
+	let emit: (event: unknown) => void = noHandler;
 	mock.module("@earendil-works/pi-coding-agent", {
 		namedExports: {
 			defineTool: (tool: unknown) => tool,
 			getAgentDir: () => cwd,
 			DefaultResourceLoader: class {
-				reload() {
-					return Promise.resolve();
+				readonly loaded = Promise.resolve();
+				async reload() {
+					await this.loaded;
 				}
 			},
 			SettingsManager: { create: () => ({}) },
 			SessionManager: { create: () => manager, inMemory: () => manager, open: () => manager },
 			ModelRuntime: {
-				create() {
-					if (scenario === "setup") now += 20_000;
-					return Promise.resolve({
-						registerProvider() {},
+				async create() {
+					if (scenario === "setup") {
+						now += 20_000;
+					}
+					return {
+						registerProvider: () => undefined,
 						getModel: () => ({ contextWindow: 128_000, maxTokens: 16_384 }),
-					});
+					};
 				},
 			},
-			createAgentSession(options: { tools: string[]; customTools: CustomTool[] }) {
+			async createAgentSession(options: { tools: string[]; customTools: CustomTool[] }) {
 				record(`create:session tools=${options.tools.join(",")}`);
-				if (scenario === "session-init") throw new Error("session initialization failed");
+				if (scenario === "session-init") {
+					throw new Error("session initialization failed");
+				}
 				const tool = (name: string) => {
 					const found = options.customTools.find((item) => item.name === name);
 					assert.ok(found, `${name} is registered`);
 					return found;
 				};
-				return Promise.resolve({
+				return {
 					extensionsResult: { errors: [] },
 					session: {
 						state: { messages: [] },
 						sessionManager: manager,
 						subscribe(handler: (event: unknown) => void) {
 							emit = handler;
-							return () => {};
+							return () => undefined;
 						},
-						clearQueue() {},
+						clearQueue: () => undefined,
 						getContextUsage: () => ({
-							tokens: scenario === "compose-overflow" ? 120_000 : 1_000,
+							tokens: scenario === "compose-overflow" ? 120_000 : 1000,
 							contextWindow: 128_000,
 							percent: 0,
 						}),
-						compact: () => {
+						compact: async () => {
 							record("compact");
-							return Promise.resolve({});
+							return {};
 						},
 						get isStreaming() {
 							return releasePrompt !== undefined || compacting;
 						},
 						waitForIdle,
 						abortCompaction() {
-							if (!compacting) return;
+							if (!compacting) {
+								return;
+							}
 							record("abort-compaction");
 							compacting = false;
 							settleIdle();
 						},
-						abort: () => {
+						abort: async () => {
 							record("abort");
 							// The aborted call ends a moment later, and abort() settles once the session is
 							// idle — which a compaction still in flight keeps it from being.
@@ -178,11 +217,13 @@ if (scenario) {
 							return waitForIdle();
 						},
 						dispose: () => record("dispose"),
-						steer: () => Promise.resolve(record("steer")),
+						steer: async () => {
+							record("steer");
+						},
 						async prompt(text: string) {
-							prompts++;
+							prompts += 1;
 							record(`prompt:${prompts}`);
-							writeFileSync(join(cwd, `prompt-${prompts}.md`), text);
+							writeFileSync(nodePath.join(cwd, `prompt-${prompts}.md`), text);
 							if (scenario === "budget") {
 								now += 20_000;
 								return;
@@ -202,14 +243,16 @@ if (scenario) {
 							}
 							// Like the SDK: a prompt while the last one is still ending is refused, and the
 							// aborted call ends only when abort() is called.
-							if (releasePrompt) throw new Error("Agent is already processing.");
+							if (releasePrompt) {
+								throw new Error("Agent is already processing.");
+							}
 							if (scenario === "overrun" && prompts === 1) {
 								// The turn crossed the compaction threshold: the session is compacting when the
 								// share runs out.
 								compacting = true;
-								await new Promise<void>((resolve) => {
-									releasePrompt = resolve;
-								});
+								const inFlight = Promise.withResolvers<undefined>();
+								releasePrompt = () => inFlight.resolve(undefined);
+								await inFlight.promise;
 								releasePrompt = undefined;
 								settleIdle();
 								return;
@@ -258,7 +301,7 @@ if (scenario) {
 								if (scenario === "compose-silent") {
 									// A composer that reads its way through the practice files: at the twelfth call
 									// without a recording call it is told to persist, once.
-									for (let call = 1; call <= 13; call++) {
+									for (let call = 1; call <= 13; call += 1) {
 										emit({
 											type: "tool_execution_start",
 											toolCallId: `r-${call}`,
@@ -272,7 +315,7 @@ if (scenario) {
 									// A session that keeps calling a recording tool without recording anything: the
 									// SDK emits the start of every call whether or not its schema check let it
 									// through, and the runner ends the turn after enough of them.
-									for (let call = 1; call <= 24; call++) {
+									for (let call = 1; call <= 24; call += 1) {
 										emit({
 											type: "tool_execution_start",
 											toolCallId: `s-${call}`,
@@ -315,11 +358,11 @@ if (scenario) {
 										`${keyword} in ${schema.slice(0, 200)}`,
 									);
 								}
-								assert.match(schema, /One of: IN_CONTEXT, IN_APP\./);
-								assert.match(schema, /Required: channel, practiceSlug, basedOn, action\./);
+								assert.match(schema, /One of: IN_CONTEXT, IN_APP\./u);
+								assert.match(schema, /Required: channel, practiceSlug, basedOn, action\./u);
 								assert.match(
 									schema,
-									/SUPERSEDE to replace a message that is queued and unread; WITHHOLD/,
+									/SUPERSEDE to replace a message that is queued and unread; WITHHOLD/u,
 								);
 								// One occurrence is not a pattern: with no history, the card is refused, and a
 								// call that stored nothing is an error the session must correct.
@@ -343,9 +386,9 @@ if (scenario) {
 										},
 									],
 								});
-								mkdirSync(join(cwd, "history"), { recursive: true });
+								mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
 								writeFileSync(
-									join(cwd, "history/observations.json"),
+									nodePath.join(cwd, "history/observations.json"),
 									JSON.stringify({
 										observations: [
 											{
@@ -434,7 +477,7 @@ if (scenario) {
 								return;
 							}
 							const report = tool("report_observation");
-							assert.match(report.description, /local review state/);
+							assert.match(report.description, /local review state/u);
 							// The SDK checks a call against this schema all or nothing, so it carries the shape and
 							// the vocabulary and no rule: a rule is applied per observation, by the tool.
 							const schema = JSON.stringify(report.parameters);
@@ -444,8 +487,8 @@ if (scenario) {
 									`${keyword} in ${schema.slice(0, 200)}`,
 								);
 							}
-							assert.match(schema, /One of: evidence\/change\.json, evidence\/metadata\.json/);
-							assert.match(schema, /One of: OLD, NEW/);
+							assert.match(schema, /One of: evidence\/change\.json, evidence\/metadata\.json/u);
+							assert.match(schema, /One of: OLD, NEW/u);
 							// Below the root, an object or a list is documented by its properties and items and
 							// typed by neither, since a string where an object goes must not refuse the call; a
 							// scalar keeps its type, which the SDK coerces rather than refuses.
@@ -456,12 +499,12 @@ if (scenario) {
 							const items = JSON.stringify(Reflect.get(properties, "observations"));
 							assert.ok(!items.includes('"type":"object"'), items.slice(0, 200));
 							assert.ok(!items.includes('"type":"array"'), items.slice(0, 200));
-							assert.match(items, /"startLine":\{"description":"[^"]*","type":"integer"\}/);
-							assert.match(items, /Required: practiceSlug, summary/);
+							assert.match(items, /"startLine":\{"description":"[^"]*","type":"integer"\}/u);
+							assert.match(items, /Required: practiceSlug, summary/u);
 							if (scenario === "repeat") {
 								// The same bash call, six times: the SDK emits each start with its arguments, and
 								// the runner nudges at the third and ends the turn at the sixth.
-								for (let call = 1; call <= 6; call++) {
+								for (let call = 1; call <= 6; call += 1) {
 									emit({
 										type: "tool_execution_start",
 										toolCallId: `b-${call}`,
@@ -476,7 +519,7 @@ if (scenario) {
 									...changeCitation,
 									quote: "+ notInTheDiff();",
 								});
-								for (let attempt = 1; attempt <= 9; attempt++) {
+								for (let attempt = 1; attempt <= 9; attempt += 1) {
 									await report
 										.execute(`o-${attempt}`, { observations: [wrong] })
 										.then(() => record(`refusal-${attempt}:accepted`))
@@ -489,7 +532,7 @@ if (scenario) {
 								return;
 							}
 							if (scenario === "tree-citation") {
-								const cite = (
+								const cite = async (
 									path: string,
 									quote: string,
 									summary = "Unsafe authentication call",
@@ -507,21 +550,21 @@ if (scenario) {
 									});
 								await assert.rejects(
 									cite("src/Auth.java", "insecure(user);"),
-									/\[L2\] reads " {2}insecure\(\);", not "insecure\(user\);"/,
+									/\[L2\] reads " {2}insecure\(\);", not "insecure\(user\);"/u,
 								);
-								await assert.rejects(cite("src/Missing.java", "insecure();"), /no such file/);
+								await assert.rejects(cite("src/Missing.java", "insecure();"), /no such file/u);
 								await assert.rejects(
 									cite("src/logo.png", "PNG"),
-									/binary and has no lines to quote/,
+									/binary and has no lines to quote/u,
 								);
-								await assert.rejects(cite("../task.json", "schemaVersion"), /no such file/);
+								await assert.rejects(cite("../task.json", "schemaVersion"), /no such file/u);
 								record("citation:refused");
 								await cite("src/Auth.java", "insecure();");
 								record("citation:stored");
 								// A citation at a revision in the history is read through .git; a wrong line is
 								// corrected there too, and an unknown revision is refused.
-								const historySha = readFileSync(join(cwd, "history-sha"), "utf8");
-								const atRevision = (revision: string, startLine: number) =>
+								const historySha = readFileSync(nodePath.join(cwd, "history-sha"), "utf8");
+								const atRevision = async (revision: string, startLine: number) =>
 									report.execute("o-2", {
 										observations: [
 											observation("test-practice", `At revision ${startLine}`, {
@@ -538,7 +581,7 @@ if (scenario) {
 								record(
 									`citation:history:${typeof relocated === "object" && relocated !== null && "details" in relocated && typeof relocated.details === "object" && relocated.details !== null && "inserted" in relocated.details ? String(relocated.details.inserted) : "?"}`,
 								);
-								await assert.rejects(atRevision("b".repeat(40), 2), /no such file at revision/);
+								await assert.rejects(atRevision("b".repeat(40), 2), /no such file at revision/u);
 								record("citation:history-refused");
 								// Coordinates alone: the runner records the line and echoes what it recorded.
 								const echoed: unknown = await cite("src/Auth.java", "", "Cited by line alone");
@@ -557,35 +600,9 @@ if (scenario) {
 										? firstContent.text
 										: "";
 								record(`citation:echo:${echoedText.split("\n")[1] ?? ""}`);
-								writeFileSync(join(cwd, "out", "stray.txt"), "left by a session");
+								writeFileSync(nodePath.join(cwd, "out", "stray.txt"), "left by a session");
 								return;
 							}
-							// An observation that decides nothing must show it read the change, as admission demands.
-							const undecided = (consulted: string[]) => ({
-								practiceSlug: "test-practice",
-								summary: "Nothing to assess in this change",
-								assessmentStatus: "NOT_APPLICABLE",
-								presence: null,
-								assessment: null,
-								severity: null,
-								evidenceRationale: "The change touches only metadata.",
-								evidence: {
-									citations: [
-										{
-											sourceKind: "scm.pull-request.core",
-											artifactPath: "evidence/metadata.json",
-											path: "evidence/metadata.json",
-											startLine: 1,
-											quote: '"title": "Add login"',
-										},
-									],
-									inapplicability: {
-										consulted,
-										subject: "authentication calls",
-										ruledOutBy: "no code changed",
-									},
-								},
-							});
 							await report
 								.execute("o-na", { observations: [undecided(["scm.pull-request.core"])] })
 								.then(() => record("undecided:accepted"))
@@ -648,7 +665,7 @@ if (scenario) {
 							record(`batch:${JSON.stringify(reply)}`);
 						},
 					},
-				});
+				};
 			},
 		},
 	});
@@ -696,34 +713,37 @@ if (scenario) {
 				"compose-quiet": "skips a WITHHOLD on a practice with nothing to withhold and asks no more",
 			}[stage] ?? stage,
 			() => {
-				const cwd = mkdtempSync(join(tmpdir(), "pi-orchestration-"));
+				const cwd = mkdtempSync(nodePath.join(tmpdir(), "pi-orchestration-"));
 				try {
-					mkdirSync(join(cwd, "catalog/practices"), { recursive: true });
-					mkdirSync(join(cwd, "evidence"), { recursive: true });
-					mkdirSync(join(cwd, "work/change"), { recursive: true });
-					writeFileSync(join(cwd, "AGENTS.md"), "Review the staged evidence.");
-					writeFileSync(join(cwd, "feedback-composer.md"), "Compose from admitted observations.");
-					writeFileSync(join(cwd, "events"), "");
+					mkdirSync(nodePath.join(cwd, "catalog/practices"), { recursive: true });
+					mkdirSync(nodePath.join(cwd, "evidence"), { recursive: true });
+					mkdirSync(nodePath.join(cwd, "work/change"), { recursive: true });
+					writeFileSync(nodePath.join(cwd, "AGENTS.md"), "Review the staged evidence.");
 					writeFileSync(
-						join(cwd, "evidence/metadata.json"),
+						nodePath.join(cwd, "feedback-composer.md"),
+						"Compose from admitted observations.",
+					);
+					writeFileSync(nodePath.join(cwd, "events"), "");
+					writeFileSync(
+						nodePath.join(cwd, "evidence/metadata.json"),
 						JSON.stringify({ title: "Add login" }),
 					);
 					writeFileSync(
-						join(cwd, "evidence/change.json"),
+						nodePath.join(cwd, "evidence/change.json"),
 						JSON.stringify({ base_sha: "b".repeat(40), head_sha: "a".repeat(40) }),
 					);
 					// The change view the container derives from the checkout before the runner starts.
 					writeFileSync(
-						join(cwd, "work/change/diff.patch"),
+						nodePath.join(cwd, "work/change/diff.patch"),
 						"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,0 +10,1 @@\n[L10] + insecure();\n",
 					);
 					writeFileSync(
-						join(cwd, "catalog/practices/test-practice.md"),
+						nodePath.join(cwd, "catalog/practices/test-practice.md"),
 						"# Test practice\nCriteria.",
 					);
 					if (stage.startsWith("compose")) {
 						writeFileSync(
-							join(cwd, "evidence/composition.json"),
+							nodePath.join(cwd, "evidence/composition.json"),
 							JSON.stringify({
 								enabled: true,
 								channels: {
@@ -737,13 +757,13 @@ if (scenario) {
 					if (stage === "tree-citation") {
 						// A real checkout with one commit in its history, so a citation at a revision is read
 						// through .git like admission reads it.
-						mkdirSync(join(cwd, "repos/primary/src"), { recursive: true });
+						mkdirSync(nodePath.join(cwd, "repos/primary/src"), { recursive: true });
 						writeFileSync(
-							join(cwd, "repos/primary/src/Auth.java"),
+							nodePath.join(cwd, "repos/primary/src/Auth.java"),
 							"class Auth {\n  insecure();\n}\n",
 						);
 						const git = (...args: string[]) =>
-							spawnSync("git", ["-C", join(cwd, "repos/primary"), ...args], {
+							spawnSync("git", ["-C", nodePath.join(cwd, "repos/primary"), ...args], {
 								encoding: "utf8",
 								env: {
 									...process.env,
@@ -754,21 +774,24 @@ if (scenario) {
 								},
 							});
 						writeFileSync(
-							join(cwd, "repos/primary/src/logo.png"),
+							nodePath.join(cwd, "repos/primary/src/logo.png"),
 							Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2]),
 						);
 						git("init", "-q");
 						git("add", ".");
 						git("commit", "-q", "-m", "first");
 						writeFileSync(
-							join(cwd, "repos/primary/src/Auth.java"),
+							nodePath.join(cwd, "repos/primary/src/Auth.java"),
 							"class Auth {\n  insecure();\n  more();\n}\n",
 						);
 						git("commit", "-q", "-am", "second");
-						writeFileSync(join(cwd, "history-sha"), git("rev-parse", "HEAD~1").stdout.trim());
+						writeFileSync(
+							nodePath.join(cwd, "history-sha"),
+							git("rev-parse", "HEAD~1").stdout.trim(),
+						);
 					}
 					writeFileSync(
-						join(cwd, "evidence/manifest.json"),
+						nodePath.join(cwd, "evidence/manifest.json"),
 						JSON.stringify({
 							sources: [
 								{
@@ -794,7 +817,7 @@ if (scenario) {
 						}),
 					);
 					writeFileSync(
-						join(cwd, "catalog/practices/index.json"),
+						nodePath.join(cwd, "catalog/practices/index.json"),
 						JSON.stringify(
 							stage === "finish"
 								? [
@@ -805,11 +828,11 @@ if (scenario) {
 						),
 					);
 					writeFileSync(
-						join(cwd, "pi-provider.json"),
+						nodePath.join(cwd, "pi-provider.json"),
 						JSON.stringify({ apiProtocol: "openai-completions", modelId: "test-model" }),
 					);
 					writeFileSync(
-						join(cwd, "task.json"),
+						nodePath.join(cwd, "task.json"),
 						JSON.stringify({
 							schemaVersion: 2,
 							paths: {
@@ -842,12 +865,12 @@ if (scenario) {
 						},
 					);
 					assert.equal(child.error, undefined);
-					const events = readFileSync(join(cwd, "events"), "utf8")
+					const events = readFileSync(nodePath.join(cwd, "events"), "utf8")
 						.trim()
 						.split("\n")
 						.filter(Boolean);
 					const coverage: unknown = JSON.parse(
-						readFileSync(join(cwd, "out/practice-coverage.json"), "utf8"),
+						readFileSync(nodePath.join(cwd, "out/practice-coverage.json"), "utf8"),
 					);
 					const reached = (slugs: Record<string, "EVALUATED" | "NOT_REACHED">) =>
 						assert.deepEqual(coverage, {
@@ -859,31 +882,35 @@ if (scenario) {
 							})),
 						});
 					switch (stage) {
-						case "setup":
+						case "setup": {
 							assert.equal(child.status, 1, child.stderr);
 							assert.deepEqual(events, []);
 							reached({ "test-practice": "NOT_REACHED" });
 							break;
-						case "session-init":
+						}
+						case "session-init": {
 							assert.equal(child.status, 2, child.stderr);
 							assert.equal(events.length, 1);
 							break;
-						case "budget":
+						}
+						case "budget": {
 							assert.equal(child.status, 1, child.stderr);
 							assert.ok(events.includes("prompt:1"), child.stderr);
 							assert.ok(events.includes("abort"), child.stderr);
 							assert.ok(!events.includes("prompt:2"), events.join("\n"));
 							reached({ "test-practice": "NOT_REACHED" });
 							break;
-						case "provider-error":
+						}
+						case "provider-error": {
 							// Exit 76: the server queues the review again instead of recording a failure.
 							assert.equal(child.status, 76, child.stderr);
 							assert.match(
 								child.stderr,
-								/UNREACHABLE: this review reached no practice, and \d+ model call\(s\)/,
+								/UNREACHABLE: this review reached no practice, and \d+ model call\(s\)/u,
 							);
 							reached({ "test-practice": "NOT_REACHED" });
 							break;
+						}
 						case "overrun": {
 							// The first turn is aborted at its share, which ends the compaction it was in; the
 							// finishing turn is sent once the session is idle, in the same session, and records
@@ -899,9 +926,9 @@ if (scenario) {
 								"abort",
 								"prompt:2",
 							]);
-							assert.match(events.find((event) => event.startsWith("finish:")) ?? "", /stored/);
-							assert.match(child.stderr, /share exhausted — aborting this turn/);
-							assert.doesNotMatch(child.stderr, /already processing/);
+							assert.match(events.find((event) => event.startsWith("finish:")) ?? "", /stored/u);
+							assert.match(child.stderr, /share exhausted — aborting this turn/u);
+							assert.doesNotMatch(child.stderr, /already processing/u);
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
@@ -909,66 +936,66 @@ if (scenario) {
 							assert.equal(child.status, 0, child.stderr);
 							assert.match(
 								events.find((event) => event.startsWith("undecided:")) ?? "",
-								/must show it read the change/,
+								/must show it read the change/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("undecided-consulted:")) ?? "",
-								/#1 test-practice: stored\./,
+								/#1 test-practice: stored\./u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("repaired:")) ?? "",
-								/#1 test-practice: stored \(negative\)/,
+								/#1 test-practice: stored \(negative\)/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("repaired-early:")) ?? "",
-								/#1 test-practice: stored \(negative\)/,
+								/#1 test-practice: stored \(negative\)/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("repaired-unclosed:")) ?? "",
-								/#1 test-practice: stored \(negative\)[\s\S]*#2 test-practice: stored \(negative\)/,
+								/#1 test-practice: stored \(negative\)[\s\S]*#2 test-practice: stored \(negative\)/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("unparsed:")) ?? "",
-								/observations refused — the list arrived as a string that is not a JSON array/,
+								/observations refused — the list arrived as a string that is not a JSON array/u,
 							);
 							const reply = events.find((event) => event.startsWith("batch:")) ?? "";
-							assert.match(reply, /#1 test-practice: stored \(negative\)/);
+							assert.match(reply, /#1 test-practice: stored \(negative\)/u);
 							assert.match(
 								reply,
-								/#2 test-practice: refused — .*not in the diff|#2 test-practice: refused/,
+								/#2 test-practice: refused — .*not in the diff|#2 test-practice: refused/u,
 							);
 							assert.match(
 								reply,
-								/#3 test-practice: refused — summary must be at most 160 characters/,
+								/#3 test-practice: refused — summary must be at most 160 characters/u,
 							);
 							assert.match(
 								reply,
-								/#4 test-practice: stored \(negative\)\.\\n {3}evidence\/change\.json is staged by scm\.pull-request\.diff, not scm\.pull-request\.core; recorded as scm\.pull-request\.diff/,
+								/#4 test-practice: stored \(negative\)\.\\n {3}evidence\/change\.json is staged by scm\.pull-request\.diff, not scm\.pull-request\.core; recorded as scm\.pull-request\.diff/u,
 							);
-							assert.match(reply, /Every practice of this turn has a recorded result/);
+							assert.match(reply, /Every practice of this turn has a recorded result/u);
 							// One session, one measuring turn, no composition requested.
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
 								["prompt:1"],
 							);
 							assert.equal(events.filter((event) => event.startsWith("create:")).length, 1);
-							const first = readFileSync(join(cwd, "prompt-1.md"), "utf8");
-							assert.match(first, /Review the practice\./);
-							assert.match(first, /### `evidence\/metadata\.json`/);
-							assert.match(first, /### `work\/change\/diff\.patch`/);
+							const first = readFileSync(nodePath.join(cwd, "prompt-1.md"), "utf8");
+							assert.match(first, /Review the practice\./u);
+							assert.match(first, /### `evidence\/metadata\.json`/u);
+							assert.match(first, /### `work\/change\/diff\.patch`/u);
 							assert.match(
 								first,
-								/### Practice `test-practice`\n[\s\S]*# Test practice\nCriteria\./,
+								/### Practice `test-practice`\n[\s\S]*# Test practice\nCriteria\./u,
 							);
 							assert.match(
-								readFileSync(join(cwd, "work/notes/review.md"), "utf8"),
-								/test-practice: PRESENT\/BAD — Unsafe authentication call/,
+								readFileSync(nodePath.join(cwd, "work/notes/review.md"), "utf8"),
+								/test-practice: PRESENT\/BAD — Unsafe authentication call/u,
 							);
 							// The quote was copied with its diff marker; what is recorded is the line's content,
 							// which is what admission reads out of the blob.
-							const reviewState = readFileSync(join(cwd, "out/review-state.json"), "utf8");
-							assert.match(reviewState, /"quote": " insecure\(\);"/);
-							assert.match(reviewState, /"side": "NEW"/);
+							const reviewState = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
+							assert.match(reviewState, /"quote": " insecure\(\);"/u);
+							assert.match(reviewState, /"side": "NEW"/u);
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
@@ -979,12 +1006,12 @@ if (scenario) {
 								["prompt:1", "prompt:2"],
 							);
 							assert.equal(events.filter((event) => event.startsWith("create:")).length, 1);
-							const second = readFileSync(join(cwd, "prompt-2.md"), "utf8");
+							const second = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
 							assert.match(
 								second,
-								/## Recorded so far\n(- test-practice: .*\n)*- test-practice: PRESENT\/BAD/,
+								/## Recorded so far\n(?:- test-practice: .*\n)*- test-practice: PRESENT\/BAD/u,
 							);
-							assert.match(second, /No observation was recorded for: second-practice/);
+							assert.match(second, /No observation was recorded for: second-practice/u);
 							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
 							break;
 						}
@@ -992,15 +1019,15 @@ if (scenario) {
 							assert.equal(child.status, 0, child.stderr);
 							assert.match(
 								child.stderr,
-								/turn 1\/1 \(code\): the same bash call 3 times — nudging to record/,
+								/turn 1\/1 \(code\): the same bash call 3 times — nudging to record/u,
 							);
 							assert.match(
 								child.stderr,
-								/turn 1\/1 \(code\): the same bash call 6 times — aborting this turn/,
+								/turn 1\/1 \(code\): the same bash call 6 times — aborting this turn/u,
 							);
 							assert.ok(events.includes("steer") && events.includes("abort"), events.join("\n"));
 							// The finishing turn, in the same session, records the practice the loop left unrecorded.
-							assert.match(events.find((event) => event.startsWith("finish:")) ?? "", /stored/);
+							assert.match(events.find((event) => event.startsWith("finish:")) ?? "", /stored/u);
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
@@ -1008,10 +1035,10 @@ if (scenario) {
 							assert.equal(child.status, 1, child.stderr);
 							const refusals = events.filter((event) => event.startsWith("refusal-"));
 							assert.equal(refusals.length, 9);
-							assert.match(refusals[7] ?? "", /refused/);
+							assert.match(refusals[7] ?? "", /refused/u);
 							assert.match(
 								refusals[8] ?? "",
-								/8 submissions for 'test-practice' were refused; no more are accepted/,
+								/8 submissions for 'test-practice' were refused; no more are accepted/u,
 							);
 							reached({ "test-practice": "NOT_REACHED" });
 							break;
@@ -1029,9 +1056,9 @@ if (scenario) {
 								],
 								child.stderr,
 							);
-							assert.ok(!existsSync(join(cwd, "out/stray.txt")));
+							assert.ok(!existsSync(nodePath.join(cwd, "out/stray.txt")));
 							const result: unknown = JSON.parse(
-								readFileSync(join(cwd, "out/result.json"), "utf8"),
+								readFileSync(nodePath.join(cwd, "out/result.json"), "utf8"),
 							);
 							assert.ok(
 								typeof result === "object" && result !== null && "admissionDigest" in result,
@@ -1050,56 +1077,56 @@ if (scenario) {
 							assert.ok(!events.includes("compact"), child.stderr);
 							assert.match(
 								events.find((event) => event.startsWith("feedback-alone:")) ?? "",
-								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NEGATIVE on 1/,
+								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NEGATIVE on 1/u,
 								child.stderr,
 							);
 							const reply = events.find((event) => event.startsWith("feedback:")) ?? "";
-							assert.match(reply, /#1: stored a IN_APP unit for test-practice \(NEW\); 1\/1 used/);
-							assert.match(reply, /#2: basedOn is required/);
-							assert.match(reply, /#3: unknown unit field\(s\): verdict — a unit takes channel/);
-							assert.match(reply, /#4: body must be at most 8000 characters; this one is 8001/);
+							assert.match(reply, /#1: stored a IN_APP unit for test-practice \(NEW\); 1\/1 used/u);
+							assert.match(reply, /#2: basedOn is required/u);
+							assert.match(reply, /#3: unknown unit field\(s\): verdict — a unit takes channel/u);
+							assert.match(reply, /#4: body must be at most 8000 characters; this one is 8001/u);
 							assert.match(
 								reply,
-								/#5: withholdReason must be one of NO_MATERIAL_CHANGE, ALREADY_SAID, BELOW_BAR \(received 'NOT_A_REASON'\)/,
+								/#5: withholdReason must be one of NO_MATERIAL_CHANGE, ALREADY_SAID, BELOW_BAR \(received 'NOT_A_REASON'\)/u,
 							);
 							assert.match(
 								reply,
-								/#6: practiceSlug 'other-practice' is not a practice with an admitted observation in this run \(those are: test-practice\)/,
+								/#6: practiceSlug 'other-practice' is not a practice with an admitted observation in this run \(those are: test-practice\)/u,
 							);
 							assert.match(
 								reply,
-								/#7: already have a IN_CONTEXT unit for test-practice; skipped\./,
+								/#7: already have a IN_CONTEXT unit for test-practice; skipped\./u,
 							);
 							assert.match(
 								reply,
-								/#8: each item of units is one unit object .*\(received string\)/,
+								/#8: each item of units is one unit object .*\(received string\)/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("feedback-bare:")) ?? "",
-								/#1: IN_CHAT is not a lane this run may write for/,
+								/#1: IN_CHAT is not a lane this run may write for/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("lead-long:")) ?? "",
-								/lead must be at most 240 characters, or end a sentence within them; this one is 305/,
+								/lead must be at most 240 characters, or end a sentence within them; this one is 305/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("lead-cut:")) ?? "",
-								/Stored the opening line up to its last sentence end within 240 characters: \\"The auth change is the one to read first\.\\"/,
+								/Stored the opening line up to its last sentence end within 240 characters: \\"The auth change is the one to read first\.\\"/u,
 							);
-							const second = readFileSync(join(cwd, "prompt-2.md"), "utf8");
-							assert.match(second, /Compose from admitted observations\./);
-							assert.match(second, /"id": "observation-1"/);
+							const second = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
+							assert.match(second, /Compose from admitted observations\./u);
+							assert.match(second, /"id": "observation-1"/u);
 							// The quoted lines and the verification records stay on disk, where the composer
 							// can read them if it must; the search it recorded is still shown.
-							assert.doesNotMatch(second, /"quote"/);
-							assert.doesNotMatch(second, /"verification"/);
-							assert.match(second, /"lookedFor": "x"/);
+							assert.doesNotMatch(second, /"quote"/u);
+							assert.doesNotMatch(second, /"verification"/u);
+							assert.match(second, /"lookedFor": "x"/u);
 							assert.match(
-								readFileSync(join(cwd, "work/composition/observations.json"), "utf8"),
-								/"quote": "\+ insecure\(\);"/,
+								readFileSync(nodePath.join(cwd, "work/composition/observations.json"), "utf8"),
+								/"quote": "\+ insecure\(\);"/u,
 							);
 							const feedback: unknown = JSON.parse(
-								readFileSync(join(cwd, "out/feedback.json"), "utf8"),
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
 							);
 							assert.ok(typeof feedback === "object" && feedback !== null);
 							assert.equal(Reflect.get(feedback, "admissionDigest"), "admitted-digest");
@@ -1114,7 +1141,7 @@ if (scenario) {
 								Reflect.get(feedback, "lead"),
 								"The auth change is the one to read first.",
 							);
-							assert.match(child.stderr, /composition: .*stored=3/);
+							assert.match(child.stderr, /composition: .*stored=3/u);
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
@@ -1128,11 +1155,11 @@ if (scenario) {
 							assert.deepEqual(order, ["prompt:1", "compact", "prompt:2"]);
 							assert.match(
 								child.stderr,
-								/composition: 120000 tokens held and \d+ needed exceed the 128000 window — compacting first/,
+								/composition: 120000 tokens held and \d+ needed exceed the 128000 window — compacting first/u,
 							);
 							assert.match(
-								readFileSync(join(cwd, "prompt-2.md"), "utf8"),
-								/Compose from admitted observations\./,
+								readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8"),
+								/Compose from admitted observations\./u,
 							);
 							break;
 						}
@@ -1143,17 +1170,17 @@ if (scenario) {
 								["prompt:1", "prompt:2", "prompt:3"],
 							);
 							assert.match(
-								readFileSync(join(cwd, "prompt-3.md"), "utf8"),
-								/## Nothing persisted[\s\S]*NEGATIVE observation: test-practice/,
+								readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8"),
+								/## Nothing persisted[\s\S]*NEGATIVE observation: test-practice/u,
 							);
 							assert.match(
 								child.stderr,
-								/composition recorded nothing for 1 NEGATIVE practice\(s\) — asking once more/,
+								/composition recorded nothing for 1 NEGATIVE practice\(s\) — asking once more/u,
 							);
 							assert.equal(
 								(
 									child.stderr.match(
-										/composition: 12 calls without a recording call — nudging to persist/g,
+										/composition: 12 calls without a recording call — nudging to persist/gu,
 									) ?? []
 								).length,
 								1,
@@ -1162,10 +1189,10 @@ if (scenario) {
 							assert.equal(events.filter((event) => event === "steer").length, 1);
 							assert.match(
 								events.find((event) => event.startsWith("feedback-finish:")) ?? "",
-								/#1: stored a IN_APP unit for test-practice \(WITHHOLD\)/,
+								/#1: stored a IN_APP unit for test-practice \(WITHHOLD\)/u,
 							);
 							const feedback: unknown = JSON.parse(
-								readFileSync(join(cwd, "out/feedback.json"), "utf8"),
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
 							);
 							assert.ok(typeof feedback === "object" && feedback !== null);
 							const units: unknown = Reflect.get(feedback, "units");
@@ -1183,9 +1210,9 @@ if (scenario) {
 							);
 							assert.match(
 								events.find((event) => event.startsWith("feedback-quiet:")) ?? "",
-								/#1: test-practice has no NEGATIVE observation in this run, so there is nothing to withhold; skipped\./,
+								/#1: test-practice has no NEGATIVE observation in this run, so there is nothing to withhold; skipped\./u,
 							);
-							assert.doesNotMatch(child.stderr, /asking once more/);
+							assert.doesNotMatch(child.stderr, /asking once more/u);
 							break;
 						}
 						case "compose-loop": {
@@ -1193,15 +1220,15 @@ if (scenario) {
 							assert.ok(events.includes("abort"), child.stderr);
 							assert.match(
 								child.stderr,
-								/composer: 24 recording calls without a record — aborting this turn/,
+								/composer: 24 recording calls without a record — aborting this turn/u,
 							);
 							// Every refused call is in the transcript with the SDK's reason, and in the trace.
 							assert.match(
 								child.stderr,
-								/composer tool error: report_summary — Validation failed for tool "report_summary": - \/lead: Expected string/,
+								/composer tool error: report_summary — Validation failed for tool "report_summary": - \/lead: Expected string/u,
 							);
 							const debug: unknown = JSON.parse(
-								readFileSync(join(cwd, "out/runner-debug.json"), "utf8"),
+								readFileSync(nodePath.join(cwd, "out/runner-debug.json"), "utf8"),
 							);
 							assert.ok(typeof debug === "object" && debug !== null);
 							const turns: unknown = Reflect.get(debug, "turns");
@@ -1217,8 +1244,9 @@ if (scenario) {
 							assert.equal(Reflect.get(composition, "recordingCalls"), 24);
 							break;
 						}
-						default:
+						default: {
 							assert.fail(`unknown stage ${stage}`);
+						}
 					}
 				} finally {
 					rmSync(cwd, { recursive: true, force: true });

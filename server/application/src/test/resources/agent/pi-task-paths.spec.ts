@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -28,15 +28,15 @@ void test("resolves a completely relocated layout without any captured-input pre
 
 for (const invalid of [undefined, null, [], "paths", {}]) {
 	void test(`rejects a missing or invalid path map: ${JSON.stringify(invalid)}`, () => {
-		assert.throws(() => taskPaths(invalid), /task.json/);
+		assert.throws(() => taskPaths(invalid), /task.json/u);
 	});
 }
 for (const invalid of [
 	"",
 	" ",
-	"\u00a0",
+	"\u00A0",
 	"\u2007",
-	"\u202f",
+	"\u202F",
 	"/etc/passwd",
 	"../secret",
 	"area/../secret",
@@ -44,7 +44,7 @@ for (const invalid of [
 	"area//file",
 	"area/",
 	"C:/secret",
-	"area\\file",
+	String.raw`area\file`,
 	"area\u0000file",
 	"area\nfile",
 	"area\u0085file",
@@ -53,14 +53,14 @@ for (const invalid of [
 		for (const key of Object.keys(paths)) {
 			assert.throws(
 				() => taskPaths({ ...paths, [key]: invalid }),
-				/normalized workspace-relative path/,
+				/normalized workspace-relative path/u,
 			);
 		}
 	});
 }
 void test("ignores additive metadata without relaxing required path validation", () => {
 	assert.deepEqual(taskPaths({ ...paths, interactiveFrames: { url: "/frames" } }), paths);
-	assert.throws(() => taskPaths({ ...paths, manifest: 42 }), /paths.manifest/);
+	assert.throws(() => taskPaths({ ...paths, manifest: 42 }), /paths.manifest/u);
 });
 
 void test("accepts the envelope produced by the Java task writer", () => {
@@ -82,9 +82,9 @@ for (const [name, envelope] of Object.entries({
 	},
 })) {
 	void test(`runner exits with contract drift before execution for ${name}`, () => {
-		const root = mkdtempSync(join(tmpdir(), "invalid-task-"));
+		const root = mkdtempSync(path.join(tmpdir(), "invalid-task-"));
 		try {
-			writeFileSync(join(root, "task.json"), JSON.stringify(envelope));
+			writeFileSync(path.join(root, "task.json"), JSON.stringify(envelope));
 			const child = spawnSync(
 				process.execPath,
 				[fileURLToPath(new URL("../../../main/resources/agent/pi-runner.ts", import.meta.url))],

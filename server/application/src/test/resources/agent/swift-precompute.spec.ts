@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -11,18 +11,23 @@ import type { DiffFile } from "../../../../../../docker/agents/precompute/lib/ty
 const repositoryRoot = fileURLToPath(new URL("../../../../../../", import.meta.url));
 
 async function stage(slug: string) {
-	const root = mkdtempSync(join(tmpdir(), "swift-precompute-"));
-	mkdirSync(join(root, "practices"));
-	mkdirSync(join(root, "repo/App"), { recursive: true });
-	writeFileSync(join(root, "package.json"), '{"type":"module"}\n');
-	symlinkSync(join(repositoryRoot, "docker/agents/precompute/lib"), join(root, "lib"));
-	const staged = join(root, `practices/${slug}.ts`);
+	const root = mkdtempSync(path.join(tmpdir(), "swift-precompute-"));
+	mkdirSync(path.join(root, "practices"));
+	mkdirSync(path.join(root, "repo/App"), { recursive: true });
+	writeFileSync(path.join(root, "package.json"), '{"type":"module"}\n');
+	symlinkSync(path.join(repositoryRoot, "docker/agents/precompute/lib"), path.join(root, "lib"));
+	const staged = path.join(root, `practices/${slug}.ts`);
 	cpSync(
-		join(repositoryRoot, `server/application/src/main/resources/practices/precompute/${slug}.ts`),
+		path.join(
+			repositoryRoot,
+			`server/application/src/main/resources/practices/precompute/${slug}.ts`,
+		),
 		staged,
 	);
 	const mod: unknown = await import(staged);
-	if (!isPracticeModule(mod)) throw new Error("script does not export a default function");
+	if (!isPracticeModule(mod)) {
+		throw new Error("script does not export a default function");
+	}
 	return { root, script: mod.default };
 }
 
@@ -56,12 +61,12 @@ final class EventStore {
 `;
 
 /** The whole file as added lines, numbered as in the file. */
-function whole(path: string, source: string): [string, DiffFile] {
+function whole(file: string, source: string): [string, DiffFile] {
 	const lines = source.split("\n");
 	return [
-		path,
+		file,
 		{
-			path,
+			path: file,
 			addedLines: new Map(lines.map((line, i) => [i + 1, line])),
 			removedLines: new Map(),
 			hunks: [],
@@ -72,9 +77,9 @@ function whole(path: string, source: string): [string, DiffFile] {
 void test("an I/O call is placed in the type that encloses it: the view's counts, the store's does not", async () => {
 	const { root, script } = await stage("keeps-views-free-of-networking-and-persistence");
 	try {
-		writeFileSync(join(root, "repo/App/EventList.swift"), view);
+		writeFileSync(path.join(root, "repo/App/EventList.swift"), view);
 		const result = await script(
-			join(root, "repo"),
+			path.join(root, "repo"),
 			new Map([whole("App/EventList.swift", view)]),
 			metadata,
 		);
@@ -96,7 +101,7 @@ void test("without a checkout the placing is unknown, and the hint is still repo
 	const { root, script } = await stage("keeps-views-free-of-networking-and-persistence");
 	try {
 		const result = await script(
-			join(root, "repo"),
+			path.join(root, "repo"),
 			new Map([whole("App/EventList.swift", view)]),
 			metadata,
 		);
@@ -113,7 +118,7 @@ void test("a new view without a preview is counted per file, a preview elsewhere
 	const { root, script } = await stage("ships-a-preview-with-each-new-view");
 	try {
 		const result = await script(
-			join(root, "repo"),
+			path.join(root, "repo"),
 			new Map([
 				whole("App/EventList.swift", view),
 				whole(
@@ -145,13 +150,13 @@ void test("a capability is paired with its usage key from the checkout's project
 	const { root, script } = await stage("declares-permissions-truthfully-at-point-of-use");
 	try {
 		writeFileSync(
-			join(root, "repo/project.yml"),
+			path.join(root, "repo/project.yml"),
 			"targets:\n  App:\n    info:\n      properties:\n        NSCameraUsageDescription: Scans the ticket's QR code\n",
 		);
 		const source =
 			"import CoreLocation\nimport AVFoundation\nlet manager = CLLocationManager()\nmanager.requestWhenInUseAuthorization()\nlet session = AVCaptureSession()\n";
 		const result = await script(
-			join(root, "repo"),
+			path.join(root, "repo"),
 			new Map([whole("App/Scanner.swift", source)]),
 			metadata,
 		);
@@ -167,13 +172,13 @@ void test("a capability is paired with its usage key from the checkout's project
 void test("a change with no reference anywhere says what it scanned and what the inventory holds", async () => {
 	const { root, script } = await stage("links-the-change-to-its-issue");
 	try {
-		mkdirSync(join(root, "context"));
+		mkdirSync(path.join(root, "context"));
 		writeFileSync(
-			join(root, "context/project_inventory.json"),
+			path.join(root, "context/project_inventory.json"),
 			JSON.stringify({ issues: [{ number: 4, title: "Add the event map", state: "opened" }] }),
 		);
 		const result = await script(
-			join(root, "repo"),
+			path.join(root, "repo"),
 			new Map(),
 			{
 				...metadata,
@@ -181,13 +186,13 @@ void test("a change with no reference anywhere says what it scanned and what the
 				body: "Shows the events on a map.",
 				source_branch: "map",
 			},
-			join(root, "context"),
+			path.join(root, "context"),
 		);
 		assert.equal(result.metrics.referencesFound, 0);
 		assert.equal(result.metrics.inventoryOpenIssues, 1);
 		assert.equal(result.metrics.linkedWorkItems, -1);
 		const referenced = await script(
-			join(root, "repo"),
+			path.join(root, "repo"),
 			new Map(),
 			{
 				...metadata,
@@ -196,7 +201,7 @@ void test("a change with no reference anywhere says what it scanned and what the
 				body: "<!-- Example: Closes #12 -->\nCloses #4",
 				source_branch: "4-add-the-map",
 			},
-			join(root, "context"),
+			path.join(root, "context"),
 		);
 		assert.equal(referenced.metrics.referencesFound, 1);
 		assert.equal(referenced.metrics.closingReferences, 1);
@@ -209,11 +214,11 @@ void test("a print beside an existing logger is a lead, a print under a scripts 
 	const { root, script } = await stage("logs-through-the-platform-logger");
 	try {
 		writeFileSync(
-			join(root, "repo/App/Log.swift"),
+			path.join(root, "repo/App/Log.swift"),
 			'import OSLog\nlet logger = Logger(subsystem: "app", category: "app")\n',
 		);
 		const result = await script(
-			join(root, "repo"),
+			path.join(root, "repo"),
 			new Map([
 				whole(
 					"App/Store.swift",
@@ -245,16 +250,16 @@ void test("a print beside an existing logger is a lead, a print under a scripts 
 void test("a literal and a named asset color are told apart, and the asset's dark appearance is read from the catalog", async () => {
 	const { root, script } = await stage("uses-adaptive-colors-for-every-appearance");
 	try {
-		mkdirSync(join(root, "repo/App/Assets.xcassets/Card.colorset"), { recursive: true });
+		mkdirSync(path.join(root, "repo/App/Assets.xcassets/Card.colorset"), { recursive: true });
 		writeFileSync(
-			join(root, "repo/App/Assets.xcassets/Card.colorset/Contents.json"),
+			path.join(root, "repo/App/Assets.xcassets/Card.colorset/Contents.json"),
 			'{"colors":[{"idiom":"universal","color":{}},{"appearances":[{"appearance":"luminosity","value":"dark"}],"idiom":"universal","color":{}}]}',
 		);
 		const source =
 			'struct Card: View {\n    var body: some View {\n        Text("x")\n            .foregroundStyle(.white)\n            .background(Color("Card"))\n            .padding()\n            .background(Color(red: 1, green: 1, blue: 1))\n    }\n}\n';
-		writeFileSync(join(root, "repo/App/Card.swift"), source);
+		writeFileSync(path.join(root, "repo/App/Card.swift"), source);
 		const result = await script(
-			join(root, "repo"),
+			path.join(root, "repo"),
 			new Map([whole("App/Card.swift", source)]),
 			metadata,
 		);

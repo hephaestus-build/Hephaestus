@@ -29,11 +29,11 @@ void test("Version PR maintenance follows trusted successful main CI without can
 	assert.equal(job.getIn(["concurrency", "cancel-in-progress"]), false);
 	const guard = job.get("if");
 	assert.equal(typeof guard, "string");
-	assert.match(String(guard), /github\.event\.workflow_run\.conclusion == 'success'/);
-	assert.match(String(guard), /&& github\.event\.workflow_run\.event == 'push'/);
+	assert.match(String(guard), /github\.event\.workflow_run\.conclusion == 'success'/u);
+	assert.match(String(guard), /&& github\.event\.workflow_run\.event == 'push'/u);
 	assert.match(
 		String(guard),
-		/&& github\.event\.workflow_run\.head_repository\.full_name == github\.repository/,
+		/&& github\.event\.workflow_run\.head_repository\.full_name == github\.repository/u,
 	);
 	const checkout = steps.items[0];
 	assert.ok(isMap(checkout));
@@ -57,7 +57,7 @@ void test(
 	},
 	async (context) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "version-pr-tip-"));
-		context.after(() => rm(directory, { recursive: true, force: true }));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
 		function git(...args: string[]): string {
 			const result = spawnSync("git", args, {
 				cwd: directory,
@@ -84,7 +84,8 @@ void test(
 		assert.equal(selection.get("shell"), "bash");
 		let attempt = 0;
 		async function selected(sha: string): Promise<boolean> {
-			const output = path.join(directory, `output-${attempt++}`);
+			const output = path.join(directory, `output-${attempt}`);
+			attempt += 1;
 			const result = spawnSync(
 				"bash",
 				["--noprofile", "--norc", "-eo", "pipefail", "-c", String(command)],
@@ -95,12 +96,13 @@ void test(
 				},
 			);
 			assert.equal(result.status, 0, result.stderr);
-			return (
-				await readFile(output, "utf8").catch((error: unknown) => {
-					if (error instanceof Error && "code" in error && error.code === "ENOENT") return "";
-					throw error;
-				})
-			).includes("validated=true");
+			const written = await readFile(output, "utf8").catch((error: unknown) => {
+				if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+					return "";
+				}
+				throw error;
+			});
+			return written.includes("validated=true");
 		}
 		assert.equal(await selected(first), true);
 		git(

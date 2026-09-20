@@ -19,6 +19,8 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { asDate } from "@/lib/dates";
+import { rendersContent } from "@/lib/react-node";
+import { hasText } from "@/lib/text";
 
 import { ActiveJobProgress } from "./ActiveJobProgress";
 import { ConnectionHealthBadge } from "./ConnectionHealthBadge";
@@ -50,13 +52,13 @@ function DiagnosticItem({
 	children: ReactNode;
 }) {
 	return (
-		<Item size="sm" role="listitem" className="w-auto gap-2 border-0 p-0">
+		<Item size="sm" role="listitem" className="w-auto gap-2 p-0">
 			<ItemMedia variant="icon" className="text-muted-foreground">
 				{icon}
 			</ItemMedia>
 			<ItemContent className="gap-0">
-				<span className="text-muted-foreground text-xs">{label}</span>
-				<ItemTitle className="font-normal text-sm">{children}</ItemTitle>
+				<span className="text-xs text-muted-foreground">{label}</span>
+				<ItemTitle className="text-sm font-normal">{children}</ItemTitle>
 			</ItemContent>
 		</Item>
 	);
@@ -81,12 +83,14 @@ function DiagnosticItem({
  *     remaining, and never `— / N` which reads as a gauge.
  *  4. Nothing renderable → `null`.
  *
- * `now` decides only whether branch 1 is still live.
+ * `now` decides whether branch 1 is still live and anchors the relative phrases.
  */
 function rateLimitReading(rateLimit: RateLimitSnapshot, now: number): ReactNode {
 	const throttledUntil = asDate(rateLimit.throttledUntil);
 	if (throttledUntil && throttledUntil.getTime() > now) {
-		return <span className="text-warning">Throttled · retry {relativeTime(throttledUntil)}</span>;
+		return (
+			<span className="text-warning">Throttled · retry {relativeTime(throttledUntil, now)}</span>
+		);
 	}
 
 	if (rateLimit.limit != null && rateLimit.remaining != null) {
@@ -98,11 +102,13 @@ function rateLimitReading(rateLimit: RateLimitSnapshot, now: number): ReactNode 
 				<span className="text-muted-foreground"> / {rateLimit.limit.toLocaleString()}</span>
 			</span>
 		);
-		if (!rateLimit.resetAt) return value;
+		if (!rateLimit.resetAt) {
+			return value;
+		}
 		return (
 			<Tooltip>
 				<TooltipTrigger className="cursor-help">{value}</TooltipTrigger>
-				<TooltipContent>Resets {relativeTime(rateLimit.resetAt)}</TooltipContent>
+				<TooltipContent>Resets {relativeTime(rateLimit.resetAt, now)}</TooltipContent>
 			</Tooltip>
 		);
 	}
@@ -134,19 +140,19 @@ function ConnectionDiagnostics({ status }: { status: ConnectionSyncStatus }) {
 	// A `false` registration IS a measured fact ("we should have one and don't"), so it still shows.
 	const tracksWebhook = status.webhookRegistered != null || status.lastEventProcessedAt != null;
 	if (tracksWebhook) {
+		let webhookFact: ReactNode = <span className="text-muted-foreground">No events yet</span>;
+		if (status.webhookRegistered === false) {
+			webhookFact = <span className="text-muted-foreground">Not registered</span>;
+		} else if (status.lastEventProcessedAt) {
+			webhookFact = <RelativeTime value={status.lastEventProcessedAt} />;
+		}
 		diagnostics.push(
 			<DiagnosticItem
 				key="webhook"
 				icon={status.webhookRegistered === false ? <ZapOffIcon /> : <WebhookIcon />}
 				label="Webhook"
 			>
-				{status.webhookRegistered === false ? (
-					<span className="text-muted-foreground">Not registered</span>
-				) : status.lastEventProcessedAt ? (
-					<RelativeTime value={status.lastEventProcessedAt} />
-				) : (
-					<span className="text-muted-foreground">No events yet</span>
-				)}
+				{webhookFact}
 			</DiagnosticItem>,
 		);
 	}
@@ -154,8 +160,8 @@ function ConnectionDiagnostics({ status }: { status: ConnectionSyncStatus }) {
 	// A snapshot exists only when the vendor was observed, but an observed snapshot can still carry
 	// nothing renderable (a lapsed throttle with no known ceiling), so the row is gated on the reading
 	// itself — not merely on the snapshot's presence — to keep the "Rate limit" label from orphaning.
-	const rateLimit = status.rateLimit ? rateLimitReading(status.rateLimit, now) : null;
-	if (rateLimit) {
+	const rateLimit = status.rateLimit === undefined ? null : rateLimitReading(status.rateLimit, now);
+	if (rendersContent(rateLimit)) {
 		diagnostics.push(
 			<DiagnosticItem key="rateLimit" icon={<GaugeIcon />} label="Rate limit">
 				{rateLimit}
@@ -179,7 +185,9 @@ function ConnectionDiagnostics({ status }: { status: ConnectionSyncStatus }) {
 	// Every row is gated on a real observation, so a connection that reports none (a fresh Slack
 	// workspace before its first event) has nothing to qualify — render no empty row rather than an
 	// invisible flex box the surrounding `space-y-4` would still pad around.
-	if (diagnostics.length === 0) return null;
+	if (diagnostics.length === 0) {
+		return null;
+	}
 
 	return (
 		<ItemGroup className="flex-row flex-wrap items-center gap-x-4 gap-y-2">
@@ -199,12 +207,18 @@ function ConnectionDiagnostics({ status }: { status: ConnectionSyncStatus }) {
 	);
 }
 
+/** Which lookup failed, since the alert names it: the connection itself, or its sync status. */
+export interface SyncStatusHeaderError {
+	failedQuery: "connection" | "status";
+	cause: unknown;
+}
+
 export interface SyncStatusHeaderProps {
 	/** The integration's name, for copy that has to name it ("No GitHub connection found"). */
 	label: string;
 	status?: ConnectionSyncStatus;
 	isLoading?: boolean;
-	error?: unknown;
+	error?: SyncStatusHeaderError;
 	isConnectionActive: boolean;
 	/**
 	 * When the stored credential was first found unreadable. Health is what sync reports and a trigger
@@ -224,7 +238,7 @@ export interface SyncStatusHeaderProps {
 	onBackfill?: () => void;
 	onCancel: () => void;
 	/** Integration-specific trailing controls, e.g. GitHub's "Manage installation" link. */
-	actions?: ReactNode;
+	actions?: ReactElement | undefined;
 }
 
 /**
@@ -253,128 +267,151 @@ export function SyncStatusHeader({
 	onCancel,
 	actions,
 }: SyncStatusHeaderProps) {
-	const activeJob = status?.activeJob;
-	const canBackfill = status?.backfillSupported === true && onBackfill != null;
-	const isTriggerBusy = triggeringType != null || activeJob != null;
+	const now = useNow();
 
+	if (error) {
+		return (
+			<ConnectionCard>
+				<QueryErrorAlert
+					error={error.cause}
+					title={
+						error.failedQuery === "connection"
+							? `We couldn't load the ${label} connection`
+							: `We couldn't load ${label} sync status`
+					}
+					onRetry={onRetry}
+				/>
+			</ConnectionCard>
+		);
+	}
+	if (isLoading) {
+		// Mirrors the loaded layout — a headline line, a diagnostics row, a button row — so
+		// resolving swaps text into boxes already the right size instead of shifting the page.
+		return (
+			<ConnectionCard>
+				<div className="space-y-4">
+					<Skeleton className="h-5 w-72" />
+					<div className="flex flex-wrap gap-8">
+						{Array.from({ length: 3 }, (_, index) => (
+							<div key={index} className="space-y-1">
+								<Skeleton className="h-3 w-20" />
+								<Skeleton className="h-4 w-28" />
+							</div>
+						))}
+					</div>
+					<Skeleton className="h-8 w-40" />
+				</div>
+			</ConnectionCard>
+		);
+	}
+	if (!status) {
+		return (
+			<ConnectionCard>
+				<p className="text-sm text-muted-foreground">
+					No {label} connection found for this workspace.
+				</p>
+			</ConnectionCard>
+		);
+	}
+
+	const { activeJob } = status;
+	const canBackfill = status.backfillSupported && onBackfill != null;
+	const isTriggerBusy = triggeringType != null || activeJob != null;
+	const nextRun = nextRunLabel(status.nextScheduledSyncAt, now);
+
+	return (
+		<ConnectionCard>
+			<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+				{!credentialsUnreadableSince && (
+					<ConnectionHealthBadge health={status.health} isSyncing={activeJob != null} />
+				)}
+				<p className="text-sm">
+					{status.lastSuccessfulSyncAt ? (
+						<>
+							Last synced{" "}
+							<RelativeTime
+								value={status.lastSuccessfulSyncAt}
+								tone={freshnessTone(status.lastSuccessfulSyncAt, status.syncIntervalSeconds, now)}
+							/>
+						</>
+					) : (
+						/* "Never synced" on a connection with nothing to sync yet is an accusation the
+						   facts don't support — a fresh Slack workspace has no activated channels. */
+						<span className="text-muted-foreground">
+							{status.resourceCounts.total === 0 ? "No resources to sync yet" : "Never synced"}
+						</span>
+					)}
+					{hasText(nextRun) && (
+						<span className="text-muted-foreground">
+							{" · "}
+							{nextRun}
+						</span>
+					)}
+				</p>
+			</div>
+
+			<ConnectionDiagnostics status={status} />
+
+			<ActiveJobProgress job={activeJob} />
+
+			{isConnectionActive && (!credentialsUnreadableSince || activeJob) && (
+				<div className="flex flex-wrap items-center gap-2 pt-2">
+					{/* Sync / Backfill / Cancel act on one connection, so they read as one control. */}
+					<ButtonGroup>
+						{/* A trigger would run on the credential nothing can read; cancelling a running job needs none. */}
+						{!credentialsUnreadableSince && (
+							<SyncNowButton
+								onClick={onSync}
+								triggeringType={triggeringType}
+								activeJob={activeJob}
+							/>
+						)}
+						{canBackfill && !credentialsUnreadableSince && (
+							<DropdownMenu>
+								<DropdownMenuTrigger
+									render={
+										<Button
+											variant="outline"
+											size="sm"
+											disabled={isTriggerBusy}
+											aria-label="More sync options"
+										>
+											<ChevronDownIcon className="size-4" />
+										</Button>
+									}
+								/>
+								{/* The popup is anchored to a chevron, so it must opt out of the default
+								    trigger-width sizing or "Run backfill" lands in a 32px column. */}
+								<DropdownMenuContent align="end" className="w-auto min-w-40">
+									<DropdownMenuItem onClick={onBackfill}>Run backfill</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						)}
+						{activeJob && (
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={isCancelling || activeJob.cancelRequested}
+								onClick={onCancel}
+							>
+								{activeJob.cancelRequested ? "Stopping after current step…" : "Cancel"}
+							</Button>
+						)}
+					</ButtonGroup>
+					{actions !== undefined && <div className="ml-auto">{actions}</div>}
+				</div>
+			)}
+		</ConnectionCard>
+	);
+}
+
+function ConnectionCard({ children }: { children: ReactNode }) {
 	return (
 		<Card>
 			<CardHeader>
 				<IntegrationCardHeading>Connection</IntegrationCardHeading>
 			</CardHeader>
-			<CardContent className="space-y-4">
-				{error ? (
-					<QueryErrorAlert
-						error={error}
-						title={`We couldn't load the ${label} connection`}
-						onRetry={onRetry}
-					/>
-				) : isLoading ? (
-					/* Mirrors the loaded layout — a headline line, a diagnostics row, a button row — so
-					   resolving swaps text into boxes already the right size instead of shifting the page. */
-					<div className="space-y-4">
-						<Skeleton className="h-5 w-72" />
-						<div className="flex flex-wrap gap-8">
-							{Array.from({ length: 3 }, (_, index) => (
-								<div key={index} className="space-y-1">
-									<Skeleton className="h-3 w-20" />
-									<Skeleton className="h-4 w-28" />
-								</div>
-							))}
-						</div>
-						<Skeleton className="h-8 w-40" />
-					</div>
-				) : !status ? (
-					<p className="text-muted-foreground text-sm">
-						No {label} connection found for this workspace.
-					</p>
-				) : (
-					<>
-						<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-							{!credentialsUnreadableSince && (
-								<ConnectionHealthBadge health={status.health} isSyncing={activeJob != null} />
-							)}
-							<p className="text-sm">
-								{status.lastSuccessfulSyncAt ? (
-									<>
-										Last synced{" "}
-										<RelativeTime
-											value={status.lastSuccessfulSyncAt}
-											tone={freshnessTone(status.lastSuccessfulSyncAt, status.syncIntervalSeconds)}
-										/>
-									</>
-								) : (
-									/* "Never synced" on a connection with nothing to sync yet is an accusation the
-									   facts don't support — a fresh Slack workspace has no activated channels. */
-									<span className="text-muted-foreground">
-										{status.resourceCounts.total === 0
-											? "No resources to sync yet"
-											: "Never synced"}
-									</span>
-								)}
-								{nextRunLabel(status.nextScheduledSyncAt) && (
-									<span className="text-muted-foreground">
-										{" · "}
-										{nextRunLabel(status.nextScheduledSyncAt)}
-									</span>
-								)}
-							</p>
-						</div>
-
-						<ConnectionDiagnostics status={status} />
-
-						<ActiveJobProgress job={activeJob} />
-
-						{isConnectionActive && (!credentialsUnreadableSince || activeJob) && (
-							<div className="flex flex-wrap items-center gap-2 pt-2">
-								{/* Sync / Backfill / Cancel act on one connection, so they read as one control. */}
-								<ButtonGroup>
-									{/* A trigger would run on the credential nothing can read; cancelling a running job needs none. */}
-									{!credentialsUnreadableSince && (
-										<SyncNowButton
-											onClick={onSync}
-											triggeringType={triggeringType}
-											activeJob={activeJob}
-										/>
-									)}
-									{canBackfill && !credentialsUnreadableSince && (
-										<DropdownMenu>
-											<DropdownMenuTrigger
-												render={
-													<Button
-														variant="outline"
-														size="sm"
-														disabled={isTriggerBusy}
-														aria-label="More sync options"
-													>
-														<ChevronDownIcon className="size-4" />
-													</Button>
-												}
-											/>
-											{/* The popup is anchored to a chevron, so it must opt out of the default
-											    trigger-width sizing or "Run backfill" lands in a 32px column. */}
-											<DropdownMenuContent align="end" className="w-auto min-w-40">
-												<DropdownMenuItem onClick={onBackfill}>Run backfill</DropdownMenuItem>
-											</DropdownMenuContent>
-										</DropdownMenu>
-									)}
-									{activeJob && (
-										<Button
-											variant="outline"
-											size="sm"
-											disabled={isCancelling || activeJob.cancelRequested}
-											onClick={onCancel}
-										>
-											{activeJob.cancelRequested ? "Stopping after current step…" : "Cancel"}
-										</Button>
-									)}
-								</ButtonGroup>
-								{actions && <div className="ml-auto">{actions}</div>}
-							</div>
-						)}
-					</>
-				)}
-			</CardContent>
+			<CardContent className="space-y-4">{children}</CardContent>
 		</Card>
 	);
 }

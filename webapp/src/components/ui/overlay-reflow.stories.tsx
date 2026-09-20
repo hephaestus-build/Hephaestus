@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ReactElement, ReactNode } from "react";
-import { screen, userEvent } from "storybook/test";
+import { expect, screen, userEvent } from "storybook/test";
 
 import {
 	Combobox,
@@ -34,8 +34,8 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { settledPopup } from "@/test/overlay";
-import { expectNoPageOverflow, expectOverlayFollowsTrigger } from "@/test/reflow";
+import { settledPopup } from "@/stories/overlay";
+import { expectNoPageOverflow, expectOverlayFollowsTrigger } from "@/stories/reflow";
 
 /**
  * A cross-cutting regression suite, not a component's own stories: six primitives in this kit hang
@@ -61,7 +61,6 @@ import { expectNoPageOverflow, expectOverlayFollowsTrigger } from "@/test/reflow
  * measuring: the closed state never overflowed, which is exactly why this shipped.
  */
 const meta = {
-	title: "Tests/Overlay reflow",
 	tags: ["autodocs"],
 	parameters: {
 		layout: "fullscreen",
@@ -113,7 +112,7 @@ export const PopoverOverlay = reflowStory(
 	),
 	async () => {
 		await userEvent.click(screen.getByRole("button", { name: "Open popover" }));
-		return await screen.findByText(cardBody);
+		return screen.findByText(cardBody);
 	},
 );
 
@@ -133,7 +132,7 @@ export const HoverCardOverlay = reflowStory(
 	),
 	async () => {
 		await userEvent.hover(screen.getByRole("button", { name: "Show details" }));
-		return await screen.findByText(cardBody);
+		return screen.findByText(cardBody);
 	},
 );
 
@@ -149,7 +148,7 @@ export const TooltipOverlay = reflowStory(
 	),
 	async () => {
 		await userEvent.hover(screen.getByRole("button", { name: "Why is this off?" }));
-		return await screen.findByText(cardBody);
+		return screen.findByText(cardBody);
 	},
 );
 
@@ -167,7 +166,7 @@ export const DropdownMenuOverlay = reflowStory(
 	),
 	async () => {
 		await userEvent.click(screen.getByRole("button", { name: "Open menu" }));
-		return await screen.findByRole("menuitem", { name: menuItemLabel });
+		return screen.findByRole("menuitem", { name: menuItemLabel });
 	},
 );
 
@@ -193,7 +192,7 @@ export const SelectOverlay = reflowStory(
 	),
 	async () => {
 		await userEvent.click(screen.getByRole("combobox", { name: "Autonomy" }));
-		return await screen.findByRole("option", { name: optionLabel });
+		return screen.findByRole("option", { name: optionLabel });
 	},
 );
 
@@ -219,7 +218,7 @@ export const ComboboxOverlay = reflowStory(
 	),
 	async () => {
 		await userEvent.click(screen.getByRole("combobox", { name: "Autonomy" }));
-		return await screen.findByRole("option", { name: optionLabel });
+		return screen.findByRole("option", { name: optionLabel });
 	},
 );
 
@@ -314,5 +313,26 @@ export const FollowsTriggerInScrollArea: Story = {
 		await expectOverlayFollowsTrigger(trigger, popup, () => {
 			viewport.scrollTop += 40;
 		});
+	},
+};
+
+export const OversizedDropdownMenu: Story = {
+	render: () => (
+		<Page>
+			<DropdownMenu>
+				<DropdownMenuTrigger>Open wide menu</DropdownMenuTrigger>
+				<DropdownMenuContent className="w-[200vw]" align="end">
+					<DropdownMenuItem>View workspace settings</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</Page>
+	),
+	play: async () => {
+		await userEvent.click(screen.getByRole("button", { name: "Open wide menu" }));
+		const popup = await settledPopup();
+		const bounds = popup.getBoundingClientRect();
+		await expect(bounds.left).toBeGreaterThanOrEqual(0);
+		await expect(bounds.right).toBeLessThanOrEqual(window.innerWidth);
+		await expectNoPageOverflow();
 	},
 };

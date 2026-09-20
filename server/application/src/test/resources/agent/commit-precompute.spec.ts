@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -48,20 +48,25 @@ void test("a subject's shape is a fact — bare, repeated, listed, cut off — a
 });
 
 async function stage(slug: string, commits: unknown[]) {
-	const root = mkdtempSync(join(tmpdir(), "commit-precompute-"));
-	mkdirSync(join(root, "practices"));
-	mkdirSync(join(root, "work/change"), { recursive: true });
-	writeFileSync(join(root, "package.json"), '{"type":"module"}\n');
-	symlinkSync(join(repositoryRoot, "docker/agents/precompute/lib"), join(root, "lib"));
-	writeFileSync(join(root, "work/change/commits.json"), JSON.stringify({ commits }));
-	const staged = join(root, `practices/${slug}.ts`);
+	const root = mkdtempSync(path.join(tmpdir(), "commit-precompute-"));
+	mkdirSync(path.join(root, "practices"));
+	mkdirSync(path.join(root, "work/change"), { recursive: true });
+	writeFileSync(path.join(root, "package.json"), '{"type":"module"}\n');
+	symlinkSync(path.join(repositoryRoot, "docker/agents/precompute/lib"), path.join(root, "lib"));
+	writeFileSync(path.join(root, "work/change/commits.json"), JSON.stringify({ commits }));
+	const staged = path.join(root, `practices/${slug}.ts`);
 	cpSync(
-		join(repositoryRoot, `server/application/src/main/resources/practices/precompute/${slug}.ts`),
+		path.join(
+			repositoryRoot,
+			`server/application/src/main/resources/practices/precompute/${slug}.ts`,
+		),
 		staged,
 	);
 	const mod: unknown = await import(staged);
-	if (!isPracticeModule(mod)) throw new Error("script does not export a default function");
-	return { root, script: mod.default, changeDir: join(root, "work/change") };
+	if (!isPracticeModule(mod)) {
+		throw new Error("script does not export a default function");
+	}
+	return { root, script: mod.default, changeDir: path.join(root, "work/change") };
 }
 
 const metadata = {
@@ -83,21 +88,21 @@ void test("both commit practices read the subjects from the change view and stat
 		const { root, script, changeDir } = await stage(slug, commits);
 		try {
 			const result = await script(
-				join(root, "repo"),
+				path.join(root, "repo"),
 				new Map(),
 				metadata,
-				join(root, "context"),
+				path.join(root, "context"),
 				changeDir,
 			);
 			assert.equal(result.metrics.authoredCommits, 2);
 			assert.equal(result.metrics.mergeCommits, 1);
 			assert.match(
 				result.directions[0] ?? "",
-				/2 authored commit\(s\), 1 merge commit\(s\) excluded/,
+				/2 authored commit\(s\), 1 merge commit\(s\) excluded/u,
 			);
 			assert.match(
 				result.directions.join("\n"),
-				/2222222 "add location manager, SwiftData persistence, and UI color cleanup" — lists several concerns/,
+				/2222222 "add location manager, SwiftData persistence, and UI color cleanup" — lists several concerns/u,
 			);
 		} finally {
 			rmSync(root, { recursive: true, force: true });

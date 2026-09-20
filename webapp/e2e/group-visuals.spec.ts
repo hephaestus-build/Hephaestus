@@ -8,6 +8,6 @@ test("a new practice group's visual editor opens", async ({ page }) => {
 	await page.getByRole("button", { name: "Create group" }).click();
 	const createDialog = page.getByRole("dialog", { name: "Create group" });
 	await createDialog.getByRole("textbox", { name: "Name" }).fill("Code quality");
-	await createDialog.getByRole("button", { name: /Edit the icon and color/ }).click();
+	await createDialog.getByRole("button", { name: /Edit the icon and color/u }).click();
 	await expect(page.getByRole("dialog", { name: "Icon and color" })).toBeVisible();
 });

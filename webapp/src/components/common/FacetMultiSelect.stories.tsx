@@ -71,8 +71,8 @@ export const AccentInsensitiveSearch: Story = {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Workspaces" }));
 		await userEvent.type(await screen.findByPlaceholderText("Search…"), "arztliche");
 		const options = within(await screen.findByRole("listbox", { name: "Workspaces options" }));
-		await expect(await options.findByRole("option", { name: /Ärztliche/ })).toBeVisible();
-		await expect(options.queryByRole("option", { name: /Teaching/ })).toBeNull();
+		await expect(await options.findByRole("option", { name: /Ärztliche/u })).toBeVisible();
+		await expect(options.queryByRole("option", { name: /Teaching/u })).toBeNull();
 	},
 };
 
@@ -87,7 +87,7 @@ export const SelectsAnOption: Story = {
 export const ClearsTheSelection: Story = {
 	args: { selected: ["LOGIN_SUCCESS"] },
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("combobox", { name: /Event:/ }));
+		await userEvent.click(canvas.getByRole("combobox", { name: /Event:/u }));
 		await userEvent.click(await screen.findByRole("button", { name: "Clear selection" }));
 		await expect(args.onChange).toHaveBeenCalledWith([]);
 	},

@@ -18,18 +18,14 @@ export default function issueClosedWithUnmetOutcome(
 	const body = (m.body ?? "").trim();
 	const state = (m.state ?? "").toUpperCase();
 	const reason = m.state_reason ?? null;
-	const unchecked = (body.match(/^[\s>]*[-*]\s+\[ \]/gm) ?? []).length;
-	const checked = (body.match(/^[\s>]*[-*]\s+\[[xX]\]/gm) ?? []).length;
+	const unchecked = (body.match(/^[\s>]*[-*]\s+\[ \]/gmu) ?? []).length;
+	const checked = (body.match(/^[\s>]*[-*]\s+\[[xX]\]/gmu) ?? []).length;
 	const subTotal = m.sub_issues_total ?? 0;
 	const subDone = m.sub_issues_completed ?? 0;
 	const subOpen = Math.max(0, subTotal - subDone);
 
 	const directions: string[] = [];
-	if (state !== "CLOSED") {
-		directions.push(
-			`Issue state is ${state || "unknown"} — not CLOSED; this close-time check concerns only closed issues.`,
-		);
-	} else {
+	if (state === "CLOSED") {
 		directions.push(
 			`Current captured issue facts: state_reason=${reason ?? "none"}, uncheckedBoxes=${unchecked}, checkedBoxes=${checked}, subIssuesOpen=${subOpen}/${subTotal}, closed_at=${m.closed_at ?? "?"}.`,
 		);
@@ -42,6 +38,10 @@ export default function issueClosedWithUnmetOutcome(
 				`The current record has ${checked} checked item(s) and ${subTotal} completed sub-issue(s). This does not establish their state at closure or prove the work was verified; inspect dated closure evidence before assessing that event.`,
 			);
 		}
+	} else {
+		directions.push(
+			`Issue state is ${state || "unknown"} — not CLOSED; this close-time check concerns only closed issues.`,
+		);
 	}
 
 	const hints: Hint[] = [];

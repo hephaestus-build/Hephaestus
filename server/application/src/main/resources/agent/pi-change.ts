@@ -13,7 +13,7 @@
 // review, or a change the server could not pin) writes nothing, and the manifest already says so.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 
 import { SUPPORTED_SCHEMA_VERSION, resolveTaskPaths } from "./pi-task-paths.ts";
 
@@ -21,8 +21,10 @@ export const CHANGE_ROOT = "work/change";
 
 /** The change the server pinned, from `<contextRoot>/change.json`; null when none was captured. */
 export function readChange(contextRoot: string): { base: string; head: string } | null {
-	const file = resolve(contextRoot, "change.json");
-	if (!existsSync(file)) return null;
+	const file = path.resolve(contextRoot, "change.json");
+	if (!existsSync(file)) {
+		return null;
+	}
 	const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
 	const base: unknown =
 		typeof parsed === "object" && parsed !== null ? Reflect.get(parsed, "base_sha") : null;
@@ -35,7 +37,7 @@ export function readChange(contextRoot: string): { base: string; head: string } 
 }
 
 function isSha(value: string): boolean {
-	return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(value);
+	return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/u.test(value);
 }
 
 /**
@@ -52,7 +54,10 @@ export function annotateDiff(patch: Buffer): Buffer {
 	let newLeft = 0;
 	for (const line of lines) {
 		if (oldLeft === 0 && newLeft === 0) {
-			const hunk = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+			const hunk =
+				/^@@ -(?<oldStart>\d+)(?:,(?<oldCount>\d+))? \+(?<newStart>\d+)(?:,(?<newCount>\d+))? @@/u.exec(
+					line,
+				);
 			if (hunk) {
 				oldLine = Number(hunk[1]);
 				oldLeft = hunk[2] === undefined ? 1 : Number(hunk[2]);
@@ -65,16 +70,19 @@ export function annotateDiff(patch: Buffer): Buffer {
 		if (line.startsWith("\\")) {
 			out.push(line);
 		} else if (line.startsWith("+")) {
-			out.push(`[L${newLine++}] ${line}`);
-			newLeft--;
+			out.push(`[L${newLine}] ${line}`);
+			newLine += 1;
+			newLeft -= 1;
 		} else if (line.startsWith("-")) {
-			out.push(`[L${oldLine++}] ${line}`);
-			oldLeft--;
+			out.push(`[L${oldLine}] ${line}`);
+			oldLine += 1;
+			oldLeft -= 1;
 		} else if (line.startsWith(" ")) {
-			out.push(`[L${newLine++}] ${line}`);
-			oldLine++;
-			oldLeft--;
-			newLeft--;
+			out.push(`[L${newLine}] ${line}`);
+			newLine += 1;
+			oldLine += 1;
+			oldLeft -= 1;
+			newLeft -= 1;
 		} else {
 			throw new Error(
 				`git diff: unexpected line inside a hunk: ${JSON.stringify(line.slice(0, 80))}`,
@@ -87,23 +95,34 @@ export function annotateDiff(patch: Buffer): Buffer {
 /** `git diff --name-status -z` as records. Renames and copies carry the old path first. */
 export function parseNameStatus(
 	output: Buffer,
-): Array<{ status: string; path: string; oldPath?: string }> {
+): { status: string; path: string; oldPath?: string }[] {
 	const fields = output.toString("utf8").split("\0");
-	if (fields.at(-1) === "") fields.pop();
-	const files: Array<{ status: string; path: string; oldPath?: string }> = [];
-	for (let index = 0; index < fields.length;) {
-		const status = fields[index++] ?? "";
+	if (fields.at(-1) === "") {
+		fields.pop();
+	}
+	const files: { status: string; path: string; oldPath?: string }[] = [];
+	let index = 0;
+	const next = (): string | undefined => {
+		const field = fields[index];
+		index += 1;
+		return field;
+	};
+	while (index < fields.length) {
+		const status = next() ?? "";
 		const letter = status.charAt(0);
 		if (letter === "R" || letter === "C") {
-			const oldPath = fields[index++];
-			const path = fields[index++];
-			if (oldPath === undefined || path === undefined)
+			const oldPath = next();
+			const newPath = next();
+			if (oldPath === undefined || newPath === undefined) {
 				throw new Error("git diff --name-status: truncated record");
-			files.push({ status: letter, path, oldPath });
+			}
+			files.push({ status: letter, path: newPath, oldPath });
 		} else {
-			const path = fields[index++];
-			if (path === undefined) throw new Error("git diff --name-status: truncated record");
-			files.push({ status: letter, path });
+			const file = next();
+			if (file === undefined) {
+				throw new Error("git diff --name-status: truncated record");
+			}
+			files.push({ status: letter, path: file });
 		}
 	}
 	return files;
@@ -116,12 +135,14 @@ export function parseNameStatus(
 export function parseCommits(output: Buffer) {
 	const records = output
 		.toString("utf8")
-		.split("\u001e")
-		.map((record) => record.replace(/^\n/, ""))
+		.split("\u001E")
+		.map((record) => record.replace(/^\n/u, ""))
 		.filter((record) => record !== "");
 	return records.map((record) => {
 		const [sha, parents, author, authoredAt, committer, committedAt, message] = record.split("\0");
-		if (sha === undefined || message === undefined) throw new Error("git log: truncated record");
+		if (sha === undefined || message === undefined) {
+			throw new Error("git log: truncated record");
+		}
 		return {
 			sha,
 			parents: parents === undefined || parents === "" ? [] : parents.split(" "),
@@ -129,7 +150,7 @@ export function parseCommits(output: Buffer) {
 			authoredAt: authoredAt ?? "",
 			committer: committer ?? "",
 			committedAt: committedAt ?? "",
-			message: message.replace(/\n$/, ""),
+			message: message.replace(/\n$/u, ""),
 		};
 	});
 }
@@ -148,7 +169,9 @@ function git(repository: string, args: string[]): Buffer {
 			env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" },
 		},
 	);
-	if (child.error) throw child.error;
+	if (child.error) {
+		throw child.error;
+	}
 	if (child.status !== 0) {
 		throw new Error(
 			`git ${args[0]} failed (${child.status}): ${child.stderr.toString("utf8").trim()}`,
@@ -162,19 +185,19 @@ export function writeChangeView(
 	repository: string,
 	change: { base: string; head: string },
 ) {
-	const out = resolve(root, CHANGE_ROOT);
+	const out = path.resolve(root, CHANGE_ROOT);
 	mkdirSync(out, { recursive: true });
 	const range = [change.base, change.head];
 	const patch = git(repository, ["diff", "--no-color", "--no-ext-diff", RENAMES, ...range]);
-	writeFileSync(resolve(out, "diff.patch"), annotateDiff(patch));
+	writeFileSync(path.resolve(out, "diff.patch"), annotateDiff(patch));
 	writeFileSync(
-		resolve(out, "diff_stat.txt"),
+		path.resolve(out, "diff_stat.txt"),
 		git(repository, ["diff", "--no-color", "--no-ext-diff", "--stat=200", RENAMES, ...range]),
 	);
 	const files = parseNameStatus(
 		git(repository, ["diff", "--no-color", "--name-status", "-z", RENAMES, ...range]),
 	);
-	writeFileSync(resolve(out, "files.json"), `${JSON.stringify({ files }, null, 2)}\n`);
+	writeFileSync(path.resolve(out, "files.json"), `${JSON.stringify({ files }, null, 2)}\n`);
 	const commits = parseCommits(
 		git(repository, [
 			"log",
@@ -184,18 +207,21 @@ export function writeChangeView(
 			`${change.base}..${change.head}`,
 		]),
 	);
-	writeFileSync(resolve(out, "commits.json"), `${JSON.stringify({ commits }, null, 2)}\n`);
+	writeFileSync(path.resolve(out, "commits.json"), `${JSON.stringify({ commits }, null, 2)}\n`);
 }
 
 if (import.meta.filename === process.argv[1]) {
-	const root = resolve(process.argv[2] ?? "/workspace");
-	const envelope: unknown = JSON.parse(readFileSync(resolve(root, "task.json"), "utf8"));
-	if (typeof envelope !== "object" || envelope === null)
+	const root = path.resolve(process.argv[2] ?? "/workspace");
+	const envelope: unknown = JSON.parse(readFileSync(path.resolve(root, "task.json"), "utf8"));
+	if (typeof envelope !== "object" || envelope === null) {
 		throw new Error("task.json: expected an envelope");
+	}
 	if (Reflect.get(envelope, "schemaVersion") !== SUPPORTED_SCHEMA_VERSION) {
 		throw new Error("task.json: unsupported schemaVersion");
 	}
 	const paths = resolveTaskPaths(root, Reflect.get(envelope, "paths"));
 	const change = readChange(paths.contextRoot);
-	if (change !== null) writeChangeView(root, paths.repositoryRoot, change);
+	if (change !== null) {
+		writeChangeView(root, paths.repositoryRoot, change);
+	}
 }

@@ -3,7 +3,7 @@
 // in the change or the checkout's Info.plist / project.yml. Pairing a capability with its key is a fact;
 // whether the description is truthful and the request sits at the point of use is the review's.
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import { globFilesSync } from "../lib/files.ts";
 import { scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
@@ -13,60 +13,60 @@ import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 const CAPABILITIES: readonly [string, RegExp, string[]][] = [
 	[
 		"CoreLocation",
-		/\bimport CoreLocation\b|\bCLLocationManager\b/,
+		/\bimport CoreLocation\b|\bCLLocationManager\b/u,
 		["NSLocationWhenInUseUsageDescription", "NSLocationAlwaysAndWhenInUseUsageDescription"],
 	],
 	[
 		"Camera",
-		/\bAVCaptureDevice\b|\bAVCaptureSession\b|\bUIImagePickerController\b|\.camera\b/,
+		/\bAVCaptureDevice\b|\bAVCaptureSession\b|\bUIImagePickerController\b|\.camera\b/u,
 		["NSCameraUsageDescription"],
 	],
 	[
 		"Microphone",
-		/\bAVAudioRecorder\b|\bAVAudioSession\b.*record|\.record\(/,
+		/\bAVAudioRecorder\b|\bAVAudioSession\b.*record|\.record\(/u,
 		["NSMicrophoneUsageDescription"],
 	],
 	[
 		"PhotoLibrary",
-		/\bPHPhotoLibrary\b|\bPHPickerViewController\b|\bPHAsset\b/,
+		/\bPHPhotoLibrary\b|\bPHPickerViewController\b|\bPHAsset\b/u,
 		["NSPhotoLibraryUsageDescription", "NSPhotoLibraryAddUsageDescription"],
 	],
-	["Notifications", /\bUNUserNotificationCenter\b/, []],
+	["Notifications", /\bUNUserNotificationCenter\b/u, []],
 	[
 		"Calendar",
-		/\bEKEventStore\b/,
+		/\bEKEventStore\b/u,
 		[
 			"NSCalendarsUsageDescription",
 			"NSCalendarsFullAccessUsageDescription",
 			"NSCalendarsWriteOnlyAccessUsageDescription",
 		],
 	],
-	["Contacts", /\bCNContactStore\b/, ["NSContactsUsageDescription"]],
+	["Contacts", /\bCNContactStore\b/u, ["NSContactsUsageDescription"]],
 	[
 		"HealthKit",
-		/\bHKHealthStore\b/,
+		/\bHKHealthStore\b/u,
 		["NSHealthShareUsageDescription", "NSHealthUpdateUsageDescription"],
 	],
-	["Tracking", /\bATTrackingManager\b/, ["NSUserTrackingUsageDescription"]],
+	["Tracking", /\bATTrackingManager\b/u, ["NSUserTrackingUsageDescription"]],
 	[
 		"Bluetooth",
-		/\bCBCentralManager\b|\bCBPeripheralManager\b/,
+		/\bCBCentralManager\b|\bCBPeripheralManager\b/u,
 		["NSBluetoothAlwaysUsageDescription"],
 	],
-	["Motion", /\bCMMotionActivityManager\b|\bCMPedometer\b/, ["NSMotionUsageDescription"]],
-	["Speech", /\bSFSpeechRecognizer\b/, ["NSSpeechRecognitionUsageDescription"]],
-	["LocalNetwork", /\bNWBrowser\b|\bNetService\b/, ["NSLocalNetworkUsageDescription"]],
+	["Motion", /\bCMMotionActivityManager\b|\bCMPedometer\b/u, ["NSMotionUsageDescription"]],
+	["Speech", /\bSFSpeechRecognizer\b/u, ["NSSpeechRecognitionUsageDescription"]],
+	["LocalNetwork", /\bNWBrowser\b|\bNetService\b/u, ["NSLocalNetworkUsageDescription"]],
 ];
 
 const REQUEST: readonly SourcePattern[] = [
 	[
 		"authorization request",
-		/\brequest(?:WhenInUse|Always)?Authorization\b|\brequestAccess\b|\brequestTrackingAuthorization\b|\bPHPhotoLibrary\.requestAuthorization\b/,
+		/\brequest(?:WhenInUse|Always)?Authorization\b|\brequestAccess\b|\brequestTrackingAuthorization\b|\bPHPhotoLibrary\.requestAuthorization\b/u,
 	],
 	...CAPABILITIES.map(([label, re]): SourcePattern => [`capability ${label}`, re]),
 ];
 
-const USAGE_KEY = /\b(NS\w+UsageDescription)\b/g;
+const USAGE_KEY = /\b(?<key>NS\w+UsageDescription)\b/gu;
 
 async function usageKeysInCheckout(repoPath: string): Promise<Map<string, string>> {
 	const found = new Map<string, string>();
@@ -75,17 +75,19 @@ async function usageKeysInCheckout(repoPath: string): Promise<Map<string, string
 		...globFilesSync("**/project.yml", repoPath),
 		...globFilesSync("**/project.yaml", repoPath),
 		...globFilesSync("**/*.xcodeproj/project.pbxproj", repoPath),
-	].filter((f) => !/(?:^|\/)(?:Pods|\.build|DerivedData|Carthage)\//.test(f));
+	].filter((f) => !/(?:^|\/)(?:Pods|\.build|DerivedData|Carthage)\//u.test(f));
 	for (const file of files.slice(0, 20)) {
 		let text: string;
 		try {
-			text = await readFile(join(repoPath, file), "utf8");
+			text = await readFile(path.join(repoPath, file), "utf8");
 		} catch {
 			continue;
 		}
 		for (const match of text.matchAll(USAGE_KEY)) {
-			const key = match[1] ?? "";
-			if (!found.has(key)) found.set(key, file);
+			const key = match.groups?.key ?? "";
+			if (!found.has(key)) {
+				found.set(key, file);
+			}
 		}
 	}
 	return found;
@@ -103,14 +105,16 @@ export default async function declaresPermissionsTruthfullyAtPointOfUse(
 	const hints: Hint[] = [...scan.hints];
 	// Usage keys the change itself adds, in any file.
 	const keysInChange = new Map<string, { file: string; line: number }>();
-	for (const [path, df] of diffFiles) {
-		if (!/Info\.plist$|project\.ya?ml$|project\.pbxproj$/.test(path)) continue;
+	for (const [file, df] of diffFiles) {
+		if (!/Info\.plist$|project\.ya?ml$|project\.pbxproj$/u.test(file)) {
+			continue;
+		}
 		for (const [line, content] of df.addedLines) {
 			for (const match of content.matchAll(USAGE_KEY)) {
-				const key = match[1] ?? "";
-				keysInChange.set(key, { file: path, line });
+				const key = match.groups?.key ?? "";
+				keysInChange.set(key, { file, line });
 				hints.push({
-					file: path,
+					file,
 					line,
 					pattern: "usage key added",
 					context: content.trim().slice(0, 160),
@@ -131,8 +135,12 @@ export default async function declaresPermissionsTruthfullyAtPointOfUse(
 	const undeclared: string[] = [];
 	for (const label of capabilities) {
 		const keys = CAPABILITIES.find(([l]) => l === label)?.[2] ?? [];
-		if (keys.length === 0) continue;
-		if (!keys.some((k) => keysInChange.has(k) || keysInCheckout.has(k))) undeclared.push(label);
+		if (keys.length === 0) {
+			continue;
+		}
+		if (!keys.some((k) => keysInChange.has(k) || keysInCheckout.has(k))) {
+			undeclared.push(label);
+		}
 	}
 	const directions: string[] = [];
 	if (capabilities.length > 0) {

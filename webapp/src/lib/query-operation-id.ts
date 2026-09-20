@@ -7,6 +7,8 @@ import { isRecord } from "@/lib/is-record";
  */
 export function queryOperationId(queryKey: readonly unknown[]): string | undefined {
 	const [head] = queryKey;
-	if (!isRecord(head)) return undefined;
+	if (!isRecord(head)) {
+		return undefined;
+	}
 	return typeof head._id === "string" ? head._id : undefined;
 }

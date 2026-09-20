@@ -2,12 +2,12 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen } from "storybook/test";
 
 import type { CatalogEntryStatus } from "@/api/types.gen";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { withPageBehind } from "@/stories/decorators";
+import { settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow, expectPanelContentInset } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { settledDrawerPanel } from "@/test/overlay";
-import { expectNoPanelOverflow, expectPanelContentInset } from "@/test/reflow";
 
 import { curatedGroupLevel, GUARDED_CURATED_LEVEL_KINDS } from "./curated-catalog-search";
 import { CuratedFormLevel } from "./CuratedFormLevel";
@@ -35,7 +35,6 @@ const initialData = {
  * written — and so these stories exercise the surface people actually get.
  */
 const meta = {
-	title: "Instance admin/Practice catalog/Group editor",
 	component: CuratedGroupForm,
 	parameters: { layout: "fullscreen", chromatic: { viewports: [1440] } },
 	decorators: [withPageBehind],
@@ -93,7 +92,7 @@ export const StaleEdit: Story = {
 export const Submitting: Story = {
 	args: { mode: "edit", initialData, isPending: true },
 	play: async () => {
-		await expect(screen.getByRole("textbox", { name: /Name/ })).toBeDisabled();
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toBeDisabled();
 	},
 };
 

@@ -38,16 +38,20 @@ function PresetIcon({ preset, className }: { preset: TimeframePreset; className?
 	const iconClass = cn("h-4 w-4 shrink-0", className);
 
 	switch (preset) {
-		case "all-activity":
+		case "all-activity": {
 			return <Clock className={iconClass} />;
+		}
 		case "this-week":
-		case "last-week":
+		case "last-week": {
 			return <CalendarDays className={iconClass} />;
+		}
 		case "this-month":
-		case "last-month":
+		case "last-month": {
 			return <CalendarIcon className={iconClass} />;
-		case "custom":
+		}
+		case "custom": {
 			return <CalendarRange className={iconClass} />;
+		}
 	}
 }
 
@@ -95,7 +99,9 @@ export function ProfileTimeframePicker({
 	};
 
 	const handleCustomRangeChange = (range: DateRange | undefined) => {
-		if (!range?.from) return;
+		if (!range?.from) {
+			return;
+		}
 		const dates = formatDateRangeForApi(
 			getDateRangeForPreset(now, "custom", schedule, { from: range.from, to: range.to }),
 		);
@@ -103,9 +109,11 @@ export function ProfileTimeframePicker({
 	};
 
 	const formatCustomRangeLabel = () => {
-		if (!customRange?.from) return "Pick dates";
-		const from = customRange.from;
-		const to = customRange.to;
+		if (!customRange?.from) {
+			return "Pick dates";
+		}
+		const { from } = customRange;
+		const { to } = customRange;
 
 		if (!to) {
 			return `since ${format(from, "MMM d")}`;
@@ -124,7 +132,11 @@ export function ProfileTimeframePicker({
 		<div className="flex flex-wrap items-center gap-2">
 			<Select
 				value={selectedPreset}
-				onValueChange={(value) => value && handlePresetChange(value)}
+				onValueChange={(value) => {
+					if (value) {
+						handlePresetChange(value);
+					}
+				}}
 				items={items}
 			>
 				<SelectTrigger className="w-65" aria-label="Timeframe">

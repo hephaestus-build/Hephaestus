@@ -1,5 +1,4 @@
 import type { AgentJob } from "@/api/types.gen";
-import { isCancellable, isResultProcessingRetryable } from "@/components/admin/ai/job-utils";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -12,6 +11,7 @@ import {
 	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { isCancellable, isResultProcessingRetryable } from "./job-utils";
 
 export interface ReviewRunActionsProps {
 	job: AgentJob;
@@ -28,7 +28,9 @@ export function ReviewRunActions({
 	onCancel,
 	onRetry,
 }: ReviewRunActionsProps) {
-	if (!isCancellable(job.status) && !isResultProcessingRetryable(job)) return null;
+	if (!isCancellable(job.status) && !isResultProcessingRetryable(job)) {
+		return null;
+	}
 	return (
 		<div className="flex gap-2">
 			{isCancellable(job.status) && (

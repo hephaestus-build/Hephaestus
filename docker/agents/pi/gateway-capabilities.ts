@@ -15,7 +15,9 @@ export async function discoverCapabilities(
 	headers: Record<string, string>,
 ): Promise<GatewayCapabilities> {
 	const discovery = await fetch(endpoint, { headers });
-	if (!discovery.ok) throw new Error(`Gateway discovery refused: ${discovery.status}`);
+	if (!discovery.ok) {
+		throw new Error(`Gateway discovery refused: ${discovery.status}`);
+	}
 	const capabilities: unknown = await discovery.json();
 	if (
 		typeof capabilities !== "object" ||
@@ -24,14 +26,21 @@ export async function discoverCapabilities(
 		capabilities.protocolVersion !== PROTOCOL_VERSION ||
 		!("workspaceByteBudget" in capabilities) ||
 		!isByteBudget(capabilities.workspaceByteBudget)
-	)
+	) {
 		throw new Error("Invalid gateway capabilities");
+	}
 	// Absent on the wire for a session with no interactive channel.
 	const frameByteBudget = "frameByteBudget" in capabilities ? capabilities.frameByteBudget : null;
-	if (frameByteBudget !== null && !isByteBudget(frameByteBudget))
+	if (frameByteBudget !== null && !isByteBudget(frameByteBudget)) {
 		throw new Error("Invalid gateway capabilities");
+	}
 	return {
 		workspaceByteBudget: capabilities.workspaceByteBudget,
 		frameByteBudget,
 	};
+}
+
+/** Whether an environment value is set and not empty: the gateway refuses to start on either. */
+export function present(value: string | undefined): value is string {
+	return value !== undefined && value !== "";
 }

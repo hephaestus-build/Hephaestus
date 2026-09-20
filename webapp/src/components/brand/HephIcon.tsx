@@ -1,6 +1,8 @@
 import { cn } from "cn";
 import styles from "./HephIcon.module.css";
 
+import { hasText } from "@/lib/text";
+
 interface HephIconProps {
 	size?: number;
 	strokeWidth?: number;
@@ -20,20 +22,23 @@ export function HephIcon({
 	className,
 	label,
 }: HephIconProps) {
+	let pingOpacity = "0";
+	if (animated) {
+		pingOpacity = streaming ? "1" : "0.5";
+	}
 	return (
 		<svg
 			className={cn(styles.icon, animated && styles.animated, className)}
-			height={size}
-			width={size}
+			style={{ "--heph-size": `${size}px` }}
 			viewBox={`-${pad} -${pad} ${24 + pad * 2} ${24 + pad * 2}`}
 			fill="none"
 			stroke="currentColor"
 			strokeWidth={strokeWidth}
 			strokeLinecap="round"
 			strokeLinejoin="round"
-			role={label ? "img" : undefined}
+			role={hasText(label) ? "img" : undefined}
 			aria-label={label}
-			aria-hidden={label ? undefined : true}
+			aria-hidden={hasText(label) ? undefined : true}
 		>
 			<ellipse className={styles.shadow} cx="12" cy="23.6" rx="5" ry="1.2" fill="currentColor" />
 			<g className={styles.float}>
@@ -41,13 +46,12 @@ export function HephIcon({
 					<line x1="12" y1="7.2" x2="12" y2="3.6" />
 					<circle cx="12" cy="2.8" r="1" fill="currentColor" />
 					<circle
-						className={cn(styles.ping, streaming && styles.streaming)}
+						className={cn(styles.ping, streaming && [styles.streaming, "text-mentor"])}
 						cx="12"
 						cy="2.8"
 						r={streaming ? 4 : 1.6}
 						fill="none"
-						style={{ color: streaming ? "var(--color-mentor)" : undefined }}
-						opacity={animated ? (streaming ? "1" : "0.5") : "0"}
+						opacity={pingOpacity}
 					/>
 					<rect x="4" y="8" width="16" height="12" rx="3" />
 					<path d="M2 14h2" />

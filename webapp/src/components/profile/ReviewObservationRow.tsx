@@ -1,8 +1,10 @@
 import { cn } from "cn";
 import { ChevronDownIcon } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { PracticeGroupReviewObservation } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { type StatusDefs, statusToneClass, statusValues } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	FEEDBACK_RESOLUTION_DEFS,
 	type FeedbackResolution,
@@ -12,15 +14,10 @@ import {
 	type FeedbackUsefulness,
 } from "@/components/practice-vocabulary/feedback-usefulness-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import {
-	type StatusDefs,
-	statusToneClass,
-	statusValues,
-} from "@/components/practice-vocabulary/status-def";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { hasText } from "@/lib/text";
 import { toEvidenceLocations } from "./evidence";
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
 import { FeedbackComment } from "./FeedbackComment";
@@ -60,7 +57,7 @@ function ResponseChoice<TValue extends string>({
 						size="sm"
 						aria-pressed={isChosen}
 						disabled={isPending}
-						className={cn(isChosen && "bg-muted", isChosen && statusToneClass(def.badgeVariant))}
+						className={cn(isChosen && statusToneClass(def.badgeVariant))}
 						onClick={() => onChoose(value)}
 					>
 						<Icon aria-hidden />
@@ -95,7 +92,7 @@ export function ReviewObservationRow({
 	const kind = observationKind(observation);
 	const status = OBSERVATION_KIND_PRESENTATION[kind];
 	const StatusIcon = status.icon;
-	const canRespond = Boolean(observation.feedbackId && onRespond);
+	const canRespond = Boolean(hasText(observation.feedbackId) && onRespond);
 	const canOpen = onToggle !== undefined || canRespond;
 	const detail = detailState?.detail;
 	const evidenceLocations = toEvidenceLocations(detail?.evidence);
@@ -109,7 +106,9 @@ export function ReviewObservationRow({
 	const selectedResolution =
 		pendingResolution === recorded.resolution ? undefined : pendingResolution;
 	const respond = (change: FeedbackResponse) => {
-		if (!observation.feedbackId || !onRespond) return;
+		if (!hasText(observation.feedbackId) || !onRespond) {
+			return;
+		}
 		onRespond(observation, { ...recorded, ...change });
 	};
 	const toggleUsefulness = (usefulness: FeedbackUsefulness) =>
@@ -119,13 +118,89 @@ export function ReviewObservationRow({
 			setPendingResolution(undefined);
 			return;
 		}
-		if (resolution === "DISPUTED" && !recorded.comment?.trim()) {
+		if (resolution === "DISPUTED" && !hasText(recorded.comment?.trim())) {
 			setPendingResolution(resolution);
 			return;
 		}
 		setPendingResolution(undefined);
 		respond({ resolution: recorded.resolution === resolution ? undefined : resolution });
 	};
+
+	let panel: ReactNode;
+	if (detailState?.isLoading === true) {
+		panel = (
+			<div className="flex flex-col gap-2">
+				<Skeleton className="h-4 w-3/4" />
+				<Skeleton className="h-4 w-2/3" />
+			</div>
+		);
+	} else if (detailState?.error == null) {
+		panel = (
+			<div className="flex min-w-0 flex-col gap-4">
+				<div className="grid min-w-0 gap-4 sm:grid-cols-2">
+					{hasText(reasoning) && (
+						<div className="flex flex-col gap-1">
+							<p className="text-xs font-medium text-muted-foreground">Why this was noted</p>
+							<p className="text-sm text-pretty">{reasoning}</p>
+						</div>
+					)}
+					{hasText(guidance) && (
+						<div className="flex flex-col gap-1">
+							<p className="text-xs font-medium text-muted-foreground">What to try next</p>
+							<p className="text-sm text-pretty">{guidance}</p>
+						</div>
+					)}
+				</div>
+				{evidenceLocations.length > 0 && (
+					<div className="flex min-w-0 flex-col gap-2">
+						<p className="text-xs font-medium text-muted-foreground">Evidence</p>
+						{evidenceLocations.map((location, index) => (
+							<EvidenceFileBlock
+								key={`${location.path}-${location.revision ?? ""}-${location.startLine}`}
+								location={location}
+								detector={detail?.evidence?.detector}
+								defaultOpen={index === 0}
+							/>
+						))}
+					</div>
+				)}
+				{detailState && !hasDetails && (
+					<p className="text-sm text-muted-foreground">
+						No further detail was recorded for this observation.
+					</p>
+				)}
+				{canRespond && (
+					<div className="flex flex-col gap-3 border-t pt-3">
+						<ResponseChoice
+							legend="Was this feedback helpful?"
+							defs={FEEDBACK_USEFULNESS_DEFS}
+							chosen={recorded.usefulness}
+							isPending={isFeedbackResponsePending}
+							onChoose={toggleUsefulness}
+						/>
+						<ResponseChoice
+							legend="What did you do about it?"
+							defs={FEEDBACK_RESOLUTION_DEFS}
+							chosen={selectedResolution ?? recorded.resolution}
+							isPending={isFeedbackResponsePending}
+							onChoose={toggleResolution}
+						/>
+						<FeedbackComment
+							key={`${observation.observationId}:${recorded.comment ?? ""}`}
+							comment={recorded.comment}
+							isRequired={selectedResolution === "DISPUTED" || recorded.resolution === "DISPUTED"}
+							isPending={isFeedbackResponsePending}
+							onSave={(comment) => {
+								respond({ comment, resolution: selectedResolution ?? recorded.resolution });
+							}}
+						/>
+					</div>
+				)}
+			</div>
+		);
+	} else {
+		panel = <QueryErrorAlert error={detailState.error} title="Could not load this observation" />;
+	}
 
 	return (
 		<li>
@@ -135,14 +210,16 @@ export function ReviewObservationRow({
 				onOpenChange={
 					onToggle
 						? (open) => {
-								if (open !== Boolean(isOpen)) onToggle(observation.observationId);
+								if (open !== Boolean(isOpen)) {
+									onToggle(observation.observationId);
+								}
 							}
 						: undefined
 				}
 			>
 				<CollapsibleTrigger
 					disabled={!canOpen}
-					className="grid w-full min-w-0 gap-2 px-4 py-3 text-left transition-colors enabled:hover:bg-muted/30 enabled:focus-visible:outline-none enabled:focus-visible:ring-2 enabled:focus-visible:ring-ring/50 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-4"
+					className="grid w-full min-w-0 gap-2 px-4 py-3 text-left transition-colors enabled:hover:bg-muted/30 enabled:focus-visible:ring-2 enabled:focus-visible:ring-ring/50 enabled:focus-visible:outline-none sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-4"
 				>
 					<div className="min-w-0">
 						<p className="truncate text-sm font-medium">{title}</p>
@@ -170,80 +247,7 @@ export function ReviewObservationRow({
 				</CollapsibleTrigger>
 				{canOpen && (
 					<CollapsibleContent className="border-t bg-muted/20 px-4 py-4">
-						{detailState?.isLoading ? (
-							<div className="flex flex-col gap-2">
-								<Skeleton className="h-4 w-3/4" />
-								<Skeleton className="h-4 w-2/3" />
-							</div>
-						) : detailState?.error ? (
-							<QueryErrorAlert error={detailState.error} title="Could not load this observation" />
-						) : (
-							<div className="flex min-w-0 flex-col gap-4">
-								<div className="grid min-w-0 gap-4 sm:grid-cols-2">
-									{reasoning && (
-										<div className="flex flex-col gap-1">
-											<p className="text-xs font-medium text-muted-foreground">
-												Why this was noted
-											</p>
-											<p className="text-sm text-pretty">{reasoning}</p>
-										</div>
-									)}
-									{guidance && (
-										<div className="flex flex-col gap-1">
-											<p className="text-xs font-medium text-muted-foreground">What to try next</p>
-											<p className="text-sm text-pretty">{guidance}</p>
-										</div>
-									)}
-								</div>
-								{evidenceLocations.length > 0 && (
-									<div className="flex min-w-0 flex-col gap-2">
-										<p className="text-xs font-medium text-muted-foreground">Evidence</p>
-										{evidenceLocations.map((location, index) => (
-											<EvidenceFileBlock
-												key={`${location.path}-${location.revision ?? ""}-${location.startLine}`}
-												location={location}
-												detector={detail?.evidence?.detector}
-												defaultOpen={index === 0}
-											/>
-										))}
-									</div>
-								)}
-								{detailState && !hasDetails && (
-									<p className="text-sm text-muted-foreground">
-										No further detail was recorded for this observation.
-									</p>
-								)}
-								{canRespond && (
-									<div className="flex flex-col gap-3 border-t pt-3">
-										<ResponseChoice
-											legend="Was this feedback helpful?"
-											defs={FEEDBACK_USEFULNESS_DEFS}
-											chosen={recorded.usefulness}
-											isPending={isFeedbackResponsePending}
-											onChoose={toggleUsefulness}
-										/>
-										<ResponseChoice
-											legend="What did you do about it?"
-											defs={FEEDBACK_RESOLUTION_DEFS}
-											chosen={selectedResolution ?? recorded.resolution}
-											isPending={isFeedbackResponsePending}
-											onChoose={toggleResolution}
-										/>
-										<FeedbackComment
-											key={`${observation.observationId}:${recorded.comment ?? ""}`}
-											comment={recorded.comment}
-											isRequired={
-												selectedResolution === "DISPUTED" || recorded.resolution === "DISPUTED"
-											}
-											isPending={isFeedbackResponsePending}
-											onSave={(comment) => {
-												respond({ comment, resolution: selectedResolution ?? recorded.resolution });
-											}}
-										/>
-									</div>
-								)}
-							</div>
-						)}
+						{panel}
 					</CollapsibleContent>
 				)}
 			</Collapsible>

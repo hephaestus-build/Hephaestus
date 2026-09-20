@@ -70,10 +70,10 @@ export const AlmostLevelUp: Story = {
 
 export const HighLevel: Story = {
 	args: {
-		currentXP: 25000,
-		xpNeeded: 50000,
+		currentXP: 25_000,
+		xpNeeded: 50_000,
 		nextLevel: 51,
-		totalXP: 1250000,
+		totalXP: 1_250_000,
 		contributingSince: "January 2019",
 		className: "w-[320px]",
 	},

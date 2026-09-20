@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, resolve as resolvePath } from "node:path";
+import nodePath from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import {
 	type AgentSession,
@@ -69,6 +70,7 @@ import {
 } from "./pi-runner-usage.ts";
 import { stopSession } from "./pi-session-lifecycle.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
+import { hasText, isBlank } from "./pi-text.ts";
 
 // One review is one session. The server captured the inputs; pi-change.ts derived the change view;
 // this runner puts the brief in front of the model, walks the practices as turns of that one session,
@@ -85,8 +87,12 @@ function jsonArray(value: unknown): unknown[] {
 }
 
 function logValue(value: unknown): string {
-	if (typeof value === "string") return value;
-	if (value === undefined) return "undefined";
+	if (typeof value === "string") {
+		return value;
+	}
+	if (value === undefined) {
+		return "undefined";
+	}
 	return JSON.stringify(value);
 }
 
@@ -119,7 +125,10 @@ function submittedList(value: unknown): { items: unknown[] } | { error: string }
 
 /** The list, or the one item that was sent where a list of them was asked for. */
 function listOrItem(value: unknown): unknown[] {
-	return Array.isArray(value) ? value : isRecord(value) ? [value] : [];
+	if (Array.isArray(value)) {
+		return value;
+	}
+	return isRecord(value) ? [value] : [];
 }
 
 /**
@@ -137,26 +146,30 @@ function repairedClosers(text: string): string {
 	let changed = false;
 	let inString = false;
 	let escaped = false;
-	for (let index = 0; index < text.length; index++) {
+	for (let index = 0; index < text.length; index += 1) {
 		const char = text[index] ?? "";
 		if (inString) {
 			out += char;
-			if (escaped) escaped = false;
-			else if (char === "\\") escaped = true;
-			else if (char === '"') inString = false;
+			if (escaped) {
+				escaped = false;
+			} else if (char === "\\") {
+				escaped = true;
+			} else if (char === '"') {
+				inString = false;
+			}
 			continue;
 		}
 		if (char === '"') {
 			inString = true;
 		} else if (char === "{" || char === "[") {
-			if (char === "{" && owed.at(-1) === "}" && owed.includes("]")) {
-				const comma = out.trimEnd().length - 1;
-				if (out[comma] === ",") {
-					let closers = "";
-					while (owed.at(-1) === "}") closers += owed.pop();
-					out = out.slice(0, comma) + closers + out.slice(comma);
-					changed = true;
+			const comma = out.trimEnd().length - 1;
+			if (char === "{" && owed.at(-1) === "}" && owed.includes("]") && out[comma] === ",") {
+				let closers = "";
+				while (owed.at(-1) === "}") {
+					closers += owed.pop();
 				}
+				out = out.slice(0, comma) + closers + out.slice(comma);
+				changed = true;
 			}
 			owed.push(char === "{" ? "}" : "]");
 		} else if (char === "}" || char === "]") {
@@ -172,7 +185,9 @@ function repairedClosers(text: string): string {
 		}
 		out += char;
 	}
-	if (inString || (!changed && owed.length === 0)) return text;
+	if (inString || (!changed && owed.length === 0)) {
+		return text;
+	}
 	return out.trimEnd() + owed.toReversed().join("");
 }
 
@@ -180,19 +195,27 @@ function repairedClosers(text: string): string {
 function keyFollows(text: string, from: number): boolean {
 	let index = from;
 	const skipSpace = () => {
-		while (index < text.length && /\s/.test(text[index] ?? "")) index++;
+		while (index < text.length && /\s/u.test(text[index] ?? "")) {
+			index += 1;
+		}
 	};
 	skipSpace();
-	if (text[index] !== ",") return false;
-	index++;
-	skipSpace();
-	if (text[index] !== '"') return false;
-	index++;
-	while (index < text.length && text[index] !== '"') {
-		if (text[index] === "\\") index++;
-		index++;
+	if (text[index] !== ",") {
+		return false;
 	}
-	index++;
+	index += 1;
+	skipSpace();
+	if (text[index] !== '"') {
+		return false;
+	}
+	index += 1;
+	while (index < text.length && text[index] !== '"') {
+		if (text[index] === "\\") {
+			index += 1;
+		}
+		index += 1;
+	}
+	index += 1;
 	skipSpace();
 	return text[index] === ":";
 }
@@ -297,11 +320,11 @@ if (!Number.isFinite(AGENT_BUDGET_MS) || AGENT_BUDGET_MS <= 0) {
 	);
 }
 const AGENT_DIR = process.env.PI_CODING_AGENT_DIR;
-if (!AGENT_DIR) {
+if (!hasText(AGENT_DIR)) {
 	throw new Error("PI_CODING_AGENT_DIR env var is required");
 }
 /** Practices a turn carries at once; a catalog group larger than this is split. */
-const PRACTICES_PER_TURN = process.env.PI_PRACTICE_BATCH_SIZE
+const PRACTICES_PER_TURN = hasText(process.env.PI_PRACTICE_BATCH_SIZE)
 	? Number(process.env.PI_PRACTICE_BATCH_SIZE)
 	: 6;
 /**
@@ -359,7 +382,9 @@ function readManifest(): {
 		if (!isRecord(source) || typeof source.kind !== "string" || !isRecord(source.state)) {
 			throw new Error("Task manifest: every source needs a string kind and a state");
 		}
-		if (source.state.availability === "AVAILABLE") availableSourceKinds.add(source.kind);
+		if (source.state.availability === "AVAILABLE") {
+			availableSourceKinds.add(source.kind);
+		}
 		for (const artifact of jsonArray(source.artifacts)) {
 			if (isRecord(artifact) && typeof artifact.path === "string") {
 				artifactSources.set(artifact.path, source.kind);
@@ -376,7 +401,9 @@ function readManifest(): {
  */
 function readPracticeIndex(): PracticeIndexEntry[] {
 	const index = parseJson(readFileSync(INPUT_PATHS.practiceIndex, "utf8"));
-	if (!Array.isArray(index)) throw new Error("the task-declared practice index: expected an array");
+	if (!Array.isArray(index)) {
+		throw new Error("the task-declared practice index: expected an array");
+	}
 	return jsonArray(index).map((practice): PracticeIndexEntry => {
 		if (!isRecord(practice) || typeof practice.slug !== "string") {
 			throw new Error("the task-declared practice index: every practice needs a string slug");
@@ -584,14 +611,14 @@ const evidenceSchema = {
 					startLine: {
 						type: "integer",
 						minimum: 1,
-						maximum: 2147483647,
+						maximum: 2_147_483_647,
 						description:
 							"The 1-based line of the quoted text in the artifact; for a quote of the change, the [L<n>] coordinate of work/change/diff.patch.",
 					},
 					endLine: {
 						type: "integer",
 						minimum: 1,
-						maximum: 2147483647,
+						maximum: 2_147_483_647,
 						description: "The last line of the quote, at least startLine; omitted means one line.",
 					},
 					quote: {
@@ -683,7 +710,9 @@ function persistReviewState() {
 }
 
 function maybeWriteResultFile(): boolean {
-	if (reviewState.observations.length === 0) return false;
+	if (reviewState.observations.length === 0) {
+		return false;
+	}
 	writeFileSync(
 		RESULT_PATH,
 		JSON.stringify(
@@ -703,17 +732,25 @@ function maybeWriteResultFile(): boolean {
 function finalizeOutput(): void {
 	const written = new Set<string>();
 	const persist = (path: string, write: () => unknown) => {
-		if (write() !== false) written.add(path);
+		if (write() !== false) {
+			written.add(path);
+		}
 	};
 	persist(REVIEW_STATE_PATH, persistReviewState);
 	persist(RESULT_PATH, maybeWriteResultFile);
 	persist(USAGE_PATH, persistUsage);
 	persist(RUNNER_DEBUG_PATH, persistRunnerDebug);
-	if (practiceCoverageLedger !== null) persist(PRACTICE_COVERAGE_PATH, persistPracticeCoverage);
-	if (compositionAdmitted) persist(FEEDBACK_PATH, persistComposedFeedback);
+	if (practiceCoverageLedger !== null) {
+		persist(PRACTICE_COVERAGE_PATH, persistPracticeCoverage);
+	}
+	if (compositionAdmitted) {
+		persist(FEEDBACK_PATH, persistComposedFeedback);
+	}
 	for (const entry of readdirSync(OUTPUT)) {
 		const path = `${OUTPUT}/${entry}`;
-		if (!written.has(path)) rmSync(path, { recursive: true, force: true });
+		if (!written.has(path)) {
+			rmSync(path, { recursive: true, force: true });
+		}
 	}
 }
 
@@ -731,11 +768,12 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 	const notes: string[] = [];
 	const observation = normalizeObservation(
 		rawObservation,
-		ruledOutCellsOf(slugOf(rawObservation).toLowerCase().replace(/_/g, "-")),
+		ruledOutCellsOf(slugOf(rawObservation).toLowerCase().replaceAll("_", "-")),
 		notes,
 	);
-	if (!admittedPractices.has(observation.practiceSlug))
+	if (!admittedPractices.has(observation.practiceSlug)) {
 		throw new Error(`unknown practice '${observation.practiceSlug}'`);
+	}
 	// The manifest says which source staged an artifact; a citation that names the artifact under
 	// another source kind is read as the manifest reads it, and the correction is echoed back.
 	for (const citation of observation.evidence.citations) {
@@ -772,28 +810,8 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 		// A repository citation is read from the checkout — the working tree at HEAD, or the blob at the
 		// named revision through its .git — so the session gets its correction here, by the same rule
 		// admission applies. A quote of the change is read from the diff this container derived.
-		const content =
-			citation.sourceKind === "scm.repository.tree"
-				? citation.revision === undefined
-					? readCheckoutFile(citation.path)
-					: readRevisionFile(citation.path, citation.revision)
-				: citation.sourceKind === "scm.pull-request.diff"
-					? readFileSync(`${CWD}/${CHANGE_ROOT}/diff.patch`, "utf8")
-					: readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
-		const resolved =
-			content === null
-				? {
-						mismatch:
-							citation.revision === undefined
-								? "no such file in the checkout"
-								: `no such file at revision ${citation.revision} in the checkout's history`,
-					}
-				: content === BINARY
-					? {
-							mismatch:
-								"that file is binary and has no lines to quote; cite the change that adds it (work/change/files.json) or the text that embeds it",
-						}
-					: resolveOnEitherSide(citation, content);
+		const content = citedContent(citation);
+		const resolved = resolveCited(citation, content);
 		if ("mismatch" in resolved) {
 			throw new Error(
 				`citation does not match ${citation.path}:${citation.startLine}-${citation.endLine} ` +
@@ -863,6 +881,41 @@ function readTheChange(observation: NormalizedObservation): boolean {
 /** What a repository read returns for a file that is not text: git's own rule, a NUL in the opening bytes. */
 const BINARY = Symbol("binary");
 
+/** What a citation quotes: the checkout at HEAD or at the named revision, or the derived change view. */
+function citedContent(citation: NormalizedCitation): string | typeof BINARY | null {
+	if (citation.sourceKind === "scm.repository.tree") {
+		return citation.revision === undefined
+			? readCheckoutFile(citation.path)
+			: readRevisionFile(citation.path, citation.revision);
+	}
+	if (citation.sourceKind === "scm.pull-request.diff") {
+		return readFileSync(`${CWD}/${CHANGE_ROOT}/diff.patch`, "utf8");
+	}
+	return readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
+}
+
+/** The citation resolved against what it quotes, or the mismatch that says why it cannot be. */
+function resolveCited(
+	citation: NormalizedCitation,
+	content: string | typeof BINARY | null,
+): ReturnType<typeof resolveOnEitherSide> {
+	if (content === null) {
+		return {
+			mismatch:
+				citation.revision === undefined
+					? "no such file in the checkout"
+					: `no such file at revision ${citation.revision} in the checkout's history`,
+		};
+	}
+	if (content === BINARY) {
+		return {
+			mismatch:
+				"that file is binary and has no lines to quote; cite the change that adds it (work/change/files.json) or the text that embeds it",
+		};
+	}
+	return resolveOnEitherSide(citation, content);
+}
+
 /** The bytes as text, or BINARY: a quote of a binary file cannot be verified, here or at admission. */
 function asText(bytes: Buffer): string | typeof BINARY {
 	return bytes.subarray(0, 8000).includes(0) ? BINARY : bytes.toString("utf8");
@@ -870,7 +923,9 @@ function asText(bytes: Buffer): string | typeof BINARY {
 
 /** The blob at a repository-relative path in a revision of the checkout's history, or null. */
 function readRevisionFile(path: string, revision: string): string | typeof BINARY | null {
-	if (path.startsWith("/") || path.split("/").includes("..")) return null;
+	if (path.startsWith("/") || path.split("/").includes("..")) {
+		return null;
+	}
 	const child = spawnSync(
 		"git",
 		["-C", INPUT_PATHS.repositoryRoot, "--no-pager", "show", `${revision}:${path}`],
@@ -884,8 +939,10 @@ function readRevisionFile(path: string, revision: string): string | typeof BINAR
 
 /** The file at a repository-relative path in the checkout, or null when there is none. */
 function readCheckoutFile(path: string): string | typeof BINARY | null {
-	const file = resolvePath(INPUT_PATHS.repositoryRoot, path);
-	if (!file.startsWith(`${INPUT_PATHS.repositoryRoot}/`)) return null;
+	const file = nodePath.resolve(INPUT_PATHS.repositoryRoot, path);
+	if (!file.startsWith(`${INPUT_PATHS.repositoryRoot}/`)) {
+		return null;
+	}
 	try {
 		return asText(readFileSync(file));
 	} catch {
@@ -921,9 +978,9 @@ const REPEATED_CALL_ABORT = 6;
 const answeredRefusals = new Set<string>();
 
 /** A refusal the tool itself is answering: logged where it was decided, and once. */
-function refusal<T>(toolCallId: string, text: string): Promise<AgentToolResult<T>> {
+async function refusal<T>(toolCallId: string, text: string): Promise<AgentToolResult<T>> {
 	answeredRefusals.add(toolCallId);
-	return Promise.reject(new Error(text));
+	throw new Error(text);
 }
 
 /** The tools a turn exists to call: what it records with them is what it owes. */
@@ -946,7 +1003,7 @@ const TOOL_ERROR_CHARS = 240;
 
 /** A reason on one line, bounded: the SDK puts what it refused on the line after its heading. */
 function firstLine(text: string): string {
-	const line = text.replace(/\s+/g, " ").trim() || "(no reason given)";
+	const line = text.replaceAll(/\s+/gu, " ").trim() || "(no reason given)";
 	return line.length > TOOL_ERROR_CHARS ? `${line.slice(0, TOOL_ERROR_CHARS)}…` : line;
 }
 
@@ -960,7 +1017,9 @@ const blockedPractices = new Set<string>();
 function countRefusal(slug: string): void {
 	const count = (refusals.get(slug) ?? 0) + 1;
 	refusals.set(slug, count);
-	if (count >= MAX_REFUSALS_PER_PRACTICE) blockedPractices.add(slug);
+	if (count >= MAX_REFUSALS_PER_PRACTICE) {
+		blockedPractices.add(slug);
+	}
 }
 
 function slugOf(raw: unknown): string {
@@ -991,7 +1050,9 @@ function record(raw: unknown): Recorded {
 	}
 	const { observation, notes } = validated;
 	const key = dedupeKeyForObservation(observation);
-	if (reviewState.observationKeys.includes(key)) return { kind: "duplicate", slug };
+	if (reviewState.observationKeys.includes(key)) {
+		return { kind: "duplicate", slug };
+	}
 	reviewState.observationKeys.push(key);
 	reviewState.observations.push(observation);
 	// What the check recorded for a citation by coordinates alone, and where it moved a citation
@@ -1015,7 +1076,7 @@ function noteRecorded(observations: readonly NormalizedObservation[]): void {
 		return `- ${observation.practiceSlug}: ${verdict} — ${observation.summary} (cites ${cited.join(", ")})`;
 	});
 	try {
-		mkdirSync(dirname(NOTES_PATH), { recursive: true });
+		mkdirSync(nodePath.dirname(NOTES_PATH), { recursive: true });
 		const existing = existsSync(NOTES_PATH)
 			? readFileSync(NOTES_PATH, "utf8")
 			: "# Recorded observations\n\nOne line per observation this review has recorded, appended by the runner.\n";
@@ -1027,7 +1088,9 @@ function noteRecorded(observations: readonly NormalizedObservation[]): void {
 
 /** One line per recorded observation, for the top of every later turn. */
 function recordedSoFar(): string {
-	if (reviewState.observations.length === 0) return "Nothing recorded yet.";
+	if (reviewState.observations.length === 0) {
+		return "Nothing recorded yet.";
+	}
 	return reviewState.observations
 		.map((observation) => {
 			const verdict =
@@ -1055,7 +1118,7 @@ function logRefusal(slug: string, reason: string): void {
 		line.length > MAX_REFUSAL_LOG_CHARS ? `${line.slice(0, MAX_REFUSAL_LOG_CHARS)}…` : line,
 	);
 	if (currentTurn) {
-		currentTurn.refused++;
+		currentTurn.refused += 1;
 		currentTurn.refusalReasons.push(
 			reason.length > TRACE_REASON_CHARS ? `${reason.slice(0, TRACE_REASON_CHARS)}…` : reason,
 		);
@@ -1088,8 +1151,12 @@ const RULE_KEYWORDS = new Set([
  * vocabulary an enum listed is kept in the description.
  */
 function documentedShape(schema: unknown): unknown {
-	if (Array.isArray(schema)) return schema.map(documentedShape);
-	if (!isRecord(schema)) return schema;
+	if (Array.isArray(schema)) {
+		return schema.map(documentedShape);
+	}
+	if (!isRecord(schema)) {
+		return schema;
+	}
 	const out: Record<string, unknown> = {};
 	// A scalar type is coerced by the SDK before the check ("12" is 12), so it stays; an object or a
 	// list type is refused outright when the session writes "none" or a string where the object goes,
@@ -1099,20 +1166,28 @@ function documentedShape(schema: unknown): unknown {
 		const description = typeof out.description === "string" ? out.description : "";
 		out.description = description ? `${description} ${note}` : note;
 	};
-	if (typeof schema.description === "string") out.description = schema.description;
+	if (typeof schema.description === "string") {
+		out.description = schema.description;
+	}
 	for (const [key, value] of Object.entries(schema)) {
-		if (key === "description") continue;
+		if (key === "description") {
+			continue;
+		}
 		// What the schema required is still said, in words: the rule is applied by the tool, but the
 		// session is told which fields a call cannot do without.
 		if (key === "required" && Array.isArray(value) && value.length > 0) {
 			noted(`Required: ${value.map(String).join(", ")}.`);
 			continue;
 		}
-		if (RULE_KEYWORDS.has(key) || (key === "type" && structural)) continue;
+		if (RULE_KEYWORDS.has(key) || (key === "type" && structural)) {
+			continue;
+		}
 		if (key === "enum" && Array.isArray(value)) {
 			const listed = value.map((item) => (item === null ? "null" : String(item))).join(", ");
 			const description = typeof out.description === "string" ? out.description : "";
-			if (!description.includes(listed.split(", ")[0] ?? "")) noted(`One of: ${listed}.`);
+			if (!description.includes(listed.split(", ")[0] ?? "")) {
+				noted(`One of: ${listed}.`);
+			}
 			continue;
 		}
 		out[key] = documentedShape(value);
@@ -1135,10 +1210,10 @@ function buildReportObservationTool() {
 				observations: documentedShape(listSchema(observationSchema, "observations")),
 			},
 		},
-		execute: (toolCallId, params): Promise<AgentToolResult<ReportObservationDetails>> => {
+		execute: async (toolCallId, params): Promise<AgentToolResult<ReportObservationDetails>> => {
 			if (measurementClosed) {
 				const text = "Measurement is closed; this turn may only compose feedback.";
-				return Promise.resolve({
+				return {
 					content: [{ type: "text", text }],
 					details: {
 						inserted: 0,
@@ -1147,22 +1222,28 @@ function buildReportObservationTool() {
 						totalObservations: reviewState.observations.length,
 						remainingPractices: [],
 					},
-				});
+				};
 			}
 			const submitted = submittedList(isRecord(params) ? params.observations : null);
 			if ("error" in submitted) {
 				// Counted against every practice of the turn, so a session that keeps sending the same
 				// unparseable string runs out of tries like any other refusal.
-				for (const slug of currentTurnSlugs) countRefusal(slug);
+				for (const slug of currentTurnSlugs) {
+					countRefusal(slug);
+				}
 				logRefusal("(unparsed list)", submitted.error);
 				return refusal(toolCallId, `observations refused — ${submitted.error}`);
 			}
 			const outcomes = submitted.items.map(record);
 			const stored = outcomes.filter((outcome) => outcome.kind === "stored");
 			for (const outcome of outcomes) {
-				if (outcome.kind === "refused") logRefusal(outcome.slug, outcome.reason);
+				if (outcome.kind === "refused") {
+					logRefusal(outcome.slug, outcome.reason);
+				}
 			}
-			if (currentTurn) currentTurn.stored += stored.length;
+			if (currentTurn) {
+				currentTurn.stored += stored.length;
+			}
 			if (stored.length > 0) {
 				persistReviewState();
 				maybeWriteResultFile();
@@ -1173,10 +1254,12 @@ function buildReportObservationTool() {
 			const remainingPractices = currentTurnSlugs.filter((slug) => !observed.has(slug));
 			const lines = outcomes.map((outcome, index) => {
 				const head = `#${index + 1} ${outcome.slug}:`;
-				if (outcome.kind === "stored")
+				if (outcome.kind === "stored") {
 					return `${head} stored${outcome.negative ? " (negative)" : ""}.${outcome.filled.map((line) => `\n   ${line}`).join("")}`;
-				if (outcome.kind === "duplicate")
+				}
+				if (outcome.kind === "duplicate") {
 					return `${head} duplicate of one already stored; skipped.`;
+				}
 				return `${head} refused — ${outcome.reason}`;
 			});
 			lines.push(
@@ -1194,8 +1277,10 @@ function buildReportObservationTool() {
 			};
 			// A call that stored nothing is an error the session must correct; one that stored some of
 			// what it sent is an answer, with the refusals named in it.
-			if (stored.length === 0 && details.duplicates === 0) return refusal(toolCallId, text);
-			return Promise.resolve({ content: [{ type: "text", text }], details });
+			if (stored.length === 0 && details.duplicates === 0) {
+				return refusal(toolCallId, text);
+			}
+			return { content: [{ type: "text", text }], details };
 		},
 	});
 }
@@ -1221,8 +1306,9 @@ function loadPracticeSlugs(): string[] {
 let practiceCoverageLedger: PracticeCoverageLedger | null = null;
 
 function persistPracticeCoverage() {
-	if (practiceCoverageLedger === null)
+	if (practiceCoverageLedger === null) {
 		throw new Error("practice coverage ledger is not initialized");
+	}
 	return practiceCoverageLedger.markEvaluated(
 		reviewState.observations.map((item) => item.practiceSlug),
 	);
@@ -1270,15 +1356,15 @@ function readTaskEnvelope(): TaskEnvelope {
 	let raw: string;
 	try {
 		raw = readFileSync(TASK_PATH, "utf8");
-	} catch (err) {
-		console.error(`[pi-runner] Failed to read ${TASK_PATH}: ${errorText(err)}`);
+	} catch (error) {
+		console.error(`[pi-runner] Failed to read ${TASK_PATH}: ${errorText(error)}`);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
 	}
 	let parsed: unknown;
 	try {
 		parsed = parseJson(raw);
-	} catch (err) {
-		console.error(`[pi-runner] Failed to parse ${TASK_PATH}: ${errorText(err)}`);
+	} catch (error) {
+		console.error(`[pi-runner] Failed to parse ${TASK_PATH}: ${errorText(error)}`);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
 	}
 	const envelope: Record<string, unknown> = isRecord(parsed) ? parsed : {};
@@ -1402,8 +1488,8 @@ function buildSummaryTool() {
 				}),
 			},
 		},
-		execute: (toolCallId, params): Promise<AgentToolResult<ReportSummaryDetails>> => {
-			const refuse = (text: string) => refusal<ReportSummaryDetails>(toolCallId, text);
+		execute: async (toolCallId, params): Promise<AgentToolResult<ReportSummaryDetails>> => {
+			const refuse = async (text: string) => refusal<ReportSummaryDetails>(toolCallId, text);
 			if (!compositionAdmitted) {
 				return refuse(
 					"Feedback composition opens only after Java admits the completed observations.",
@@ -1412,7 +1498,7 @@ function buildSummaryTool() {
 			// A session that cannot land a lead in three tries is spending the composition on it; the
 			// review opens on its first finding, which is a fine opening, and the units are what matter.
 			if (leadRefusals >= MAX_LEAD_REFUSALS) {
-				return Promise.resolve({
+				return {
 					content: [
 						{
 							type: "text",
@@ -1420,27 +1506,29 @@ function buildSummaryTool() {
 						},
 					],
 					details: { stored: 0 },
-				});
+				};
 			}
 			const raw = isRecord(params) ? params.lead : undefined;
-			const trimmed = (typeof raw === "string" ? raw : "").replace(/\s+/g, " ").trim();
+			const trimmed = (typeof raw === "string" ? raw : "").replaceAll(/\s+/gu, " ").trim();
 			if (!trimmed) {
-				leadRefusals++;
+				leadRefusals += 1;
 				return refuse(
 					"lead is required: one or two sentences as a string; skip the call instead of sending nothing.",
 				);
 			}
 			const lead = boundedAtSentenceEnd(trimmed, LEAD_MAX_LENGTH);
-			if (!lead) {
-				leadRefusals++;
+			if (lead === undefined) {
+				leadRefusals += 1;
 				return refuse(
 					`lead must be at most ${LEAD_MAX_LENGTH} characters, or end a sentence within them; this one is ${trimmed.length} with no sentence end inside the bound. Send one shorter sentence.`,
 				);
 			}
 			composedFeedback.lead = lead;
 			persistComposedFeedback();
-			if (currentTurn) currentTurn.stored++;
-			return Promise.resolve({
+			if (currentTurn) {
+				currentTurn.stored += 1;
+			}
+			return {
 				content: [
 					{
 						type: "text",
@@ -1451,7 +1539,7 @@ function buildSummaryTool() {
 					},
 				],
 				details: { stored: 1 },
-			});
+			};
 		},
 	});
 }
@@ -1534,9 +1622,13 @@ function isPlacementKind(value: unknown): value is PlacementKind {
 
 function loadCompositionRequest(): CompositionRequest | null {
 	try {
-		if (!existsSync(COMPOSITION_REQUEST_PATH)) return null;
+		if (!existsSync(COMPOSITION_REQUEST_PATH)) {
+			return null;
+		}
 		const parsed = parseJson(readFileSync(COMPOSITION_REQUEST_PATH, "utf8"));
-		if (!isRecord(parsed) || parsed.enabled !== true) return null;
+		if (!isRecord(parsed) || parsed.enabled !== true) {
+			return null;
+		}
 		const declared: Record<string, unknown> = isRecord(parsed.channels) ? parsed.channels : {};
 		const boundsFor = (channel: Channel): ChannelBounds => {
 			const bounds: Record<string, unknown> = isRecord(declared[channel]) ? declared[channel] : {};
@@ -1552,19 +1644,22 @@ function loadCompositionRequest(): CompositionRequest | null {
 			IN_APP: boundsFor("IN_APP"),
 			IN_CHAT: boundsFor("IN_CHAT"),
 		};
-		if (!CHANNELS.some((channel) => channels[channel].enabled && channels[channel].maxUnits > 0))
+		if (!CHANNELS.some((channel) => channels[channel].enabled && channels[channel].maxUnits > 0)) {
 			return null;
+		}
 		const inContextPlacementKinds = jsonArray(parsed.inContextPlacementKinds).filter(
 			isPlacementKind,
 		);
-		if (channels.IN_CONTEXT.enabled && inContextPlacementKinds.length === 0) return null;
+		if (channels.IN_CONTEXT.enabled && inContextPlacementKinds.length === 0) {
+			return null;
+		}
 		return {
 			channels,
 			inContextPlacementKinds,
 			minDistinctArtifacts: Math.max(2, Number(parsed.minDistinctArtifacts) || 2),
 		};
-	} catch (e) {
-		console.error(`[pi-runner] composition request unreadable: ${errorText(e)}`);
+	} catch (error) {
+		console.error(`[pi-runner] composition request unreadable: ${errorText(error)}`);
 		return null;
 	}
 }
@@ -1576,11 +1671,15 @@ function composablePracticeSlugs(): string[] {
 // Supersession is limited to unread thread keys present in this snapshot.
 function stagedPreparedTargets(): PreparedFeedbackTarget[] {
 	try {
-		if (!existsSync(PREPARED_FEEDBACK_PATH)) return [];
+		if (!existsSync(PREPARED_FEEDBACK_PATH)) {
+			return [];
+		}
 		const prepared = parseJson(readFileSync(PREPARED_FEEDBACK_PATH, "utf8"));
 		const entries = isRecord(prepared) ? jsonArray(prepared.prepared) : [];
 		return entries.flatMap((entry) => {
-			if (!isRecord(entry)) return [];
+			if (!isRecord(entry)) {
+				return [];
+			}
 			const { threadKey, channel, practiceSlug } = entry;
 			return typeof threadKey === "string" &&
 				threadKey.trim() &&
@@ -1590,8 +1689,8 @@ function stagedPreparedTargets(): PreparedFeedbackTarget[] {
 				? [{ threadKey, channel, practiceSlug }]
 				: [];
 		});
-	} catch (e) {
-		console.error(`[pi-runner] prepared feedback unreadable for composition: ${errorText(e)}`);
+	} catch (error) {
+		console.error(`[pi-runner] prepared feedback unreadable for composition: ${errorText(error)}`);
 		return [];
 	}
 }
@@ -1644,6 +1743,11 @@ interface ReportFeedbackDetails {
 	total?: number;
 }
 
+/** A unit the tool did not store, with the reason the session is told. */
+function skipped(text: string): { stored: boolean; text: string } {
+	return { stored: false, text };
+}
+
 function buildFeedbackTool(
 	practiceSlugs: string[],
 	request: CompositionRequest,
@@ -1661,9 +1765,10 @@ function buildFeedbackTool(
 	/** One unit stored, or the reason it was not. */
 	const store = (value: unknown): { stored: boolean; text: string } => {
 		const read = readFeedbackUnit(value, practiceSlugs);
-		if (typeof read === "string") return { stored: false, text: read };
+		if (typeof read === "string") {
+			return { stored: false, text: read };
+		}
 		const unit = read;
-		const skipped = (text: string) => ({ stored: false, text });
 		// Built per call: the tool is defined before admission fills the observations it reads.
 		const observationsById = new Map(
 			observations.map((observation) => [observation.id, observation]),
@@ -1675,8 +1780,9 @@ function buildFeedbackTool(
 			);
 		}
 		const key = `${unit.channel}:${unit.practiceSlug}`;
-		if (seen.has(key))
+		if (seen.has(key)) {
 			return skipped(`already have a ${unit.channel} unit for ${unit.practiceSlug}; skipped.`);
+		}
 		const delivers = unit.action !== "WITHHOLD";
 		if (delivers && usedPerChannel[unit.channel] >= bounds.maxUnits) {
 			return skipped(`${unit.channel} cap of ${bounds.maxUnits} reached; skipped.`);
@@ -1695,7 +1801,9 @@ function buildFeedbackTool(
 			);
 		}
 		const rejection = validateUnit(unit, observationsById, preparedTargets, placementKinds);
-		if (rejection) return skipped(rejection);
+		if (rejection !== null) {
+			return skipped(rejection);
+		}
 		// The pattern bar the composer prompt states, enforced from what the runner can count: a card
 		// on the practice pages rests on the same practice being NEGATIVE on several separate pieces of
 		// work, this one and the person's history. One occurrence is a note on the work, never a card.
@@ -1710,7 +1818,9 @@ function buildFeedbackTool(
 			}
 		}
 		seen.add(key);
-		if (delivers) usedPerChannel[unit.channel]++;
+		if (delivers) {
+			usedPerChannel[unit.channel] += 1;
+		}
 		composedFeedback.units.push(unit);
 		return {
 			stored: true,
@@ -1864,9 +1974,9 @@ function buildFeedbackTool(
 			},
 		},
 		// Nothing here waits on anything; Pi takes the result as a promise either way.
-		execute: (toolCallId, params): Promise<AgentToolResult<ReportFeedbackDetails>> => {
+		execute: async (toolCallId, params): Promise<AgentToolResult<ReportFeedbackDetails>> => {
 			if (!compositionAdmitted) {
-				return Promise.resolve({
+				return {
 					content: [
 						{
 							type: "text",
@@ -1874,7 +1984,7 @@ function buildFeedbackTool(
 						},
 					],
 					details: { stored: 0 },
-				});
+				};
 			}
 			const submitted = submittedList(isRecord(params) ? params.units : null);
 			if ("error" in submitted) {
@@ -1888,16 +1998,22 @@ function buildFeedbackTool(
 			}
 			const outcomes = submitted.items.map(store);
 			const stored = outcomes.filter((outcome) => outcome.stored).length;
-			if (currentTurn) currentTurn.stored += stored;
-			if (stored > 0) persistComposedFeedback();
+			if (currentTurn) {
+				currentTurn.stored += stored;
+			}
+			if (stored > 0) {
+				persistComposedFeedback();
+			}
 			const text = outcomes.map((outcome, index) => `#${index + 1}: ${outcome.text}`).join("\n");
 			// A call that stored nothing is an error the session must correct — the reasons are in it;
 			// one that stored some of what it sent is an answer, with the skips named per unit.
-			if (stored === 0) return refusal(toolCallId, text);
-			return Promise.resolve({
+			if (stored === 0) {
+				return refusal(toolCallId, text);
+			}
+			return {
 				content: [{ type: "text", text }],
 				details: { stored, total: composedFeedback.units.length },
-			});
+			};
 		},
 	});
 }
@@ -1953,7 +2069,7 @@ function vocabularyWord<T extends string>(
 	if (typeof value !== "string" || value.trim() === "") {
 		return `${field} is required: one of ${vocabulary.join(", ")}`;
 	}
-	const word = value.trim().toUpperCase().replace(/-/g, "_");
+	const word = value.trim().toUpperCase().replaceAll("-", "_");
 	const match = vocabulary.find((candidate) => candidate === word);
 	return match ?? `${field} must be one of ${vocabulary.join(", ")} (received '${value}')`;
 }
@@ -1966,10 +2082,16 @@ function boundedText(
 	value: unknown,
 	field: keyof typeof FEEDBACK_TEXT_BOUNDS,
 ): { text: string | undefined } | { error: string } {
-	if (value === undefined || value === null) return { text: undefined };
-	if (typeof value !== "string") return { error: `${field} must be a string` };
+	if (value === undefined || value === null) {
+		return { text: undefined };
+	}
+	if (typeof value !== "string") {
+		return { error: `${field} must be a string` };
+	}
 	const text = value.trim();
-	if (text === "") return { text: undefined };
+	if (text === "") {
+		return { text: undefined };
+	}
 	const bound = FEEDBACK_TEXT_BOUNDS[field];
 	if (text.length > bound) {
 		return {
@@ -1999,14 +2121,20 @@ function readFeedbackUnit(value: unknown, practiceSlugs: readonly string[]): Fee
 		return `unknown unit field(s): ${unknownFields.join(", ")} — a unit takes ${UNIT_FIELDS.join(", ")}; skipped.`;
 	}
 	const channel = vocabularyWord(value.channel, CHANNELS, "channel");
-	if (!isChannel(channel)) return `${channel}; skipped.`;
+	if (!isChannel(channel)) {
+		return `${channel}; skipped.`;
+	}
 	const action = vocabularyWord(value.action, ACTIONS, "action");
-	if (!isFeedbackAction(action)) return `${action}; skipped.`;
+	if (!isFeedbackAction(action)) {
+		return `${action}; skipped.`;
+	}
 	const practiceSlug =
 		typeof value.practiceSlug === "string"
-			? value.practiceSlug.trim().toLowerCase().replace(/_/g, "-")
+			? value.practiceSlug.trim().toLowerCase().replaceAll("_", "-")
 			: "";
-	if (!practiceSlug) return "practiceSlug is required; skipped.";
+	if (!practiceSlug) {
+		return "practiceSlug is required; skipped.";
+	}
 	if (!practiceSlugs.includes(practiceSlug)) {
 		return `practiceSlug '${practiceSlug}' is not a practice with an admitted observation in this run (those are: ${practiceSlugs.join(", ")}); skipped.`;
 	}
@@ -2021,18 +2149,24 @@ function readFeedbackUnit(value: unknown, practiceSlugs: readonly string[]): Fee
 	let withholdReason: string | undefined;
 	if (value.withholdReason !== undefined && value.withholdReason !== null) {
 		const word = vocabularyWord(value.withholdReason, WITHHOLD_REASONS, "withholdReason");
-		if (!WITHHOLD_REASONS.some((reason) => reason === word)) return `${word}; skipped.`;
+		if (!WITHHOLD_REASONS.some((reason) => reason === word)) {
+			return `${word}; skipped.`;
+		}
 		withholdReason = word;
 	}
 	const texts: Partial<Record<keyof typeof FEEDBACK_TEXT_BOUNDS, string>> = {};
 	for (const field of ["supersedesThreadKey", "title", "body", "nextStep"] as const) {
 		const read = boundedText(value[field], field);
-		if ("error" in read) return `${read.error}; skipped.`;
+		if ("error" in read) {
+			return `${read.error}; skipped.`;
+		}
 		texts[field] = read.text;
 	}
 	let notes: ConversationNotes | undefined;
 	if (value.notes !== undefined && value.notes !== null) {
-		if (!isRecord(value.notes)) return "notes must be an object; skipped.";
+		if (!isRecord(value.notes)) {
+			return "notes must be an object; skipped.";
+		}
 		const unknownNotes = Object.keys(value.notes).filter(
 			(key) => !NOTE_FIELDS.some((field) => field === key),
 		);
@@ -2042,26 +2176,26 @@ function readFeedbackUnit(value: unknown, practiceSlugs: readonly string[]): Fee
 		notes = {};
 		for (const field of NOTE_FIELDS) {
 			const read = boundedText(value.notes[field], field);
-			if ("error" in read) return `notes.${read.error}; skipped.`;
+			if ("error" in read) {
+				return `notes.${read.error}; skipped.`;
+			}
 			notes[field] = read.text;
 		}
 	}
 	let placement: Placement | undefined;
 	if (value.placement !== undefined && value.placement !== null) {
-		if (!isRecord(value.placement)) return "placement must be an object; skipped.";
+		if (!isRecord(value.placement)) {
+			return "placement must be an object; skipped.";
+		}
 		const kind = vocabularyWord(value.placement.kind, ["DIFF", "ARTIFACT"], "placement.kind");
-		if (!isPlacementKind(kind)) return `${kind}; skipped.`;
-		const index = value.placement.citationIndex;
-		const citationIndex =
-			typeof index === "number"
-				? index
-				: typeof index === "string" && /^\d+$/.test(index.trim())
-					? Number(index)
-					: undefined;
+		if (!isPlacementKind(kind)) {
+			return `${kind}; skipped.`;
+		}
+		const citationIndex = integerOrUndefined(value.placement.citationIndex);
 		const observationId = optionalString(value.placement.observationId)?.trim();
 		placement = {
 			kind,
-			...(observationId ? { observationId } : {}),
+			...(hasText(observationId) ? { observationId } : {}),
 			citationIndex,
 		};
 	}
@@ -2080,9 +2214,20 @@ function readFeedbackUnit(value: unknown, practiceSlugs: readonly string[]): Fee
 	};
 }
 
+/** An integer as sent, as a number or as its digits in a string; anything else is nothing. */
+function integerOrUndefined(value: unknown): number | undefined {
+	if (typeof value === "number") {
+		return value;
+	}
+	return typeof value === "string" && /^\d+$/u.test(value.trim()) ? Number(value) : undefined;
+}
+
 /** A list as sent, or the one value sent bare where a list was asked for. */
 function listOrSingle(value: unknown): unknown[] {
-	return Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
+	if (Array.isArray(value)) {
+		return value;
+	}
+	return value === undefined || value === null ? [] : [value];
 }
 
 // Enforce snapshot-dependent constraints here for fast model correction; Java rechecks them.
@@ -2103,22 +2248,73 @@ function negativePiecesOfWork(
 	) {
 		pieces.add("this work");
 	}
-	const historyPath = `${dirname(PREPARED_FEEDBACK_PATH)}/observations.json`;
-	if (!existsSync(historyPath)) return pieces.size;
+	const historyPath = `${nodePath.dirname(PREPARED_FEEDBACK_PATH)}/observations.json`;
+	if (!existsSync(historyPath)) {
+		return pieces.size;
+	}
 	const history = parseJson(readFileSync(historyPath, "utf8"));
 	const entries =
 		isRecord(history) && Array.isArray(history.observations) ? history.observations : [];
 	for (const entry of entries) {
-		if (!isRecord(entry) || entry.practiceSlug !== practiceSlug || entry.outcome !== "NEGATIVE")
+		if (!isRecord(entry) || entry.practiceSlug !== practiceSlug || entry.outcome !== "NEGATIVE") {
 			continue;
+		}
 		const artifact = isRecord(entry.artifact) ? entry.artifact : {};
 		const name = [artifact.url, artifact.number, artifact.title].find(
 			(value) => typeof value === "string" || typeof value === "number",
 		);
-		if (name !== undefined)
+		if (name !== undefined) {
 			pieces.add(`${typeof artifact.kind === "string" ? artifact.kind : ""}:${name}`);
+		}
 	}
 	return pieces.size;
+}
+
+/** The IN_CHAT lane: notes to the mentor, and nothing that would be read out. */
+function validateChatUnit(unit: FeedbackUnit): string | null {
+	if (hasText(unit.body) || hasText(unit.nextStep)) {
+		return "IN_CHAT takes notes{situation,capability,evidenceSummary,inConversationSignal}, not body/nextStep - nothing on this lane is read out; skipped.";
+	}
+	const { notes } = unit;
+	for (const field of [
+		"situation",
+		"capability",
+		"evidenceSummary",
+		"inConversationSignal",
+	] as const) {
+		if (isBlank(notes?.[field])) {
+			return `IN_CHAT needs notes.${field}; skipped.`;
+		}
+	}
+	if (unit.placement) {
+		return "Only IN_CONTEXT units may carry a placement; skipped.";
+	}
+	return null;
+}
+
+/** The IN_APP lane: a body about a pattern across work, never a quote of this work. */
+function validateAppUnit(
+	unit: FeedbackUnit,
+	observationsById: ReadonlyMap<string, AdmittedObservation>,
+): string | null {
+	const { body } = unit;
+	if (!hasText(body?.trim())) {
+		return "IN_APP needs a body; skipped.";
+	}
+	if (unit.placement) {
+		return "Only IN_CONTEXT units may carry a placement; skipped.";
+	}
+	const normalizedBody = normalizeQuotedText(body);
+	const repeatsCurrentEvidence = unit.basedOn.some((id) =>
+		(observationsById.get(id)?.citations ?? []).some((citation) => {
+			const quote = normalizeQuotedText(optionalString(citation.quote) ?? "");
+			return quote.length >= 12 && normalizedBody.includes(quote);
+		}),
+	);
+	if (repeatsCurrentEvidence) {
+		return "IN_APP describes a cross-artifact pattern; do not copy a current artifact quote into it. Skipped.";
+	}
+	return null;
 }
 
 function validateUnit(
@@ -2132,14 +2328,22 @@ function validateUnit(
 		unit.basedOn,
 		new Map([...observationsById].map(([id, observation]) => [id, observation.practiceSlug])),
 	);
-	if (evidenceError) return evidenceError;
+	if (evidenceError !== null) {
+		return evidenceError;
+	}
 	if (unit.action === "WITHHOLD") {
-		if (!unit.withholdReason) return "WITHHOLD needs a withholdReason; skipped.";
+		if (!hasText(unit.withholdReason)) {
+			return "WITHHOLD needs a withholdReason; skipped.";
+		}
 		return null;
 	}
-	if (!unit.title?.trim()) return "A unit that is not a WITHHOLD needs a title; skipped.";
+	if (isBlank(unit.title)) {
+		return "A unit that is not a WITHHOLD needs a title; skipped.";
+	}
 	if (unit.action === "SUPERSEDE") {
-		if (!unit.supersedesThreadKey) return "SUPERSEDE needs a supersedesThreadKey; skipped.";
+		if (!hasText(unit.supersedesThreadKey)) {
+			return "SUPERSEDE needs a supersedesThreadKey; skipped.";
+		}
 		if (
 			!preparedTargets.some(
 				(target) =>
@@ -2152,38 +2356,24 @@ function validateUnit(
 		}
 	}
 	if (unit.channel === "IN_CHAT") {
-		if (unit.body || unit.nextStep) {
-			return "IN_CHAT takes notes{situation,capability,evidenceSummary,inConversationSignal}, not body/nextStep - nothing on this lane is read out; skipped.";
-		}
-		const { notes } = unit;
-		if (!notes?.situation?.trim()) return "IN_CHAT needs notes.situation; skipped.";
-		if (!notes.capability?.trim()) return "IN_CHAT needs notes.capability; skipped.";
-		if (!notes.evidenceSummary?.trim()) return "IN_CHAT needs notes.evidenceSummary; skipped.";
-		if (!notes.inConversationSignal?.trim())
-			return "IN_CHAT needs notes.inConversationSignal; skipped.";
-		if (unit.placement) return "Only IN_CONTEXT units may carry a placement; skipped.";
-		return null;
+		return validateChatUnit(unit);
 	}
-	if (unit.notes) return "Only IN_CHAT units may carry a notes block; skipped.";
-	if (!unit.nextStep?.trim()) return `${unit.channel} needs a nextStep; skipped.`;
+	if (unit.notes) {
+		return "Only IN_CHAT units may carry a notes block; skipped.";
+	}
+	if (isBlank(unit.nextStep)) {
+		return `${unit.channel} needs a nextStep; skipped.`;
+	}
 	if (unit.channel === "IN_APP") {
-		if (!unit.body?.trim()) return "IN_APP needs a body; skipped.";
-		if (unit.placement) return "Only IN_CONTEXT units may carry a placement; skipped.";
-		const normalizedBody = normalizeQuotedText(unit.body);
-		const repeatsCurrentEvidence = unit.basedOn.some((id) =>
-			(observationsById.get(id)?.citations ?? []).some((citation) => {
-				const quote = normalizeQuotedText(optionalString(citation.quote) ?? "");
-				return quote.length >= 12 && normalizedBody.includes(quote);
-			}),
-		);
-		if (repeatsCurrentEvidence) {
-			return "IN_APP describes a cross-artifact pattern; do not copy a current artifact quote into it. Skipped.";
-		}
-		return null;
+		return validateAppUnit(unit, observationsById);
 	}
-	if (unit.body) return "IN_CONTEXT takes title, placement, and nextStep only; skipped.";
-	if (!unit.placement) return "IN_CONTEXT needs a DIFF or ARTIFACT placement; skipped.";
-	const placement = unit.placement;
+	if (hasText(unit.body)) {
+		return "IN_CONTEXT takes title, placement, and nextStep only; skipped.";
+	}
+	if (!unit.placement) {
+		return "IN_CONTEXT needs a DIFF or ARTIFACT placement; skipped.";
+	}
+	const { placement } = unit;
 	if (!placementKinds.some((kind) => kind === placement.kind)) {
 		return `${placement.kind} placement is unavailable on this artifact; skipped.`;
 	}
@@ -2199,17 +2389,22 @@ function validateUnit(
 		}
 		return null;
 	}
-	if (placement.kind !== "DIFF") return "Unknown IN_CONTEXT placement kind; skipped.";
+	if (placement.kind !== "DIFF") {
+		return "Unknown IN_CONTEXT placement kind; skipped.";
+	}
 	const { observationId, citationIndex } = placement;
-	if (!observationId || citationIndex === undefined || !Number.isInteger(citationIndex)) {
+	if (!hasText(observationId) || citationIndex === undefined || !Number.isInteger(citationIndex)) {
 		return "DIFF placement needs observationId and citationIndex; skipped.";
 	}
 	const observation = observationsById.get(observationId);
-	if (!observation) return `No observation '${observationId}' in this run; skipped.`;
+	if (!observation) {
+		return `No observation '${observationId}' in this run; skipped.`;
+	}
 	const citation = observation.citations[citationIndex];
-	if (!citation)
+	if (!citation) {
 		return `Observation '${observation.id}' has no citation ${citationIndex}; skipped.`;
-	if (!citation.anchorable) {
+	}
+	if (citation.anchorable !== true) {
 		return `Citation ${citationIndex} of '${observation.id}' is not on this change's diff, so no note can be placed on it. Skipped.`;
 	}
 	return null;
@@ -2218,9 +2413,9 @@ function validateUnit(
 function normalizeQuotedText(value: string): string {
 	return value
 		.normalize("NFKC")
-		.replace(/[“”„‟]/g, '"')
-		.replace(/[‘’‚‛]/g, "'")
-		.replace(/\s+/g, " ")
+		.replaceAll(/[“”„‟]/gu, '"')
+		.replaceAll(/[‘’‚‛]/gu, "'")
+		.replaceAll(/\s+/gu, " ")
 		.trim()
 		.toLowerCase();
 }
@@ -2245,6 +2440,17 @@ function composerView(observation: AdmittedObservation): Record<string, unknown>
 	};
 }
 
+/** A staged file as a titled block of the composition turn, or a pointer to it when it is too large. */
+function shown(label: string, file: string, limit = 32_000): string {
+	if (!existsSync(file)) {
+		return "";
+	}
+	const text = readFileSync(file, "utf8").trim();
+	return text.length > limit
+		? `### ${label} — too large to show here; read \`${file}\`\n`
+		: `### ${label}\n\`\`\`json\n${text}\n\`\`\`\n`;
+}
+
 function buildCompositionTurn(
 	request: CompositionRequest,
 	observations: readonly AdmittedObservation[],
@@ -2262,14 +2468,7 @@ function buildCompositionTurn(
 		: "";
 	const coverageNote = notReachedNote(notReached);
 	const admitted = JSON.stringify({ observations: observations.map(composerView) }, null, 1);
-	const shown = (label: string, path: string, limit = 32_000): string => {
-		if (!existsSync(path)) return "";
-		const text = readFileSync(path, "utf8").trim();
-		return text.length > limit
-			? `### ${label} — too large to show here; read \`${path}\`\n`
-			: `### ${label}\n\`\`\`json\n${text}\n\`\`\`\n`;
-	};
-	const historyRoot = dirname(PREPARED_FEEDBACK_PATH);
+	const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
 	const context = [
 		shown("The composition request (lanes, caps, placements)", COMPOSITION_REQUEST_PATH),
 		shown("What earlier reviews recorded about this person", `${historyRoot}/observations.json`),
@@ -2296,7 +2495,9 @@ ${coverageNote}Persist the units with report_feedback — every unit you have in
 }
 
 /** A transport failure or a server that is not answering yet; a refusal is a decision, not a blip. */
-class AdmissionUnreachable extends Error {}
+class AdmissionUnreachableError extends Error {
+	name = "AdmissionUnreachableError";
+}
 
 /** The cause behind a wrapped error, in parentheses, or nothing when the error carries none. */
 function causeText(error: unknown): string {
@@ -2341,7 +2542,7 @@ async function postAdmission(): Promise<unknown> {
 			headers: {
 				authorization: `Bearer ${process.env.LLM_PROXY_TOKEN}`,
 				"content-type": "application/json",
-				...(process.env.TRACEPARENT ? { traceparent: process.env.TRACEPARENT } : {}),
+				...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
 			},
 			body: JSON.stringify({ schemaVersion: 1, observations: reviewState.observations }),
 		});
@@ -2355,12 +2556,12 @@ async function postAdmission(): Promise<unknown> {
 		}
 		// Node reports every transport failure as `TypeError: fetch failed`; only the cause says which
 		// one it was, and a report that has just the message cannot tell a restart from a wrong URL.
-		throw new AdmissionUnreachable(
+		throw new AdmissionUnreachableError(
 			`observation admission could not be sent: ${errorText(error)}${causeText(error)}`,
 		);
 	}
 	if (isRetryableStatus(response.status)) {
-		throw new AdmissionUnreachable(`observation admission failed: HTTP ${response.status}`);
+		throw new AdmissionUnreachableError(`observation admission failed: HTTP ${response.status}`);
 	}
 	if (!response.ok) {
 		// The server has decided, and it said why. Asking again puts the same question, so the run ends
@@ -2374,7 +2575,7 @@ async function postAdmission(): Promise<unknown> {
 	} catch (error) {
 		// A server that dies while writing its answer ends the body mid-stream. The admission may well
 		// have been recorded; asking again replays it rather than admitting it twice.
-		throw new AdmissionUnreachable(
+		throw new AdmissionUnreachableError(
 			`observation admission answer was cut short: ${errorText(error)}${causeText(error)}`,
 		);
 	}
@@ -2386,7 +2587,7 @@ async function admitObservations() {
 	// the payload is frozen once the measurement is closed, and the server replays an identical one.
 	const admitted: unknown = await retrying(
 		postAdmission,
-		(error) => error instanceof AdmissionUnreachable,
+		(error) => error instanceof AdmissionUnreachableError,
 		{ attempts: ADMISSION_ATTEMPTS },
 		(attempt, error, delayMs) =>
 			console.error(
@@ -2412,6 +2613,65 @@ async function admitObservations() {
 		COMPOSITION_OBSERVATIONS_PATH,
 		JSON.stringify({ observations: admittedObservations }, null, 2),
 	);
+}
+
+/**
+ * One tool call of a turn, as the loop guards read it before the tool runs. Three things end a turn
+ * early here, each after telling the session once: a composer reading instead of writing, a call
+ * repeated with the same arguments, and recording calls that record nothing.
+ */
+function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measuring: boolean): void {
+	turn.toolCalls[toolName] = (turn.toolCalls[toolName] ?? 0) + 1;
+	if (!activeSession) {
+		return;
+	}
+	// A composer that has made this many calls without one recording call is reading its way
+	// through the practice files instead of writing: on the cohort a composition read 37 criteria
+	// one by one, compacted its own instructions away twice, and wrote nothing.
+	const calls = Object.values(turn.toolCalls).reduce((sum, count) => sum + count, 0);
+	if (
+		!measuring &&
+		!RECORDING_TOOLS.has(toolName) &&
+		turn.recordingCalls === 0 &&
+		calls === COMPOSITION_EXPLORATION_NUDGE
+	) {
+		console.error(
+			`[pi-runner] composition: ${COMPOSITION_EXPLORATION_NUDGE} calls without a recording call — nudging to persist`,
+		);
+		void steer(activeSession, COMPOSITION_NUDGE);
+	}
+	const signature = `${toolName}:${JSON.stringify(args)}`;
+	const repeats = (repeatedCalls.get(signature) ?? 0) + 1;
+	repeatedCalls.set(signature, repeats);
+	turn.repeatedCalls = Math.max(turn.repeatedCalls, repeats);
+	if (repeats === REPEATED_CALL_NUDGE) {
+		console.error(
+			`[pi-runner] ${turn.label}: the same ${toolName} call ${repeats} times — nudging to record`,
+		);
+		void steer(
+			activeSession,
+			`You have run the same ${toolName} call ${repeats} times; its result will not change. Record what the evidence you have read supports, in one ${measuring ? "report_observation" : "report_feedback"} call. ${PERSIST_DISCIPLINE}`,
+		);
+	}
+	if (repeats >= REPEATED_CALL_ABORT) {
+		console.error(
+			`[pi-runner] ${turn.label}: the same ${toolName} call ${repeats} times — aborting this turn`,
+		);
+		void abortSession(activeSession);
+	}
+	// A call the SDK refuses on its schema never reaches the tool, so the refusal cap cannot end a
+	// session that re-sends it; this bound does. A turn that has recorded nothing after this many
+	// attempts at its recording tools is spending its share on the same mistake — one composition
+	// called report_summary 452 times against one refusal.
+	if (RECORDING_TOOLS.has(toolName)) {
+		turn.recordingCalls += 1;
+		if (turn.recordingCalls >= MAX_RECORDING_ATTEMPTS_PER_TURN && turn.stored === 0) {
+			console.error(
+				`[pi-runner] ${measuring ? "review" : "composer"}: ${turn.recordingCalls} recording calls without a record — aborting this turn`,
+			);
+			void abortSession(activeSession);
+		}
+	}
 }
 
 /** How often each call of the current turn has been made: the loop guard's memory, reset per turn. */
@@ -2452,20 +2712,26 @@ function closeTurnTrace(trace: TurnTrace): void {
 }
 
 function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
-	let release = () => {};
 	// Racing `elapsed` says the wait is over, not why: the caller asks this to tell an answer from a
 	// budget that ran out. A function rather than a field, because a timer sets it: a field read after
 	// an early check would be narrowed to its first value.
 	let expired = false;
-	const elapsed = new Promise<void>((resolve) => {
-		release = resolve;
-	});
+	const { promise: elapsed, resolve: release } = Promise.withResolvers<undefined>();
 	const timer = setTimeout(() => {
 		expired = true;
 		onTimeout();
-		release();
+		release(undefined);
 	}, timeoutMs);
 	return { elapsed, timer, expired: () => expired };
+}
+
+/** A mid-turn nudge; the turn goes on either way, so a steer that fails is only logged. */
+async function steer(session: AgentSession, message: string): Promise<void> {
+	try {
+		await session.steer(message);
+	} catch (error) {
+		console.error(`[pi-runner] steer failed: ${errorText(error)}`);
+	}
 }
 
 /**
@@ -2473,14 +2739,16 @@ function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
  * refuses a prompt while the aborted call is still ending, so a turn that aborts waits for this
  * before the next turn is sent — otherwise every later turn fails as "already processing".
  */
-function abortSession(session: AgentSession): Promise<void> {
+async function abortSession(session: AgentSession): Promise<void> {
 	session.clearQueue();
 	// A compaction in flight is a model call of its own that `abort()` leaves running, and the
 	// session is not idle until it ends; the next turn compacts again if it must, inside its own share.
 	session.abortCompaction();
-	return session.abort().catch((error) => {
+	try {
+		await session.abort();
+	} catch (error) {
 		console.error(`[pi-runner] session abort failed: ${errorText(error)}`);
-	});
+	}
 }
 
 /** How long an aborted turn waits for the session to go idle before the next turn is sent. */
@@ -2496,14 +2764,15 @@ async function settleSession(
 	label: string,
 	maxMs: number,
 ): Promise<boolean> {
-	if (!session.isStreaming) return true;
+	if (!session.isStreaming) {
+		return true;
+	}
 	const started = Date.now();
-	const idle = await Promise.race([
-		session.waitForIdle().then(() => true),
-		new Promise<boolean>((resolve) => {
-			setTimeout(() => resolve(false), maxMs);
-		}),
-	]);
+	const becameIdle = async (): Promise<boolean> => {
+		await session.waitForIdle();
+		return true;
+	};
+	const idle = await Promise.race([becameIdle(), sleep(maxMs, false)]);
 	// The run flag clears a beat after the prompt resolves; a wait that short is not worth a line.
 	const waitedMs = Date.now() - started;
 	if (!idle || waitedMs >= 1000) {
@@ -2515,7 +2784,7 @@ async function settleSession(
 }
 
 function criteriaFileOf(slug: string): string | null {
-	const file = `${dirname(INPUT_PATHS.practiceIndex)}/${slug}.md`;
+	const file = `${nodePath.dirname(INPUT_PATHS.practiceIndex)}/${slug}.md`;
 	return existsSync(file) ? readFileSync(file, "utf8").trim() : null;
 }
 
@@ -2577,7 +2846,9 @@ async function makeRoomFor(
 ): Promise<boolean> {
 	const held = session.getContextUsage()?.tokens ?? 0;
 	const needed = Math.ceil(text.length / 4) + (model.maxTokens ?? 0);
-	if (held + needed <= model.contextWindow) return false;
+	if (held + needed <= model.contextWindow) {
+		return false;
+	}
 	console.error(
 		`[pi-runner] composition: ${held} tokens held and ${needed} needed exceed the ${model.contextWindow} window — compacting first`,
 	);
@@ -2599,6 +2870,25 @@ function negativePractices(observations: readonly AdmittedObservation[]): string
 				.map((observation) => observation.practiceSlug),
 		),
 	].toSorted();
+}
+
+/**
+ * The composition's finishing prompt. The first prompt may have been ended by the loop guard: the
+ * session settles first, and the guard's memory starts over so the second prompt gets its own six.
+ */
+async function askComposerOnceMore(
+	session: AgentSession,
+	negatives: readonly string[],
+	deadline: Promise<undefined>,
+): Promise<void> {
+	console.error(
+		`[pi-runner] composition recorded nothing for ${negatives.length} NEGATIVE practice(s) — asking once more`,
+	);
+	if (!(await settleSession(session, "composition", ABORT_SETTLE_MS))) {
+		throw new Error("the session was still busy when the composition was asked once more");
+	}
+	repeatedCalls.clear();
+	await Promise.race([session.prompt(finishCompositionText(negatives)), deadline]);
 }
 
 function finishCompositionText(negatives: readonly string[]): string {
@@ -2653,13 +2943,15 @@ async function main() {
 
 	const providerConfig = loadProviderConfig(CWD);
 	const registered = registerHephaestusProvider(modelRuntime, providerConfig);
-	if (!registered || !providerConfig?.modelId) {
+	if (!registered || !hasText(providerConfig?.modelId)) {
 		throw new Error(
 			"Hephaestus provider is not configured — pi-provider.json and proxy credentials are required",
 		);
 	}
 	const model = modelRuntime.getModel("hephaestus", providerConfig.modelId);
-	if (!model) throw new Error(`Hephaestus model was not registered: ${providerConfig.modelId}`);
+	if (!model) {
+		throw new Error(`Hephaestus model was not registered: ${providerConfig.modelId}`);
+	}
 	// The window is logged because everything downstream is measured against it: a workspace that
 	// declares it wrong says so in the first lines of every transcript.
 	console.error(
@@ -2679,68 +2971,13 @@ async function main() {
 	const streamUsage = newUsageLedger();
 	let providerFailures = 0;
 	let measuring = true;
-	const subscribeSession = (trackedSession: AgentSession) => {
-		return trackedSession.subscribe((event: AgentSessionEvent) => {
+	const subscribeSession = (trackedSession: AgentSession) =>
+		trackedSession.subscribe((event: AgentSessionEvent) => {
 			const label = measuring ? "review" : "composer";
 			if (event.type === "tool_execution_start") {
 				console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
 				if (currentTurn) {
-					currentTurn.toolCalls[event.toolName] = (currentTurn.toolCalls[event.toolName] ?? 0) + 1;
-					// A composer that has made this many calls without one recording call is reading its way
-					// through the practice files instead of writing: on the cohort a composition read 37
-					// criteria one by one, compacted its own instructions away twice, and wrote nothing.
-					if (
-						!measuring &&
-						!RECORDING_TOOLS.has(event.toolName) &&
-						currentTurn.recordingCalls === 0 &&
-						Object.values(currentTurn.toolCalls).reduce((sum, count) => sum + count, 0) ===
-							COMPOSITION_EXPLORATION_NUDGE &&
-						activeSession
-					) {
-						console.error(
-							`[pi-runner] composition: ${COMPOSITION_EXPLORATION_NUDGE} calls without a recording call — nudging to persist`,
-						);
-						activeSession
-							.steer(COMPOSITION_NUDGE)
-							.catch((err) => console.error(`[pi-runner] steer failed: ${errorText(err)}`));
-					}
-					const signature = `${event.toolName}:${JSON.stringify(event.args)}`;
-					const repeats = (repeatedCalls.get(signature) ?? 0) + 1;
-					repeatedCalls.set(signature, repeats);
-					currentTurn.repeatedCalls = Math.max(currentTurn.repeatedCalls, repeats);
-					if (repeats === REPEATED_CALL_NUDGE && activeSession) {
-						console.error(
-							`[pi-runner] ${currentTurn.label}: the same ${event.toolName} call ${repeats} times — nudging to record`,
-						);
-						activeSession
-							.steer(
-								`You have run the same ${event.toolName} call ${repeats} times; its result will not change. Record what the evidence you have read supports, in one ${measuring ? "report_observation" : "report_feedback"} call. ${PERSIST_DISCIPLINE}`,
-							)
-							.catch((err) => console.error(`[pi-runner] steer failed: ${errorText(err)}`));
-					}
-					if (repeats >= REPEATED_CALL_ABORT && activeSession) {
-						console.error(
-							`[pi-runner] ${currentTurn.label}: the same ${event.toolName} call ${repeats} times — aborting this turn`,
-						);
-						void abortSession(activeSession);
-					}
-					// A call the SDK refuses on its schema never reaches the tool, so the refusal cap cannot
-					// end a session that re-sends it; this bound does. A turn that has recorded nothing after
-					// this many attempts at its recording tools is spending its share on the same mistake —
-					// one composition called report_summary 452 times against one refusal.
-					if (RECORDING_TOOLS.has(event.toolName)) {
-						currentTurn.recordingCalls++;
-						if (
-							currentTurn.recordingCalls >= MAX_RECORDING_ATTEMPTS_PER_TURN &&
-							currentTurn.stored === 0 &&
-							activeSession
-						) {
-							console.error(
-								`[pi-runner] ${label}: ${currentTurn.recordingCalls} recording calls without a record — aborting this turn`,
-							);
-							void abortSession(activeSession);
-						}
-					}
+					noteToolCall(currentTurn, event.toolName, event.args, measuring);
 				}
 			}
 			// A call that ended in an error is the one thing the tool lines above cannot show: a schema the
@@ -2756,20 +2993,24 @@ async function main() {
 				const reason = firstLine(toolResultText(result));
 				console.error(`[pi-runner] ${label} tool error: ${event.toolName} — ${reason}`);
 				if (currentTurn) {
-					currentTurn.toolErrors++;
+					currentTurn.toolErrors += 1;
 					currentTurn.toolErrorReasons.push(`${event.toolName}: ${reason}`);
 				}
 			}
 			if (event.type === "compaction_end") {
 				console.error(
-					`[pi-runner] ${label} context compacted (${event.reason})${event.errorMessage ? `: ${event.errorMessage}` : ""}`,
+					`[pi-runner] ${label} context compacted (${event.reason})${hasText(event.errorMessage) ? `: ${event.errorMessage}` : ""}`,
 				);
-				if (currentTurn && !event.aborted) currentTurn.compactions++;
+				if (currentTurn && !event.aborted) {
+					currentTurn.compactions += 1;
+				}
 			}
 			// The SDK rides out a retryable provider failure on its own. A run that took longer, or that
 			// gave up after several of these, says so here rather than looking like an idle session.
 			if (event.type === "auto_retry_start") {
-				if (currentTurn) currentTurn.providerRetries++;
+				if (currentTurn) {
+					currentTurn.providerRetries += 1;
+				}
 				console.error(
 					`[pi-runner] ${label} provider call failed, retrying in ${event.delayMs}ms ` +
 						`(attempt ${event.attempt}/${event.maxAttempts}): ${event.errorMessage}`,
@@ -2780,29 +3021,35 @@ async function main() {
 				// A call the provider never answered, after the SDK spent its whole budget on it. Only the
 				// measuring turns count: composition can fail without costing a practice, and what this
 				// number decides is whether a review that recorded nothing was cut off or had nothing to record.
-				if (measuring) providerFailures++;
+				if (measuring) {
+					providerFailures += 1;
+				}
 				console.error(
 					`[pi-runner] ${label} provider call failed for good after ${event.attempt} retries: ${finalError}`,
 				);
 			}
 			if (event.type === "message_end" && event.message.role === "assistant") {
 				addAssistantUsage(streamUsage, event.message);
-				if (currentTurn) currentTurn.calls++;
-				const stopReason = event.message.stopReason;
+				if (currentTurn) {
+					currentTurn.calls += 1;
+				}
+				const { stopReason } = event.message;
 				const types = listOrEmpty(event.message.content).map((c) => c.type);
 				const toolCalls = types.filter((t) => t === "toolCall").length;
 				// A turn that ended in an error or ran out of room said why, and without it the
 				// transcript shows a session that simply stopped answering — the one thing a reader
 				// cannot diagnose afterwards.
-				const rawStopReason = event.message.rawStopReason;
+				const { rawStopReason } = event.message;
 				// A call the provider answered with an error the SDK does not retry — no deployment for
 				// the model, a rejected key, a gateway fault — is as much a provider failure as one it gave
 				// up retrying: nothing about the work was read. Counted so a review that recorded nothing
 				// is queued again rather than recorded as a review that found nothing.
-				if (stopReason === "error" && measuring) providerFailures++;
+				if (stopReason === "error" && measuring) {
+					providerFailures += 1;
+				}
 				const failure =
 					stopReason === "error" || stopReason === "length"
-						? `, error=${event.message.errorMessage ?? "none given"}${rawStopReason ? `, rawStopReason=${rawStopReason}` : ""}`
+						? `, error=${event.message.errorMessage ?? "none given"}${hasText(rawStopReason) ? `, rawStopReason=${rawStopReason}` : ""}`
 						: "";
 				console.error(
 					`[pi-runner] ${label} assistant msg: stopReason=${stopReason}, toolCalls=${toolCalls}, ` +
@@ -2810,7 +3057,6 @@ async function main() {
 				);
 			}
 		});
-	};
 
 	const allSlugs = loadPracticeSlugs();
 	practiceCoverageLedger = new PracticeCoverageLedger(PRACTICE_COVERAGE_PATH, allSlugs);
@@ -2835,7 +3081,9 @@ async function main() {
 	}
 
 	const customTools = [buildReportObservationTool()];
-	if (feedbackTool) customTools.push(feedbackTool, buildSummaryTool());
+	if (feedbackTool) {
+		customTools.push(feedbackTool, buildSummaryTool());
+	}
 	if (hardAborted) {
 		logPracticeCoverage();
 		finalizeOutput();
@@ -2881,11 +3129,10 @@ async function main() {
 			softTimeoutFired = true;
 			trace.softTimeoutFired = true;
 			console.error(`[pi-runner] ${label}: share nearly spent — nudging to record`);
-			session
-				.steer(
-					`This turn has used most of its share of the review budget. Stop exploring and record what the inspected evidence supports for the listed practices, in one report_observation call. ${PERSIST_DISCIPLINE}`,
-				)
-				.catch((err) => console.error(`[pi-runner] steer failed: ${errorText(err)}`));
+			void steer(
+				session,
+				`This turn has used most of its share of the review budget. Stop exploring and record what the inspected evidence supports for the listed practices, in one report_observation call. ${PERSIST_DISCIPLINE}`,
+			);
 		}, share.softMs);
 		let aborting: Promise<void> | undefined;
 		const hard = scheduleDeadline(share.hardMs, () => {
@@ -2902,7 +3149,9 @@ async function main() {
 		} finally {
 			clearTimeout(softTimer);
 			clearTimeout(hard.timer);
-			if (aborting) await settleSession(session, label, ABORT_SETTLE_MS);
+			if (aborting) {
+				await settleSession(session, label, ABORT_SETTLE_MS);
+			}
 			trace.hardAborted = hard.expired();
 			closeTurnTrace(trace);
 		}
@@ -3009,9 +3258,7 @@ async function main() {
 				() => {
 					trace.softTimeoutFired = true;
 					console.error(`[pi-runner] composition: budget nearly spent — nudging to persist`);
-					session
-						.steer(COMPOSITION_NUDGE)
-						.catch((err) => console.error(`[pi-runner] steer failed: ${errorText(err)}`));
+					void steer(session, COMPOSITION_NUDGE);
 				},
 				Math.floor(compositionMs * 0.6),
 			);
@@ -3029,22 +3276,9 @@ async function main() {
 				// nothing about why. Asked once more, in the same session, like the measurement's
 				// finishing turn: on the cohort, one composition in five ended this way.
 				const negatives = negativePractices(admittedObservations);
-				if (
-					!deadline.expired() &&
-					trace.recordingCalls === 0 &&
-					composedFeedback.units.length === 0 &&
-					negatives.length > 0
-				) {
-					console.error(
-						`[pi-runner] composition recorded nothing for ${negatives.length} NEGATIVE practice(s) — asking once more`,
-					);
-					// The first prompt may have been ended by the loop guard: the session settles first, and
-					// the guard's memory starts over so the second prompt gets its own six.
-					if (!(await settleSession(session, "composition", ABORT_SETTLE_MS))) {
-						throw new Error("the session was still busy when the composition was asked once more");
-					}
-					repeatedCalls.clear();
-					await Promise.race([session.prompt(finishCompositionText(negatives)), deadline.elapsed]);
+				const silent = trace.recordingCalls === 0 && composedFeedback.units.length === 0;
+				if (!deadline.expired() && silent && negatives.length > 0) {
+					await askComposerOnceMore(session, negatives, deadline.elapsed);
 				}
 			} catch (error) {
 				console.error(`[pi-runner] composition failed: ${errorText(error)}`);
@@ -3089,11 +3323,19 @@ process.on("unhandledRejection", (reason) => {
 	process.exit(2);
 });
 
-main().catch((err: unknown) => {
-	console.error(`[pi-runner] FATAL: ${errorText(err)}\n${err instanceof Error ? err.stack : ""}`);
-	finalizeOutputQuietly();
-	// A server this container never reached is not a defect in the review, and the attempts above have
-	// already ridden out the failures that clear in place. Saying so distinctly is what lets the server
-	// try the same work again instead of ending it.
-	process.exit(err instanceof AdmissionUnreachable ? SERVER_UNREACHABLE_EXIT : 2);
-});
+async function run(): Promise<void> {
+	try {
+		await main();
+	} catch (error) {
+		console.error(
+			`[pi-runner] FATAL: ${errorText(error)}\n${error instanceof Error ? error.stack : ""}`,
+		);
+		finalizeOutputQuietly();
+		// A server this container never reached is not a defect in the review, and the attempts above
+		// have already ridden out the failures that clear in place. Saying so distinctly is what lets
+		// the server try the same work again instead of ending it.
+		process.exit(error instanceof AdmissionUnreachableError ? SERVER_UNREACHABLE_EXIT : 2);
+	}
+}
+
+void run();

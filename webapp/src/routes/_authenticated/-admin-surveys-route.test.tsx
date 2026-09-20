@@ -140,7 +140,7 @@ describe("instance surveys route", () => {
 
 		await waitFor(() => expect(edits).toHaveLength(1));
 		const [edit] = edits;
-		expect(typeof edit?.endsAt).toBe("string");
+		expect(edit?.endsAt).toBeTypeOf("string");
 		expect(edit).toStrictEqual({
 			title: survey.title,
 			description: survey.description,
@@ -253,7 +253,7 @@ describe("instance surveys route", () => {
 			],
 		});
 		// No audience and no end: neither key is sent, and the start is the publish instant.
-		expect(typeof body?.startsAt).toBe("string");
+		expect(body?.startsAt).toBeTypeOf("string");
 		expect(body).not.toHaveProperty("workspaceId");
 		expect(body).not.toHaveProperty("endsAt");
 

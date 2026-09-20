@@ -7,7 +7,7 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import { CuratedFormLevel } from "@/components/admin/curated-catalog/CuratedFormLevel";
 import { CuratedGroupForm } from "@/components/admin/curated-catalog/CuratedGroupForm";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { problemDetailOf } from "@/lib/problem-detail";
 
 export interface CuratedGroupCreateLevelProps {

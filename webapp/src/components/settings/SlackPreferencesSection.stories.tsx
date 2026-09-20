@@ -49,11 +49,11 @@ export const ConfirmTurningOff: Story = {
 		canConnectSlack: true,
 	},
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("switch", { name: /use my new channel messages/i }));
+		await userEvent.click(canvas.getByRole("switch", { name: /use my new channel messages/iu }));
 		// Flipping the switch alone must not delete anything.
 		await expect(args.onToggleChannelMessages).not.toHaveBeenCalled();
 
-		const confirm = await screen.findByRole("button", { name: /turn off & delete/i });
+		const confirm = await screen.findByRole("button", { name: /turn off & delete/iu });
 		await userEvent.click(confirm);
 		await expect(args.onToggleChannelMessages).toHaveBeenCalledWith("hephaestustest", false);
 	},
@@ -67,7 +67,7 @@ export const MessageUseOff: Story = {
 		canConnectSlack: true,
 	},
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("switch", { name: /use my new channel messages/i }));
+		await userEvent.click(canvas.getByRole("switch", { name: /use my new channel messages/iu }));
 		await expect(args.onToggleChannelMessages).toHaveBeenCalledWith("hephaestustest", true);
 	},
 };
@@ -107,8 +107,8 @@ export const ErrorState: Story = {
 		error: { detail: "Slack is not responding." },
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/could not load your slack preferences/i);
-		await userEvent.click(canvas.getByRole("button", { name: /retry/i }));
+		canvas.getByText(/could not load your slack preferences/iu);
+		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalled();
 	},
 };

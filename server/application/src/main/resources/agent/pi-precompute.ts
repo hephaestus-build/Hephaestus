@@ -1,12 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 
 import { CHANGE_ROOT } from "./pi-change.ts";
 import { SUPPORTED_SCHEMA_VERSION, resolveTaskPaths } from "./pi-task-paths.ts";
 
-const root = resolve(process.argv[2] ?? "/workspace");
-const envelope: unknown = JSON.parse(readFileSync(resolve(root, "task.json"), "utf8"));
+const root = path.resolve(process.argv[2] ?? "/workspace");
+const envelope: unknown = JSON.parse(readFileSync(path.resolve(root, "task.json"), "utf8"));
 if (typeof envelope !== "object" || envelope === null) {
 	throw new Error("task.json: expected an envelope");
 }
@@ -14,17 +14,17 @@ if (Reflect.get(envelope, "schemaVersion") !== SUPPORTED_SCHEMA_VERSION) {
 	throw new Error("task.json: unsupported schemaVersion");
 }
 const paths = resolveTaskPaths(root, Reflect.get(envelope, "paths"));
-const stage = resolve(root, "work/precompute-stage");
-const output = resolve(root, "work/precompute-out");
-rmSync(resolve(stage, "practices"), { recursive: true, force: true });
-mkdirSync(resolve(stage, "practices"), { recursive: true });
+const stage = path.resolve(root, "work/precompute-stage");
+const output = path.resolve(root, "work/precompute-out");
+rmSync(path.resolve(stage, "practices"), { recursive: true, force: true });
+mkdirSync(path.resolve(stage, "practices"), { recursive: true });
 mkdirSync(output, { recursive: true });
 if (existsSync(paths.precomputeScripts)) {
 	for (const entry of readdirSync(paths.precomputeScripts, { withFileTypes: true })) {
 		if (entry.isFile() && entry.name.endsWith(".ts")) {
 			copyFileSync(
-				resolve(paths.precomputeScripts, entry.name),
-				resolve(stage, "practices", entry.name),
+				path.resolve(paths.precomputeScripts, entry.name),
+				path.resolve(stage, "practices", entry.name),
 			);
 		}
 	}
@@ -41,19 +41,21 @@ const child = spawnSync(
 		"--repo",
 		paths.repositoryRoot,
 		"--diff",
-		resolve(root, CHANGE_ROOT, "diff.patch"),
+		path.resolve(root, CHANGE_ROOT, "diff.patch"),
 		"--metadata",
-		resolve(paths.contextRoot, "metadata.json"),
+		path.resolve(paths.contextRoot, "metadata.json"),
 		"--context",
 		paths.contextRoot,
 		"--change",
-		resolve(root, CHANGE_ROOT),
+		path.resolve(root, CHANGE_ROOT),
 		"--practices",
-		resolve(stage, "practices"),
+		path.resolve(stage, "practices"),
 		"--output",
 		output,
 	],
 	{ stdio: "inherit" },
 );
-if (child.error) throw child.error;
+if (child.error) {
+	throw child.error;
+}
 process.exitCode = child.status ?? 1;

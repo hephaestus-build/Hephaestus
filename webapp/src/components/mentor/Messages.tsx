@@ -1,20 +1,18 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
-import { isStaticToolUIPart } from "ai";
 import { motion } from "motion/react";
 import type { RefObject } from "react";
 
 import { cn } from "cn";
 import type { ChatMessageVote } from "@/api/types.gen";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { ChatMessage, ChatTools } from "@/lib/types";
+import type { ChatMessage } from "@/lib/types";
 
 import { Greeting } from "./Greeting";
 import { PreviewMessage, ThinkingMessage } from "./Message";
-import type { PartRendererMap } from "./renderers/types";
 
 export interface MessagesProps {
 	messages: ChatMessage[];
-	votes?: Array<ChatMessageVote>;
+	votes?: ChatMessageVote[];
 	status: UseChatHelpers<ChatMessage>["status"];
 	readonly?: boolean;
 	showThinking?: boolean;
@@ -26,7 +24,22 @@ export interface MessagesProps {
 	onCopy?: (content: string) => void;
 	onVote?: (messageId: string, isUpvote: boolean) => void;
 	className?: string;
-	partRenderers?: PartRendererMap;
+}
+
+function hasVisibleContent(message: ChatMessage): boolean {
+	const { parts } = message;
+	if (parts.length === 0) {
+		return false;
+	}
+	for (const p of parts) {
+		if (p.type === "text" && p.text.trim().length > 0) {
+			return true;
+		}
+		if (p.type === "file") {
+			return true;
+		}
+	}
+	return false;
 }
 
 export function Messages({
@@ -43,34 +56,21 @@ export function Messages({
 	onCopy,
 	onVote,
 	className,
-	partRenderers,
 }: MessagesProps) {
 	const isArtifact = variant === "artifact";
 
-	const hasVisibleContent = (message: ChatMessage): boolean => {
-		const parts = message.parts;
-		if (parts.length === 0) return false;
-		for (const p of parts) {
-			if (p.type === "text" && p.text.trim().length > 0) return true;
-			if (p.type === "file") return true;
-			// Every state a tool part can be in renders something, so reaching one is visible content.
-			if (isStaticToolUIPart<ChatTools>(p)) return true;
-		}
-		return false;
-	};
-
 	return (
-		<ScrollArea className="flex flex-col w-full flex-1 min-h-0" viewportRef={containerRef}>
+		<ScrollArea className="flex min-h-0 w-full flex-1 flex-col" viewportRef={containerRef}>
 			<div
 				role="log"
 				aria-live="polite"
 				aria-relevant="additions text"
 				aria-busy={status === "streaming" || status === "submitted"}
 				className={cn(
-					"flex flex-col w-full pb-16",
+					"flex w-full flex-col pb-16",
 					{
-						"min-w-0 gap-2 flex-1 pt-4 relative mx-auto md:max-w-3xl": !isArtifact,
-						"gap-2 flex-1 px-0 pt-4": isArtifact,
+						"relative mx-auto min-w-0 flex-1 gap-2 pt-4 md:max-w-3xl": !isArtifact,
+						"flex-1 gap-2 px-0 pt-4": isArtifact,
 						"gap-4": readonly,
 					},
 					className,
@@ -87,7 +87,9 @@ export function Messages({
 						showThinking &&
 						(status === "submitted" || status === "streaming");
 
-					if (hideEmptyAssistantPlaceholder) return null;
+					if (hideEmptyAssistantPlaceholder) {
+						return null;
+					}
 
 					return (
 						<PreviewMessage
@@ -100,7 +102,6 @@ export function Messages({
 							onMessageEdit={onMessageEdit}
 							onCopy={onCopy}
 							onVote={onVote}
-							partRenderers={partRenderers}
 						/>
 					);
 				})}
@@ -109,13 +110,15 @@ export function Messages({
 					(status === "submitted" || status === "streaming") &&
 					(() => {
 						const last = messages.at(-1);
-						if (!last) return <ThinkingMessage />;
+						if (!last) {
+							return <ThinkingMessage />;
+						}
 						const isUser = last.role === "user";
 						const assistantHasVisible = last.role === "assistant" && hasVisibleContent(last);
 						return isUser || !assistantHasVisible ? <ThinkingMessage /> : null;
 					})()}
 
-				<motion.div ref={endRef} className="shrink-0 min-w-[12px] min-h-[12px]" />
+				<motion.div ref={endRef} className="min-h-[12px] min-w-[12px] shrink-0" />
 			</div>
 		</ScrollArea>
 	);

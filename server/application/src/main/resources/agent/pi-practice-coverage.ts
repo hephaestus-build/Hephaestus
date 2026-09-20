@@ -5,7 +5,7 @@ export type PracticeCoverageOutcome = "EVALUATED" | "NOT_REACHED";
 export interface PracticeCoverage {
 	eligible: number;
 	evaluated: number;
-	outcomes: Array<{ practiceSlug: string; outcome: PracticeCoverageOutcome }>;
+	outcomes: { practiceSlug: string; outcome: PracticeCoverageOutcome }[];
 }
 
 export class PracticeCoverageLedger {
@@ -26,8 +26,12 @@ export class PracticeCoverageLedger {
 
 	markEvaluated(practiceSlugs: readonly string[]) {
 		const unknown = practiceSlugs.find((slug) => !this.#eligibleSet.has(slug));
-		if (unknown !== undefined) throw new Error(`evaluated practice is not eligible: ${unknown}`);
-		for (const slug of practiceSlugs) this.#evaluated.add(slug);
+		if (unknown !== undefined) {
+			throw new Error(`evaluated practice is not eligible: ${unknown}`);
+		}
+		for (const slug of practiceSlugs) {
+			this.#evaluated.add(slug);
+		}
 		return this.persist();
 	}
 

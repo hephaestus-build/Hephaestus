@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 
 import type { CatalogEntryStatus } from "@/api/types.gen";
-import { expectNoOverflowingElement } from "@/test/reflow";
+import { expectNoOverflowingElement } from "@/stories/reflow";
 
 import { CuratedEntryBadges } from "./CuratedEntryBadges";
 
@@ -14,7 +14,6 @@ const status = (overrides: Partial<CatalogEntryStatus> = {}): CatalogEntryStatus
 });
 
 const meta = {
-	title: "Instance admin/Practice catalog/Entry badges",
 	component: CuratedEntryBadges,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],

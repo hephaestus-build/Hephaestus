@@ -1,14 +1,15 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, screen } from "storybook/test";
 
+import { workspacePractices } from "./fixtures";
 import { ReviewPracticeLink } from "./ReviewPracticeLink";
-import { workspacePractices } from "./story-mock-data";
 
 const thinControllers = workspacePractices.find((p) => p.slug === "thin-controllers");
-if (!thinControllers) throw new Error("The practice fixtures no longer cover thin-controllers");
+if (!thinControllers) {
+	throw new Error("The practice fixtures no longer cover thin-controllers");
+}
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Practice link",
 	component: ReviewPracticeLink,
 	parameters: { layout: "centered", chromatic: { viewports: [1440] } },
 	tags: ["autodocs"],
@@ -26,7 +27,7 @@ type Story = StoryObj<typeof meta>;
 
 export const WithTheHoverCard: Story = {
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.hover(canvas.getByRole("link", { name: /Thin controllers/ }));
+		await userEvent.hover(canvas.getByRole("link", { name: /Thin controllers/u }));
 		await screen.findByText(thinControllers.whyItMatters ?? "");
 	},
 };
@@ -34,7 +35,7 @@ export const WithTheHoverCard: Story = {
 export const WithoutThePracticeRecord: Story = {
 	args: { practice: undefined },
 	play: async ({ canvas, userEvent }) => {
-		const link = canvas.getByRole("link", { name: /Thin controllers/ });
+		const link = canvas.getByRole("link", { name: /Thin controllers/u });
 		await expect(link).toHaveAttribute("href", "/w/demo/admin/practices/thin-controllers");
 		await userEvent.hover(link);
 		await expect(screen.queryByText(thinControllers.whyItMatters ?? "")).not.toBeInTheDocument();

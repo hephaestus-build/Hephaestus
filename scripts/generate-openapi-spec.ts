@@ -3,30 +3,34 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { glob, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
-import { join } from "node:path";
+import path from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { isSet } from "./lib/env.ts";
 import { run } from "./lib/process.ts";
 
-const serverDirectory = join(import.meta.dirname, "..", "server");
-const specification = join(serverDirectory, "openapi.yaml");
-const wrapper = join(import.meta.dirname, "run-gradlew.ts");
+const serverDirectory = path.join(import.meta.dirname, "..", "server");
+const specification = path.join(serverDirectory, "openapi.yaml");
+const wrapper = path.join(import.meta.dirname, "run-gradlew.ts");
 const startupBudgetMs = 180_000;
 
 async function executableJar(): Promise<string> {
 	const configured = process.env.HEPHAESTUS_APPLICATION_JAR;
-	if (configured) return configured;
+	if (isSet(configured)) {
+		return configured;
+	}
 	await run(process.execPath, [wrapper, ":application:bootJar", ...process.argv.slice(2)], {
 		cwd: serverDirectory,
 	});
-	const jars = (
-		await Array.fromAsync(
-			glob("application/build/libs/hephaestus-application-*.jar", { cwd: serverDirectory }),
-		)
-	).filter((jar) => !/-(?:sources|javadoc)\.jar$/.test(jar));
-	if (jars.length !== 1) throw new Error(`Expected one executable JAR, found ${jars.length}`);
-	return join(serverDirectory, jars[0] ?? "");
+	const built = await Array.fromAsync(
+		glob("application/build/libs/hephaestus-application-*.jar", { cwd: serverDirectory }),
+	);
+	const jars = built.filter((jar) => !/-(?:sources|javadoc)\.jar$/u.test(jar));
+	if (jars.length !== 1) {
+		throw new Error(`Expected one executable JAR, found ${jars.length}`);
+	}
+	return path.join(serverDirectory, jars[0] ?? "");
 }
 
 async function freePort(): Promise<number> {
@@ -35,17 +39,23 @@ async function freePort(): Promise<number> {
 	const address = probe.address();
 	probe.close();
 	await once(probe, "close");
-	if (!address || typeof address === "string") throw new Error("Could not allocate a port");
+	if (address === null || typeof address === "string") {
+		throw new Error("Could not allocate a port");
+	}
 	return address.port;
 }
 
 async function fetchSpecification(url: string, child: ReturnType<typeof spawn>): Promise<string> {
 	const deadline = Date.now() + startupBudgetMs;
 	while (Date.now() < deadline) {
-		if (child.exitCode !== null) throw new Error(`The server exited with code ${child.exitCode}`);
+		if (child.exitCode !== null) {
+			throw new Error(`The server exited with code ${child.exitCode}`);
+		}
 		try {
 			const response = await fetch(url, { signal: AbortSignal.timeout(deadline - Date.now()) });
-			if (response.ok) return await response.text();
+			if (response.ok) {
+				return await response.text();
+			}
 		} catch {
 			// Retry connection failures until the startup deadline.
 		}
@@ -72,10 +82,13 @@ const child = spawn(
 const exited = once(child, "exit");
 try {
 	const yaml = await fetchSpecification(`http://127.0.0.1:${port}/v3/api-docs.yaml`, child);
-	if (!yaml.trim()) throw new Error("The server returned an empty specification");
+	if (!yaml.trim()) {
+		throw new Error("The server returned an empty specification");
+	}
 	await rm(specification, { force: true });
 	await writeFile(specification, yaml);
-	console.log(`Wrote ${specification} (${(await readFile(specification)).length} bytes)`);
+	const written = await readFile(specification);
+	console.log(`Wrote ${specification} (${written.length} bytes)`);
 } finally {
 	child.kill("SIGTERM");
 	await Promise.race([exited, sleep(15_000).then(() => child.kill("SIGKILL"))]);

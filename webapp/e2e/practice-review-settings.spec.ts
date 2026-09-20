@@ -20,7 +20,7 @@ test("practice review settings can be updated", async ({ page }) => {
 
 	const deliverAfterMerge = page.getByRole("switch", { name: "Post feedback after merge" });
 	const before = await deliverAfterMerge.getAttribute("aria-checked");
-	assert.ok(before, "switch has no checked state");
+	assert.ok(before !== null, "switch has no checked state");
 	const [response] = await Promise.all([
 		page.waitForResponse(isReviewSettingsWrite),
 		deliverAfterMerge.click(),

@@ -81,7 +81,7 @@ void test(
 		const command = profile.get("run");
 		assert.equal(typeof command, "string");
 		const directory = await mkdtemp(path.join(tmpdir(), "profile-pipeline-"));
-		context.after(() => rm(directory, { recursive: true, force: true }));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
 		await writeFile(path.join(directory, "vp"), "#!/bin/sh\necho 'Gradle failed' >&2\nexit 17\n", {
 			mode: 0o755,
 		});
@@ -97,7 +97,7 @@ void test(
 		assert.equal(result.status, 17, result.stderr);
 		assert.match(
 			await readFile(path.join(directory, "ci-metrics/server-integration.log"), "utf8"),
-			/Gradle failed/,
+			/Gradle failed/u,
 		);
 	},
 );
@@ -111,9 +111,9 @@ void test("verification profiling retains coverage and runs separately from inte
 	const profile = items.items.find((item) => isMap(item) && item.get("id") === "profile");
 	assert.ok(isMap(profile));
 	assert.equal(profile.get("shell"), "bash");
-	assert.match(String(profile.get("run")), /vp run test:server:verification/);
-	assert.doesNotMatch(String(profile.get("run")), /skipCoverage|skipTests/);
-	assert.match(String(profile.get("run")), /-PprofileTests=true/);
+	assert.match(String(profile.get("run")), /vp run test:server:verification/u);
+	assert.doesNotMatch(String(profile.get("run")), /skipCoverage|skipTests/u);
+	assert.match(String(profile.get("run")), /-PprofileTests=true/u);
 	assert.equal(
 		items.items.some((item) => isMap(item) && item.get("id") === "history"),
 		false,
@@ -122,7 +122,7 @@ void test("verification profiling retains coverage and runs separately from inte
 
 void test("only opt-in Gradle profiles stream context diagnostics", async () => {
 	const build = await readFile("server/application/build.gradle.kts", "utf8");
-	assert.match(build, /showStandardStreams = profileTests\.get\(\)/);
+	assert.match(build, /showStandardStreams = profileTests\.get\(\)/u);
 });
 
 void test("profile history excludes incompatible process-accounting baselines", () => {
@@ -138,7 +138,7 @@ void test("both profile tiers use a fresh Gradle process", () => {
 		assert.ok(isSeq(items));
 		const profile = items.items.find((item) => isMap(item) && item.get("id") === "profile");
 		assert.ok(isMap(profile));
-		assert.match(String(profile.get("run")), /--no-daemon/);
+		assert.match(String(profile.get("run")), /--no-daemon/u);
 	}
 });
 
@@ -147,7 +147,7 @@ void test("runner comparisons are manual, sequential and separate from profile h
 	assert.ok(isMap(benchmark));
 	assert.match(
 		String(benchmark.get("if")),
-		/github\.event_name == 'workflow_dispatch' && inputs\.suite == 'runner-comparison'/,
+		/github\.event_name == 'workflow_dispatch' && inputs\.suite == 'runner-comparison'/u,
 	);
 	assert.equal(benchmark.getIn(["strategy", "max-parallel"]), 1);
 	assert.equal(benchmark.getIn(["strategy", "fail-fast"]), false);
@@ -159,9 +159,10 @@ void test("runner comparisons are manual, sequential and separate from profile h
 		{ runner: "ubuntu-24.04-arm", sample: 2 },
 		{ runner: "ubuntu-24.04", sample: 2 },
 	]);
-	for (const job of ["server-integration", "server-verification"])
+	for (const job of ["server-integration", "server-verification"]) {
 		assert.match(
 			String(workflow.getIn(["jobs", job, "if"])),
-			/inputs\.suite != 'runner-comparison'/,
+			/inputs\.suite != 'runner-comparison'/u,
 		);
+	}
 });

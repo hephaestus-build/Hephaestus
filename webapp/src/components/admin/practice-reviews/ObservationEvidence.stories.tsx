@@ -3,7 +3,7 @@ import { expect } from "storybook/test";
 
 import type { EvidenceCitation } from "@/api/types.gen";
 import { knownEvidenceSourceKinds } from "@/components/practice-vocabulary/evidence-source-defs";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { ObservationEvidence } from "./ObservationEvidence";
 
@@ -78,7 +78,9 @@ const CITATION_BY_KIND: Record<string, { path: string; quote: string }> = {
 
 function citation(sourceKind: string, overrides: Partial<EvidenceCitation> = {}): EvidenceCitation {
 	const sample = CITATION_BY_KIND[sourceKind];
-	if (!sample) throw new Error(`No sample passage is written for evidence source ${sourceKind}`);
+	if (!sample) {
+		throw new Error(`No sample passage is written for evidence source ${sourceKind}`);
+	}
 	const { path, quote } = sample;
 	const isDiff = sourceKind === "scm.pull-request.diff";
 	return {
@@ -96,7 +98,6 @@ function citation(sourceKind: string, overrides: Partial<EvidenceCitation> = {})
 }
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Observation evidence",
 	component: ObservationEvidence,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],
@@ -170,7 +171,7 @@ export const EverySource: Story = {
 			].sort(),
 		);
 		// Only a `code` locator has trustworthy line numbers, so no other source prints one.
-		await expect(canvas.queryByText(/Message from Ada Lovelace:\d/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/Message from Ada Lovelace:\d/u)).not.toBeInTheDocument();
 	},
 };
 
@@ -189,7 +190,7 @@ export const LineNumbersOnlyWhereTheyAreReal: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("webapp/src/lib/artifact-kinds.ts:12–13");
 		canvas.getByText("Message from Ada Lovelace");
-		await expect(canvas.queryByText(/Message from Ada Lovelace:12/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/Message from Ada Lovelace:12/u)).not.toBeInTheDocument();
 	},
 };
 
@@ -206,7 +207,7 @@ export const RedactedQuote: Story = {
 		},
 	},
 	play: async ({ canvas, canvasElement }) => {
-		canvas.getByText(/This looked like a credential/);
+		canvas.getByText(/This looked like a credential/u);
 		canvas.getByText("webapp/src/components/admin/practice-reviews/ReviewRow.tsx:12–13");
 		await expect(canvasElement.querySelector("pre")).toBeNull();
 	},
@@ -237,7 +238,7 @@ export const UnknownSource: Story = {
 export const NoEvidence: Story = {
 	args: { evidence: null },
 	play: async ({ canvas }) => {
-		canvas.getByText(/Nothing was quoted for this observation/);
+		canvas.getByText(/Nothing was quoted for this observation/u);
 	},
 };
 

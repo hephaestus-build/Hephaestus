@@ -1,6 +1,6 @@
 import { format, subDays } from "date-fns";
 import { AlertCircle, History } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type { CreateReviewBackfillRunRequest, ReviewBackfillRun } from "@/api/types.gen";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -33,6 +33,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { ARTIFACT_KIND, artifactKindLabel, artifactKindPluralLabel } from "@/lib/artifact-kinds";
 import { asDate } from "@/lib/dates";
 import { formatCostUsd } from "@/lib/money";
+import { hasText } from "@/lib/text";
 
 export interface PracticeReviewBackfillProps {
 	runs: ReviewBackfillRun[];
@@ -87,7 +88,9 @@ const countOf = (count: number, artifactKind: string) =>
 const formatWindow = (run: ReviewBackfillRun) => {
 	const from = asDate(run.fromAt);
 	const to = asDate(run.toAt);
-	if (!from || !to) return "Dates unavailable";
+	if (!from || !to) {
+		return "Dates unavailable";
+	}
 	return `${format(from, "d MMM yyyy")} – ${format(to, "d MMM yyyy")}`;
 };
 
@@ -111,12 +114,30 @@ export function PracticeReviewBackfill({
 	const active = runs.find((run) => run.status === "RUNNING" || run.status === "PAUSED");
 	const history = runs.filter((run) => run.status === "COMPLETED" || run.status === "CANCELLED");
 
+	let currentRun: ReactNode;
+	if (active) {
+		currentRun = <ActiveRunSection run={active} isUpdating={isUpdating} onCancel={onCancel} />;
+	} else if (pending) {
+		currentRun = (
+			<ConfirmationSection
+				run={pending}
+				isUpdating={isUpdating}
+				onConfirm={onConfirm}
+				onCancel={onCancel}
+			/>
+		);
+	} else {
+		currentRun = (
+			<EstimateSection isLoading={isLoading} isEstimating={isEstimating} onEstimate={onEstimate} />
+		);
+	}
+
 	return (
 		<div className="space-y-8">
 			{isError ? (
 				<Alert variant="destructive">
 					<AlertCircle />
-					<AlertTitle>Backfills couldn't be loaded</AlertTitle>
+					<AlertTitle>Backfills couldn’t be loaded</AlertTitle>
 					<AlertDescription>
 						<p>Any backfill already running is unaffected — this is only about showing it here.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
@@ -126,22 +147,7 @@ export function PracticeReviewBackfill({
 				</Alert>
 			) : null}
 
-			{active ? (
-				<ActiveRunSection run={active} isUpdating={isUpdating} onCancel={onCancel} />
-			) : pending ? (
-				<ConfirmationSection
-					run={pending}
-					isUpdating={isUpdating}
-					onConfirm={onConfirm}
-					onCancel={onCancel}
-				/>
-			) : (
-				<EstimateSection
-					isLoading={isLoading}
-					isEstimating={isEstimating}
-					onEstimate={onEstimate}
-				/>
-			)}
+			{currentRun}
 
 			<HistorySection runs={history} isLoading={isLoading} />
 		</div>
@@ -169,10 +175,10 @@ function EstimateSection({
 	return (
 		<section className="space-y-4" aria-labelledby="backfill-estimate-heading">
 			<div className="space-y-1">
-				<h2 id="backfill-estimate-heading" className="font-semibold text-lg">
+				<h2 id="backfill-estimate-heading" className="text-lg font-semibold">
 					Review past work
 				</h2>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					Reviews normally start when work happens, so anything from before this workspace was set
 					up has never been measured. A backfill measures it once, as it stands today.
 				</p>
@@ -238,7 +244,7 @@ function EstimateSection({
 					{isEstimating ? <Spinner /> : null}
 					Estimate this backfill
 				</Button>
-				<p className="text-muted-foreground text-sm">Nothing is reviewed until you confirm.</p>
+				<p className="text-sm text-muted-foreground">Nothing is reviewed until you confirm.</p>
 			</div>
 		</section>
 	);
@@ -264,23 +270,23 @@ function ConfirmationSection({
 	return (
 		<section className="space-y-4" aria-labelledby="backfill-confirm-heading">
 			<div className="space-y-1">
-				<h2 id="backfill-confirm-heading" className="font-semibold text-lg">
+				<h2 id="backfill-confirm-heading" className="text-lg font-semibold">
 					Confirm this backfill
 				</h2>
-				<p className="text-muted-foreground text-sm">{formatWindow(run)}</p>
+				<p className="text-sm text-muted-foreground">{formatWindow(run)}</p>
 			</div>
 			<div className="grid gap-4 sm:grid-cols-2">
 				<div>
-					<p className="text-muted-foreground text-sm">Work to review</p>
-					<p className="font-semibold text-2xl">
+					<p className="text-sm text-muted-foreground">Work to review</p>
+					<p className="text-2xl font-semibold">
 						{countOf(run.estimatedArtifacts, run.artifactKind)}
 					</p>
 				</div>
 				<div>
-					<p className="text-muted-foreground text-sm">Estimated AI spend</p>
-					<p className="font-semibold text-2xl">{cost ?? "Unknown"}</p>
-					{cost ? null : (
-						<p className="text-muted-foreground text-sm">
+					<p className="text-sm text-muted-foreground">Estimated AI spend</p>
+					<p className="text-2xl font-semibold">{cost ?? "Unknown"}</p>
+					{hasText(cost) ? null : (
+						<p className="text-sm text-muted-foreground">
 							This workspace has no priced reviews yet, so there is nothing to base an estimate on.
 						</p>
 					)}
@@ -315,7 +321,7 @@ function ConfirmationSection({
 					Discard
 				</Button>
 				{nothingToDo ? (
-					<p className="text-muted-foreground text-sm">
+					<p className="text-sm text-muted-foreground">
 						Nothing was opened in that stretch. Discard this and try a longer one.
 					</p>
 				) : null}
@@ -341,18 +347,18 @@ function ActiveRunSection({
 		<section className="space-y-4" aria-labelledby="backfill-active-heading">
 			<div className="space-y-1">
 				<div className="flex items-center gap-2">
-					<h2 id="backfill-active-heading" className="font-semibold text-lg">
+					<h2 id="backfill-active-heading" className="text-lg font-semibold">
 						Backfill in progress
 					</h2>
 					<Badge variant={run.status === "PAUSED" ? "outline" : "secondary"}>
 						{run.status === "PAUSED" ? "Paused" : "Running"}
 					</Badge>
 				</div>
-				<p className="text-muted-foreground text-sm">{formatWindow(run)}</p>
+				<p className="text-sm text-muted-foreground">{formatWindow(run)}</p>
 			</div>
 			<div className="space-y-2">
 				<Progress value={percent} aria-label="Backfill progress" />
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					{walked} of {countOf(total, run.artifactKind)} looked at — {run.submittedCount} sent for
 					review, {run.passedCount} already measured or outside your review rules.
 					{run.failedCount > 0 ? ` ${run.failedCount} could not be read, and stay unmeasured.` : ""}
@@ -376,61 +382,68 @@ function ActiveRunSection({
 }
 
 function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoading: boolean }) {
+	let history: ReactNode;
+	if (isLoading) {
+		history = (
+			<div className="flex justify-center py-6">
+				<Spinner />
+			</div>
+		);
+	} else if (runs.length === 0) {
+		history = (
+			<Empty>
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<History />
+					</EmptyMedia>
+					<EmptyTitle>No backfills yet</EmptyTitle>
+					<EmptyDescription>Past work has never been measured in this workspace.</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		);
+	} else {
+		history = (
+			<div className="space-y-2">
+				{runs.map((run) => (
+					<Item key={run.id} variant="outline">
+						<ItemContent>
+							<ItemTitle>
+								{artifactKindPluralLabel(run.artifactKind)}
+								{": "}
+								{formatWindow(run)}
+							</ItemTitle>
+							<ItemDescription>
+								{run.status === "CANCELLED"
+									? `Stopped after reviewing ${countOf(run.submittedCount, run.artifactKind)}.`
+									: `Reviewed ${countOf(run.submittedCount, run.artifactKind)}; ${run.passedCount} needed no new measurement.${
+											run.failedCount > 0
+												? ` ${run.failedCount} could not be read, and stay unmeasured.`
+												: ""
+										}`}
+							</ItemDescription>
+						</ItemContent>
+						<ItemActions>
+							<Badge variant={run.status === "CANCELLED" ? "outline" : "secondary"}>
+								{run.status === "CANCELLED" ? "Stopped" : "Finished"}
+							</Badge>
+						</ItemActions>
+					</Item>
+				))}
+			</div>
+		);
+	}
+
 	return (
 		<section className="space-y-4" aria-labelledby="backfill-history-heading">
 			<div className="space-y-1">
-				<h2 id="backfill-history-heading" className="font-semibold text-lg">
+				<h2 id="backfill-history-heading" className="text-lg font-semibold">
 					Past backfills
 				</h2>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					What has already been measured, and by whose decision.
 				</p>
 			</div>
-			{isLoading ? (
-				<div className="flex justify-center py-6">
-					<Spinner />
-				</div>
-			) : runs.length === 0 ? (
-				<Empty>
-					<EmptyHeader>
-						<EmptyMedia variant="icon">
-							<History />
-						</EmptyMedia>
-						<EmptyTitle>No backfills yet</EmptyTitle>
-						<EmptyDescription>
-							Past work has never been measured in this workspace.
-						</EmptyDescription>
-					</EmptyHeader>
-				</Empty>
-			) : (
-				<div className="space-y-2">
-					{runs.map((run) => (
-						<Item key={run.id} variant="outline">
-							<ItemContent>
-								<ItemTitle>
-									{artifactKindPluralLabel(run.artifactKind)}
-									{": "}
-									{formatWindow(run)}
-								</ItemTitle>
-								<ItemDescription>
-									{run.status === "CANCELLED"
-										? `Stopped after reviewing ${countOf(run.submittedCount, run.artifactKind)}.`
-										: `Reviewed ${countOf(run.submittedCount, run.artifactKind)}; ${run.passedCount} needed no new measurement.${
-												run.failedCount > 0
-													? ` ${run.failedCount} could not be read, and stay unmeasured.`
-													: ""
-											}`}
-								</ItemDescription>
-							</ItemContent>
-							<ItemActions>
-								<Badge variant={run.status === "CANCELLED" ? "outline" : "secondary"}>
-									{run.status === "CANCELLED" ? "Stopped" : "Finished"}
-								</Badge>
-							</ItemActions>
-						</Item>
-					))}
-				</div>
-			)}
+			{history}
 		</section>
 	);
 }

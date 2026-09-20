@@ -16,10 +16,18 @@ function text(value: unknown): string {
 }
 
 function linkedItemCount(data: unknown): number | null {
-	if (Array.isArray(data)) return data.length;
-	if (!isJsonObject(data)) return null;
-	if (Array.isArray(data.workItems)) return data.workItems.length;
-	if (Array.isArray(data.items)) return data.items.length;
+	if (Array.isArray(data)) {
+		return data.length;
+	}
+	if (!isJsonObject(data)) {
+		return null;
+	}
+	if (Array.isArray(data.workItems)) {
+		return data.workItems.length;
+	}
+	if (Array.isArray(data.items)) {
+		return data.items.length;
+	}
 	return null;
 }
 

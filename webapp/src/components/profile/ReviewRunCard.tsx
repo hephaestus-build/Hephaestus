@@ -7,7 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ARTIFACT_KIND, artifactKindIcon, artifactKindLabel } from "@/lib/artifact-kinds";
 import { asDate } from "@/lib/dates";
-import { getProviderLabel } from "@/lib/provider";
+import { getProviderLabel } from "@/lib/provider/provider-labels";
+import { hasText } from "@/lib/text";
 import type { FeedbackResponse, ObservationDetailState } from "./review-runs";
 import { ReviewObservationRow } from "./ReviewObservationRow";
 
@@ -23,22 +24,24 @@ const PROVIDER_ICONS = {
 	typeof GithubIcon
 >;
 function providerMeta(run: PracticeGroupReviewRun) {
-	const provider = run.reviewedWork.provider;
+	const { provider } = run.reviewedWork;
 	return provider
 		? { label: getProviderLabel(provider), Icon: PROVIDER_ICONS[provider] }
 		: undefined;
 }
 function workIdentity(run: PracticeGroupReviewRun, providerLabel?: string) {
 	const work = run.reviewedWork;
-	if (work.type === ARTIFACT_KIND.conversationThread && work.channelName) {
+	if (work.type === ARTIFACT_KIND.conversationThread && hasText(work.channelName)) {
 		return `#${work.channelName}`;
 	}
 	const numbered = [work.number !== undefined && `#${work.number}`, work.title]
 		.filter(Boolean)
 		.join(" · ");
-	if (numbered) return numbered;
+	if (numbered) {
+		return numbered;
+	}
 	const kind = artifactKindLabel(work.type);
-	return providerLabel ? `${kind} on ${providerLabel}` : kind;
+	return hasText(providerLabel) ? `${kind} on ${providerLabel}` : kind;
 }
 
 export interface ReviewRunCardProps {
@@ -84,15 +87,18 @@ export function ReviewRunCard({
 			)}
 			<div className="relative col-start-1 row-start-1 row-end-3 sm:col-start-2">
 				<span
-					className="absolute left-1/2 top-3 z-10 size-2.5 -translate-x-1/2 rounded-full border-2 border-background bg-muted-foreground"
+					className="absolute top-3 left-1/2 z-10 size-2.5 -translate-x-1/2 rounded-full border-2 border-background bg-muted-foreground"
 					aria-hidden
 				/>
 				<span
-					className="absolute bottom-0 left-1/2 top-5 w-px -translate-x-1/2 bg-border group-last:hidden"
+					className="absolute top-5 bottom-0 left-1/2 w-px -translate-x-1/2 bg-border group-last:hidden"
 					aria-hidden
 				/>
 			</div>
-			<Card className="col-start-2 mb-3 min-w-0 gap-0 overflow-hidden py-0 shadow-none sm:col-start-3 sm:row-start-1">
+			<Card
+				flush
+				className="col-start-2 mb-3 min-w-0 overflow-hidden sm:col-start-3 sm:row-start-1"
+			>
 				<CardContent className="min-w-0 p-0">
 					<div className="flex min-w-0 items-start gap-2 border-b bg-muted/50 px-4 py-3">
 						{provider && (
@@ -100,7 +106,7 @@ export function ReviewRunCard({
 						)}
 						<KindIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
 						<div className="min-w-0">
-							{run.reviewedWork.url ? (
+							{hasText(run.reviewedWork.url) ? (
 								<Tooltip>
 									<TooltipTrigger
 										render={
@@ -121,7 +127,7 @@ export function ReviewRunCard({
 							) : (
 								<p className="truncate text-sm font-medium">{identity}</p>
 							)}
-							{run.reviewedWork.repositoryName && (
+							{hasText(run.reviewedWork.repositoryName) && (
 								<p className="truncate text-xs text-muted-foreground">
 									{run.reviewedWork.repositoryName}
 								</p>
@@ -147,9 +153,9 @@ export function ReviewRunCard({
 						<div className="border-t px-4 py-2">
 							<Button
 								type="button"
-								variant="ghost"
+								variant="quiet"
 								size="sm"
-								className="h-8 px-2 text-muted-foreground hover:text-foreground"
+								className="h-8"
 								onClick={() => setShowAllObservations((current) => !current)}
 							>
 								{showAllObservations ? "Show less" : `Show more (${hiddenCount})`}

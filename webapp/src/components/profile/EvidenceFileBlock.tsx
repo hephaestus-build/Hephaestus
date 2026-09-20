@@ -6,7 +6,9 @@ import {
 	evidenceSourceDef,
 } from "@/components/practice-vocabulary/evidence-source-defs";
 import { Badge } from "@/components/ui/badge";
+import { hasText } from "@/lib/text";
 import { type EvidenceLocation, evidenceLineRangeLabel, splitPath } from "./evidence";
+
 const SECRET_SCANNER = "secret-diff-scanner";
 
 interface EvidenceFileBlockProps {
@@ -27,7 +29,7 @@ export function EvidenceFileBlock({
 	const lines = location.snippet?.split("\n") ?? [];
 	const firstLineNumber = location.startLine;
 	const hasSnippet = lines.length > 0;
-	const bodyId = `evidence-${location.path.replace(/[^\w-]/g, "-")}-${firstLineNumber}-${instanceId}`;
+	const bodyId = `evidence-${location.path.replaceAll(/[^\w-]/gu, "-")}-${firstLineNumber}-${instanceId}`;
 	const SourceIcon = source.icon;
 
 	return (
@@ -72,7 +74,7 @@ export function EvidenceFileBlock({
 						/>
 					</button>
 				)}
-				{location.revision && (
+				{hasText(location.revision) && (
 					<p className="min-w-0 basis-full text-xs break-all text-muted-foreground">
 						Commit <code>{location.revision}</code>
 					</p>
@@ -102,7 +104,7 @@ export function EvidenceFileBlock({
 									className={cn("grid", locatedByLine ? "grid-cols-[auto_1fr]" : "grid-cols-1")}
 								>
 									{locatedByLine && (
-										<span className="sticky left-0 select-none bg-inherit pe-3 ps-2.5 text-end tabular-nums text-muted-foreground">
+										<span className="sticky left-0 bg-inherit ps-2.5 pe-3 text-end text-muted-foreground tabular-nums select-none">
 											{lineNumber}
 										</span>
 									)}

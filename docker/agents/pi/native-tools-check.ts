@@ -17,11 +17,11 @@ async function checkNativeTools() {
 			"git log -1 --format=%s && rg --hidden --no-ignore --only-matching SENTINEL .hidden/large.txt && find .hidden -type f && ! git -c user.name=fixture -c user.email=fixture@example.invalid commit --allow-empty -m forbidden && ! touch tracked.txt && ! mv /workspace/inputs /workspace/replaced-inputs && ! touch /opt/pi-sdk/package.json",
 		timeout: 10,
 	});
-	assert.match(JSON.stringify(bash.content), /captured/);
-	assert.match(JSON.stringify(bash.content), /SENTINEL/);
-	assert.doesNotMatch(JSON.stringify(bash.content), /Command exited with code/);
+	assert.match(JSON.stringify(bash.content), /captured/u);
+	assert.match(JSON.stringify(bash.content), /SENTINEL/u);
+	assert.doesNotMatch(JSON.stringify(bash.content), /Command exited with code/u);
 	const read = await createReadTool(cwd).execute("read", { path: "tracked.txt" });
-	assert.match(JSON.stringify(read.content), /searchable/);
+	assert.match(JSON.stringify(read.content), /searchable/u);
 	const scratch = "/workspace/work/analysis.txt";
 	await createWriteTool(cwd).execute("write", { path: scratch, content: "before\n" });
 	await createEditTool(cwd).execute("edit", {
@@ -40,9 +40,9 @@ async function checkNativeTools() {
 	);
 	assert.equal(await readFile(`${cwd}/tracked.txt`, "utf8"), "searchable\n");
 	const grep = await createGrepTool(cwd).execute("grep", { pattern: "searchable" });
-	assert.match(JSON.stringify(grep.content), /tracked.txt/);
+	assert.match(JSON.stringify(grep.content), /tracked.txt/u);
 	const find = await createFindTool(cwd).execute("find", { pattern: "*.txt" });
-	assert.match(JSON.stringify(find.content), /tracked.txt/);
+	assert.match(JSON.stringify(find.content), /tracked.txt/u);
 }
 
 await checkNativeTools();

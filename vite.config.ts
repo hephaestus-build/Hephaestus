@@ -1,20 +1,18 @@
-import { readFileSync } from "node:fs";
-import { posix } from "node:path";
+import path from "node:path";
 
-import { parse } from "jsonc-parser";
-import type { OxfmtConfig } from "oxfmt";
 import { defineConfig } from "vite-plus";
 
-const asStringArray = (value: unknown): string[] | undefined =>
-	Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value : undefined;
+import { asStringArray } from "./scripts/lib/json.ts";
+import { readJsonc } from "./webapp/tools/jsonc.ts";
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const formatConfig = parse(
-	readFileSync(new URL(".oxfmtrc.json", import.meta.url), "utf8"),
-) as OxfmtConfig;
+const formatConfig = readJsonc(new URL(".oxfmtrc.json", import.meta.url));
 const fmt = {
 	...formatConfig,
-	ignorePatterns: [...(formatConfig.ignorePatterns ?? []), "**/*.md", "**/*.html"],
+	ignorePatterns: [
+		...asStringArray(formatConfig.ignorePatterns, ".oxfmtrc.json#ignorePatterns"),
+		"**/*.md",
+		"**/*.html",
+	],
 };
 
 // The one home of every repository command; `package.json` keeps only `prepare`, which pnpm runs
@@ -58,25 +56,24 @@ const agentSources =
 const loadSources = "'load-tests/**/*.js'";
 const docsSources = "'docs/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 // Two passes: a negation applies to the whole invocation, so `!*/**` would also drop the nested set.
-const rootConfigSources = "'*.{json,ts,code-workspace}' '!*/**'";
+const rootConfigSources = "'*.{json,jsonc,ts,code-workspace}' '!*/**'";
 const nestedConfigSources = "'{.changeset,.vscode,scripts}/*.{cjs,json}'";
 // `as const` keeps the command a literal type, so `cached` can still read what it runs.
 const configFormatCommand = (mode: "--check" | "--write") =>
 	`vp fmt ${mode} ${rootConfigSources} && vp fmt ${mode} ${nestedConfigSources}` as const;
-const oxlintTargets = "server docker scripts .changeset .github commitlint.config.ts";
+// Every tree the root config governs: `webapp/` and `docs/` carry their own configs and gates, and
+// `security/semgrep/` holds fixtures that are wrong on purpose.
+const oxlintTargets =
+	"server docker scripts load-tests .changeset .github commitlint.config.ts vite.config.ts";
 // Decided when the config loads; a command never uses shell expansion.
 const oxlintFormat = process.env.GITHUB_ACTIONS === "true" ? "-f github " : "";
-const repoRoot = import.meta.dirname;
 
 // The docs lint's file set, plus the trees markdownlint reaches outside `docs/`, read from its own
 // config so the fingerprint cannot miss a scope change.
-const markdownScope = (
-	asStringArray(
-		parse(readFileSync(new URL("docs/.markdownlint-cli2.jsonc", import.meta.url), "utf8")).globs,
-	) ?? []
-)
+const markdownlintConfig = readJsonc(new URL("docs/.markdownlint-cli2.jsonc", import.meta.url));
+const markdownScope = asStringArray(markdownlintConfig.globs, "docs/.markdownlint-cli2.jsonc#globs")
 	.filter((glob) => glob.startsWith("../"))
-	.map((glob) => posix.normalize(`docs/${glob}`));
+	.map((glob) => path.posix.normalize(`docs/${glob}`));
 const docsLintInputs = [
 	"docs/**",
 	"!docs/build/**",
@@ -85,6 +82,7 @@ const docsLintInputs = [
 	...markdownScope,
 	"webapp/tools/oxlint/**",
 	".oxlintrc.json",
+	"oxlint.react.jsonc",
 	"tsconfig.json",
 	"pnpm-lock.yaml",
 ];
@@ -103,13 +101,7 @@ const policyGates = [
 	"gate:env",
 ];
 const serverGates = ["gate:java-nullness", "gate:server"];
-const webappGates = [
-	"gate:webapp",
-	"gate:webapp-format",
-	"gate:components",
-	"gate:stories",
-	"gate:story-sort",
-];
+const webappGates = ["gate:webapp", "gate:webapp-format", "gate:components", "gate:stories"];
 const agentGates = ["gate:agents", "gate:agent-tests"];
 const docsGates = ["gate:docs", "gate:diagrams", "gate:docs-tokens"];
 const loadGates = ["gate:load-format"];
@@ -124,7 +116,7 @@ const checkTasks = [
 // What the Windows runner cannot run: Gradle against a JDK it does not provision, Docker, and the
 // agent specs, which run the Linux sandbox runtime. Everything else is expected to pass there; a
 // gate that fails on Windows is a portability defect, not a reason to add it here.
-const linuxOnly = ["gate:server", "gate:agent-tests", "gate:preview-stack"];
+const linuxOnly = new Set(["gate:server", "gate:agent-tests", "gate:preview-stack"]);
 
 export default defineConfig({
 	fmt,
@@ -189,7 +181,9 @@ export default defineConfig({
 			"lint:webapp:fix": run("vp -C webapp lint --fix ."),
 			"lint:agents": group(["gate:agents-lint"]),
 			"lint:agents:fix": run(`vp exec oxlint --fix ${oxlintTargets}`),
-			"typecheck:webapp": run("vp -C webapp lint --type-aware --type-check ."),
+			// The SPA has no separate `tsc` leg: the root config turns `typeAware` and `typeCheck` on, so
+			// the lint half of `gate:webapp` is also its type check.
+			"typecheck:webapp": group(["gate:webapp"]),
 			"typecheck:scripts": group(["gate:scripts-typecheck"]),
 			"typecheck:agents": group(["gate:agents-typecheck"]),
 			"check:webapp": run("vp -C webapp check"),
@@ -245,7 +239,6 @@ export default defineConfig({
 			"gate:webapp-format": cached(`vp fmt --check ${webappSources}`),
 			"gate:components": cached("node scripts/check-presentational-components.ts"),
 			"gate:stories": cached("node scripts/check-story-prose.ts"),
-			"gate:story-sort": cached("node scripts/check-story-sort.ts"),
 			"gate:docs-tokens": cached(
 				"node scripts/check-docs-tokens.ts && node --test scripts/check-docs-tokens.test.ts",
 			),
@@ -300,7 +293,7 @@ export default defineConfig({
 			"docs:serve": run("vp run --filter docs serve"),
 
 			// What each CI job runs.
-			"ci:server": group(serverGates.concat("gate:contracts", "gate:env")),
+			"ci:server": group([...serverGates, "gate:contracts", "gate:env"]),
 			// Render docs after the checks: lint cannot detect broken theme contexts during static rendering.
 			"ci:tooling": run("vp run verification:docs-build", {
 				dependsOn: [
@@ -321,7 +314,7 @@ export default defineConfig({
 			// The build regenerates the route tree, so it never runs beside a gate that reads it. A
 			// second name after `vp run` is an argument, not a second task, so the two are separate.
 			"ci:webapp": run(["vp run ci:webapp:static", "vp run verification:webapp-build"]),
-			"ci:windows": group(checkTasks.filter((gate) => !linuxOnly.includes(gate))),
+			"ci:windows": group(checkTasks.filter((gate) => !linuxOnly.has(gate))),
 
 			// Scoped selections for check:affected
 			"affected:agents": group(agentGates),

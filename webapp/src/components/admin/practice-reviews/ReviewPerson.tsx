@@ -2,6 +2,7 @@ import { cn } from "cn";
 import type { ReviewSubject } from "@/api/types.gen";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/avatar";
+import { hasText } from "@/lib/text";
 
 import { subjectLabel } from "./review-format";
 
@@ -21,18 +22,18 @@ export function ReviewPerson({ person, prefix, className }: ReviewPersonProps) {
 	return (
 		<span
 			className={cn(
-				"inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-xs",
+				"inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-xs",
 				className,
 			)}
 		>
 			<Avatar className="size-4 shrink-0">
 				<AvatarImage src={person?.avatarUrl} alt="" />
-				<AvatarFallback className="text-[0.625rem]">
+				<AvatarFallback className="text-2xs">
 					{getInitials(person?.name, person?.login)}
 				</AvatarFallback>
 			</Avatar>
 			<span className="min-w-0 break-words">
-				{prefix && <span className="text-muted-foreground">{prefix} </span>}
+				{hasText(prefix) && <span className="text-muted-foreground">{prefix} </span>}
 				{subjectLabel(person)}
 			</span>
 		</span>

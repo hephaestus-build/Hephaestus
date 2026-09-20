@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { test } from "node:test";
 
 import { PracticeCoverageLedger } from "../../../main/resources/agent/pi-practice-coverage.ts";
 
 void test("an abort after two practices leaves a complete atomic coverage snapshot", () => {
-	const directory = mkdtempSync(join(tmpdir(), "pi-practice-coverage-"));
+	const directory = mkdtempSync(nodePath.join(tmpdir(), "pi-practice-coverage-"));
 	try {
 		const eligible = ["a", "b", "c", "d"];
 		const abort = new AbortController();
-		const path = join(directory, "practice-coverage.json");
+		const path = nodePath.join(directory, "practice-coverage.json");
 		const ledger = new PracticeCoverageLedger(path, eligible);
 
 		assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), {
@@ -21,9 +21,13 @@ void test("an abort after two practices leaves a complete atomic coverage snapsh
 		});
 
 		for (const [index, slug] of eligible.entries()) {
-			if (abort.signal.aborted) break;
+			if (abort.signal.aborted) {
+				break;
+			}
 			ledger.markEvaluated([slug]);
-			if (index === 1) abort.abort();
+			if (index === 1) {
+				abort.abort();
+			}
 		}
 
 		assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), {
@@ -42,17 +46,17 @@ void test("an abort after two practices leaves a complete atomic coverage snapsh
 });
 
 void test("the ledger rejects outcomes outside its eligible practice set", () => {
-	const directory = mkdtempSync(join(tmpdir(), "pi-practice-coverage-"));
+	const directory = mkdtempSync(nodePath.join(tmpdir(), "pi-practice-coverage-"));
 	try {
-		const ledger = new PracticeCoverageLedger(join(directory, "practice-coverage.json"), [
+		const ledger = new PracticeCoverageLedger(nodePath.join(directory, "practice-coverage.json"), [
 			"eligible",
 		]);
 		assert.throws(
 			() => ledger.markEvaluated(["eligible", "unknown"]),
-			/evaluated practice is not eligible: unknown/,
+			/evaluated practice is not eligible: unknown/u,
 		);
 		assert.partialDeepStrictEqual(
-			JSON.parse(readFileSync(join(directory, "practice-coverage.json"), "utf8")),
+			JSON.parse(readFileSync(nodePath.join(directory, "practice-coverage.json"), "utf8")),
 			{
 				evaluated: 0,
 			},

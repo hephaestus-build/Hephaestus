@@ -22,11 +22,9 @@
  * rather than the index: `vp run check` runs before `git add`, so a gate answering about the last
  * commit would disagree with the tree in front of you.
  */
-import { execFile } from "node:child_process";
 import { lstat, readFile, readlink } from "node:fs/promises";
-import { resolve } from "node:path";
+import nodePath from "node:path";
 import { basename, dirname, join, matchesGlob, normalize } from "node:path/posix";
-import { promisify } from "node:util";
 
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { mdxFromMarkdown } from "mdast-util-mdx";
@@ -34,9 +32,10 @@ import { mdxjs } from "micromark-extension-mdxjs";
 
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asRecord, asStringArray, parseJson } from "./lib/json.ts";
+import { output } from "./lib/process.ts";
 
 /** Resolved from this file, so the gate answers the same whatever the working directory is. */
-const REPO_ROOT = resolve(import.meta.dirname, "..");
+const REPO_ROOT = nodePath.resolve(import.meta.dirname, "..");
 
 const OPENCODE_CONFIG = "opencode.json";
 const SKILLS_ROOT = ".claude/skills";
@@ -51,7 +50,7 @@ const AGENT_ROOTS = [".claude/", ".opencode/", ".agents/"];
 
 const isContributorDoc = (path: string): boolean =>
 	path.startsWith("docs/contributor/")
-		? /\.mdx?$/.test(path)
+		? /\.mdx?$/u.test(path)
 		: !path.includes("/") && path.endsWith(".md");
 
 /**
@@ -217,16 +216,16 @@ const INTENTIONALLY_MISSING_PATHS = [
 	},
 ] satisfies readonly ClaimException[];
 
-const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/;
-const PACKAGE_SHAPED = /-(?:cli|config|core|js|node|package|plugin|react|sdk|test|ts)$/;
+const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/u;
+const PACKAGE_SHAPED = /-(?:cli|config|core|js|node|package|plugin|react|sdk|test|ts)$/u;
 /**
  * A settings path this product owns, which the release notes name whenever one is renamed —
  * `hephaestus.mentor.docker-cli` reads as a package to the shape test above, and blocked a release
  * for it. An npm name reaches two dots about as often as a Spring property reaches none, so the
  * dotted depth is what separates them; a declared dependency is still recognised as itself.
  */
-const SETTINGS_PATH = /^[a-z0-9-]+(?:\.[a-z0-9-]+){2,}$/;
-const FILE_SHAPED = /\.(?:java|js|jsonc?|mdx?|mjs|sh|ts|tsx|xml|ya?ml)$/;
+const SETTINGS_PATH = /^[a-z0-9-]+(?:\.[a-z0-9-]+){2,}$/u;
+const FILE_SHAPED = /\.(?:java|js|jsonc?|mdx?|mjs|sh|ts|tsx|xml|ya?ml)$/u;
 const exists = (repo: Repo, path: string): boolean =>
 	repo.present.has(path) || repo.paths.some((present) => present.startsWith(`${path}/`));
 
@@ -243,12 +242,18 @@ const dependencyFields = [
 function declaredPackages(repo: Repo): ReadonlySet<string> {
 	const packages = new Set<string>();
 	for (const file of repo.present.values()) {
-		if (file.kind !== "text" || basename(file.path) !== "package.json") continue;
+		if (file.kind !== "text" || basename(file.path) !== "package.json") {
+			continue;
+		}
 		const json = asRecord(parseJson(file.content), file.path);
-		if (typeof json["name"] === "string") packages.add(json["name"]);
+		if (typeof json.name === "string") {
+			packages.add(json.name);
+		}
 		for (const field of dependencyFields) {
 			const dependencies = json[field];
-			if (dependencies === undefined) continue;
+			if (dependencies === undefined) {
+				continue;
+			}
 			for (const name of Object.keys(asRecord(dependencies, `${file.path} ${field}`))) {
 				packages.add(name);
 			}
@@ -264,21 +269,26 @@ const looksLikePackage = (value: string, packages: ReadonlySet<string>): boolean
 		(PACKAGE_SHAPED.test(value) && !SETTINGS_PATH.test(value)));
 
 function looksLikePath(value: string, roots: ReadonlySet<string>): boolean {
-	if (value.startsWith("@") || value.startsWith("~/") || value.includes(":")) return false;
+	if (value.startsWith("@") || value.startsWith("~/") || value.includes(":")) {
+		return false;
+	}
 	const first = value.split("/", 1)[0] ?? "";
 	return (
 		roots.has(first) ||
 		(first.startsWith(".") && value.includes("/")) ||
 		(value.includes("/") && basename(value).startsWith(".")) ||
-		(FILE_SHAPED.test(value) && (value.includes("/") || /\.mdx?$/.test(value)))
+		(FILE_SHAPED.test(value) && (value.includes("/") || /\.mdx?$/u.test(value)))
 	);
 }
 
 function pathResolves(repo: Repo, document: string, value: string): boolean {
-	const cleaned = normalize(value.replace(/\/$/, ""));
-	if (exists(repo, cleaned)) return true;
-	if (/^\.\.?\//.test(value) && exists(repo, normalize(join(dirname(document), cleaned))))
+	const cleaned = normalize(value.replace(/\/$/u, ""));
+	if (exists(repo, cleaned)) {
 		return true;
+	}
+	if (/^\.\.?\//u.test(value) && exists(repo, normalize(join(dirname(document), cleaned)))) {
+		return true;
+	}
 	if (!value.startsWith(".")) {
 		const suffixes = new Set(
 			repo.paths.flatMap((path) => {
@@ -288,7 +298,9 @@ function pathResolves(repo: Repo, document: string, value: string): boolean {
 					: [path.slice(0, start + cleaned.length + 1)];
 			}),
 		);
-		if (suffixes.size === 1) return true;
+		if (suffixes.size === 1) {
+			return true;
+		}
 	}
 	return excepts(INTENTIONALLY_MISSING_PATHS, document, cleaned);
 }
@@ -298,7 +310,9 @@ function staleContributorClaims(repo: Repo): readonly string[] {
 	const packages = declaredPackages(repo);
 	const failures: string[] = [];
 	for (const file of repo.present.values()) {
-		if (file.kind !== "text" || !isContributorDoc(file.path)) continue;
+		if (file.kind !== "text" || !isContributorDoc(file.path)) {
+			continue;
+		}
 		let spans: readonly string[];
 		try {
 			spans = codeSpans(file.content, file.path.endsWith(".mdx") ? "mdx" : "markdown");
@@ -308,9 +322,10 @@ function staleContributorClaims(repo: Repo): readonly string[] {
 			});
 		}
 		for (const value of new Set(spans)) {
-			const candidate = value.replace(/[.,:;]$/, "").replace(/#.*$/, "");
-			if (candidate.includes("…") || candidate.includes("...") || /[*<>{}$\s]/.test(candidate))
+			const candidate = value.replace(/[.,:;]$/u, "").replace(/#.*$/u, "");
+			if (candidate.includes("…") || candidate.includes("...") || /[*<>{}$\s]/u.test(candidate)) {
 				continue;
+			}
 			if (looksLikePackage(candidate, packages)) {
 				if (!packages.has(candidate)) {
 					failures.push(
@@ -372,53 +387,76 @@ const readable = (repo: Repo, path: string): Readable =>
 
 const COMMENT_START = "<!--";
 const COMMENT_END = "-->";
+/** A fenced-code opener or closer: the marker run, then the info string (CommonMark § 4.5). */
+const FENCE = /^ {0,3}(?<marker>`{3,}|~{3,})(?<info>.*)$/u;
+
+/** Whether `line` closes a fence opened with `fence` (CommonMark § 4.5: same character, at least as long, bare). */
+function closesFence(line: string, fence: string): boolean {
+	const groups = FENCE.exec(line)?.groups;
+	const marker = groups?.marker;
+	return (
+		marker !== undefined &&
+		marker.startsWith(fence.charAt(0)) &&
+		marker.length >= fence.length &&
+		(groups?.info ?? "").trim() === ""
+	);
+}
+
+/** The marker of the fence `line` opens, if it opens one; a backtick info string opens nothing. */
+function openedFence(line: string): string | undefined {
+	const groups = FENCE.exec(line)?.groups;
+	const marker = groups?.marker;
+	if (marker === undefined || (marker.startsWith("`") && (groups?.info ?? "").includes("`"))) {
+		return undefined;
+	}
+	return marker;
+}
+
+/**
+ * `line` with its HTML comments removed, and whether one is still open at the end of it. Rescanned
+ * from the start each pass: closing one comment can bring a `<!` and a `--` together, which a single
+ * sweep would leave behind as an opening delimiter nothing goes on to remove.
+ */
+function withoutComments(input: string): { line: string; commented: boolean } {
+	let line = input;
+	for (let open = line.indexOf(COMMENT_START); open !== -1; open = line.indexOf(COMMENT_START)) {
+		const close = line.indexOf(COMMENT_END, open + COMMENT_START.length);
+		if (close === -1) {
+			return { line: line.slice(0, open), commented: true };
+		}
+		line = `${line.slice(0, open)} ${line.slice(close + COMMENT_END.length)}`;
+	}
+	return { line, commented: false };
+}
 
 function visibleMarkdown(markdown: string): string {
 	const kept: string[] = [];
 	let fence: string | undefined;
 	let commented = false;
-	for (const raw of markdown.replaceAll(/\r\n?/g, "\n").split("\n")) {
+	for (const raw of markdown.replaceAll(/\r\n?/gu, "\n").split("\n")) {
 		let line = raw;
-		const fenceMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-		const marker = fenceMatch?.[1];
 		if (fence !== undefined) {
-			if (
-				marker !== undefined &&
-				marker[0] === fence[0] &&
-				marker.length >= fence.length &&
-				(fenceMatch?.[2] ?? "").trim() === ""
-			) {
+			if (closesFence(line, fence)) {
 				fence = undefined;
 			}
 			continue;
 		}
 		if (commented) {
 			const close = line.indexOf(COMMENT_END);
-			if (close === -1) continue;
+			if (close === -1) {
+				continue;
+			}
 			line = line.slice(close + COMMENT_END.length);
 			commented = false;
 		}
-		const visibleFence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-		const visibleMarker = visibleFence?.[1];
-		if (
-			visibleMarker !== undefined &&
-			!(visibleMarker[0] === "`" && (visibleFence?.[2] ?? "").includes("`"))
-		) {
-			fence = visibleMarker;
+		const opened = openedFence(line);
+		if (opened !== undefined) {
+			fence = opened;
 			continue;
 		}
-		// Rescanned from the start each pass: closing one comment can bring a `<!` and a `--` together,
-		// which a single sweep would leave behind as an opening delimiter nothing goes on to remove.
-		for (let open = line.indexOf(COMMENT_START); open !== -1; open = line.indexOf(COMMENT_START)) {
-			const close = line.indexOf(COMMENT_END, open + COMMENT_START.length);
-			if (close === -1) {
-				line = line.slice(0, open);
-				commented = true;
-				break;
-			}
-			line = `${line.slice(0, open)} ${line.slice(close + COMMENT_END.length)}`;
-		}
-		kept.push(line);
+		const stripped = withoutComments(line);
+		commented = stripped.commented;
+		kept.push(stripped.line);
 	}
 	return kept.join("\n");
 }
@@ -433,9 +471,11 @@ export function codeSpans(markdown: string, syntax: "markdown" | "mdx"): readonl
 	const spans: string[] = [];
 	const visit = (node: MarkdownNode): void => {
 		if (node.type === "inlineCode" && typeof node.value === "string") {
-			spans.push(node.value.replaceAll(/\r\n?|\n/g, " "));
+			spans.push(node.value.replaceAll(/\r\n?|\n/gu, " "));
 		}
-		for (const child of node.children ?? []) visit(child);
+		for (const child of node.children ?? []) {
+			visit(child);
+		}
 	};
 	visit(
 		fromMarkdown(
@@ -450,7 +490,7 @@ export function codeSpans(markdown: string, syntax: "markdown" | "mdx"): readonl
 
 export function withoutCode(markdown: string): string {
 	// Line-bounded pairing prevents malformed wrapping from hiding a later agent import.
-	return visibleMarkdown(markdown).replaceAll(/(`+)[^`\n]*?\1/g, " ");
+	return visibleMarkdown(markdown).replaceAll(/(?<ticks>`+)[^`\n]*?\k<ticks>/gu, " ");
 }
 
 /**
@@ -459,16 +499,18 @@ export function withoutCode(markdown: string): string {
  * targets stay ambiguous — nothing in the shape of `@base-ui/react` distinguishes it from
  * `@docs/contributor/erd` — so they are not read as references.
  */
-const LOADABLE = /^[\w.~/-]+\.(?:md|mdx|txt|ts|tsx|json|ya?ml)$/;
+const LOADABLE = /^[\w.~/-]+\.(?:md|mdx|txt|ts|tsx|json|ya?ml)$/u;
 
 /** `@` is excluded from the target, so `@scope/pkg@1.2.3` yields two rejects rather than one accept. */
-const REFERENCE = /@([A-Za-z0-9._~/-]+)/g;
+const REFERENCE = /@(?<target>[A-Za-z0-9._~/-]+)/gu;
 
 export function references(markdown: string): readonly string[] {
 	const found = new Set<string>();
-	for (const [, target] of withoutCode(markdown).matchAll(REFERENCE)) {
-		const cleaned = (target ?? "").replace(/\.+$/, "");
-		if (LOADABLE.test(cleaned)) found.add(cleaned);
+	for (const match of withoutCode(markdown).matchAll(REFERENCE)) {
+		const cleaned = (match.groups?.target ?? "").replace(/\.+$/u, "");
+		if (LOADABLE.test(cleaned)) {
+			found.add(cleaned);
+		}
 	}
 	return [...found];
 }
@@ -479,9 +521,11 @@ export function references(markdown: string): readonly string[] {
  * "the field is absent" with "there is no block to read".
  */
 export function parse(markdown: string): { frontmatter?: string; body: string } {
-	const text = markdown.replace(/^﻿/, "").replaceAll("\r\n", "\n");
+	const text = markdown.replace(/^﻿/u, "").replaceAll("\r\n", "\n");
 	const end = text.startsWith("---\n") ? text.indexOf("\n---", 4) : -1;
-	if (end === -1) return { body: text };
+	if (end === -1) {
+		return { body: text };
+	}
 	return { frontmatter: text.slice(4, end), body: text.slice(text.indexOf("\n", end + 1) + 1) };
 }
 
@@ -494,21 +538,29 @@ const YAML_FALSE = new Set(["false", "no", "off"]);
  * `false` would skip the check it guards and call that a pass.
  */
 function yamlBoolean(block: string | undefined, key: string): boolean | string {
-	const raw = new RegExp(`^${key}:[ \\t]*(\\S+)`, "m").exec(block ?? "")?.[1];
-	if (raw === undefined) return false;
-	const value = raw.replace(/#.*$/, "").trim();
-	if (YAML_TRUE.has(value.toLowerCase())) return true;
-	if (YAML_FALSE.has(value.toLowerCase())) return false;
+	const raw = new RegExp(`^${key}:[ \\t]*(?<value>\\S+)`, "mu").exec(block ?? "")?.groups?.value;
+	if (raw === undefined) {
+		return false;
+	}
+	const value = raw.replace(/#.*$/u, "").trim();
+	if (YAML_TRUE.has(value.toLowerCase())) {
+		return true;
+	}
+	if (YAML_FALSE.has(value.toLowerCase())) {
+		return false;
+	}
 	return value;
 }
 
 /** A file whose body is nothing but references — what a command file and a nested `CLAUDE.md` are. */
 const isPointer = (markdown: string): boolean => {
 	const { body } = parse(markdown);
-	if (references(body).length === 0) return false;
+	if (references(body).length === 0) {
+		return false;
+	}
 	return withoutCode(body)
 		.split("\n")
-		.every((line) => line.replaceAll(/@[A-Za-z0-9._~/-]+/g, "").trim() === "");
+		.every((line) => line.replaceAll(/@[A-Za-z0-9._~/-]+/gu, "").trim() === "");
 };
 
 /**
@@ -535,16 +587,19 @@ function symlinked(repo: Repo): readonly string[] {
 		(file): file is Extract<TrackedFile, { kind: "symlink" }> =>
 			file.kind === "symlink" && isAgentPath(file.path),
 	);
-	return links.map((file) => {
+	const remedy = (file: Extract<TrackedFile, { kind: "symlink" }>): string => {
+		if (basename(file.path) === "CLAUDE.md") {
+			return 'Claude loads the target path as the entire instruction set. Replace it with a regular file containing "@AGENTS.md".';
+		}
 		const target = join(dirname(file.path), file.target);
-		const remedy =
-			basename(file.path) === "CLAUDE.md"
-				? 'Claude loads the target path as the entire instruction set. Replace it with a regular file containing "@AGENTS.md".'
-				: inCheckout(target)
-					? `It duplicates ${target}, which both agents already read. Delete the link.`
-					: "Replace it with a regular file holding what it points at.";
-		return `${file.path} is a committed symlink, which resolves here and not on a Windows checkout.\n  ${remedy}`;
-	});
+		return inCheckout(target)
+			? `It duplicates ${target}, which both agents already read. Delete the link.`
+			: "Replace it with a regular file holding what it points at.";
+	};
+	return links.map(
+		(file) =>
+			`${file.path} is a committed symlink, which resolves here and not on a Windows checkout.\n  ${remedy(file)}`,
+	);
 }
 
 /** An `AGENTS.md` the `CLAUDE.md` beside it does not import is read by every agent but Claude Code. */
@@ -560,7 +615,10 @@ function unreachable(repo: Repo): readonly string[] {
 			);
 			continue;
 		}
-		if (beside.kind !== "text") continue; // Symlinked or unread; each has its own check.
+		// Symlinked or unread; each has its own check.
+		if (beside.kind !== "text") {
+			continue;
+		}
 		const imported = references(beside.content).map((target) => join(dirname(claude), target));
 		if (!imported.includes(guide)) {
 			failures.push(
@@ -587,7 +645,8 @@ function dangling(repo: Repo): readonly string[] {
 	});
 	return sources.flatMap(([path, base, content]) =>
 		references(content)
-			.filter((target) => !target.startsWith("~/")) // A personal file, outside every checkout.
+			// A personal file, outside every checkout.
+			.filter((target) => !target.startsWith("~/"))
 			.map((target) => [target, join(base, target)] as const)
 			.filter(([, resolved]) => !repo.present.has(resolved))
 			.map(
@@ -610,7 +669,7 @@ function uncovered(repo: Repo): readonly string[] {
 	let patterns: readonly string[];
 	try {
 		const parsed = asRecord(parseJson(config.content), OPENCODE_CONFIG);
-		patterns = asStringArray(parsed["instructions"] ?? [], `${OPENCODE_CONFIG} instructions`)
+		patterns = asStringArray(parsed.instructions ?? [], `${OPENCODE_CONFIG} instructions`)
 			// A remote rule set is not ours to resolve.
 			.filter((pattern) => !pattern.startsWith("http"));
 	} catch (error) {
@@ -648,9 +707,14 @@ function uncovered(repo: Repo): readonly string[] {
 function uncommanded(repo: Repo): readonly string[] {
 	const failures: string[] = [];
 	for (const path of repo.byName.get("SKILL.md") ?? []) {
-		if (dirname(dirname(path)) !== SKILLS_ROOT) continue; // Not a skill root; it has no command name.
+		// Not a skill root; it has no command name.
+		if (dirname(dirname(path)) !== SKILLS_ROOT) {
+			continue;
+		}
 		const skill = readable(repo, path);
-		if (skill.kind !== "text") continue;
+		if (skill.kind !== "text") {
+			continue;
+		}
 		const flag = yamlBoolean(parse(skill.content).frontmatter, "disable-model-invocation");
 		if (typeof flag === "string") {
 			failures.push(
@@ -659,7 +723,9 @@ function uncommanded(repo: Repo): readonly string[] {
 			);
 			continue;
 		}
-		if (!flag) continue;
+		if (!flag) {
+			continue;
+		}
 		const name = basename(dirname(path));
 		const command = `${COMMANDS_ROOT}/${name}.md`;
 		if (!repo.present.has(command)) {
@@ -686,7 +752,9 @@ function unmirrored(repo: Repo, expected: readonly string[]): readonly string[] 
 	for (const skill of expected) {
 		for (const root of [SKILLS_ROOT, CODEX_SKILLS_ROOT]) {
 			const path = `${root}/${skill}/SKILL.md`;
-			if (repo.present.has(path)) continue;
+			if (repo.present.has(path)) {
+				continue;
+			}
 			failures.push(
 				`${path} is missing, and ${skill} is listed as a skill Codex has.\n` +
 					`  Codex reads ${CODEX_SKILLS_ROOT}/ and Claude Code reads ${SKILLS_ROOT}/, so the skill lives in both.\n` +
@@ -696,12 +764,16 @@ function unmirrored(repo: Repo, expected: readonly string[]): readonly string[] 
 	}
 	for (const file of repo.present.values()) {
 		const original = mirrorOf(file.path);
-		if (original === undefined || file.kind !== "text") continue;
+		if (original === undefined || file.kind !== "text") {
+			continue;
+		}
 		const source = readable(repo, original);
 		if (source.kind === "absent") {
 			// A listed skill's missing half is reported by the loop above, in the terms that name why
 			// the pair exists at all.
-			if (expected.includes(basename(dirname(file.path)))) continue;
+			if (expected.includes(basename(dirname(file.path)))) {
+				continue;
+			}
 			failures.push(
 				`${file.path} has no counterpart at ${original}, so Codex reads a skill Claude Code does not have.\n` +
 					`  Restore ${original}, or delete the Codex copy if the skill is going away.`,
@@ -727,10 +799,17 @@ function unmirrored(repo: Repo, expected: readonly string[]): readonly string[] 
 function duplicated(repo: Repo): readonly string[] {
 	const bodies = new Map<string, string[]>();
 	for (const file of repo.present.values()) {
-		if (file.kind !== "text" || !isAgentMarkdown(file.path)) continue;
-		if (mirrorOf(file.path) !== undefined) continue; // A Codex mirror, which `unmirrored` owns.
+		if (file.kind !== "text" || !isAgentMarkdown(file.path)) {
+			continue;
+		}
+		// A Codex mirror, which `unmirrored` owns.
+		if (mirrorOf(file.path) !== undefined) {
+			continue;
+		}
 		const body = file.content.trim();
-		if (body === "" || isPointer(file.content)) continue;
+		if (body === "" || isPointer(file.content)) {
+			continue;
+		}
 		bodies.set(body, [...(bodies.get(body) ?? []), file.path]);
 	}
 	return [...bodies.values()]
@@ -765,28 +844,33 @@ export const analyse = (
 };
 
 export async function scan(root: string = REPO_ROOT): Promise<Snapshot> {
-	const { stdout } = await promisify(execFile)(
+	const stdout = await output(
 		"git",
 		["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-		{ cwd: root, env: environmentWithoutGitRepository(), maxBuffer: 64 * 1024 * 1024 },
+		{ cwd: root, env: environmentWithoutGitRepository() },
 	);
 	// Sorted, so the failures print in the same sequence locally and in CI.
 	const listed = [...new Set(stdout.split("\0").filter((path) => path !== ""))].toSorted();
 	const files: TrackedFile[] = [];
 	for (const path of listed) {
 		// A path git still tracks but the working tree no longer has is a deletion in progress.
-		const stats = await lstat(resolve(root, path)).catch(() => undefined);
-		if (stats === undefined) continue;
+		const absolute = nodePath.resolve(root, path);
+		const stats = await lstat(absolute).catch(() => undefined);
+		if (stats === undefined) {
+			continue;
+		}
 		if (stats.isSymbolicLink()) {
-			files.push({ path, kind: "symlink", target: await readlink(resolve(root, path)) });
+			files.push({ path, kind: "symlink", target: await readlink(absolute) });
 		} else if (
 			isAgentMarkdown(path) ||
 			isContributorDoc(path) ||
 			basename(path) === "package.json" ||
 			path === OPENCODE_CONFIG
 		) {
-			files.push({ path, kind: "text", content: await readFile(resolve(root, path), "utf8") });
-		} else files.push({ path, kind: "opaque" });
+			files.push({ path, kind: "text", content: await readFile(absolute, "utf8") });
+		} else {
+			files.push({ path, kind: "opaque" });
+		}
 	}
 	return { files };
 }
@@ -810,7 +894,9 @@ if (process.argv[1] === import.meta.filename) {
 
 	const failures = analyse(snapshot, CODEX_SKILLS);
 	if (failures.length > 0) {
-		for (const failure of failures) console.error(`${failure}\n`);
+		for (const failure of failures) {
+			console.error(`${failure}\n`);
+		}
 		process.exit(1);
 	}
 	const mirrored = [...repo.present.keys()].filter(

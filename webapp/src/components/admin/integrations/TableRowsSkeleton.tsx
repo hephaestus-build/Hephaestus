@@ -1,5 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { hasText } from "@/lib/text";
 
 export interface TableRowsSkeletonProps {
 	/**
@@ -24,7 +25,7 @@ export function TableRowsSkeleton({ columns, rows = 5 }: TableRowsSkeletonProps)
 				<TableRow key={rowIndex}>
 					{columns.map((width, cellIndex) => (
 						<TableCell key={cellIndex}>
-							{width && <Skeleton className={`h-5 ${width}`} />}
+							{hasText(width) && <Skeleton className={`h-5 ${width}`} />}
 						</TableCell>
 					))}
 				</TableRow>

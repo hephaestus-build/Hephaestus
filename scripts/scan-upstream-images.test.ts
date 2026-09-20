@@ -34,24 +34,26 @@ void describe("planUpstreamSubjects", () => {
 		]);
 		// A tag would resolve to whatever it points at today rather than to the artefact the release
 		// promotes, which is the whole reason the inventory pins digests.
-		for (const subject of subjects) assert.match(subject.reference, /@sha256:[a-f0-9]{64}$/);
+		for (const subject of subjects) {
+			assert.match(subject.reference, /@sha256:[a-f0-9]{64}$/u);
+		}
 	});
 
 	void test("rejects an inventory that could name something other than a pinned image", () => {
 		const entry = { digest: DIGEST, name: "alpine", repository: "docker.io/library/alpine" };
-		assert.throws(() => planUpstreamSubjects({}), /must be an array/);
-		assert.throws(() => planUpstreamSubjects({ upstream: [] }), /no upstream images/);
+		assert.throws(() => planUpstreamSubjects({}), /must be an array/u);
+		assert.throws(() => planUpstreamSubjects({ upstream: [] }), /no upstream images/u);
 		assert.throws(
 			() => planUpstreamSubjects({ upstream: [{ ...entry, name: "al pine" }] }),
-			/malformed upstream image name/,
+			/malformed upstream image name/u,
 		);
 		assert.throws(
 			() => planUpstreamSubjects({ upstream: [{ ...entry, digest: "3" }] }),
-			/malformed upstream image digest/,
+			/malformed upstream image digest/u,
 		);
 		assert.throws(
 			() => planUpstreamSubjects({ upstream: [{ ...entry, repository: 7 }] }),
-			/must be a string/,
+			/must be a string/u,
 		);
 	});
 });

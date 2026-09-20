@@ -34,7 +34,9 @@ export function facetPills<TValue extends string>(
  * the toolbar shows the values itself.
  */
 export function AppliedFacetPills({ pills }: { pills: AppliedFacetPill[] }) {
-	if (pills.length === 0) return null;
+	if (pills.length === 0) {
+		return null;
+	}
 	return (
 		<div role="group" aria-label="Applied filters" className="flex flex-wrap gap-2 sm:hidden">
 			{pills.map((pill) => (

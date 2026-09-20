@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, screen, within } from "storybook/test";
 
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
+import { observationDetail, reviewObservationDetail, workspacePractices } from "./fixtures";
 import { ObservationDetailPage } from "./ObservationDetailPage";
-import { observationDetail, reviewObservationDetail, workspacePractices } from "./story-mock-data";
 
 /**
  * The route fetches the record and the workspace's practice list; this screen only draws what it is
@@ -13,7 +13,6 @@ import { observationDetail, reviewObservationDetail, workspacePractices } from "
  * produced.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Observation details",
 	component: ObservationDetailPage,
 	parameters: {
 		layout: "padded",
@@ -47,7 +46,7 @@ export const Default: Story = {
 		});
 		canvas.getByRole("link", { name: "in a review" });
 		canvas.getByRole("heading", { name: "Why this was raised", level: 3 });
-		await expect(canvas.queryByText(/Hephaestus review/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/Hephaestus review/u)).not.toBeInTheDocument();
 		await expect(canvas.queryByText("AI-generated observation")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("Technical details")).not.toBeInTheDocument();
 		await expect(canvasElement.querySelector("code")?.textContent).not.toContain("citations");
@@ -61,7 +60,7 @@ export const EvidenceAcrossSources: Story = {
 		canvas.getByRole("heading", { name: "The code changes", level: 4 });
 		canvas.getByRole("heading", { name: "Files and history in the repository", level: 4 });
 		canvas.getByRole("heading", { name: "Review threads on the code", level: 4 });
-		await expect(canvas.queryByText(/scm\.pull-request/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/scm\.pull-request/u)).not.toBeInTheDocument();
 	},
 };
 
@@ -141,9 +140,10 @@ export const PracticeSaysWhatItIs: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ canvas, userEvent }) => {
 		const errorsCarryContext = workspacePractices.find((p) => p.slug === "errors-carry-context");
-		if (!errorsCarryContext)
+		if (!errorsCarryContext) {
 			throw new Error("The practice fixtures no longer cover errors-carry-context");
-		await userEvent.hover(await canvas.findByRole("link", { name: /Errors carry their context/ }));
+		}
+		await userEvent.hover(await canvas.findByRole("link", { name: /Errors carry their context/u }));
 		// The card is a portal, so it is looked for on the whole screen rather than in the canvas.
 		await screen.findByText(errorsCarryContext.whyItMatters ?? "");
 	},

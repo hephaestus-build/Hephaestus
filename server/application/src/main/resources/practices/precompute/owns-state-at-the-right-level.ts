@@ -5,26 +5,26 @@
 import { scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
-const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/;
+const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/u;
 
 const STATE_DECLARATIONS: readonly SourcePattern[] = [
-	["@State creating an object", /@State(?:Object)?\b[^=]*=\s*[A-Z][A-Za-z0-9_]*\s*\(/],
-	["@State", /@State\b/],
-	["@StateObject", /@StateObject\b/],
-	["@ObservedObject", /@ObservedObject\b/],
-	["@Binding", /@Binding\b/],
-	["@Bindable", /@Bindable\b/],
-	["@Environment", /@Environment(?:Object)?\b/],
-	["@AppStorage", /@AppStorage\b/],
-	["@Query", /@Query\b/],
-	["@Observable type", /@Observable\b/],
-	["ObservableObject type", /\bObservableObject\b/],
-	["@Published", /@Published\b/],
+	["@State creating an object", /@State(?:Object)?\b[^=]*=\s*[A-Z][A-Za-z0-9_]*\s*\(/u],
+	["@State", /@State\b/u],
+	["@StateObject", /@StateObject\b/u],
+	["@ObservedObject", /@ObservedObject\b/u],
+	["@Binding", /@Binding\b/u],
+	["@Bindable", /@Bindable\b/u],
+	["@Environment", /@Environment(?:Object)?\b/u],
+	["@AppStorage", /@AppStorage\b/u],
+	["@Query", /@Query\b/u],
+	["@Observable type", /@Observable\b/u],
+	["ObservableObject type", /\bObservableObject\b/u],
+	["@Published", /@Published\b/u],
 	[
 		"mutable stored property",
-		/^\s*(?:private\s+|fileprivate\s+|internal\s+)?var\s+[A-Za-z_][A-Za-z0-9_]*\s*(?::\s*[^{=\n]+)?(?:=\s*[^{\n]+)?\s*$/,
+		/^\s*(?:private\s+|fileprivate\s+|internal\s+)?var\s+[A-Za-z_][A-Za-z0-9_]*\s*(?::\s*[^{=\n]+)?(?:=\s*[^{\n]+)?\s*$/u,
 	],
-	["environment injection", /\.environment(?:Object)?\s*\(/],
+	["environment injection", /\.environment(?:Object)?\s*\(/u],
 ];
 
 export default async function ownsStateAtTheRightLevel(

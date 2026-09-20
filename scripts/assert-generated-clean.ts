@@ -1,7 +1,9 @@
 import { output } from "./lib/process.ts";
 
 const paths = process.argv.slice(2);
-if (paths.length === 0) throw new Error("Name the generated paths to check");
+if (paths.length === 0) {
+	throw new Error("Name the generated paths to check");
+}
 
 const pathspecs = paths.map((path) => `:(top)${path}`);
 // A stale or mistyped artifact path must not silently become an empty, successful comparison.

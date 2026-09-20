@@ -22,7 +22,9 @@ function registered(env: Record<string, string | undefined>): RegisteredModel {
 	);
 	assert.equal(ok, true);
 	const model = models[0];
-	if (!model) throw new Error("one model registered");
+	if (!model) {
+		throw new Error("one model registered");
+	}
 	return model;
 }
 

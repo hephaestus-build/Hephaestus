@@ -27,7 +27,9 @@ export interface ChangedFile {
 }
 
 async function readChangeJson(changeDir: string | undefined, name: string): Promise<unknown> {
-	if (!changeDir) return null;
+	if (changeDir === undefined || changeDir === "") {
+		return null;
+	}
 	try {
 		return JSON.parse(await readFile(`${changeDir}/${name}`, "utf8"));
 	} catch {
@@ -42,7 +44,9 @@ function text(value: unknown): string {
 /** The commits from base to head, oldest first; empty when no change view was derived. */
 export async function readCommits(changeDir: string | undefined): Promise<ChangeCommit[]> {
 	const parsed = await readChangeJson(changeDir, "commits.json");
-	if (!isJsonObject(parsed) || !Array.isArray(parsed.commits)) return [];
+	if (!isJsonObject(parsed) || !Array.isArray(parsed.commits)) {
+		return [];
+	}
 	return parsed.commits.filter(isJsonObject).map((commit) => ({
 		sha: text(commit.sha),
 		message: text(commit.message),
@@ -59,7 +63,9 @@ export async function readCommits(changeDir: string | undefined): Promise<Change
 /** The files the change touches, with renames under both names; empty when no change view was derived. */
 export async function readChangedFiles(changeDir: string | undefined): Promise<ChangedFile[]> {
 	const parsed = await readChangeJson(changeDir, "files.json");
-	if (!isJsonObject(parsed) || !Array.isArray(parsed.files)) return [];
+	if (!isJsonObject(parsed) || !Array.isArray(parsed.files)) {
+		return [];
+	}
 	return parsed.files.filter(isJsonObject).map((file) => ({
 		status: text(file.status),
 		path: text(file.path),

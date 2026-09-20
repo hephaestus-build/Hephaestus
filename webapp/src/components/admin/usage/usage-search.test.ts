@@ -27,7 +27,7 @@ describe("usageSearchSchema", () => {
 		["a malformed month", "june"],
 		["a month number that does not exist", "2026-13"],
 		["a month with no zero padding", "2026-7"],
-		["a value of the wrong type", 202607],
+		["a value of the wrong type", 202_607],
 	])("opens the report on this month rather than erroring on %s", (_name, month) => {
 		expect(usageSearchSchema.parse({ month })).toStrictEqual({ month: undefined });
 	});

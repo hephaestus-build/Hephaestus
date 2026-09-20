@@ -9,14 +9,15 @@ import type {
 	PracticeGroup,
 	UpdatePracticeRequest,
 } from "@/api/types.gen";
-import { soleBinding } from "@/components/admin/practice-catalog/bindings";
+import { soleBinding } from "@/components/admin/practice-editor/bindings";
 import {
 	PracticeDefinitionForm,
 	type PracticeDefinitionValue,
-} from "@/components/admin/practice-catalog/PracticeDefinitionForm";
-import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-catalog/PracticeEvidenceSummary";
+} from "@/components/admin/practice-editor/PracticeDefinitionForm";
+import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { hasText } from "@/lib/text";
 
 interface PracticeFormCreateProps {
 	mode: "create";
@@ -60,26 +61,36 @@ function asDefinitionValue(practice: Practice): PracticeDefinitionValue {
 		name: practice.name,
 		bindings: [soleBinding(practice.bindings)],
 		criteria: practice.criteria,
-		...(practice.groupSlug ? { groupSlug: practice.groupSlug } : {}),
-		...(practice.whyItMatters ? { whyItMatters: practice.whyItMatters } : {}),
-		...(practice.whatGoodLooksLike ? { whatGoodLooksLike: practice.whatGoodLooksLike } : {}),
-		...(practice.precomputeScript ? { precomputeScript: practice.precomputeScript } : {}),
+		...(hasText(practice.groupSlug) ? { groupSlug: practice.groupSlug } : {}),
+		...(hasText(practice.whyItMatters) ? { whyItMatters: practice.whyItMatters } : {}),
+		...(hasText(practice.whatGoodLooksLike)
+			? { whatGoodLooksLike: practice.whatGoodLooksLike }
+			: {}),
+		...(hasText(practice.precomputeScript) ? { precomputeScript: practice.precomputeScript } : {}),
 		automatedReviewPolicy: practice.automatedReviewPolicy,
 	};
 }
 
 export function PracticeForm(props: PracticeFormProps) {
 	const { mode, workspaceSlug, groups, isPending, initialData, definitionOptions, cancel } = props;
-	const submit = (value: PracticeDefinitionValue) => {
+	// Passes the host's return through untouched: a `void` from `onSubmit` must stay `void`, because
+	// the unsaved-changes guard reads only a promise as a save it can wait for.
+	const submit = (value: PracticeDefinitionValue): void | Promise<void> => {
 		const { groupSlug, ...definition } = value;
 		if (props.mode === "create") {
 			return props.onSubmit(definition, groupSlug ?? null);
 		}
 
 		const clear: NonNullable<UpdatePracticeRequest["clear"]> = [];
-		if (!definition.precomputeScript) clear.push("PRECOMPUTE_SCRIPT");
-		if (!definition.whyItMatters) clear.push("WHY_IT_MATTERS");
-		if (!definition.whatGoodLooksLike) clear.push("WHAT_GOOD_LOOKS_LIKE");
+		if (!hasText(definition.precomputeScript)) {
+			clear.push("PRECOMPUTE_SCRIPT");
+		}
+		if (!hasText(definition.whyItMatters)) {
+			clear.push("WHY_IT_MATTERS");
+		}
+		if (!hasText(definition.whatGoodLooksLike)) {
+			clear.push("WHAT_GOOD_LOOKS_LIKE");
+		}
 		return props.onSubmit(
 			props.initialData.slug,
 			{
@@ -103,7 +114,7 @@ export function PracticeForm(props: PracticeFormProps) {
 					<div>
 						<h2 className="text-lg font-semibold">What the author declared</h2>
 						<p className="text-sm text-muted-foreground">
-							The requirements above are the author's own claim about this practice. Nobody has
+							The requirements above are the author’s own claim about this practice. Nobody has
 							checked them independently, and nothing here says the observations recorded under it
 							are correct. The digests record the exact rules that were declared, so a later change
 							to them is visible rather than silent.

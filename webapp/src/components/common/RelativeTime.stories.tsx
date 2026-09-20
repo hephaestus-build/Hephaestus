@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, screen, userEvent } from "storybook/test";
 
-import { expectSettledVisible } from "@/test/overlay";
+import { expectSettledVisible } from "@/stories/overlay";
 
+import { minutesBefore } from "@/stories/story-clock";
 import { RelativeTime } from "./RelativeTime";
-import { minutesBefore } from "./story-clock";
 
 const meta = {
 	component: RelativeTime,
@@ -21,9 +21,9 @@ export const Default: Story = {};
 export const HoverRevealsAbsoluteTime: Story = {
 	args: { value: new Date("2026-07-14T09:30:12Z") },
 	play: async ({ canvas }) => {
-		const trigger = canvas.getByText(/ago$/);
+		const trigger = canvas.getByText(/ago$/u);
 		await userEvent.hover(trigger);
-		await expectSettledVisible(await screen.findByText(/14 Jul 2026, /));
+		await expectSettledVisible(await screen.findByText(/14 Jul 2026, /u));
 	},
 };
 
@@ -32,14 +32,14 @@ export const Fresh: Story = { args: { value: minutesBefore(4), tone: "fresh" } }
 export const Stale: Story = {
 	args: { value: minutesBefore(180), tone: "stale" },
 	play: async ({ canvas }) => {
-		canvas.getByRole("button", { name: /stale/i });
+		canvas.getByRole("button", { name: /stale/iu });
 	},
 };
 
 export const VeryStale: Story = {
 	args: { value: minutesBefore(60 * 24 * 9), tone: "veryStale" },
 	play: async ({ canvas }) => {
-		canvas.getByRole("button", { name: /very stale/i });
+		canvas.getByRole("button", { name: /very stale/iu });
 	},
 };
 
@@ -63,7 +63,7 @@ export const CustomFallback: Story = {
 export const WireString: Story = {
 	args: { value: "2026-07-14T09:30:12Z" },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText(/invalid date/i)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/invalid date/iu)).not.toBeInTheDocument();
 	},
 };
 

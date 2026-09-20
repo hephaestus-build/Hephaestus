@@ -2,9 +2,9 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { OutlineCollection } from "@/api/types.gen";
-import { daysBefore, minutesBefore } from "@/components/common/story-clock";
 import { Table, TableBody } from "@/components/ui/table";
-import { expectSettledVisible } from "@/test/overlay";
+import { expectSettledVisible } from "@/stories/overlay";
+import { daysBefore, minutesBefore } from "@/stories/story-clock";
 
 import { OutlineCollectionRow } from "./OutlineCollectionRow";
 
@@ -57,14 +57,14 @@ export const Mirroring: Story = {
 	args: { collection: base },
 	play: async ({ canvas }) => {
 		canvas.getByText("Mirroring");
-		canvas.getByText(/up to date/i);
+		canvas.getByText(/up to date/iu);
 		canvas.getByText("engineering-4nZ3x");
 		// Freshness and document count live in the sync ledger, not this row — assert their absence.
-		await expect(canvas.queryByRole("button", { name: /ago$/i })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("button", { name: /ago$/iu })).not.toBeInTheDocument();
 		await expect(canvas.queryByText("87")).not.toBeInTheDocument();
 
-		await userEvent.click(canvas.getByRole("button", { name: /actions for engineering/i }));
-		await expectSettledVisible(await screen.findByRole("menuitem", { name: /^pause$/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /actions for engineering/iu }));
+		await expectSettledVisible(await screen.findByRole("menuitem", { name: /^pause$/iu }));
 	},
 };
 
@@ -76,9 +76,9 @@ export const Paused: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("Paused");
 
-		await userEvent.click(canvas.getByRole("button", { name: /actions for handbook/i }));
-		await expectSettledVisible(await screen.findByRole("menuitem", { name: /resume/i }));
-		await expect(screen.queryByRole("menuitem", { name: /^pause$/i })).not.toBeInTheDocument();
+		await userEvent.click(canvas.getByRole("button", { name: /actions for handbook/iu }));
+		await expectSettledVisible(await screen.findByRole("menuitem", { name: /resume/iu }));
+		await expect(screen.queryByRole("menuitem", { name: /^pause$/iu })).not.toBeInTheDocument();
 	},
 };
 
@@ -98,9 +98,9 @@ export const Syncing: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/syncing…/i);
+		canvas.getByText(/syncing…/iu);
 		// No urlId ⇒ no subtitle; the raw UUID is never shown.
-		await expect(canvas.queryByText(/col-decisions/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/col-decisions/u)).not.toBeInTheDocument();
 		// "Never synced" is the sync ledger's reading, not this row's.
 		await expect(canvas.queryByText("Never")).not.toBeInTheDocument();
 	},
@@ -121,8 +121,8 @@ export const SyncError: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /sync error for legacy wiki/i }));
-		await expectSettledVisible(await screen.findByText(/the bot user lost access/i));
+		await userEvent.click(canvas.getByRole("button", { name: /sync error for legacy wiki/iu }));
+		await expectSettledVisible(await screen.findByText(/the bot user lost access/iu));
 	},
 };
 
@@ -148,11 +148,11 @@ export const BudgetSkipped: Story = {
 	play: async ({ canvas }) => {
 		// The coverage pair is the ledger's; the warning that qualifies it stays with the pass.
 		await expect(canvas.queryByText("480")).not.toBeInTheDocument();
-		await expect(canvas.queryByText(/\/ 512/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/\/ 512/u)).not.toBeInTheDocument();
 
 		await userEvent.click(
-			canvas.getByRole("button", { name: /32 exports skipped for budget for research notes/i }),
+			canvas.getByRole("button", { name: /32 exports skipped for budget for research notes/iu }),
 		);
-		await expectSettledVisible(await screen.findByText(/catch up on the next reconcile/i));
+		await expectSettledVisible(await screen.findByText(/catch up on the next reconcile/iu));
 	},
 };

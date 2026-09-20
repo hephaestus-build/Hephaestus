@@ -23,6 +23,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { hasText } from "@/lib/text";
 
 type ProviderType = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
 
@@ -34,8 +35,12 @@ const PROVIDER_TYPE_ITEMS: { value: ProviderType; label: string }[] = [
 ];
 
 function scopesPlaceholder(type: ProviderType): string {
-	if (type === "SLACK") return "openid profile email";
-	if (type === "OUTLINE") return "read";
+	if (type === "SLACK") {
+		return "openid profile email";
+	}
+	if (type === "OUTLINE") {
+		return "read";
+	}
 	return "Defaulted by provider type if blank";
 }
 
@@ -105,7 +110,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 		editing?.redirectUri ??
 		`${window.location.origin}/api/login/oauth2/code/${registrationId.trim() || "<registration-id>"}`;
 
-	const REGISTRATION_ID_PATTERN = /^[a-z][a-z0-9-]{1,62}$/;
+	const REGISTRATION_ID_PATTERN = /^[a-z][a-z0-9-]{1,62}$/u;
 	const validate = (): boolean => {
 		const next: { registrationId?: string; baseUrl?: string } = {};
 		if (!isEdit && !REGISTRATION_ID_PATTERN.test(registrationId.trim())) {
@@ -161,7 +166,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 				</DialogDescription>
 			</DialogHeader>
 
-			<Field data-invalid={errors.registrationId ? "true" : undefined}>
+			<Field data-invalid={hasText(errors.registrationId) ? "true" : undefined}>
 				<FieldLabel htmlFor="lp-registration-id">Registration ID</FieldLabel>
 				<Input
 					id="lp-registration-id"
@@ -170,7 +175,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 					placeholder="gitlab-acme"
 					disabled={isEdit}
 					required={!isEdit}
-					aria-invalid={errors.registrationId ? "true" : undefined}
+					aria-invalid={hasText(errors.registrationId) ? "true" : undefined}
 					aria-describedby="lp-registration-id-description"
 					autoComplete="off"
 				/>
@@ -178,7 +183,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 					Stable id used in the OAuth callback path. Lowercase letters, digits, hyphens. Immutable
 					once created.
 				</FieldDescription>
-				{errors.registrationId && <FieldError>{errors.registrationId}</FieldError>}
+				{hasText(errors.registrationId) && <FieldError>{errors.registrationId}</FieldError>}
 			</Field>
 
 			<Field>
@@ -204,7 +209,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 				</Select>
 				{isSlack && (
 					<FieldDescription>
-						Use the same Slack app client ID and secret. Add this provider's redirect URI to the
+						Use the same Slack app client ID and secret. Add this provider’s redirect URI to the
 						Slack app redirect URLs.
 					</FieldDescription>
 				)}
@@ -229,7 +234,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 			</Field>
 
 			{needsBaseUrl && (
-				<Field data-invalid={errors.baseUrl ? "true" : undefined}>
+				<Field data-invalid={hasText(errors.baseUrl) ? "true" : undefined}>
 					<FieldLabel htmlFor="lp-base-url">Instance base URL</FieldLabel>
 					<Input
 						id="lp-base-url"
@@ -238,14 +243,14 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 						onChange={(e) => setBaseUrl(e.target.value)}
 						placeholder={isOutline ? "https://outline.example.com" : "https://gitlab.example.com"}
 						required={!isEdit}
-						aria-invalid={errors.baseUrl ? "true" : undefined}
+						aria-invalid={hasText(errors.baseUrl) ? "true" : undefined}
 						aria-describedby="lp-base-url-description"
 					/>
 					<FieldDescription id="lp-base-url-description">
 						HTTPS only. GitHub and Slack are always at a fixed host, so this field applies to
 						self-hosted GitLab and Outline instances.
 					</FieldDescription>
-					{errors.baseUrl && <FieldError>{errors.baseUrl}</FieldError>}
+					{hasText(errors.baseUrl) && <FieldError>{errors.baseUrl}</FieldError>}
 				</Field>
 			)}
 

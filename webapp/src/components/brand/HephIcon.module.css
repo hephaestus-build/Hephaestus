@@ -1,6 +1,9 @@
 .icon {
 	--mentor-shadow-opacity: 0.08;
 	--mentor-blush-opacity: 0.25;
+	/* Owned here, not by a utility — webapp/AGENTS.md § Styling. */
+	width: var(--heph-size);
+	height: var(--heph-size);
 }
 
 .shadow {

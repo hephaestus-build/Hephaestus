@@ -90,4 +90,10 @@
   --fgColor-sponsors: #db61a2;
   --bgColor-sponsors: #3a1c2d;
 }
+
+/* The Docs page paints its own canvas; the story's theme tokens have to win over it. */
+.docs-story {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
 </style>
