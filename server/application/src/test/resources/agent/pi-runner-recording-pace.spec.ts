@@ -8,7 +8,7 @@ import {
 } from "../../../main/resources/agent/pi-runner-recording-pace.ts";
 
 void test("the prompt is every bucket the provider split it into", () => {
-	assert.equal(promptTokens({ input: 300, cacheRead: 20_000, cacheWrite: 5_000 }), 25_300);
+	assert.equal(promptTokens({ input: 300, cacheRead: 20_000, cacheWrite: 5000 }), 25_300);
 });
 
 void test("a session is asked once at each share of its context", () => {
@@ -77,12 +77,12 @@ void test("a session that starts empty is asked from its first turn", () => {
 
 void test("a window and its checkpoints have to make sense", () => {
 	for (const invalid of [0, -1, Number.NaN]) {
-		assert.throws(() => createRecordingPace(invalid, true), /positive number/);
+		assert.throws(() => createRecordingPace(invalid, true), /positive number/u);
 	}
-	assert.throws(() => createRecordingPace(1000, true, []), /at least one checkpoint/);
-	assert.throws(() => createRecordingPace(1000, true, [0.8, 0.4]), /ascend/);
-	assert.throws(() => createRecordingPace(1000, true, [0, 0.4]), /ascend/);
-	assert.throws(() => createRecordingPace(1000, true, [0.4, 0.4]), /ascend/);
-	assert.throws(() => createRecordingPace(1000, true, [0.4, 1.2]), /ascend/);
-	assert.throws(() => createRecordingPace(1000, true, [Number.NaN]), /ascend/);
+	assert.throws(() => createRecordingPace(1000, true, []), /at least one checkpoint/u);
+	assert.throws(() => createRecordingPace(1000, true, [0.8, 0.4]), /ascend/u);
+	assert.throws(() => createRecordingPace(1000, true, [0, 0.4]), /ascend/u);
+	assert.throws(() => createRecordingPace(1000, true, [0.4, 0.4]), /ascend/u);
+	assert.throws(() => createRecordingPace(1000, true, [0.4, 1.2]), /ascend/u);
+	assert.throws(() => createRecordingPace(1000, true, [Number.NaN]), /ascend/u);
 });

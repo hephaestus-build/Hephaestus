@@ -2,13 +2,13 @@ import { motion } from "motion/react";
 
 import { HephIcon } from "@/components/brand/HephIcon";
 
-export const Greeting = () => {
+export function Greeting() {
 	return (
 		<div
 			key="overview"
 			className="mx-auto flex size-full max-w-3xl flex-col justify-center px-4 sm:px-8 md:mt-20"
 		>
-			<div className="flex items-center gap-4 mb-4">
+			<div className="mb-4 flex items-center gap-4">
 				<motion.div
 					className="text-muted-foreground"
 					initial={{ opacity: 0, scale: 0.8 }}
@@ -33,7 +33,7 @@ export const Greeting = () => {
 						animate={{ opacity: 1, y: 0 }}
 						exit={{ opacity: 0, y: 10 }}
 						transition={{ delay: 0.6 }}
-						className="text-2xl text-zinc-500"
+						className="text-2xl text-muted-foreground"
 					>
 						How can I help you today?
 					</motion.div>
@@ -41,4 +41,4 @@ export const Greeting = () => {
 			</div>
 		</div>
 	);
-};
+}

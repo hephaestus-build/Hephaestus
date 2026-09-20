@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -35,13 +36,10 @@ describe("sign-in callback", () => {
 	});
 
 	it("lets the user leave while the session request is still pending", async () => {
-		let release = () => {};
-		const pending = new Promise<void>((resolve) => {
-			release = resolve;
-		});
+		const session = deferred();
 		server.use(
 			http.get("*/user", async () => {
-				await pending;
+				await session.promise;
 				return new HttpResponse(null, { status: 401 });
 			}),
 		);
@@ -54,7 +52,7 @@ describe("sign-in callback", () => {
 			expect(router.state.location.pathname).toBe("/login");
 			expect(router.state.location.search).toMatchObject({ returnTo: destination });
 		} finally {
-			release();
+			session.resolve();
 		}
 	});
 });

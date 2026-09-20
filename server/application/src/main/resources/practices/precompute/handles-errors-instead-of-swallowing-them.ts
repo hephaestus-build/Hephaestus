@@ -7,54 +7,60 @@ import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 // language key -> [human label, regex] of error-discarding / swallowing constructs in ADDED code. The `\s`
 // in each regex spans the newlines joined into a window, so multi-line empty bodies match.
-const LANG_PATTERNS: Record<string, Array<[string, RegExp]>> = {
+const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 	swift: [
-		["try? (discards error)", /\btry\?\s/],
-		["empty catch", /\bcatch\s*\{\s*\}/],
-		["catch with only print", /\bcatch\s*\{\s*print\s*\([^)]*\)\s*\}/],
-		["error ignored: if let error {}", /\bif\s+let\s+error\b[^{]*\{\s*\}/],
+		["try? (discards error)", /\btry\?\s/u],
+		["empty catch", /\bcatch\s*\{\s*\}/u],
+		["catch with only print", /\bcatch\s*\{\s*print\s*\([^)]*\)\s*\}/u],
+		["error ignored: if let error {}", /\bif\s+let\s+error\b[^{]*\{\s*\}/u],
 	],
 	ts: [
-		["empty catch", /\bcatch\s*(\([^)]*\))?\s*\{\s*\}/],
-		[".catch(noop)", /\.catch\s*\(\s*\(\s*[^)]*\)\s*=>\s*\{\s*\}\s*\)/],
-		["catch with only console", /\bcatch\s*(\([^)]*\))?\s*\{\s*console\.[a-z]+\([^)]*\)\s*;?\s*\}/],
+		["empty catch", /\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}/u],
+		[".catch(noop)", /\.catch\s*\(\s*\(\s*[^)]*\)\s*=>\s*\{\s*\}\s*\)/u],
+		[
+			"catch with only console",
+			/\bcatch\s*(?:\([^)]*\))?\s*\{\s*console\.[a-z]+\([^)]*\)\s*;?\s*\}/u,
+		],
 	],
 	js: [
-		["empty catch", /\bcatch\s*(\([^)]*\))?\s*\{\s*\}/],
-		[".catch(noop)", /\.catch\s*\(\s*\(\s*[^)]*\)\s*=>\s*\{\s*\}\s*\)/],
-		["catch with only console", /\bcatch\s*(\([^)]*\))?\s*\{\s*console\.[a-z]+\([^)]*\)\s*;?\s*\}/],
+		["empty catch", /\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}/u],
+		[".catch(noop)", /\.catch\s*\(\s*\(\s*[^)]*\)\s*=>\s*\{\s*\}\s*\)/u],
+		[
+			"catch with only console",
+			/\bcatch\s*(?:\([^)]*\))?\s*\{\s*console\.[a-z]+\([^)]*\)\s*;?\s*\}/u,
+		],
 	],
 	python: [
-		["except: pass", /\bexcept[^:]*:\s*pass\b/],
-		["bare except", /^\s*except\s*:/m],
-		["except ...: continue", /\bexcept[^:]*:\s*continue\b/],
+		["except: pass", /\bexcept[^:]*:\s*pass\b/u],
+		["bare except", /^\s*except\s*:/mu],
+		["except ...: continue", /\bexcept[^:]*:\s*continue\b/u],
 	],
 	go: [
 		[
 			"blank-identifier assignment (possible ignored error)",
-			/\b_\s*(,\s*[a-zA-Z0-9_]+)?\s*:?=\s*[a-zA-Z_][a-zA-Z0-9_.]*\s*\(/,
+			/\b_\s*(?:,\s*[a-zA-Z0-9_]+)?\s*:?=\s*[a-zA-Z_][a-zA-Z0-9_.]*\s*\(/u,
 		],
-		["empty if err != nil", /\bif\s+err\s*!=\s*nil\s*\{\s*\}/],
+		["empty if err != nil", /\bif\s+err\s*!=\s*nil\s*\{\s*\}/u],
 	],
 	java: [
-		["empty catch", /\bcatch\s*\([^)]*\)\s*\{\s*\}/],
+		["empty catch", /\bcatch\s*\([^)]*\)\s*\{\s*\}/u],
 		[
 			"catch printStackTrace only",
-			/\bcatch\s*\([^)]*\)\s*\{\s*[a-zA-Z0-9_.]*\.printStackTrace\s*\(\s*\)\s*;?\s*\}/,
+			/\bcatch\s*\([^)]*\)\s*\{\s*[a-zA-Z0-9_.]*\.printStackTrace\s*\(\s*\)\s*;?\s*\}/u,
 		],
 	],
 	kotlin: [
-		["empty catch", /\bcatch\s*\([^)]*\)\s*\{\s*\}/],
-		["runCatching{}.getOrNull", /runCatching\s*\{[\s\S]*?\}\s*\.getOrNull\s*\(\s*\)/],
+		["empty catch", /\bcatch\s*\([^)]*\)\s*\{\s*\}/u],
+		["runCatching{}.getOrNull", /runCatching\s*\{[\s\S]*?\}\s*\.getOrNull\s*\(\s*\)/u],
 	],
 	rust: [
-		[".ok(); (discards Err)", /\.ok\s*\(\s*\)\s*;/],
-		["let _ = call()", /\blet\s+_\s*=\s*[a-zA-Z_][a-zA-Z0-9_.:]*\s*\(/],
-		["if let Err(_) {} empty", /\bif\s+let\s+Err\s*\(\s*_\s*\)[^{]*\{\s*\}/],
+		[".ok(); (discards Err)", /\.ok\s*\(\s*\)\s*;/u],
+		["let _ = call()", /\blet\s+_\s*=\s*[a-zA-Z_][a-zA-Z0-9_.:]*\s*\(/u],
+		["if let Err(_) {} empty", /\bif\s+let\s+Err\s*\(\s*_\s*\)[^{]*\{\s*\}/u],
 	],
 	ruby: [
-		["rescue => e (unused)", /\brescue\s*=>\s*[a-z_]+\s*$/m],
-		["rescue; end", /\brescue\b[^;\n]*;\s*end\b/],
+		["rescue => e (unused)", /\brescue\s*=>\s*[a-z_]+\s*$/mu],
+		["rescue; end", /\brescue\b[^;\n]*;\s*end\b/u],
 	],
 };
 
@@ -95,8 +101,8 @@ function isComment(trimmed: string): boolean {
 
 // Group a file's added lines into windows of CONSECUTIVE line numbers so a multi-line construct
 // (e.g. `catch {` then `}`) is one searchable text block without falsely joining distant additions.
-function consecutiveWindows(added: Map<number, string>): Array<{ start: number; lines: string[] }> {
-	const windows: Array<{ start: number; lines: string[] }> = [];
+function consecutiveWindows(added: Map<number, string>): { start: number; lines: string[] }[] {
+	const windows: { start: number; lines: string[] }[] = [];
 	// The open window carries its own first and last line number, so "is there a window" and "what does
 	// it end at" are one nullable value rather than length checks against a scratch array.
 	let open: { start: number; end: number; lines: string[] } | null = null;
@@ -109,7 +115,9 @@ function consecutiveWindows(added: Map<number, string>): Array<{ start: number; 
 		open.end = n;
 		open.lines.push(added.get(n) ?? "");
 	}
-	if (open !== null) windows.push({ start: open.start, lines: open.lines });
+	if (open !== null) {
+		windows.push({ start: open.start, lines: open.lines });
+	}
 	return windows;
 }
 
@@ -122,18 +130,26 @@ export default function handlesErrorsInsteadOfSwallowingThem(
 	const byLang: Record<string, number> = {};
 	for (const [path, df] of diffFiles) {
 		const lang = langOf(path);
-		if (!lang) continue;
+		if (lang === null) {
+			continue;
+		}
 		const patterns = LANG_PATTERNS[lang];
-		if (!patterns) continue;
+		if (!patterns) {
+			continue;
+		}
 		for (const w of consecutiveWindows(df.addedLines)) {
 			const text = w.lines.join("\n");
 			for (const [name, re] of patterns) {
 				const match = text.match(re);
-				if (!match || match.index === undefined) continue;
+				if (!match || match.index === undefined) {
+					continue;
+				}
 				const offset = text.slice(0, match.index).split("\n").length - 1;
 				const lineNum = w.start + offset;
 				const lineContent = w.lines[offset] ?? "";
-				if (isComment(lineContent.trimStart())) continue;
+				if (isComment(lineContent.trimStart())) {
+					continue;
+				}
 				hints.push({
 					file: path,
 					line: lineNum,
@@ -143,7 +159,8 @@ export default function handlesErrorsInsteadOfSwallowingThem(
 					flags: {},
 				});
 				byLang[lang] = (byLang[lang] ?? 0) + 1;
-				break; // one hint per window — the LLM reads the full diff for the rest
+				// one hint per window — the LLM reads the full diff for the rest
+				break;
 			}
 		}
 	}

@@ -37,6 +37,14 @@ ruleTester.run("no-nondeterministic-render", noNondeterministicRender, {
 		// -- Not a component or a hook, so not known to be a render ---------------------------------
 		"function useLabel() { return (at: number) => new Date(at); }",
 		"class Timer { at = Date.now(); }",
+
+		// -- date-fns, with the instant passed in -----------------------------------------------------
+		'import { formatDistance, isBefore } from "date-fns";\nfunction Card({ at }) { const now = useNow(); return <p>{formatDistance(at, now)} {String(isBefore(at, now))}</p>; }',
+		// The same name, but not the library's: a helper written here takes its instant from a caller.
+		"function isPast(at: Date, now: Date) { return at < now; }\nfunction Card({ at }) { return <p>{String(isPast(at, useNow()))}</p>; }",
+		'import { isPast } from "./clock";\nfunction Card({ at }) { return <p>{String(isPast(at))}</p>; }',
+		// Called from a handler, it reads the clock at the moment of the event, which is right.
+		'import { isPast } from "date-fns";\nfunction Card({ at }) { return <button onClick={() => setExpired(isPast(at))} />; }',
 	],
 	invalid: [
 		// -- Module load ----------------------------------------------------------------------------
@@ -91,6 +99,39 @@ ruleTester.run("no-nondeterministic-render", noNondeterministicRender, {
 			// Two readings are two edits, so each is reported where it stands.
 			code: "function Card() { const a = Date.now(); const b = new Date(); return <p>{a}{String(b)}</p>; }",
 			errors: [{ messageId: "duringRender" }, { messageId: "duringRender" }],
+		},
+
+		// -- date-fns reading the clock for itself ----------------------------------------------------
+		{
+			code: 'import { formatDistanceToNow } from "date-fns";\nfunction Card({ at }) { return <p>{formatDistanceToNow(at)}</p>; }',
+			errors: [{ messageId: "hiddenClock", data: { reading: "formatDistanceToNow()" }, line: 2 }],
+		},
+		{
+			code: 'import { isPast, isFuture, isToday } from "date-fns";\nconst Card = ({ at }) => <p>{String(isPast(at) || isFuture(at) || isToday(at))}</p>;',
+			errors: [
+				{ messageId: "hiddenClock", data: { reading: "isPast()" } },
+				{ messageId: "hiddenClock", data: { reading: "isFuture()" } },
+				{ messageId: "hiddenClock", data: { reading: "isToday()" } },
+			],
+		},
+		{
+			// A hook body runs during the render of whoever calls it.
+			code: 'import { formatDistanceToNowStrict } from "date-fns";\nfunction useAge(at) { return formatDistanceToNowStrict(at); }',
+			errors: [{ messageId: "hiddenClock" }],
+		},
+		{
+			// Module scope: the fixture is stamped once at import and drifts with the calendar.
+			code: 'import { startOfToday } from "date-fns";\nexport const since = startOfToday();',
+			errors: [{ messageId: "hiddenClock", data: { reading: "startOfToday()" } }],
+		},
+		{
+			// Renamed on import, it is still the library's function and still reads the clock.
+			code: 'import { isPast as expired } from "date-fns";\nfunction Card({ at }) { return <p>{String(expired(at))}</p>; }',
+			errors: [{ messageId: "hiddenClock", data: { reading: "isPast()" } }],
+		},
+		{
+			code: 'import { isToday } from "date-fns/isToday";\nfunction Card({ at }) { return <p>{String(isToday(at))}</p>; }',
+			errors: [{ messageId: "hiddenClock" }],
 		},
 	],
 });

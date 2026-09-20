@@ -5,6 +5,7 @@ import { SignInNotice } from "@/components/auth/SignInNotice";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { hasText } from "@/lib/text";
 
 // Never display raw OAuth error parameters; they can contain provider details. A `Map` rather than
 // an object literal, so a code of `__proto__` cannot reach an inherited value.
@@ -41,7 +42,7 @@ export interface LoginPageProps extends SignInButtonsProps {
  * the page holds nothing else.
  */
 export function LoginPage({ title = "Sign in to Hephaestus", error, ...signIn }: LoginPageProps) {
-	const errorCopy = error ? (ERROR_COPY.get(error) ?? GENERIC_ERROR) : undefined;
+	const errorCopy = hasText(error) ? (ERROR_COPY.get(error) ?? GENERIC_ERROR) : undefined;
 
 	return (
 		<div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6">

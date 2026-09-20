@@ -43,9 +43,9 @@ export function selectGroupPatch(
 	request: UpdatePracticeGroupRequest,
 ): UpdatePracticeGroupRequest {
 	return {
-		...(request.visibleInPracticeDashboards !== undefined
-			? { visibleInPracticeDashboards: group.visibleInPracticeDashboards }
-			: {}),
+		...(request.visibleInPracticeDashboards === undefined
+			? {}
+			: { visibleInPracticeDashboards: group.visibleInPracticeDashboards }),
 		...("color" in request ? { color: group.color } : {}),
 		...("description" in request ? { description: group.description } : {}),
 		...("displayOrder" in request ? { displayOrder: group.displayOrder } : {}),
@@ -110,6 +110,10 @@ export function selectPracticePatch(
 
 export type PracticePlacement = Pick<Practice, "groupSlug" | "displayOrder" | "slug">;
 
+export function byDisplayOrder<T extends { displayOrder: number; name: string }>(a: T, b: T) {
+	return a.displayOrder - b.displayOrder || a.name.localeCompare(b.name);
+}
+
 export function placePractice(
 	practices: Practice[],
 	slug: string,
@@ -117,18 +121,20 @@ export function placePractice(
 	position: number,
 ): Practice[] {
 	const moving = practices.find((practice) => practice.slug === slug);
-	if (!moving) return practices;
+	if (!moving) {
+		return practices;
+	}
 
 	const sourceGroupSlug = moving.groupSlug ?? null;
 	const inGroup = (candidate: Practice, candidateGroupSlug: string | null) =>
 		candidate.slug !== slug && (candidate.groupSlug ?? null) === candidateGroupSlug;
-	const byOrder = (a: Practice, b: Practice) =>
-		a.displayOrder - b.displayOrder || a.name.localeCompare(b.name);
-	const source = practices.filter((practice) => inGroup(practice, sourceGroupSlug)).sort(byOrder);
+	const source = practices
+		.filter((practice) => inGroup(practice, sourceGroupSlug))
+		.sort(byDisplayOrder);
 	const destination =
 		sourceGroupSlug === groupSlug
 			? source
-			: practices.filter((practice) => inGroup(practice, groupSlug)).sort(byOrder);
+			: practices.filter((practice) => inGroup(practice, groupSlug)).sort(byDisplayOrder);
 	destination.splice(Math.min(position, destination.length), 0, {
 		...moving,
 		groupSlug: groupSlug ?? undefined,
@@ -196,13 +202,12 @@ export function unassignPractices(practices: Practice[], groupSlug: string): Pra
 				.map((practice) => practice.displayOrder),
 		) + 1;
 	let offset = 0;
-	return practices.map((practice) =>
-		practice.groupSlug === groupSlug
-			? {
-					...practice,
-					groupSlug: undefined,
-					displayOrder: firstDisplayOrder + offset++,
-				}
-			: practice,
-	);
+	return practices.map((practice) => {
+		if (practice.groupSlug !== groupSlug) {
+			return practice;
+		}
+		const displayOrder = firstDisplayOrder + offset;
+		offset += 1;
+		return { ...practice, groupSlug: undefined, displayOrder };
+	});
 }

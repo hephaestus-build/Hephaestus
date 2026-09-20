@@ -77,12 +77,16 @@ export function createRecordingPace(
 	const at = (index: number) => checkpoints[index] ?? Number.POSITIVE_INFINITY;
 	return {
 		checkpointReached(promptSize: number): number | null {
-			if (!Number.isFinite(promptSize) || promptSize <= 0) return null;
+			if (!Number.isFinite(promptSize) || promptSize <= 0) {
+				return null;
+			}
 			const share = promptSize / contextWindow;
 			// Compaction empties the window mid-review and the session reads on from a summary of what
 			// it can no longer see, which is the situation this whole pace exists for. A share the
 			// window has fallen back below is asked for again when the session fills it again.
-			while (passed > 0 && share < at(passed - 1)) passed -= 1;
+			while (passed > 0 && share < at(passed - 1)) {
+				passed -= 1;
+			}
 			let reached: number | null = null;
 			// A single large read can cross more than one share at once, and the session is asked once
 			// for the furthest it reached rather than once per share it stepped over.

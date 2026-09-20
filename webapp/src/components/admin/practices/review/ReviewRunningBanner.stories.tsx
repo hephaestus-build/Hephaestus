@@ -5,7 +5,6 @@ import { ReviewRunningBanner } from "./ReviewRunningBanner";
 const readyModel = { binding: { purpose: "PRACTICE_REVIEW", enabled: true, ready: true } as const };
 
 const meta = {
-	title: "Workspace admin/Practices/Review/Running banner",
 	component: ReviewRunningBanner,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],

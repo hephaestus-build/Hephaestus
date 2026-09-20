@@ -2,13 +2,14 @@ import type { Meta, StoryObj } from "@storybook/react";
 
 import { LeaderboardFilter } from "./LeaderboardFilter";
 
-const meta: Meta<typeof LeaderboardFilter> = {
+const meta = {
 	component: LeaderboardFilter,
 	tags: ["autodocs"],
-};
+	args: { selectedMode: "INDIVIDUAL" },
+} satisfies Meta<typeof LeaderboardFilter>;
 
 export default meta;
-type Story = StoryObj<typeof LeaderboardFilter>;
+type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	args: {

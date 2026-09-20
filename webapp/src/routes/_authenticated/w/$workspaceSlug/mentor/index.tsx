@@ -5,9 +5,10 @@ import { v4 as uuidv4 } from "uuid";
 
 import { getThreadQueryKey, listThreadsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { ChatThreadSummary } from "@/api/types.gen";
+import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { Greeting } from "@/components/mentor/Greeting";
-import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/")({
 	component: MentorContainer,
@@ -27,7 +28,9 @@ function MentorContainer() {
 	// Once per mount, guarded by a ref rather than by the dependency list, which cannot promise it:
 	// a second run would mint a second id and strand an empty "New chat" in the list.
 	useEffect(() => {
-		if (!workspaceSlug || hasStartedRef.current) return;
+		if (!hasText(workspaceSlug) || hasStartedRef.current) {
+			return;
+		}
 		hasStartedRef.current = true;
 
 		const threadId = uuidv4();
@@ -37,11 +40,13 @@ function MentorContainer() {
 		});
 
 		// Flat: `NavMentorThreads` buckets by `createdAt`, so ordering here is not load-bearing.
-		queryClient.setQueryData<Array<ChatThreadSummary>>(
+		queryClient.setQueryData<ChatThreadSummary[]>(
 			listThreadsQueryKey({ path: { workspaceSlug: slug } }),
 			(prev) => {
 				const threads = prev ?? [];
-				if (threads.some((t) => t.id === threadId)) return threads;
+				if (threads.some((t) => t.id === threadId)) {
+					return threads;
+				}
 				const newSummary: ChatThreadSummary = {
 					id: threadId,
 					title: "New chat",
@@ -61,7 +66,7 @@ function MentorContainer() {
 		});
 	}, [workspaceSlug, slug, queryClient, navigate]);
 
-	if (!workspaceSlug) {
+	if (!hasText(workspaceSlug)) {
 		return <NoWorkspace />;
 	}
 

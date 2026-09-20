@@ -48,7 +48,7 @@ published.
 | --- | --- | --- |
 | Quality → App Server | Spotless and PMD, NullAway policy, the PMD canary when PMD inputs changed, artifact-source contracts, setting delivery per runtime role | `vp run gate:server`, `gate:java-nullness`, `gate:contracts`, `gate:env` |
 | Quality → Tooling and Docs | toolchain and agent-runtime pins, the runner and lint contracts, `gate:agents`, load-test format and syntax, agent specs, instruction mirrors, docs format and `docs:lint`, Mermaid parse | `vp run gate:agents`, `gate:docs`, `test:agents` |
-| Quality → Webapp | `vp check`, presentational components, story prose, story sort, docs colour tokens, unit tests, Vite build with a `routeTree.gen.ts` diff | `vp run check:webapp`, `test:webapp`, `build:webapp` |
+| Quality → Webapp | `vp check`, presentational components, story prose, docs colour tokens, unit tests, Vite build with a `routeTree.gen.ts` diff | `vp run check:webapp`, `test:webapp`, `build:webapp` |
 | Quality → Webapp: Stories | Storybook interaction tests, `export:assets` diff, Storybook build, Chromatic | `vp run test:webapp:stories` |
 | Quality → Windows | Every gate that needs neither Gradle, Docker nor the agent sandbox, on `windows-latest`, uncached | `vp run --no-cache ci:windows` |
 | Quality → Clean install | `vp install --frozen-lockfile` on a runner with Node and the launcher and nothing else, then `gate:toolchain` and the hooks path | `vp install` |
@@ -855,9 +855,8 @@ and `vp run test:server:integration`; `vp run verify` runs the credential-free s
 
 ```bash
 # Webapp
-vp run check:webapp          # vp check: format and lint
+vp run check:webapp          # vp check: format and lint; the lint is type-aware and type-checks
 vp run fix:webapp           # check:webapp, applying every safe fix
-vp run typecheck:webapp      # A separate leg — check:webapp does not run it
 vp run test:webapp           # Unit tests
 
 # Application Server (Java)

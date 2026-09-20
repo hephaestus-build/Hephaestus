@@ -16,6 +16,8 @@ export function hasMinimumWorkspaceRole(
 	role: string | null | undefined,
 	minRole: WorkspaceRole,
 ): boolean {
-	if (role == null || !isWorkspaceRole(role)) return false;
+	if (role == null || !isWorkspaceRole(role)) {
+		return false;
+	}
 	return WORKSPACE_ROLE_RANK[role] >= WORKSPACE_ROLE_RANK[minRole];
 }

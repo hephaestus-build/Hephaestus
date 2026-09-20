@@ -3,8 +3,8 @@ import { useState } from "react";
 import { assert, describe, expect, it, vi } from "vitest";
 import type { AgentBinding, PracticeReviewSettings as Settings } from "@/api/types.gen";
 import { renderWithRouter } from "@/test/router-harness";
+import { mockReviewSettings } from "./fixtures";
 import { PracticeReviewSettings } from "./PracticeReviewSettings";
-import { mockReviewSettings } from "./story-mock-data";
 
 const readyBinding: AgentBinding = {
 	purpose: "PRACTICE_REVIEW",
@@ -28,7 +28,9 @@ const people = {
 	],
 };
 
-function renderSettings(props: Partial<React.ComponentProps<typeof PracticeReviewSettings>> = {}) {
+async function renderSettings(
+	props: Partial<React.ComponentProps<typeof PracticeReviewSettings>> = {},
+) {
 	return renderWithRouter(
 		<PracticeReviewSettings
 			workspaceSlug="acme"
@@ -125,7 +127,9 @@ describe("PracticeReviewSettings", () => {
 		fireEvent.click(screen.getByRole("radio", { name: "Selected people" }));
 		fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
 
-		await act(() => Promise.resolve());
+		await act(async () => {
+			await Promise.resolve();
+		});
 		expect(preview).toHaveBeenCalledOnce();
 		expect(onUpdate).toHaveBeenCalledOnce();
 		expect(screen.queryByRole("alertdialog")).toBeNull();
@@ -133,7 +137,12 @@ describe("PracticeReviewSettings", () => {
 
 	it("preserves an unsaved coverage draft when an unrelated etag changes", async () => {
 		const persisted = selectedSettings();
-		const policy = { settings: persisted, isSaving: false, onUpdate: vi.fn(), onReset: vi.fn() };
+		const policy = {
+			settings: persisted,
+			isSaving: false,
+			onUpdate: vi.fn(),
+			onReset: vi.fn(),
+		};
 		function EtagHarness() {
 			const [current, setCurrent] = useState(persisted);
 			return (
@@ -347,7 +356,7 @@ describe("PracticeReviewSettings", () => {
 
 		await screen.findByText("acme/archived");
 		expect(screen.queryByText("Not monitored")).toBeNull();
-		expect(screen.queryByTitle(/unavailable/)).toBeNull();
+		expect(screen.queryByTitle(/unavailable/u)).toBeNull();
 	});
 
 	it("marks persisted targets unavailable only after a successful list excludes them", async () => {
@@ -385,7 +394,7 @@ describe("PracticeReviewSettings", () => {
 		const view = await renderSettings();
 		const active = await screen.findByRole("switch", { name: "Send feedback" });
 		expect(active.getAttribute("aria-checked")).toBe("true");
-		expect(screen.queryByRole("switch", { name: /Active/ })).toBeNull();
+		expect(screen.queryByRole("switch", { name: /Active/u })).toBeNull();
 		view.unmount();
 		await renderSettings({
 			policy: {
@@ -399,6 +408,6 @@ describe("PracticeReviewSettings", () => {
 		expect(screen.getByRole("switch", { name: "Send feedback" }).getAttribute("aria-checked")).toBe(
 			"false",
 		);
-		expect(screen.queryByRole("switch", { name: /Paused/ })).toBeNull();
+		expect(screen.queryByRole("switch", { name: /Paused/u })).toBeNull();
 	});
 });

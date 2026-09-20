@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from "lucide-react";
 
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type DashboardVisibility = "VISIBLE" | "HIDDEN";
 

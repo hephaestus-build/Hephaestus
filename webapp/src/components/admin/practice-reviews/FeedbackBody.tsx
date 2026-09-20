@@ -1,12 +1,12 @@
-import { cn } from "cn";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import {
 	type DeliveryFacts,
 	deliveryOutcome,
 } from "@/components/practice-vocabulary/delivery-outcome-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { hasText } from "@/lib/text";
 
 export type FeedbackBodyFeedback = DeliveryFacts & { body?: string };
 
@@ -19,18 +19,18 @@ export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 	const { body } = feedback;
 	const unsent = feedback.deliveryState !== "DELIVERED";
 
-	if (!body) {
+	if (!hasText(body)) {
 		return (
-			<Card className={cn("gap-0 border py-0", className)}>
-				<CardContent className="py-4 text-sm text-muted-foreground">
-					No feedback text was composed for this record.
+			<Card flush className={className}>
+				<CardContent className="py-4">
+					<p className="text-muted-foreground">No feedback text was composed for this record.</p>
 				</CardContent>
 			</Card>
 		);
 	}
 
 	return (
-		<Card className={cn("gap-0 border py-0", className)}>
+		<Card flush className={className}>
 			<Tabs defaultValue="rendered" className="gap-0">
 				<CardHeader className="flex flex-wrap items-center justify-between gap-2 pt-3 pb-2">
 					<TabsList aria-label="How to show the feedback">
@@ -48,7 +48,7 @@ export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 						<UntrustedMarkdown>{body}</UntrustedMarkdown>
 					</TabsContent>
 					<TabsContent value="source">
-						<pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">
+						<pre className="rounded-md bg-muted p-3 text-xs break-words whitespace-pre-wrap">
 							{body}
 						</pre>
 					</TabsContent>

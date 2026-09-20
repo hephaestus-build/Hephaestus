@@ -10,33 +10,30 @@ ruleTester.run("prefer-auto-story-title", preferAutoStoryTitle, {
 			filename: "webapp/src/components/ui/Button.stories.tsx",
 		},
 		{
-			// Dropping the implementation-only `components` segment is a real sidebar relocation.
-			code: `${component}\nconst meta = { title: "UI primitives/Button", component: Button } satisfies Meta<typeof Button>;`,
+			// Only the story meta is a title; fixture data keeps its own fields.
+			code: `${component}\nconst issue = { title: "Fix login" };\nconst meta = { component: Button, args: { issue } } satisfies Meta<typeof Button>;`,
 			filename: "webapp/src/components/ui/Button.stories.tsx",
 		},
 		{
-			// Product surfaces can cut across the source layout.
-			code: `${component}\nconst meta = { title: "Workspace admin/Practices/Review/Overview", component: Button } satisfies Meta<typeof Button>;`,
-			filename: "webapp/src/components/admin/practices/review/ReviewPage.stories.tsx",
-		},
-		{
-			// A computed title is owned by gate:story-sort, which gives the more precise diagnostic.
-			code: `${component}\nconst meta = { title: prefix + "/Button", component: Button } satisfies Meta<typeof Button>;`,
-			filename: "webapp/src/components/ui/Button.stories.tsx",
+			code: `const meta = { title: "Anything" };`,
+			filename: "webapp/src/components/ui/Button.tsx",
 		},
 	],
 	invalid: [
 		{
 			code: `${component}\nconst meta = { title: "components/ui/Button", component: Button } satisfies Meta<typeof Button>;`,
 			filename: "webapp/src/components/ui/Button.stories.tsx",
-			errors: [{ messageId: "redundant", data: { automatic: "components/ui/Button" } }],
+			errors: [{ messageId: "explicit" }],
 		},
 		{
-			// Sentence case and punctuation do not make the same Storybook path meaningful metadata.
-			code: `${component}\nconst meta = { title: "components/UI/button", component: Button } satisfies Meta<typeof Button>;`,
-			filename: "/repo/webapp/src/components/ui/Button.stories.tsx",
-			cwd: "/repo",
-			errors: [{ messageId: "redundant" }],
+			code: `${component}\nconst meta = { title: "Workspace admin/Practices/Review/Overview", component: Button } satisfies Meta<typeof Button>;`,
+			filename: "webapp/src/components/admin/practices/review/ReviewPage.stories.tsx",
+			errors: [{ messageId: "explicit" }],
+		},
+		{
+			code: `${component}\nconst meta = { title: prefix + "/Button", component: Button } satisfies Meta<typeof Button>;`,
+			filename: "webapp/src/components/ui/Button.stories.tsx",
+			errors: [{ messageId: "explicit" }],
 		},
 	],
 });

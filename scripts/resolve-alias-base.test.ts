@@ -6,21 +6,22 @@ import { resolveAliasBase, type BaseChain } from "./resolve-alias-base.ts";
 const sha = (letter: string): string => letter.repeat(40);
 const main = sha("a");
 const layers = { [sha("c")]: sha("b"), [sha("b")]: main };
-const never = (what: string) => (): Promise<never> =>
-	Promise.reject(new Error(`${what} must not be consulted`));
+const never = (what: string) => async (): Promise<never> => {
+	throw new Error(`${what} must not be consulted`);
+};
 
 const chain = (
 	bases: Readonly<Record<string, string>>,
 	published: readonly string[],
 ): BaseChain => ({
-	compare: (base) => Promise.resolve(published.includes(base) ? "ahead" : "diverged"),
-	baseOf: (commit) => Promise.resolve(bases[commit]),
+	compare: async (base) => (published.includes(base) ? "ahead" : "diverged"),
+	baseOf: async (commit) => bases[commit],
 });
 
 await test("a pull request based on the default branch aliases from its own base", async () => {
 	assert.equal(
 		await resolveAliasBase(main, "main", {
-			compare: () => Promise.resolve("identical"),
+			compare: async () => "identical",
 			baseOf: never("the base chain"),
 		}),
 		main,

@@ -3,9 +3,9 @@ import { MessageSquareTextIcon } from "lucide-react";
 
 import type { ReviewFeedback } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { deliveryOutcome } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { withholdingReasonSentence } from "@/components/practice-vocabulary/withholding-defs";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +16,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
+import { hasText } from "@/lib/text";
 
 import { feedbackPreviewText } from "./feedback-preview";
 import { REVIEW_PAGE_SIZE, type ReviewScopeSearch } from "./review-search";
@@ -37,11 +38,12 @@ export interface FeedbackResultsProps {
 }
 
 export function FeedbackResults({ workspaceSlug, state }: FeedbackResultsProps) {
-	if (state.status === "loading")
+	if (state.status === "loading") {
 		return <ReviewResultsSkeleton label="Loading feedback" rows={REVIEW_PAGE_SIZE} />;
+	}
 	if (state.status === "empty") {
 		return (
-			<Empty className="border">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<MessageSquareTextIcon />
@@ -106,7 +108,7 @@ export function FeedbackRow({ workspaceSlug, feedback, scope }: FeedbackRowProps
 					{/* Feedback whose preview is nothing but a code quote has a body and no prose to show
 					    for it, which is not the same state as feedback nobody has composed yet. */}
 					{feedbackPreviewText(feedback) ??
-						(feedback.bodyPreview
+						(hasText(feedback.bodyPreview)
 							? "Opens with a quote from the work…"
 							: "No feedback text was composed")}
 				</Link>

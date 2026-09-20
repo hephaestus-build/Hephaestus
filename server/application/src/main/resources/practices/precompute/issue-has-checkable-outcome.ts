@@ -7,16 +7,17 @@ export default function issueHasCheckableOutcome(
 	m: IssueMetadata,
 ) {
 	const { body, emptyOrTitleEcho, hasDeliverableType, looksUmbrella } = classifyIssue(m);
-	const uncheckedBoxes = (body.match(/^[\s>]*[-*]\s+\[ \]/gm) ?? []).length;
-	const checkedBoxes = (body.match(/^[\s>]*[-*]\s+\[[xX]\]/gm) ?? []).length;
+	const uncheckedBoxes = (body.match(/^[\s>]*[-*]\s+\[ \]/gmu) ?? []).length;
+	const checkedBoxes = (body.match(/^[\s>]*[-*]\s+\[[xX]\]/gmu) ?? []).length;
 	const totalBoxes = uncheckedBoxes + checkedBoxes;
 
 	const acHeading =
-		/(acceptance criteria|definition of done|\bDoD\b|done when|verif(y|iable)|expected (outcome|result|behaviou?r))/i.test(
+		/(?:acceptance criteria|definition of done|\bDoD\b|done when|verif(?:y|iable)|expected (?:outcome|result|behaviou?r))/iu.test(
 			body,
 		);
 	const valueClause =
-		/\bso that\b/i.test(body) || /\bas an?\b[\s\S]{0,60}\bi (want|need|would like)\b/i.test(body);
+		/\bso that\b/iu.test(body) ||
+		/\bas an?\b[\s\S]{0,60}\bi (?:want|need|would like)\b/iu.test(body);
 	const isStub = body.length < 40;
 
 	const directions: string[] = [];
@@ -29,21 +30,24 @@ export default function issueHasCheckableOutcome(
 			`Classification fact: umbrella/requirement card — its verifiable outcome is normally a decomposition into child stories that each carry their own acceptance criteria, rather than an inline checkbox block.`,
 		);
 	}
-	if (isStub && !emptyOrTitleEcho)
+	if (isStub && !emptyOrTitleEcho) {
 		directions.push(
 			`Body is ${body.length} chars — thin; do not credit a verifiable "done" without quotable text.`,
 		);
+	}
 	directions.push(
 		`Checkable-outcome facts: acceptanceCriteriaHeadingPresent=${acHeading}, taskCheckboxes=${totalBoxes} (unchecked=${uncheckedBoxes}, checked=${checkedBoxes}), valueClausePresent=${valueClause}.`,
 	);
-	if (totalBoxes > 0)
+	if (totalBoxes > 0) {
 		directions.push(
 			`A task checklist exists — judge whether the boxes are concrete verifiable outcomes (not vague intentions); an explicit acceptance-criteria block is a stronger verifiable-done signal than a bare value clause.`,
 		);
-	if (totalBoxes === 0 && !acHeading)
+	}
+	if (totalBoxes === 0 && !acHeading) {
 		directions.push(
 			`No checklist and no acceptance-criteria heading detected — confirm there is genuinely no quotable verifiable-done artifact before crediting one.`,
 		);
+	}
 
 	const hints: Hint[] = [];
 	return {

@@ -3,8 +3,8 @@ import { expect, fn, screen, within } from "storybook/test";
 
 import { Stateful } from "@/stories/stateful";
 
+import { manyMembers, workspaceMembers } from "./fixtures";
 import { MEMBER_PAGE_SIZE, type ReviewPeople, ReviewPersonFacet } from "./ReviewPersonFacet";
-import { manyMembers, workspaceMembers } from "./story-mock-data";
 
 function peopleFrom(
 	members: typeof workspaceMembers,
@@ -34,7 +34,6 @@ function peopleFrom(
  * including the failure — is a story rather than a mocked request.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Person facet",
 	component: ReviewPersonFacet,
 	parameters: { layout: "centered", chromatic: { viewports: [1440] } },
 	tags: ["autodocs"],
@@ -69,7 +68,7 @@ export const Default: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Developer" }));
 		const listbox = await screen.findByRole("listbox", { name: "Developer options" });
-		await userEvent.click(await within(listbox).findByRole("option", { name: /Grace Hopper/ }));
+		await userEvent.click(await within(listbox).findByRole("option", { name: /Grace Hopper/u }));
 		await expect(args.onChange).toHaveBeenCalledWith(9);
 		await canvas.findByRole("combobox", { name: "Developer: Grace Hopper" });
 	},
@@ -120,7 +119,7 @@ export const MorePeopleThanTheFacetCanList: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Developer" }));
 		await screen.findByRole("listbox", { name: "Developer options" });
-		await screen.findByText(/Showing the first 100 members/);
+		await screen.findByText(/Showing the first 100 members/u);
 	},
 };
 

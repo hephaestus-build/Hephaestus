@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
 import { assert, describe, expect, it, vi } from "vitest";
 
-import { buildAutonomyFixture } from "@/components/admin/practices/practice-autonomy/story-mock-data";
+import { buildAutonomyFixture } from "@/components/admin/practices/practice-autonomy/fixtures";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
 
@@ -44,7 +44,7 @@ describe("review route", () => {
 		renderRouteAt("/w/acme/admin/practices/review");
 
 		await screen.findByRole("heading", { name: "Review" }, ROUTE_RENDER_WAIT);
-		await screen.findByRole("button", { name: /Hygiene/ }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("button", { name: /Hygiene/u }, ROUTE_RENDER_WAIT);
 
 		screen.getByText("2 practices: 1 off and 1 review before sending. 1 practice set by hand.");
 		screen.getByText("2 practices: 1 off and 1 review before sending.");
@@ -124,7 +124,7 @@ describe("review route", () => {
 	 * inherit" — so clearing an override means omitting the key, not sending `null`.
 	 */
 	it("clears an override by omitting the autonomy, not by sending null", async () => {
-		const bodies: Array<Record<string, unknown>> = [];
+		const bodies: Record<string, unknown>[] = [];
 		stubWorkspace([
 			http.patch<PathParams, Record<string, unknown>>(
 				"*/workspaces/:workspaceSlug/practices/:practiceSlug/autonomy",
@@ -140,9 +140,10 @@ describe("review route", () => {
 
 		renderRouteAt("/w/acme/admin/practices/review");
 
-		const group = await screen.findByRole("button", { name: /Hygiene/ }, ROUTE_RENDER_WAIT);
+		const group = await screen.findByRole("button", { name: /Hygiene/u }, ROUTE_RENDER_WAIT);
 		await userEvent.click(group);
-		const row = (await screen.findByText("Links the issue")).closest("li");
+		const practice = await screen.findByText("Links the issue");
+		const row = practice.closest("li");
 		assert(row instanceof HTMLElement, "Practice row not rendered");
 
 		// `hidden: true`: jsdom runs no layout, so Base UI leaves the opened accordion panel carrying

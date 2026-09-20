@@ -1,5 +1,5 @@
 import { RotateCcw } from "lucide-react";
-import { useId } from "react";
+import { type ReactNode, useId } from "react";
 
 import { cn } from "cn";
 import type {
@@ -8,7 +8,7 @@ import type {
 	CuratedPracticeDefinition,
 	PracticeDefinitionOptions,
 } from "@/api/types.gen";
-import { PracticeEvidenceSummary } from "@/components/admin/practice-catalog/PracticeEvidenceSummary";
+import { PracticeEvidenceSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Spinner } from "@/components/ui/spinner";
@@ -79,11 +79,18 @@ function displayValue(
 	if (field === "groupSlug" && typeof value === "string") {
 		return groupNames[value] ?? "Group no longer exists";
 	}
-	if ((field === "icon" || field === "color") && typeof value === "string")
+	if ((field === "icon" || field === "color") && typeof value === "string") {
 		return humanizeToken(value);
-	if (Array.isArray(value)) return value.join("\n");
-	if (typeof value === "string") return value;
-	if (typeof value === "number" || typeof value === "boolean") return String(value);
+	}
+	if (Array.isArray(value)) {
+		return value.join("\n");
+	}
+	if (typeof value === "string") {
+		return value;
+	}
+	if (typeof value === "number" || typeof value === "boolean") {
+		return String(value);
+	}
 	// A nested object has no readable `toString`; show its shape rather than "[object Object]".
 	return JSON.stringify(value);
 }
@@ -149,34 +156,38 @@ export function HephaestusVersionPanel(props: HephaestusVersionPanelProps) {
 								className="mt-2 space-y-3 rounded-md border bg-muted/40 p-3"
 							>
 								{Object.entries(kind === "group" ? GROUP_FIELDS : PRACTICE_FIELDS).map(
-									([field, label]) => (
-										<div key={field} className="space-y-1">
-											<dt className="font-medium text-xs">{label}</dt>
-											<dd
-												className={cn(
-													"whitespace-pre-wrap break-words text-muted-foreground text-xs",
-													field === "precomputeScript" && "font-mono",
-												)}
-											>
-												{field === "automatedReviewPolicy" && shippedPractice ? (
-													shippedDefinitionOptions ? (
-														<PracticeEvidenceSummary
-															policy={shippedPractice.automatedReviewPolicy}
-															bindings={shippedPractice.bindings}
-															validation={shippedPractice.automatedReviewValidation}
-															sources={shippedDefinitionOptions.allowedSources}
-															signals={shippedDefinitionOptions.signals}
-															workTypeLabel={artifactKindLabel(shippedPractice.artifactKind)}
-														/>
-													) : (
-														"Evidence details are unavailable for this work type."
-													)
-												) : (
-													displayValue(field, shippedDefinition[field], groupNames)
-												)}
-											</dd>
-										</div>
-									),
+									([field, label]) => {
+										let value: ReactNode;
+										if (field === "automatedReviewPolicy" && shippedPractice) {
+											value = shippedDefinitionOptions ? (
+												<PracticeEvidenceSummary
+													policy={shippedPractice.automatedReviewPolicy}
+													bindings={shippedPractice.bindings}
+													validation={shippedPractice.automatedReviewValidation}
+													sources={shippedDefinitionOptions.allowedSources}
+													signals={shippedDefinitionOptions.signals}
+													workTypeLabel={artifactKindLabel(shippedPractice.artifactKind)}
+												/>
+											) : (
+												"Evidence details are unavailable for this work type."
+											);
+										} else {
+											value = displayValue(field, shippedDefinition[field], groupNames);
+										}
+										return (
+											<div key={field} className="space-y-1">
+												<dt className="text-xs font-medium">{label}</dt>
+												<dd
+													className={cn(
+														"text-xs break-words whitespace-pre-wrap text-muted-foreground",
+														field === "precomputeScript" && "font-mono",
+													)}
+												>
+													{value}
+												</dd>
+											</div>
+										);
+									},
 								)}
 							</CollapsibleContent>
 						</Collapsible>

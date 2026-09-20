@@ -9,9 +9,10 @@
  * and the broker and volume initialiser from the upstream pins. A job that only renders sets neither.
  */
 import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import { DIGEST, environmentKey, readInventory, type ImageInventory } from "./commit-image-lock.ts";
+import { isSet } from "./lib/env.ts";
 import { SELF_HOST } from "./prepare-host-smoke-env.ts";
 import { commitLockEnvironment, isCommit } from "./reconcile-deployment.ts";
 
@@ -30,12 +31,15 @@ export function smokeLockImages(
 	build?: Build,
 ): Readonly<Record<string, string>> {
 	const images: Record<string, string> = {};
-	for (const image of inventory.images) images[environmentKey(image)] = placeholder(image);
-	for (const upstream of inventory.upstream)
+	for (const image of inventory.images) {
+		images[environmentKey(image)] = placeholder(image);
+	}
+	for (const upstream of inventory.upstream) {
 		images[environmentKey(upstream.name)] =
 			build && BOOTED_UPSTREAM.has(upstream.name)
 				? `${upstream.repository}@${upstream.digest}`
 				: placeholder(upstream.name);
+	}
 	if (build) {
 		images[environmentKey("application-server")] =
 			`ghcr.io/hephaestus-build/application-server@${build.applicationDigest}`;
@@ -46,22 +50,30 @@ export function smokeLockImages(
 
 export function bootedBuild(environment: NodeJS.ProcessEnv): Build | undefined {
 	const { HEAD_SHA: commit, APPLICATION_DIGEST: applicationDigest } = environment;
-	if (!commit && !applicationDigest) return undefined;
-	if (!commit || !applicationDigest)
+	const commitMissing = !isSet(commit);
+	const digestMissing = !isSet(applicationDigest);
+	if (commitMissing && digestMissing) {
+		return undefined;
+	}
+	if (commitMissing || digestMissing) {
 		throw new Error("HEAD_SHA and APPLICATION_DIGEST name the booted build together");
-	if (!isCommit(commit)) throw new Error(`HEAD_SHA must be a full commit SHA, not '${commit}'`);
-	if (!DIGEST.test(applicationDigest))
+	}
+	if (!isCommit(commit)) {
+		throw new Error(`HEAD_SHA must be a full commit SHA, not '${commit}'`);
+	}
+	if (!DIGEST.test(applicationDigest)) {
 		throw new Error("Build returned an invalid application image digest");
+	}
 	return { commit, applicationDigest };
 }
 
 if (import.meta.main) {
 	const build = bootedBuild(process.env);
 	const inventory = await readInventory(
-		join(import.meta.dirname, "..", "security", "release-images.json"),
+		path.join(import.meta.dirname, "..", "security", "release-images.json"),
 	);
 	await writeFile(
-		join(SELF_HOST, "smoke-lock.env"),
+		path.join(SELF_HOST, "smoke-lock.env"),
 		commitLockEnvironment(build?.commit ?? "0".repeat(40), smokeLockImages(inventory, build)),
 	);
 }

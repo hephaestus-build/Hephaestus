@@ -20,7 +20,7 @@ export function RemovableToken({
 }: RemovableTokenProps) {
 	return (
 		<ButtonGroup>
-			<ButtonGroupText className={cn("h-8 min-w-0 max-w-[60vw] sm:max-w-xs", className)}>
+			<ButtonGroupText className={cn("h-8 max-w-[60vw] min-w-0 sm:max-w-xs", className)}>
 				<span className="truncate" title={label}>
 					{label}
 				</span>

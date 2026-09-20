@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "storybook/test";
 
-import { STORY_NOW } from "@/components/common/story-clock";
 import type { ChatMessage } from "@/lib/types";
+import { STORY_NOW } from "@/stories/story-clock";
 
 import { PreviewMessage, ThinkingMessage } from "./Message";
 
@@ -62,7 +62,7 @@ const meta = {
 	},
 	decorators: [
 		(Story) => (
-			<div className="max-w-4xl w-full p-6 bg-background">
+			<div className="w-full max-w-4xl bg-background p-6">
 				<Story />
 			</div>
 		),

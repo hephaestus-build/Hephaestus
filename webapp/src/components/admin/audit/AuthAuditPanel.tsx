@@ -5,16 +5,16 @@ import { toast } from "sonner";
 import { adminListAuthEventsInfiniteOptions } from "@/api/@tanstack/react-query.gen";
 import { adminExportAuthEvents } from "@/api/sdk.gen";
 import type { AuthEventView } from "@/api/types.gen";
+import { AdminAuditTable } from "@/components/admin/audit/AdminAuditTable";
+import { EVENT_TYPE_LABELS } from "@/components/admin/audit/audit-format";
 import {
 	type AuditSearch,
 	dayAfterInstant,
 	dayStartInstant,
 	fromDateRange,
 	toDateRange,
-} from "@/components/admin/audit-shared/audit-search";
-import { nameForRef } from "@/components/admin/audit-shared/name-for-ref";
-import { AdminAuditTable } from "@/components/admin/audit/AdminAuditTable";
-import { EVENT_TYPE_LABELS } from "@/components/admin/audit/audit-format";
+} from "@/components/admin/audit/audit-search";
+import { nameForRef } from "@/components/admin/audit/name-for-ref";
 import { DateRangeFacet } from "@/components/common/DateRangeFacet";
 import { FacetMultiSelect, toFacetOptions } from "@/components/common/FacetMultiSelect";
 import { FilterToolbar } from "@/components/common/FilterToolbar";
@@ -22,10 +22,10 @@ import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { loadedPages, springPageParams } from "@/integrations/tanstack-query/spring-page";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { saveTextFile } from "@/lib/download";
 import { narrowToEnum, nonEmpty } from "@/lib/search-params";
+import { loadedPages, springPageParams } from "@/runtime/tanstack-query/spring-page";
 
 const PAGE_SIZE = 50;
 
@@ -87,7 +87,9 @@ export function AuthAuditPanel({
 	const exportCsv = useMutation({
 		mutationFn: async () => {
 			const { data, error } = await adminExportAuthEvents({ query: filters });
-			if (error || typeof data !== "string") throw new Error("Export failed");
+			if (error !== undefined || typeof data !== "string") {
+				throw new Error("Export failed");
+			}
 			const day = new Date().toISOString().slice(0, 10);
 			saveTextFile(data, `audit-log-${day}.csv`, "text/csv;charset=utf-8;");
 		},
@@ -157,8 +159,12 @@ export function AuthAuditPanel({
 				onResetFilters={reset}
 				hasNextPage={listQuery.hasNextPage}
 				isFetchingNextPage={listQuery.isFetchingNextPage}
-				onLoadMore={() => void listQuery.fetchNextPage()}
-				onRetry={() => void listQuery.refetch()}
+				onLoadMore={() => {
+					void listQuery.fetchNextPage();
+				}}
+				onRetry={() => {
+					void listQuery.refetch();
+				}}
 				onFilterAccount={(accountId) => onSearchChange({ accountId })}
 				onFilterActor={(actorId) => onSearchChange({ actorId })}
 				resolveWorkspaceName={resolveWorkspaceName}

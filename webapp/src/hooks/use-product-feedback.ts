@@ -12,9 +12,10 @@ import {
 	submitWorkspaceProductFeedbackMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { Answer, FeedbackRequest, SurveyInvitation } from "@/api/types.gen";
-import { READERS } from "@/components/feedback/feedback-copy";
-import { studyOf } from "@/components/feedback/survey-purpose-defs";
+import { READERS } from "@/components/product-feedback/feedback-copy";
+import { studyOf } from "@/components/product-feedback/survey-purpose-defs";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
 
 /**
  * The invitation cache across every workspace. An instance-wide survey is handled once per
@@ -38,14 +39,21 @@ const DRAFT_KEPT = "Your draft is still here.";
 
 function submissionError(error: unknown, subject: "survey" | "feedback"): string {
 	const status = problemStatusOf(error);
-	if (status === undefined)
+	if (status === undefined) {
 		return `Couldn't send. ${DRAFT_KEPT} Check your connection and try again.`;
-	if (status === 429) return `Please wait a minute before sending more feedback. ${DRAFT_KEPT}`;
-	if (status === 401) return "Your session has expired. Sign in again before sending.";
-	if (subject === "survey" && status === 409)
+	}
+	if (status === 429) {
+		return `Please wait a minute before sending more feedback. ${DRAFT_KEPT}`;
+	}
+	if (status === 401) {
+		return "Your session has expired. Sign in again before sending.";
+	}
+	if (subject === "survey" && status === 409) {
 		return "This survey was already answered or declined, possibly in another tab.";
-	if (subject === "survey" && status === 404)
+	}
+	if (subject === "survey" && status === 404) {
 		return "This survey is no longer available. Your answers have not been sent.";
+	}
 	return `Couldn't send (${problemDetailOf(error, "the server refused the request")}). ${DRAFT_KEPT}`;
 }
 
@@ -63,7 +71,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 	const slug = workspaceSlug ?? "";
 	const query = useQuery({
 		...listProductSurveyInvitationsOptions({ path: { workspaceSlug: slug } }),
-		enabled: !!workspaceSlug,
+		enabled: hasText(workspaceSlug),
 	});
 	const removeFromCaches = (id: string) => {
 		queryClient.setQueriesData({ queryKey: productSurveyQueryScope() }, (data: typeof query.data) =>
@@ -89,7 +97,9 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 	// too, or the invitation reopens to the same refusal until the next refetch.
 	const dropWhenGone = (error: unknown, variables: { path: { surveyId: string } }) => {
 		const status = problemStatusOf(error);
-		if (status === 404 || status === 409) removeFromCaches(variables.path.surveyId);
+		if (status === 404 || status === 409) {
+			removeFromCaches(variables.path.surveyId);
+		}
 	};
 	const submit = useMutation({
 		...submitProductSurveyResponseMutation(),
@@ -118,31 +128,32 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		onSuccess: (_, variables) => {
 			removeFromCaches(variables.path.surveyId);
 			toast.success("Survey declined. You won't be asked again.", {
-				duration: 15000,
+				duration: 15_000,
 				action: { label: "Undo", onClick: () => undoDecline.mutate({ path: variables.path }) },
 			});
 		},
 		onError: dropWhenGone,
 	});
 	const deciding = () =>
-		!workspaceSlug || queryClient.isMutating({ mutationKey: SURVEY_DECISION }) > 0;
+		!hasText(workspaceSlug) || queryClient.isMutating({ mutationKey: SURVEY_DECISION }) > 0;
+	const failedWrite = [submit, decline].find((mutation) => mutation.isError);
 	return {
 		query,
 		isPending: submit.isPending || decline.isPending || undoDecline.isPending,
-		error: submit.isError
-			? submissionError(submit.error, "survey")
-			: decline.isError
-				? submissionError(decline.error, "survey")
-				: undefined,
+		error: failedWrite ? submissionError(failedWrite.error, "survey") : undefined,
 		reset: () => {
 			submit.reset();
 			decline.reset();
 		},
 		acknowledge: (surveyId: string) => {
-			if (workspaceSlug) acknowledge.mutate({ path: { workspaceSlug: slug, surveyId } });
+			if (hasText(workspaceSlug)) {
+				acknowledge.mutate({ path: { workspaceSlug: slug, surveyId } });
+			}
 		},
 		submit: async (survey: SurveyIdentity, answers: Answer[]) => {
-			if (deciding()) return false;
+			if (deciding()) {
+				return false;
+			}
 			decline.reset();
 			try {
 				await submit.mutateAsync({
@@ -156,7 +167,9 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			}
 		},
 		decline: async (surveyId: string) => {
-			if (deciding()) return false;
+			if (deciding()) {
+				return false;
+			}
 			submit.reset();
 			try {
 				await decline.mutateAsync({ path: { workspaceSlug: slug, surveyId } });
@@ -184,16 +197,19 @@ export function useSubmitProductFeedback(workspaceSlug: string | undefined) {
 	};
 	const workspaceMutation = useMutation({ ...submitWorkspaceProductFeedbackMutation(), ...shared });
 	const instanceMutation = useMutation({ ...submitInstanceProductFeedbackMutation(), ...shared });
-	const mutation = workspaceSlug ? workspaceMutation : instanceMutation;
+	const mutation = hasText(workspaceSlug) ? workspaceMutation : instanceMutation;
 	return {
 		isPending: mutation.isPending,
 		error: mutation.isError ? submissionError(mutation.error, "feedback") : undefined,
 		reset: mutation.reset,
 		submit: async (body: FeedbackRequest) => {
-			if (queryClient.isMutating({ mutationKey: FEEDBACK_SEND }) > 0) return false;
+			if (queryClient.isMutating({ mutationKey: FEEDBACK_SEND }) > 0) {
+				return false;
+			}
 			try {
-				if (workspaceSlug) await workspaceMutation.mutateAsync({ path: { workspaceSlug }, body });
-				else await instanceMutation.mutateAsync({ body });
+				await (hasText(workspaceSlug)
+					? workspaceMutation.mutateAsync({ path: { workspaceSlug }, body })
+					: instanceMutation.mutateAsync({ body }));
 				return true;
 			} catch {
 				return false;

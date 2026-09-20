@@ -4,9 +4,9 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { expect, it, vi } from "vitest";
 
-import { AuthProvider } from "@/integrations/auth/AuthContext";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
+import { AuthProvider } from "@/runtime/auth/AuthContext";
 import { ROUTE_RENDER_WAIT, testQueryClient } from "@/test/router-harness";
 
 const { importFailure } = vi.hoisted(() => ({

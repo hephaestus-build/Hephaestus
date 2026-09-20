@@ -6,9 +6,9 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { asArray, asRecord, asString } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
-const [previousImage, candidateImage, postgresImage] = process.argv.slice(2);
+const [previousImage = "", candidateImage = "", postgresImage = ""] = process.argv.slice(2);
 
-if (!previousImage || !candidateImage || !postgresImage) {
+if (previousImage === "" || candidateImage === "" || postgresImage === "") {
 	throw new Error(
 		"Usage: node scripts/release-upgrade-test.ts <previous-app-image> <candidate-app-image> <postgres-image>",
 	);
@@ -17,7 +17,7 @@ if (!previousImage || !candidateImage || !postgresImage) {
 const WORKSPACE_SLUG = "upgrade-fixture";
 const ADOPTION_WORKSPACE_SLUG = "upgrade-adoption-fixture";
 const HTTP_TIMEOUT_MS = 30_000;
-const READINESS_TIMEOUT_MS = 2_000;
+const READINESS_TIMEOUT_MS = 2000;
 
 const runId = `upgrade-${randomUUID().slice(0, 8)}`;
 const network = runId;
@@ -32,7 +32,7 @@ function docker(...args: string[]): string {
 	return result.stdout.trim();
 }
 
-function fetchWithTimeout(input: string, init?: RequestInit): Promise<Response> {
+async function fetchWithTimeout(input: string, init?: RequestInit): Promise<Response> {
 	return fetch(input, { ...init, signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) });
 }
 
@@ -75,7 +75,9 @@ function startApplication(name: string, image: string): number {
 	);
 	const mapping = docker("port", name, "8080/tcp");
 	const port = Number(mapping.slice(mapping.lastIndexOf(":") + 1));
-	if (!Number.isInteger(port)) throw new Error(`Could not parse application port from ${mapping}`);
+	if (!Number.isInteger(port)) {
+		throw new TypeError(`Could not parse application port from ${mapping}`);
+	}
 	return port;
 }
 
@@ -83,16 +85,20 @@ async function waitUntilReady(name: string, port: number): Promise<void> {
 	const deadline = Date.now() + 180_000;
 	while (Date.now() < deadline) {
 		const state = docker("inspect", "--format", "{{.State.Status}}", name);
-		if (state !== "running") throw new Error(`${name} stopped during startup`);
+		if (state !== "running") {
+			throw new Error(`${name} stopped during startup`);
+		}
 		try {
 			const response = await fetch(`http://127.0.0.1:${port}/actuator/health/readiness`, {
 				signal: AbortSignal.timeout(READINESS_TIMEOUT_MS),
 			});
-			if (response.ok) return;
+			if (response.ok) {
+				return;
+			}
 		} catch {
 			// The endpoint is unavailable while the container starts.
 		}
-		await sleep(2_000);
+		await sleep(2000);
 	}
 	throw new Error(`${name} did not become ready within 180 seconds`);
 }
@@ -128,22 +134,29 @@ async function login(port: number, username: string): Promise<Session> {
 			admin: username === "root",
 		}),
 	});
-	if (response.status !== 204)
+	if (response.status !== 204) {
 		throw new Error(`Dev login returned ${response.status}: ${await response.text()}`);
+	}
 	const authCookie = cookieNamed(response, "HEPHAESTUS_AT");
-	if (!authCookie) throw new Error("Dev login did not return an authentication cookie");
+	if (authCookie === undefined) {
+		throw new Error("Dev login did not return an authentication cookie");
+	}
 	// Fetch a CSRF cookie for the signed-in caller before any write. Dev login is not asked for one,
 	// so it returns none to pair with.
 	const probe = await fetchWithTimeout(`http://127.0.0.1:${port}/user`, {
 		headers: { cookie: authCookie },
 	});
-	if (!probe.ok) throw new Error(`Reading the signed-in user returned ${probe.status}`);
+	if (!probe.ok) {
+		throw new Error(`Reading the signed-in user returned ${probe.status}`);
+	}
 	// This test drives two releases in turn, and the previous one may predate CSRF enforcement: it
 	// issues no token and requires none. Sending the header anyway would be meaningless, and
 	// demanding one here would fail the upgrade path rather than test it. A candidate that requires
 	// a token still fails loudly — as a 403 on the first request that changes something.
 	const csrfCookie = cookieNamed(probe, "XSRF-TOKEN");
-	if (!csrfCookie) return { cookie: authCookie, writeHeaders: {} };
+	if (csrfCookie === undefined) {
+		return { cookie: authCookie, writeHeaders: {} };
+	}
 	return {
 		cookie: `${authCookie}; ${csrfCookie}`,
 		writeHeaders: { "x-xsrf-token": csrfCookie.slice(csrfCookie.indexOf("=") + 1) },
@@ -154,17 +167,21 @@ async function completeTransparencyNotice(port: number, session: Session): Promi
 	const status = await fetchWithTimeout(`http://127.0.0.1:${port}/user/consent`, {
 		headers: { cookie: session.cookie },
 	});
-	if (!status.ok)
+	if (!status.ok) {
 		throw new Error(`Consent status returned ${status.status}: ${await status.text()}`);
+	}
 	const statusBody: unknown = await status.json();
 	if (
 		typeof statusBody !== "object" ||
 		statusBody === null ||
 		!("noticeVersion" in statusBody) ||
 		typeof statusBody.noticeVersion !== "string"
-	)
+	) {
 		throw new Error("Consent status did not return the current notice version");
-	if ("completed" in statusBody && statusBody.completed === true) return;
+	}
+	if ("completed" in statusBody && statusBody.completed === true) {
+		return;
+	}
 	const completed = await fetchWithTimeout(`http://127.0.0.1:${port}/user/consent`, {
 		method: "PUT",
 		headers: {
@@ -181,41 +198,48 @@ async function completeTransparencyNotice(port: number, session: Session): Promi
 				typeof statusBody.researchOrganization === "string" && { participateInResearch: false }),
 		}),
 	});
-	if (!completed.ok)
+	if (!completed.ok) {
 		throw new Error(
 			`Completing the transparency notice returned ${completed.status}: ${await completed.text()}`,
 		);
+	}
 }
 
 async function assertCoreReads(port: number, session: Session): Promise<void> {
 	const user = await fetchWithTimeout(`http://127.0.0.1:${port}/user`, {
 		headers: { cookie: session.cookie },
 	});
-	if (!user.ok) throw new Error(`Core read /user returned ${user.status}: ${await user.text()}`);
+	if (!user.ok) {
+		throw new Error(`Core read /user returned ${user.status}: ${await user.text()}`);
+	}
 	const userBody: unknown = await user.json();
 	if (
 		typeof userBody !== "object" ||
 		userBody === null ||
 		!("displayName" in userBody) ||
 		userBody.displayName !== "Upgrade alice"
-	)
+	) {
 		throw new Error("Core read /user did not return the seeded account");
+	}
 
 	const providers = await fetchWithTimeout(`http://127.0.0.1:${port}/identity-providers`);
-	if (!providers.ok)
+	if (!providers.ok) {
 		throw new Error(
 			`Core read /identity-providers returned ${providers.status}: ${await providers.text()}`,
 		);
+	}
 	const providerBody: unknown = await providers.json();
-	if (!Array.isArray(providerBody) || providerBody.length === 0)
+	if (!Array.isArray(providerBody) || providerBody.length === 0) {
 		throw new Error("Core read /identity-providers returned no providers");
+	}
 	const workspaces = await fetchWithTimeout(`http://127.0.0.1:${port}/workspaces`, {
 		headers: { cookie: session.cookie },
 	});
-	if (!workspaces.ok)
+	if (!workspaces.ok) {
 		throw new Error(
 			`Core read /workspaces returned ${workspaces.status}: ${await workspaces.text()}`,
 		);
+	}
 	const body: unknown = await workspaces.json();
 	if (
 		!Array.isArray(body) ||
@@ -226,8 +250,9 @@ async function assertCoreReads(port: number, session: Session): Promise<void> {
 				"workspaceSlug" in workspace &&
 				workspace.workspaceSlug === WORKSPACE_SLUG,
 		)
-	)
+	) {
 		throw new Error("Core read /workspaces did not return the seeded workspace");
+	}
 }
 
 async function seedWorkspace(port: number, session: Session, workspaceSlug: string): Promise<void> {
@@ -247,8 +272,9 @@ async function seedWorkspace(port: number, session: Session, workspaceSlug: stri
 			personalAccessToken: "upgrade-fixture-token",
 		}),
 	});
-	if (response.status !== 201)
+	if (response.status !== 201) {
 		throw new Error(`Workspace seed returned ${response.status}: ${await response.text()}`);
+	}
 }
 
 async function adoptCatalogPractice(port: number, session: Session): Promise<void> {
@@ -256,8 +282,9 @@ async function adoptCatalogPractice(port: number, session: Session): Promise<voi
 	const offered = await fetchWithTimeout(catalog, {
 		headers: { cookie: session.cookie },
 	});
-	if (!offered.ok)
+	if (!offered.ok) {
 		throw new Error(`Adoptable practices returned ${offered.status}: ${await offered.text()}`);
+	}
 	const entries = asArray(await offered.json(), "Adoptable practices").map((entry, index) => {
 		const summary = asRecord(entry, `Adoptable practices[${index}]`);
 		const availability = asString(
@@ -268,34 +295,41 @@ async function adoptCatalogPractice(port: number, session: Session): Promise<voi
 			availability !== "AVAILABLE" &&
 			availability !== "ADOPTED" &&
 			availability !== "SLUG_CONFLICT"
-		)
+		) {
 			throw new Error(
 				`Adoptable practices[${index}].availability has unexpected value: ${availability}`,
 			);
+		}
 		return {
 			availability,
 			slug: asString(summary.slug, `Adoptable practices[${index}].slug`),
 		};
 	});
 	const practice = entries.find((entry) => entry.availability === "AVAILABLE");
-	if (!practice) throw new Error("Candidate returned no practice available for adoption");
+	if (!practice) {
+		throw new Error("Candidate returned no practice available for adoption");
+	}
 
 	const url = `${catalog}/${encodeURIComponent(practice.slug)}`;
 	const preview = await fetchWithTimeout(url, {
 		headers: { cookie: session.cookie },
 	});
-	if (!preview.ok)
+	if (!preview.ok) {
 		throw new Error(`Adoption preview returned ${preview.status}: ${await preview.text()}`);
+	}
 	const validator = preview.headers.get("etag");
-	if (!validator) throw new Error("Adoption preview returned no ETag to send as If-Match");
+	if (validator === null || validator === "") {
+		throw new Error("Adoption preview returned no ETag to send as If-Match");
+	}
 	const adopted = await fetchWithTimeout(url, {
 		method: "POST",
 		headers: { cookie: session.cookie, "if-match": validator, ...session.writeHeaders },
 	});
-	if (adopted.status !== 201)
+	if (adopted.status !== 201) {
 		throw new Error(
 			`Adopting from the catalog returned ${adopted.status}: ${await adopted.text()}`,
 		);
+	}
 }
 
 function linkWorkspaceIdentity(): void {
@@ -376,8 +410,9 @@ function count(sql: string): number {
 		"--command",
 		sql,
 	);
-	if (!/^[0-9]+$/.test(value))
+	if (!/^[0-9]+$/u.test(value)) {
 		throw new Error(`Expected an integer query result, received: ${value}`);
+	}
 	return Number(value);
 }
 
@@ -403,8 +438,9 @@ function synchronizeBaseline(image: string): void {
 		count(`SELECT count(*) FROM databasechangelog
 			WHERE id = 'baseline_v0_77_4-tag' AND author = 'hephaestus-release'
 			AND filename = '${baselineFile}' AND tag = 'baseline_v0_77_4';`) === 1
-	)
+	) {
 		return;
+	}
 
 	if (
 		count(`SELECT count(*) FROM databasechangelog
@@ -412,10 +448,11 @@ function synchronizeBaseline(image: string): void {
 			AND filename = 'db/changelog/1788679885460_changelog.xml'
 			AND md5sum = '9:658c0b7abed980fcd0e8142337bec5be'
 			AND exectype IN ('EXECUTED', 'MARK_RAN');`) !== 1
-	)
+	) {
 		throw new Error(
 			"The previous release has not reached the verified v0.77.4 baseline cut-point.",
 		);
+	}
 
 	// Use the candidate's bundled Liquibase and resources, not a separately versioned CLI.
 	docker(
@@ -443,8 +480,9 @@ function synchronizeBaseline(image: string): void {
 		count(`SELECT count(*) FROM databasechangelog
 			WHERE id = 'baseline_v0_77_4-tag' AND author = 'hephaestus-release'
 			AND filename = '${baselineFile}' AND tag = 'baseline_v0_77_4';`) !== 1
-	)
+	) {
 		throw new Error("Baseline synchronization did not record the expected tag.");
+	}
 }
 
 try {
@@ -467,13 +505,15 @@ try {
 		postgresImage,
 	);
 
-	for (let attempt = 0; attempt < 60; attempt++) {
+	for (let attempt = 0; attempt < 60; attempt += 1) {
 		try {
 			docker("exec", postgres, "pg_isready", "--username=root", "--dbname=hephaestus");
 			break;
 		} catch {
-			if (attempt === 59) throw new Error("PostgreSQL did not become ready");
-			await sleep(1_000);
+			if (attempt === 59) {
+				throw new Error("PostgreSQL did not become ready");
+			}
+			await sleep(1000);
 		}
 	}
 
@@ -487,8 +527,9 @@ try {
 	await assertCoreReads(port, previousSession);
 	const seededData = dataFingerprint();
 	for (const kind of ["account", "identity", "user", "workspace", "membership", "connection"]) {
-		if (!seededData.includes(`${kind}|`))
+		if (!seededData.includes(`${kind}|`)) {
 			throw new Error(`Previous release did not seed ${kind} data`);
+		}
 	}
 	const previousPractices = workspacePracticeCount(WORKSPACE_SLUG);
 	const previousChanges = appliedChangeCount();
@@ -500,30 +541,35 @@ try {
 	port = startApplication(application, candidateImage);
 	await waitUntilReady(application, port);
 	const upgradedData = dataFingerprint();
-	if (upgradedData !== seededData)
+	if (upgradedData !== seededData) {
 		throw new Error("Seeded application data changed during upgrade");
+	}
 	const upgradedPractices = workspacePracticeCount(WORKSPACE_SLUG);
-	if (upgradedPractices < previousPractices)
+	if (upgradedPractices < previousPractices) {
 		throw new Error(
 			`Workspace practices shrank during upgrade: before=${previousPractices}, after=${upgradedPractices}`,
 		);
+	}
 	const candidateChanges = appliedChangeCount();
-	if (candidateChanges < previousChanges)
+	if (candidateChanges < previousChanges) {
 		throw new Error(
 			`Liquibase history shrank during upgrade: before=${previousChanges}, after=${candidateChanges}`,
 		);
+	}
 	const candidateSession = await login(port, "alice");
 	await completeTransparencyNotice(port, candidateSession);
 	await assertCoreReads(port, candidateSession);
 
 	await seedWorkspace(port, candidateSession, ADOPTION_WORKSPACE_SLUG);
 	const practicesBeforeAdoption = workspacePracticeCount(ADOPTION_WORKSPACE_SLUG);
-	if (practicesBeforeAdoption !== 0)
+	if (practicesBeforeAdoption !== 0) {
 		throw new Error(`New workspace unexpectedly started with ${practicesBeforeAdoption} practices`);
+	}
 	await adoptCatalogPractice(port, candidateSession);
 	const practicesAfterAdoption = workspacePracticeCount(ADOPTION_WORKSPACE_SLUG);
-	if (practicesAfterAdoption !== 1)
+	if (practicesAfterAdoption !== 1) {
 		throw new Error(`Adoption created ${practicesAfterAdoption} practices instead of one`);
+	}
 
 	console.log("Seeded previous-release upgrade passed.");
 } catch (error) {

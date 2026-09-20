@@ -3,7 +3,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { assert, describe, expect, it, vi } from "vitest";
 
-import { bindingsProblem } from "@/components/admin/practice-catalog/bindings";
+import { bindingsProblem } from "@/components/admin/practice-editor/bindings";
 import { buttonVariants } from "@/components/ui/button";
 import {
 	mockAuthorDeclaredEvidenceValidation,
@@ -30,7 +30,7 @@ const cancel = (
 	</Link>
 );
 
-vi.mock("@/components/shared/CodeEditor", () => ({
+vi.mock("@/components/common/CodeEditor", () => ({
 	CodeEditor: () => <div />,
 }));
 
@@ -53,7 +53,7 @@ function submitSpy() {
 	return vi.fn<(value: CuratedPracticeFormValue) => void>();
 }
 
-function renderForm(
+async function renderForm(
 	overrides: Partial<CuratedPracticeFormInitialValue> = {},
 	onSubmit = submitSpy(),
 ) {
@@ -81,8 +81,10 @@ function occasion() {
  */
 function moment(signal: string) {
 	const option = mockPullRequestWorkType.signals.find((candidate) => candidate.signal === signal);
-	if (!option) throw new Error(`No signal option for ${signal}`);
-	return new RegExp(`^${option.displayName}`);
+	if (!option) {
+		throw new Error(`No signal option for ${signal}`);
+	}
+	return new RegExp(`^${option.displayName}`, "u");
 }
 
 describe("CuratedPracticeForm", () => {
@@ -94,16 +96,16 @@ describe("CuratedPracticeForm", () => {
 				groups={[]}
 				definitionOptions={mockPracticeDefinitionOptions}
 				isPending={false}
-				onSubmit={vi.fn()}
+				onSubmit={submitSpy()}
 			/>,
 			"/admin/catalog/new",
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: "Create practice" }));
-		const name = screen.getByRole("textbox", { name: /Name/ });
+		const name = screen.getByRole("textbox", { name: /Name/u });
 		expect(name.getAttribute("aria-invalid")).toBe("true");
 		expect(
-			screen.getByRole("textbox", { name: /What to look for/ }).getAttribute("aria-describedby"),
+			screen.getByRole("textbox", { name: /What to look for/u }).getAttribute("aria-describedby"),
 		).toBe("practice-criteria-description practice-criteria-error");
 		expect(screen.queryByRole("textbox", { name: "Identifier" })).toBeNull();
 	});
@@ -116,18 +118,18 @@ describe("CuratedPracticeForm", () => {
 				groups={[]}
 				definitionOptions={mockPracticeDefinitionOptions}
 				isPending={false}
-				onSubmit={vi.fn()}
+				onSubmit={submitSpy()}
 			/>,
 			"/admin/catalog/new",
 		);
 
 		// The server sorts work types alphabetically; which kind leads the picker is presentation.
 		expect(
-			screen.getByRole("radio", { name: /Pull or merge request/ }).getAttribute("aria-checked"),
+			screen.getByRole("radio", { name: /Pull or merge request/u }).getAttribute("aria-checked"),
 		).toBe("true");
 		expect(
 			occasion()
-				.getByRole("checkbox", { name: /^Opened/ })
+				.getByRole("checkbox", { name: /^Opened/u })
 				.getAttribute("aria-checked"),
 		).toBe("true");
 	});
@@ -140,12 +142,12 @@ describe("CuratedPracticeForm", () => {
 				groups={[]}
 				definitionOptions={mockPracticeDefinitionOptions}
 				isPending={false}
-				onSubmit={vi.fn()}
+				onSubmit={submitSpy()}
 			/>,
 			"/admin/catalog/new",
 		);
 
-		fireEvent.change(screen.getByRole("textbox", { name: /Name/ }), {
+		fireEvent.change(screen.getByRole("textbox", { name: /Name/u }), {
 			target: { value: "A new practice" },
 		});
 		fireEvent.click(screen.getByRole("link", { name: "Cancel" }));
@@ -173,12 +175,12 @@ describe("CuratedPracticeForm", () => {
 				groups={[]}
 				definitionOptions={mockPracticeDefinitionOptions}
 				isPending={false}
-				onSubmit={vi.fn()}
+				onSubmit={submitSpy()}
 			/>,
 			"/admin/catalog/new",
 		);
 
-		fireEvent.change(screen.getByRole("textbox", { name: /Name/ }), {
+		fireEvent.change(screen.getByRole("textbox", { name: /Name/u }), {
 			target: { value: "A new practice" },
 		});
 		fireEvent.click(screen.getByRole("link", { name: "Cancel" }));
@@ -201,7 +203,7 @@ describe("CuratedPracticeForm", () => {
 				isPending={false}
 				conflict
 				onContinueWithDraft={vi.fn()}
-				onSubmit={vi.fn()}
+				onSubmit={submitSpy()}
 			/>,
 			"/admin/catalog/practices/clear-pr-description",
 		);
@@ -222,15 +224,14 @@ describe("CuratedPracticeForm", () => {
 
 		// Nothing adds a second: a practice that would read different evidence at a different moment is
 		// a second practice, which is what the server asks for.
-		expect(screen.queryByRole("button", { name: /Add occasion/ })).toBeNull();
-		await user.click(occasion().getByRole("checkbox", { name: /^Merged/ }));
+		expect(screen.queryByRole("button", { name: /Add occasion/u })).toBeNull();
+		await user.click(occasion().getByRole("checkbox", { name: /^Merged/u }));
 		await user.click(screen.getByRole("button", { name: "Save changes" }));
 
 		const submitted = onSubmit.mock.calls[0]?.[0];
 		assert(submitted);
 		expect(submitted.bindings).toHaveLength(1);
 		const [occasionSubmitted] = submitted.bindings;
-		assert(occasionSubmitted);
 		// Sorted the way the server stores them, so an untouched practice is not dirty on the way back.
 		expect(occasionSubmitted.signals).toStrictEqual(
 			["scm.pull_request.merged", ...mockPullRequestBinding.signals].sort(),
@@ -281,7 +282,7 @@ describe("CuratedPracticeForm", () => {
 			).getByRole("radio", { name: "Required" }),
 		);
 		await user.click(
-			screen.getByRole("checkbox", { name: /absent from Review threads and decisions/ }),
+			screen.getByRole("checkbox", { name: /absent from Review threads and decisions/u }),
 		);
 		await user.click(screen.getByRole("button", { name: "Save changes" }));
 
@@ -309,7 +310,7 @@ describe("CuratedPracticeForm", () => {
 
 		// Absent rather than present-and-refused on save: the source contract cannot promise a whole
 		// capture of the linked work items, so no claim about what is absent from them can rest on it.
-		expect(screen.queryByRole("checkbox", { name: /absent from Linked work items/ })).toBeNull();
+		expect(screen.queryByRole("checkbox", { name: /absent from Linked work items/u })).toBeNull();
 	});
 
 	it("strips the occasion's evidence when the practice stops being reviewed", async () => {
@@ -317,7 +318,7 @@ describe("CuratedPracticeForm", () => {
 		const onSubmit = submitSpy();
 		await renderForm({}, onSubmit);
 
-		await user.click(screen.getByRole("radio", { name: /Guidance only/ }));
+		await user.click(screen.getByRole("radio", { name: /Guidance only/u }));
 		await user.click(screen.getByRole("button", { name: "Save changes" }));
 
 		const submitted = onSubmit.mock.calls[0]?.[0];
@@ -328,7 +329,7 @@ describe("CuratedPracticeForm", () => {
 			evidenceSufficiency: "NONE",
 		});
 		expect(submitted.automatedReviewPolicy.knownLimitations).toStrictEqual([]);
-		await user.click(screen.getByRole("button", { name: /Technical settings/ }));
+		await user.click(screen.getByRole("button", { name: /Technical settings/u }));
 		expect(screen.queryByText("Static analysis")).toBeNull();
 	});
 
@@ -337,8 +338,8 @@ describe("CuratedPracticeForm", () => {
 		const onSubmit = submitSpy();
 		await renderForm({}, onSubmit);
 
-		await user.click(screen.getByRole("radio", { name: /Guidance only/ }));
-		await user.click(screen.getByRole("radio", { name: /AI-supported mentoring/ }));
+		await user.click(screen.getByRole("radio", { name: /Guidance only/u }));
+		await user.click(screen.getByRole("radio", { name: /AI-supported mentoring/u }));
 		await user.click(screen.getByRole("button", { name: "Save changes" }));
 
 		// Saveable, not merely non-empty: a list of purely contextual sources is longer than zero and
@@ -346,7 +347,6 @@ describe("CuratedPracticeForm", () => {
 		const submitted = onSubmit.mock.calls[0]?.[0];
 		assert(submitted);
 		const [resumed] = submitted.bindings;
-		assert(resumed);
 		expect(
 			bindingsProblem(resumed, submitted.automatedReviewPolicy, mockPullRequestWorkType),
 		).toBeUndefined();
@@ -357,12 +357,12 @@ describe("CuratedPracticeForm", () => {
 		const onSubmit = submitSpy();
 		await renderForm({ precomputeScript: "export default {};" }, onSubmit);
 
-		await user.click(screen.getByRole("radio", { name: /Human review needed/ }));
+		await user.click(screen.getByRole("radio", { name: /Human review needed/u }));
 		await user.type(
-			screen.getByRole("textbox", { name: /Why is human review needed/ }),
+			screen.getByRole("textbox", { name: /Why is human review needed/u }),
 			"A mentor must discuss the developer's reasoning.",
 		);
-		await user.click(screen.getByRole("button", { name: /Technical settings/ }));
+		await user.click(screen.getByRole("button", { name: /Technical settings/u }));
 		expect(screen.queryByText("Static analysis")).toBeNull();
 
 		await user.click(screen.getByRole("button", { name: "Save changes" }));
@@ -384,8 +384,8 @@ describe("CuratedPracticeForm", () => {
 			name: "Description for limitation 2",
 		});
 		await user.type(limitationDescription, "Keep this limitation");
-		await user.click(screen.getByRole("radio", { name: /^Issue/ }));
-		await user.click(screen.getByRole("radio", { name: /Pull or merge request/ }));
+		await user.click(screen.getByRole("radio", { name: /^Issue/u }));
+		await user.click(screen.getByRole("radio", { name: /Pull or merge request/u }));
 
 		screen.getByDisplayValue("Keep this limitation");
 	});
@@ -394,9 +394,9 @@ describe("CuratedPracticeForm", () => {
 		const user = userEvent.setup();
 		await renderForm();
 
-		await user.click(screen.getByRole("radio", { name: /Guidance only/ }));
-		await user.click(screen.getByRole("radio", { name: /^Issue/ }));
-		expect(screen.getByRole("radio", { name: /Guidance only/ }).getAttribute("aria-checked")).toBe(
+		await user.click(screen.getByRole("radio", { name: /Guidance only/u }));
+		await user.click(screen.getByRole("radio", { name: /^Issue/u }));
+		expect(screen.getByRole("radio", { name: /Guidance only/u }).getAttribute("aria-checked")).toBe(
 			"true",
 		);
 	});
@@ -405,20 +405,20 @@ describe("CuratedPracticeForm", () => {
 		const user = userEvent.setup();
 		await renderForm();
 
-		await user.click(screen.getByRole("radio", { name: /^Issue/ }));
-		await user.click(occasion().getByRole("checkbox", { name: /^Closed$/ }));
-		await user.click(screen.getByRole("radio", { name: /Pull or merge request/ }));
+		await user.click(screen.getByRole("radio", { name: /^Issue/u }));
+		await user.click(occasion().getByRole("checkbox", { name: /^Closed$/u }));
+		await user.click(screen.getByRole("radio", { name: /Pull or merge request/u }));
 		expect(
 			occasion()
-				.getByRole("checkbox", { name: /^Opened/ })
+				.getByRole("checkbox", { name: /^Opened/u })
 				.getAttribute("aria-checked"),
 		).toBe("true");
-		expect(occasion().queryByRole("checkbox", { name: /^Closed$/ })).toBeNull();
+		expect(occasion().queryByRole("checkbox", { name: /^Closed$/u })).toBeNull();
 
-		await user.click(screen.getByRole("radio", { name: /^Issue/ }));
+		await user.click(screen.getByRole("radio", { name: /^Issue/u }));
 		expect(
 			occasion()
-				.getByRole("checkbox", { name: /^Closed$/ })
+				.getByRole("checkbox", { name: /^Closed$/u })
 				.getAttribute("aria-checked"),
 		).toBe("true");
 	});
@@ -427,11 +427,11 @@ describe("CuratedPracticeForm", () => {
 		const user = userEvent.setup();
 		await renderForm();
 
-		screen.getByRole("switch", { name: /^Include drafts/ });
+		screen.getByRole("switch", { name: /^Include drafts/u });
 
-		await user.click(screen.getByRole("radio", { name: /^Issue/ }));
+		await user.click(screen.getByRole("radio", { name: /^Issue/u }));
 
 		// An issue can never be a draft, so the control for that state is gone rather than inert.
-		expect(screen.queryByRole("switch", { name: /^Include drafts/ })).toBeNull();
+		expect(screen.queryByRole("switch", { name: /^Include drafts/u })).toBeNull();
 	});
 });

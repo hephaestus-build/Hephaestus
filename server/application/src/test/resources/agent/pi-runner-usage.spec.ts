@@ -132,14 +132,14 @@ void test("with no ledger at all the report is exactly the message walk", () => 
 });
 
 void test("every bucket is taken from whichever view saw more, independently", () => {
-	const walked = assistant("kept", { input: 10, output: 9_000, cacheWrite: 40 });
+	const walked = assistant("kept", { input: 10, output: 9000, cacheWrite: 40 });
 	const ledger = newUsageLedger();
-	addAssistantUsage(ledger, assistant("dropped", { input: 5_000, cacheRead: 70 }));
+	addAssistantUsage(ledger, assistant("dropped", { input: 5000, cacheRead: 70 }));
 
 	const reported = extractUsageFromSession(sessionOf(walked), ledger);
 
-	assert.equal(reported.inputTokens, 5_000);
-	assert.equal(reported.outputTokens, 9_000);
+	assert.equal(reported.inputTokens, 5000);
+	assert.equal(reported.outputTokens, 9000);
 	assert.equal(reported.cacheReadTokens, 70);
 	assert.equal(reported.cacheWriteTokens, 40);
 });

@@ -1,13 +1,15 @@
-const SLACK_CHANNEL_ID = /^[CG][A-Z0-9]{8,}$/;
+import { hasText } from "@/lib/text";
+
+const SLACK_CHANNEL_ID = /^[CG][A-Z0-9]{8,}$/u;
 // Anchored to a Slack archive URL path segment so an unrelated all-caps word pasted in prose
 // (e.g. shouting "PLEASE HELP ASAP") can't be mistaken for a channel id.
-const SLACK_CHANNEL_ID_IN_TEXT = /\/archives\/([CG][A-Z0-9]{8,})(?:[/?#]|$)/;
-const SLACK_MENTION = /^<#([CG][A-Z0-9]{8,})(?:\|([^>]+))?>$/;
+const SLACK_CHANNEL_ID_IN_TEXT = /\/archives\/(?<id>[CG][A-Z0-9]{8,})(?:[/?#]|$)/u;
+const SLACK_MENTION = /^<#(?<id>[CG][A-Z0-9]{8,})(?:\|(?<name>[^>]+))?>$/u;
 
-export type SlackChannelReference = {
+export interface SlackChannelReference {
 	channelId: string;
 	channelName?: string;
-};
+}
 
 export function parseSlackChannelReference(value: string): SlackChannelReference | null {
 	const trimmed = value.trim();
@@ -15,11 +17,11 @@ export function parseSlackChannelReference(value: string): SlackChannelReference
 		return { channelId: trimmed };
 	}
 
-	const [, mentionId, mentionName] = SLACK_MENTION.exec(trimmed) ?? [];
-	if (mentionId !== undefined) {
-		return { channelId: mentionId, channelName: mentionName };
+	const mention = SLACK_MENTION.exec(trimmed)?.groups;
+	if (mention?.id !== undefined) {
+		return { channelId: mention.id, channelName: mention.name };
 	}
 
-	const id = SLACK_CHANNEL_ID_IN_TEXT.exec(trimmed)?.[1];
-	return id ? { channelId: id } : null;
+	const id = SLACK_CHANNEL_ID_IN_TEXT.exec(trimmed)?.groups?.id;
+	return hasText(id) ? { channelId: id } : null;
 }

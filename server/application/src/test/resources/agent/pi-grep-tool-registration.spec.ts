@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -20,11 +20,12 @@ import { buildGrepTool } from "../../../main/resources/agent/pi-grep-tool.ts";
  * under that name. Both halves are what the runner relies on.
  */
 void test("the runner's grep replaces the SDK's in a session opened the way the runner opens one", async () => {
-	const cwd = mkdtempSync(join(tmpdir(), "grep-registration-"));
-	const agentDir = join(cwd, ".pi");
+	const cwd = mkdtempSync(path.join(tmpdir(), "grep-registration-"));
+	const agentDir = path.join(cwd, ".pi");
 	mkdirSync(agentDir, { recursive: true });
-	for (const file of ["settings.json", "auth.json", "models.json"])
-		writeFileSync(join(agentDir, file), "{}\n");
+	for (const file of ["settings.json", "auth.json", "models.json"]) {
+		writeFileSync(path.join(agentDir, file), "{}\n");
+	}
 	const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
 	const resourceLoader = new DefaultResourceLoader({
 		cwd,
@@ -35,8 +36,8 @@ void test("the runner's grep replaces the SDK's in a session opened the way the 
 	});
 	await resourceLoader.reload();
 	const modelRuntime = await ModelRuntime.create({
-		authPath: join(agentDir, "auth.json"),
-		modelsPath: join(agentDir, "models.json"),
+		authPath: path.join(agentDir, "auth.json"),
+		modelsPath: path.join(agentDir, "models.json"),
 		allowModelNetwork: false,
 	});
 	process.env.GREP_REGISTRATION_TOKEN = "unused";

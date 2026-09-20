@@ -30,7 +30,7 @@ const REASONS: SignalStateReason[] = [
  * does would make a wrong component and a wrong test agree. `how-much` is the Review page's default
  * section, so it carries no search param.
  */
-const EXPECTED_HREFS: ReadonlyArray<readonly [SignalStateReason, string]> = [
+const EXPECTED_HREFS: readonly (readonly [SignalStateReason, string])[] = [
 	["GATE_SKIPPED", "/w/demo/admin/practices/review?section=when-and-where"],
 	["OUT_OF_REVIEW_SCOPE", "/w/demo/admin/practices/review?section=when-and-where"],
 	["PRACTICES_DISABLED", "/w/demo/admin/practices/review?section=when-and-where"],
@@ -59,7 +59,6 @@ function RefusalCatalogue(props: RefusalFixLinkProps) {
 }
 
 const meta = {
-	title: "Practice trace/Refusal fix link",
 	component: RefusalFixLink,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],
@@ -107,7 +106,7 @@ export const EveryReason: Story = {
 		await expect(links).toHaveLength(EXPECTED_HREFS.length);
 		// A link is read out of its sentence, so its name has to name the destination (WCAG 2.4.4).
 		for (const link of links) {
-			await expect(link).toHaveAccessibleName(/^(Open|Set up) \S/);
+			await expect(link).toHaveAccessibleName(/^(?:Open|Set up) \S/u);
 		}
 	},
 };
@@ -125,7 +124,9 @@ export const WhereEachFixLives: Story = {
 		for (const [reason, href] of EXPECTED_HREFS) {
 			const sentence = SIGNAL_STATE_REASON_LABELS[reason];
 			const row = canvas.getByText(`${sentence}.`).closest("li");
-			if (!(row instanceof HTMLElement)) throw new Error(`No row for ${reason}`);
+			if (!(row instanceof HTMLElement)) {
+				throw new Error(`No row for ${reason}`);
+			}
 			await expect(within(row).getByRole("link")).toHaveAttribute("href", href);
 		}
 	},

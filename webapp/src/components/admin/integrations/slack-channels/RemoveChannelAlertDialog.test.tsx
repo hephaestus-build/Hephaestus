@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SlackMonitoredChannel } from "@/api/types.gen";
 
-import { RemoveChannelAlertDialog } from "./RemoveChannelAlertDialog";
+import {
+	RemoveChannelAlertDialog,
+	type RemoveChannelAlertDialogProps,
+} from "./RemoveChannelAlertDialog";
 
 const base = {
 	slackTeamId: "T0000000000",
@@ -21,21 +24,21 @@ const active: SlackMonitoredChannel = {
 
 describe("RemoveChannelAlertDialog — resets on close", () => {
 	it("clears a typed confirmation and reason after Cancel, ready for the next open", () => {
-		const onOpenChange = vi.fn();
+		const onOpenChange = vi.fn<RemoveChannelAlertDialogProps["onOpenChange"]>();
 		render(
 			<RemoveChannelAlertDialog channel={active} onOpenChange={onOpenChange} onConfirm={vi.fn()} />,
 		);
 
-		fireEvent.change(screen.getByLabelText(/to confirm/i), {
+		fireEvent.change(screen.getByLabelText(/to confirm/iu), {
 			target: { value: active.slackChannelId },
 		});
-		fireEvent.change(screen.getByLabelText(/reason/i), { target: { value: "testing" } });
+		fireEvent.change(screen.getByLabelText(/reason/iu), { target: { value: "testing" } });
 
-		fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+		fireEvent.click(screen.getByRole("button", { name: /^cancel$/iu }));
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 
 		// Same instance persists (no `key`-driven remount) — the fields reset synchronously.
-		expect(screen.getByLabelText<HTMLInputElement>(/to confirm/i).value).toBe("");
-		expect(screen.getByLabelText<HTMLTextAreaElement>(/reason/i).value).toBe("");
+		expect(screen.getByLabelText<HTMLInputElement>(/to confirm/iu).value).toBe("");
+		expect(screen.getByLabelText<HTMLTextAreaElement>(/reason/iu).value).toBe("");
 	});
 });

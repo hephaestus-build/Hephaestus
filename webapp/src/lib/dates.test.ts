@@ -31,7 +31,11 @@ describe("asDate", () => {
  * that is about to be serialised, hiding a field whose real wire spelling nobody ever checked.
  */
 describe("Wire", () => {
-	type View = { id: string; createdAt: Date; nested: { at: Date }[] };
+	interface View {
+		id: string;
+		createdAt: Date;
+		nested: { at: Date }[];
+	}
 
 	it("accepts the wire shape, checked against the generated view", () => {
 		const view: Wire<View> = {

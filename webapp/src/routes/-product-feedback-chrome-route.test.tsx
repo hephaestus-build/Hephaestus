@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SurveyInvitation } from "@/api/types.gen";
-import { surveyInvitation } from "@/components/feedback/product-survey-fixtures";
+import { surveyInvitation } from "@/components/product-feedback/fixtures";
 import type { Wire } from "@/lib/dates";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
@@ -70,9 +70,9 @@ describe("survey invitations in the app chrome", () => {
 			await screen.findByRole("button", { name: "Feedback, 1 survey waiting" }, ROUTE_RENDER_WAIT),
 		);
 
-		const item = await screen.findByRole("menuitem", { name: /Help improve practice feedback/ });
+		const item = await screen.findByRole("menuitem", { name: /Help improve practice feedback/u });
 		expect(item.textContent).toContain("4 questions · about 2 minutes");
-		expect(screen.queryByText(/New survey:/)).toBeNull();
+		expect(screen.queryByText(/New survey:/u)).toBeNull();
 		expect(acknowledgements).toStrictEqual([]);
 	});
 });

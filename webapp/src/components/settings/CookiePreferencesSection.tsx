@@ -3,7 +3,7 @@ import {
 	errorMonitoringConfigured,
 	requestConsentReopen,
 	useCookieConsent,
-} from "@/integrations/consent";
+} from "@/runtime/consent";
 
 /**
  * Lets a signed-in user revisit the cookie choice they made in the consent banner. "Change cookie
@@ -16,9 +16,9 @@ export function CookiePreferencesSection() {
 
 	const parts: string[] = [];
 	if (errorMonitoringConfigured) {
-		parts.push(`Error reports ${consent?.errorMonitoring ? "on" : "off"}`);
+		parts.push(`Error reports ${consent?.errorMonitoring === true ? "on" : "off"}`);
 	}
-	const summary = consent && parts.length ? parts.join(" · ") : "Using essential cookies only.";
+	const summary = consent && parts.length > 0 ? parts.join(" · ") : "Using essential cookies only.";
 
 	return (
 		<section className="space-y-4" aria-labelledby="cookie-preferences-heading">

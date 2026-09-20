@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import type { ReactNode } from "react";
 
 import { cn } from "cn";
 import type { ProfileXpRecord, RepositoryInfo, UserInfo } from "@/api/types.gen";
@@ -26,11 +27,18 @@ export interface ProfileHeaderProps {
 	leaguesEnabled?: boolean;
 }
 
+const FIRST_LEVEL: ProfileXpRecord = {
+	currentLevel: 1,
+	currentLevelXP: 0,
+	totalXP: 0,
+	xpNeeded: 150,
+};
+
 export function ProfileHeader({
 	user,
 	firstContribution,
 	leaguePoints = 0,
-	userXpRecord = { currentLevel: 1, currentLevelXP: 0, totalXP: 0, xpNeeded: 150 },
+	userXpRecord = FIRST_LEVEL,
 	isLoading,
 	progressionEnabled = true,
 	leaguesEnabled = true,
@@ -44,9 +52,35 @@ export function ProfileHeader({
 	const rawTier = getLeagueTier(leaguePoints);
 	const leagueTier = rawTier === "none" ? "bronze" : rawTier;
 
+	let identity: ReactNode = null;
+	if (isLoading) {
+		identity = (
+			<div className="flex min-w-0 flex-col gap-1.5">
+				<Skeleton className="h-7 w-40" />
+				<Skeleton className="h-5 w-48" />
+			</div>
+		);
+	} else if (user) {
+		identity = (
+			<div className="flex min-w-0 flex-col gap-0.5">
+				<h1 className="text-xl leading-tight font-bold break-words md:text-2xl">{user.name}</h1>
+				<div className="flex min-w-0 flex-wrap items-center gap-2">
+					<a
+						className="min-w-0 text-sm break-all text-muted-foreground transition-colors hover:text-primary md:text-base"
+						href={user.htmlUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						{user.htmlUrl ? new URL(user.htmlUrl).host : ""}/{user.login}
+					</a>
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className="flex min-w-0 flex-row items-start justify-between gap-4 sm:gap-6">
-			<div className="flex min-w-0 w-full max-w-xl flex-col gap-4">
+			<div className="flex w-full max-w-xl min-w-0 flex-col gap-4">
 				<div className="flex min-w-0 items-center gap-4">
 					<div className="relative shrink-0">
 						{isLoading ? (
@@ -61,14 +95,14 @@ export function ProfileHeader({
 						)}
 
 						{isLoading ? (
-							<Skeleton className="absolute -bottom-1 -right-1 size-7 rounded-full" />
+							<Skeleton className="absolute -right-1 -bottom-1 size-7 rounded-full" />
 						) : (
 							<Tooltip>
 								<TooltipTrigger
 									render={
 										<div
 											className={cn(
-												"absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full border-2 border-background font-bold text-xs",
+												"absolute -right-1 -bottom-1 flex size-7 items-center justify-center rounded-full border-2 border-background text-xs font-bold",
 												getLeagueColor(leagueTier),
 												getLeagueForegroundColor(leagueTier),
 											)}
@@ -84,28 +118,7 @@ export function ProfileHeader({
 						)}
 					</div>
 
-					{isLoading ? (
-						<div className="flex min-w-0 flex-col gap-1.5">
-							<Skeleton className="h-7 w-40" />
-							<Skeleton className="h-5 w-48" />
-						</div>
-					) : user ? (
-						<div className="flex min-w-0 flex-col gap-0.5">
-							<h1 className="break-words text-xl font-bold leading-tight md:text-2xl">
-								{user.name}
-							</h1>
-							<div className="flex min-w-0 flex-wrap items-center gap-2">
-								<a
-									className="min-w-0 break-all text-sm text-muted-foreground transition-colors hover:text-primary md:text-base"
-									href={user.htmlUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-								>
-									{user.htmlUrl ? new URL(user.htmlUrl).host : ""}/{user.login}
-								</a>
-							</div>
-						</div>
-					) : null}
+					{identity}
 				</div>
 
 				{progressionEnabled &&
@@ -128,7 +141,7 @@ export function ProfileHeader({
 			</div>
 
 			{leaguesEnabled && (
-				<div className="flex flex-col items-center gap-1 shrink-0">
+				<div className="flex shrink-0 flex-col items-center gap-1">
 					{isLoading ? (
 						<>
 							<Skeleton className="size-16 rounded-full" />
@@ -137,7 +150,7 @@ export function ProfileHeader({
 					) : (
 						<>
 							<LeagueIcon leaguePoints={leaguePoints} size="lg" />
-							<span className="text-muted-foreground text-base font-semibold">{leaguePoints}</span>
+							<span className="text-base font-semibold text-muted-foreground">{leaguePoints}</span>
 						</>
 					)}
 				</div>

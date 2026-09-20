@@ -69,7 +69,9 @@ export function armRetryWindow(
 	onExpire: () => void,
 ) {
 	const windowMs = deriveRetryWindow(timeouts, initialElapsedMs, remainingProcessMs);
-	if (windowMs === 0) onExpire();
+	if (windowMs === 0) {
+		onExpire();
+	}
 	return { windowMs, timer: windowMs > 0 ? setTimeout(onExpire, windowMs) : undefined };
 }
 

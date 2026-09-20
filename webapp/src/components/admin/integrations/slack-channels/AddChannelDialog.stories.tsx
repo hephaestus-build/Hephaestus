@@ -62,19 +62,19 @@ type Story = StoryObj<typeof meta>;
 export const WithCandidates: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await userEvent.click(dialog.getByRole("combobox", { name: /^channel$/i }));
+		await userEvent.click(dialog.getByRole("combobox", { name: /^channel$/iu }));
 
-		await expect(await screen.findByRole("option", { name: /#team-archive/i })).toHaveAttribute(
+		await expect(await screen.findByRole("option", { name: /#team-archive/iu })).toHaveAttribute(
 			"aria-disabled",
 			"true",
 		);
-		await expect(await screen.findByRole("option", { name: /#team-listed/i })).toHaveAttribute(
+		await expect(await screen.findByRole("option", { name: /#team-listed/iu })).toHaveAttribute(
 			"aria-disabled",
 			"true",
 		);
 
-		await userEvent.click(screen.getByRole("option", { name: /#general/i }));
-		await userEvent.click(dialog.getByRole("button", { name: /^add channel$/i }));
+		await userEvent.click(screen.getByRole("option", { name: /#general/iu }));
+		await userEvent.click(dialog.getByRole("button", { name: /^add channel$/iu }));
 
 		await expect(args.onSubmit).toHaveBeenCalledWith({
 			slackChannelId: "C05GENERAL5",
@@ -87,13 +87,13 @@ export const WithCandidates: Story = {
 export const NothingChosen: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
-		const submit = dialog.getByRole("button", { name: /^add channel$/i });
+		const submit = dialog.getByRole("button", { name: /^add channel$/iu });
 		await expect(submit).toBeEnabled();
 
 		await userEvent.click(submit);
 
 		await expect(args.onSubmit).not.toHaveBeenCalled();
-		dialog.getByText(/choose a channel from the list/i);
+		dialog.getByText(/choose a channel from the list/iu);
 	},
 };
 
@@ -103,10 +103,10 @@ export const NoCandidates: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await userEvent.type(
-			dialog.getByLabelText(/paste a channel link or id/i),
+			dialog.getByLabelText(/paste a channel link or id/iu),
 			"https://acme.slack.com/archives/C0974LJBPBK",
 		);
-		await userEvent.click(dialog.getByRole("button", { name: /^add channel$/i }));
+		await userEvent.click(dialog.getByRole("button", { name: /^add channel$/iu }));
 
 		await expect(args.onSubmit).toHaveBeenCalledWith({
 			slackChannelId: "C0974LJBPBK",
@@ -120,8 +120,8 @@ export const InvalidPaste: Story = {
 	args: { candidates: [] },
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await userEvent.type(dialog.getByLabelText(/paste a channel link or id/i), "not-a-channel");
-		dialog.getByText(/paste a slack channel url, mention, or/i);
+		await userEvent.type(dialog.getByLabelText(/paste a channel link or id/iu), "not-a-channel");
+		dialog.getByText(/paste a slack channel url, mention, or/iu);
 	},
 };
 
@@ -135,8 +135,8 @@ export const SubmitRejected: Story = {
 	},
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await userEvent.type(dialog.getByLabelText(/paste a channel link or id/i), "C0974LJBPBK");
-		await userEvent.click(dialog.getByRole("button", { name: /^add channel$/i }));
+		await userEvent.type(dialog.getByLabelText(/paste a channel link or id/iu), "C0974LJBPBK");
+		await userEvent.click(dialog.getByRole("button", { name: /^add channel$/iu }));
 
 		await expect(await screen.findByRole("dialog")).toBeVisible();
 	},

@@ -1,6 +1,6 @@
 # ADR 0023: Outline documentation integration — a content source, not a detection surface
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-08-08 — a document is a reviewable artifact)
 **Date:** 2026-07-04
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0015](0015-unified-integration-framework.md) (integration framework), [ADR 0020](0020-context-fabric-everything-is-an-integration.md) (context fabric), [ADR 0014](0014-per-row-aes-gcm-aad-binding.md) (credential encryption), [ADR 0007](0007-sandbox-spi-shape.md) (sandbox SPI shape)

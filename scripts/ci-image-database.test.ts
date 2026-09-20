@@ -22,7 +22,7 @@ function runs(
 		],
 	]);
 	const expression = new Parser(
-		new Lexer(condition.replace(/^\$\{\{\s*|\s*}}$/g, "")).lex().tokens,
+		new Lexer(condition.replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "")).lex().tokens,
 		["needs", "github"],
 		[...functions.values()],
 	).parse();
@@ -132,11 +132,12 @@ void test("every CI image scan receives the producer's immutable artifact ID acr
 			undefined,
 		);
 		if (name === "ci-docker-build.yml") {
-			for (const job of ["webapp-build", "agent-pi-build", "postgres-build"])
+			for (const job of ["webapp-build", "agent-pi-build", "postgres-build"]) {
 				assert.equal(
 					workflow.getIn(["jobs", job, "with", "database-artifact"]),
 					`\${{ inputs.database-artifact }}`,
 				);
+			}
 		} else {
 			const job = name === "reusable-docker-build.yml" ? "scan" : "upstream-images";
 			const steps = workflow.getIn(["jobs", job, "steps"]);
@@ -170,7 +171,7 @@ void test("snapshot identity comes from the producer, not the consumer attempt, 
 	assert.ok(isSeq(producer));
 	const upload = producer.items.find((step) => isMap(step) && step.get("id") === "snapshot");
 	assert.ok(isMap(upload));
-	assert.match(String(upload.get("uses")), /^actions\/upload-artifact@[a-f0-9]{40}$/);
+	assert.match(String(upload.get("uses")), /^actions\/upload-artifact@[a-f0-9]{40}$/u);
 	assert.equal(
 		upload.getIn(["with", "name"]),
 		`trivy-db-\${{ github.run_id }}-\${{ github.run_attempt }}`,

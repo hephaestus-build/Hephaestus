@@ -1,11 +1,11 @@
 import { Link } from "@tanstack/react-router";
 
-import type { ListPracticeReviewFeedbackResponse } from "@/api/types.gen";
+import type { ListPracticeReviewFeedbackResponse, ReviewFeedback } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { TablePagination } from "@/components/common/TablePagination";
 
 import { clearedFeedbackFilters, FeedbackFilters, hasFeedbackFilter } from "./FeedbackFilters";
-import { FeedbackResults } from "./FeedbackResults";
+import { FeedbackResults, type FeedbackResultsState } from "./FeedbackResults";
 import type { FeedbackSearch } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
 
@@ -21,6 +21,22 @@ export interface FeedbackListPageProps {
 	people: ReviewPeople;
 }
 
+function resultsState(
+	isLoading: boolean,
+	rows: ReviewFeedback[],
+	onClearFilters: (() => void) | undefined,
+): FeedbackResultsState {
+	if (isLoading) {
+		return { status: "loading" };
+	}
+	if (rows.length > 0) {
+		return { status: "ready", feedback: rows };
+	}
+	return onClearFilters
+		? { status: "empty", filtered: true, onClearFilters }
+		: { status: "empty", filtered: false };
+}
+
 export function FeedbackListPage({
 	workspaceSlug,
 	search,
@@ -34,7 +50,7 @@ export function FeedbackListPage({
 	const rows = feedback?.content ?? [];
 	// Guarded on the filter being set: see `ObservationsListPage`. Unfiltered, row zero is whoever
 	// sorts first, and their name would be shown against a different person's id.
-	const filteredRecipient = search.recipientUserId != null ? rows[0]?.recipient : undefined;
+	const filteredRecipient = search.recipientUserId == null ? undefined : rows[0]?.recipient;
 	const hasFilter = hasFeedbackFilter(search);
 	const reset = () => onSearchChange(clearedFeedbackFilters());
 	const patchFilter = (patch: Partial<FeedbackSearch>) => onSearchChange({ ...patch, page: 0 });
@@ -50,21 +66,13 @@ export function FeedbackListPage({
 				scopedArtifact={rows[0]?.artifact}
 				recipientName={filteredRecipient?.name ?? filteredRecipient?.login}
 			/>
-			{error ? (
-				<QueryErrorAlert error={error} title="Couldn't load feedback" onRetry={onRetry} />
-			) : (
+			{error == null ? (
 				<FeedbackResults
 					workspaceSlug={workspaceSlug}
-					state={
-						isLoading
-							? { status: "loading" }
-							: rows.length === 0
-								? hasFilter
-									? { status: "empty", filtered: true, onClearFilters: reset }
-									: { status: "empty", filtered: false }
-								: { status: "ready", feedback: rows }
-					}
+					state={resultsState(isLoading, rows, hasFilter ? reset : undefined)}
 				/>
+			) : (
+				<QueryErrorAlert error={error} title="Couldn't load feedback" onRetry={onRetry} />
 			)}
 			<TablePagination
 				page={feedback?.page?.number ?? search.page ?? 0}

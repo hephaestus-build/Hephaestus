@@ -73,7 +73,9 @@ export function usePracticeAutonomyMutations(workspaceSlug: string) {
 		// One write, one refetch — except inside a bulk run, which settles once at the end rather than
 		// refetching the list and the rollup after every PATCH in it.
 		onSettled: () => {
-			if (!bulkRunning.current) invalidateResolved();
+			if (!bulkRunning.current) {
+				invalidateResolved();
+			}
 		},
 	});
 
@@ -81,7 +83,9 @@ export function usePracticeAutonomyMutations(workspaceSlug: string) {
 		practiceSlugs: readonly string[],
 		autonomy: PracticeAutonomy | null,
 	) => {
-		if (practiceSlugs.length === 0) return;
+		if (practiceSlugs.length === 0) {
+			return;
+		}
 		let failed = 0;
 		bulkRunning.current = true;
 		setBulk({ done: 0, total: practiceSlugs.length });

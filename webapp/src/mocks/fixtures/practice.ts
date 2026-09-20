@@ -388,7 +388,9 @@ function workTypeOf(artifactKind: string): PracticeWorkTypeDefinitionOptions {
 	const workType = mockPracticeDefinitionOptions.workTypes.find(
 		(candidate) => candidate.artifactKind === artifactKind,
 	);
-	if (!workType) throw new Error(`No work type fixture for ${artifactKind}`);
+	if (!workType) {
+		throw new Error(`No work type fixture for ${artifactKind}`);
+	}
 	return workType;
 }
 

@@ -53,7 +53,7 @@ export function TracePage({
 
 	if (isLoading) {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{backLink}
 				<div role="status" className="space-y-3">
 					<span className="sr-only">Loading review activity</span>
@@ -64,9 +64,9 @@ export function TracePage({
 			</article>
 		);
 	}
-	if (error) {
+	if (error != null) {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{backLink}
 				<QueryErrorAlert
 					error={error}
@@ -80,7 +80,7 @@ export function TracePage({
 	// the absent status as a lost connection. See `MissingRecordEmpty`.
 	if (!trace) {
 		return (
-			<article className="min-w-0 max-w-4xl space-y-8">
+			<article className="max-w-4xl min-w-0 space-y-8">
 				{backLink}
 				<MissingRecordEmpty title="This work's review activity hasn't loaded" onRetry={onRetry} />
 			</article>
@@ -88,7 +88,7 @@ export function TracePage({
 	}
 
 	return (
-		<article className="min-w-0 max-w-4xl space-y-8">
+		<article className="max-w-4xl min-w-0 space-y-8">
 			{backLink}
 
 			<header className="min-w-0 space-y-4">

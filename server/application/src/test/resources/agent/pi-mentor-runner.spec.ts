@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -14,6 +15,7 @@ import {
 	type MentorOutboundFrame,
 	type MentorRequest,
 } from "../../../main/resources/agent/pi-mentor-protocol.ts";
+import { hasText } from "../../../main/resources/agent/pi-text.ts";
 
 const RUNNER = path.resolve(
 	import.meta.dirname,
@@ -78,7 +80,7 @@ interface Reader {
 function createReader(): Reader {
 	let buffer: Buffer = Buffer.alloc(0);
 	const queue: string[] = [];
-	const waiters: Array<(line: string) => void> = [];
+	const waiters: ((line: string) => void)[] = [];
 	const onLine = (line: string) => {
 		const waiter = waiters.shift();
 		if (waiter) {
@@ -92,31 +94,39 @@ function createReader(): Reader {
 			buffer = Buffer.concat([buffer, chunk]);
 			for (;;) {
 				const nl = buffer.indexOf(0x0a);
-				if (nl === -1) return;
+				if (nl === -1) {
+					return;
+				}
 				let lineBuf = buffer.subarray(0, nl);
 				buffer = buffer.subarray(nl + 1);
-				if (lineBuf.length > 0 && lineBuf[lineBuf.length - 1] === 0x0d) {
-					lineBuf = lineBuf.subarray(0, lineBuf.length - 1);
+				if (lineBuf.length > 0 && lineBuf.at(-1) === 0x0d) {
+					lineBuf = lineBuf.subarray(0, -1);
 				}
-				if (lineBuf.length === 0) continue;
+				if (lineBuf.length === 0) {
+					continue;
+				}
 				onLine(lineBuf.toString("utf8"));
 			}
 		},
 		async next(timeoutMs = 5000): Promise<string> {
 			const queued = queue.shift();
-			if (queued !== undefined) return queued;
-			return new Promise<string>((resolve, reject) => {
-				const timer = setTimeout(() => {
-					const idx = waiters.indexOf(resolveOnce);
-					if (idx >= 0) waiters.splice(idx, 1);
-					reject(new Error(`timeout after ${timeoutMs}ms waiting for line`));
-				}, timeoutMs);
-				const resolveOnce = (line: string) => {
-					clearTimeout(timer);
-					resolve(line);
-				};
-				waiters.push(resolveOnce);
-			});
+			if (queued !== undefined) {
+				return queued;
+			}
+			const { promise, resolve, reject } = Promise.withResolvers<string>();
+			const timer = setTimeout(() => {
+				const idx = waiters.indexOf(resolveOnce);
+				if (idx !== -1) {
+					waiters.splice(idx, 1);
+				}
+				reject(new Error(`timeout after ${timeoutMs}ms waiting for line`));
+			}, timeoutMs);
+			const resolveOnce = (line: string) => {
+				clearTimeout(timer);
+				resolve(line);
+			};
+			waiters.push(resolveOnce);
+			return promise;
 		},
 	};
 }
@@ -147,21 +157,23 @@ function spawnRunner(t: TestContext, env: Record<string, string> = {}): RunnerHa
 	});
 	t.after(() => {
 		try {
-			assert.match(stderr, /WARN MENTOR_RUNNER_PROTOCOL_ONLY=1 — Pi SDK disabled/);
+			assert.match(stderr, /WARN MENTOR_RUNNER_PROTOCOL_ONLY=1 — Pi SDK disabled/u);
 			for (const line of stderr.trim().split("\n")) {
 				if (
 					line.startsWith("[pi-mentor-runner] WARN MENTOR_RUNNER_PROTOCOL_ONLY=1 — Pi SDK disabled")
-				)
+				) {
 					continue;
-				const message = line.replace(/^\[pi-mentor-runner [\dT:.Z-]+\] /, "");
+				}
+				const message = line.replace(/^\[pi-mentor-runner [\dT:.Z-]+\] /u, "");
 				if (
-					env["MENTOR_TURN_BUDGET_MS"] &&
-					/^watchdog fired: rebuilding session for thread=[\da-f-]+$/.test(message)
-				)
+					hasText(env.MENTOR_TURN_BUDGET_MS) &&
+					/^watchdog fired: rebuilding session for thread=[\da-f-]+$/u.test(message)
+				) {
 					continue;
+				}
 				assert.match(
 					message,
-					/^(?:runtime initialised|shutdown requested — exiting|bound thread [\da-f-]+ → .+\.jsonl|prompt resolved: thread=[\da-f-]+)$/,
+					/^(?:runtime initialised|shutdown requested — exiting|bound thread [\da-f-]+ → .+\.jsonl|prompt resolved: thread=[\da-f-]+)$/u,
 				);
 			}
 		} catch (error) {
@@ -177,9 +189,7 @@ function spawnRunner(t: TestContext, env: Record<string, string> = {}): RunnerHa
 
 async function shutdown({ child, send }: RunnerHandle): Promise<void> {
 	send({ jsonrpc: "2.0", id: "shut", method: "shutdown", params: {} });
-	await new Promise<void>((resolve) => {
-		child.on("close", () => resolve());
-	});
+	await once(child, "close");
 }
 
 async function readUntil(
@@ -188,9 +198,11 @@ async function readUntil(
 	opts: { max?: number; timeoutMs?: number } = {},
 ): Promise<MentorOutboundFrame> {
 	const max = opts.max ?? 50;
-	for (let i = 0; i < max; i++) {
+	for (let i = 0; i < max; i += 1) {
 		const frame = parseFrame(await reader.next(opts.timeoutMs ?? 5000));
-		if (predicate(frame)) return frame;
+		if (predicate(frame)) {
+			return frame;
+		}
 	}
 	throw new Error("predicate never matched in readUntil");
 }
@@ -267,7 +279,7 @@ void test("path-traversal threadId rejected with -32600", async (t) => {
 			const reqId = `t-${i}`;
 			runner.send({ jsonrpc: "2.0", id: reqId, method: "open_thread", params: { threadId: evil } });
 			const error = await readError(runner.reader, reqId);
-			assert.equal(error.code, -32600, `expected -32600 for "${evil}"`);
+			assert.equal(error.code, -32_600, `expected -32600 for "${evil}"`);
 		}
 	} catch (error) {
 		runner.diagnose();
@@ -302,7 +314,7 @@ void test("second concurrent prompt returns -32001 turn_already_in_flight", asyn
 			params: { threadId, text: "second" },
 		});
 		const rejected = await readError(runner.reader, "p2");
-		assert.equal(rejected.code, -32001, "expected turn_already_in_flight");
+		assert.equal(rejected.code, -32_001, "expected turn_already_in_flight");
 	} catch (error) {
 		runner.diagnose();
 		throw error;
@@ -322,7 +334,7 @@ void test("prompt on an unopened thread returns -32000", async (t) => {
 			params: { threadId: "66666666-6666-6666-6666-666666666666", text: "hello" },
 		});
 		const error = await readError(runner.reader, "p");
-		assert.equal(error.code, -32000);
+		assert.equal(error.code, -32_000);
 	} catch (error) {
 		runner.diagnose();
 		throw error;
@@ -357,11 +369,13 @@ void test("abort cancels delayed events and permits the next turn", async (t) =>
 				assert.equal(frame.result.aborted, true);
 				abortAcknowledged = true;
 			}
-			if (eventType(frame) === "agent_end") terminalSeen = true;
+			if (eventType(frame) === "agent_end") {
+				terminalSeen = true;
+			}
 		}
 		await assert.rejects(
 			runner.reader.next(250),
-			/timeout/,
+			/timeout/u,
 			"cancelled prompt emitted stale events",
 		);
 
@@ -400,11 +414,11 @@ void test("forwards only the final attempt after Pi settles", async (t) => {
 		await readResult(runner.reader, "p");
 		await readUntil(runner.reader, (frame) => eventType(frame) === "message_update");
 
-		await assert.rejects(runner.reader.next(50), /timeout/, "attempt-level agent_end leaked");
+		await assert.rejects(runner.reader.next(50), /timeout/u, "attempt-level agent_end leaked");
 		const terminal = await readUntil(runner.reader, (frame) => eventType(frame) === "agent_end");
 		assert.equal(eventThreadId(terminal), threadId);
 		assert.ok(isEventNotification(terminal));
-		const event = terminal.params.event;
+		const { event } = terminal.params;
 		assert.equal(event.type, "agent_end");
 		assert.equal(event.willRetry, false);
 		assert.equal(event.messages.length, 1);
@@ -413,7 +427,7 @@ void test("forwards only the final attempt after Pi settles", async (t) => {
 		assert.deepEqual(message.content, [{ type: "text", text: "stub: retry once" }]);
 		await assert.rejects(
 			runner.reader.next(50),
-			/timeout/,
+			/timeout/u,
 			"turn emitted more than one terminal event",
 		);
 	} catch (error) {
@@ -435,7 +449,7 @@ void test("batch JSON-RPC request is rejected with -32600 (not silently dropped)
 		];
 		runner.child.stdin?.write(`${JSON.stringify(batch)}\n`);
 
-		const frame = await readUntil(runner.reader, (f) => isFailure(f) && f.error.code === -32600);
+		const frame = await readUntil(runner.reader, (f) => isFailure(f) && f.error.code === -32_600);
 		assert.equal(frameId(frame), null, "batch rejection error must carry id:null per JSON-RPC §6");
 	} catch (error) {
 		runner.diagnose();
@@ -449,7 +463,7 @@ void test("watchdog cross-thread rebind: no event leakage from concurrently-boun
 	const threadA = "33333333-3333-3333-3333-333333333333";
 	const threadB = "44444444-4444-4444-4444-444444444444";
 	const runner = spawnRunner(t, {
-		MENTOR_RUNNER_STUB_DELAY_MS: "100", // 100+100 = 200 ms total stub turn
+		MENTOR_RUNNER_STUB_DELAY_MS: "100",
 		MENTOR_TURN_BUDGET_MS: "50",
 		MENTOR_TURN_GRACE_MS: "30",
 	});
@@ -477,14 +491,20 @@ void test("watchdog cross-thread rebind: no event leakage from concurrently-boun
 		const start = Date.now();
 		while (Date.now() - start < 2000) {
 			const line = await runner.reader.next(500).catch(() => null);
-			if (line === null) break;
+			if (line === null) {
+				break;
+			}
 			const parsed = parseFrame(line);
-			if (!isEventNotification(parsed)) continue;
+			if (!isEventNotification(parsed)) {
+				continue;
+			}
 			events.push(parsed);
 			if (eventType(parsed) === "turn_watchdog_fired") {
 				watchdogSeenAtIndex = events.length - 1;
 			}
-			if (watchdogSeenAtIndex >= 0 && Date.now() - start > 600) break;
+			if (watchdogSeenAtIndex >= 0 && Date.now() - start > 600) {
+				break;
+			}
 		}
 
 		const summarise = (frames: MentorEventNotification[]) =>

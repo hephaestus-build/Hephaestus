@@ -58,7 +58,7 @@ export const OpenedCalendar: Story = {
 export const ClearAPickedRange: Story = {
 	args: { value: { from: new Date(2026, 6, 1), to: new Date(2026, 6, 24) } },
 	play: async ({ args, canvas }) => {
-		await userEvent.click(await canvas.findByRole("button", { name: /^Observed:/ }));
+		await userEvent.click(await canvas.findByRole("button", { name: /^Observed:/u }));
 		await userEvent.click(await screen.findByRole("button", { name: "Clear selection" }));
 		await expect(args.onChange).toHaveBeenCalledWith(undefined);
 	},

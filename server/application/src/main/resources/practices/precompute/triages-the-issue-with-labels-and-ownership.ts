@@ -12,20 +12,22 @@ export default function triagesTheIssueWithMetadata(
 	m: IssueMeta,
 ) {
 	const labels = m.labels ?? [];
-	const issueType = m.issue_type ?? null;
+	const issueType = m.issue_type ?? "";
+	const hasIssueType = issueType !== "";
 	const assignees = m.assignees ?? [];
-	const milestone = m.milestone ?? null;
+	const milestone = m.milestone ?? "";
+	const hasMilestone = milestone !== "";
 	const state = (m.state ?? "").toUpperCase();
 	const directions: string[] = [
-		`Classification metadata: issueType=${issueType ? `"${issueType}"` : "none"}, labels=${labels.length} [${labels.slice(0, 8).join(", ")}], assignees=${assignees.length}, milestone=${milestone ? `"${milestone}"` : "none"}, state=${state || "?"}.`,
+		`Classification metadata: issueType=${hasIssueType ? `"${issueType}"` : "none"}, labels=${labels.length} [${labels.slice(0, 8).join(", ")}], assignees=${assignees.length}, milestone=${hasMilestone ? `"${milestone}"` : "none"}, state=${state || "?"}.`,
 	];
 	return {
 		hints: [],
 		metrics: {
-			hasIssueType: issueType ? 1 : 0,
+			hasIssueType: hasIssueType ? 1 : 0,
 			labelCount: labels.length,
 			assigneeCount: assignees.length,
-			hasMilestone: milestone ? 1 : 0,
+			hasMilestone: hasMilestone ? 1 : 0,
 		},
 		directions,
 	};

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -18,10 +18,10 @@ import {
 	CuratedPracticeForm,
 	type CuratedPracticeFormValue,
 } from "@/components/admin/curated-catalog/CuratedPracticeForm";
-import { soleBinding } from "@/components/admin/practice-catalog/bindings";
+import { soleBinding } from "@/components/admin/practice-editor/bindings";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { DrawerBody } from "@/components/ui/drawer";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
@@ -42,34 +42,43 @@ export function CuratedPracticeEditLevel({
 	const catalogQuery = useQuery({ ...adminGetCuratedCatalogOptions() });
 	const definitionOptionsQuery = useQuery({ ...adminGetPracticeDefinitionOptionsOptions() });
 
+	let body: ReactNode;
+	if (practiceQuery.isPending || catalogQuery.isPending || definitionOptionsQuery.isPending) {
+		body = (
+			<DrawerBody>
+				<PracticeDefinitionSkeleton />
+			</DrawerBody>
+		);
+	} else if (practiceQuery.isError || catalogQuery.isError || definitionOptionsQuery.isError) {
+		body = (
+			<DrawerBody>
+				<QueryErrorAlert
+					error={practiceQuery.error ?? catalogQuery.error ?? definitionOptionsQuery.error}
+					title="Couldn't load the practice"
+					onRetry={() => {
+						void practiceQuery.refetch();
+						void catalogQuery.refetch();
+						void definitionOptionsQuery.refetch();
+					}}
+				/>
+			</DrawerBody>
+		);
+	} else {
+		body = (
+			<LoadedCuratedPracticeEditor
+				key={practiceSlug}
+				practiceSlug={practiceSlug}
+				initialPractice={practiceQuery.data}
+				groups={catalogQuery.data.groups}
+				definitionOptions={definitionOptionsQuery.data}
+				onDone={onDone}
+			/>
+		);
+	}
+
 	return (
 		<CuratedFormLevel kind="practice-edit" nested={nested}>
-			{practiceQuery.isPending || catalogQuery.isPending || definitionOptionsQuery.isPending ? (
-				<DrawerBody>
-					<PracticeDefinitionSkeleton />
-				</DrawerBody>
-			) : practiceQuery.isError || catalogQuery.isError || definitionOptionsQuery.isError ? (
-				<DrawerBody>
-					<QueryErrorAlert
-						error={practiceQuery.error ?? catalogQuery.error ?? definitionOptionsQuery.error}
-						title="Couldn't load the practice"
-						onRetry={() => {
-							void practiceQuery.refetch();
-							void catalogQuery.refetch();
-							void definitionOptionsQuery.refetch();
-						}}
-					/>
-				</DrawerBody>
-			) : (
-				<LoadedCuratedPracticeEditor
-					key={practiceSlug}
-					practiceSlug={practiceSlug}
-					initialPractice={practiceQuery.data}
-					groups={catalogQuery.data.groups}
-					definitionOptions={definitionOptionsQuery.data}
-					onDone={onDone}
-				/>
-			)}
+			{body}
 		</CuratedFormLevel>
 	);
 }
@@ -200,7 +209,9 @@ function LoadedCuratedPracticeEditor({
 			isResetPending={deleteOverride.isPending}
 			isKeepPending={keepCurrentDefinition.isPending}
 			conflict={conflict}
-			onContinueWithDraft={() => void continueWithDraft()}
+			onContinueWithDraft={() => {
+				void continueWithDraft();
+			}}
 			onUseHephaestusVersion={() => {
 				setConflict(false);
 				deleteOverride.mutate({

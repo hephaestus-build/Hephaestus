@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { expectGenuinelyDisabled } from "@/test/controls";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { reviewFeedbackDetail, workspacePractices } from "./fixtures";
 import { ProposalReviewPage } from "./ProposalReviewPage";
-import { reviewFeedbackDetail, workspacePractices } from "./story-mock-data";
 
 const feedback = {
 	...reviewFeedbackDetail,
@@ -30,7 +30,6 @@ const feedback = {
 };
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Proposal review",
 	component: ProposalReviewPage,
 	parameters: {
 		layout: "padded",
@@ -53,8 +52,10 @@ type Story = StoryObj<typeof meta>;
 export const Ready: Story = {
 	play: async ({ canvas, args }) => {
 		const firstObservation = feedback.observations[0];
-		if (!firstObservation) throw new Error("The proposal story needs a supporting observation");
-		await expect(canvas.getByRole("heading", { name: /Feedback for/ })).toBeVisible();
+		if (!firstObservation) {
+			throw new Error("The proposal story needs a supporting observation");
+		}
+		await expect(canvas.getByRole("heading", { name: /Feedback for/u })).toBeVisible();
 		await expect(canvas.getByText("1 summary and 2 line comments")).toBeVisible();
 		await expect(canvas.getByText("src/main/java/example/RetryService.java")).toBeVisible();
 		await expect(

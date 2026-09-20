@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { hasText } from "@/lib/text";
 
 interface ErrorSearch {
 	code?: string;
@@ -55,7 +56,7 @@ const ERROR_COPY: Record<string, { title: string; description: string }> = {
 };
 
 function describe(code: string | undefined): { title: string; description: string } {
-	if (code && ERROR_COPY[code]) {
+	if (hasText(code) && ERROR_COPY[code]) {
 		return ERROR_COPY[code];
 	}
 	return {

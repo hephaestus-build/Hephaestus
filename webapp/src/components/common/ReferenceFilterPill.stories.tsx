@@ -4,7 +4,6 @@ import { expect, fn, userEvent } from "storybook/test";
 import { ReferenceFilterPill } from "./ReferenceFilterPill";
 
 const meta = {
-	title: "Common/Reference filter pill",
 	component: ReferenceFilterPill,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -32,7 +31,7 @@ export const ClearsTheFilter: Story = {
 	args: { name: "Grace Hopper" },
 	play: async ({ canvas, args }) => {
 		await userEvent.click(
-			canvas.getByRole("button", { name: /clear actor filter \(Grace Hopper\)/i }),
+			canvas.getByRole("button", { name: /clear actor filter \(Grace Hopper\)/iu }),
 		);
 		await expect(args.onClear).toHaveBeenCalledOnce();
 	},

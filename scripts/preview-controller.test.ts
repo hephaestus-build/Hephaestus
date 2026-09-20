@@ -55,8 +55,15 @@ const makeContext = () => ({
 	payload: { repository: { default_branch: "main" }, pull_request: { number: 7 } },
 });
 
-type Deployment = { environment: string; id: number; sha: string };
-type Status = { description?: string | null; state: string };
+interface Deployment {
+	environment: string;
+	id: number;
+	sha: string;
+}
+interface Status {
+	description?: string | null;
+	state: string;
+}
 
 interface GitHubOptions {
 	deployments?: Deployment[];
@@ -88,15 +95,18 @@ const makeGitHub = ({
 	paginate: async <T>(
 		endpoint: (params: Record<string, unknown>) => Promise<{ data: T[] }>,
 		params: Record<string, unknown>,
-	) => (await endpoint(params)).data,
+	) => {
+		const page = await endpoint(params);
+		return page.data;
+	},
 	rest: {
 		pulls: {
-			get: () => Promise.resolve({ data: resolvedPull }),
+			get: async () => ({ data: resolvedPull }),
 		},
 		git: {
 			// The branches diverge from `baseFiles`, empty unless a test is about something leaving a
 			// tree, so `files` is what this head added and `behindFiles` what the default branch did.
-			getTree: (params: Record<string, unknown>) => {
+			getTree: async (params: Record<string, unknown>) => {
 				const trees: Record<string, { filename: string; sha?: string }[]> = {
 					[MERGE_BASE_SHA]: baseFiles,
 					[resolvedPull.head.sha]: files,
@@ -105,7 +115,7 @@ const makeGitHub = ({
 				const entries = trees[String(params.tree_sha)];
 				assert.ok(entries, `unexpected tree ${String(params.tree_sha)}`);
 				assert.equal(params.recursive, "1");
-				return Promise.resolve({
+				return {
 					data: {
 						truncated: false,
 						tree: entries.map((entry) => ({
@@ -114,42 +124,45 @@ const makeGitHub = ({
 							sha: entry.sha ?? `blob-of-${entry.filename}`,
 						})),
 					},
-				});
+				};
 			},
 		},
 		repos: {
-			compareCommitsWithBasehead: (params) => {
+			compareCommitsWithBasehead: async (params) => {
 				// The direction matters: `main...head` makes the merge base the point this branch left
 				// the default branch, which is what both checks are diffed from.
 				assert.equal(params.basehead, `main...${resolvedPull.head.sha}`);
-				return Promise.resolve({
+				return {
 					data: {
 						base_commit: { sha: DEFAULT_BRANCH_SHA },
 						merge_base_commit: { sha: MERGE_BASE_SHA },
 					},
-				});
+				};
 			},
-			getContent: (params: Record<string, unknown>) => {
+			getContent: async (params: Record<string, unknown>) => {
 				const sha = branchBlobs[String(params.path)];
-				if (sha === undefined) return Promise.reject(new Error("404"));
-				return Promise.resolve({ data: { sha } });
+				if (sha === undefined) {
+					throw new Error("404");
+				}
+				return { data: { sha } };
 			},
-			createDeployment: () =>
-				Promise.resolve({ data: { environment: "preview/pr-7", id: 2, sha: "head-sha" } }),
-			createDeploymentStatus: (params: Record<string, unknown>) => {
+			createDeployment: async () => ({
+				data: { environment: "preview/pr-7", id: 2, sha: "head-sha" },
+			}),
+			createDeploymentStatus: async (params: Record<string, unknown>) => {
 				postedStatuses.push(params);
-				return Promise.resolve({ data: {} });
+				return { data: {} };
 			},
-			deleteDeployment: () => Promise.resolve({ data: {} }),
-			listDeployments: (params) =>
-				Promise.resolve({
-					data:
-						typeof params.environment === "string"
-							? deployments.filter((entry) => entry.environment === params.environment)
-							: deployments,
-				}),
-			listDeploymentStatuses: (params) =>
-				Promise.resolve({ data: statuses[Number(params.deployment_id)] ?? defaultStatuses }),
+			deleteDeployment: async () => ({ data: {} }),
+			listDeployments: async (params) => ({
+				data:
+					typeof params.environment === "string"
+						? deployments.filter((entry) => entry.environment === params.environment)
+						: deployments,
+			}),
+			listDeploymentStatuses: async (params) => ({
+				data: statuses[Number(params.deployment_id)] ?? defaultStatuses,
+			}),
 		},
 	},
 });
@@ -200,7 +213,7 @@ void describe("preview controller admission", () => {
 
 		assert.equal(core.outputs.get("eligible"), "false");
 		assert.equal(core.outputs.get("announce"), "true");
-		assert.match(core.outputs.get("reason") ?? "", /fork/);
+		assert.match(core.outputs.get("reason") ?? "", /fork/u);
 	});
 
 	void it("deploys a draft, which is usually the point of asking for a preview", async () => {
@@ -229,7 +242,7 @@ void describe("preview controller admission", () => {
 			});
 
 			assert.equal(core.outputs.get("eligible"), "false", filename);
-			assert.match(core.outputs.get("reason") ?? "", /trusted deployment policy/, filename);
+			assert.match(core.outputs.get("reason") ?? "", /trusted deployment policy/u, filename);
 		}
 	});
 
@@ -260,7 +273,7 @@ void describe("preview controller admission", () => {
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /trusted deployment policy/);
+		assert.match(core.outputs.get("reason") ?? "", /trusted deployment policy/u);
 	});
 
 	void it("refuses a head that took a file out of the deployment control plane", async () => {
@@ -276,7 +289,7 @@ void describe("preview controller admission", () => {
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /docker\/preview\/compose\.app\.yaml/);
+		assert.match(core.outputs.get("reason") ?? "", /docker\/preview\/compose\.app\.yaml/u);
 	});
 
 	void it("deploys a stacked layer, whose base is another pull request's branch", async () => {
@@ -301,14 +314,14 @@ void describe("preview controller admission", () => {
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /not a repository collaborator/);
+		assert.match(core.outputs.get("reason") ?? "", /not a repository collaborator/u);
 	});
 
 	void it("refuses a preview URL template that cannot name the pull request", async () => {
 		process.env.COOLIFY_PREVIEW_URL_TEMPLATE = "https://preview.example";
 		await assert.rejects(
 			resolve({ github: makeGitHub(), context: makeContext(), core: makeCore() }),
-			/must contain \{pr\}/,
+			/must contain \{pr\}/u,
 		);
 	});
 
@@ -328,14 +341,15 @@ void describe("preview controller admission", () => {
 	});
 });
 
-void describe("preview host capacity", () => {
-	const occupants = (count: number): Deployment[] =>
-		Array.from({ length: count }, (_unused, index) => ({
-			environment: `preview/pr-${100 + index}`,
-			id: 100 + index,
-			sha: `head-${index}`,
-		}));
+function occupants(count: number): Deployment[] {
+	return Array.from({ length: count }, (_unused, index) => ({
+		environment: `preview/pr-${100 + index}`,
+		id: 100 + index,
+		sha: `head-${index}`,
+	}));
+}
 
+void describe("preview host capacity", () => {
 	void it("names the occupants when the host is full", async () => {
 		const core = makeCore();
 		await resolve({
@@ -346,7 +360,7 @@ void describe("preview host capacity", () => {
 
 		assert.equal(core.outputs.get("eligible"), "false");
 		assert.equal(core.outputs.get("announce"), "true");
-		assert.match(core.outputs.get("reason") ?? "", /#100, #101, #102/);
+		assert.match(core.outputs.get("reason") ?? "", /#100, #101, #102/u);
 	});
 
 	void it("keeps updating a preview that already holds a slot on a full host", async () => {
@@ -420,7 +434,7 @@ void describe("preview host capacity", () => {
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /1\/1/);
+		assert.match(core.outputs.get("reason") ?? "", /1\/1/u);
 	});
 });
 
@@ -445,19 +459,19 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 			...baseGitHub.rest,
 			repos: {
 				...baseGitHub.rest.repos,
-				createDeploymentStatus: (params: Record<string, unknown>) => {
+				createDeploymentStatus: async (params: Record<string, unknown>) => {
 					initialState = String(params.state);
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
-				createDeployment: (params: Record<string, unknown>) => {
+				createDeployment: async (params: Record<string, unknown>) => {
 					deploymentRef = String(params.ref);
 					description = String(params.description);
-					payload = params.payload;
+					({ payload } = params);
 					assert.equal(params.task, "deploy:preview");
 					assert.equal(params.transient_environment, true);
-					return Promise.resolve({
+					return {
 						data: { environment: "preview/pr-7", id: 2, sha: "head-sha" },
-					});
+					};
 				},
 			},
 		},
@@ -491,10 +505,10 @@ void it("refuses to open a deployment that would carry no title or pull request 
 			PR_URL: "https://github.example/pull/7",
 			SOURCE_RUN_URL: "https://github.example/runs/50",
 		});
-		delete process.env[missing];
+		Reflect.deleteProperty(process.env, missing);
 		await assert.rejects(
-			() => create({ github: makeGitHub(), context: makeContext(), core: makeCore() }),
-			new RegExp(missing),
+			async () => create({ github: makeGitHub(), context: makeContext(), core: makeCore() }),
+			new RegExp(missing, "u"),
 		);
 	}
 });
@@ -581,13 +595,13 @@ void it("marks a successful deployment and explicitly inactivates its predecesso
 			...baseGitHub.rest,
 			repos: {
 				...baseGitHub.rest.repos,
-				createDeploymentStatus: (parameters) => {
+				createDeploymentStatus: async (parameters) => {
 					statuses.push(parameters);
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
-				deleteDeployment: (parameters) => {
+				deleteDeployment: async (parameters) => {
 					deleted.push(Number(parameters.deployment_id));
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
 			},
 		},
@@ -624,9 +638,9 @@ void it("lets cleanup own the final state when the preview opted out mid-deploym
 			...baseGitHub.rest,
 			repos: {
 				...baseGitHub.rest.repos,
-				createDeploymentStatus: (parameters) => {
+				createDeploymentStatus: async (parameters) => {
 					statuses.push(parameters);
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
 			},
 		},
@@ -651,13 +665,13 @@ void it("retires deployment records only after marking them inactive", async () 
 			...baseGitHub.rest,
 			repos: {
 				...baseGitHub.rest.repos,
-				createDeploymentStatus: () => {
+				createDeploymentStatus: async () => {
 					operations.push("inactive");
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
-				deleteDeployment: () => {
+				deleteDeployment: async () => {
 					operations.push("delete");
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
 			},
 		},
@@ -682,13 +696,13 @@ void it("keeps the verified tombstone record when cleanup inactivates a preview"
 			...baseGitHub.rest,
 			repos: {
 				...baseGitHub.rest.repos,
-				createDeploymentStatus: (parameters) => {
+				createDeploymentStatus: async (parameters) => {
 					descriptions.push(String(parameters.description));
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
-				deleteDeployment: () => {
+				deleteDeployment: async () => {
 					deletions += 1;
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
 			},
 		},
@@ -790,8 +804,8 @@ void describe("preview deployment lifecycle", () => {
 		process.env.SOURCE_RUN_URL = "https://runs.example/1";
 
 		await assert.rejects(
-			() => progress({ github: makeGitHub({}), context: makeContext(), core: makeCore() }),
-			/queued or in_progress/,
+			async () => progress({ github: makeGitHub({}), context: makeContext(), core: makeCore() }),
+			/queued or in_progress/u,
 		);
 		assert.equal(postedStatuses.length, 0);
 	});
@@ -840,18 +854,18 @@ void describe("preview schema drift", () => {
 		assert.equal(core.outputs.get("eligible"), "false");
 		const reason = core.outputs.get("reason") ?? "";
 		// The three things the author needs: which file, what goes wrong, and what to do about it.
-		assert.match(reason, /0001_drop\.xml/);
-		assert.match(reason, /have failed to start against it/);
-		assert.match(reason, /Merge main in/);
+		assert.match(reason, /0001_drop\.xml/u);
+		assert.match(reason, /have failed to start against it/u);
+		assert.match(reason, /Merge main in/u);
 		// Both mechanisms were reproduced against a restored database, so the reason names them, and
 		// names the step each one stops at: neither branch reaches a started application.
-		assert.match(reason, /Liquibase re-runs migrations/);
-		assert.match(reason, /startup then fails on a column/);
+		assert.match(reason, /Liquibase re-runs migrations/u);
+		assert.match(reason, /startup then fails on a column/u);
 		// It reports what has gone wrong, never what this branch is guaranteed to hit: a migration
 		// that only adds a table this branch never queries breaks nothing. Two causes it may not
 		// claim are Hibernate validation, which `prod` disables, and a schema mismatch that a
 		// differing blob does not prove.
-		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot|Hibernate/);
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot|Hibernate/u);
 		assert.equal(core.outputs.get("announce"), "true");
 	});
 
@@ -901,7 +915,7 @@ void describe("preview schema drift", () => {
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /0001_drop\.xml/);
+		assert.match(core.outputs.get("reason") ?? "", /0001_drop\.xml/u);
 	});
 
 	void it("ignores prose under the schema directory", async () => {
@@ -934,7 +948,7 @@ void describe("preview schema drift", () => {
 		assert.equal(core.outputs.get("eligible"), "false");
 		// Quiet: the reason is the live deployment, and it posts no comment.
 		assert.equal(core.outputs.get("announce"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /already has a current preview/);
+		assert.match(core.outputs.get("reason") ?? "", /already has a current preview/u);
 	});
 
 	void it("deploys a branch that is merely behind on code, which is almost every branch", async () => {

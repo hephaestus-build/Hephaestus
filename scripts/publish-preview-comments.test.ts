@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import path from "node:path";
 import { test, type TestContext } from "node:test";
 
 import { PREVIEW_COMMENT_LIMIT } from "./lib/preview-comment.ts";
@@ -16,9 +16,9 @@ const comment = (id: number, part = 1, kind = "storybook", login = "github-actio
 });
 
 async function fixture(t: TestContext, comments = [comment(1)]) {
-	const directory = await mkdtemp(resolve(tmpdir(), "publish-preview-"));
-	t.after(() => rm(directory, { recursive: true, force: true }));
-	const path = resolve(directory, "comments.json");
+	const directory = await mkdtemp(path.resolve(tmpdir(), "publish-preview-"));
+	t.after(async () => rm(directory, { recursive: true, force: true }));
+	const commentsFile = path.resolve(directory, "comments.json");
 	const requests: { operation: string; params: Record<string, unknown> }[] = [];
 	let nextId = 100;
 	let state = "open";
@@ -27,47 +27,60 @@ async function fixture(t: TestContext, comments = [comment(1)]) {
 		paginate: async <T>(
 			method: (params: Record<string, unknown>) => Promise<{ data: T[] }>,
 			params: Record<string, unknown>,
-		) => (await method(params)).data,
+		) => {
+			const response = await method(params);
+			return response.data;
+		},
 		rest: {
-			pulls: { get: () => Promise.resolve({ data: { state } }) },
+			pulls: { get: async () => ({ data: { state } }) },
 			issues: {
-				listComments: () => Promise.resolve({ data: comments }),
-				createComment: (params: Record<string, unknown>) => {
+				listComments: async () => ({ data: comments }),
+				createComment: async (params: Record<string, unknown>) => {
 					requests.push({ operation: "create", params });
-					if (requests.length === failAt) throw new Error("API unavailable");
+					if (requests.length === failAt) {
+						throw new Error("API unavailable");
+					}
 					comments.push({
-						id: nextId++,
+						id: nextId,
 						body: String(params.body),
 						user: { login: "github-actions[bot]" },
 					});
-					return Promise.resolve({ data: {} });
+					nextId += 1;
+					return { data: {} };
 				},
-				updateComment: (params: Record<string, unknown>) => {
+				updateComment: async (params: Record<string, unknown>) => {
 					requests.push({ operation: "update", params });
-					if (requests.length === failAt) throw new Error("API unavailable");
+					if (requests.length === failAt) {
+						throw new Error("API unavailable");
+					}
 					const previous = comments.find((entry) => entry.id === params.comment_id);
 					assert.ok(previous);
 					previous.body = String(params.body);
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
-				deleteComment: (params: Record<string, unknown>) => {
+				deleteComment: async (params: Record<string, unknown>) => {
 					requests.push({ operation: "delete", params });
 					const index = comments.findIndex((entry) => entry.id === params.comment_id);
-					assert.ok(index >= 0);
+					assert.ok(index !== -1);
 					comments.splice(index, 1);
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
 			},
 		},
 	};
 	const context = { repo: { owner: "example", repo: "project" }, issue: { number: 7 } };
-	const publish = (teardown = false) =>
-		publishPreviewComments({ github, context, kind: "storybook", ...(!teardown && { path }) });
+	const publish = async (teardown = false) =>
+		publishPreviewComments({
+			github,
+			context,
+			kind: "storybook",
+			...(!teardown && { path: commentsFile }),
+		});
 	return {
 		comments,
 		requests,
 		publish,
-		write: (value: unknown) => writeFile(path, JSON.stringify(value)),
+		write: async (value: unknown) => writeFile(commentsFile, JSON.stringify(value)),
 		close: () => {
 			state = "closed";
 		},
@@ -120,8 +133,8 @@ void test("teardown removes continuation comments, including a delayed build aft
 		f.close();
 		await f.publish(!delayedBuild);
 		assert.equal(f.comments.length, 1);
-		assert.match(f.comments[0]?.body ?? "", /Preview has been removed/);
-		assert.doesNotMatch(f.comments[0]?.body ?? "", /Live preview|live links/);
+		assert.match(f.comments[0]?.body ?? "", /Preview has been removed/u);
+		assert.doesNotMatch(f.comments[0]?.body ?? "", /Live preview|live links/u);
 	}
 });
 
@@ -138,7 +151,7 @@ void test("an API failure propagates and never deletes still-needed previous par
 	const f = await fixture(t, [comment(1), comment(2, 2)]);
 	await f.write(["New"]);
 	f.fail();
-	await assert.rejects(f.publish(), /API unavailable/);
+	await assert.rejects(f.publish(), /API unavailable/u);
 	assert.equal(f.comments.length, 2);
 	assert.deepEqual(
 		f.requests.map((request) => request.operation),
@@ -150,7 +163,7 @@ void test("retrying a partially created list converges without duplicate parts",
 	const f = await fixture(t, []);
 	await f.write(["First", "Second", "Third"]);
 	f.fail(2);
-	await assert.rejects(f.publish(), /API unavailable/);
+	await assert.rejects(f.publish(), /API unavailable/u);
 	assert.equal(f.comments.length, 1);
 	await f.publish();
 	assert.deepEqual(

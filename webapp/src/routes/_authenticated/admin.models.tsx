@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { BrainCircuit, Plus } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -31,16 +31,16 @@ import type {
 	UpdateInstanceLlmSettingsRequest,
 	UpdateLlmConnectionRequest,
 } from "@/api/types.gen";
-import { AdminLlmConnectionFormDialog } from "@/components/admin/llm/AdminLlmConnectionFormDialog";
-import { AdminLlmConnectionsTable } from "@/components/admin/llm/AdminLlmConnectionsTable";
-import { AdminLlmModelAccessDialog } from "@/components/admin/llm/AdminLlmModelAccessDialog";
-import { AdminLlmModelFormDialog } from "@/components/admin/llm/AdminLlmModelFormDialog";
-import { AdminLlmModelsSection } from "@/components/admin/llm/AdminLlmModelsSection";
-import { InstanceLlmSettingsCard } from "@/components/admin/llm/InstanceLlmSettingsCard";
+import { AdminLlmConnectionFormDialog } from "@/components/admin/instance-llm/AdminLlmConnectionFormDialog";
+import { AdminLlmConnectionsTable } from "@/components/admin/instance-llm/AdminLlmConnectionsTable";
+import { AdminLlmModelAccessDialog } from "@/components/admin/instance-llm/AdminLlmModelAccessDialog";
+import { AdminLlmModelFormDialog } from "@/components/admin/instance-llm/AdminLlmModelFormDialog";
+import { AdminLlmModelsSection } from "@/components/admin/instance-llm/AdminLlmModelsSection";
+import { InstanceLlmSettingsCard } from "@/components/admin/instance-llm/InstanceLlmSettingsCard";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
@@ -83,10 +83,10 @@ function AdminLlmPage() {
 
 	const modelsQuery = useQuery(adminListLlmModelsOptions());
 	const allModels = modelsQuery.data ?? [];
-	const modelCounts = allModels.reduce<Record<number, number>>((acc, model) => {
-		acc[model.connectionId] = (acc[model.connectionId] ?? 0) + 1;
-		return acc;
-	}, {});
+	const modelCounts: Record<number, number> = {};
+	for (const model of allModels) {
+		modelCounts[model.connectionId] = (modelCounts[model.connectionId] ?? 0) + 1;
+	}
 	const modelsForSelectedConnection = selectedConnection
 		? allModels.filter((m) => m.connectionId === selectedConnection.id)
 		: [];
@@ -100,9 +100,9 @@ function AdminLlmPage() {
 
 	const settingsQuery = useQuery(adminGetLlmSettingsOptions());
 
-	const invalidateConnections = () =>
+	const invalidateConnections = async () =>
 		queryClient.invalidateQueries({ queryKey: adminListLlmConnectionsQueryKey() });
-	const invalidateModels = () =>
+	const invalidateModels = async () =>
 		queryClient.invalidateQueries({ queryKey: adminListLlmModelsQueryKey() });
 
 	const [challenge, setChallenge] = useState<StepUpChallenge | undefined>(undefined);
@@ -153,7 +153,9 @@ function AdminLlmPage() {
 		...filedUnder(CONNECTION_WRITE_MUTATION_KEY, adminDeleteLlmConnectionMutation()),
 		onSuccess: (_data, variables) => {
 			void invalidateConnections();
-			if (variables.path.id === selectedConnectionId) setSelectedConnectionId(null);
+			if (variables.path.id === selectedConnectionId) {
+				setSelectedConnectionId(null);
+			}
 			toast.success("Connection deleted");
 		},
 		onError: (error) => reportConnectionError(error, "Couldn't delete the connection"),
@@ -203,19 +205,21 @@ function AdminLlmPage() {
 		updateSharing.isPending;
 
 	const handleSaveModel = async (body: AdminLlmModelSaveBody) => {
-		if (!selectedConnection) return;
+		if (!selectedConnection) {
+			return;
+		}
 		try {
 			await saveAdminLlmModelSafely({
 				connectionId: selectedConnection.id,
 				editing: editingModel,
 				body,
 				operations: {
-					create: (connectionId, metadata) =>
+					create: async (connectionId, metadata) =>
 						createModel.mutateAsync({ path: { connectionId }, body: metadata }),
-					updateMetadata: (id, metadata) =>
+					updateMetadata: async (id, metadata) =>
 						updateModel.mutateAsync({ path: { id }, body: metadata }),
-					updatePrice: (id, price) => updatePrice.mutateAsync({ path: { id }, body: price }),
-					updateSharing: (id, sharing) =>
+					updatePrice: async (id, price) => updatePrice.mutateAsync({ path: { id }, body: price }),
+					updateSharing: async (id, sharing) =>
 						updateSharing.mutateAsync({ path: { id }, body: sharing }),
 				},
 			});
@@ -233,6 +237,53 @@ function AdminLlmPage() {
 			}
 		}
 	};
+
+	let modelsSection: ReactNode = null;
+	if (selectedConnection) {
+		if (modelsQuery.isError) {
+			modelsSection = (
+				<QueryErrorAlert
+					error={modelsQuery.error}
+					title="Could not load models"
+					onRetry={() => {
+						void modelsQuery.refetch();
+					}}
+				/>
+			);
+		} else if (modelsQuery.isLoading) {
+			modelsSection = (
+				<div
+					className="flex h-32 items-center justify-center"
+					role="status"
+					aria-label="Loading models"
+				>
+					<Spinner className="size-6" />
+				</div>
+			);
+		} else {
+			modelsSection = (
+				<AdminLlmModelsSection
+					connectionDisplayName={selectedConnection.displayName}
+					connectionEnabled={selectedConnection.enabled}
+					workspaceOptions={workspaceOptions}
+					models={modelsForSelectedConnection}
+					mutatingIds={mutatingModelIds}
+					onAdd={() => {
+						setEditingModel(null);
+						setModelDialogOpen(true);
+					}}
+					onEdit={(model) => {
+						setEditingModel(model);
+						setModelDialogOpen(true);
+					}}
+					onManageAccess={setAccessModel}
+					onDelete={(model) => {
+						deleteModel.mutate({ path: { id: model.id } });
+					}}
+				/>
+			);
+		}
+	}
 
 	return (
 		<PageLayout>
@@ -262,7 +313,9 @@ function AdminLlmPage() {
 				isLoading={connectionsQuery.isLoading}
 				isError={connectionsQuery.isError}
 				error={connectionsQuery.error}
-				onRetry={() => void connectionsQuery.refetch()}
+				onRetry={() => {
+					void connectionsQuery.refetch();
+				}}
 				mutatingIds={mutatingConnectionIds}
 				selectedId={selectedConnection?.id ?? null}
 				onSelect={(connection) => {
@@ -286,48 +339,15 @@ function AdminLlmPage() {
 				}}
 			/>
 
-			{selectedConnection &&
-				(modelsQuery.isError ? (
-					<QueryErrorAlert
-						error={modelsQuery.error}
-						title="Could not load models"
-						onRetry={() => void modelsQuery.refetch()}
-					/>
-				) : modelsQuery.isLoading ? (
-					<div
-						className="flex h-32 items-center justify-center"
-						role="status"
-						aria-label="Loading models"
-					>
-						<Spinner className="size-6" />
-					</div>
-				) : (
-					<AdminLlmModelsSection
-						connectionDisplayName={selectedConnection.displayName}
-						connectionEnabled={selectedConnection.enabled}
-						workspaceOptions={workspaceOptions}
-						models={modelsForSelectedConnection}
-						mutatingIds={mutatingModelIds}
-						onAdd={() => {
-							setEditingModel(null);
-							setModelDialogOpen(true);
-						}}
-						onEdit={(model) => {
-							setEditingModel(model);
-							setModelDialogOpen(true);
-						}}
-						onManageAccess={setAccessModel}
-						onDelete={(model) => {
-							deleteModel.mutate({ path: { id: model.id } });
-						}}
-					/>
-				))}
+			{modelsSection}
 
 			{settingsQuery.isError ? (
 				<QueryErrorAlert
 					error={settingsQuery.error}
 					title="Could not load AI policy"
-					onRetry={() => void settingsQuery.refetch()}
+					onRetry={() => {
+						void settingsQuery.refetch();
+					}}
 				/>
 			) : (
 				<InstanceLlmSettingsCard
@@ -342,7 +362,9 @@ function AdminLlmPage() {
 				open={connectionDialogOpen}
 				onOpenChange={(open) => {
 					setConnectionDialogOpen(open);
-					if (!open) setProbedModels(null);
+					if (!open) {
+						setProbedModels(null);
+					}
 				}}
 				editing={editingConnection}
 				isSubmitting={createConnection.isPending || updateConnection.isPending}
@@ -387,22 +409,30 @@ function AdminLlmPage() {
 						: []
 				}
 				isSubmitting={isModelSaving}
-				onSave={(body) => void handleSaveModel(body)}
+				onSave={(body) => {
+					void handleSaveModel(body);
+				}}
 			/>
 
 			<AdminLlmModelAccessDialog
 				open={accessModel != null}
 				onOpenChange={(open) => {
-					if (!open) setAccessModel(null);
+					if (!open) {
+						setAccessModel(null);
+					}
 				}}
 				model={accessModel}
 				workspaceOptions={workspaceOptions}
 				isLoadingWorkspaces={workspacesQuery.isLoading}
 				workspacesError={workspacesQuery.error}
-				onRetryWorkspaces={() => void workspacesQuery.refetch()}
+				onRetryWorkspaces={() => {
+					void workspacesQuery.refetch();
+				}}
 				isSubmitting={updateSharing.isPending}
 				onSave={(body) => {
-					if (!accessModel) return;
+					if (!accessModel) {
+						return;
+					}
 					updateSharing.mutate(
 						{ path: { id: accessModel.id }, body },
 						{
@@ -411,10 +441,11 @@ function AdminLlmPage() {
 								setAccessModel(null);
 								toast.success("Workspace access updated");
 							},
-							onError: (error) =>
+							onError: (error) => {
 								toast.error("Couldn't update workspace access", {
 									description: problemDetailOf(error),
-								}),
+								});
+							},
 						},
 					);
 				}}
@@ -423,7 +454,9 @@ function AdminLlmPage() {
 			<ConfirmAccessDialog
 				open={challenge !== undefined}
 				onOpenChange={(open) => {
-					if (!open) setChallenge(undefined);
+					if (!open) {
+						setChallenge(undefined);
+					}
 				}}
 				maxAgeSeconds={challenge?.maxAgeSeconds}
 				providers={confirmAccess.providers}

@@ -10,7 +10,6 @@ const ICONS = [
 ];
 
 const meta = {
-	title: "Icons/Brand",
 	tags: ["autodocs"],
 } satisfies Meta;
 
@@ -27,7 +26,7 @@ export const AllMarks: StoryObj = {
 			{ICONS.map(({ label, Icon }) => (
 				<div key={label} className="flex w-24 flex-col items-center gap-2">
 					<Icon className="size-8" />
-					<span className="text-muted-foreground text-xs">{label}</span>
+					<span className="text-xs text-muted-foreground">{label}</span>
 				</div>
 			))}
 		</div>
@@ -41,7 +40,7 @@ export const Sizes: StoryObj = {
 			{["size-3.5", "size-4", "size-5", "size-8"].map((size) => (
 				<div key={size} className="flex flex-col items-center gap-2">
 					<OutlineIcon className={size} />
-					<span className="text-muted-foreground text-xs">{size}</span>
+					<span className="text-xs text-muted-foreground">{size}</span>
 				</div>
 			))}
 		</div>

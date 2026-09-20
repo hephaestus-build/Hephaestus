@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { currentMonthUtc } from "./usage-utils";
 
-const ISO_MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+const ISO_MONTH = /^\d{4}-(?:0[1-9]|1[0-2])$/u;
 
 /**
  * URL state for the AI-usage surfaces. `.catch()` rather than a hard rejection: a hand-typed or stale

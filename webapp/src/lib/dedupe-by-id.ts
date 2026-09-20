@@ -3,8 +3,12 @@
 export function dedupeById<T extends { id?: string | number }>(rows: T[]): T[] {
 	const seen = new Set<string | number>();
 	return rows.filter((row) => {
-		if (row.id == null) return true;
-		if (seen.has(row.id)) return false;
+		if (row.id == null) {
+			return true;
+		}
+		if (seen.has(row.id)) {
+			return false;
+		}
 		seen.add(row.id);
 		return true;
 	});

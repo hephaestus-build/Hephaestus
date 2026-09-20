@@ -2,11 +2,11 @@ import { cn } from "cn";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
-import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { statusToneClass, statusValues } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
-import { statusToneClass, statusValues } from "@/components/practice-vocabulary/status-def";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,7 +45,7 @@ export function PracticeGroupStandingCard({
 	if (isLoading) {
 		return <Skeleton className="h-40 w-full" data-testid="practice-group-standing-loading" />;
 	}
-	if (error) {
+	if (error != null) {
 		return (
 			<QueryErrorAlert
 				error={error}
@@ -65,7 +65,9 @@ export function PracticeGroupStandingCard({
 	});
 	const collapsible = orderedGroups.length > COLLAPSED_GROUP_COUNT;
 	const visibleGroups = showAll ? orderedGroups : orderedGroups.slice(0, COLLAPSED_GROUP_COUNT);
-	const showsRing = Object.values(practicesByGroup ?? {}).some((practices) => practices?.length);
+	const showsRing = Object.values(practicesByGroup ?? {}).some(
+		(practices) => practices !== undefined && practices.length > 0,
+	);
 
 	return (
 		<section className="flex flex-col gap-3" aria-labelledby="practice-groups-heading">
@@ -103,8 +105,8 @@ export function PracticeGroupStandingCard({
 					const breakdown = summarizePracticeStandings(practices);
 					const { Icon, pill } = getGroupVisual(group.icon, group.color);
 					return (
-						<Card key={group.slug} className="relative flex h-full flex-col overflow-hidden pt-0">
-							<CardHeader className="gap-2 border-b bg-muted/40 pt-4">
+						<Card key={group.slug} className="relative flex h-full flex-col overflow-hidden">
+							<CardHeader band className="gap-2">
 								<div className="flex items-center gap-3">
 									<span
 										className={cn(
@@ -114,7 +116,7 @@ export function PracticeGroupStandingCard({
 									>
 										<Icon className="size-5" aria-hidden />
 									</span>
-									<h3 className="min-w-0 flex-1 text-lg font-medium leading-snug">{group.name}</h3>
+									<h3 className="min-w-0 flex-1 text-lg leading-snug font-medium">{group.name}</h3>
 									{onOpenDetails && (
 										<ChevronRightIcon className="size-4 text-muted-foreground" aria-hidden />
 									)}

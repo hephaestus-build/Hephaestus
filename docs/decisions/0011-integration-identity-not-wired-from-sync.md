@@ -24,3 +24,11 @@ Deferred, then deleted. The entire `integration.identity` package
 auth model is documented in **[ADR 0016](0016-unified-identity-keycloak-as-truth.md)**:
 SCM `User` is the authoritative person row, and Keycloak `sub` is persisted on
 `User.keycloak_subject` as the stable join key.
+
+## Update — 2026-09-17
+
+Corrects the last sentence of § Outcome. The model ADR 0016 shipped is itself superseded by
+[ADR 0017](0017-replace-keycloak-with-spring-native-auth.md), whose § Update 2026-09-17 names the
+person row and its join key. The deletion this ADR records holds: `integration/identity/`
+carries no layer of that shape, only the `connect/` package
+[ADR 0015](0015-unified-integration-framework.md) § Update 2026-09-17 lists.

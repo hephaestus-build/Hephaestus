@@ -20,6 +20,7 @@ import type { Practice, PracticeGroup } from "@/api/types.gen";
 import {
 	applyDisplayOrder,
 	applyPracticePlacements,
+	byDisplayOrder,
 	patchGroup,
 	placePractice,
 	practiceCatalogStructureScope,
@@ -31,6 +32,7 @@ import {
 } from "@/hooks/practice-catalog-cache";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { problemStatusOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
 
 const UNASSIGNED = "__unassigned__";
 
@@ -43,7 +45,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 	const practiceMutationKey = ["practice-catalog", workspaceSlug, "practices"] as const;
 	const structuralScope = practiceCatalogStructureScope(workspaceSlug);
 	const applyPlacementCaches = (
-		placements: Array<Pick<Practice, "groupSlug" | "displayOrder" | "slug">>,
+		placements: Pick<Practice, "groupSlug" | "displayOrder" | "slug">[],
 	) => {
 		queryClient.setQueryData<Practice[]>(practicesQueryKey, (practices = []) =>
 			applyPracticePlacements(practices, placements),
@@ -149,7 +151,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 				removeGroup(groups, slug),
 			);
 			const practices = queryClient.getQueryData<Practice[]>(practicesQueryKey) ?? [];
-			if (variables.query?.deletePractices) {
+			if (variables.query?.deletePractices === true) {
 				const deleted = practices.filter((practice) => practice.groupSlug === slug);
 				queryClient.setQueryData<Practice[]>(
 					practicesQueryKey,
@@ -193,10 +195,8 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 		scope: structuralScope,
 		onMutate: async (variables) => {
 			await queryClient.cancelQueries({ queryKey: groupsQueryKey });
-			const previousOrder = queryClient
-				.getQueryData<PracticeGroup[]>(groupsQueryKey)
-				?.slice()
-				.sort((a, b) => a.displayOrder - b.displayOrder)
+			const previousOrder = [...(queryClient.getQueryData<PracticeGroup[]>(groupsQueryKey) ?? [])]
+				.sort(byDisplayOrder)
 				.map((group) => group.slug);
 			queryClient.setQueryData<PracticeGroup[]>(groupsQueryKey, (groups = []) =>
 				applyDisplayOrder(groups, variables.body.orderedSlugs),
@@ -213,9 +213,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 			toast.error("Couldn't reorder the groups");
 		},
 		onSuccess: (updated) => {
-			const order = [...updated]
-				.sort((a, b) => a.displayOrder - b.displayOrder)
-				.map((group) => group.slug);
+			const order = [...updated].sort(byDisplayOrder).map((group) => group.slug);
 			queryClient.setQueryData<PracticeGroup[]>(groupsQueryKey, (groups = []) =>
 				applyDisplayOrder(groups, order),
 			);
@@ -318,7 +316,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 		blockedPracticeOrderBuckets.add(UNASSIGNED);
 		blockedMoveDestinationSlugs.add(UNASSIGNED);
 		for (const practice of practices) {
-			if (practice.groupSlug) {
+			if (hasText(practice.groupSlug)) {
 				blockedPracticeOrderBuckets.add(practice.groupSlug);
 				blockedMoveDestinationSlugs.add(practice.groupSlug);
 			}

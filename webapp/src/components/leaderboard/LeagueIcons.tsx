@@ -227,7 +227,7 @@ export function LeagueMasterIcon({ className, size, ...props }: LeagueIconBasePr
 export function LeagueNoneIcon({ className, size, ...props }: LeagueIconBaseProps) {
 	return (
 		<svg
-			className={cn(leagueVariants({ size }), "text-league-none", className)}
+			className={cn(leagueVariants({ size }), "text-muted-foreground", className)}
 			width="24"
 			height="24"
 			viewBox="0 0 24 24"

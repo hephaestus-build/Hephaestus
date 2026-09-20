@@ -24,7 +24,7 @@ void test(
 		const caller = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		assert.equal(caller.getIn(["jobs", "Changesets", "if"]), "github.event_name == 'pull_request'");
 		const jobPath = ["jobs", "verify-changesets"];
-		assert.match(String(workflow.getIn([...jobPath, "steps", 0, "uses"])), /^actions\/checkout@/);
+		assert.match(String(workflow.getIn([...jobPath, "steps", 0, "uses"])), /^actions\/checkout@/u);
 		assert.equal(workflow.getIn([...jobPath, "steps", 0, "with", "fetch-depth"]), 0);
 		assert.equal(workflow.getIn([...jobPath, "steps", 0, "with", "ref"]), undefined);
 		const base = workflow.getIn([...jobPath, "env", "BASE_SHA"]);
@@ -42,7 +42,7 @@ void test(
 		const shell = releaseStep.get("run");
 		assert.ok(typeof shell === "string");
 		const directory = await mkdtemp(path.join(tmpdir(), "changeset-merge-"));
-		t.after(() => rm(directory, { recursive: true, force: true }));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
 		const env = environmentForGitFixture();
 		const git = (...args: string[]): string => {
 			const result = spawnSync("git", args, { cwd: directory, encoding: "utf8", env });
@@ -91,7 +91,7 @@ void test(
 		git("merge", "--quiet", "--no-ff", "invalid-migration", "-m", "PR merge");
 		const migration = check();
 		assert.notEqual(migration.status, 0);
-		assert.match(migration.stdout, /Do not edit MIGRATION\.md/);
+		assert.match(migration.stdout, /Do not edit MIGRATION\.md/u);
 
 		git("checkout", "--quiet", "-b", "missing-note");
 		await write("server/Service.java", "class Service {}\n");
@@ -101,6 +101,6 @@ void test(
 		git("merge", "--quiet", "--no-ff", "missing-note", "-m", "PR merge");
 		const missing = check();
 		assert.notEqual(missing.status, 0);
-		assert.match(missing.stdout, /changes shipped code but carries no changeset/);
+		assert.match(missing.stdout, /changes shipped code but carries no changeset/u);
 	},
 );

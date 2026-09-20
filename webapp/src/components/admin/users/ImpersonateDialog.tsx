@@ -13,6 +13,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { hasText } from "@/lib/text";
 
 export interface ImpersonationTarget {
 	id?: number;
@@ -74,7 +75,9 @@ export function ImpersonateDialog({
 				<form
 					onSubmit={(event) => {
 						event.preventDefault();
-						if (user && canSubmit) onConfirm(user, trimmed);
+						if (user && canSubmit) {
+							onConfirm(user, trimmed);
+						}
 					}}
 					className="space-y-4"
 				>
@@ -90,7 +93,7 @@ export function ImpersonateDialog({
 							autoFocus
 						/>
 					</div>
-					{errorMessage && (
+					{hasText(errorMessage) && (
 						<p
 							role="alert"
 							className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"

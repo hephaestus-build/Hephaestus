@@ -1,8 +1,8 @@
-import { Progress as ProgressRoot } from "@base-ui/react/progress";
 import { ClockIcon } from "@primer/octicons-react";
 
 import { cn } from "cn";
-import { ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
+import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
+import { hasText } from "@/lib/text";
 
 export interface XpProgressProps {
 	currentXP: number;
@@ -26,29 +26,29 @@ export function XpProgress({
 	return (
 		<div className={cn("w-full", className)}>
 			<div className="flex flex-col gap-1.5">
-				<div className="flex justify-between items-baseline px-0.5">
+				<div className="flex items-baseline justify-between px-0.5">
 					<span className="text-xs font-semibold text-muted-foreground">
 						{currentXP.toLocaleString()} / {xpNeeded.toLocaleString()} XP to Level {nextLevel}
 					</span>
 					<span className="text-xs text-muted-foreground">{totalXP.toLocaleString()} XP total</span>
 				</div>
 
-				<div className="relative h-2.5 w-full bg-secondary/80 rounded-full overflow-hidden">
-					<div className="absolute inset-0 z-10 bg-gradient-to-b from-white/10 to-transparent pointer-events-none rounded-full" />
+				<div className="relative h-2.5 w-full overflow-hidden rounded-full bg-secondary/80">
+					<div className="pointer-events-none absolute inset-0 z-10 rounded-full bg-gradient-to-b from-white/10 to-transparent" />
 
-					<ProgressRoot.Root
+					<Progress
 						value={percentage}
 						aria-label={`Progress to level ${nextLevel}`}
 						className="h-full w-full"
 					>
 						<ProgressTrack className="h-full rounded-full bg-transparent">
-							<ProgressIndicator className="absolute bg-gradient-to-r from-primary/90 to-primary rounded-full transition-all duration-500" />
+							<ProgressIndicator className="absolute rounded-full bg-gradient-to-r from-primary/90 to-primary transition-all duration-500" />
 						</ProgressTrack>
-					</ProgressRoot.Root>
+					</Progress>
 				</div>
 
-				{contributingSince && (
-					<div className="flex items-center gap-1.5 text-muted-foreground text-xs mt-0.5">
+				{hasText(contributingSince) && (
+					<div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
 						<ClockIcon size={12} className="shrink-0" />
 						<span>Contributing since {contributingSince}</span>
 					</div>

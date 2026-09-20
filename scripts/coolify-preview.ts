@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { appendFileSync } from "node:fs";
+import { setTimeout as sleep } from "node:timers/promises";
 
-import { requiredEnv as required, requiredPositiveInteger } from "./lib/env.ts";
+import { isSet, requiredEnv as required, requiredPositiveInteger } from "./lib/env.ts";
 import { isRecord } from "./lib/json.ts";
 
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
@@ -65,10 +66,7 @@ export interface WaitResult {
 const defaultDependencies: Dependencies = {
 	fetch,
 	now: Date.now,
-	sleep: (milliseconds) =>
-		new Promise((resolve) => {
-			setTimeout(resolve, milliseconds);
-		}),
+	sleep,
 };
 
 const DEPLOYMENT_STATES = new Set([
@@ -87,7 +85,7 @@ const BUILD_BUDGET_MS = 1_200_000;
 // it to the build deadline meant a slow build left the probe no time and reported a healthy preview
 // as broken.
 const REACHABILITY_BUDGET_MS = 300_000;
-const POLL_INTERVAL_MS = 5_000;
+const POLL_INTERVAL_MS = 5000;
 const QUEUE_POLL_ATTEMPTS = 18;
 /** CI publishes the commit-addressed tags while its tests are still running, so a missing tag means
  * "not built yet", not "will never exist". Only this message is retried. */
@@ -101,9 +99,9 @@ export class CoolifyAuthError extends Error {
 	}
 }
 const IMAGE_POLL_ATTEMPTS = 60;
-const SHA_PATTERN = /^[a-f0-9]{40}$/;
-const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]+$/;
-const REF_PATTERN = /^[A-Za-z0-9._/-]+$/;
+const SHA_PATTERN = /^[a-f0-9]{40}$/u;
+const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]+$/u;
+const REF_PATTERN = /^[A-Za-z0-9._/-]+$/u;
 
 // Not a wrapper for its own sake: `Array.isArray` narrows `unknown` to `any[]`, which makes every
 // element access an `any` and trips no-unsafe-assignment. This keeps the elements `unknown`.
@@ -113,13 +111,17 @@ function isUnknownArray(value: unknown): value is unknown[] {
 
 function parseHttpsUrl(value: string, name: string): URL {
 	const url = new URL(value);
-	if (url.protocol !== "https:") throw new Error(`${name} must use HTTPS.`);
+	if (url.protocol !== "https:") {
+		throw new Error(`${name} must use HTTPS.`);
+	}
 	return url;
 }
 
 function commonConfig(environment: NodeJS.ProcessEnv): CommonConfig {
 	const appUuid = required(environment, "COOLIFY_APP_UUID");
-	if (!IDENTIFIER_PATTERN.test(appUuid)) throw new Error("COOLIFY_APP_UUID is malformed.");
+	if (!IDENTIFIER_PATTERN.test(appUuid)) {
+		throw new Error("COOLIFY_APP_UUID is malformed.");
+	}
 	return {
 		appUuid,
 		coolifyUrl: parseHttpsUrl(required(environment, "COOLIFY_URL"), "COOLIFY_URL"),
@@ -132,11 +134,13 @@ function pullRequestConfig(environment: NodeJS.ProcessEnv): PullRequestConfig {
 	const baseRef = required(environment, "BASE_REF");
 	const headRef = required(environment, "HEAD_REF");
 	const authorAssociation = required(environment, "AUTHOR_ASSOCIATION");
-	if (!SHA_PATTERN.test(headSha)) throw new Error("HEAD_SHA must be a full lowercase commit SHA.");
+	if (!SHA_PATTERN.test(headSha)) {
+		throw new Error("HEAD_SHA must be a full lowercase commit SHA.");
+	}
 	if (!REF_PATTERN.test(baseRef) || !REF_PATTERN.test(headRef)) {
 		throw new Error("Pull-request refs are malformed.");
 	}
-	if (!/^[A-Z_]+$/.test(authorAssociation)) {
+	if (!/^[A-Z_]+$/u.test(authorAssociation)) {
 		throw new Error("AUTHOR_ASSOCIATION is malformed.");
 	}
 	return {
@@ -199,19 +203,25 @@ export function buildWebhookPayload(config: PullRequestConfig, action: WebhookAc
 }
 
 export function assertWebhookAccepted(value: unknown): void {
-	if (!isUnknownArray(value)) throw new Error("Coolify returned a malformed webhook response.");
+	if (!isUnknownArray(value)) {
+		throw new Error("Coolify returned a malformed webhook response.");
+	}
 	const queued = value.filter((entry) => isRecord(entry) && entry.status === "queued");
-	if (value.length === 1 && queued.length === 1) return;
+	if (value.length === 1 && queued.length === 1) {
+		return;
+	}
 	const rejected = value.find((entry) => isRecord(entry) && entry.status !== "queued");
 	const message =
 		isRecord(rejected) && typeof rejected.message === "string"
-			? rejected.message.replaceAll(/[\r\n]+/g, " ").slice(0, 200)
+			? rejected.message.replaceAll(/[\r\n]+/gu, " ").slice(0, 200)
 			: "No application accepted the webhook.";
 	throw new Error(message);
 }
 
 function deploymentRecord(value: unknown): DeploymentRecord | undefined {
-	if (!isRecord(value)) return undefined;
+	if (!isRecord(value)) {
+		return undefined;
+	}
 	const pullRequestId = Number(value.pull_request_id);
 	if (
 		typeof value.commit !== "string" ||
@@ -222,7 +232,9 @@ function deploymentRecord(value: unknown): DeploymentRecord | undefined {
 	) {
 		return undefined;
 	}
-	if (!IDENTIFIER_PATTERN.test(value.deployment_uuid)) return undefined;
+	if (!IDENTIFIER_PATTERN.test(value.deployment_uuid)) {
+		return undefined;
+	}
 	return {
 		commit: value.commit,
 		createdAt: value.created_at,
@@ -261,7 +273,9 @@ function deploymentInventory(value: unknown): { records: DeploymentRecord[]; tot
 	}
 	const records = value.deployments.map((entry) => {
 		const record = deploymentRecord(entry);
-		if (!record) throw new Error("Coolify returned a malformed deployment inventory record.");
+		if (!record) {
+			throw new Error("Coolify returned a malformed deployment inventory record.");
+		}
 		return record;
 	});
 	return { records, total };
@@ -274,7 +288,9 @@ export function validateDeploymentProvenance(
 	expectedUuid: string,
 ): DeploymentRecord {
 	const record = deploymentRecord(value);
-	if (!record) throw new Error("Coolify returned a malformed deployment record.");
+	if (!record) {
+		throw new Error("Coolify returned a malformed deployment record.");
+	}
 	if (
 		record.pullRequestId !== prNumber ||
 		record.commit !== expectedSha ||
@@ -287,7 +303,9 @@ export function validateDeploymentProvenance(
 
 async function jsonResponse(response: Response, operation: string): Promise<unknown> {
 	const text = await response.text();
-	if (!response.ok) throw new Error(`${operation} returned HTTP ${response.status}.`);
+	if (!response.ok) {
+		throw new Error(`${operation} returned HTTP ${response.status}.`);
+	}
 	try {
 		return JSON.parse(text) as unknown;
 	} catch {
@@ -356,7 +374,9 @@ async function readDeploymentInventory(
 			signal: AbortSignal.timeout(15_000),
 		},
 	);
-	if (!response) throw new Error(`Could not reach Coolify: ${error ?? "unknown"}.`);
+	if (!response) {
+		throw new Error(`Could not reach Coolify: ${error ?? "unknown"}.`);
+	}
 	if (response.status === 401 || response.status === 403) {
 		throw new CoolifyAuthError();
 	}
@@ -380,19 +400,27 @@ export async function queuePreview(
 		.filter((record) => record.status === "queued" || record.status === "in_progress")
 		.toSorted((left, right) => left.createdAt.localeCompare(right.createdAt))
 		.at(-1);
-	if (active) return active.deploymentUuid;
+	if (active) {
+		return active.deploymentUuid;
+	}
 	const excludedUuids = new Set<string>();
-	for (const record of previous) excludedUuids.add(record.deploymentUuid);
+	for (const record of previous) {
+		excludedUuids.add(record.deploymentUuid);
+	}
 	await sendWebhook(config, "opened", dependencies);
 	for (let attempt = 0; attempt < QUEUE_POLL_ATTEMPTS; attempt += 1) {
 		const pause = async (): Promise<void> => {
-			if (attempt < QUEUE_POLL_ATTEMPTS - 1) await dependencies.sleep(POLL_INTERVAL_MS);
+			if (attempt < QUEUE_POLL_ATTEMPTS - 1) {
+				await dependencies.sleep(POLL_INTERVAL_MS);
+			}
 		};
 		let inventory: unknown;
 		try {
 			inventory = await readDeploymentInventory(config, dependencies);
 		} catch (error) {
-			if (error instanceof CoolifyAuthError) throw error;
+			if (error instanceof CoolifyAuthError) {
+				throw error;
+			}
 			await pause();
 			continue;
 		}
@@ -402,7 +430,9 @@ export async function queuePreview(
 			config.headSha,
 			excludedUuids,
 		);
-		if (deployment) return deployment.deploymentUuid;
+		if (deployment) {
+			return deployment.deploymentUuid;
+		}
 		await pause();
 	}
 	throw new Error("Coolify accepted the webhook but no exact-SHA deployment record appeared.");
@@ -413,14 +443,48 @@ export function deploymentLogUrl(
 	config: Pick<DeploymentConfig, "coolifyUrl">,
 	candidate?: string,
 ): string {
-	if (!candidate || /\s/.test(candidate)) return config.coolifyUrl.href;
-	if (candidate.startsWith("/project/")) return new URL(candidate, config.coolifyUrl).href;
+	if (!isSet(candidate) || /\s/u.test(candidate)) {
+		return config.coolifyUrl.href;
+	}
+	if (candidate.startsWith("/project/")) {
+		return new URL(candidate, config.coolifyUrl).href;
+	}
 	try {
 		const parsed = new URL(candidate);
 		return parsed.protocol === "https:" ? parsed.href : config.coolifyUrl.href;
 	} catch {
 		return config.coolifyUrl.href;
 	}
+}
+
+/** Coolify has finished; the preview itself still has to answer. */
+async function waitForReachability(
+	config: DeploymentConfig,
+	dependencies: Dependencies,
+	logUrl: string,
+): Promise<WaitResult> {
+	const healthDeadline = dependencies.now() + REACHABILITY_BUDGET_MS;
+	while (dependencies.now() < healthDeadline) {
+		// Scoped to this probe: a connection refused from a still-booting preview must
+		// not be reported as a failure to reach Coolify.
+		const { response: health } = await attemptFetch(dependencies, config.previewUrl, {
+			redirect: "manual",
+			signal: AbortSignal.timeout(10_000),
+		});
+		if (health?.ok === true) {
+			return {
+				description: "Approved preview is deployed and reachable.",
+				logUrl,
+				state: "success",
+			};
+		}
+		await dependencies.sleep(POLL_INTERVAL_MS);
+	}
+	return {
+		description: "Coolify finished, but the preview did not return HTTP 2xx.",
+		logUrl,
+		state: "failure",
+	};
 }
 
 export async function waitForDeployment(
@@ -461,28 +525,7 @@ export async function waitForDeployment(
 				);
 				logUrl = deploymentLogUrl(config, record.deploymentUrl);
 				if (record.status === "finished") {
-					const healthDeadline = dependencies.now() + REACHABILITY_BUDGET_MS;
-					while (dependencies.now() < healthDeadline) {
-						// Scoped to this probe: a connection refused from a still-booting preview must
-						// not be reported as a failure to reach Coolify.
-						const { response: health } = await attemptFetch(dependencies, config.previewUrl, {
-							redirect: "manual",
-							signal: AbortSignal.timeout(10_000),
-						});
-						if (health?.ok) {
-							return {
-								description: "Approved preview is deployed and reachable.",
-								logUrl,
-								state: "success",
-							};
-						}
-						await dependencies.sleep(POLL_INTERVAL_MS);
-					}
-					return {
-						description: "Coolify finished, but the preview did not return HTTP 2xx.",
-						logUrl,
-						state: "failure",
-					};
+					return await waitForReachability(config, dependencies, logUrl);
 				}
 				if (record.status === "failed") {
 					return {
@@ -494,10 +537,12 @@ export async function waitForDeployment(
 				if (record.status === "cancelled" || record.status === "cancelled-by-user") {
 					return { description: "Preview deployment was cancelled.", logUrl, state: "failure" };
 				}
-			} catch (invalid) {
+			} catch (invalidRecordError) {
 				return {
 					description:
-						invalid instanceof Error ? invalid.message : "Invalid Coolify deployment response.",
+						invalidRecordError instanceof Error
+							? invalidRecordError.message
+							: "Invalid Coolify deployment response.",
 					logUrl,
 					state: "failure",
 				};
@@ -545,7 +590,9 @@ export function loginToRegistry(
 		["login", "ghcr.io", "-u", required(environment, "GITHUB_ACTOR"), "--password-stdin"],
 		{ input: required(environment, "GHCR_TOKEN") },
 	);
-	if (login.status !== 0) throw new Error("Could not authenticate to GHCR.");
+	if (login.status !== 0) {
+		throw new Error("Could not authenticate to GHCR.");
+	}
 }
 
 export function checkImages(
@@ -555,8 +602,10 @@ export function checkImages(
 ): void {
 	const headSha = required(environment, "HEAD_SHA");
 	const repository = required(environment, "GITHUB_REPOSITORY");
-	if (!SHA_PATTERN.test(headSha)) throw new Error("HEAD_SHA must be a full lowercase commit SHA.");
-	if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
+	if (!SHA_PATTERN.test(headSha)) {
+		throw new Error("HEAD_SHA must be a full lowercase commit SHA.");
+	}
+	if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
 		throw new Error("GITHUB_REPOSITORY is malformed.");
 	}
 	for (const image of ["application-server", "webapp", "postgres"]) {
@@ -571,7 +620,7 @@ export function checkImages(
 			"{{.Manifest.Digest}}",
 		]);
 		const digest = inspect.stdout.trim();
-		if (inspect.status !== 0 || !/^sha256:[a-f0-9]{64}$/.test(digest)) {
+		if (inspect.status !== 0 || !/^sha256:[a-f0-9]{64}$/u.test(digest)) {
 			throw new Error(`${IMAGE_PENDING}: ${reference}`);
 		}
 		// `gh attestation verify` exits non-zero unless at least one attestation for this digest was
@@ -616,8 +665,12 @@ export async function awaitImages(
 			checkImages(environment, runner, log);
 			return;
 		} catch (error) {
-			if (!(error instanceof Error) || !error.message.startsWith(IMAGE_PENDING)) throw error;
-			if (attempt === 0) log("::notice::Waiting for CI to publish this commit's images.");
+			if (!(error instanceof Error) || !error.message.startsWith(IMAGE_PENDING)) {
+				throw error;
+			}
+			if (attempt === 0) {
+				log("::notice::Waiting for CI to publish this commit's images.");
+			}
 			if (attempt === IMAGE_POLL_ATTEMPTS - 1) {
 				throw new Error("CI never published images for this commit.", { cause: error });
 			}
@@ -630,7 +683,7 @@ export async function awaitImages(
 // single-line form is only safe once newlines are gone.
 export function formatOutputs(outputs: Record<string, string>): string {
 	return `${Object.entries(outputs)
-		.map(([key, value]) => `${key}=${value.replaceAll(/[\r\n]+/g, " ")}`)
+		.map(([key, value]) => `${key}=${value.replaceAll(/[\r\n]+/gu, " ")}`)
 		.join("\n")}\n`;
 }
 
@@ -670,7 +723,7 @@ if (import.meta.main) {
 		await main();
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Unknown Coolify preview error.";
-		console.error(`::error::${message.replaceAll(/[\r\n]+/g, " ")}`);
+		console.error(`::error::${message.replaceAll(/[\r\n]+/gu, " ")}`);
 		process.exitCode = 1;
 	}
 }

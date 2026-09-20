@@ -228,7 +228,7 @@ export const Streaming: Story = {
 		status: "streaming",
 	},
 	render: (args) => {
-		const StreamingDemo = () => {
+		function StreamingDemo() {
 			const [streamingMessage, setStreamingMessage] = useState("");
 
 			const fullResponse = `Great question! The **useEffect hook** is one of the most important React hooks for managing side effects in functional components.
@@ -289,7 +289,7 @@ The key is to include all values from component scope that are used inside the e
 				const interval = setInterval(() => {
 					if (currentIndex < fullResponse.length) {
 						setStreamingMessage(fullResponse.slice(0, currentIndex + 1));
-						currentIndex++;
+						currentIndex += 1;
 					} else {
 						// Reset and start over
 						currentIndex = 0;
@@ -315,7 +315,7 @@ The key is to include all values from component scope that are used inside the e
 			];
 
 			return <Messages {...args} messages={messages} status="streaming" />;
-		};
+		}
 
 		return <StreamingDemo />;
 	},
@@ -379,7 +379,7 @@ export const ArtifactVariant: Story = {
 	},
 	decorators: [
 		(Story) => (
-			<div className="h-[600px] w-[500px] border border-border rounded-lg bg-background overflow-hidden">
+			<div className="h-[600px] w-[500px] overflow-hidden rounded-lg border border-border bg-background">
 				<Story />
 			</div>
 		),
@@ -401,7 +401,7 @@ export const ArtifactEmpty: Story = {
 	},
 	decorators: [
 		(Story) => (
-			<div className="h-[400px] w-[400px] border border-border rounded-lg bg-background overflow-hidden">
+			<div className="h-[400px] w-[400px] overflow-hidden rounded-lg border border-border bg-background">
 				<Story />
 			</div>
 		),
@@ -413,7 +413,7 @@ export const ArtifactEmpty: Story = {
  */
 export const ArtifactStreaming: Story = {
 	args: {
-		messages: multiTurnMessages.slice(0, 2), // Use first 2 messages for a cleaner demo
+		messages: multiTurnMessages.slice(0, 2),
 		status: "streaming",
 		variant: "artifact",
 		showGreeting: false,
@@ -423,7 +423,7 @@ export const ArtifactStreaming: Story = {
 	},
 	decorators: [
 		(Story) => (
-			<div className="h-[600px] w-[500px] border border-border rounded-lg bg-background overflow-hidden">
+			<div className="h-[600px] w-[500px] overflow-hidden rounded-lg border border-border bg-background">
 				<Story />
 			</div>
 		),
