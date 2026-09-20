@@ -44,8 +44,18 @@ export function validateFeedbackEvidence(
 	observationPractices: ReadonlyMap<string, string>,
 ): string | null {
 	const unknown = basedOn.find((id) => !observationPractices.has(id));
-	if (unknown)
-		return `Evidence '${unknown}' does not name an admitted observation from this run; skipped.`;
+	if (unknown) {
+		// The ids of this practice's own observations are named, so the correction is one edit away:
+		// a session that wrote a digest or a citation here is looking at the wrong field.
+		const own = [...observationPractices]
+			.filter(([, practice]) => practice === primaryPractice)
+			.map(([id]) => id);
+		const hint =
+			own.length > 0
+				? `the admitted observation id(s) of ${primaryPractice} are: ${own.join(", ")}`
+				: `no admitted observation belongs to ${primaryPractice}`;
+		return `Evidence '${unknown}' does not name an admitted observation from this run (basedOn takes the \`id\` field of work/composition/observations.json; ${hint}); skipped.`;
+	}
 	if (!basedOn.some((id) => observationPractices.get(id) === primaryPractice)) {
 		return `At least one basedOn observation must belong to the primary practice '${primaryPractice}'; skipped.`;
 	}

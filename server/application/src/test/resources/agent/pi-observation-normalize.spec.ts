@@ -200,21 +200,106 @@ void test("a field left out, or written as the word null, reads as null", () => 
 	);
 });
 
-void test("a summary longer than the practice page shows is refused, on its own", () => {
+void test("a summary longer than the practice page shows is kept up to a sentence end, else refused", () => {
 	const long = "The handler swallows the error ".repeat(6).trim();
 	assert.ok(long.length > MAX_SUMMARY_CHARS);
 	assert.throws(
 		() => normalizeObservation(baseObservation({ summary: long })),
-		new RegExp(`at most ${MAX_SUMMARY_CHARS} characters; this one is ${long.length}`),
+		new RegExp(
+			`at most ${MAX_SUMMARY_CHARS} characters; this one is ${long.length} with no sentence end inside the bound`,
+		),
 	);
 	const atTheLimit = "x ".repeat(MAX_SUMMARY_CHARS / 2).trim();
 	assert.equal(normalizeObservation(baseObservation({ summary: atTheLimit })).summary, atTheLimit);
+	// A clause too long, with a sentence end inside the bound: kept up to it, and the session is told.
+	const twoSentences = `The handler swallows the error. ${"It is caught and logged at debug level ".repeat(4).trim()}`;
+	assert.ok(twoSentences.length > MAX_SUMMARY_CHARS);
+	const notes: string[] = [];
+	const shortened = normalizeObservation(
+		baseObservation({ summary: twoSentences }),
+		new Set(),
+		notes,
+	);
+	assert.equal(shortened.summary, "The handler swallows the error.");
+	assert.deepEqual(notes, [
+		`summary was ${twoSentences.length} characters; recorded up to its last sentence end within ${MAX_SUMMARY_CHARS}: "The handler swallows the error."`,
+	]);
+	// Runs of whitespace are one space: a summary is one line on the page.
+	assert.equal(
+		normalizeObservation(baseObservation({ summary: "PR mixes\n  unrelated   changes" })).summary,
+		"PR mixes unrelated changes",
+	);
+});
+
+void test("a field sent beside the observation instead of under evidence is read from there and named", () => {
+	const { evidence, ...rest } = baseObservation();
+	const notes: string[] = [];
+	// citations beside the observation, and the rationale under evidence: each moved to its home.
+	const { evidenceRationale, ...withoutRationale } = rest;
+	const rehomed = normalizeObservation(
+		{
+			...withoutRationale,
+			citations: evidence.citations,
+			evidence: { evidenceRationale },
+		},
+		new Set(),
+		notes,
+	);
+	assert.equal(rehomed.evidenceRationale, evidenceRationale);
+	assert.equal(rehomed.evidence.citations.length, 1);
+	assert.deepEqual(notes, [
+		"evidenceRationale read from under evidence; it belongs beside evidence, not in it",
+		"citations read from beside the observation; they belong under evidence",
+	]);
+	// The search fields beside an ABSENT observation, with no search wrapper at all.
+	const absent = normalizeObservation(
+		{ ...rest, presence: "ABSENT", assessment: "BAD", evidence, ...goodSearch },
+		new Set(),
+		notes,
+	);
+	assert.deepEqual(absent.evidence.search?.consulted, ["scm.review-threads"]);
+	assert.equal(
+		notes.at(-1),
+		"search{consulted, lookedFor, boundary} read from beside the observation; they belong under evidence",
+	);
+	// A field present in both places is not guessed at: the unknown-field check names it.
+	assert.throws(
+		() => normalizeObservation({ ...rest, evidence, citations: [] }),
+		/unknown observation field\(s\): citations/,
+	);
 });
 
 void test("genuinely invalid enum still rejected after normalization", () => {
 	const invalid = baseObservation();
 	invalid.presence = "MAYBE";
-	assert.throws(() => normalizeObservation(invalid), /invalid presence/);
+	assert.throws(
+		() => normalizeObservation(invalid),
+		/invalid presence 'MAYBE': one of PRESENT, ABSENT/,
+	);
+	// A word of the vocabulary in another spelling is that word; a missing one is named as missing.
+	assert.equal(
+		normalizeObservation(
+			baseObservation({
+				assessmentStatus: "not applicable",
+				presence: null,
+				assessment: null,
+				severity: null,
+				evidence: {
+					citations: baseObservation().evidence.citations,
+					inapplicability: {
+						consulted: ["scm.pull-request.diff"],
+						subject: "tests",
+						ruledOutBy: "docs only",
+					},
+				},
+			}),
+		).assessmentStatus,
+		"NOT_APPLICABLE",
+	);
+	assert.throws(
+		() => normalizeObservation(baseObservation({ presence: undefined })),
+		/invalid presence 'undefined' \(missing\): one of PRESENT, ABSENT/,
+	);
 });
 
 void test("missing evidence-source attribution is rejected", () => {

@@ -33,9 +33,15 @@ const admittedObservation = {
 			side: "NEW",
 			startLine: 10,
 			endLine: 10,
+			quote: "+ insecure();",
+			verification: { status: "VERIFIED", scope: "EXACT_LOCATION" },
 			anchorable: true,
 		},
 	],
+	evidence: {
+		citations: [{ path: "src/Auth.java", quote: "+ insecure();" }],
+		search: { consulted: ["scm.pull-request.diff"], lookedFor: "x", boundary: "y" },
+	},
 };
 
 const changeCitation = {
@@ -80,7 +86,11 @@ if (scenario) {
 			Response.json({
 				schemaVersion: 1,
 				admissionDigest: "admitted-digest",
-				observations: [admittedObservation],
+				observations: [
+					scenario === "compose-quiet"
+						? { ...admittedObservation, outcome: "POSITIVE", assessment: "GOOD", severity: null }
+						: admittedObservation,
+				],
 			}),
 		),
 	);
@@ -119,7 +129,7 @@ if (scenario) {
 					if (scenario === "setup") now += 20_000;
 					return Promise.resolve({
 						registerProvider() {},
-						getModel: () => ({ contextWindow: 128_000 }),
+						getModel: () => ({ contextWindow: 128_000, maxTokens: 16_384 }),
 					});
 				},
 			},
@@ -141,6 +151,15 @@ if (scenario) {
 							return () => {};
 						},
 						clearQueue() {},
+						getContextUsage: () => ({
+							tokens: scenario === "compose-overflow" ? 120_000 : 1_000,
+							contextWindow: 128_000,
+							percent: 0,
+						}),
+						compact: () => {
+							record("compact");
+							return Promise.resolve({});
+						},
 						get isStreaming() {
 							return releasePrompt !== undefined || compacting;
 						},
@@ -195,8 +214,88 @@ if (scenario) {
 								settleIdle();
 								return;
 							}
+							if (text.includes("## Nothing persisted")) {
+								// The composer's finishing prompt: the runner asks once more for the practices
+								// with a NEGATIVE observation, and a WITHHOLD is a recorded decision.
+								const withheld = await tool("report_feedback").execute("f-9", {
+									units: [
+										{
+											channel: "IN_APP",
+											practiceSlug: "test-practice",
+											basedOn: ["observation-1"],
+											action: "WITHHOLD",
+											withholdReason: "below_bar",
+										},
+									],
+								});
+								record(`feedback-finish:${JSON.stringify(withheld)}`);
+								return;
+							}
 							if (text.includes("## This turn")) {
 								// The composition turn, in the same session.
+								if (scenario === "compose-quiet") {
+									// Nothing to withhold on a practice that is not NEGATIVE: the unit is skipped
+									// with the reason, and with no negatives the runner does not ask again.
+									const quiet = await tool("report_feedback")
+										.execute("f-q", {
+											units: [
+												{
+													channel: "IN_APP",
+													practiceSlug: "test-practice",
+													basedOn: ["observation-1"],
+													action: "WITHHOLD",
+													withholdReason: "BELOW_BAR",
+												},
+											],
+										})
+										.then(() => "accepted")
+										.catch((error: unknown) =>
+											error instanceof Error ? error.message : String(error),
+										);
+									record(`feedback-quiet:${quiet}`);
+									return;
+								}
+								if (scenario === "compose-silent") {
+									// A composer that reads its way through the practice files: at the twelfth call
+									// without a recording call it is told to persist, once.
+									for (let call = 1; call <= 13; call++) {
+										emit({
+											type: "tool_execution_start",
+											toolCallId: `r-${call}`,
+											toolName: "read",
+											args: { path: `catalog/practices/${call}.md` },
+										});
+									}
+									return;
+								}
+								if (scenario === "compose-loop") {
+									// A session that keeps calling a recording tool without recording anything: the
+									// SDK emits the start of every call whether or not its schema check let it
+									// through, and the runner ends the turn after enough of them.
+									for (let call = 1; call <= 24; call++) {
+										emit({
+											type: "tool_execution_start",
+											toolCallId: `s-${call}`,
+											toolName: "report_summary",
+											args: {},
+										});
+										emit({
+											type: "tool_execution_end",
+											toolCallId: `s-${call}`,
+											toolName: "report_summary",
+											isError: true,
+											result: {
+												content: [
+													{
+														type: "text",
+														text: 'Validation failed for tool "report_summary":\n  - /lead: Expected string',
+													},
+												],
+											},
+										});
+									}
+									return;
+								}
 								const card = {
 									channel: "IN_APP",
 									practiceSlug: "test-practice",
@@ -206,9 +305,44 @@ if (scenario) {
 									body: "The pattern across your work.",
 									nextStep: "Check the call before pushing.",
 								};
-								// One occurrence is not a pattern: with no history, the card is refused.
-								const alone = await tool("report_feedback").execute("f-0", { units: [card] });
-								record(`feedback-alone:${JSON.stringify(alone)}`);
+								const feedback = tool("report_feedback");
+								// The schema carries the shape and the vocabulary and no rule: a rule is applied
+								// per unit, by the tool, so one wrong unit never discards the others in the call.
+								const schema = JSON.stringify(feedback.parameters);
+								for (const keyword of ["maxLength", "additionalProperties", "minItems", "oneOf"]) {
+									assert.ok(
+										!schema.includes(`"${keyword}"`),
+										`${keyword} in ${schema.slice(0, 200)}`,
+									);
+								}
+								assert.match(schema, /One of: IN_CONTEXT, IN_APP\./);
+								assert.match(schema, /Required: channel, practiceSlug, basedOn, action\./);
+								assert.match(
+									schema,
+									/SUPERSEDE to replace a message that is queued and unread; WITHHOLD/,
+								);
+								// One occurrence is not a pattern: with no history, the card is refused, and a
+								// call that stored nothing is an error the session must correct.
+								const alone = await feedback
+									.execute("f-0", { units: [card] })
+									.then(() => "accepted")
+									.catch((error: unknown) =>
+										error instanceof Error ? error.message : String(error),
+									);
+								record(`feedback-alone:${alone}`);
+								// A decision to stay quiet on the work, stored before the card: written after it,
+								// since the server reads the first thirty units and delivers no WITHHOLD.
+								await feedback.execute("f-w", {
+									units: [
+										{
+											channel: "IN_CONTEXT",
+											practiceSlug: "test-practice",
+											basedOn: ["observation-1"],
+											action: "WITHHOLD",
+											withholdReason: "ALREADY_SAID",
+										},
+									],
+								});
 								mkdirSync(join(cwd, "history"), { recursive: true });
 								writeFileSync(
 									join(cwd, "history/observations.json"),
@@ -222,22 +356,77 @@ if (scenario) {
 										],
 									}),
 								);
-								const reply = await tool("report_feedback").execute("f-1", {
+								// Trying to break it: every unit but the first is wrong in its own way, and each
+								// is answered on its own while the first is stored.
+								const reply = await feedback.execute("f-1", {
 									units: [
-										card,
+										{ ...card, channel: "in_app", basedOn: "observation-1" },
 										{
 											channel: "IN_APP",
 											practiceSlug: "test-practice",
 											action: "NEW",
 											basedOn: [],
 										},
+										{ ...card, verdict: "BAD" },
+										{ ...card, body: "x".repeat(8001) },
+										{ ...card, channel: "IN_CHAT", withholdReason: "NOT_A_REASON" },
+										{ ...card, practiceSlug: "other-practice" },
+										{
+											...card,
+											channel: "IN_CONTEXT",
+											body: undefined,
+											placement: {
+												kind: "diff",
+												observationId: "observation-1",
+												citationIndex: "0",
+											},
+										},
+										"a unit as a string",
 									],
 								});
 								record(`feedback:${JSON.stringify(reply)}`);
+								// A single unit sent bare where the list was asked for is the list of one.
+								const bare = await feedback
+									.execute("f-2", {
+										units: {
+											...card,
+											channel: "IN_CHAT",
+											body: undefined,
+											nextStep: undefined,
+											notes: {
+												situation: "s",
+												capability: "c",
+												evidenceSummary: "e",
+												inConversationSignal: "i",
+											},
+										},
+									})
+									.then((result) => JSON.stringify(result))
+									.catch((error: unknown) =>
+										error instanceof Error ? error.message : String(error),
+									);
+								record(`feedback-bare:${bare}`);
+								const summary = tool("report_summary");
+								assert.ok(!JSON.stringify(summary.parameters).includes('"minLength"'));
+								const long = "A sentence that runs on and on without ever ending ".repeat(6);
+								const lead = await summary
+									.execute("l-1", { lead: long })
+									.then(() => "accepted")
+									.catch((error: unknown) =>
+										error instanceof Error ? error.message : String(error),
+									);
+								record(`lead-long:${lead}`);
+								const cut = await summary.execute("l-2", {
+									lead: `The auth change is the one to read first. ${long}`,
+								});
+								record(`lead-cut:${JSON.stringify(cut)}`);
 								return;
 							}
 							if (text.includes("## Unfinished practices")) {
-								const unfinished = scenario === "overrun" ? "test-practice" : "second-practice";
+								const unfinished =
+									scenario === "overrun" || scenario === "repeat"
+										? "test-practice"
+										: "second-practice";
 								const reply = await tool("report_observation").execute("o-3", {
 									observations: [observation(unfinished, "Recorded on the finishing turn")],
 								});
@@ -257,6 +446,31 @@ if (scenario) {
 							}
 							assert.match(schema, /One of: evidence\/change\.json, evidence\/metadata\.json/);
 							assert.match(schema, /One of: OLD, NEW/);
+							// Below the root, an object or a list is documented by its properties and items and
+							// typed by neither, since a string where an object goes must not refuse the call; a
+							// scalar keeps its type, which the SDK coerces rather than refuses.
+							const parameters: unknown = report.parameters;
+							assert.ok(typeof parameters === "object" && parameters !== null);
+							const properties: unknown = Reflect.get(parameters, "properties");
+							assert.ok(typeof properties === "object" && properties !== null);
+							const items = JSON.stringify(Reflect.get(properties, "observations"));
+							assert.ok(!items.includes('"type":"object"'), items.slice(0, 200));
+							assert.ok(!items.includes('"type":"array"'), items.slice(0, 200));
+							assert.match(items, /"startLine":\{"description":"[^"]*","type":"integer"\}/);
+							assert.match(items, /Required: practiceSlug, summary/);
+							if (scenario === "repeat") {
+								// The same bash call, six times: the SDK emits each start with its arguments, and
+								// the runner nudges at the third and ends the turn at the sixth.
+								for (let call = 1; call <= 6; call++) {
+									emit({
+										type: "tool_execution_start",
+										toolCallId: `b-${call}`,
+										toolName: "bash",
+										args: { command: "git show abc --stat | head" },
+									});
+								}
+								return;
+							}
 							if (scenario === "refusal-cap") {
 								const wrong = observation("test-practice", "Wrong quote", {
 									...changeCitation,
@@ -449,8 +663,13 @@ if (scenario) {
 		"batch",
 		"finish",
 		"refusal-cap",
+		"repeat",
 		"tree-citation",
 		"compose",
+		"compose-overflow",
+		"compose-silent",
+		"compose-loop",
+		"compose-quiet",
 	]) {
 		void test(
 			{
@@ -464,9 +683,17 @@ if (scenario) {
 				batch: "stores several observations from one call and answers per item",
 				finish: "asks once more, in the same session, for the practices no turn recorded",
 				"refusal-cap": "stops accepting a practice after eight refused submissions",
+				repeat: "nudges a turn that repeats one call and ends it when the call keeps coming",
 				"tree-citation":
 					"verifies a HEAD repository citation against the checkout and finalizes out/",
 				compose: "composes feedback in the same session from the admitted observations",
+				"compose-overflow":
+					"compacts the session before a composition prompt that would not fit beside what it holds",
+				"compose-silent":
+					"asks once more when the composition ended without a recording call and negatives await a decision",
+				"compose-loop":
+					"ends a composition that keeps calling a recording tool without recording anything",
+				"compose-quiet": "skips a WITHHOLD on a practice with nothing to withhold and asks no more",
 			}[stage] ?? stage,
 			() => {
 				const cwd = mkdtempSync(join(tmpdir(), "pi-orchestration-"));
@@ -494,12 +721,16 @@ if (scenario) {
 						join(cwd, "catalog/practices/test-practice.md"),
 						"# Test practice\nCriteria.",
 					);
-					if (stage === "compose") {
+					if (stage.startsWith("compose")) {
 						writeFileSync(
 							join(cwd, "evidence/composition.json"),
 							JSON.stringify({
 								enabled: true,
-								channels: { IN_APP: { enabled: true, maxUnits: 1 } },
+								channels: {
+									IN_APP: { enabled: true, maxUnits: 1 },
+									IN_CONTEXT: { enabled: true, maxUnits: 1 },
+								},
+								inContextPlacementKinds: ["ARTIFACT"],
 							}),
 						);
 					}
@@ -757,6 +988,22 @@ if (scenario) {
 							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
 							break;
 						}
+						case "repeat": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.match(
+								child.stderr,
+								/turn 1\/1 \(code\): the same bash call 3 times — nudging to record/,
+							);
+							assert.match(
+								child.stderr,
+								/turn 1\/1 \(code\): the same bash call 6 times — aborting this turn/,
+							);
+							assert.ok(events.includes("steer") && events.includes("abort"), events.join("\n"));
+							// The finishing turn, in the same session, records the practice the loop left unrecorded.
+							assert.match(events.find((event) => event.startsWith("finish:")) ?? "", /stored/);
+							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
 						case "refusal-cap": {
 							assert.equal(child.status, 1, child.stderr);
 							const refusals = events.filter((event) => event.startsWith("refusal-"));
@@ -800,24 +1047,174 @@ if (scenario) {
 								["prompt:1", "prompt:2"],
 							);
 							assert.equal(events.filter((event) => event.startsWith("create:")).length, 1);
+							assert.ok(!events.includes("compact"), child.stderr);
 							assert.match(
 								events.find((event) => event.startsWith("feedback-alone:")) ?? "",
 								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NEGATIVE on 1/,
+								child.stderr,
 							);
 							const reply = events.find((event) => event.startsWith("feedback:")) ?? "";
 							assert.match(reply, /#1: stored a IN_APP unit for test-practice \(NEW\); 1\/1 used/);
-							assert.match(reply, /#2: a feedback unit needs a channel/);
+							assert.match(reply, /#2: basedOn is required/);
+							assert.match(reply, /#3: unknown unit field\(s\): verdict — a unit takes channel/);
+							assert.match(reply, /#4: body must be at most 8000 characters; this one is 8001/);
+							assert.match(
+								reply,
+								/#5: withholdReason must be one of NO_MATERIAL_CHANGE, ALREADY_SAID, BELOW_BAR \(received 'NOT_A_REASON'\)/,
+							);
+							assert.match(
+								reply,
+								/#6: practiceSlug 'other-practice' is not a practice with an admitted observation in this run \(those are: test-practice\)/,
+							);
+							assert.match(
+								reply,
+								/#7: already have a IN_CONTEXT unit for test-practice; skipped\./,
+							);
+							assert.match(
+								reply,
+								/#8: each item of units is one unit object .*\(received string\)/,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("feedback-bare:")) ?? "",
+								/#1: IN_CHAT is not a lane this run may write for/,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("lead-long:")) ?? "",
+								/lead must be at most 240 characters, or end a sentence within them; this one is 305/,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("lead-cut:")) ?? "",
+								/Stored the opening line up to its last sentence end within 240 characters: \\"The auth change is the one to read first\.\\"/,
+							);
 							const second = readFileSync(join(cwd, "prompt-2.md"), "utf8");
 							assert.match(second, /Compose from admitted observations\./);
 							assert.match(second, /"id": "observation-1"/);
+							// The quoted lines and the verification records stay on disk, where the composer
+							// can read them if it must; the search it recorded is still shown.
+							assert.doesNotMatch(second, /"quote"/);
+							assert.doesNotMatch(second, /"verification"/);
+							assert.match(second, /"lookedFor": "x"/);
+							assert.match(
+								readFileSync(join(cwd, "work/composition/observations.json"), "utf8"),
+								/"quote": "\+ insecure\(\);"/,
+							);
 							const feedback: unknown = JSON.parse(
 								readFileSync(join(cwd, "out/feedback.json"), "utf8"),
 							);
 							assert.ok(typeof feedback === "object" && feedback !== null);
 							assert.equal(Reflect.get(feedback, "admissionDigest"), "admitted-digest");
 							const units: unknown = Reflect.get(feedback, "units");
-							assert.ok(Array.isArray(units) && units.length === 1);
+							assert.ok(Array.isArray(units) && units.length === 2, JSON.stringify(units));
+							const [delivered, withheld] = units as unknown[];
+							assert.ok(typeof delivered === "object" && delivered !== null);
+							assert.ok(typeof withheld === "object" && withheld !== null);
+							assert.equal(Reflect.get(delivered, "action"), "NEW");
+							assert.equal(Reflect.get(withheld, "action"), "WITHHOLD");
+							assert.equal(
+								Reflect.get(feedback, "lead"),
+								"The auth change is the one to read first.",
+							);
+							assert.match(child.stderr, /composition: .*stored=3/);
 							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
+						case "compose-overflow": {
+							// 120k held, a prompt of a few thousand and 16k of output do not fit in 128k: the
+							// session is compacted before the prompt, and the prompt itself is sent whole.
+							assert.equal(child.status, 0, child.stderr);
+							const order = events.filter((event) =>
+								["prompt:1", "compact", "prompt:2"].includes(event),
+							);
+							assert.deepEqual(order, ["prompt:1", "compact", "prompt:2"]);
+							assert.match(
+								child.stderr,
+								/composition: 120000 tokens held and \d+ needed exceed the 128000 window — compacting first/,
+							);
+							assert.match(
+								readFileSync(join(cwd, "prompt-2.md"), "utf8"),
+								/Compose from admitted observations\./,
+							);
+							break;
+						}
+						case "compose-silent": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("prompt:")),
+								["prompt:1", "prompt:2", "prompt:3"],
+							);
+							assert.match(
+								readFileSync(join(cwd, "prompt-3.md"), "utf8"),
+								/## Nothing persisted[\s\S]*NEGATIVE observation: test-practice/,
+							);
+							assert.match(
+								child.stderr,
+								/composition recorded nothing for 1 NEGATIVE practice\(s\) — asking once more/,
+							);
+							assert.equal(
+								(
+									child.stderr.match(
+										/composition: 12 calls without a recording call — nudging to persist/g,
+									) ?? []
+								).length,
+								1,
+								child.stderr,
+							);
+							assert.equal(events.filter((event) => event === "steer").length, 1);
+							assert.match(
+								events.find((event) => event.startsWith("feedback-finish:")) ?? "",
+								/#1: stored a IN_APP unit for test-practice \(WITHHOLD\)/,
+							);
+							const feedback: unknown = JSON.parse(
+								readFileSync(join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(typeof feedback === "object" && feedback !== null);
+							const units: unknown = Reflect.get(feedback, "units");
+							assert.ok(Array.isArray(units) && units.length === 1);
+							const unit: unknown = units[0];
+							assert.ok(typeof unit === "object" && unit !== null);
+							assert.equal(Reflect.get(unit, "withholdReason"), "BELOW_BAR");
+							break;
+						}
+						case "compose-quiet": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("prompt:")),
+								["prompt:1", "prompt:2"],
+							);
+							assert.match(
+								events.find((event) => event.startsWith("feedback-quiet:")) ?? "",
+								/#1: test-practice has no NEGATIVE observation in this run, so there is nothing to withhold; skipped\./,
+							);
+							assert.doesNotMatch(child.stderr, /asking once more/);
+							break;
+						}
+						case "compose-loop": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.ok(events.includes("abort"), child.stderr);
+							assert.match(
+								child.stderr,
+								/composer: 24 recording calls without a record — aborting this turn/,
+							);
+							// Every refused call is in the transcript with the SDK's reason, and in the trace.
+							assert.match(
+								child.stderr,
+								/composer tool error: report_summary — Validation failed for tool "report_summary": - \/lead: Expected string/,
+							);
+							const debug: unknown = JSON.parse(
+								readFileSync(join(cwd, "out/runner-debug.json"), "utf8"),
+							);
+							assert.ok(typeof debug === "object" && debug !== null);
+							const turns: unknown = Reflect.get(debug, "turns");
+							assert.ok(Array.isArray(turns));
+							const composition: unknown = turns.find(
+								(turn: unknown) =>
+									typeof turn === "object" &&
+									turn !== null &&
+									Reflect.get(turn, "label") === "composition",
+							);
+							assert.ok(typeof composition === "object" && composition !== null);
+							assert.equal(Reflect.get(composition, "toolErrors"), 24);
+							assert.equal(Reflect.get(composition, "recordingCalls"), 24);
 							break;
 						}
 						default:

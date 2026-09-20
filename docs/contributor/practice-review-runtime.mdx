@@ -61,15 +61,29 @@ sequenceDiagram
   context with line coordinates — and each turn carries one catalog group of practices with their criteria
   inlined. Observations go through `report_observation` in batches; a refused one is answered per item and
   a practice past eight refusals is reported as not reached. The schema the SDK validates a call against
-  is documentation only — the SDK's check is all or nothing, and one wrong field must not discard the
-  other observations in the call — so every rule is applied per item by the runner's normalizer,
-  including the cells a practice's Judge section rules out (`- PRESENT/GOOD and ABSENT/GOOD: no ordinary
-  case.`). A turn aborted at its share of the budget is awaited until the session is idle before the
-  next turn is sent. What was recorded is repeated at the top of
-  every later turn and appended to `work/notes/review.md`, so it survives context compaction. After
-  admission the same session composes feedback in one more turn, with the admitted observations and the
-  history inlined. There is no reconnaissance session, no fork per practice group and no retry session:
-  a practice no turn recorded gets one finishing turn in the same session.
+  is documentation only, for every recording tool (`report_observation`, `report_feedback`,
+  `report_summary`) — the SDK's check is all or nothing, and one wrong field must not discard the other
+  items in the call — so every rule is applied per item by the tool, with the reason: the vocabulary
+  (case and `_`/`-` spelling forgiven), the text bounds the server holds a unit to, an unknown field
+  named, a field sent beside the observation instead of under `evidence` read from where it is and the
+  correction echoed, a summary a clause too long kept up to its last sentence end within the bound, and
+  the cells a practice's Judge section rules out (`- PRESENT/GOOD and ABSENT/GOOD: no ordinary case.`).
+  A call that stores nothing is an error the session must correct; one that stores some of what it sent
+  is an answer with the skips named per item. A call that ended in an error — a schema the SDK refused,
+  a call cut off by the output limit, a failed command — is one line of the transcript and one count in
+  the turn's trace (`toolErrors`); a turn that has made 24 recording calls without recording anything
+  is ended, and one that repeats the same call with the same arguments is told so at the third and
+  ended at the sixth. A turn aborted at its share of the budget is awaited until the session is idle
+  before the next turn is sent. What was recorded is repeated at the top of every later turn and
+  appended to `work/notes/review.md`, so it survives context compaction. After admission the same
+  session composes feedback in one more turn, with the admitted observations (verdict, words and
+  citations by coordinates; the quoted lines and verification records stay in
+  `work/composition/observations.json`) and the history inlined;
+  the session is compacted first when that prompt would not fit beside what it holds, a composer still
+  reading at its twelfth call or at most of its budget is told to persist, and a composition that ended
+  without one recording call while a practice is NEGATIVE is asked once more. There is no
+  reconnaissance session, no fork per practice group and no retry session: a practice no turn recorded
+  gets one finishing turn in the same session.
 - **The worker posts public feedback.** Parsing, persistence, composition, and provider delivery remain on
   the worker after sandbox execution.
 - **Control never returns to the server between claim and completion.** The only server-to-worker push is

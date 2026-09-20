@@ -332,11 +332,24 @@ export function normalizeUndecidability(undecidability: unknown): RecordedUndeci
 	return { openQuestion, wouldSettleIt };
 }
 
+/**
+ * A word of a closed vocabulary as the session wrote it — case, and a space or hyphen for the
+ * underscore, are not what the vocabulary is about. A word outside it, or none, is answered with the
+ * whole list, so the session corrects the field rather than guessing at it.
+ */
 function parseVocabulary<T extends string>(values: readonly T[], value: unknown, field: string): T {
-	const admitted = values.find(
-		(candidate) => candidate === (typeof value === "string" ? value.toUpperCase() : value),
-	);
-	if (!admitted) throw new Error(`invalid ${field} '${String(value)}'`);
+	const word =
+		typeof value === "string"
+			? value
+					.trim()
+					.toUpperCase()
+					.replace(/[-\s]+/g, "_")
+			: value;
+	const admitted = values.find((candidate) => candidate === word);
+	if (!admitted) {
+		const missing = nullish(value) ? " (missing)" : "";
+		throw new Error(`invalid ${field} '${String(value)}'${missing}: one of ${values.join(", ")}`);
+	}
 	return admitted;
 }
 
@@ -417,14 +430,76 @@ function parseAssessment(
 export const MAX_SUMMARY_CHARS = 160;
 
 /**
+ * The text, or as much of it as ends a sentence within `max` characters; undefined when no sentence
+ * ends there. A bound on a headline is what the reader's page can show, and a text that runs past it
+ * by one clause is worth keeping up to the clause before — the session is told what was kept.
+ */
+export function boundedAtSentenceEnd(text: string, max: number): string | undefined {
+	if (text.length <= max) return text;
+	const prefix = text.slice(0, max + 1);
+	let end = -1;
+	for (const match of prefix.matchAll(/[.!?](?=\s|$)/g)) end = match.index;
+	return end < 0 ? undefined : prefix.slice(0, end + 1).trim();
+}
+
+/** The evidence fields, in the order the session tends to put them beside the observation instead. */
+const EVIDENCE_FIELDS = ["citations", "search", "inapplicability", "undecidability"] as const;
+/** The search fields, which arrive beside the observation when the session forgets `search` wraps them. */
+const SEARCH_FIELDS = ["consulted", "lookedFor", "boundary"] as const;
+
+/**
+ * The observation with each field in its home: what belongs under `evidence` and arrived beside it is
+ * moved there, and the rationale that arrived under `evidence` is moved beside it. A field present in
+ * both places is left for the unknown-field check to name. What moved is echoed in `notes`, so the
+ * session sees the shape it should have sent.
+ */
+function rehomed(observation: Record<string, unknown>, notes: string[]): Record<string, unknown> {
+	const out = { ...observation };
+	const evidence: Record<string, unknown> = isRecord(out.evidence) ? { ...out.evidence } : {};
+	const moved: string[] = [];
+	for (const key of EVIDENCE_FIELDS) {
+		if (key in out && !(key in evidence)) {
+			evidence[key] = out[key];
+			delete out[key];
+			moved.push(key);
+		}
+	}
+	if (!("search" in evidence) && SEARCH_FIELDS.some((key) => key in out)) {
+		const search: Record<string, unknown> = {};
+		for (const key of SEARCH_FIELDS) {
+			if (key in out) {
+				search[key] = out[key];
+				delete out[key];
+			}
+		}
+		evidence.search = search;
+		moved.push("search{consulted, lookedFor, boundary}");
+	}
+	if ("evidenceRationale" in evidence && !("evidenceRationale" in out)) {
+		out.evidenceRationale = evidence.evidenceRationale;
+		delete evidence.evidenceRationale;
+		notes.push("evidenceRationale read from under evidence; it belongs beside evidence, not in it");
+	}
+	if (moved.length > 0) {
+		notes.push(`${moved.join(", ")} read from beside the observation; they belong under evidence`);
+	}
+	if (moved.length > 0 || "evidence" in out) out.evidence = evidence;
+	return out;
+}
+
+/**
  * @param ruledOut the cells the practice's Judge section rules out, from {@link cellsRuledOut}; an
  *   assessed observation in one of them is refused before anything else about it is asked for.
+ * @param notes receives one line per correction made on the way in — a field moved to its home, a
+ *   summary cut at a sentence end — so the caller can echo what was recorded.
  */
 export function normalizeObservation(
-	observation: unknown,
+	raw: unknown,
 	ruledOut: ReadonlySet<string> = new Set(),
+	notes: string[] = [],
 ): NormalizedObservation {
-	if (!isRecord(observation)) throw new Error("observation must be an object");
+	if (!isRecord(raw)) throw new Error("observation must be an object");
+	const observation = rehomed(raw, notes);
 	const allowed = new Set([
 		"practiceSlug",
 		"summary",
@@ -445,21 +520,28 @@ export function normalizeObservation(
 		throw new Error(
 			`practiceSlug is required: each item of observations is one observation object (received keys: ${Object.keys(observation).join(", ") || "none"})`,
 		);
-	const title = trimmedText(observation.summary);
+	const sent = trimmedText(observation.summary).replace(/\s+/g, " ");
 	const reasoning = trimmedText(observation.evidenceRationale);
 	const result = parseAssessment(observation, practiceSlug, ruledOut);
 	const { assessmentStatus, presence } = result;
-	if (!title) throw new Error("summary is required");
+	if (!sent) throw new Error("summary is required");
 	// The summary is what the developer reads on their practice page, above the practice's own name and
 	// with no evidence beside it, so a single word there ("Test") names nothing the practice did not.
-	if (!/\S\s+\S/.test(title))
+	if (!/\S\s+\S/.test(sent))
 		throw new Error(
 			"summary must say what was observed as a short phrase, not one word — e.g. " +
 				"'Debug print left in the request handler'",
 		);
-	if (title.length > MAX_SUMMARY_CHARS)
+	// A summary a clause too long is kept up to its last sentence end within the bound: on the cohort
+	// one refusal in five was this, at a median of 175 characters, and each cost the turn a model call.
+	const title = boundedAtSentenceEnd(sent, MAX_SUMMARY_CHARS);
+	if (title === undefined)
 		throw new Error(
-			`summary must be at most ${MAX_SUMMARY_CHARS} characters; this one is ${title.length}. Name the behavior, and keep the reasons for the rationale`,
+			`summary must be at most ${MAX_SUMMARY_CHARS} characters; this one is ${sent.length} with no sentence end inside the bound. Name the behavior, and keep the reasons for the rationale`,
+		);
+	if (title !== sent)
+		notes.push(
+			`summary was ${sent.length} characters; recorded up to its last sentence end within ${MAX_SUMMARY_CHARS}: "${title}"`,
 		);
 	if (!reasoning) throw new Error("evidenceRationale is required");
 	const externalEvidence: Record<string, unknown> = isRecord(observation.evidence)

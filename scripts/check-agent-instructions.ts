@@ -136,6 +136,11 @@ const INTENTIONALLY_MISSING_PATHS = [
 		reason: "the review's notes file, created inside the agent workspace",
 	},
 	{
+		document: "docs/contributor/practice-review-runtime.mdx",
+		value: "work/composition/observations.json",
+		reason: "the admitted observations, written inside the agent workspace for the composer",
+	},
+	{
 		document: "MIGRATION.md",
 		value: "docker/.env",
 		reason: "a deployment-local secrets file that must stay untracked",
