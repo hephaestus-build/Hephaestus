@@ -103,9 +103,10 @@ The gates that remain are the ones that describe *what may run*, not *who asked*
 - The head must not introduce edits to `.github/workflows/**`, `.github/actions/**`, or
   `docker/preview/**`, measured by comparing the head against the *default branch* rather than against
   the pull request's own base — a stacked layer's diff hides what the layers beneath it changed, and
-  those commits are in the head Coolify deploys. A comparison too large for GitHub to report in full
-  is refused rather than trusted. Coolify re-reads the Compose file from the commit it deploys, so
-  this rule is load-bearing.
+  those commits are in the head Coolify deploys. The comparison supplies the commit the branches
+  diverged from, and the trees at that commit and at the head supply the paths, because a
+  comparison reports at most 300 files and flags nothing when it stops there. Coolify re-reads the
+  Compose file from the commit it deploys, so this rule is load-bearing.
   `ci-compose-validate.yml` holds the other half: on every pull request it renders that file and fails
   if the stack gains a way out of its sandbox — a socket, a build stage, a published port, an
   unbounded memory limit, a network every preview would share, or a renamed or flipped integration

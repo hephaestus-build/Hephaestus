@@ -67,7 +67,9 @@ interface Status {
 
 interface GitHubOptions {
 	deployments?: Deployment[];
-	files?: { filename: string }[];
+	files?: { filename: string; sha?: string }[];
+	/** The tree both branches left. Only a fixture about a deletion or a rename needs it. */
+	baseFiles?: { filename: string; sha?: string }[];
 	resolvedPull?: typeof pull;
 	statuses?: Record<number, Status[]>;
 	behindFiles?: { filename: string; sha?: string }[];
@@ -75,11 +77,15 @@ interface GitHubOptions {
 	defaultStatuses?: Status[];
 }
 
+const MERGE_BASE_SHA = "merge-base-sha";
+const DEFAULT_BRANCH_SHA = "main-sha";
+
 const postedStatuses: Record<string, unknown>[] = [];
 
 const makeGitHub = ({
 	deployments = [{ environment: "preview/pr-7", id: 1, sha: "old-sha" }],
 	files = [],
+	baseFiles = [],
 	resolvedPull = pull,
 	statuses = {},
 	behindFiles = [],
@@ -97,17 +103,41 @@ const makeGitHub = ({
 		pulls: {
 			get: async () => ({ data: resolvedPull }),
 		},
+		git: {
+			// The branches diverge from `baseFiles`, empty unless a test is about something leaving a
+			// tree, so `files` is what this head added and `behindFiles` what the default branch did.
+			getTree: async (params: Record<string, unknown>) => {
+				const trees: Record<string, { filename: string; sha?: string }[]> = {
+					[MERGE_BASE_SHA]: baseFiles,
+					[resolvedPull.head.sha]: files,
+					[DEFAULT_BRANCH_SHA]: behindFiles,
+				};
+				const entries = trees[String(params.tree_sha)];
+				assert.ok(entries, `unexpected tree ${String(params.tree_sha)}`);
+				assert.equal(params.recursive, "1");
+				return {
+					data: {
+						truncated: false,
+						tree: entries.map((entry) => ({
+							path: entry.filename,
+							type: "blob",
+							sha: entry.sha ?? `blob-of-${entry.filename}`,
+						})),
+					},
+				};
+			},
+		},
 		repos: {
 			compareCommitsWithBasehead: async (params) => {
-				// Two directions, and they answer different questions. `main...head` is the whole
-				// stack this pull request would deploy, not just its own layer's diff. `head...main`
-				// is what the default branch has that this branch does not, which is what decides
-				// whether a restored staging schema still fits it.
-				if (params.basehead === `${resolvedPull.head.sha}...main`) {
-					return { data: { files: behindFiles } };
-				}
+				// The direction matters: `main...head` makes the merge base the point this branch left
+				// the default branch, which is what both checks are diffed from.
 				assert.equal(params.basehead, `main...${resolvedPull.head.sha}`);
-				return { data: { files } };
+				return {
+					data: {
+						base_commit: { sha: DEFAULT_BRANCH_SHA },
+						merge_base_commit: { sha: MERGE_BASE_SHA },
+					},
+				};
 			},
 			getContent: async (params: Record<string, unknown>) => {
 				const sha = branchBlobs[String(params.path)];
@@ -216,18 +246,50 @@ void describe("preview controller admission", () => {
 		}
 	});
 
-	void it("refuses a comparison too large for GitHub to report in full", async () => {
+	void it("admits a branch with more files than one comparison reports", async () => {
 		const core = makeCore();
 		await resolve({
 			github: makeGitHub({
-				files: Array.from({ length: 300 }, (_unused, index) => ({ filename: `src/f${index}.ts` })),
+				files: Array.from({ length: 1200 }, (_unused, index) => ({ filename: `src/f${index}.ts` })),
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "true");
+	});
+
+	void it("finds deployment policy changed past where a comparison stops reporting", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				files: [
+					...Array.from({ length: 1200 }, (_unused, index) => ({ filename: `src/f${index}.ts` })),
+					{ filename: "docker/preview/compose.app.yaml" },
+				],
 			}),
 			context: makeContext(),
 			core,
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /deployment policy cannot be verified/u);
+		assert.match(core.outputs.get("reason") ?? "", /trusted deployment policy/u);
+	});
+
+	void it("refuses a head that took a file out of the deployment control plane", async () => {
+		// A comparison counts a rename as one file and names only where it landed.
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				baseFiles: [{ filename: "docker/preview/compose.app.yaml" }],
+				files: [{ filename: "docker/compose.app.yaml" }],
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+		assert.match(core.outputs.get("reason") ?? "", /docker\/preview\/compose\.app\.yaml/u);
 	});
 
 	void it("deploys a stacked layer, whose base is another pull request's branch", async () => {
@@ -837,32 +899,23 @@ void describe("preview schema drift", () => {
 		assert.equal(core.outputs.get("eligible"), "false");
 	});
 
-	void it("refuses a branch too far behind to compare, naming the consequence not the tool", async () => {
-		// The response caps at COMPARE_FILE_LIMIT and flags no truncation, so a saturated answer is
-		// not evidence that no migration is missing.
+	void it("checks the schema of a branch further behind than a comparison reports", async () => {
 		const core = makeCore();
 		await resolve({
 			github: makeGitHub({
-				behindFiles: Array.from({ length: 300 }, (_, index) => ({
-					filename: `webapp/src/file-${index}.tsx`,
-				})),
+				behindFiles: [
+					...Array.from({ length: 1200 }, (_unused, index) => ({
+						filename: `webapp/src/file-${index}.tsx`,
+					})),
+					migration,
+				],
 			}),
 			context: makeContext(),
 			core,
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		const reason = core.outputs.get("reason") ?? "";
-		// At the comparison's limit, whether this branch carries every one of the default branch's
-		// migrations cannot be established — a saturated response does not even prove truncation. So
-		// the reason names the check that could not run, what branches behind on schema have run
-		// into, and how to clear it.
-		assert.match(reason, /behind main/u);
-		assert.match(reason, /carries main's migrations/u);
-		assert.match(reason, /cannot be checked/u);
-		assert.match(reason, /have failed to start against it/u);
-		assert.match(reason, /Merge main in/u);
-		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot/u);
+		assert.match(core.outputs.get("reason") ?? "", /0001_drop\.xml/u);
 	});
 
 	void it("ignores prose under the schema directory", async () => {
