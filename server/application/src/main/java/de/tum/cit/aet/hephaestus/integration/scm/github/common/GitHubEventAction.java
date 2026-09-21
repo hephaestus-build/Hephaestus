@@ -708,6 +708,38 @@ public sealed interface GitHubEventAction {
 
     // Push Events
 
+    enum CheckSuite implements GitHubEventAction {
+        COMPLETED,
+        REQUESTED,
+        REREQUESTED,
+        UNKNOWN;
+
+        @Override
+        public String value() {
+            return name().toLowerCase();
+        }
+
+        public static CheckSuite fromString(String action) {
+            if (action == null || action.isBlank()) return UNKNOWN;
+            return switch (action.toLowerCase()) {
+                case "completed" -> COMPLETED;
+                case "requested" -> REQUESTED;
+                case "rerequested" -> REREQUESTED;
+                default -> UNKNOWN;
+            };
+        }
+    }
+
+    /** A commit status event has no action: the status itself is the event. */
+    enum Status implements GitHubEventAction {
+        REPORTED;
+
+        @Override
+        public String value() {
+            return name().toLowerCase();
+        }
+    }
+
     /**
      * Push events don't have a traditional "action" field. The event itself is the action.
      * We use a synthetic PUSHED action to conform to the GitHubWebhookEvent interface.

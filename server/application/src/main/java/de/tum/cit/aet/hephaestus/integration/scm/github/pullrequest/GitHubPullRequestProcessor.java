@@ -284,7 +284,22 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                 Objects.requireNonNullElse(dto.requestedReviewers(), List.of()),
                 pr.getRequestedReviewers(),
                 providerId);
-        return assigneesChanged || labelsChanged || reviewersChanged;
+        // Both read by GraphQL only; a webhook payload carries neither and leaves the record as it is.
+        boolean closingIssuesChanged = dto.closingIssueNumbers() != null
+                && pr.replaceClosingIssues(resolveLocalIssues(repository, dto.closingIssueNumbers()));
+        boolean checksChanged = dto.headChecks() != null
+                && pr.observeHeadChecks(dto.headChecks().sha(), dto.headChecks().state(), true);
+        return assigneesChanged || labelsChanged || reviewersChanged || closingIssuesChanged || checksChanged;
+    }
+
+    private Set<Issue> resolveLocalIssues(Repository repository, List<Integer> numbers) {
+        Set<Issue> issues = new HashSet<>();
+        for (Integer number : numbers) {
+            issueRepository
+                    .findByRepositoryIdAndNumber(repository.getId(), number)
+                    .ifPresent(issues::add);
+        }
+        return issues;
     }
 
     /**

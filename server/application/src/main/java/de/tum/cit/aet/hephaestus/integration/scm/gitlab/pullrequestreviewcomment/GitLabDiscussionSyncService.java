@@ -369,6 +369,8 @@ public class GitLabDiscussionSyncService {
         }
 
         Instant firstCreatedAt = parseTimestamp((String) noteNodes.get(0).get("createdAt"));
+        Object resolvedAtRaw = discussionNode.get("resolvedAt");
+        Instant resolvedAt = parseTimestamp(resolvedAtRaw == null ? null : resolvedAtRaw.toString());
 
         // Create/update the thread
         var threadData = new GitLabPullRequestReviewThreadProcessor.ThreadData(
@@ -382,7 +384,8 @@ public class GitLabDiscussionSyncService {
                 headSha,
                 baseSha,
                 outdated,
-                firstCreatedAt);
+                firstCreatedAt,
+                resolvedAt);
         PullRequestReviewThread thread = threadProcessor.findOrCreateThread(threadData, pr, provider, scopeId);
 
         // Pre-compute one synthetic COMMENTED review per (author, discussion) so each note

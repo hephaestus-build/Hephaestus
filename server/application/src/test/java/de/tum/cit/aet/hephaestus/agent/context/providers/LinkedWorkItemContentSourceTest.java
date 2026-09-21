@@ -192,6 +192,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             assertThat(item.propertyNames())
                     .containsExactlyInAnyOrder(
                             "number",
+                            "how",
                             "title",
                             "state",
                             "url",
@@ -201,6 +202,8 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
                             "subIssuesCompleted",
                             "subIssuesSource");
             assertThat(item.get("number").asInt()).isEqualTo(42);
+            // Named in the text, not recorded by the provider as closed by this change.
+            assertThat(item.get("how").asString()).isEqualTo("mentions");
             assertThat(item.get("title").asString()).isEqualTo("Add token refresh");
             assertThat(item.get("state").asString()).isEqualTo("OPEN");
             assertThat(item.get("url").asString()).isEqualTo("https://example.com/issues/42");
@@ -246,6 +249,41 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             assertThat(item.has("subIssuesTotal")).isFalse();
             assertThat(item.has("subIssuesCompleted")).isFalse();
             assertThat(item.has("subIssuesSource")).isFalse();
+        }
+
+        @Test
+        void shouldListWhatTheProviderRecordsAsClosedEvenWhenNoTextNamesIt() throws Exception {
+            // A link made in the provider's UI: no `#N` anywhere, and still the pull request closes it.
+            var pr = new PullRequest();
+            pr.setId(PR_ID);
+            pr.setBody("Implements the token refresh.");
+            when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+            Issue linked = issue(42, "Add token refresh", "criteria");
+            when(pullRequestRepository.findClosingIssuesById(PR_ID)).thenReturn(List.of(linked));
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(itemNumbers(root)).containsExactly(42);
+            assertThat(root.get("workItems").get(0).get("how").asString()).isEqualTo("closes");
+            verify(issueRepository, never()).findByRepositoryIdAndNumber(REPO_ID, 42);
+        }
+
+        @Test
+        void shouldSayClosesForAMentionTheProviderAlsoRecordsAsClosing() throws Exception {
+            var pr = new PullRequest();
+            pr.setId(PR_ID);
+            pr.setBody("Closes #42, see also #7");
+            when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+            when(pullRequestRepository.findClosingIssuesById(PR_ID)).thenReturn(List.of(issue(42, "Closed one", "")));
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 7))
+                    .thenReturn(Optional.of(issue(7, "Mentioned one", "")));
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(root.get("workItems")
+                            .valueStream()
+                            .map(item -> item.get("how").asString()))
+                    .containsExactly("closes", "mentions");
         }
 
         @Test

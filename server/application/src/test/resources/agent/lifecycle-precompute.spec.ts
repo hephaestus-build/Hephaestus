@@ -556,6 +556,7 @@ void test("the merge practices read the threads and decisions as rows against th
 					state: "RESOLVED",
 					resolvedBy: "ada",
 					createdAt: "2026-04-13T14:18:20Z",
+					resolvedAt: "2026-04-13T14:30:00Z",
 				},
 				{
 					id: 11,
@@ -564,6 +565,16 @@ void test("the merge practices read the threads and decisions as rows against th
 					state: "UNRESOLVED",
 					outdated: true,
 					createdAt: "2026-04-13T14:19:00Z",
+				},
+				// Resolved, but after the merge: open at the merge, which is what the practice asks.
+				{
+					id: 12,
+					path: "App/Late.swift",
+					line: 3,
+					state: "RESOLVED",
+					resolvedBy: "ada",
+					createdAt: "2026-04-13T14:20:00Z",
+					resolvedAt: "2026-04-13T16:00:00Z",
 				},
 			],
 			reviewDecisions: [
@@ -591,7 +602,7 @@ void test("the merge practices read the threads and decisions as rows against th
 			threads.contextDir,
 			threads.changeDir,
 		);
-		assert.equal(unresolved.metrics.unresolvedThreads, 1);
+		assert.equal(unresolved.metrics.unresolvedThreads, 2);
 		assert.equal(unresolved.metrics.resolvedThreads, 1);
 		assert.equal(unresolved.metrics.mergedByIsAuthor, 1);
 		assert.equal(unresolved.metrics.threadsFileAbsent, 0);
@@ -606,13 +617,19 @@ void test("the merge practices read the threads and decisions as rows against th
 			id: 11,
 			state: "UNRESOLVED",
 			createdAt: "2026-04-13T14:19:00Z",
+			resolvedAt: "",
+			resolvedBy: "",
 			path: "App/Model.swift",
 			line: 9,
 			outdated: true,
 		});
+		const late = unresolved.hints[2];
+		assert.ok(late);
+		assert.equal(late.pattern, "thread resolved after the merge");
+		assert.equal(late.flags.resolvedAt, "2026-04-13T16:00:00Z");
 		assert.match(
 			unresolved.directions[0] ?? "",
-			/^Merged by ada \(the author\); 2 thread\(s\) captured, 1 not marked RESOLVED/u,
+			/^Merged by ada \(the author\); 3 thread\(s\) captured, 2 open at the merge/u,
 		);
 
 		const decisions = await approval.script(

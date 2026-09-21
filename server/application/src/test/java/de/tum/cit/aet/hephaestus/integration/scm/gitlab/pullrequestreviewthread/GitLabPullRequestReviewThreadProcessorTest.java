@@ -157,6 +157,31 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldDateTheResolutionFromTheDiscussionAndClearItWhenUnresolved() {
+            when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
+                    .thenReturn(Optional.empty());
+            when(threadRepository.save(any(PullRequestReviewThread.class)))
+                    .thenAnswer(inv -> inv.getArgument(0, PullRequestReviewThread.class));
+            Instant resolvedAt = Instant.parse("2024-01-16T09:30:00Z");
+            var resolved = new GitLabPullRequestReviewThreadProcessor.ThreadData(
+                    DISCUSSION_GID, true, null, "src/Foo.ts", 42, null, null, null, null, null, CREATED_AT, resolvedAt);
+
+            PullRequestReviewThread saved = processor.findOrCreateThread(resolved, pr, provider, SCOPE_ID);
+
+            assertThat(saved.getResolvedAt()).isEqualTo(resolvedAt);
+
+            when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
+                    .thenReturn(Optional.of(saved));
+            var reopened = new GitLabPullRequestReviewThreadProcessor.ThreadData(
+                    DISCUSSION_GID, false, null, "src/Foo.ts", 42, null, null, null, null, null, CREATED_AT, null);
+
+            PullRequestReviewThread updated = processor.findOrCreateThread(reopened, pr, provider, SCOPE_ID);
+
+            assertThat(updated.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(updated.getResolvedAt()).isNull();
+        }
+
+        @Test
         void shouldKeepTheOldLineAsTheLineWhenTheDiscussionSitsOnARemovedLine() {
             when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
                     .thenReturn(Optional.empty());

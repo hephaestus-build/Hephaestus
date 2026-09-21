@@ -15,6 +15,8 @@ export interface LinkedWorkItem {
 	number: number;
 	title: string;
 	state?: string;
+	/** `closes` when the provider records the pull request as closing the issue; `mentions` otherwise. */
+	how?: string;
 	body: string;
 	createdAt?: string;
 	closedAt?: string;
@@ -55,6 +57,8 @@ export interface ReviewThread {
 	line?: number;
 	state: string;
 	resolvedBy?: string;
+	/** When the provider recorded the resolution; absent when unresolved or when only a sync saw it. */
+	resolvedAt?: string;
 	outdated?: boolean;
 	createdAt?: string;
 }
@@ -99,6 +103,7 @@ export async function readLinkedWorkItems(
 				number,
 				title: text(item.title),
 				state: optionalString(item.state),
+				how: optionalString(item.how),
 				body: text(item.body ?? item.description),
 				createdAt: optionalString(item.createdAt),
 				closedAt: optionalString(item.closedAt),
@@ -168,6 +173,7 @@ export async function readReviewThreads(
 			line: optionalNumber(thread.line),
 			state: text(thread.state) || "UNRESOLVED",
 			resolvedBy: optionalString(thread.resolvedBy),
+			resolvedAt: optionalString(thread.resolvedAt),
 			outdated: typeof thread.outdated === "boolean" ? thread.outdated : undefined,
 			createdAt: optionalString(thread.createdAt),
 		})),
@@ -348,6 +354,7 @@ export function mergeRow(metadata: PullRequestMetadata, merge: MergeFacts): Hint
 			author: merge.author ?? "",
 			reviewDecision: metadata.review_decision ?? "",
 			mergeStateStatus: metadata.merge_state_status ?? "",
+			headChecks: metadata.head_checks ?? "",
 		},
 	};
 }
@@ -381,23 +388,29 @@ export function lastDecisionPerReviewer(decisions: readonly ReviewDecision[]): R
 	return [...last.values()];
 }
 
-/** One record row per thread the record does not mark RESOLVED. */
-export function unresolvedThreadRows(threads: readonly ReviewThread[]): Hint[] {
-	return threads
-		.filter((t) => t.state !== "RESOLVED")
-		.map((t) => ({
-			file: t.path ?? "inputs/context/review_threads.json",
+/**
+ * One record row per thread the record does not mark RESOLVED, and one per thread resolved after
+ * the merge when the record dates the resolution: a thread closed after the fact was open at the
+ * merge, which is what the practice asks.
+ */
+export function unresolvedThreadRows(threads: readonly ReviewThread[], mergedAt?: string): Hint[] {
+	const openAtMerge = (t: ReviewThread) =>
+		t.state !== "RESOLVED" || (mergedAt !== undefined && later(t.resolvedAt, mergedAt));
+	return threads.filter(openAtMerge).map((t) => ({
+		file: t.path ?? "inputs/context/review_threads.json",
+		line: t.line ?? 0,
+		pattern: t.state === "RESOLVED" ? "thread resolved after the merge" : "unresolved thread",
+		context: `${t.state}${t.path === undefined ? "" : ` on ${t.path}${t.line === undefined ? "" : `:${t.line}`}`}${t.resolvedAt === undefined ? "" : `, resolved ${t.resolvedAt}`}`,
+		inDiff: false,
+		flags: {
+			id: t.id ?? 0,
+			state: t.state,
+			createdAt: t.createdAt ?? "",
+			resolvedAt: t.resolvedAt ?? "",
+			resolvedBy: t.resolvedBy ?? "",
+			path: t.path ?? "",
 			line: t.line ?? 0,
-			pattern: "unresolved thread",
-			context: `${t.state}${t.path === undefined ? "" : ` on ${t.path}${t.line === undefined ? "" : `:${t.line}`}`}`,
-			inDiff: false,
-			flags: {
-				id: t.id ?? 0,
-				state: t.state,
-				createdAt: t.createdAt ?? "",
-				path: t.path ?? "",
-				line: t.line ?? 0,
-				outdated: t.outdated === true,
-			},
-		}));
+			outdated: t.outdated === true,
+		},
+	}));
 }

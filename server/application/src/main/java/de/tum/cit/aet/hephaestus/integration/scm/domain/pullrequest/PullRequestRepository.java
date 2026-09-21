@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import jakarta.persistence.QueryHint;
 import java.time.Instant;
 import java.util.List;
@@ -123,6 +124,17 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     Optional<String> findHeadRefOidById(@Param("id") Long id);
 
     List<PullRequest> findAllByRepository_Id(Long repositoryId);
+
+    /**
+     * The issues the provider records the pull request as closing, with their labels, in number order:
+     * the rows of {@code pull_request_closing_issue} for one pull request.
+     */
+    @Query("SELECT DISTINCT i FROM PullRequest p JOIN p.closingIssues i LEFT JOIN FETCH i.labels "
+            + "WHERE p.id = :id ORDER BY i.number")
+    List<Issue> findClosingIssuesById(@Param("id") Long id);
+
+    /** The pull requests whose head is {@code headRefOid}: the ones a check on that commit is about. */
+    List<PullRequest> findAllByRepository_IdAndHeadRefOid(Long repositoryId, String headRefOid);
 
     /**
      * Repository-wide pull-request inventory ordered newest-first by number, for the cross-artifact

@@ -7,10 +7,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
@@ -30,6 +32,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -61,6 +64,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     private final PullRequestRepository pullRequestRepository;
     private final PullRequestReviewRepository reviewRepository;
     private final MilestoneRepository milestoneRepository;
+    private final IssueRepository issueRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     public GitLabMergeRequestProcessor(
@@ -68,6 +72,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             PullRequestRepository pullRequestRepository,
             PullRequestReviewRepository reviewRepository,
             MilestoneRepository milestoneRepository,
+            IssueRepository issueRepository,
             UserRepository userRepository,
             LabelRepository labelRepository,
             RepositoryRepository repositoryRepository,
@@ -86,7 +91,21 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         this.pullRequestRepository = pullRequestRepository;
         this.reviewRepository = reviewRepository;
         this.milestoneRepository = milestoneRepository;
+        this.issueRepository = issueRepository;
         this.eventPublisher = eventPublisher;
+    }
+
+    /**
+     * Whether the sync has to read what the merge request closes: on first sight, and whenever the
+     * merge request moved since the stored record — the link set changes only with the merge request.
+     */
+    @Transactional(readOnly = true)
+    public boolean closingIssuesStale(Repository repository, int iid, @Nullable String updatedAt) {
+        Instant seen = parseGitLabTimestamp(updatedAt);
+        return pullRequestRepository
+                .findByRepositoryIdAndNumber(repository.getId(), iid)
+                .map(stored -> seen == null || !seen.equals(stored.getUpdatedAt()))
+                .orElse(true);
     }
 
     // Sync Data Records
@@ -148,7 +167,15 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             @Nullable List<SyncUserData> syncReviewers,
             @Nullable List<SyncUserData> syncApprovers,
             @Nullable List<SyncUserData> syncParticipants,
-            @Nullable Integer milestoneIid) {}
+            @Nullable Integer milestoneIid,
+            /** GitLab's own {@code PipelineStatusEnum} name for the head pipeline; null when the MR has none. */
+            @Nullable String headPipelineStatus,
+            @Nullable String headPipelineSha,
+            /**
+             * The iids of the issues GitLab records the MR as closing, from the REST closes-issues route;
+             * null when this sync did not read them, which leaves the stored set alone.
+             */
+            @Nullable List<Integer> closingIssueNumbers) {}
 
     // Webhook Processing
 
@@ -636,6 +663,21 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         boolean changed = updateSyncLabels(data.syncLabels(), pr.getLabels(), repository);
         changed |= updateSyncAssignees(data.syncAssignees(), pr.getAssignees(), providerId);
         changed |= updateSyncReviewers(data.syncReviewers(), pr.getRequestedReviewers(), providerId);
+        // The head pipeline is read on every sync: a head with none has no checks, for that head.
+        if (data.diffHeadSha() != null || data.headPipelineSha() != null) {
+            String checkedSha = data.headPipelineSha() != null ? data.headPipelineSha() : data.diffHeadSha();
+            changed |= pr.observeHeadChecks(
+                    Objects.requireNonNull(checkedSha), mapPipelineStatus(data.headPipelineStatus()), true);
+        }
+        if (data.closingIssueNumbers() != null) {
+            Set<Issue> closing = new HashSet<>();
+            for (Integer number : data.closingIssueNumbers()) {
+                issueRepository
+                        .findByRepositoryIdAndNumber(repository.getId(), number)
+                        .ifPresent(closing::add);
+            }
+            changed |= pr.replaceClosingIssues(closing);
+        }
         if (changed) {
             pr = pullRequestRepository.save(pr);
         }
@@ -883,6 +925,23 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
      * and user native IDs fit in 32 bits. When either exceeds its safe range,
      * collisions become possible due to bit truncation, and a warning is logged.
      */
+    /**
+     * GitLab's pipeline status as one {@link CheckState}: a pipeline that has not finished is pending
+     * whatever stage it is in, a skipped one and no pipeline at all say nothing about the head.
+     */
+    public static CheckState mapPipelineStatus(@Nullable String status) {
+        if (status == null) {
+            return CheckState.NONE;
+        }
+        return switch (status.toUpperCase(Locale.ROOT)) {
+            case "SUCCESS" -> CheckState.SUCCESS;
+            case "FAILED" -> CheckState.FAILURE;
+            case "CANCELED", "CANCELING" -> CheckState.CANCELLED;
+            case "SKIPPED" -> CheckState.NONE;
+            default -> CheckState.PENDING;
+        };
+    }
+
     public static long generateApprovalNativeId(long mrNativeId, long userNativeId) {
         if (mrNativeId > Integer.MAX_VALUE || userNativeId > Integer.MAX_VALUE) {
             log.warn(

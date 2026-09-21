@@ -235,6 +235,9 @@ public class ReviewThreadContentSource implements EvidenceSource {
         if (resolver != null) {
             node.put("resolvedBy", resolver);
         }
+        if (t.getResolvedAt() != null) {
+            node.put("resolvedAt", t.getResolvedAt().toString());
+        }
         if (t.getOutdated() != null) {
             node.put("outdated", t.getOutdated());
         }

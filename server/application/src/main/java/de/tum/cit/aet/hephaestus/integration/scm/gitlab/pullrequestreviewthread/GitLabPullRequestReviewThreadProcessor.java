@@ -68,7 +68,37 @@ public class GitLabPullRequestReviewThreadProcessor {
             @Nullable String commitSha,
             @Nullable String originalCommitSha,
             @Nullable Boolean outdated,
-            @Nullable Instant createdAt) {
+            @Nullable Instant createdAt,
+            /** When GitLab says the discussion was resolved; the discussion states it, the sync copies it. */
+            @Nullable Instant resolvedAt) {
+        /** Overload for callers that do not carry the resolution time. */
+        public ThreadData(
+                String discussionGlobalId,
+                boolean resolved,
+                @Nullable User resolvedBy,
+                @Nullable String filePath,
+                @Nullable Integer newLine,
+                @Nullable Integer oldLine,
+                PullRequestReviewComment.@Nullable Side side,
+                @Nullable String commitSha,
+                @Nullable String originalCommitSha,
+                @Nullable Boolean outdated,
+                @Nullable Instant createdAt) {
+            this(
+                    discussionGlobalId,
+                    resolved,
+                    resolvedBy,
+                    filePath,
+                    newLine,
+                    oldLine,
+                    side,
+                    commitSha,
+                    originalCommitSha,
+                    outdated,
+                    createdAt,
+                    null);
+        }
+
         /** Backward-compatible overload for callers that don't carry outdated data. */
         public ThreadData(
                 String discussionGlobalId,
@@ -204,8 +234,13 @@ public class GitLabPullRequestReviewThreadProcessor {
             existing.setResolvedBy(data.resolvedBy());
             changed = true;
         }
-        if (!data.resolved() && existing.getResolvedBy() != null) {
+        if (data.resolved() && data.resolvedAt() != null && !data.resolvedAt().equals(existing.getResolvedAt())) {
+            existing.setResolvedAt(data.resolvedAt());
+            changed = true;
+        }
+        if (!data.resolved() && (existing.getResolvedBy() != null || existing.getResolvedAt() != null)) {
             existing.setResolvedBy(null);
+            existing.setResolvedAt(null);
             changed = true;
         }
 
@@ -277,6 +312,9 @@ public class GitLabPullRequestReviewThreadProcessor {
                 data.resolved() ? PullRequestReviewThread.State.RESOLVED : PullRequestReviewThread.State.UNRESOLVED);
         if (data.resolved() && data.resolvedBy() != null) {
             thread.setResolvedBy(data.resolvedBy());
+        }
+        if (data.resolved()) {
+            thread.setResolvedAt(data.resolvedAt());
         }
         thread.setCreatedAt(data.createdAt());
         thread.setUpdatedAt(data.createdAt());

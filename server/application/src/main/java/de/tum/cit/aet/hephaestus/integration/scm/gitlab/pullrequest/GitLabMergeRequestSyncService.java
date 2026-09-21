@@ -52,6 +52,7 @@ public class GitLabMergeRequestSyncService {
     private final GitLabGraphQlResponseHandler responseHandler;
     private final GitLabMergeRequestProcessor mergeRequestProcessor;
     private final GitLabDiscussionSyncService discussionSyncService;
+    private final GitLabClosingIssueClient closingIssueClient;
     private final GitLabProperties gitLabProperties;
 
     public GitLabMergeRequestSyncService(
@@ -59,11 +60,13 @@ public class GitLabMergeRequestSyncService {
             GitLabGraphQlResponseHandler responseHandler,
             GitLabMergeRequestProcessor mergeRequestProcessor,
             GitLabDiscussionSyncService discussionSyncService,
+            GitLabClosingIssueClient closingIssueClient,
             GitLabProperties gitLabProperties) {
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
         this.mergeRequestProcessor = mergeRequestProcessor;
         this.discussionSyncService = discussionSyncService;
+        this.closingIssueClient = closingIssueClient;
         this.gitLabProperties = gitLabProperties;
     }
 
@@ -421,6 +424,15 @@ public class GitLabMergeRequestSyncService {
         List<GitLabMergeRequestProcessor.SyncUserData> syncParticipants = extractParticipants(node, mrContext);
 
         Integer milestoneIid = extractMilestoneIid(node);
+        HeadPipeline headPipeline = extractHeadPipeline(node);
+
+        // One REST request per merge request that moved: the closes-issues route is the only place
+        // GitLab states the links, and a merge request that did not change did not change them.
+        List<Integer> closingIssueNumbers = null;
+        Integer iid = parseIid(fields.iid());
+        if (iid != null && mergeRequestProcessor.closingIssuesStale(repository, iid, fields.updatedAt())) {
+            closingIssueNumbers = closingIssueClient.closesIssues(scopeId, repository.getNativeId(), iid);
+        }
 
         var syncData = new GitLabMergeRequestProcessor.SyncMergeRequestData(
                 fields.globalId(),
@@ -465,17 +477,20 @@ public class GitLabMergeRequestSyncService {
                 syncReviewers,
                 syncApprovers,
                 syncParticipants,
-                milestoneIid);
+                milestoneIid,
+                headPipeline.status(),
+                headPipeline.sha(),
+                closingIssueNumbers);
         PullRequest pr = mergeRequestProcessor.processFromSync(syncData, repository, scopeId);
 
         // Sync discussions (threads + comments) for this MR when something can be there.
         // Uses discussion-based sync to preserve thread structure, resolution state, and diff positions.
         if (pr != null
+                && iid != null
                 && readsDiscussions(
                         fields.userNotesCount(), syncApprovers != null && !syncApprovers.isEmpty(), fields.state())) {
             try {
-                discussionSyncService.syncDiscussionsForMergeRequest(
-                        scopeId, repository, Integer.parseInt(fields.iid()), pr);
+                discussionSyncService.syncDiscussionsForMergeRequest(scopeId, repository, iid, pr);
             } catch (Exception e) {
                 log.error("Discussion sync failed for MR: context={}", mrContext, e);
             }
@@ -492,6 +507,26 @@ public class GitLabMergeRequestSyncService {
      */
     static boolean readsDiscussions(int userNotesCount, boolean hasApprover, @Nullable String state) {
         return userNotesCount > 0 || hasApprover || !"opened".equalsIgnoreCase(state);
+    }
+
+    private static @Nullable Integer parseIid(@Nullable String iid) {
+        try {
+            return iid == null ? null : Integer.valueOf(iid);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private record HeadPipeline(
+            @Nullable String status, @Nullable String sha) {}
+
+    @SuppressWarnings("unchecked")
+    private static HeadPipeline extractHeadPipeline(Map<String, Object> node) {
+        Map<String, Object> pipeline = (Map<String, Object>) node.get("headPipeline");
+        if (pipeline == null) {
+            return new HeadPipeline(null, null);
+        }
+        return new HeadPipeline((String) pipeline.get("status"), (String) pipeline.get("sha"));
     }
 
     // Scalar field extraction

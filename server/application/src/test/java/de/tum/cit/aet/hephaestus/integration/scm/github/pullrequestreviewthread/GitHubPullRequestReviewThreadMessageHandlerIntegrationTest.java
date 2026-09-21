@@ -168,11 +168,11 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
 
         handler.handleEvent(event);
 
-        // Then - thread should be resolved
-        assertThat(threadRepository.findById(thread.getId()))
-                .isPresent()
-                .get()
-                .satisfies(t -> assertThat(t.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED));
+        // Then - thread should be resolved, dated by the event: the only source of that moment on GitHub.
+        assertThat(threadRepository.findById(thread.getId())).isPresent().get().satisfies(t -> {
+            assertThat(t.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
+            assertThat(t.getResolvedAt()).isEqualTo(Instant.parse("2025-11-05T12:15:24Z"));
+        });
     }
 
     @Test
@@ -194,6 +194,7 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
         thread.setNodeId(event.thread().nodeId());
         thread.setPullRequest(testPullRequest);
         thread.setState(PullRequestReviewThread.State.RESOLVED);
+        thread.setResolvedAt(Instant.parse("2025-11-05T12:15:24Z"));
         thread.setPath(event.thread().path());
         thread.setLine(event.thread().line());
         thread.setCreatedAt(Instant.now());
@@ -209,11 +210,11 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
 
         handler.handleEvent(event);
 
-        // Then - thread should be unresolved
-        assertThat(threadRepository.findById(thread.getId()))
-                .isPresent()
-                .get()
-                .satisfies(t -> assertThat(t.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED));
+        // Then - thread should be unresolved, and no longer dated as resolved
+        assertThat(threadRepository.findById(thread.getId())).isPresent().get().satisfies(t -> {
+            assertThat(t.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(t.getResolvedAt()).isNull();
+        });
     }
 
     @Test

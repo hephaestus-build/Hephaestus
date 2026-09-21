@@ -50,7 +50,11 @@ export default async function mergeConfirmsTheLinkedIssueOutcome(
 		const heading = OUTCOME_HEADING.test(item.body);
 		const subIssues = item.subIssuesTotal ?? 0;
 		const checkable = items.length > 0 || heading || subIssues > 0;
-		const how = howLinked(item.number, closing, named);
+		// The provider's own link outranks what the text says: a link made in the UI matches no `#N`.
+		const how =
+			item.how === "closes"
+				? "closed by the provider's link"
+				: howLinked(item.number, closing, named);
 		hints.push({
 			file: `inputs/context/linked_work_items/${String(item.number)}.md`,
 			line: items[0]?.line ?? 0,

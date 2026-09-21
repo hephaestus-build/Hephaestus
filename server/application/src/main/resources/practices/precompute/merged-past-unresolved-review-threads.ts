@@ -14,7 +14,7 @@ export default async function mergedPastUnresolvedReviewThreads(
 	const merge = mergeFacts(metadata);
 	const record = await readReviewThreads(contextDir);
 	const threads = record?.threads ?? [];
-	const unresolved = unresolvedThreadRows(threads);
+	const unresolved = unresolvedThreadRows(threads, merge.mergedAt);
 	const directions: string[] = [];
 	if (!merge.merged) {
 		directions.push("The pull request is not merged: the occasion did not arise.");
@@ -24,7 +24,7 @@ export default async function mergedPastUnresolvedReviewThreads(
 		);
 	} else {
 		directions.push(
-			`Merged${merge.mergedBy === undefined ? "" : ` by ${merge.mergedBy}`}${merge.mergedByIsAuthor ? " (the author)" : ""}; ${threads.length} thread(s) captured, ${unresolved.length} not marked RESOLVED, one row each. Read each unresolved thread's comments in comments.json by its id (the comments' \`thread\`) before deciding what it asked.`,
+			`Merged${merge.mergedBy === undefined ? "" : ` by ${merge.mergedBy}`}${merge.mergedByIsAuthor ? " (the author)" : ""}; ${threads.length} thread(s) captured, ${unresolved.length} open at the merge — not marked RESOLVED, or resolved after the merge where the record dates the resolution — one row each. Read each thread's comments in comments.json by its id (the comments' \`thread\`) before deciding what it asked.`,
 		);
 	}
 	return {

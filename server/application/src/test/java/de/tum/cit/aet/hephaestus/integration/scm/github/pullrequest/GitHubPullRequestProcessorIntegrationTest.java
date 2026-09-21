@@ -203,7 +203,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                 null, // mergeStateStatus
                 null, // isMergeable
                 false, // maintainerCanModify
-                null // mergeCommitInfo
+                null, // mergeCommitInfo
+                null, // headChecks
+                null // closingIssueNumbers
                 );
     }
 
@@ -253,7 +255,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.process(dto, createContext());
@@ -306,7 +310,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             // Verify the fallback works
@@ -361,7 +367,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             // Verify fallback returns null
@@ -523,7 +531,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.process(dto, createContext());
@@ -591,7 +601,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.process(dto, createContext());
@@ -652,7 +664,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.processClosed(closedDto, createContext());
@@ -710,7 +724,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.processClosed(mergedDto, createContext());
@@ -770,7 +786,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
             processor.process(draftDto, createContext());
             eventListener.clear();
@@ -812,7 +830,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.processReadyForReview(readyDto, createContext());
@@ -872,7 +892,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.processConvertedToDraft(draftDto, createContext());
@@ -932,7 +954,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.processSynchronize(syncDto, createContext());
@@ -996,7 +1020,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             processor.processLabeled(labeledDto, labelDto, createContext());
@@ -1049,7 +1075,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
             processor.process(withLabelDto, createContext());
             eventListener.clear();
@@ -1091,7 +1119,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             processor.processUnlabeled(unlabeledDto, labelDto, createContext());

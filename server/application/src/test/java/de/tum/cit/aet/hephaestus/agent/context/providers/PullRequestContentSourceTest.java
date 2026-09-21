@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.MergeStateStatus;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -272,6 +273,30 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldWriteTheHeadChecksOnlyWhenTheyWereObservedForTheCurrentHead() throws Exception {
+            PullRequest current = new PullRequest();
+            current.setHeadRefOid(HEAD);
+            current.observeHeadChecks(HEAD, CheckState.FAILURE, true);
+            PullRequest stale = new PullRequest();
+            stale.setHeadRefOid(HEAD);
+            stale.observeHeadChecks("e".repeat(40), CheckState.SUCCESS, true);
+            stubGit();
+
+            when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(current));
+            JsonNode fresh = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+                    .files()
+                    .get("inputs/context/metadata.json"));
+            assertThat(fresh.get("head_checks").asString()).isEqualTo("FAILURE");
+
+            // A state observed for an earlier head is not the current one: left out rather than stated.
+            when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(stale));
+            JsonNode outdated = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+                    .files()
+                    .get("inputs/context/metadata.json"));
+            assertThat(outdated.has("head_checks")).isFalse();
+        }
+
+        @Test
         void shouldWriteEmptyListsAndNoKeysWhenThePullRequestCarriesNoneOfThem() throws Exception {
             stubGit();
 
@@ -287,6 +312,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(metadataJson.has("milestone")).isFalse();
             assertThat(metadataJson.has("merge_state_status")).isFalse();
             assertThat(metadataJson.has("review_decision")).isFalse();
+            assertThat(metadataJson.has("head_checks")).isFalse();
         }
 
         @Test

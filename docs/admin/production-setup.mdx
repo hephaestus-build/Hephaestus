@@ -239,6 +239,13 @@ The login provider is instance-agnostic: gitlab.com works out of the box, and an
 
 This env-seeds **one** default GitLab login provider (registration id `gitlab`). Additional GitLab instances are added at runtime by an instance admin under **Instance admin → Login providers** — no redeploy.
 
+The auto-registered group webhook subscribes to merge request, issue, note, push, tag push, pipeline,
+milestone, member, subgroup and project events. A hook registered by an earlier release does not gain
+a subscription on upgrade: for a workspace connected before pipeline events were read, enable
+**Pipeline events** on the hook under the group's **Settings → Webhooks**, or delete the hook and let
+Hephaestus register it again on the next sync. Until then the head pipeline's state reaches
+Hephaestus only through the scheduled sync.
+
 ### Practice review
 
 Practice review has its own page: **[Practice Review](./practice-review)** covers the deployment

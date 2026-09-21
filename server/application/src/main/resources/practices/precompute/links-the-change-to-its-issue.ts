@@ -44,6 +44,12 @@ export default async function linksTheChangeToItsIssue(
 			});
 		}
 	};
+	// The provider's own record of what the pull request closes comes first: a link made in the UI
+	// or through a cross-project reference matches nothing in the text.
+	const providerLinks = (linked ?? [])
+		.filter((item) => item.how === "closes")
+		.map((item) => item.number);
+	add("inputs/context/linked_work_items.json (how: closes)", providerLinks, true);
 	const title = text(metadata.title);
 	const body = text(metadata.body);
 	const branch = metadata.source_branch;
@@ -62,6 +68,7 @@ export default async function linksTheChangeToItsIssue(
 			hints.filter((h) => h.flags.inInventory === true).map((h) => h.flags.number),
 		).size,
 		closingReferences: hints.filter((h) => h.pattern === "closing reference").length,
+		providerClosingLinks: providerLinks.length,
 		linkedWorkItems: linked?.length ?? -1,
 		inventoryIssues: inventory?.issues?.length ?? -1,
 		inventoryOpenIssues: inventory?.issues?.filter((i) => isOpenState(i.state)).length ?? -1,
@@ -69,7 +76,7 @@ export default async function linksTheChangeToItsIssue(
 	const directions: string[] = [];
 	if (numbers.size > 0) {
 		directions.push(
-			`Issue-shaped references found: ${[...numbers].map((n) => `#${String(n)}`).join(", ")}, one row each with what the inventory holds under that number (${inventory === null ? "no inventory captured" : `${String(metrics.inventoryIssues)} issues`}) and whether it is among the linked items (${linked === null ? "linked_work_items.json not captured" : `${String(linked.length)} captured`}).`,
+			`Issue-shaped references found: ${[...numbers].map((n) => `#${String(n)}`).join(", ")}, one row each with what the inventory holds under that number (${inventory === null ? "no inventory captured" : `${String(metrics.inventoryIssues)} issues`}) and whether it is among the linked items (${linked === null ? "linked_work_items.json not captured" : `${String(linked.length)} captured, ${String(providerLinks.length)} of them the provider records as closed by this change`}).`,
 		);
 	} else {
 		directions.push(

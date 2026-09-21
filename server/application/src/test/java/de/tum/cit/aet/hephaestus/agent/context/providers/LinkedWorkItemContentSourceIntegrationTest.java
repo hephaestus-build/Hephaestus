@@ -13,6 +13,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -89,6 +91,29 @@ class LinkedWorkItemContentSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(rollup.getCompleted()).isEqualTo(1);
         assertThat(none.getTotal()).isZero();
         assertThat(none.getCompleted()).isZero();
+    }
+
+    @Test
+    void shouldListTheIssuesAPullRequestClosesWithTheirLabelsInNumberOrder() {
+        Issue later = persistIssue(20, Issue.State.OPEN, null);
+        Issue earlier = persistIssue(10, Issue.State.CLOSED, null);
+        persistIssue(30, Issue.State.OPEN, null);
+        PullRequest mr = new PullRequest();
+        mr.setNativeId(nextNativeId());
+        mr.setProvider(provider);
+        mr.setNumber(7);
+        mr.setTitle("MR !7");
+        mr.setState(Issue.State.OPEN);
+        mr.setHtmlUrl("https://gitlab.example.com/acme/web/-/merge_requests/7");
+        mr.setRepository(repository);
+        mr.replaceClosingIssues(Set.of(later, earlier));
+        mr = pullRequestRepository.save(mr);
+
+        // Read outside any transaction, as the projection does.
+        List<Issue> closing = pullRequestRepository.findClosingIssuesById(mr.getId());
+
+        assertThat(closing).extracting(Issue::getNumber).containsExactly(10, 20);
+        assertThat(closing.get(0).getLabels()).isEmpty();
     }
 
     private long nextNativeId() {

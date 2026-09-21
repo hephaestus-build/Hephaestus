@@ -356,6 +356,13 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         if (pullRequest.getReviewDecision() != null) {
             result.put("review_decision", pullRequest.getReviewDecision().name());
         }
+        // What the checks said about this head; a state observed for an earlier head is not the
+        // current one and is left out, as is a head no sync or event has reported on.
+        if (pullRequest.getHeadCheckState() != null
+                && pullRequest.getHeadCheckSha() != null
+                && pullRequest.getHeadCheckSha().equals(pullRequest.getHeadRefOid())) {
+            result.put("head_checks", pullRequest.getHeadCheckState().name());
+        }
 
         return result;
     }

@@ -84,6 +84,10 @@ export interface PullRequestMetadata {
 	/** Filled by the GraphQL sync only. */
 	merge_state_status?: string;
 	review_decision?: string;
+	/** What the checks or pipeline said about the reviewed head: SUCCESS, FAILURE, PENDING, CANCELLED or NONE. */
+	head_checks?: string;
+	/** The provider classified the author as automation. */
+	author_bot?: boolean;
 	additions?: number;
 	deletions?: number;
 	changed_files?: number;

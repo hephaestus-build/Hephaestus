@@ -355,9 +355,11 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldDateAThreadWhenTheProviderRecordedWhenItWasOpened() throws Exception {
-        PullRequestReviewThread dated = thread(PullRequestReviewThread.State.UNRESOLVED, "src/Foo.swift", 12, null);
+    void shouldDateAThreadWhenTheProviderRecordedWhenItWasOpenedAndResolved() throws Exception {
+        PullRequestReviewThread dated =
+                thread(PullRequestReviewThread.State.RESOLVED, "src/Foo.swift", 12, user("reviewer-b"));
         dated.setCreatedAt(Instant.parse("2025-06-01T10:00:00Z"));
+        dated.setResolvedAt(Instant.parse("2025-06-02T08:00:00Z"));
         stubThreads(List.of(dated, thread(PullRequestReviewThread.State.UNRESOLVED, "src/Bar.swift", 5, null)));
 
         Map<String, byte[]> files = new HashMap<>();
@@ -365,7 +367,9 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
 
         JsonNode threads = objectMapper.readTree(files.get(FILE_KEY)).get("threads");
         assertThat(threads.get(0).get("createdAt").asString()).isEqualTo("2025-06-01T10:00:00Z");
+        assertThat(threads.get(0).get("resolvedAt").asString()).isEqualTo("2025-06-02T08:00:00Z");
         assertThat(threads.get(1).has("createdAt")).isFalse();
+        assertThat(threads.get(1).has("resolvedAt")).isFalse();
     }
 
     @Test

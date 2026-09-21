@@ -153,7 +153,15 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
                             .findByIdWithAllForGate(pullRequestId)
                             .orElse(null);
 
-            Set<Integer> numbers = new LinkedHashSet<>();
+            // What the provider records the pull request as closing, before what the text mentions: a
+            // link made in the provider's UI or through a cross-project reference matches no `#N`.
+            Map<Integer, Issue> closing = new LinkedHashMap<>();
+            if (pullRequest != null) {
+                for (Issue issue : pullRequestRepository.findClosingIssuesById(pullRequest.getId())) {
+                    closing.put(issue.getNumber(), issue);
+                }
+            }
+            Set<Integer> numbers = new LinkedHashSet<>(closing.keySet());
             collect(NUMBER_REF, pullRequest == null ? null : pullRequest.getTitle(), numbers);
             collect(NUMBER_REF, pullRequest == null ? null : withoutHtmlComments(pullRequest.getBody()), numbers);
             collect(
@@ -176,14 +184,16 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
             int examined = 0;
             for (int number : numbers) {
                 if (examined++ >= MAX_ITEMS) break;
-                Optional<Issue> resolved = issueRepository.findByRepositoryIdAndNumber(repositoryId, number);
+                Optional<Issue> resolved = closing.containsKey(number)
+                        ? Optional.of(closing.get(number))
+                        : issueRepository.findByRepositoryIdAndNumber(repositoryId, number);
                 if (resolved.isEmpty()) {
                     // Found, and pointing at an issue this repository does not mirror: another repository
                     // or an external tracker.
                     unresolved.add(number);
                     continue;
                 }
-                items.add(toItem(resolved.get()));
+                items.add(toItem(resolved.get(), closing.containsKey(number) ? "closes" : "mentions"));
                 files.put(ITEMS_PREFIX + number + ".md", asText(resolved.get()));
             }
 
@@ -219,9 +229,14 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         return ("# " + issue.getTitle() + "\n\n" + dates + "\n\n" + body).getBytes(StandardCharsets.UTF_8);
     }
 
-    private ObjectNode toItem(Issue issue) {
+    /**
+     * @param how {@code closes} when the provider records the pull request as closing the issue,
+     *     {@code mentions} when only the title, description, branch or a commit message names it
+     */
+    private ObjectNode toItem(Issue issue, String how) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("number", issue.getNumber());
+        node.put("how", how);
         node.put("title", issue.getTitle());
         if (issue.getState() != null) node.put("state", issue.getState().name());
         node.put("url", issue.getHtmlUrl());

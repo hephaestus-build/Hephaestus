@@ -137,7 +137,10 @@ entries are the ones kept when it is reached, and the capture is then reported `
 `assignees` (logins, sorted) are always written. `is_merged` is stated apart from `state` because a
 webhook-synced pull request closed by its merge is stored `CLOSED` with `merged_at` set. When present:
 `created_at`, `closed_at`, `merged_at` (ISO instants), `author`, `merged_by`, `milestone` (its title),
-and `merge_state_status` and `review_decision`, which only the GraphQL sync fills. `author_bot: true`
+and `merge_state_status` and `review_decision`, which only the GraphQL sync fills, and `head_checks`
+— `SUCCESS`, `FAILURE`, `PENDING`, `CANCELLED` or `NONE`, what the provider's checks said about the
+head (GitHub's status check rollup, GitLab's head pipeline), written only when the state was observed
+for the head under review and left out for a head no sync or check event has reported on. `author_bot: true`
 is written when the adapter classified the author as automation (GitHub's bot type, GitLab's
 `group_<id>_bot_<hash>` / `project_<id>_bot_<hash>` token identities); absent means a person. The
 same rule gives every `author` below its `bot: true`, so a reader never guesses from a login.
@@ -160,7 +163,10 @@ when `true`). `general_comments.json` entries carry `bot` the same way beside th
 
 **`review_threads.json`** — `threads`, `reviewDecisions` and `truncated`. A thread: `id` (what a
 comment's `thread` names), `state` (`RESOLVED` or `UNRESOLVED`); when present, `path`, `line`,
-`resolvedBy`, `outdated` and `createdAt`. A thread holding a Hephaestus note is left out. A decision is
+`resolvedBy`, `resolvedAt`, `outdated` and `createdAt`. `resolvedAt` is the moment the provider
+recorded: GitLab states it on the discussion, so every synced GitLab thread carries it; GitHub's
+GraphQL thread carries no such moment, so on GitHub it is the time of the resolved webhook event and
+is absent for a resolution only the sync saw. A thread holding a Hephaestus note is left out. A decision is
 a submitted review that decided something: `state` (`APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`,
 `DISMISSED`), and when present `author`, `bot` (only when `true`), `submittedAt`, `body` (what the
 reviewer wrote with it) and `dismissed` (only when `true`). Unsubmitted and unmapped reviews are never listed, and neither is a
@@ -169,11 +175,14 @@ GitLab's sync makes per discussion and author — because its substance is alrea
 The window is the same 10,000 bound as every other list, so an approval on a busy merge request is
 never pushed out by discussion rows.
 
-**`linked_work_items.json`** and **`linked_work_items/<n>.md`** — the issues this repository stores for
-every `#N` the title, the description (HTML comments removed), the branch name and the full commit
-messages of the change mention. A `#N` that continues another name — `owner/repo#12`, `v1.2#3`,
-`GH-12` — is not this repository's issue and is not looked up. `unresolvedReferences[]` lists the
-numbers this repository does not hold. An item's `subIssuesTotal` and `subIssuesCompleted` come with
+**`linked_work_items.json`** and **`linked_work_items/<n>.md`** — the issues this repository stores
+that the provider records the pull request as closing (GitHub's closing references, GitLab's
+closes-issues), and the ones named by every `#N` the title, the description (HTML comments removed),
+the branch name and the full commit messages of the change mention. Each item says `how`: `closes`
+when the provider records the link — made by a keyword, in the provider's UI or through a
+cross-project reference — and `mentions` when only the text names it. A `#N` that continues another
+name — `owner/repo#12`, `v1.2#3`, `GH-12` — is not this repository's issue and is not looked up.
+`unresolvedReferences[]` lists the mentioned numbers this repository does not hold. An item's `subIssuesTotal` and `subIssuesCompleted` come with
 `subIssuesSource`: `provider` when the provider synced the rollup (GitHub), `children` when the record
 counted the issues this repository stores as the item's children, closed ones as completed (GitLab,
 whose sync links a child to its parent and never totals them). All three are absent when there is

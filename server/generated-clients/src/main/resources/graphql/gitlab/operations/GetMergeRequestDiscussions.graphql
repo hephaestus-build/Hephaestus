@@ -9,6 +9,7 @@ query GetMergeRequestDiscussions($fullPath: ID!, $iid: String!, $first: Int!, $a
                 nodes {
                     id
                     resolved
+                    resolvedAt
                     resolvedBy {
                         ...GitLabUserFields
                     }
