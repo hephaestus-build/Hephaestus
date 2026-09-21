@@ -25,9 +25,11 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,6 +110,8 @@ public class GitLabDiscussionSyncService {
             return 0;
         }
 
+        // Who withdrew an approval by note in this pass: the only approvals a later note re-gives.
+        Set<Long> unapproved = new HashSet<>();
         int totalDiffNotes = 0;
         int totalGeneralNotes = 0;
         int totalSkipped = 0;
@@ -172,7 +176,8 @@ public class GitLabDiscussionSyncService {
 
                 for (Map<String, Object> discussionNode : nodes) {
                     try {
-                        int[] result = processDiscussion(discussionNode, pr, repository, provider, providerId, scopeId);
+                        int[] result = processDiscussion(
+                                discussionNode, pr, repository, provider, providerId, scopeId, unapproved);
                         totalDiffNotes += result[0];
                         totalGeneralNotes += result[1];
                         totalSkipped += result[2];
@@ -241,7 +246,8 @@ public class GitLabDiscussionSyncService {
             Repository repository,
             IdentityProvider provider,
             Long providerId,
-            Long scopeId) {
+            Long scopeId,
+            Set<Long> unapproved) {
         String discussionGlobalId = (String) discussionNode.get("id");
         if (discussionGlobalId == null) {
             return new int[] {0, 0, 1};
@@ -284,7 +290,7 @@ public class GitLabDiscussionSyncService {
                     providerId,
                     scopeId);
         } else {
-            return processGeneralDiscussion(noteNodes, pr, providerId, scopeId);
+            return processGeneralDiscussion(noteNodes, pr, providerId, scopeId, unapproved);
         }
     }
 
@@ -525,14 +531,14 @@ public class GitLabDiscussionSyncService {
      * Processes a general discussion into IssueComment(s) via the existing processor.
      */
     private int[] processGeneralDiscussion(
-            List<Map<String, Object>> noteNodes, PullRequest pr, Long providerId, Long scopeId) {
+            List<Map<String, Object>> noteNodes, PullRequest pr, Long providerId, Long scopeId, Set<Long> unapproved) {
         int generalNotes = 0;
 
         for (Map<String, Object> noteNode : noteNodes) {
-            // A system note is not a comment, but the one that records an approval is the only place
-            // GitLab says when the approval was given.
+            // A system note is not a comment, but the ones that record a review decision are the only
+            // place GitLab says who approved, withdrew an approval or requested changes, and when.
             if (Boolean.TRUE.equals(noteNode.get("system"))) {
-                recordApprovalFromSystemNote(noteNode, pr, providerId);
+                recordReviewDecisionFromSystemNote(noteNode, pr, providerId, unapproved);
                 continue;
             }
             if (Boolean.TRUE.equals(noteNode.get("internal"))) {
@@ -576,19 +582,47 @@ public class GitLabDiscussionSyncService {
         return new int[] {0, generalNotes, 0};
     }
 
-    /** GitLab's own wording for the system note it writes when a user approves a merge request. */
+    /**
+     * GitLab's own wording for the system notes it writes on a review decision, as the notes carry it;
+     * the only place the sync learns who decided what, and when.
+     */
     static final String APPROVED_SYSTEM_NOTE = "approved this merge request";
 
-    private void recordApprovalFromSystemNote(Map<String, Object> noteNode, PullRequest pr, Long providerId) {
-        if (!APPROVED_SYSTEM_NOTE.equals(String.valueOf(noteNode.get("body")).strip())) {
+    static final String UNAPPROVED_SYSTEM_NOTE = "unapproved this merge request";
+    static final String REQUESTED_CHANGES_SYSTEM_NOTE = "requested changes";
+
+    /**
+     * @param unapproved the authors whose "unapproved" note this pass has already seen; an "approved"
+     *     note by one of them gives the approval again
+     */
+    void recordReviewDecisionFromSystemNote(
+            Map<String, Object> noteNode, PullRequest pr, Long providerId, Set<Long> unapproved) {
+        String body = String.valueOf(noteNode.get("body")).strip();
+        if (!APPROVED_SYSTEM_NOTE.equals(body)
+                && !UNAPPROVED_SYSTEM_NOTE.equals(body)
+                && !REQUESTED_CHANGES_SYSTEM_NOTE.equals(body)) {
             return;
         }
-        Instant approvedAt = parseTimestamp((String) noteNode.get("createdAt"));
-        User approver = resolveAuthor(noteNode, providerId);
-        if (approvedAt == null || approver == null) {
+        Instant at = parseTimestamp((String) noteNode.get("createdAt"));
+        User author = resolveAuthor(noteNode, providerId);
+        if (at == null || author == null || author.getNativeId() == null) {
             return;
         }
-        reviewReconciler.recordApprovalTime(pr, approver, approvedAt, pr.getProvider());
+        switch (body) {
+            case APPROVED_SYSTEM_NOTE ->
+                reviewReconciler.recordApprovalTime(
+                        pr, author, at, pr.getProvider(), unapproved.contains(author.getNativeId()));
+            case UNAPPROVED_SYSTEM_NOTE -> {
+                reviewReconciler.recordUnapproval(pr, author, at, pr.getProvider());
+                unapproved.add(author.getNativeId());
+            }
+            default -> {
+                String noteGlobalId = (String) noteNode.get("id");
+                if (noteGlobalId != null) {
+                    reviewReconciler.recordChangesRequested(pr, author, noteGlobalId, at, pr.getProvider());
+                }
+            }
+        }
     }
 
     /**

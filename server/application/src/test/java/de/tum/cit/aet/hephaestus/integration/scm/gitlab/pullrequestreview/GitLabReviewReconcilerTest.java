@@ -65,7 +65,7 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
         approval(MERGED_AT);
         when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        PullRequestReview review = reconciler.recordApprovalTime(pr, approver, APPROVED_AT, provider);
+        PullRequestReview review = reconciler.recordApprovalTime(pr, approver, APPROVED_AT, provider, false);
 
         assertThat(review).isNotNull();
         assertThat(review.getSubmittedAt()).isEqualTo(APPROVED_AT);
@@ -79,10 +79,89 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
         Instant earlier = APPROVED_AT.minusSeconds(60);
         approval(earlier);
 
-        PullRequestReview review = reconciler.recordApprovalTime(pr, approver, APPROVED_AT, provider);
+        PullRequestReview review = reconciler.recordApprovalTime(pr, approver, APPROVED_AT, provider, false);
 
         assertThat(review).isNotNull();
         assertThat(review.getSubmittedAt()).isEqualTo(earlier);
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a requested-changes note becomes a CHANGES_REQUESTED review by its author at its time")
+    void shouldRecordChangesRequestedFromTheSystemNote() {
+        when(reviewRepository.findByNativeIdAndProviderId(any(), any())).thenReturn(Optional.empty());
+        when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Instant requestedAt = Instant.parse("2026-04-15T08:23:58Z");
+
+        PullRequestReview review =
+                reconciler.recordChangesRequested(pr, approver, "gid://gitlab/Note/4538627", requestedAt, provider);
+
+        assertThat(review).isNotNull();
+        assertThat(review.getState()).isEqualTo(PullRequestReview.State.CHANGES_REQUESTED);
+        assertThat(review.getAuthor()).isSameAs(approver);
+        assertThat(review.getSubmittedAt()).isEqualTo(requestedAt);
+        assertThat(review.getProvider()).isSameAs(provider);
+        // Keyed by the note, apart from the approval row and from a discussion's COMMENTED row, so a
+        // re-sync finds this row rather than adding another.
+        long nativeId = GitLabReviewReconciler.generateChangesRequestedNativeId("gid://gitlab/Note/4538627", 99L);
+        assertThat(review.getNativeId()).isEqualTo(nativeId);
+        assertThat(nativeId)
+                .isNotEqualTo(GitLabMergeRequestProcessor.generateApprovalNativeId(4242L, 99L))
+                .isNotEqualTo(GitLabReviewReconciler.generateCommentedReviewNativeId("gid://gitlab/Note/4538627", 99L));
+        assertThat(pr.getReviews()).contains(review);
+    }
+
+    @Test
+    @DisplayName("a re-sync of the same requested-changes note updates the row it made before")
+    void shouldReuseTheChangesRequestedRowOnResync() {
+        PullRequestReview existing = new PullRequestReview();
+        existing.setState(PullRequestReview.State.CHANGES_REQUESTED);
+        existing.setSubmittedAt(MERGED_AT);
+        long nativeId = GitLabReviewReconciler.generateChangesRequestedNativeId("gid://gitlab/Note/1", 99L);
+        when(reviewRepository.findByNativeIdAndProviderId(nativeId, 7L)).thenReturn(Optional.of(existing));
+        when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PullRequestReview review =
+                reconciler.recordChangesRequested(pr, approver, "gid://gitlab/Note/1", APPROVED_AT, provider);
+
+        assertThat(review).isSameAs(existing);
+        assertThat(existing.getSubmittedAt()).isEqualTo(APPROVED_AT);
+    }
+
+    @Test
+    @DisplayName("an unapproved note dismisses the approval, and a later approved note gives it again")
+    void shouldDismissOnUnapprovalAndReapproveOnALaterNote() {
+        PullRequestReview review = approval(APPROVED_AT);
+        when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Instant unapprovedAt = APPROVED_AT.plusSeconds(600);
+        Instant reapprovedAt = APPROVED_AT.plusSeconds(1_200);
+
+        PullRequestReview dismissed = reconciler.recordUnapproval(pr, approver, unapprovedAt, provider);
+
+        assertThat(dismissed).isSameAs(review);
+        assertThat(review.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
+        assertThat(review.isDismissed()).isTrue();
+
+        PullRequestReview reapproved = reconciler.recordApprovalTime(pr, approver, reapprovedAt, provider, true);
+
+        assertThat(reapproved).isSameAs(review);
+        assertThat(review.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+        assertThat(review.isDismissed()).isFalse();
+        assertThat(review.getSubmittedAt()).isEqualTo(reapprovedAt);
+    }
+
+    @Test
+    @DisplayName("an approved note does not revive an approval dismissed for a reason it cannot see")
+    void shouldLeaveADismissedApprovalAloneWithoutAnUnapprovalNote() {
+        PullRequestReview review = approval(APPROVED_AT);
+        // Dismissed by the sync because approvedBy no longer lists the user: a push reset the approvals.
+        review.setState(PullRequestReview.State.DISMISSED);
+        review.setDismissed(true);
+
+        PullRequestReview result = reconciler.recordApprovalTime(pr, approver, APPROVED_AT, provider, false);
+
+        assertThat(result).isSameAs(review);
+        assertThat(review.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
         verify(reviewRepository, never()).save(any());
     }
 
@@ -91,7 +170,7 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
     void shouldRecordNothingWithoutAnApproval() {
         when(reviewRepository.findByNativeIdAndProviderId(any(), any())).thenReturn(Optional.empty());
 
-        assertThat(reconciler.recordApprovalTime(pr, approver, APPROVED_AT, provider))
+        assertThat(reconciler.recordApprovalTime(pr, approver, APPROVED_AT, provider, false))
                 .isNull();
         verify(reviewRepository, never()).save(any());
     }

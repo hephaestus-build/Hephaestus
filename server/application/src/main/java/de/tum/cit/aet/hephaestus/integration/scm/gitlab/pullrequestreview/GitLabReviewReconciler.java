@@ -110,21 +110,29 @@ public class GitLabReviewReconciler {
      * before merging needs. The earliest such note by the approver stands; an approval later than the
      * note is moved back, one earlier is left alone.
      *
+     * <p>An approval the same person had withdrawn with a note ({@link #recordUnapproval}) is given
+     * again by a later note: {@code afterUnapproval} says the caller saw that withdrawal, and only then
+     * is a dismissed row re-approved — a row {@code approvedBy} no longer lists was dismissed for a
+     * reason this note does not undo, such as a push that reset the approvals.
+     *
      * @return the review as it stands after the note, or {@code null} when no approval by this user is
      *     recorded for the merge request
      */
     @Transactional(propagation = Propagation.REQUIRED)
     public @Nullable PullRequestReview recordApprovalTime(
-            PullRequest pr, User approver, Instant approvedAt, IdentityProvider provider) {
-        if (pr.getNativeId() == null || approver.getNativeId() == null || provider.getId() == null) {
+            PullRequest pr, User approver, Instant approvedAt, IdentityProvider provider, boolean afterUnapproval) {
+        PullRequestReview review = approvalReview(pr, approver, provider);
+        if (review == null) {
             return null;
         }
-        long approvalNativeId =
-                GitLabMergeRequestProcessor.generateApprovalNativeId(pr.getNativeId(), approver.getNativeId());
-        PullRequestReview review = reviewRepository
-                .findByNativeIdAndProviderId(approvalNativeId, provider.getId())
-                .orElse(null);
-        if (review == null || review.getState() != PullRequestReview.State.APPROVED) {
+        if (review.getState() == PullRequestReview.State.DISMISSED && afterUnapproval) {
+            review.setState(PullRequestReview.State.APPROVED);
+            review.setDismissed(false);
+            review.setSubmittedAt(approvedAt);
+            review.setUpdatedAt(Instant.now());
+            return reviewRepository.save(review);
+        }
+        if (review.getState() != PullRequestReview.State.APPROVED) {
             return review;
         }
         Instant recorded = review.getSubmittedAt();
@@ -135,6 +143,71 @@ public class GitLabReviewReconciler {
             return reviewRepository.save(review);
         }
         return review;
+    }
+
+    /**
+     * The system note "unapproved this merge request": the person withdrew their approval, so their
+     * approval review is dismissed, as the {@code unapproved} webhook dismisses it. Not a request for
+     * changes — that is its own note and its own review.
+     *
+     * @return the review as it stands after the note, or {@code null} when no approval by this user is
+     *     recorded for the merge request
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public @Nullable PullRequestReview recordUnapproval(
+            PullRequest pr, User approver, Instant unapprovedAt, IdentityProvider provider) {
+        PullRequestReview review = approvalReview(pr, approver, provider);
+        if (review == null || review.getState() != PullRequestReview.State.APPROVED) {
+            return review;
+        }
+        review.setState(PullRequestReview.State.DISMISSED);
+        review.setDismissed(true);
+        review.setUpdatedAt(unapprovedAt);
+        return reviewRepository.save(review);
+    }
+
+    /**
+     * The system note "requested changes": one CHANGES_REQUESTED review by its author at the note's
+     * time. Each such note is its own decision, so the row is keyed by the note, and a re-sync finds the
+     * row it made before. The approval review of the same person is left alone: GitLab keeps the two
+     * apart, and so does this record.
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public @Nullable PullRequestReview recordChangesRequested(
+            PullRequest pr, User reviewer, String noteGlobalId, Instant requestedAt, IdentityProvider provider) {
+        if (reviewer.getNativeId() == null || provider.getId() == null) {
+            return null;
+        }
+        long nativeId = generateChangesRequestedNativeId(noteGlobalId, reviewer.getNativeId());
+        PullRequestReview review = reviewRepository
+                .findByNativeIdAndProviderId(nativeId, provider.getId())
+                .orElseGet(() -> {
+                    PullRequestReview created = new PullRequestReview();
+                    created.setNativeId(nativeId);
+                    created.setProvider(provider);
+                    created.setState(PullRequestReview.State.CHANGES_REQUESTED);
+                    created.setHtmlUrl(pr.getHtmlUrl() != null ? pr.getHtmlUrl() : "");
+                    created.setCreatedAt(requestedAt);
+                    created.setAuthor(reviewer);
+                    created.setPullRequest(pr);
+                    return created;
+                });
+        review.setSubmittedAt(requestedAt);
+        review.setUpdatedAt(Instant.now());
+        PullRequestReview saved = reviewRepository.save(review);
+        pr.addReview(saved);
+        return saved;
+    }
+
+    private @Nullable PullRequestReview approvalReview(PullRequest pr, User approver, IdentityProvider provider) {
+        if (pr.getNativeId() == null || approver.getNativeId() == null || provider.getId() == null) {
+            return null;
+        }
+        long approvalNativeId =
+                GitLabMergeRequestProcessor.generateApprovalNativeId(pr.getNativeId(), approver.getNativeId());
+        return reviewRepository
+                .findByNativeIdAndProviderId(approvalNativeId, provider.getId())
+                .orElse(null);
     }
 
     private PullRequestReview updateReview(
@@ -202,15 +275,27 @@ public class GitLabReviewReconciler {
     /**
      * Produces a deterministic positive Long native ID for a COMMENTED review.
      * <p>
-     * Uses FNV-1a over {@code discussionGlobalId + "|" + authorNativeId}. Collisions
+     * Uses FNV-1a over {@code key + "|" + authorNativeId}. Collisions
      * with the bit-packed approval native IDs ({@code (mr<<32)|user}) are
      * astronomically unlikely because the two schemes occupy different hash spaces;
      * any collision would surface as a DB unique-constraint violation and is logged.
      */
     public static long generateCommentedReviewNativeId(String discussionGlobalId, long authorNativeId) {
+        return deterministicNativeId(discussionGlobalId, authorNativeId);
+    }
+
+    /**
+     * The native ID of a CHANGES_REQUESTED review, hashed like a COMMENTED one but over the system
+     * note's GID with a prefix, so it never coincides with the COMMENTED review of a discussion.
+     */
+    public static long generateChangesRequestedNativeId(String noteGlobalId, long authorNativeId) {
+        return deterministicNativeId("requested-changes:" + noteGlobalId, authorNativeId);
+    }
+
+    private static long deterministicNativeId(String key, long authorNativeId) {
         long hash = FNV_OFFSET_BASIS;
-        for (int i = 0; i < discussionGlobalId.length(); i++) {
-            hash ^= discussionGlobalId.charAt(i);
+        for (int i = 0; i < key.length(); i++) {
+            hash ^= key.charAt(i);
             hash *= FNV_PRIME;
         }
         hash ^= '|';

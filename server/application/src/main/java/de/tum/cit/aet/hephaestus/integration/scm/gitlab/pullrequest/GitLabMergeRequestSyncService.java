@@ -468,9 +468,11 @@ public class GitLabMergeRequestSyncService {
                 milestoneIid);
         PullRequest pr = mergeRequestProcessor.processFromSync(syncData, repository, scopeId);
 
-        // Sync discussions (threads + comments) for this MR if it has comments and wasn't skipped.
+        // Sync discussions (threads + comments) for this MR when something can be there.
         // Uses discussion-based sync to preserve thread structure, resolution state, and diff positions.
-        if (pr != null && fields.userNotesCount() > 0) {
+        if (pr != null
+                && readsDiscussions(
+                        fields.userNotesCount(), syncApprovers != null && !syncApprovers.isEmpty(), fields.state())) {
             try {
                 discussionSyncService.syncDiscussionsForMergeRequest(
                         scopeId, repository, Integer.parseInt(fields.iid()), pr);
@@ -480,6 +482,16 @@ public class GitLabMergeRequestSyncService {
         }
 
         return pr;
+    }
+
+    /**
+     * Whether a merge request's discussions are fetched at all: the gate spares one request per
+     * untouched open MR. The review decisions — an approval's time, a request for changes, an
+     * unapproval — live in system notes, which {@code userNotesCount} does not count, so an MR with an
+     * approver or one that has left the open state is read regardless.
+     */
+    static boolean readsDiscussions(int userNotesCount, boolean hasApprover, @Nullable String state) {
+        return userNotesCount > 0 || hasApprover || !"opened".equalsIgnoreCase(state);
     }
 
     // Scalar field extraction
