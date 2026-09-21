@@ -7,11 +7,13 @@ import type {
 
 export function nextStepOf(practiceStanding?: PracticeStanding): string | undefined {
 	const firstAction = practiceStanding?.toWorkOn[0];
-	if (!firstAction) return undefined;
+	if (!firstAction) {
+		return undefined;
+	}
 	const deliveredGuidance = firstAction.deliveredFeedback?.trim();
 	const observationTitle = firstAction.title.trim();
 	const distinctTitle =
-		observationTitle !== practiceStanding.name.trim() ? observationTitle : undefined;
+		observationTitle === practiceStanding.name.trim() ? undefined : observationTitle;
 	return [deliveredGuidance, distinctTitle].find((value) => value !== undefined && value !== "");
 }
 

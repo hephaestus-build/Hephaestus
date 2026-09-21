@@ -37,6 +37,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { hasText } from "@/lib/text";
 
 const RELEASE_CONFIRM_WORD = "release";
 
@@ -74,7 +75,9 @@ export function SilentModeCard({
 
 	const confirmRelease = (event: SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (releaseDisabled) return;
+		if (releaseDisabled) {
+			return;
+		}
 		if (confirmWord.trim() !== RELEASE_CONFIRM_WORD) {
 			setMismatch(true);
 			return;
@@ -106,10 +109,10 @@ export function SilentModeCard({
 					) : (
 						<Badge variant="success">Released</Badge>
 					)}
-					{settings.silentModeChangedBy || settings.silentModeChangedAt ? (
+					{hasText(settings.silentModeChangedBy) || settings.silentModeChangedAt ? (
 						<span className="text-sm text-muted-foreground">
 							{engaged ? "engaged" : "last changed"}
-							{settings.silentModeChangedBy ? ` by ${settings.silentModeChangedBy}` : ""}
+							{hasText(settings.silentModeChangedBy) ? ` by ${settings.silentModeChangedBy}` : ""}
 							{settings.silentModeChangedAt ? (
 								<>
 									{" "}
@@ -119,7 +122,7 @@ export function SilentModeCard({
 						</span>
 					) : null}
 				</div>
-				{engaged && settings.silentModeReason ? (
+				{engaged && hasText(settings.silentModeReason) ? (
 					<p className="text-sm text-muted-foreground">Reason: “{settings.silentModeReason}”</p>
 				) : null}
 			</CardContent>

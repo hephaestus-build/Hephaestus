@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
@@ -33,15 +32,6 @@ public class PracticeDetectionResultParser {
     private static final int MAX_RAW_OUTPUT_LENGTH = 1_000_000;
 
     static final int MAX_MR_NOTE_LENGTH = 60_000;
-
-    /** Only practices with correctness, security, or integrity consequences may block a merge. */
-    static final Set<String> BLOCKING_ELIGIBLE_PRACTICES = Set.of(
-            "handles-errors-instead-of-swallowing-them",
-            "validates-inputs-and-edge-cases-at-the-boundary",
-            "avoids-unsafe-panics-and-chosen-crashes",
-            "validates-and-escapes-untrusted-input",
-            "avoids-insecure-defaults-and-over-broad-permissions",
-            "keeps-the-test-suite-honest");
 
     private static final Set<String> OBSERVATION_FIELDS = Set.of(
             "practiceSlug",
@@ -359,43 +349,16 @@ public class PracticeDetectionResultParser {
         public @Nullable String occurrenceKey() {
             return keys == null ? null : keys.occurrenceKey();
         }
-
-        /** Enforces valence and severity invariants independently of model output. */
-        public ValidatedObservation coerceCoherence(boolean isDefectDetector, boolean advisoryOnly) {
-            Presence p = presence;
-            Assessment a = assessment;
-            if (isDefectDetector && a == Assessment.GOOD) {
-                throw new ObservationsRefusedException(
-                        "incoherent_assessment",
-                        "Practice " + practiceSlug
-                                + " targets harmful behaviour: assessment must be BAD for both presence values. Reassess the original"
-                                + " evidence; inconsistency does not establish that the practice is inapplicable.");
-            }
-            assessmentStatus.validate(p, a, severity);
-            Severity s = severity;
-            if (advisoryOnly && outcome() == Outcome.NEGATIVE && (s == Severity.CRITICAL || s == Severity.MAJOR)) {
-                s = Severity.MINOR;
-            }
-            if ("avoids-insecure-defaults-and-over-broad-permissions".equals(practiceSlug) && s == Severity.CRITICAL) {
-                s = Severity.MAJOR;
-            }
-            if (p == presence && a == assessment && s == severity) {
-                return this;
-            }
-            return new ValidatedObservation(
-                    practiceSlug, summary, assessmentStatus, p, a, s, evidence, evidenceRationale, keys);
-        }
     }
 
-    /** Applies coherence rules to all observations and returns a mutable result. */
-    public static List<ValidatedObservation> coerceCoherence(
-            List<ValidatedObservation> observations, Set<String> defectDetectorSlugs) {
-        List<ValidatedObservation> out = new ArrayList<>(observations.size());
-        for (ValidatedObservation f : observations) {
-            boolean advisoryOnly = !BLOCKING_ELIGIBLE_PRACTICES.contains(f.practiceSlug());
-            out.add(f.coerceCoherence(defectDetectorSlugs.contains(f.practiceSlug()), advisoryOnly));
+    /** Validates axes without changing the practice's contextual judgment or severity. */
+    public static List<ValidatedObservation> validateCoherence(List<ValidatedObservation> observations) {
+        for (ValidatedObservation observation : observations) {
+            observation
+                    .assessmentStatus()
+                    .validate(observation.presence(), observation.assessment(), observation.severity());
         }
-        return out;
+        return new ArrayList<>(observations);
     }
 
     public record DiscardedEntry(int index, String reason) {}
@@ -425,16 +388,15 @@ public class PracticeDetectionResultParser {
      *
      * @param filePath path relative to repo root (new path, not old)
      * @param endLine  optional last line number for multi-line (GitHub only; GitLab ignores)
-     * @param recurrenceKey the stable cross-run identity inherited from the observation this note belongs to, so a
-     *     posted placement can be matched back across re-runs; {@code null} until {@link DeliveryComposer}
-     *     carries it over from the stamped observation.
+     * @param deliveryKey opaque receipt-correlation key for this exact observation, carried from its
+     *     occurrence identity by {@link DeliveryComposer}; null before server-side correlation.
      */
     public record DiffNote(
             String filePath,
             int startLine,
             @Nullable Integer endLine,
             String body,
-            @Nullable String recurrenceKey) {
+            @Nullable String deliveryKey) {
         /** The parser's pre-correlation output shape: a note with no correlation key yet. */
         public DiffNote(String filePath, int startLine, @Nullable Integer endLine, String body) {
             this(filePath, startLine, endLine, body, null);

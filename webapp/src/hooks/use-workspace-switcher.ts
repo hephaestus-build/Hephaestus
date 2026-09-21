@@ -15,7 +15,9 @@ export function useWorkspaceSwitcher() {
 	// each route to declare which of its own options are portable through `retainSearchParams`.
 	return async (workspace: { displayName: string; workspaceSlug: string }) => {
 		const { displayName, workspaceSlug } = workspace;
-		if (workspaceSlug === currentWorkspaceSlug) return;
+		if (workspaceSlug === currentWorkspaceSlug) {
+			return;
+		}
 
 		if (portable) {
 			await navigate({

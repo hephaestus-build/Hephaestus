@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, userEvent } from "storybook/test";
 
 import type { AdminWorkspaceView } from "@/api/types.gen";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { expectGenuinelyDisabled } from "@/test/controls";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import { AdminWorkspacesTable } from "./AdminWorkspacesTable";
 

@@ -13,17 +13,15 @@ import {
 	placePracticeMutation,
 	previewGroupAdoptionQueryKey,
 } from "@/api/@tanstack/react-query.gen";
+import type * as ReactQueryGen from "@/api/@tanstack/react-query.gen";
 import type { Practice } from "@/api/types.gen";
-import {
-	mockGroups,
-	mockPractice,
-	mockPractices,
-} from "@/components/admin/practices/story-mock-data";
+import { mockGroups, mockPractice, mockPractices } from "@/components/admin/practices/fixtures";
+import { deferred } from "@/test/async";
 
 import { usePracticeCatalogMutations } from "./use-practice-catalog-mutations";
 
 vi.mock("@/api/@tanstack/react-query.gen", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@/api/@tanstack/react-query.gen")>();
+	const actual = await importOriginal<typeof ReactQueryGen>();
 	return {
 		...actual,
 		deleteGroupMutation: vi.fn(),
@@ -86,12 +84,9 @@ describe("usePracticeCatalogMutations", () => {
 			}),
 			moving,
 		);
-		let resolveRequest: (value: Practice[]) => void = () => {};
+		const request = deferred<Practice[]>();
 		vi.mocked(placePracticeMutation).mockReturnValue({
-			mutationFn: () =>
-				new Promise<Practice[]>((resolve) => {
-					resolveRequest = resolve;
-				}),
+			mutationFn: async () => request.promise,
 		});
 		const { result } = renderHook(() => usePracticeCatalogMutations(WORKSPACE), {
 			wrapper: wrapper(client),
@@ -123,7 +118,7 @@ describe("usePracticeCatalogMutations", () => {
 				.map(({ displayOrder }) => displayOrder),
 		).toStrictEqual([0, 1]);
 
-		resolveRequest([
+		request.resolve([
 			first,
 			{ ...last, displayOrder: 1 },
 			{ ...moving, groupSlug: "delivery", displayOrder: 0 },
@@ -136,12 +131,9 @@ describe("usePracticeCatalogMutations", () => {
 		const client = queryClient();
 		const practices = [practice("moving", "quality", 0), practice("remaining", "quality", 1)];
 		client.setQueryData(queryKey, practices);
-		let rejectRequest: (reason: Error) => void = () => {};
+		const request = deferred<Practice[]>();
 		vi.mocked(placePracticeMutation).mockReturnValue({
-			mutationFn: () =>
-				new Promise<Practice[]>((_resolve, reject) => {
-					rejectRequest = reject;
-				}),
+			mutationFn: async () => request.promise,
 		});
 		const { result } = renderHook(() => usePracticeCatalogMutations(WORKSPACE), {
 			wrapper: wrapper(client),
@@ -161,7 +153,7 @@ describe("usePracticeCatalogMutations", () => {
 			expect(moved.groupSlug).toBeUndefined();
 		});
 		client.setQueryData<Practice[]>(queryKey, deactivating("moving"));
-		rejectRequest(new Error("rejected"));
+		request.reject(new Error("rejected"));
 
 		await waitFor(() => expect(result.current.placePractice.isError).toBe(true));
 		expect(
@@ -179,13 +171,8 @@ describe("usePracticeCatalogMutations", () => {
 			practice("first", "quality", 0),
 			practice("second", "quality", 1),
 		]);
-		let resolveFirst: (value: Practice[]) => void = () => {};
-		const mutation = vi.fn(
-			() =>
-				new Promise<Practice[]>((resolve) => {
-					resolveFirst = resolve;
-				}),
-		);
+		const first = deferred<Practice[]>();
+		const mutation = vi.fn(async () => first.promise);
 		vi.mocked(placePracticeMutation).mockReturnValue({ mutationFn: mutation });
 		const { result } = renderHook(() => usePracticeCatalogMutations(WORKSPACE), {
 			wrapper: wrapper(client),
@@ -206,7 +193,7 @@ describe("usePracticeCatalogMutations", () => {
 		expect(result.current.blockedMoveDestinationSlugs).toStrictEqual(
 			new Set(["__unassigned__", "quality"]),
 		);
-		resolveFirst([practice("second", "quality", 0), practice("first", "quality", 1)]);
+		first.resolve([practice("second", "quality", 0), practice("first", "quality", 1)]);
 		await waitFor(() => expect(result.current.placePractice.isSuccess).toBe(true));
 	});
 
@@ -217,12 +204,9 @@ describe("usePracticeCatalogMutations", () => {
 			practice("elsewhere", "delivery", 0),
 		]);
 		client.setQueryData(adoptionCatalogQueryKey, []);
-		let resolveDelete: () => void = () => {};
+		const deletion = deferred();
 		vi.mocked(deletePracticeMutation).mockReturnValue({
-			mutationFn: () =>
-				new Promise<void>((resolve) => {
-					resolveDelete = resolve;
-				}),
+			mutationFn: async () => deletion.promise,
 		});
 		const { result } = renderHook(() => usePracticeCatalogMutations(WORKSPACE), {
 			wrapper: wrapper(client),
@@ -237,7 +221,7 @@ describe("usePracticeCatalogMutations", () => {
 		await waitFor(() => expect(result.current.deletePractice.isPending).toBe(true));
 		expect(result.current.blockedPracticeOrderBuckets).toStrictEqual(new Set(["quality"]));
 		expect(result.current.blockedMoveDestinationSlugs).toStrictEqual(new Set(["quality"]));
-		resolveDelete();
+		deletion.resolve();
 		await waitFor(() => expect(result.current.deletePractice.isSuccess).toBe(true));
 		expect(client.getQueryState(adoptionCatalogQueryKey)?.isInvalidated).toBe(true);
 	});
@@ -250,12 +234,9 @@ describe("usePracticeCatalogMutations", () => {
 			path: { workspaceSlug: WORKSPACE, slug: "quality" },
 		});
 		client.setQueryData(groupPreviewKey, {});
-		let resolveDelete: () => void = () => {};
+		const deletion = deferred();
 		vi.mocked(deleteGroupMutation).mockReturnValue({
-			mutationFn: () =>
-				new Promise<void>((resolve) => {
-					resolveDelete = resolve;
-				}),
+			mutationFn: async () => deletion.promise,
 		});
 		const { result } = renderHook(() => usePracticeCatalogMutations(WORKSPACE), {
 			wrapper: wrapper(client),
@@ -271,7 +252,7 @@ describe("usePracticeCatalogMutations", () => {
 		expect(result.current.blockedMoveDestinationSlugs).toStrictEqual(
 			new Set(["quality", "__unassigned__"]),
 		);
-		resolveDelete();
+		deletion.resolve();
 		await waitFor(() => expect(result.current.deleteGroup.isSuccess).toBe(true));
 		expect(client.getQueryState(groupPreviewKey)?.isInvalidated).toBe(true);
 	});
@@ -284,7 +265,9 @@ describe("usePracticeCatalogMutations", () => {
 			practice("kept", "delivery", 0),
 		]);
 		client.setQueryData(adoptionCatalogQueryKey, []);
-		vi.mocked(deleteGroupMutation).mockReturnValue({ mutationFn: async () => {} });
+		vi.mocked(deleteGroupMutation).mockReturnValue({
+			mutationFn: vi.fn().mockResolvedValue(undefined),
+		});
 		const { result } = renderHook(() => usePracticeCatalogMutations(WORKSPACE), {
 			wrapper: wrapper(client),
 		});

@@ -18,7 +18,6 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
  * @see https://www.w3.org/TR/wai-aria-1.2/#group
  */
 const meta = {
-	title: "Tests/Toggle group orientation",
 	component: ToggleGroup,
 	parameters: { layout: "padded", chromatic: { disableSnapshot: true } },
 	tags: ["autodocs"],

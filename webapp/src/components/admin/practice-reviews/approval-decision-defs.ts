@@ -1,6 +1,6 @@
 import { CheckCircle2Icon, CircleXIcon } from "lucide-react";
 import type { FeedbackApproval } from "@/api/types.gen";
-import type { StatusDefs } from "@/components/practice-vocabulary/status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export const APPROVAL_DECISION_DEFS = {
 	APPROVED: {

@@ -39,7 +39,7 @@ export const GrantAdmin: Story = {
 	args: { user: regularUser, icon: ShieldCheck },
 	play: async ({ args }) => {
 		await screen.findByRole("alertdialog");
-		screen.getByText(/Grant application admin\?/i);
+		screen.getByText(/Grant application admin\?/iu);
 		await userEvent.click(screen.getByRole("button", { name: "Grant admin" }));
 		await expect(args.onConfirm).toHaveBeenCalledWith(regularUser, "APP_ADMIN");
 	},
@@ -60,6 +60,6 @@ export const Pending: Story = {
 	args: { user: regularUser, icon: ShieldCheck, isPending: true },
 	play: async () => {
 		await screen.findByRole("alertdialog");
-		await expect(screen.getByRole("button", { name: /grant admin/i })).toBeDisabled();
+		await expect(screen.getByRole("button", { name: /grant admin/iu })).toBeDisabled();
 	},
 };

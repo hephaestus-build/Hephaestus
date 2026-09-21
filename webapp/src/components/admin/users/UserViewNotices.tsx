@@ -13,16 +13,20 @@ export interface UserViewNoticesProps {
 }
 
 export function UserViewNotices({ state }: UserViewNoticesProps) {
-	if (state.status !== "ready") return null;
-	if (state.practicesEnabled && state.mentorEnabled) return null;
+	if (state.status !== "ready") {
+		return null;
+	}
+	if (state.practicesEnabled && state.mentorEnabled) {
+		return null;
+	}
 	return (
 		<Alert role="note">
 			<InfoIcon aria-hidden />
-			<AlertTitle>This view shows more than the user's own profile</AlertTitle>
+			<AlertTitle>This view shows more than the user’s own profile</AlertTitle>
 			<AlertDescription>
 				{!state.practicesEnabled && (
 					<p>
-						Practices are disabled in this workspace. The user's regular profile hides standings;
+						Practices are disabled in this workspace. The user’s regular profile hides standings;
 						this user view shows existing information.
 					</p>
 				)}

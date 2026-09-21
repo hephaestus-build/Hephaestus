@@ -6,10 +6,9 @@ import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
 } from "@/mocks/fixtures/practice";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
-import { expectNoPageOverflow } from "@/test/reflow";
 
-import { PracticeCatalog } from "./PracticeCatalog";
 import {
 	chosenAutonomy,
 	groupAutonomy,
@@ -18,7 +17,8 @@ import {
 	mockPracticeLongText,
 	mockPractices,
 	mockUnassignedPractice,
-} from "./story-mock-data";
+} from "./fixtures";
+import { PracticeCatalog } from "./PracticeCatalog";
 
 const [reviewReadyGroup, issueAuthoringGroup] = mockGroups;
 const [prDescriptionPractice, reviewThoroughnessPractice, testCoveragePractice] = mockPractices;
@@ -105,7 +105,6 @@ const idlePending = {
 };
 
 const meta = {
-	title: "Workspace admin/Practices/Practice setup",
 	component: PracticeCatalog,
 	parameters: {
 		layout: "padded",
@@ -214,7 +213,7 @@ export const WithInstanceCatalog: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByRole("heading", { name: "Instance catalog" });
 		await expect(
-			canvas.getAllByRole("link", { name: /Explain what changed and why/ }),
+			canvas.getAllByRole("link", { name: /Explain what changed and why/u }),
 		).toHaveLength(1);
 	},
 };
@@ -270,7 +269,7 @@ export const AtScale: Story = {
 	args: { groups: scaleGroups, practices: scalePractices },
 	parameters: { chromatic: { viewports: [320, 1440] } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByRole("button", { name: /^Reorder / })).toHaveLength(40);
+		await expect(canvas.getAllByRole("button", { name: /^Reorder /u })).toHaveLength(40);
 		await expectNoPageOverflow();
 	},
 };
@@ -359,7 +358,7 @@ export const KeyboardReordering: Story = {
 		handle.dispatchEvent(
 			new KeyboardEvent("keydown", { key: "ArrowDown", code: "ArrowDown", bubbles: true }),
 		);
-		await screen.findByText(new RegExp(`Moving ${mockPracticeLongText.name}`));
+		await screen.findByText(new RegExp(`Moving ${mockPracticeLongText.name}`, "u"));
 		handle.dispatchEvent(new KeyboardEvent("keydown", { key: " ", code: "Space", bubbles: true }));
 		await expect(args.onPlacePractice).toHaveBeenCalledWith(
 			mockPracticeLongText.slug,
@@ -432,8 +431,9 @@ export const EmptyDestinations: Story = {
 	play: async ({ canvas }) => {
 		for (const group of mockGroups) {
 			const groupSection = canvas.getByText(group.name).closest('[data-slot="accordion-item"]');
-			if (!(groupSection instanceof HTMLElement))
+			if (!(groupSection instanceof HTMLElement)) {
 				throw new Error(`Group ${group.name} not rendered`);
+			}
 			await expect(within(groupSection).getByText("No practices here.")).toBeVisible();
 		}
 		await expect(canvas.getByText("Nothing unassigned.")).toBeVisible();
@@ -452,11 +452,14 @@ export const CrossGroupDrag: Story = {
 		const destinationGroup = canvas
 			.getByText(issueAuthoringGroup.name)
 			.closest('[data-slot="accordion-item"]');
-		if (!(destinationGroup instanceof HTMLElement))
+		if (!(destinationGroup instanceof HTMLElement)) {
 			throw new Error("Destination group not rendered");
+		}
 		const destination = within(destinationGroup).getByText("No practices here.");
 		const sourceRow = handle.closest('[data-slot="item"]');
-		if (!(sourceRow instanceof HTMLElement)) throw new Error("Practice row not rendered");
+		if (!(sourceRow instanceof HTMLElement)) {
+			throw new Error("Practice row not rendered");
+		}
 		const start = handle.getBoundingClientRect();
 		const end = destination.getBoundingClientRect();
 
@@ -479,7 +482,9 @@ export const CrossGroupDrag: Story = {
 				.filter((row): row is HTMLElement => row instanceof HTMLElement && row !== sourceRow);
 			await expect(rows).toHaveLength(1);
 			const [previewRow] = rows;
-			if (!previewRow) throw new Error("The drag preview row disappeared");
+			if (!previewRow) {
+				throw new Error("The drag preview row disappeared");
+			}
 			return previewRow;
 		});
 		await expect(
@@ -516,7 +521,9 @@ export const BetweenRowsDrag: Story = {
 		const anchor = testCoveragePractice;
 		const handle = canvas.getByRole("button", { name: `Reorder ${source.name}` });
 		const anchorRow = canvas.getByText(anchor.name).closest<HTMLElement>('[data-slot="item"]');
-		if (!anchorRow) throw new Error("Destination practice row not rendered");
+		if (!anchorRow) {
+			throw new Error("Destination practice row not rendered");
+		}
 		const start = handle.getBoundingClientRect();
 		const end = anchorRow.getBoundingClientRect();
 
@@ -560,7 +567,9 @@ export const BlockedDestinationDrag: Story = {
 		const destinationGroup = canvas
 			.getByText(issueAuthoringGroup.name)
 			.closest<HTMLElement>('[data-slot="accordion-item"]');
-		if (!destinationGroup) throw new Error("Blocked destination group not rendered");
+		if (!destinationGroup) {
+			throw new Error("Blocked destination group not rendered");
+		}
 		const destination = within(destinationGroup).getByText("No practices here.");
 		const start = handle.getBoundingClientRect();
 		const end = destination.getBoundingClientRect();
@@ -621,7 +630,9 @@ export const AutonomyLevels: Story = {
 
 		for (const [name, autonomy, decidedBy] of expected) {
 			const listitem = canvas.getByText(name).closest('[role="listitem"]');
-			if (!(listitem instanceof HTMLElement)) throw new Error(`No row for ${name}`);
+			if (!(listitem instanceof HTMLElement)) {
+				throw new Error(`No row for ${name}`);
+			}
 			const row = within(listitem);
 			await expect(row.getByText(autonomy).closest('[data-slot="badge"]')).toBeVisible();
 			await expect(row.getByText(decidedBy)).toBeVisible();

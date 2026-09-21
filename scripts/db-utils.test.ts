@@ -15,30 +15,32 @@ const generated = `<?xml version="1.1" encoding="UTF-8" standalone="no"?>
 `;
 
 void test("a draft becomes a new changelog with sequential ids and one author", () => {
-	const changelog = promoteDraft(generated, 1700000000000);
-	assert.match(changelog, /^<\?xml version="1\.0" encoding="UTF-8"\?>\n<databaseChangeLog /);
-	assert.match(changelog, /dbchangelog-latest\.xsd/);
+	const changelog = promoteDraft(generated, 1_700_000_000_000);
+	assert.match(changelog, /^<\?xml version="1\.0" encoding="UTF-8"\?>\n<databaseChangeLog /u);
+	assert.match(changelog, /dbchangelog-latest\.xsd/u);
 	assert.deepEqual(
-		[...changelog.matchAll(/<changeSet id="([^"]+)" author="hephaestus">/g)].map((m) => m[1]),
+		[...changelog.matchAll(/<changeSet id="(?<id>[^"]+)" author="hephaestus">/gu)].map(
+			(m) => m.groups?.id,
+		),
 		["1700000000000-1", "1700000000000-2"],
 	);
-	assert.doesNotMatch(changelog, /root \(generated\)|version="1\.1"/);
-	assert.match(changelog, /dropForeignKeyConstraint[\s\S]*addNotNullConstraint/);
+	assert.doesNotMatch(changelog, /root \(generated\)|version="1\.1"/u);
+	assert.match(changelog, /dropForeignKeyConstraint[\s\S]*addNotNullConstraint/u);
 	assert.ok(changelog.endsWith("</databaseChangeLog>\n"));
 });
 
 void test("a draft appends to the changelog this branch already added, continuing its numbering", () => {
-	const existing = promoteDraft(generated, 1700000000000);
-	const appended = promoteDraft(generated, 1700000000000, existing);
+	const existing = promoteDraft(generated, 1_700_000_000_000);
+	const appended = promoteDraft(generated, 1_700_000_000_000, existing);
 	assert.deepEqual(
-		[...appended.matchAll(/<changeSet id="([^"]+)"/g)].map((m) => m[1]),
+		[...appended.matchAll(/<changeSet id="(?<id>[^"]+)"/gu)].map((m) => m.groups?.id),
 		["1700000000000-1", "1700000000000-2", "1700000000000-3", "1700000000000-4"],
 	);
 	assert.equal(appended.split("</databaseChangeLog>").length, 2);
 });
 
 void test("an empty draft is rejected rather than promoted to an empty changelog", () => {
-	assert.throws(() => promoteDraft("<databaseChangeLog/>", 1700000000000), /no change sets/);
+	assert.throws(() => promoteDraft("<databaseChangeLog/>", 1_700_000_000_000), /no change sets/u);
 });
 
 void test("master.xml gains the include at the end and never twice", () => {

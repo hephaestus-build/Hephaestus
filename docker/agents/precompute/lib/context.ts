@@ -9,7 +9,9 @@ export async function readContextJson(
 	contextDir: string | undefined,
 	name: string,
 ): Promise<unknown> {
-	if (!contextDir) return null;
+	if (contextDir === undefined || contextDir === "") {
+		return null;
+	}
 	try {
 		return JSON.parse(await readFile(`${contextDir}/${name}`, "utf8"));
 	} catch {
@@ -50,13 +52,19 @@ function optionalBoolean(value: unknown): boolean | undefined {
 }
 
 function parseInventoryItems(value: unknown): InventoryItem[] | undefined {
-	if (!Array.isArray(value)) return undefined;
+	if (!Array.isArray(value)) {
+		return undefined;
+	}
 	const items: InventoryItem[] = [];
 	for (const entry of value) {
-		if (!isJsonObject(entry)) continue;
+		if (!isJsonObject(entry)) {
+			continue;
+		}
 		const number = optionalNumber(entry.number);
 		const title = optionalString(entry.title);
-		if (number === undefined || title === undefined) continue;
+		if (number === undefined || title === undefined) {
+			continue;
+		}
 		items.push({
 			number,
 			title,
@@ -71,7 +79,9 @@ function parseInventoryItems(value: unknown): InventoryItem[] | undefined {
 }
 
 export function parseProjectInventory(value: unknown): ProjectInventory | null {
-	if (!isJsonObject(value)) return null;
+	if (!isJsonObject(value)) {
+		return null;
+	}
 	const focal = isJsonObject(value.focal) ? value.focal : undefined;
 	const counts = isJsonObject(value.counts) ? value.counts : undefined;
 	return {

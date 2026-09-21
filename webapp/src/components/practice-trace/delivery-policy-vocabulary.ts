@@ -4,7 +4,7 @@ import type {
 	DeliveryPolicyTrace,
 	DeliveryPolicyTraceCheck,
 } from "@/api/types.gen";
-import type { StatusDefs } from "@/components/practice-vocabulary/status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 import { WITHHOLDING_REASON_DEFS } from "@/components/practice-vocabulary/withholding-defs";
 import { WORKSPACE_DELIVERY_STATUS_DEFS } from "@/components/practice-vocabulary/workspace-delivery-status-defs";
 

@@ -17,7 +17,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
-		await expect(canvas.getByText(/Trying again usually helps/)).toBeVisible();
+		await expect(canvas.getByText(/Trying again usually helps/u)).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();
 	},
@@ -35,7 +35,7 @@ export const StepUpRequired: Story = {
 	},
 	play: async ({ args, canvas }) => {
 		await expect(canvas.getByText("Confirm your sign-in to keep viewing")).toBeVisible();
-		await expect(canvas.queryByText(/You don't have permission/)).toBeNull();
+		await expect(canvas.queryByText(/You don't have permission/u)).toBeNull();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();
 	},
@@ -44,7 +44,7 @@ export const StepUpRequired: Story = {
 export const Forbidden: Story = {
 	args: { error: { status: 403, title: "Forbidden", detail: "Not an instance administrator" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/You don't have permission/)).toBeVisible();
+		await expect(canvas.getByText(/You don't have permission/u)).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Retry" })).toBeNull();
 	},
 };

@@ -21,7 +21,7 @@ export const EmptyReason: Story = {
 	play: async () => {
 		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "View as user" }));
 		const reason = screen.getByRole("textbox", { name: "Reason for access" });
-		const description = screen.getByText(/Describe the support need/);
+		const description = screen.getByText(/Describe the support need/u);
 		await expect(reason.getAttribute("aria-describedby")?.split(" ")).toContain(description.id);
 	},
 };

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { UserPracticeSummary } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 20_000 });
@@ -84,15 +85,15 @@ describe("read-only user view", () => {
 		renderRouteAt("/admin/workspaces/engineering/users");
 		await openUserView("never-signed-in");
 		const banner = await screen.findByRole("region", BANNER);
-		within(banner).getByText(/No linked Hephaestus account/);
+		within(banner).getByText(/No linked Hephaestus account/u);
 	});
 
 	it("says what the view shows that the user's own profile hides", async () => {
 		privateReads();
 		renderRouteAt("/admin/workspaces/engineering/users");
 		await openUserView("never-signed-in");
-		await screen.findByText(/Practices are disabled in this workspace/);
-		expect(screen.queryByText(/Heph is disabled/)).toBeNull();
+		await screen.findByText(/Practices are disabled in this workspace/u);
+		expect(screen.queryByText(/Heph is disabled/u)).toBeNull();
 	});
 
 	it("carries the encoded reason and the user id on every private read", async () => {
@@ -155,13 +156,10 @@ describe("read-only user view", () => {
 
 	it("cancels the previous user's pending read before showing another user", async () => {
 		privateReads();
-		let respond = (_response: Response) => {};
-		const response = new Promise<Response>((resolve) => {
-			respond = resolve;
-		});
+		const { promise: response, resolve: respond } = deferred<Response>();
 		const signals: AbortSignal[] = [];
 		server.use(
-			http.get("*/workspaces/:workspaceSlug/user-view/users/11/practices", ({ request }) => {
+			http.get("*/workspaces/:workspaceSlug/user-view/users/11/practices", async ({ request }) => {
 				signals.push(request.signal);
 				return response;
 			}),
@@ -234,7 +232,7 @@ describe("read-only user view", () => {
 		);
 		renderRouteAt("/admin/workspaces/engineering/users");
 		await openUserView("never-signed-in");
-		await screen.findByText(/User view audit is unavailable/);
+		await screen.findByText(/User view audit is unavailable/u);
 		expect(screen.queryByRole("dialog", { name: "Confirm access" })).toBeNull();
 	});
 
@@ -256,8 +254,8 @@ describe("read-only user view", () => {
 		renderRouteAt("/admin/workspaces/engineering/users");
 		await openUserView("never-signed-in");
 		const ask = await screen.findByRole("dialog", { name: "Confirm access" });
-		within(ask).getByText(/last 5 minutes/);
-		expect(screen.queryByText(/You don't have permission/)).toBeNull();
+		within(ask).getByText(/last 5 minutes/u);
+		expect(screen.queryByText(/You don't have permission/u)).toBeNull();
 		await screen.findByText("Confirm your sign-in to keep viewing");
 	});
 

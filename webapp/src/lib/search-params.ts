@@ -20,7 +20,9 @@ export function narrowToEnum<T extends string>(
 	values: string[] | undefined,
 	allowed: readonly T[],
 ): T[] | undefined {
-	if (!values?.length) return undefined;
+	if (values === undefined || values.length === 0) {
+		return undefined;
+	}
 	const kept = values.filter((value): value is T => (allowed as readonly string[]).includes(value));
 	return kept.length > 0 ? kept : undefined;
 }
@@ -37,7 +39,7 @@ export function narrowToEnum<T extends string>(
  */
 export function useSearchState() {
 	const navigate = useNavigate();
-	return (
+	return async (
 		update: (previous: Record<string, unknown>) => Record<string, unknown>,
 		state?: NonNullable<Parameters<typeof navigate>[0]>["state"],
 	) => navigate({ to: ".", search: update, state, resetScroll: false });
@@ -46,5 +48,7 @@ export function useSearchState() {
 /** `useSearchState` for a patch: the keys given replace their current values, the rest stay. */
 export function useSearchPatch<TSearch extends object>() {
 	const setSearch = useSearchState();
-	return (patch: Partial<TSearch>) => void setSearch((previous) => ({ ...previous, ...patch }));
+	return (patch: Partial<TSearch>) => {
+		void setSearch((previous) => ({ ...previous, ...patch }));
+	};
 }

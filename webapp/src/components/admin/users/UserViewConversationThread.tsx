@@ -48,11 +48,13 @@ export function UserViewConversationThread({ state, onBack }: UserViewConversati
 
 function Transcript({ state }: Pick<UserViewConversationThreadProps, "state">) {
 	switch (state.status) {
-		case "loading":
+		case "loading": {
 			return <TranscriptSkeleton />;
-		case "error":
+		}
+		case "error": {
 			return <UserViewErrorAlert error={state.error} onRetry={state.onRetry} />;
-		case "unreadable":
+		}
+		case "unreadable": {
 			return (
 				<Alert variant="warning">
 					<MessageSquareOffIcon aria-hidden />
@@ -62,7 +64,8 @@ function Transcript({ state }: Pick<UserViewConversationThreadProps, "state">) {
 					</AlertDescription>
 				</Alert>
 			);
-		case "ready":
+		}
+		case "ready": {
 			return (
 				<Messages
 					messages={state.messages}
@@ -72,5 +75,6 @@ function Transcript({ state }: Pick<UserViewConversationThreadProps, "state">) {
 					showThinking={false}
 				/>
 			);
+		}
 	}
 }

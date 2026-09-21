@@ -18,7 +18,9 @@ export function LoginDialog({ open, onClose, ...signIn }: LoginDialogProps) {
 		<Dialog
 			open={open}
 			onOpenChange={(next) => {
-				if (!next) onClose();
+				if (!next) {
+					onClose();
+				}
 			}}
 		>
 			<DialogContent>

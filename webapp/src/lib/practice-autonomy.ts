@@ -38,9 +38,12 @@ export function autonomySourceOf(
 	assignment: AutonomyAssignment,
 	inheritedFrom: string | null,
 ): AutonomySource {
-	if (!assignment.inherited) return { kind: "chosen" };
-	if (assignment.source === "WORKSPACE")
+	if (!assignment.inherited) {
+		return { kind: "chosen" };
+	}
+	if (assignment.source === "WORKSPACE") {
 		return { kind: "inherited", from: WORKSPACE_DEFAULT_SOURCE };
+	}
 	return { kind: "inherited", from: inheritedFrom ?? "its group" };
 }
 
@@ -68,7 +71,9 @@ export function autonomyDistributionSentence(counts: Record<string, number>): st
 	const parts = autonomyDistribution(counts).map(
 		({ autonomy, count }) => `${count} ${PRACTICE_AUTONOMY_LABELS[autonomy].toLowerCase()}`,
 	);
-	if (parts.length === 0) return "No practices yet.";
+	if (parts.length === 0) {
+		return "No practices yet.";
+	}
 	const total = autonomyTotal(counts);
 	const listed =
 		parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;

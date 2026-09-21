@@ -24,7 +24,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
@@ -112,8 +111,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                         org.mockito.Mockito.mock(
                                 de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository.class),
                         org.mockito.Mockito.mock(FeedbackLedgerRecorder.class),
-                        new de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties(
-                                false, 15, 5, false, false)),
+                        new de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties(false, 15, 5, false)),
                 InContextDeliveryGateFixtures.gate(
                         practiceRepository,
                         org.mockito.Mockito.mock(
@@ -194,17 +192,12 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     private ObjectNode admittedPracticeSnapshot() {
         ObjectNode snapshot = objectMapper.createObjectNode();
         var practices = snapshot.putArray("practices");
-        practices
-                .addObject()
-                .put("slug", "pr-description-quality")
-                .put("revisionId", 1)
-                .put("defectDetector", false);
-        practices.addObject().put("slug", "error-handling").put("revisionId", 2).put("defectDetector", false);
+        practices.addObject().put("slug", "pr-description-quality").put("revisionId", 1);
+        practices.addObject().put("slug", "error-handling").put("revisionId", 2);
         practices
                 .addObject()
                 .put("slug", "avoids-insecure-defaults-and-over-broad-permissions")
-                .put("revisionId", 3)
-                .put("defectDetector", true);
+                .put("revisionId", 3);
         var source =
                 snapshot.putObject("manifest").putArray("sources").addObject().put("kind", "scm.pull-request.diff");
         source.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
@@ -472,24 +465,6 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     }
 
     @Nested
-    class ParseDiffNameOnlyPaths {
-
-        @Test
-        void simplePaths() {
-            String output = "src/Main.swift\nViews/ContentView.swift\nREADME.md\n";
-            assertThat(PullRequestReviewHandler.parseDiffNameOnlyPaths(output))
-                    .containsExactlyInAnyOrder("src/Main.swift", "Views/ContentView.swift", "README.md");
-        }
-
-        @Test
-        void blankInput() {
-            assertThat(PullRequestReviewHandler.parseDiffNameOnlyPaths("")).isEmpty();
-            assertThat(PullRequestReviewHandler.parseDiffNameOnlyPaths("  \n  "))
-                    .isEmpty();
-        }
-    }
-
-    @Nested
     class Deliver {
 
         private AgentJob jobWithOutput(String rawOutputJson) {
@@ -526,11 +501,11 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldRefuseInconsistentPinnedAssessmentBeforePersistingObservations() {
+        void shouldAdmitDesirableBehaviorWithinSecurityPractice() {
             String rawOutput = """
                     {"observations": [{
                       "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
-                      "summary": "The harmful behaviour is good",
+                      "summary": "Origin access is restricted to the required host",
                       "assessmentStatus": "ASSESSED", "presence": "PRESENT",
                       "assessment": "GOOD", "severity": null,
                       "evidenceRationale": "Original evidence rationale",
@@ -539,11 +514,11 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     """;
             AgentJob job = jobWithOutput(rawOutput);
 
-            assertThatThrownBy(() -> admit(job, rawOutput))
-                    .isInstanceOfSatisfying(
-                            ObservationsRefusedException.class,
-                            e -> assertThat(e.reasonCode()).isEqualTo("incoherent_assessment"));
-            verifyNoInteractions(deliveryService, feedbackService, observationRepository);
+            when(deliveryService.deliver(eq(job), any()))
+                    .thenAnswer(inv -> new DeliveryResult(1, 0, false, inv.getArgument(1)));
+            admit(job, rawOutput);
+            verify(deliveryService).deliver(eq(job), any());
+            verifyNoInteractions(feedbackService, observationRepository);
         }
 
         @Test
@@ -686,7 +661,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
 
         @Test
         @SuppressWarnings("unchecked")
-        void hardcodedSecretUsesPracticeSeverityCap() {
+        void shouldPreserveSubmittedCriticalSeverityWhenAdmittingASecret() {
             String rawOutput = """
                 {
                   "observations": [{
@@ -713,7 +688,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     .filter(f -> "avoids-insecure-defaults-and-over-broad-permissions".equals(f.practiceSlug()))
                     .findFirst()
                     .orElseThrow();
-            assertThat(secret.severity()).isEqualTo(Severity.MAJOR);
+            assertThat(secret.severity()).isEqualTo(Severity.CRITICAL);
         }
 
         private void stubDiff(String diff) {

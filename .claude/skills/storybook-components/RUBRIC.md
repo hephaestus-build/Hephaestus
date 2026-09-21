@@ -96,7 +96,7 @@ is not a gap** — a component whose prop is one domain object has nothing explo
 **Anti-criterion — the swallowed spy.** A stateful wrapper that *overrides* a callback from `args` makes
 the `fn()` in `meta.args` unreachable: never assertable, Actions panel permanently empty, file looks well
 instrumented. Detection: for each `fn()` in `meta.args`, grep for a JSX attribute of the same name that
-is **not** `{...args}`. `webapp/src/components/admin/practice-catalog/OccasionLifecycle.stories.tsx`
+is **not** `{...args}`. `webapp/src/components/admin/practice-editor/OccasionLifecycle.stories.tsx`
 is the shape that survives: spread `{...args}`, patch only the props the wrapper holds state for.
 
 ## Dimension 5 — Which states does the file actually show?
@@ -189,7 +189,7 @@ Nearly every file carries `tags: ["autodocs"]`, so a JSDoc block above `meta` or
   a why.
 - **A** — B, and the block is addressed to somebody reading the *component*, not the test.
 - **A+** — A file with no `autodocs` says in its meta why it opted out
-  (`webapp/src/components/admin/practice-catalog/SortableCatalogTree.stories.tsx` — the stories render
+  (`webapp/src/components/admin/practice-editor/SortableCatalogTree.stories.tsx` — the stories render
   a harness).
 
 `node scripts/check-story-prose.ts` gates `<p>` only. For the D band there is no gate — it is a review

@@ -8,9 +8,9 @@ import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AuthProvider } from "@/integrations/auth/AuthContext";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
+import { AuthProvider } from "@/runtime/auth/AuthContext";
 
 import { DangerZoneSection } from "./DangerZoneSection";
 
@@ -36,25 +36,25 @@ describe("DangerZoneSection — data export", () => {
 		vi.useFakeTimers({ shouldAdvanceTime: true });
 		renderWithClient(<DangerZoneSection onAccountDeleted={vi.fn()} />);
 
-		fireEvent.click(screen.getByRole("button", { name: /Request export/ }));
+		fireEvent.click(screen.getByRole("button", { name: /Request export/u }));
 
 		// First status poll returns PENDING; the in-progress copy proves we're polling.
-		await waitFor(() => screen.getByText(/Preparing your export/i));
+		await waitFor(() => screen.getByText(/Preparing your export/iu));
 
 		// Drive the 2s poll interval forward; the next poll lands READY.
-		await act(() => vi.advanceTimersByTimeAsync(2000));
+		await act(async () => vi.advanceTimersByTimeAsync(2000));
 
-		await waitFor(() => screen.getByRole("button", { name: /Download/ }));
-		screen.getByText(/ready to download/i);
+		await waitFor(() => screen.getByRole("button", { name: /Download/u }));
+		screen.getByText(/ready to download/iu);
 	});
 });
 
-describe("DangerZoneSection — account deletion", () => {
-	function openDeleteDialog() {
-		// The trigger button (collapsed) is labelled "Delete"; opening reveals the confirm input.
-		fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-	}
+/** The trigger button (collapsed) is labelled "Delete"; opening reveals the confirm input. */
+function openDeleteDialog() {
+	fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+}
 
+describe("DangerZoneSection — account deletion", () => {
 	it("keeps deletion disabled until the exact confirmation phrase is typed", async () => {
 		renderWithClient(<DangerZoneSection onAccountDeleted={vi.fn()} />);
 		openDeleteDialog();
@@ -92,14 +92,15 @@ describe("DangerZoneSection — account deletion", () => {
 		const confirmButton = within(dialog).getByRole<HTMLButtonElement>("button", {
 			name: "Delete account",
 		});
+		// Padded and mixed-case on purpose: the match trims and ignores case.
 		fireEvent.change(within(dialog).getByLabelText("Confirmation phrase"), {
-			target: { value: "  Delete My Account  " }, // trimmed + case-insensitive match
+			target: { value: "  Delete My Account  " },
 		});
 		// Button only enables once the session (account id) has resolved.
 		await waitFor(() => expect(confirmButton.disabled).toBe(false));
 		fireEvent.click(confirmButton);
 
-		await waitFor(() => expect(onAccountDeleted).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(onAccountDeleted).toHaveBeenCalledOnce());
 		expect(sentHeader).toBe(String(currentUser.id));
 	});
 

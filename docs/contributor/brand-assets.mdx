@@ -22,6 +22,9 @@ Do not edit generated files under `webapp/public/`, `docs/images/readme/`, or `d
 The exporter also synchronizes the inline maintenance-page mark in `docker/compose.proxy.yaml`. CI
 regenerates all of these outputs and fails when the committed result differs.
 
+The README images capture the landing-page export stories, not just the static mark. Changes to
+those stories, their component tree, or the shared theme also require regenerating the assets.
+
 Application icons use a tighter optical crop so Heph remains legible at small sizes. Product UI,
 favicons, and maskable icons keep their platform-appropriate spacing.
 

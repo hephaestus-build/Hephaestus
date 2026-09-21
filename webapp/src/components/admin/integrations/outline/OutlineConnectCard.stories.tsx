@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
-import { daysAfter, daysBefore } from "@/components/common/story-clock";
+import { daysAfter, daysBefore } from "@/stories/story-clock";
 
 import { OutlineConnectCard } from "./OutlineConnectCard";
 
@@ -39,8 +39,8 @@ const healthyToken = {
 export const Disconnected: Story = {
 	args: { connected: false },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByLabelText(/server url/i)).toHaveValue("");
-		await expect(canvas.getByRole("button", { name: /connect outline/i })).toBeDisabled();
+		await expect(canvas.getByLabelText(/server url/iu)).toHaveValue("");
+		await expect(canvas.getByRole("button", { name: /connect outline/iu })).toBeDisabled();
 	},
 };
 
@@ -48,11 +48,11 @@ export const Disconnected: Story = {
 export const DisconnectedReadyToConnect: Story = {
 	args: { connected: false },
 	play: async ({ canvas }) => {
-		await userEvent.type(canvas.getByLabelText(/api token/i), "ol_api_secret");
-		await expect(canvas.getByRole("button", { name: /connect outline/i })).toBeDisabled();
+		await userEvent.type(canvas.getByLabelText(/api token/iu), "ol_api_secret");
+		await expect(canvas.getByRole("button", { name: /connect outline/iu })).toBeDisabled();
 
-		await userEvent.type(canvas.getByLabelText(/server url/i), "https://wiki.acme.dev");
-		await expect(canvas.getByRole("button", { name: /connect outline/i })).toBeEnabled();
+		await userEvent.type(canvas.getByLabelText(/server url/iu), "https://wiki.acme.dev");
+		await expect(canvas.getByRole("button", { name: /connect outline/iu })).toBeEnabled();
 	},
 };
 
@@ -60,9 +60,9 @@ export const DisconnectedReadyToConnect: Story = {
 export const InvalidServerUrl: Story = {
 	args: { connected: false },
 	play: async ({ canvas }) => {
-		await userEvent.type(canvas.getByLabelText(/server url/i), "ftp://internal");
-		await expect(canvas.getByText(/enter an https:\/\/ url/i)).toBeVisible();
-		await expect(canvas.getByRole("button", { name: /connect outline/i })).toBeDisabled();
+		await userEvent.type(canvas.getByLabelText(/server url/iu), "ftp://internal");
+		await expect(canvas.getByText(/enter an https:\/\/ url/iu)).toBeVisible();
+		await expect(canvas.getByRole("button", { name: /connect outline/iu })).toBeDisabled();
 	},
 };
 
@@ -73,7 +73,7 @@ export const ConnectError: Story = {
 		errorMessage: "The Outline API rejected the token (401).",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/rejected the token/i)).toBeVisible();
+		await expect(canvas.getByText(/rejected the token/iu)).toBeVisible();
 	},
 };
 
@@ -89,9 +89,9 @@ export const ConnectUnavailable: Story = {
 		connectUnavailable: true,
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/no connectionstrategy registered/i)).toBeVisible();
-		await expect(canvas.getByText(/outline may not be enabled on this instance/i)).toBeVisible();
-		await expect(canvas.getByText(/ask your server administrator/i)).toBeVisible();
+		await expect(canvas.getByText(/no connectionstrategy registered/iu)).toBeVisible();
+		await expect(canvas.getByText(/outline may not be enabled on this instance/iu)).toBeVisible();
+		await expect(canvas.getByText(/ask your server administrator/iu)).toBeVisible();
 	},
 };
 
@@ -107,14 +107,14 @@ export const Connected: Story = {
 		tokenStatus: healthyToken,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline connected — acme wiki/i);
-		canvas.getByText(/outline accepts this token/i);
-		canvas.getByText(/hephaestus mirror/i);
-		canvas.getByText(/…9f2c/);
-		canvas.getByText(/expires in \d+ days \(on /i);
-		await expect(canvas.getByRole("button", { name: /disconnect outline/i })).toBeEnabled();
+		canvas.getByText(/outline connected — acme wiki/iu);
+		canvas.getByText(/outline accepts this token/iu);
+		canvas.getByText(/hephaestus mirror/iu);
+		canvas.getByText(/…9f2c/u);
+		canvas.getByText(/expires in \d+ days \(on /iu);
+		await expect(canvas.getByRole("button", { name: /disconnect outline/iu })).toBeEnabled();
 		// The connection plane's Sync control is not in this card.
-		await expect(canvas.queryByRole("button", { name: /sync now/i })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("button", { name: /sync now/iu })).not.toBeInTheDocument();
 	},
 };
 
@@ -126,8 +126,8 @@ export const TokenNeverExpires: Story = {
 		tokenStatus: { accepted: true, name: "Hephaestus mirror", last4: "9f2c" },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/never expires/i);
-		await expect(canvas.queryByText(/cannot be rotated/i)).not.toBeInTheDocument();
+		canvas.getByText(/never expires/iu);
+		await expect(canvas.queryByText(/cannot be rotated/iu)).not.toBeInTheDocument();
 	},
 };
 
@@ -142,9 +142,9 @@ export const TokenExpiringSoon: Story = {
 		tokenStatus: { ...healthyToken, expiresAt: daysAfter(5) },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/this api key expires in [45] days/i);
-		canvas.getByText(/cannot be rotated through the api/i);
-		canvas.getByText(/settings → api keys/i);
+		canvas.getByText(/this api key expires in [45] days/iu);
+		canvas.getByText(/cannot be rotated through the api/iu);
+		canvas.getByText(/settings → api keys/iu);
 	},
 };
 
@@ -156,8 +156,8 @@ export const TokenRejected: Story = {
 		tokenStatus: { accepted: false },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline no longer accepts this token — reconnect with a new one/i);
-		await expect(canvas.queryByText(/expires in/i)).not.toBeInTheDocument();
+		canvas.getByText(/outline no longer accepts this token — reconnect with a new one/iu);
+		await expect(canvas.queryByText(/expires in/iu)).not.toBeInTheDocument();
 	},
 };
 
@@ -172,10 +172,10 @@ export const TokenMetadataUnavailable: Story = {
 		tokenStatus: { accepted: true },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline accepts this token/i);
-		await expect(canvas.queryByText(/never expires/i)).not.toBeInTheDocument();
-		await expect(canvas.queryByText(/expires in/i)).not.toBeInTheDocument();
-		await expect(canvas.queryByText(/last used/i)).not.toBeInTheDocument();
+		canvas.getByText(/outline accepts this token/iu);
+		await expect(canvas.queryByText(/never expires/iu)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/expires in/iu)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/last used/iu)).not.toBeInTheDocument();
 	},
 };
 
@@ -187,11 +187,11 @@ export const ConnectedDisconnectDialog: Story = {
 		tokenStatus: healthyToken,
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /disconnect outline/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /disconnect outline/iu }));
 		// AlertDialog renders in a portal — query the whole document.
-		const dialog = await screen.findByRole("alertdialog", { name: /disconnect outline\?/i });
-		within(dialog).getByText(/every mirrored document.*is\s+erased/i);
-		within(dialog).getByRole("button", { name: /^disconnect$/i });
+		const dialog = await screen.findByRole("alertdialog", { name: /disconnect outline\?/iu });
+		within(dialog).getByText(/every mirrored document.*is\s+erased/iu);
+		within(dialog).getByRole("button", { name: /^disconnect$/iu });
 	},
 };
 
@@ -208,9 +208,9 @@ export const ConnectedButSuspended: Story = {
 		tokenStatus: healthyToken,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline suspended — acme wiki/i);
+		canvas.getByText(/outline suspended — acme wiki/iu);
 		// The token panel still reports the stored key even while syncing is paused.
-		canvas.getByText(/outline accepts this token/i);
+		canvas.getByText(/outline accepts this token/iu);
 	},
 };
 
@@ -223,7 +223,7 @@ export const ConnectedButPending: Story = {
 		tokenStatus: healthyToken,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline finishing setup — acme wiki/i);
+		canvas.getByText(/outline finishing setup — acme wiki/iu);
 	},
 };
 
@@ -236,6 +236,6 @@ export const ConnectedActiveState: Story = {
 		tokenStatus: healthyToken,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline connected — acme wiki/i);
+		canvas.getByText(/outline connected — acme wiki/iu);
 	},
 };

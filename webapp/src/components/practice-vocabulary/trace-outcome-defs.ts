@@ -14,7 +14,7 @@ import {
 
 import type { PracticeTraceEntry } from "@/api/types.gen";
 
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type TraceOutcome = PracticeTraceEntry["outcome"];
 

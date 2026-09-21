@@ -33,7 +33,7 @@ export function LeagueInfoDialog({ open, onOpenChange }: LeagueInfoDialogProps) 
 						<div key={league.name} className="flex items-center gap-4">
 							<LeagueIcon leaguePoints={league.minPoints + 1} size="default" />
 							<span className="font-semibold">{league.name}</span>
-							<div className="flex items-center text-sm text-muted-foreground gap-1">
+							<div className="flex items-center gap-1 text-sm text-muted-foreground">
 								<Star className="h-4 w-4" />
 								{league.maxPoints === Number.POSITIVE_INFINITY ? (
 									<span>{league.minPoints}+</span>
@@ -48,15 +48,15 @@ export function LeagueInfoDialog({ open, onOpenChange }: LeagueInfoDialogProps) 
 				</div>
 
 				<div className="border-t pt-4">
-					<h4 className="text-sm font-semibold mb-2">League Points Calculation</h4>
+					<h4 className="mb-2 text-sm font-semibold">League Points Calculation</h4>
 					<div className="text-sm text-muted-foreground">
 						<p className="mb-2">
 							Your league points are updated weekly using the following formula:
 						</p>
-						<div className="bg-muted rounded-md p-3 font-mono text-xs">
+						<div className="rounded-md bg-muted p-3 font-mono text-xs">
 							<p>newPoints = oldPoints + (K × (performanceBonus + placementBonus - decay))</p>
 							<p className="mt-2">Where:</p>
-							<ul className="list-disc ml-5 mt-1 space-y-1">
+							<ul className="mt-1 ml-5 list-disc space-y-1">
 								<li>K: sensitivity factor (1.1 - 2.0, higher for newer players)</li>
 								<li>performanceBonus = 10 × √score</li>
 								<li>placementBonus = 20 × (4 - rank) for top 3, 0 otherwise</li>

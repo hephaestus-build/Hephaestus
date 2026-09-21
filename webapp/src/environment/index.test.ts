@@ -6,11 +6,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 async function environmentFor(runtime: Window["__ENV__"]) {
 	vi.resetModules();
 	window.__ENV__ = runtime;
-	return (await import("./index")).default;
+	const { default: environment } = await import("./index");
+	return environment;
 }
 
 async function deploymentFor(runtime: Window["__ENV__"]) {
-	return (await environmentFor(runtime)).deployment;
+	const { deployment } = await environmentFor(runtime);
+	return deployment;
 }
 
 afterEach(() => {

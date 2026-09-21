@@ -59,7 +59,9 @@ export function RemoveChannelAlertDialog({
 	}
 
 	async function confirm() {
-		if (!channel || submitting) return;
+		if (!channel || submitting) {
+			return;
+		}
 		// The confirm action stays enabled and validates here: a disabled button with no stated
 		// reason leaves the admin guessing which of the two fields is wrong.
 		if (!matches) {
@@ -78,9 +80,15 @@ export function RemoveChannelAlertDialog({
 		} catch {
 			// Rejection = keep the dialog open. The mutation's onError already surfaced the
 			// toast, so swallow here rather than let it escape as an unhandled rejection.
-		} finally {
-			setSubmitting(false);
 		}
+		setSubmitting(false);
+	}
+
+	let actionLabel = "Remove & erase";
+	if (submitting) {
+		actionLabel = "Removing…";
+	} else if (nothingCollected) {
+		actionLabel = "Remove";
 	}
 
 	return (
@@ -151,9 +159,11 @@ export function RemoveChannelAlertDialog({
 					<AlertDialogAction
 						variant="destructive"
 						disabled={submitting}
-						onClick={() => void confirm()}
+						onClick={() => {
+							void confirm();
+						}}
 					>
-						{submitting ? "Removing…" : nothingCollected ? "Remove" : "Remove & erase"}
+						{actionLabel}
 					</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>

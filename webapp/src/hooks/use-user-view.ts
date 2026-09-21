@@ -20,9 +20,11 @@ import type {
 } from "@/components/admin/users/UserViewPractices";
 import type { UserViewUsersState } from "@/components/admin/users/UserViewUsersTable";
 import { type PanelState, panelState } from "@/components/common/panel-state";
-import { loadedPages } from "@/integrations/tanstack-query/spring-page";
+import type { ReviewRunFeedState } from "@/components/profile/PracticeGroupDetailPage";
 import { parseThreadMessages } from "@/lib/chat-validation";
 import { stepUpChallengeOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
+import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 
 export const USER_VIEW_PAGE_SIZE = 25;
 export const USER_VIEW_RUNS_PAGE_SIZE = 10;
@@ -100,7 +102,7 @@ export function useUserViewGroup(
 		...PRIVATE_READ,
 		enabled: selection !== undefined,
 		initialPageParam: 0,
-		getNextPageParam: (last) => (last.hasNext ? (last.page ?? 0) + 1 : undefined),
+		getNextPageParam: (last) => (last.hasNext === true ? (last.page ?? 0) + 1 : undefined),
 	});
 	const observation = useQuery({
 		...getUserViewObservationOptions({
@@ -119,28 +121,48 @@ export function useUserViewGroup(
 			status: "error",
 			error: refused ?? trend.error,
 			onRetry: () => {
-				if (trend.isError) void trend.refetch();
-				if (runs.isError) void runs.refetch();
-				if (observation.isError) void observation.refetch();
+				if (trend.isError) {
+					void trend.refetch();
+				}
+				if (runs.isError) {
+					void runs.refetch();
+				}
+				if (observation.isError) {
+					void observation.refetch();
+				}
 			},
 		};
 	}
-	if (trend.isPending) return { status: "loading" };
+	if (trend.isPending) {
+		return { status: "loading" };
+	}
+	let feed: ReviewRunFeedState;
+	if (runs.isError) {
+		feed = {
+			status: "error",
+			error: runs.error,
+			onRetry: () => {
+				void runs.refetch();
+			},
+		};
+	} else if (runs.isPending) {
+		feed = { status: "loading" };
+	} else {
+		feed = {
+			status: "ready",
+			runs: loadedPages(runs.data).flatMap((page) => page.content),
+			hasMore: runs.hasNextPage,
+			isLoadingMore: runs.isFetchingNextPage,
+			onLoadMore: () => {
+				void runs.fetchNextPage();
+			},
+		};
+	}
 	return {
 		status: "ready",
 		trend: trend.data,
-		feed: runs.isError
-			? { status: "error", error: runs.error, onRetry: () => void runs.refetch() }
-			: runs.isPending
-				? { status: "loading" }
-				: {
-						status: "ready",
-						runs: loadedPages(runs.data).flatMap((page) => page.content),
-						hasMore: runs.hasNextPage,
-						isLoadingMore: runs.isFetchingNextPage,
-						onLoadMore: () => void runs.fetchNextPage(),
-					},
-		observationDetail: observationId
+		feed,
+		observationDetail: hasText(observationId)
 			? {
 					isLoading: observation.isPending,
 					detail: observation.data,

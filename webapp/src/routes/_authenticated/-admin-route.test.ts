@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { isRecord } from "@/lib/is-record";
+import { hasText } from "@/lib/text";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
@@ -14,7 +15,7 @@ vi.setConfig({ testTimeout: 15_000 });
 function newRouter(url?: string) {
 	return createRouter({
 		routeTree,
-		...(url ? { history: createMemoryHistory({ initialEntries: [url] }) } : {}),
+		...(hasText(url) ? { history: createMemoryHistory({ initialEntries: [url] }) } : {}),
 		// A fresh client per case: a shared cache would let one role's answer satisfy another's guard.
 		context: { queryClient: new QueryClient(), auth: undefined },
 	});
@@ -48,12 +49,12 @@ describe("instance-admin route gate", () => {
 
 	it.each(adminUrls)("redirects a non-admin away from %s", async (url) => {
 		mockAppRole("APP_USER");
-		expect(await land(url)).toBe("/");
+		await expect(land(url)).resolves.toBe("/");
 	});
 
 	it("admits an APP_ADMIN", async () => {
 		mockAppRole("APP_ADMIN");
-		expect(await land("/admin/users")).toBe("/admin/users");
+		await expect(land("/admin/users")).resolves.toBe("/admin/users");
 	});
 });
 
@@ -79,6 +80,6 @@ describe("admin tab titles", () => {
 		["/admin/usage", "AI usage · Instance admin · Hephaestus"],
 		["/w/hephaestus/admin/usage", "AI usage · Admin · Hephaestus"],
 	])("distinguishes %s in the tab title", async (url, title) => {
-		expect(await titleOf(url)).toBe(title);
+		await expect(titleOf(url)).resolves.toBe(title);
 	});
 });

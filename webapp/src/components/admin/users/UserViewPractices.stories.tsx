@@ -8,8 +8,8 @@ import type {
 	PracticeTrend,
 	UserPracticeSummary,
 } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
 import type { ReviewRunFeedState } from "@/components/profile/PracticeGroupDetailPage";
+import { daysBefore } from "@/stories/story-clock";
 
 import {
 	UserViewPractices,
@@ -221,7 +221,7 @@ export const PracticeSelected: Story = {
 export const UnknownGroup: Story = {
 	args: { view: readyGroup({ groupSlug: "retired-group" }) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/does not exist or is not active/)).toBeVisible();
+		await expect(canvas.getByText(/does not exist or is not active/u)).toBeVisible();
 	},
 };
 

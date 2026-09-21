@@ -1,12 +1,13 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type ReactElement, type ReactNode } from "react";
 
 import { cn } from "cn";
-import { type StatusDef, statusToneClass } from "@/components/practice-vocabulary/status-def";
+import { type StatusDef, statusToneClass } from "@/components/common/status-def";
+import { hasText } from "@/lib/text";
 
 export interface ReviewRowProps {
 	status: StatusDef;
 	title: ReactNode;
-	meta?: ReactNode;
+	meta?: ReactElement | undefined;
 	chips?: ReviewRowChip[];
 }
 
@@ -31,7 +32,9 @@ export function ReviewRow({ status, title, meta, chips }: ReviewRowProps) {
 					<div className="text-sm font-medium [&_a]:after:absolute [&_a]:after:inset-0 [&_a:hover]:underline">
 						{title}
 					</div>
-					{meta && <div className="min-w-0 space-y-0.5 text-xs text-muted-foreground">{meta}</div>}
+					{meta !== undefined && (
+						<div className="min-w-0 space-y-0.5 text-xs text-muted-foreground">{meta}</div>
+					)}
 				</div>
 				{chips && chips.length > 0 && (
 					<div className="relative flex flex-wrap items-start gap-1.5 lg:flex-nowrap">
@@ -40,7 +43,7 @@ export function ReviewRow({ status, title, meta, chips }: ReviewRowProps) {
 								key={chip.key}
 								className={cn(
 									"flex min-w-0 flex-wrap items-center gap-1.5 empty:hidden",
-									chip.width && "lg:shrink-0 lg:empty:flex",
+									hasText(chip.width) && "lg:shrink-0 lg:empty:flex",
 									chip.width,
 								)}
 							>
@@ -69,7 +72,9 @@ export function ReviewRowList({ label, children }: ReviewRowListProps) {
 
 export function ReviewRowMeta({ items }: { items: ReactNode[] }) {
 	const shown = items.filter(Boolean);
-	if (shown.length === 0) return null;
+	if (shown.length === 0) {
+		return null;
+	}
 	return (
 		<p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 break-words">
 			{shown.map((item, index) => (

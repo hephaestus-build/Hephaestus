@@ -1,6 +1,6 @@
 # ADR 0016: Unified identity — SCM `User` is the authoritative person row, Keycloak `sub` is the persisted join key
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md)
 **Date:** 2026-05-27
 **Supersedes:** [ADR 0011](0011-integration-identity-not-wired-from-sync.md)
 
@@ -78,3 +78,20 @@ The partial unique index is the correct uniqueness contract for the seeded colum
 - `WorkspaceContextFilter`, `SecurityUtils` — current `preferred_username → User.login` lookup that Stage B will flip.
 - `AuthenticatedGitProviderUserService.upsertUser` — the seed point for `keycloak_subject` populated in this PR.
 - `1780313973588_changelog.xml` — the new `keycloak_subject` column + partial unique index.
+
+## Update — 2026-09-17
+
+Status corrected to superseded: [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md)
+removed Keycloak, so nothing in § Decision beyond the Stage A deletions is what the code does.
+
+- `User.keycloak_subject` and `uq_user_keycloak_subject` do not exist in
+  `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.sql`.
+  `NoKeycloakImportTest` forbids the `org.keycloak` import; the remaining mentions under
+  `server/application/src` are Javadoc naming what the Spring-native code replaced.
+- The Hephaestus principal is `core.auth.domain.Account`; ADR 0017 § Update 2026-09-17 names the
+  join key. Stage B is not what shipped.
+- The SCM `User` (`integration.scm.domain.user.User`) is the attribution row and what
+  `workspace_membership` references — ADR 0017 § Update 2026-09-17;
+  [ADR 0019](0019-workspace-membership-keyed-on-account.md) (Proposed) owns the re-key.
+- `webapp/src/integrations/auth/keycloak.ts` does not exist; `1780313973588_changelog.xml` is
+  archived ([ADR 0014](0014-per-row-aes-gcm-aad-binding.md) § Update 2026-09-17).

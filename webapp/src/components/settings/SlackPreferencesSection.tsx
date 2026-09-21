@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type { SlackUserWorkspacePreferences } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -54,6 +54,81 @@ export function SlackPreferencesSection({
 	error,
 	onRetry,
 }: SlackPreferencesSectionProps) {
+	let body: ReactNode;
+	if (isLoading) {
+		body = (
+			<div className="flex justify-center py-6">
+				<Spinner aria-label="Loading Slack preferences" />
+			</div>
+		);
+	} else if (isError) {
+		body = (
+			<QueryErrorAlert
+				error={error}
+				title="Could not load your Slack preferences"
+				onRetry={onRetry}
+			/>
+		);
+	} else if (!isSlackLinked) {
+		body = (
+			<ItemGroup>
+				<Item variant="outline" role="listitem">
+					<ItemMedia variant="icon">
+						<SlackIcon aria-hidden="true" />
+					</ItemMedia>
+					<ItemContent>
+						<ItemTitle>Slack is not connected</ItemTitle>
+						<ItemDescription>
+							Connect Slack to manage your channel-message preference from Hephaestus.
+						</ItemDescription>
+					</ItemContent>
+					<ItemActions>
+						{canConnectSlack ? (
+							<Button variant="outline" size="sm" onClick={onConnectSlack}>
+								<SlackIcon className="mr-1.5 size-3.5" aria-hidden="true" />
+								Connect Slack
+							</Button>
+						) : (
+							<Badge variant="secondary">Not available</Badge>
+						)}
+					</ItemActions>
+				</Item>
+			</ItemGroup>
+		);
+	} else if (workspaces.length === 0) {
+		body = (
+			<ItemGroup>
+				<Item variant="outline" role="listitem">
+					<ItemMedia variant="icon">
+						<SlackIcon aria-hidden="true" />
+					</ItemMedia>
+					<ItemContent>
+						<ItemTitle>
+							Slack is connected
+							<Badge variant="success">Connected</Badge>
+						</ItemTitle>
+						<ItemDescription>
+							No linked Hephaestus workspace currently has this Slack workspace installed.
+						</ItemDescription>
+					</ItemContent>
+				</Item>
+			</ItemGroup>
+		);
+	} else {
+		body = (
+			<div className="space-y-3">
+				{workspaces.map((workspace) => (
+					<WorkspacePreferenceRow
+						key={workspace.workspaceSlug}
+						workspace={workspace}
+						isUpdating={updatingWorkspaceSlug === workspace.workspaceSlug}
+						onToggleChannelMessages={onToggleChannelMessages}
+					/>
+				))}
+			</div>
+		);
+	}
+
 	return (
 		<section className="space-y-4" aria-labelledby="slack-preferences-heading">
 			<div className="space-y-1">
@@ -69,69 +144,7 @@ export function SlackPreferencesSection({
 				</p>
 			</div>
 
-			{isLoading ? (
-				<div className="flex justify-center py-6">
-					<Spinner aria-label="Loading Slack preferences" />
-				</div>
-			) : isError ? (
-				<QueryErrorAlert
-					error={error}
-					title="Could not load your Slack preferences"
-					onRetry={onRetry}
-				/>
-			) : !isSlackLinked ? (
-				<ItemGroup>
-					<Item variant="outline" role="listitem">
-						<ItemMedia variant="icon">
-							<SlackIcon aria-hidden="true" />
-						</ItemMedia>
-						<ItemContent>
-							<ItemTitle>Slack is not connected</ItemTitle>
-							<ItemDescription>
-								Connect Slack to manage your channel-message preference from Hephaestus.
-							</ItemDescription>
-						</ItemContent>
-						<ItemActions>
-							{canConnectSlack ? (
-								<Button variant="outline" size="sm" onClick={onConnectSlack}>
-									<SlackIcon className="mr-1.5 size-3.5" aria-hidden="true" />
-									Connect Slack
-								</Button>
-							) : (
-								<Badge variant="secondary">Not available</Badge>
-							)}
-						</ItemActions>
-					</Item>
-				</ItemGroup>
-			) : workspaces.length === 0 ? (
-				<ItemGroup>
-					<Item variant="outline" role="listitem">
-						<ItemMedia variant="icon">
-							<SlackIcon aria-hidden="true" />
-						</ItemMedia>
-						<ItemContent>
-							<ItemTitle>
-								Slack is connected
-								<Badge variant="success">Connected</Badge>
-							</ItemTitle>
-							<ItemDescription>
-								No linked Hephaestus workspace currently has this Slack workspace installed.
-							</ItemDescription>
-						</ItemContent>
-					</Item>
-				</ItemGroup>
-			) : (
-				<div className="space-y-3">
-					{workspaces.map((workspace) => (
-						<WorkspacePreferenceRow
-							key={workspace.workspaceSlug}
-							workspace={workspace}
-							isUpdating={updatingWorkspaceSlug === workspace.workspaceSlug}
-							onToggleChannelMessages={onToggleChannelMessages}
-						/>
-					))}
-				</div>
-			)}
+			{body}
 		</section>
 	);
 }
@@ -204,7 +217,9 @@ function WorkspacePreferenceRow({
 			<AlertDialog
 				open={confirmingOff}
 				onOpenChange={(open) => {
-					if (!open && !isUpdating) setConfirmingOff(false);
+					if (!open && !isUpdating) {
+						setConfirmingOff(false);
+					}
 				}}
 			>
 				<AlertDialogContent>
@@ -238,7 +253,6 @@ function WorkspacePreferenceRow({
 	);
 }
 
-function channelCountText(count?: number): string {
-	const value = count ?? 0;
-	return value === 1 ? "1 active monitored channel" : `${value} active monitored channels`;
+function channelCountText(count = 0): string {
+	return count === 1 ? "1 active monitored channel" : `${count} active monitored channels`;
 }

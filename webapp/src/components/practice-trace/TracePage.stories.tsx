@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
-import { artifactTrace, untouchedArtifactTrace } from "./story-mock-data";
+import { artifactTrace, untouchedArtifactTrace } from "./fixtures";
 import { TracePage } from "./TracePage";
 
 /**
@@ -18,7 +18,6 @@ import { TracePage } from "./TracePage";
  * [Practice outcomes](?path=/docs/practice-trace-practice-outcomes--docs).
  */
 const meta = {
-	title: "Practice trace/Review activity detail",
 	component: TracePage,
 	parameters: {
 		layout: "padded",
@@ -45,7 +44,7 @@ type Story = StoryObj<typeof meta>;
 export const EveryOutcome: Story = {
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByRole("heading", { name: /Member-facing review activity/ }),
+			canvas.getByRole("heading", { name: /Member-facing review activity/u }),
 		).toBeVisible();
 		await expect(canvas.getByRole("region", { name: "What we noticed" })).toBeVisible();
 		await expect(
@@ -53,7 +52,9 @@ export const EveryOutcome: Story = {
 		).toBeVisible();
 		// Measured and delivered are two axes: this practice was reviewed and still said nothing.
 		await expect(canvas.getByText("2 measurements, none sent")).toBeVisible();
-		await expect(canvas.getByText(/Silence here is always a decision with a reason/)).toBeVisible();
+		await expect(
+			canvas.getByText(/Silence here is always a decision with a reason/u),
+		).toBeVisible();
 	},
 };
 
@@ -125,7 +126,9 @@ export const RefusedTheAskAsAMember: Story = {
 		// The timeline's own fix links go with it, so the page offers a member nothing they cannot
 		// open. Scoped to the timeline: the header's "Open the original" is nobody's admin screen.
 		const timeline = within(canvas.getByRole("region", { name: "What we noticed" }));
-		await expect(timeline.queryByRole("link", { name: /^Open |^Set up / })).not.toBeInTheDocument();
+		await expect(
+			timeline.queryByRole("link", { name: /^Open |^Set up /u }),
+		).not.toBeInTheDocument();
 	},
 };
 
@@ -148,7 +151,7 @@ export const NothingReachedIt: Story = {
 		await expect(canvas.getByText("Nothing was recorded about this work")).toBeVisible();
 		await expect(canvas.getByText("No practice covers this kind of work")).toBeVisible();
 		// Named in the reader's words, not as `scm.issue`.
-		await expect(canvas.getByText(/runs no practice against issue/)).toBeVisible();
+		await expect(canvas.getByText(/runs no practice against issue/u)).toBeVisible();
 	},
 };
 

@@ -29,7 +29,7 @@ public record UpdatePracticeRequestDTO(
         List<@Valid PracticeBinding> bindings,
 
         @Size(max = 50000, message = "Criteria must be at most 50000 characters")
-        @Pattern(regexp = ".*\\S.*", message = "Criteria must not be blank")
+        @Pattern(regexp = "[\\s\\S]*\\S[\\s\\S]*", message = "Criteria must not be blank")
         @Schema(description = "Practice review criteria")
         @Nullable
         String criteria,
@@ -49,13 +49,13 @@ public record UpdatePracticeRequestDTO(
         PracticeAutomatedReviewPolicy automatedReviewPolicy,
 
         @Size(max = 2000, message = "Why-it-matters must be at most 2000 characters")
-        @Pattern(regexp = ".*\\S.*", message = "Why-it-matters must not be blank")
+        @Pattern(regexp = "[\\s\\S]*\\S[\\s\\S]*", message = "Why-it-matters must not be blank")
         @Schema(description = "Plain-language rationale shown to the developer")
         @Nullable
         String whyItMatters,
 
         @Size(max = 2000, message = "What-good-looks-like must be at most 2000 characters")
-        @Pattern(regexp = ".*\\S.*", message = "What-good-looks-like must not be blank")
+        @Pattern(regexp = "[\\s\\S]*\\S[\\s\\S]*", message = "What-good-looks-like must not be blank")
         @Schema(description = "Concrete example shown to the developer; not review criteria")
         @Nullable
         String whatGoodLooksLike,

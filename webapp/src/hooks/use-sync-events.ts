@@ -18,6 +18,7 @@ import type { ConnectionSummary, IntegrationCatalogEntry } from "@/api/types.gen
 import environment from "@/environment";
 import { isRecord } from "@/lib/is-record";
 import { queryOperationId } from "@/lib/query-operation-id";
+import { hasText } from "@/lib/text";
 
 type SyncEventScope = "job" | "resources" | "connection" | "activity";
 
@@ -49,14 +50,18 @@ function parseHint(payload: string): SyncEventHint | undefined {
 	} catch {
 		return undefined;
 	}
-	if (!isRecord(decoded)) return undefined;
+	if (!isRecord(decoded)) {
+		return undefined;
+	}
 	const { scope, connectionId } = decoded;
-	if (!isSyncEventScope(scope) || typeof connectionId !== "number") return undefined;
+	if (!isSyncEventScope(scope) || typeof connectionId !== "number") {
+		return undefined;
+	}
 	return { scope, connectionId };
 }
 
 /** Backoff ladder for manual reconnects: 1s, 2s, 4s … capped, each scaled by 0.5–1.0× jitter. */
-const RECONNECT_BASE_MS = 1_000;
+const RECONNECT_BASE_MS = 1000;
 const RECONNECT_CAP_MS = 30_000;
 
 /**
@@ -105,7 +110,9 @@ function connectionKindOf(
 		getIntegrationCatalogQueryKey({ path: { workspaceSlug } }),
 	);
 	const entry = catalog?.find((candidate) => candidate.connectionId === connectionId);
-	if (entry) return entry.kind;
+	if (entry) {
+		return entry.kind;
+	}
 
 	const connections = queryClient.getQueryData<ConnectionSummary[]>(
 		listQueryKey({ path: { workspaceSlug } }),
@@ -128,7 +135,9 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 	}
 
 	useEffect(() => {
-		if (!workspaceSlug) return;
+		if (!hasText(workspaceSlug)) {
+			return;
+		}
 
 		let source: EventSource | null = null;
 		let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -138,7 +147,7 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 		let disposed = false;
 		const hintTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-		const invalidate = (queryKey: readonly unknown[]) =>
+		const invalidate = async (queryKey: readonly unknown[]) =>
 			queryClient.invalidateQueries({ queryKey });
 
 		/**
@@ -152,9 +161,13 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 			void queryClient.invalidateQueries({
 				predicate: ({ queryKey }) => {
 					const id = queryOperationId(queryKey);
-					if (id === undefined || !familyIds.has(id)) return false;
+					if (id === undefined || !familyIds.has(id)) {
+						return false;
+					}
 					const [key] = queryKey;
-					if (!isRecord(key) || !isRecord(key.path)) return false;
+					if (!isRecord(key) || !isRecord(key.path)) {
+						return false;
+					}
 					return key.path.workspaceSlug === workspaceSlug;
 				},
 			});
@@ -162,7 +175,7 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 
 		const applyHint = ({ scope, connectionId }: SyncEventHint) => {
 			switch (scope) {
-				case "job":
+				case "job": {
 					void invalidate(
 						getConnectionSyncStatusQueryKey({ path: { workspaceSlug, connectionId } }),
 					);
@@ -170,6 +183,7 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 						listConnectionSyncJobsQueryKey({ path: { workspaceSlug, connectionId } }),
 					);
 					break;
+				}
 				case "resources": {
 					void invalidate(
 						listConnectionSyncResourcesQueryKey({ path: { workspaceSlug, connectionId } }),
@@ -188,30 +202,37 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 					}
 					break;
 				}
-				case "connection":
+				case "connection": {
 					// A connect/disconnect moves the catalog, the workspace record and the connection list
 					// together, so this is the one hint that touches the whole section.
 					resyncIntegrationQueries();
 					break;
-				case "activity":
+				}
+				case "activity": {
 					void invalidate(
 						getConnectionSyncStatusQueryKey({ path: { workspaceSlug, connectionId } }),
 					);
 					break;
-				default:
+				}
+				default: {
 					break;
+				}
 			}
 		};
 
 		const handleHint = (event: MessageEvent<string>) => {
 			const hint = parseHint(event.data);
-			if (!hint) return;
+			if (!hint) {
+				return;
+			}
 
 			// A running job emits progress hints far faster than a human can read them; collapse each
 			// burst to one refetch per scope per connection.
 			const timerKey = `${hint.scope}:${hint.connectionId}`;
 			const pending = hintTimers.get(timerKey);
-			if (pending) clearTimeout(pending);
+			if (pending) {
+				clearTimeout(pending);
+			}
 			hintTimers.set(
 				timerKey,
 				setTimeout(() => {
@@ -258,7 +279,9 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 					const isFirstOpen = !hasEverOpened;
 					hasEverOpened = true;
 					if (isFirstOpen || now - lastResyncAt < RESYNC_THROTTLE_MS) {
-						if (isFirstOpen) lastResyncAt = now;
+						if (isFirstOpen) {
+							lastResyncAt = now;
+						}
 						return;
 					}
 					lastResyncAt = now;
@@ -277,13 +300,19 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 					// connection failed — the spec reaches it for any non-200 or wrong Content-Type — and
 					// the browser never retries that: one 502 during a deploy or one 401 on an expired
 					// session ends live updates for the session unless we reconnect ourselves.
-					if (current.readyState !== EventSource.CLOSED) return;
+					if (current.readyState !== EventSource.CLOSED) {
+						return;
+					}
 
 					consecutiveFailures += 1;
-					if (consecutiveFailures >= FAILURES_BEFORE_DEGRADED) setLivePushUnavailable(true);
+					if (consecutiveFailures >= FAILURES_BEFORE_DEGRADED) {
+						setLivePushUnavailable(true);
+					}
 
 					detach(current);
-					if (disposed) return;
+					if (disposed) {
+						return;
+					}
 
 					const backoff = Math.min(
 						RECONNECT_CAP_MS,
@@ -301,10 +330,16 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 
 		return () => {
 			disposed = true;
-			if (reconnectTimer) clearTimeout(reconnectTimer);
-			for (const timer of hintTimers.values()) clearTimeout(timer);
+			if (reconnectTimer) {
+				clearTimeout(reconnectTimer);
+			}
+			for (const timer of hintTimers.values()) {
+				clearTimeout(timer);
+			}
 			hintTimers.clear();
-			if (source) detach(source);
+			if (source) {
+				detach(source);
+			}
 		};
 	}, [workspaceSlug, queryClient]);
 

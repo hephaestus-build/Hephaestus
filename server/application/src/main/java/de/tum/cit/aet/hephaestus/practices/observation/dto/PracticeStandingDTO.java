@@ -69,7 +69,7 @@ public record PracticeStandingDTO(
         NOT_OBSERVED,
         /**
          * The practice was evaluated but produced nothing to report: the reviewed work offered no relevant
-         * opportunity, the evidence did not settle the question, or a defect-detector practice ran clean.
+         * opportunity or the evidence did not settle the question.
          */
         NO_OPPORTUNITY,
     }

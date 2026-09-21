@@ -13,7 +13,7 @@ void test("a native issue type supplies classification metadata without a label"
 	assert.equal(result.metrics.hasIssueType, 1);
 	assert.equal(result.metrics.labelCount, 0);
 	assert.equal(result.directions.length, 1);
-	assert.match(result.directions[0] ?? "", /issueType="Bug"/);
+	assert.match(result.directions[0] ?? "", /issueType="Bug"/u);
 });
 
 void test("empty metadata is reported without prescribing triage work", () => {

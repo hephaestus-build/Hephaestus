@@ -204,13 +204,29 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
                     case STRENGTH -> strength();
                     case NOT_APPLICABLE -> notApplicable();
                     case ALREADY_DELIVERED -> {
-                        when(feedbackRepository.existsDeliveredInContextForRecurrenceKey(WS, RECIPIENT, "rk-1"))
+                        Observation delivered = problem(null, "rk-1");
+                        when(feedbackRepository.existsDeliveredInContextForObservation(
+                                        WS, RECIPIENT, delivered.getId()))
                                 .thenReturn(true);
-                        yield problem(null, "rk-1");
+                        yield delivered;
                     }
                 };
 
         assertThat(router().route(obs, PracticeAutonomy.AUTOMATIC, WS, ctx)).isEqualTo(expected);
+    }
+
+    @Test
+    void shouldAdmitDifferentObservationWhenItsLocationWasAlreadyDelivered() {
+        Observation delivered = problem(null, "shared-location");
+        Observation otherBehavior = problem(null, "shared-location");
+        when(feedbackRepository.existsDeliveredInContextForObservation(WS, RECIPIENT, delivered.getId()))
+                .thenReturn(true);
+        when(feedbackRepository.existsDeliveredInContextForObservation(WS, RECIPIENT, otherBehavior.getId()))
+                .thenReturn(false);
+        assertThat(router().route(delivered, PracticeAutonomy.AUTOMATIC, WS, RoutingContext.author()))
+                .isEqualTo(ConversationRoutingDecision.ALREADY_DELIVERED_IN_CONTEXT);
+        assertThat(router().route(otherBehavior, PracticeAutonomy.AUTOMATIC, WS, RoutingContext.author()))
+                .isEqualTo(ConversationRoutingDecision.ADMIT);
     }
 
     /**
@@ -359,15 +375,15 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     @Test
     void reconcilerSkipsFlip_whenLocusWasSinceDeliveredInContext() {
-        // A PREPARED unit seeded by a FAILED direct delivery: if a later re-review has since delivered the SAME
-        // recurrence_key in-context, the flip must be skipped (no double-delivery) — the stale unit ages out.
+        // A PREPARED unit seeded by a FAILED direct delivery: if this exact observation was delivered
+        // in-context, the flip must be skipped (no double-delivery) — the stale unit ages out.
         UUID a = UUID.randomUUID();
         UUID fidA = UUID.randomUUID();
         when(feedbackObservationRepository.findPreparedConversationFeedbackIdsByObservation(WS, RECIPIENT, a))
                 .thenReturn(List.of(fidA));
         Observation obs = problem(null, "rk-delivered", a);
         doReturn(List.of(obs)).when(observationRepository).findAllByIdInAndWorkspaceId(any(), anyLong());
-        when(feedbackRepository.existsDeliveredInContextForRecurrenceKey(WS, RECIPIENT, "rk-delivered"))
+        when(feedbackRepository.existsDeliveredInContextForObservation(WS, RECIPIENT, a))
                 .thenReturn(true);
 
         int flips = reconciler().reconcile(WS, RECIPIENT, UUID.randomUUID(), List.of(a));
@@ -384,7 +400,7 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
                 .thenReturn(List.of(fidA));
         Observation obs = problem(null, "rk-fresh", a);
         doReturn(List.of(obs)).when(observationRepository).findAllByIdInAndWorkspaceId(any(), anyLong());
-        when(feedbackRepository.existsDeliveredInContextForRecurrenceKey(WS, RECIPIENT, "rk-fresh"))
+        when(feedbackRepository.existsDeliveredInContextForObservation(WS, RECIPIENT, a))
                 .thenReturn(false);
         when(feedbackRepository.markConversationDelivered(eq(fidA), any())).thenReturn(1);
         when(feedbackRepository.getReferenceById(fidA)).thenReturn(mock(Feedback.class));

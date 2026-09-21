@@ -21,10 +21,10 @@ export function SyncFreshnessBanner() {
 		return (
 			<Alert variant="warning" role="status" aria-live="polite" className="mx-auto max-w-5xl">
 				<WifiOffIcon />
-				<AlertTitle>You're offline — everything below is a snapshot</AlertTitle>
+				<AlertTitle>You’re offline — everything below is a snapshot</AlertTitle>
 				<AlertDescription>
 					Sync status stopped updating when the connection dropped. It will catch up on its own once
-					you're back.
+					you’re back.
 				</AlertDescription>
 			</Alert>
 		);

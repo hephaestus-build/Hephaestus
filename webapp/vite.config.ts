@@ -1,20 +1,15 @@
-import * as fs from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-import { parse } from "jsonc-parser";
-import type { OxfmtConfig } from "oxfmt";
-import type { OxlintConfig } from "oxlint";
 import Terminal from "vite-plugin-terminal";
 import { configDefaults } from "vitest/config";
 
+import { readJsonc } from "./tools/jsonc.ts";
+import { loadLintConfig } from "./tools/oxlint/load-config.ts";
 import { appSourcePlugins } from "./vite.shared.ts";
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const formatConfig = parse(
-	fs.readFileSync(new URL("../.oxfmtrc.json", import.meta.url), "utf8"),
-) as OxfmtConfig;
+const formatConfig = readJsonc(new URL("../.oxfmtrc.json", import.meta.url));
 const fmt = {
 	...formatConfig,
 	ignorePatterns: [
@@ -26,14 +21,7 @@ const fmt = {
 	],
 };
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const lintConfig = parse(
-	fs.readFileSync(new URL(".oxlintrc.json", import.meta.url), "utf8"),
-) as OxlintConfig;
-const lint = {
-	...lintConfig,
-	options: { ...lintConfig.options, typeAware: true, typeCheck: true },
-};
+const lint = loadLintConfig(new URL(".oxlintrc.json", import.meta.url));
 
 const sentryUploadValues = [
 	process.env.SENTRY_AUTH_TOKEN,
@@ -60,8 +48,8 @@ const viteConfig = {
 			disable: !sentryUploadConfigured,
 			telemetry: false,
 		}),
-		...Terminal({ output: ["terminal", "console"] }).map(
-			(plugin) => plugin && { ...plugin, apply: "serve" as const },
+		...Terminal({ output: ["terminal", "console"] }).map((plugin) =>
+			plugin === false ? false : { ...plugin, apply: "serve" as const },
 		),
 	],
 	build: {
@@ -72,7 +60,7 @@ const viteConfig = {
 					// Keep the shared renderer cacheable across application releases. Do not collect all
 					// dependencies: feature libraries belong to the routes that actually use them.
 					groups: [
-						{ name: "react-runtime", test: /[/]node_modules[/](react|react-dom|scheduler)[/]/ },
+						{ name: "react-runtime", test: /[/]node_modules[/](?:react|react-dom|scheduler)[/]/u },
 					],
 				},
 			},
@@ -90,7 +78,7 @@ const viteConfig = {
 	},
 	resolve: {
 		alias: {
-			"@": resolve(import.meta.dirname, "./src"),
+			"@": path.resolve(import.meta.dirname, "./src"),
 		},
 	},
 	server: {
@@ -99,7 +87,7 @@ const viteConfig = {
 		// Storybook writes a separate site inside this root; rebuilding it must not reload the app.
 		watch: { ignored: ["**/storybook-static/**"] },
 		fs: {
-			allow: [resolve(import.meta.dirname, "..")],
+			allow: [path.resolve(import.meta.dirname, "..")],
 		},
 	},
 };

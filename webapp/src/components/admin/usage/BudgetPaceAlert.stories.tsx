@@ -35,21 +35,21 @@ type Story = StoryObj<typeof meta>;
 
 export const OwnProviderCap: Story = {
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText(/You've used 84% of your provider cap/)).toBeVisible();
+		await expect(await canvas.findByText(/You've used 84% of your provider cap/u)).toBeVisible();
 	},
 };
 
 export const NamedSubject: Story = {
 	args: { subjectName: "Acme" },
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText(/Acme has used 84% of its provider cap/)).toBeVisible();
+		await expect(await canvas.findByText(/Acme has used 84% of its provider cap/u)).toBeVisible();
 	},
 };
 
 export const SharedModelBudget: Story = {
 	args: { scope: "shared", subjectName: "Acme" },
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText(/shared-model budget/)).toBeVisible();
+		await expect(await canvas.findByText(/shared-model budget/u)).toBeVisible();
 	},
 };
 

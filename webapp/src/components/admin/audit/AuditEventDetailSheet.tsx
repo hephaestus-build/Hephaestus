@@ -1,11 +1,8 @@
 import type { AuthEventView } from "@/api/types.gen";
-import {
-	ELEVATION_DESCRIPTION,
-	ElevationBadge,
-} from "@/components/admin/audit-shared/ElevationBadge";
-import { prettyJson } from "@/components/admin/audit-shared/pretty-json";
-import { refLabel } from "@/components/admin/audit-shared/ref-label";
-import { formatTimestamp } from "@/components/admin/audit-shared/time-format";
+import { ELEVATION_DESCRIPTION, ElevationBadge } from "@/components/admin/audit/ElevationBadge";
+import { prettyJson } from "@/components/admin/audit/pretty-json";
+import { refLabel, workspaceLabel } from "@/components/admin/audit/ref-label";
+import { formatTimestamp } from "@/components/admin/audit/time-format";
 import { DetailRow } from "@/components/common/DetailRow";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -16,6 +13,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
+import { hasText } from "@/lib/text";
 
 import { eventLabel, resultLabel } from "./audit-format";
 
@@ -37,7 +35,7 @@ export function AuditEventDetailSheet({
 	const actor = event ? refLabel(event.actor, event.actingAccountId) : null;
 	const pretty = event ? prettyJson(event.details) : null;
 	const workspaceName =
-		event?.workspaceId != null ? resolveWorkspaceName?.(event.workspaceId) : undefined;
+		event?.workspaceId == null ? undefined : resolveWorkspaceName?.(event.workspaceId);
 
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
@@ -66,16 +64,16 @@ export function AuditEventDetailSheet({
 								{resultLabel(event.result)}
 							</Badge>
 						</DetailRow>
-						{event.failureReason && (
+						{hasText(event.failureReason) && (
 							<DetailRow label="Failure reason">
 								<span className="text-destructive">{event.failureReason}</span>
 							</DetailRow>
 						)}
 						<DetailRow label="Account">
-							{account ? (
+							{hasText(account) ? (
 								<span>
 									{account}
-									{event.account?.email && account !== event.account.email && (
+									{hasText(event.account?.email) && account !== event.account.email && (
 										<span className="ml-1 text-xs text-muted-foreground">
 											{event.account.email}
 										</span>
@@ -96,11 +94,7 @@ export function AuditEventDetailSheet({
 							<DetailRow label="Viewed user">#{event.viewedUserId}</DetailRow>
 						)}
 						<DetailRow label="Workspace">
-							{event.workspaceId != null
-								? workspaceName
-									? `${workspaceName} (#${event.workspaceId})`
-									: `#${event.workspaceId}`
-								: "—"}
+							{event.workspaceId == null ? "—" : workspaceLabel(event.workspaceId, workspaceName)}
 						</DetailRow>
 						<DetailRow label="IP address">
 							<span className="font-mono text-xs">{event.ipAddress ?? "—"}</span>
@@ -109,7 +103,7 @@ export function AuditEventDetailSheet({
 							<span className="text-xs">{event.userAgent ?? "—"}</span>
 						</DetailRow>
 						<DetailRow label="Raw data">
-							{pretty ? (
+							{hasText(pretty) ? (
 								<ScrollArea viewportClassName="max-h-48">
 									<pre className="rounded bg-muted p-2 text-xs">{pretty}</pre>
 								</ScrollArea>

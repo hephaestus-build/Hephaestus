@@ -8,18 +8,18 @@ Base UI mounts the panel with `data-starting-style` and clears it a frame later,
 to `opacity: 0` and a bare `toBeVisible()` fails on a perfectly mounted element. It is **not** a
 duration problem: the Playwright context already requests `reducedMotion: "reduce"`, the media query
 matches, and forcing every duration to 1ms does not fix it. Use `expectSettledVisible` /
-`settledPopup()` from `webapp/src/test/overlay.ts`.
+`settledPopup()` from `webapp/src/stories/overlay.ts`.
 
 ## 2. `animation.finished` **rejects** when the animation is cancelled
 
 `AbortError`, not a resolution — and a popup that re-positions while opening replaces its own enter
 animation routinely. Any settle helper must `.catch()` the rejection and treat it as an outcome
-(`webapp/src/test/overlay.ts`). Without the catch the helper throws on the ordinary path.
+(`webapp/src/stories/overlay.ts`). Without the catch the helper throws on the ordinary path.
 
 ## 3. A hook suppression aimed at the `useEffect` line suppresses nothing
 
 `webapp/AGENTS.md` § Linting owns this: the two effect rules report on the `setState` line inside the
-effect, one `setState` usually trips both, and a directive naming `react/rules-of-hooks` silences
+effect, one `setState` usually trips both, and a directive naming `react-hooks/rules-of-hooks` silences
 every hook diagnostic in the component while the build fails about the directive instead.
 
 ## 4. One story's MSW handlers answer for the whole Docs page

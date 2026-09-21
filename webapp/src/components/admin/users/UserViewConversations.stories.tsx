@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
 
 import type { ChatThreadSummary } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
+import { daysBefore } from "@/stories/story-clock";
 
 import { UserViewConversations } from "./UserViewConversations";
 
@@ -31,7 +31,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Untitled conversation/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Untitled conversation/u }));
 		await expect(args.onOpen).toHaveBeenCalledWith("thread-2");
 	},
 };

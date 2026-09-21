@@ -1,7 +1,7 @@
 import { PulseIcon } from "@primer/octicons-react";
 import { cn } from "cn";
 import { ArrowLeftIcon, ChevronDownIcon, CircleDashedIcon, InfoIcon } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type {
 	PracticeGroup,
 	PracticeGroupReviewObservation,
@@ -10,12 +10,12 @@ import type {
 	PracticeStanding,
 	PracticeTrend,
 } from "@/api/types.gen";
-import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { type StatusDef, statusToneClass } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
-import { type StatusDef, statusToneClass } from "@/components/practice-vocabulary/status-def";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ContributingPractice } from "@/lib/practice-standing";
+import { hasText } from "@/lib/text";
 import { PracticeNextStepCallout } from "./PracticeNextStepCallout";
 import { PracticeTrendChip } from "./PracticeTrendChip";
 import type { FeedbackResponse, ObservationDetailState } from "./review-runs";
@@ -55,7 +56,9 @@ const EMPTY_FEED: ReviewRunFeedState = {
 	runs: [],
 	hasMore: false,
 	isLoadingMore: false,
-	onLoadMore: () => undefined,
+	onLoadMore: () => {
+		// An empty feed has nothing more to load, and `hasMore: false` keeps the button off screen.
+	},
 };
 export interface PracticeGroupDetailPageProps {
 	group?: PracticeGroup;
@@ -85,12 +88,29 @@ interface DetailSectionIntroProps {
 function DetailSectionIntro({ id, title, description }: DetailSectionIntroProps) {
 	return (
 		<div className="grid content-start gap-1">
-			<h2 id={id} className="text-lg font-semibold leading-6">
+			<h2 id={id} className="text-lg leading-6 font-semibold">
 				{title}
 			</h2>
 			<p className="text-sm leading-5 text-muted-foreground">{description}</p>
 		</div>
 	);
+}
+
+function nextStepFor(practice: ContributingPractice, practiceStanding: PracticeStandingKey) {
+	const deliveredStep = practice.nextStep?.trim();
+	if (hasText(deliveredStep)) {
+		return deliveredStep;
+	}
+	if (practiceStanding === "STRENGTH" && hasText(practice.whatGoodLooksLike)) {
+		return `Keep doing this: ${practice.whatGoodLooksLike}`;
+	}
+	if (practiceStanding === "NO_OPPORTUNITY") {
+		return "Nothing to act on yet — the reviews ran and your work offered no occasion for this practice.";
+	}
+	if (practiceStanding === "NOT_OBSERVED" || practiceStanding === "UNMEASURED") {
+		return "No focused next step yet. It will appear after this practice is observed in reviewed work.";
+	}
+	return practice.whatGoodLooksLike;
 }
 
 export function PracticeGroupDetailPage({
@@ -125,7 +145,7 @@ export function PracticeGroupDetailPage({
 		);
 	}
 
-	if (error) {
+	if (error != null) {
 		return (
 			<QueryErrorAlert
 				error={error}
@@ -161,20 +181,78 @@ export function PracticeGroupDetailPage({
 	const selectedPractice = practices?.find((practice) => practice.slug === selectedPracticeSlug);
 	const hasAnyFeedNarrowing = selectedPractice !== undefined;
 
-	const nextStepFor = (practice: ContributingPractice, practiceStanding: PracticeStandingKey) => {
-		const deliveredStep = practice.nextStep?.trim();
-		if (deliveredStep) return deliveredStep;
-		if (practiceStanding === "STRENGTH" && practice.whatGoodLooksLike) {
-			return `Keep doing this: ${practice.whatGoodLooksLike}`;
-		}
-		if (practiceStanding === "NO_OPPORTUNITY") {
-			return "Nothing to act on yet — the reviews ran and your work offered no occasion for this practice.";
-		}
-		if (practiceStanding === "NOT_OBSERVED" || practiceStanding === "UNMEASURED") {
-			return "No focused next step yet. It will appear after this practice is observed in reviewed work.";
-		}
-		return practice.whatGoodLooksLike;
-	};
+	let feedContent: ReactNode;
+	if (feed.status === "error") {
+		feedContent = (
+			<QueryErrorAlert
+				error={feed.error}
+				title="Could not load review runs"
+				onRetry={feed.onRetry}
+			/>
+		);
+	} else if (feed.status === "loading") {
+		feedContent = (
+			<div className="flex flex-col gap-3" role="status">
+				<span className="sr-only">Loading review runs</span>
+				{Array.from({ length: skeletonRows }, (_, i) => (
+					<Skeleton key={i} className="h-16 w-full" />
+				))}
+			</div>
+		);
+	} else if (feed.runs.length > 0) {
+		feedContent = (
+			<>
+				<ReviewRunTimeline
+					runs={feed.runs}
+					openObservationId={openObservationId}
+					observationDetail={observationDetail}
+					onToggleObservation={onToggleObservation}
+					onRespond={onRespond}
+					pendingFeedbackId={pendingFeedbackId}
+				/>
+				{feed.hasMore && (
+					<Button
+						type="button"
+						variant="link"
+						size="inline"
+						className="w-fit text-sm"
+						onClick={feed.onLoadMore}
+						disabled={feed.isLoadingMore}
+					>
+						{feed.isLoadingMore ? "Loading…" : "View earlier reviews"}
+					</Button>
+				)}
+			</>
+		);
+	} else {
+		feedContent = (
+			<Empty>
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<PulseIcon />
+					</EmptyMedia>
+					<EmptyTitle>No review runs</EmptyTitle>
+					<EmptyDescription>
+						{hasAnyFeedNarrowing
+							? `No review runs mention ${selectedPractice.name}.`
+							: "Review runs appear here once your work has been reviewed."}
+					</EmptyDescription>
+				</EmptyHeader>
+				{hasAnyFeedNarrowing && onSelectPractice && (
+					<EmptyContent>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => onSelectPractice(undefined)}
+						>
+							Show every review in this group
+						</Button>
+					</EmptyContent>
+				)}
+			</Empty>
+		);
+	}
 
 	return (
 		<div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[minmax(20rem,2fr)_minmax(0,3fr)] lg:grid-rows-[auto_auto_1fr] lg:items-stretch">
@@ -197,7 +275,7 @@ export function PracticeGroupDetailPage({
 					>
 						<GroupIcon className="size-5" aria-hidden />
 					</span>
-					<h1 className="min-w-0 text-pretty text-2xl font-semibold">{group.name}</h1>
+					<h1 className="min-w-0 text-2xl font-semibold text-pretty">{group.name}</h1>
 					<StatusBadge def={badge} />
 					{groupTrend && (
 						<PracticeTrendChip
@@ -207,23 +285,19 @@ export function PracticeGroupDetailPage({
 						/>
 					)}
 				</div>
-				{standing?.guidance && (
+				{hasText(standing?.guidance) && (
 					<PracticeNextStepCallout label="Suggested next step">
 						{standing.guidance}
 					</PracticeNextStepCallout>
 				)}
-				{group.description && (
+				{hasText(group.description) && (
 					<div className="flex w-full flex-col items-start gap-2">
 						<Button
 							type="button"
-							variant="ghost"
+							variant="quiet"
 							size="sm"
 							aria-expanded={isGroupDescriptionOpen}
 							aria-controls="practice-group-description"
-							className={cn(
-								"text-muted-foreground hover:text-foreground",
-								isGroupDescriptionOpen && "bg-muted text-foreground",
-							)}
 							onClick={() => setIsGroupDescriptionOpen((open) => !open)}
 						>
 							<InfoIcon className="size-3.5" aria-hidden />
@@ -239,7 +313,7 @@ export function PracticeGroupDetailPage({
 						{isGroupDescriptionOpen && (
 							<p
 								id="practice-group-description"
-								className="w-full rounded-lg border bg-muted/20 p-3 text-pretty text-sm leading-5 text-muted-foreground"
+								className="w-full rounded-lg border bg-muted/20 p-3 text-sm leading-5 text-pretty text-muted-foreground"
 							>
 								{group.description}
 							</p>
@@ -286,7 +360,7 @@ export function PracticeGroupDetailPage({
 											aria-expanded={isSelected}
 											aria-controls={nextStepId}
 											onClick={() => onSelectPractice?.(isSelected ? undefined : practice.slug)}
-											className="absolute inset-0 z-10 cursor-pointer rounded-xl outline-none hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+											className="absolute inset-0 z-10 cursor-pointer rounded-xl outline-none hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
 										/>
 										<div className="grid min-h-16 grid-cols-[auto_1fr_auto] items-start gap-3 p-4">
 											<span
@@ -298,7 +372,7 @@ export function PracticeGroupDetailPage({
 												<NodeIcon className="size-4" aria-hidden />
 											</span>
 											<div className="flex min-w-0 flex-col gap-1">
-												<span className="text-pretty text-sm font-medium leading-5">
+												<span className="text-sm leading-5 font-medium text-pretty">
 													{practice.name}
 												</span>
 												<div className="relative z-20 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-5">
@@ -320,7 +394,7 @@ export function PracticeGroupDetailPage({
 												aria-label={`About ${practice.name}`}
 												aria-expanded={isInfoOpen}
 												aria-controls={infoId}
-												className={cn("relative z-20", isInfoOpen && "bg-muted")}
+												className="relative z-20"
 												onClick={() =>
 													setOpenPracticeInfoSlug(isInfoOpen ? undefined : practice.slug)
 												}
@@ -342,25 +416,25 @@ export function PracticeGroupDetailPage({
 									)}
 									{isInfoOpen && (
 										<div id={infoId} className="grid gap-4 border-t bg-background/70 p-4 text-sm">
-											{practice.whyItMatters && (
+											{hasText(practice.whyItMatters) && (
 												<div className="flex flex-col gap-1">
-													<h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+													<h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
 														Why it matters
 													</h3>
-													<p className="text-pretty leading-relaxed">{practice.whyItMatters}</p>
+													<p className="leading-relaxed text-pretty">{practice.whyItMatters}</p>
 												</div>
 											)}
-											{practice.whatGoodLooksLike && (
+											{hasText(practice.whatGoodLooksLike) && (
 												<div className="flex flex-col gap-1">
-													<h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+													<h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
 														What good looks like
 													</h3>
-													<p className="text-pretty leading-relaxed">
+													<p className="leading-relaxed text-pretty">
 														{practice.whatGoodLooksLike}
 													</p>
 												</div>
 											)}
-											{!practice.whyItMatters && !practice.whatGoodLooksLike && (
+											{!hasText(practice.whyItMatters) && !hasText(practice.whatGoodLooksLike) && (
 												<p className="text-muted-foreground">
 													No additional explanation is available for this practice yet.
 												</p>
@@ -379,7 +453,7 @@ export function PracticeGroupDetailPage({
 				className={cn(
 					"flex min-w-0 flex-col gap-3",
 					practices && practices.length > 0
-						? "border-t pt-6 lg:row-span-2 lg:row-start-3 lg:grid lg:grid-rows-subgrid lg:content-start lg:gap-3 lg:self-stretch lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0"
+						? "border-t pt-6 lg:row-span-2 lg:row-start-3 lg:grid lg:grid-rows-subgrid lg:content-start lg:gap-3 lg:self-stretch lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6"
 						: "lg:col-span-2 lg:row-start-3",
 				)}
 			>
@@ -388,68 +462,7 @@ export function PracticeGroupDetailPage({
 					title="Review runs"
 					description="Complete reviews of your work in this group, newest first."
 				/>
-				{feed.status === "error" ? (
-					<QueryErrorAlert
-						error={feed.error}
-						title="Could not load review runs"
-						onRetry={feed.onRetry}
-					/>
-				) : feed.status === "loading" ? (
-					<div className="flex flex-col gap-3" role="status">
-						<span className="sr-only">Loading review runs</span>
-						{Array.from({ length: skeletonRows }, (_, i) => (
-							<Skeleton key={i} className="h-16 w-full" />
-						))}
-					</div>
-				) : feed.runs.length > 0 ? (
-					<>
-						<ReviewRunTimeline
-							runs={feed.runs}
-							openObservationId={openObservationId}
-							observationDetail={observationDetail}
-							onToggleObservation={onToggleObservation}
-							onRespond={onRespond}
-							pendingFeedbackId={pendingFeedbackId}
-						/>
-						{feed.hasMore && (
-							<Button
-								type="button"
-								variant="link"
-								className="w-fit px-0 text-primary"
-								onClick={feed.onLoadMore}
-								disabled={feed.isLoadingMore}
-							>
-								{feed.isLoadingMore ? "Loading…" : "View earlier reviews"}
-							</Button>
-						)}
-					</>
-				) : (
-					<Empty>
-						<EmptyHeader>
-							<EmptyMedia variant="icon">
-								<PulseIcon />
-							</EmptyMedia>
-							<EmptyTitle>No review runs</EmptyTitle>
-							<EmptyDescription>
-								{hasAnyFeedNarrowing
-									? `No review runs mention ${selectedPractice.name}.`
-									: "Review runs appear here once your work has been reviewed."}
-							</EmptyDescription>
-						</EmptyHeader>
-						{hasAnyFeedNarrowing && onSelectPractice && (
-							<EmptyContent>
-								<Button
-									type="button"
-									variant="outline"
-									size="sm"
-									onClick={() => onSelectPractice(undefined)}
-								>
-									Show every review in this group
-								</Button>
-							</EmptyContent>
-						)}
-					</Empty>
-				)}
+				{feedContent}
 			</section>
 		</div>
 	);

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
 
 import { isMap, isSeq, parseDocument } from "yaml";
@@ -29,7 +29,9 @@ void test("image provenance can persist storage records through every reusable-w
 				);
 			}
 		}
-		if (file !== "reusable-docker-build.yml") continue;
+		if (file !== "reusable-docker-build.yml") {
+			continue;
+		}
 		for (const job of jobs) {
 			const steps = workflow.getIn(["jobs", job, "steps"]);
 			assert.ok(isSeq(steps));
@@ -37,11 +39,11 @@ void test("image provenance can persist storage records through every reusable-w
 				.map((step) => asRecord(step, "step"))
 				.find((step) => step.name === "Generate build provenance attestation");
 			assert.ok(attestation);
-			assert.match(String(attestation.uses), /^actions\/attest@[a-f0-9]{40}$/);
+			assert.match(String(attestation.uses), /^actions\/attest@[a-f0-9]{40}$/u);
 			const inputs = asRecord(attestation.with, "attestation inputs");
 			assert.equal(inputs["push-to-registry"], true);
 			assert.notEqual(inputs["create-storage-record"], false);
-			assert.match(String(inputs["subject-digest"]), /outputs\.(manifest-digest|digest)/);
+			assert.match(String(inputs["subject-digest"]), /outputs\.(?:manifest-digest|digest)/u);
 		}
 	}
 });
@@ -68,10 +70,13 @@ const verificationSites = [
 	},
 ];
 
+/** The status the script must end with when a fixture tool rejects the image, by failing tool. */
+const exitCodes = { none: 0, signature: 7, attestation: 9 };
+
 // These are Linux publishing jobs. Execute their actual shell bodies with tool-boundary fixtures
 // so different quoting or function control flow cannot silently weaken one verification site.
 for (const site of verificationSites) {
-	for (const failure of ["none", "signature", "attestation"]) {
+	for (const [failure, exitCode] of Object.entries(exitCodes)) {
 		void test(
 			`${site.job}: ${failure === "none" ? "success" : `${failure} rejection`} preserves immutable-image verification`,
 			{ skip: process.platform === "win32" },
@@ -98,12 +103,12 @@ for (const site of verificationSites) {
 					.replaceAll(`\${{ github.repository }}`, repository)
 					.replaceAll(`\${{ github.repository_owner }}`, owner);
 				assert.ok(!script.includes(`\${{`));
-				const directory = await mkdtemp(join(tmpdir(), "image-verification-"));
-				t.after(() => rm(directory, { recursive: true, force: true }));
-				const log = join(directory, "calls");
+				const directory = await mkdtemp(path.join(tmpdir(), "image-verification-"));
+				t.after(async () => rm(directory, { recursive: true, force: true }));
+				const log = path.join(directory, "calls");
 				await writeFile(log, "");
 				for (const tool of ["cosign", "gh", "docker"]) {
-					const file = join(directory, tool);
+					const file = path.join(directory, tool);
 					await writeFile(
 						file,
 						`#!/usr/bin/env node
@@ -122,7 +127,7 @@ if (tool === 'docker' && args.includes('inspect')) process.stdout.write(process.
 					encoding: "utf8",
 					env: {
 						...process.env,
-						PATH: `${directory}${delimiter}${process.env.PATH ?? ""}`,
+						PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 						CALL_LOG: log,
 						FAILURE: failure,
 						DIGEST: digest,
@@ -138,10 +143,13 @@ if (tool === 'docker' && args.includes('inspect')) process.stdout.write(process.
 						POSTGRES_IMAGE_CHANGED: "true",
 					},
 				});
-				const calls = (await readFile(log, "utf8")).trim().split("\n");
+				const recorded = await readFile(log, "utf8");
+				const calls = recorded.trim().split("\n");
 				const expected = [];
-				if (site.job === "build") expected.push(["cosign", "sign", "--yes", immutable]);
-				if (site.job === "tag-unchanged-images")
+				if (site.job === "build") {
+					expected.push(["cosign", "sign", "--yes", immutable]);
+				}
+				if (site.job === "tag-unchanged-images") {
 					expected.push([
 						"docker",
 						"buildx",
@@ -151,6 +159,7 @@ if (tool === 'docker' && args.includes('inspect')) process.stdout.write(process.
 						"{{.Manifest.Digest}}",
 						`${image}:${"b".repeat(40)}`,
 					]);
+				}
 				expected.push([
 					"cosign",
 					"verify",
@@ -162,9 +171,10 @@ if (tool === 'docker' && args.includes('inspect')) process.stdout.write(process.
 					"--certificate-github-workflow-repository",
 					repository,
 				]);
-				if (failure !== "signature")
+				if (failure !== "signature") {
 					expected.push(["gh", "attestation", "verify", `oci://${immutable}`, "--owner", owner]);
-				if (failure === "none" && site.job === "tag-unchanged-images")
+				}
+				if (failure === "none" && site.job === "tag-unchanged-images") {
 					expected.push([
 						"docker",
 						"buildx",
@@ -176,15 +186,12 @@ if (tool === 'docker' && args.includes('inspect')) process.stdout.write(process.
 						`${image}:pr-42`,
 						immutable,
 					]);
+				}
 				assert.deepEqual(
 					calls,
 					expected.map((args) => JSON.stringify(args)),
 				);
-				assert.equal(
-					result.status,
-					failure === "none" ? 0 : failure === "signature" ? 7 : 9,
-					result.stderr,
-				);
+				assert.equal(result.status, exitCode, result.stderr);
 			},
 		);
 	}
@@ -195,10 +202,11 @@ void test("registry-only merge and alias jobs remain checkout-free and signing k
 		const workflow = parseDocument(await readFile(`.github/workflows/${site.file}`, "utf8"));
 		const steps = workflow.getIn(["jobs", site.job, "steps"]);
 		assert.ok(isSeq(steps));
-		for (const step of steps.items)
+		for (const step of steps.items) {
 			if (isMap(step)) {
-				assert.doesNotMatch(String(step.get("uses")), /actions\/checkout@|^\.\//);
+				assert.doesNotMatch(String(step.get("uses")), /actions\/checkout@|^\.\//u);
 			}
+		}
 	}
 	const workflow = parseDocument(
 		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
@@ -214,8 +222,10 @@ void test("registry-only merge and alias jobs remain checkout-free and signing k
 		assert.ok(isMap(sign));
 		assert.match(
 			String(sign.get("run")),
-			job === "merge" ? /cosign sign --yes --recursive/ : /cosign sign --yes/,
+			job === "merge" ? /cosign sign --yes --recursive/u : /cosign sign --yes/u,
 		);
-		if (job === "build") assert.doesNotMatch(String(sign.get("run")), /--recursive/);
+		if (job === "build") {
+			assert.doesNotMatch(String(sign.get("run")), /--recursive/u);
+		}
 	}
 });

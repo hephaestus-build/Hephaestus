@@ -1,4 +1,4 @@
-import { defineRule, type ESTree, type Options } from "@oxlint/plugins";
+import { defineRule, type ESTree } from "@oxlint/plugins";
 
 import { memberName, propertyName, type VisitedProperty } from "../property.ts";
 
@@ -27,7 +27,7 @@ export const ASSERT_FUNCTION_NAMES = [
 	"**.findAllBy*",
 ];
 
-const escaped = (literal: string) => literal.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+const escaped = (literal: string) => literal.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
 
 export const asRegExp = (glob: string) =>
 	new RegExp(
@@ -35,15 +35,15 @@ export const asRegExp = (glob: string) =>
 			.split("**")
 			.map((crossing) => crossing.split("*").map(escaped).join("[^.]*"))
 			.join(".*")}$`,
+		"u",
 	);
 
-const configuredNames = (options: Readonly<Options>) => {
-	const [first] = options;
-	if (typeof first !== "object" || first === null || Array.isArray(first)) return undefined;
-	const names = first.assertFunctionNames;
-	if (!Array.isArray(names)) return undefined;
-	return names.filter((name) => typeof name === "string");
-};
+const ASSERT_PATTERNS = ASSERT_FUNCTION_NAMES.map(asRegExp);
+
+/** A `play:` holding a function literal. `play: sharedPlay` is somebody else's body. */
+const playFunction = (node: VisitedProperty) =>
+	propertyName(node) === "play" &&
+	(node.value.type === "ArrowFunctionExpression" || node.value.type === "FunctionExpression");
 
 /**
  * `Open.play?.(context)` runs another story's play and inherits its assertions. A glob would have to
@@ -54,56 +54,51 @@ const delegatesToStoryPlay = (callee: ESTree.Node) =>
 	callee.type === "MemberExpression" &&
 	memberName(callee) === "play" &&
 	callee.object.type === "Identifier" &&
-	/^[A-Z]/.test(callee.object.name);
+	/^[A-Z]/u.test(callee.object.name);
 
 export const playMustAssert = defineRule({
 	meta: {
 		type: "problem",
 		docs: {
 			description:
-				"A story's `play` function must end in an assertion. Without one it passes as long as nothing throws, which proves the clicks landed and not that they did anything.",
+				"A story’s `play` function must contain a recognised assertion or delegate to another story’s play.",
 		},
 		messages: {
 			noAssertion:
 				"This play drives the component but never asserts on the result. Assert what the interaction was for: a `getBy*` query for the element it should have produced, or `expect` on the value it should have changed.",
 		},
-		schema: [
-			{
-				type: "object",
-				properties: { assertFunctionNames: { type: "array", items: { type: "string" } } },
-				additionalProperties: false,
-			},
-		],
 	},
 	create(context) {
-		const patterns = (configuredNames(context.options) ?? ASSERT_FUNCTION_NAMES).map(asRegExp);
 		// A stack, not a flag: plays nest (a `step` callback holds one), and two stories side by side
 		// must not lend each other an assertion.
 		const plays: { key: ESTree.Node; asserted: boolean }[] = [];
 
-		/** A `play:` holding a function literal. `play: sharedPlay` is somebody else's body. */
-		const playFunction = (node: VisitedProperty) =>
-			propertyName(node) === "play" &&
-			(node.value.type === "ArrowFunctionExpression" || node.value.type === "FunctionExpression");
-
 		return {
 			Property(node) {
-				if (playFunction(node)) plays.push({ key: node.key, asserted: false });
+				if (playFunction(node)) {
+					plays.push({ key: node.key, asserted: false });
+				}
 			},
 			"Property:exit"(node) {
-				if (!playFunction(node)) return;
+				if (!playFunction(node)) {
+					return;
+				}
 				const play = plays.pop();
-				if (play && !play.asserted) context.report({ node: play.key, messageId: "noAssertion" });
+				if (play && !play.asserted) {
+					context.report({ node: play.key, messageId: "noAssertion" });
+				}
 			},
 			CallExpression(node) {
 				const play = plays.at(-1);
-				if (!play || play.asserted) return;
+				if (!play || play.asserted) {
+					return;
+				}
 				if (delegatesToStoryPlay(node.callee)) {
 					play.asserted = true;
 					return;
 				}
 				const callee = context.sourceCode.getText(node.callee);
-				play.asserted = patterns.some((pattern) => pattern.test(callee));
+				play.asserted = ASSERT_PATTERNS.some((pattern) => pattern.test(callee));
 			},
 		};
 	},

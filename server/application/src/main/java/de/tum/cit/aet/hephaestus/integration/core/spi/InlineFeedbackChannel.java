@@ -21,15 +21,14 @@ public interface InlineFeedbackChannel {
     void clearStaleFeedback(SummaryChannel.FeedbackTarget target, String marker);
 
     /**
-     * One piece of feedback to post inline. {@code recurrenceKey} carries the stable
-     * {@link de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint} identity so a delivery can be matched
-     * back to its placement across re-runs; it is {@code null} when the caller has no key.
+     * One piece of feedback to post inline. {@code deliveryKey} carries the exact delivery identity so a retry can be matched
+     * back to its placement; it is {@code null} when the caller has no key.
      */
     record InlineFeedback(
             FeedbackAnchor anchor,
             String body,
             String marker,
-            @Nullable String recurrenceKey) {}
+            @Nullable String deliveryKey) {}
 
     /**
      * Per-unit outcome of a delivery attempt, reported in {@link DeliveredSignal} so the placement layer can
@@ -51,12 +50,12 @@ public interface InlineFeedbackChannel {
     }
 
     /**
-     * What actually happened to one feedback unit, keyed by {@code recurrenceKey} so the caller can reconcile it
+     * What actually happened to one feedback unit, keyed by {@code deliveryKey} so the caller can reconcile it
      * against the persisted placement. {@code externalRef} is the vendor note id and {@code threadExternalRef}
      * the enclosing discussion/thread id; both are {@code null} when no durable handle exists (e.g. a failure).
      */
     record DeliveredSignal(
-            @Nullable String recurrenceKey,
+            @Nullable String deliveryKey,
             FeedbackAnchor anchor,
             Disposition disposition,
             @Nullable String externalRef,
@@ -79,7 +78,7 @@ public interface InlineFeedbackChannel {
             int failed,
             List<DeliveredSignal> signals,
             boolean suppressed,
-            List<String> suppressedRecurrenceKeys) {
+            List<String> suppressedDeliveryKeys) {
         public InlineResult(int posted, int failed, List<DeliveredSignal> signals) {
             this(posted, failed, signals, false, List.of());
         }
@@ -90,8 +89,8 @@ public interface InlineFeedbackChannel {
         }
 
         public static InlineResult suppressed(
-                int posted, int failed, List<DeliveredSignal> signals, List<String> suppressedRecurrenceKeys) {
-            return new InlineResult(posted, failed, List.copyOf(signals), true, List.copyOf(suppressedRecurrenceKeys));
+                int posted, int failed, List<DeliveredSignal> signals, List<String> suppressedDeliveryKeys) {
+            return new InlineResult(posted, failed, List.copyOf(signals), true, List.copyOf(suppressedDeliveryKeys));
         }
     }
 }

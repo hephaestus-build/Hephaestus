@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, userEvent } from "storybook/test";
 import type { TrendSupport } from "@/api/types.gen";
-import { settledPopup } from "@/test/overlay";
+import { settledPopup } from "@/stories/overlay";
 import { PracticeTrendChip } from "./PracticeTrendChip";
 
 const wellSupported: TrendSupport = {
@@ -22,7 +22,6 @@ const none: TrendSupport = {
 };
 
 const meta = {
-	title: "Profile/Practice trend chip",
 	component: PracticeTrendChip,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],

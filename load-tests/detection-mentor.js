@@ -69,12 +69,15 @@ export function setup() {
 	const artifactIds = required("ARTIFACT_IDS")
 		.split(",")
 		.map((value) => Number(value.trim()));
-	if (artifactIds.some((value) => !Number.isSafeInteger(value) || value < 1))
+	if (artifactIds.some((value) => !Number.isSafeInteger(value) || value < 1)) {
 		throw new Error("ARTIFACT_IDS must be comma-separated positive integers");
-	if (new Set(artifactIds).size !== artifactIds.length)
+	}
+	if (new Set(artifactIds).size !== artifactIds.length) {
 		throw new Error("ARTIFACT_IDS must be distinct");
-	if (reviewRequests > artifactIds.length)
+	}
+	if (reviewRequests > artifactIds.length) {
 		throw new Error("ARTIFACT_IDS must contain at least REVIEW_REQUESTS distinct ids");
+	}
 	return { artifactIds };
 }
 
@@ -102,6 +105,9 @@ export function mentor() {
 	);
 }
 
+/**
+ * @param {ReturnType<typeof setup>} data - the artifacts `setup` validated, one per iteration
+ */
 export function detection(data) {
 	const artifactId = data.artifactIds[exec.scenario.iterationInTest];
 	const startedAt = Date.now();
@@ -112,9 +118,8 @@ export function detection(data) {
 	);
 	const submitted = response.status === 200 && jsonField(response, "status") === "SUBMITTED";
 	const jobId = submitted ? jsonField(response, "jobId") : null;
-	if (
-		!check(response, { "review request submitted": () => submitted && typeof jobId === "string" })
-	) {
+	check(response, { "review request submitted": () => typeof jobId === "string" });
+	if (typeof jobId !== "string") {
 		reviewJobsCompleted.add(false);
 		return;
 	}
@@ -126,12 +131,16 @@ export function detection(data) {
 			`${api}/workspaces/${encodeURIComponent(workspace)}/agents/jobs/${jobId}`,
 			{ headers, tags: { operation: "review_status" } },
 		);
-		if (job.status !== 200) continue;
+		if (job.status !== 200) {
+			continue;
+		}
 		const status = jsonField(job, "status");
-		if (terminalStatuses.has(status)) {
+		if (typeof status === "string" && terminalStatuses.has(status)) {
 			reviewJobDuration.add(Date.now() - startedAt);
 			reviewJobsCompleted.add(status === "COMPLETED");
-			if (status === "COMPLETED") reviewJobsFinished.add(1);
+			if (status === "COMPLETED") {
+				reviewJobsFinished.add(1);
+			}
 			check(job, { "review job completed": () => status === "COMPLETED" });
 			return;
 		}

@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import path from "node:path";
 import { describe, test } from "node:test";
 import { findDrift, readTokens } from "./check-docs-tokens.ts";
 
 // Real stylesheets preserve cascade shapes that synthetic fixtures miss.
-const repositoryRoot = resolve(import.meta.dirname, "..");
+const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const [docsCss, appCss] = await Promise.all([
-	readFile(resolve(repositoryRoot, "docs/src/css/custom.css"), "utf8"),
-	readFile(resolve(repositoryRoot, "webapp/src/styles.css"), "utf8"),
+	readFile(path.resolve(repositoryRoot, "docs/src/css/custom.css"), "utf8"),
+	readFile(path.resolve(repositoryRoot, "webapp/src/styles.css"), "utf8"),
 ]);
 
 await describe("readTokens", async () => {

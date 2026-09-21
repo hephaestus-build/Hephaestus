@@ -45,6 +45,8 @@ if (git("rev-parse", "--is-inside-work-tree") === "true") {
 		const signs =
 			git("config", "--get", "--type=bool", "commit.gpgsign") === "true" &&
 			git("config", "--get", "user.signingkey") !== "";
-		if (!signs) process.stderr.write(SIGNING_WARNING);
+		if (!signs) {
+			process.stderr.write(SIGNING_WARNING);
+		}
 	}
 }

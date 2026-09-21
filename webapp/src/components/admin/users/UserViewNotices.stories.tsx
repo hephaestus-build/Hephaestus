@@ -14,15 +14,15 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/Practices are disabled/)).toBeVisible();
-		await expect(canvas.getByText(/Heph is disabled/)).toBeVisible();
+		await expect(canvas.getByText(/Practices are disabled/u)).toBeVisible();
+		await expect(canvas.getByText(/Heph is disabled/u)).toBeVisible();
 	},
 };
 
 export const PracticesOnly: Story = {
 	args: { state: { status: "ready", practicesEnabled: false, mentorEnabled: true } },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText(/Heph is disabled/)).toBeNull();
+		await expect(canvas.queryByText(/Heph is disabled/u)).toBeNull();
 	},
 };
 

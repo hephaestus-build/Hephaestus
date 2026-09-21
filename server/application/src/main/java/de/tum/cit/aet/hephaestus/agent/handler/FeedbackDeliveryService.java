@@ -16,9 +16,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationTrendService;
-import de.tum.cit.aet.hephaestus.practices.observation.TrendDelta;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -32,9 +29,7 @@ class FeedbackDeliveryService {
 
     private final PullRequestCommentPoster commentPoster;
     private final PracticeFeedbackDeliveryPolicy deliveryPolicy;
-    private final PracticeReviewProperties reviewProperties;
     private final FeedbackLedgerRecorder feedbackLedgerRecorder;
-    private final ObservationTrendService observationTrendService;
     private final PracticeFeedbackCommentFormatter commentFormatter;
     private final PracticeFeedbackDispatchService dispatchService;
     private final AgentJobRepository agentJobRepository;
@@ -42,17 +37,13 @@ class FeedbackDeliveryService {
     FeedbackDeliveryService(
             PullRequestCommentPoster commentPoster,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
-            PracticeReviewProperties reviewProperties,
             FeedbackLedgerRecorder feedbackLedgerRecorder,
-            ObservationTrendService observationTrendService,
             PracticeFeedbackCommentFormatter commentFormatter,
             PracticeFeedbackDispatchService dispatchService,
             AgentJobRepository agentJobRepository) {
         this.commentPoster = commentPoster;
         this.deliveryPolicy = deliveryPolicy;
-        this.reviewProperties = reviewProperties;
         this.feedbackLedgerRecorder = feedbackLedgerRecorder;
-        this.observationTrendService = observationTrendService;
         this.commentFormatter = commentFormatter;
         this.dispatchService = dispatchService;
         this.agentJobRepository = agentJobRepository;
@@ -101,15 +92,7 @@ class FeedbackDeliveryService {
             return;
         }
 
-        TrendDelta trend = reviewProperties.progressFooter()
-                ? observationTrendService
-                        .computeForTarget(
-                                ArtifactKinds.PULL_REQUEST,
-                                decision.target().getId(),
-                                job.getWorkspace().getId())
-                        .orElse(null)
-                : null;
-        DeliveryContent providerPackage = providerPackage(job, delivery, trend);
+        DeliveryContent providerPackage = providerPackage(job, delivery);
         PracticeFeedbackDispatchService.Result result =
                 dispatchService.dispatchAutomaticPackage(job, providerPackage, contributingPracticeSlugs);
         FeedbackDispatch dispatch = dispatchService.automaticPackage(job);
@@ -169,24 +152,22 @@ class FeedbackDeliveryService {
                 dispatch.getAgentJobId(), dispatch.getWorkspaceId(), status, dispatch.getDeliveredExternalRef());
     }
 
-    private DeliveryContent providerPackage(AgentJob job, DeliveryContent delivery, @Nullable TrendDelta trend) {
+    private DeliveryContent providerPackage(AgentJob job, DeliveryContent delivery) {
         String summary = delivery.mrNote();
         if (summary == null) return delivery;
         String sanitized = PullRequestCommentPoster.sanitize(summary);
         if (sanitized.isBlank()) return new DeliveryContent(null, delivery.diffNotes(), delivery.withheld());
-        String footer = ProgressFooterRenderer.render(trend);
-        String body = footer.isEmpty() ? sanitized : sanitized + "\n\n" + footer;
-        return new DeliveryContent(commentFormatter.format(body, job), delivery.diffNotes(), delivery.withheld());
+        return new DeliveryContent(commentFormatter.format(sanitized, job), delivery.diffNotes(), delivery.withheld());
     }
 
     private static List<String> missingInlineKeys(DeliveryContent delivery, List<DeliveredSignal> signals) {
         Set<String> delivered = signals.stream()
                 .filter(signal -> signal.disposition() != Disposition.FAILED)
-                .map(DeliveredSignal::recurrenceKey)
+                .map(DeliveredSignal::deliveryKey)
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toSet());
         return delivery.diffNotes().stream()
-                .map(PracticeDetectionResultParser.DiffNote::recurrenceKey)
+                .map(PracticeDetectionResultParser.DiffNote::deliveryKey)
                 .filter(java.util.Objects::nonNull)
                 .filter(key -> !delivered.contains(key))
                 .toList();

@@ -19,7 +19,7 @@ function operations(order: string[]) {
 			return { id: 42 };
 		}),
 		updateMetadata: vi.fn(async (_id: number, metadata: { enabled?: boolean }) => {
-			order.push(metadata.enabled ? "activate" : "metadata");
+			order.push(metadata.enabled === true ? "activate" : "metadata");
 		}),
 		updatePrice: vi.fn(async () => {
 			order.push("price");

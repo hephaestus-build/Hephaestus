@@ -42,7 +42,7 @@ export function TracePracticeList({ practices, signals, artifactKind }: TracePra
 				</p>
 			</div>
 			{practices.length === 0 ? (
-				<Empty className="border">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyTitle>No practice covers this kind of work</EmptyTitle>
 						<EmptyDescription>
@@ -58,7 +58,9 @@ export function TracePracticeList({ practices, signals, artifactKind }: TracePra
 						<TracePracticeEntry
 							key={entry.practiceSlug}
 							entry={entry}
-							occurrence={entry.occasionedById ? signalsById.get(entry.occasionedById) : undefined}
+							occurrence={
+								hasText(entry.occasionedById) ? signalsById.get(entry.occasionedById) : undefined
+							}
 						/>
 					))}
 				</ItemGroup>
@@ -80,11 +82,11 @@ function TracePracticeEntry({ entry, occurrence }: TracePracticeEntryProps) {
 				<ItemContent className="min-w-0 gap-2">
 					<div className="flex w-full min-w-0 flex-wrap items-center gap-2">
 						<TraceOutcomeBadge outcome={entry.outcome} />
-						<ItemTitle className="min-w-0 line-clamp-none break-words">
+						<ItemTitle className="line-clamp-none min-w-0 break-words">
 							{entry.practiceName}
 						</ItemTitle>
 					</div>
-					<p className="break-words text-sm text-muted-foreground">{entry.explanation}</p>
+					<p className="text-sm break-words text-muted-foreground">{entry.explanation}</p>
 					<dl className="flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
 						<div className="flex min-w-0 items-center gap-1">
 							<dt className="sr-only">Feedback delivered</dt>
@@ -152,7 +154,7 @@ function TracePracticeEntry({ entry, occurrence }: TracePracticeEntryProps) {
 					{entry.watches.length > 0 && (
 						// Identifiers, because this endpoint sends signal names and no display
 						// names; inventing labels here would disagree with the timeline above.
-						<p className="w-full min-w-0 break-words text-xs text-muted-foreground">
+						<p className="w-full min-w-0 text-xs break-words text-muted-foreground">
 							Starts a review on:{" "}
 							{entry.watches.map((signal, index) => (
 								<span key={signal}>

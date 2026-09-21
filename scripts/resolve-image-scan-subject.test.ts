@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
 
 import { isMap, isSeq, parseDocument } from "yaml";
@@ -11,7 +11,7 @@ const amd64 = `sha256:${"a".repeat(64)}`;
 const arm64 = `sha256:${"b".repeat(64)}`;
 const index = `sha256:${"c".repeat(64)}`;
 const reference = `ghcr.io/example/webapp@${index}`;
-const checker = join(import.meta.dirname, "resolve-image-scan-subject.ts");
+const checker = path.join(import.meta.dirname, "resolve-image-scan-subject.ts");
 
 // The CLI is used only by the Linux image-scan job. Its Docker process boundary uses a POSIX
 // executable fixture; pure manifest-selection tests also run on Windows in scan-main-images.test.ts.
@@ -76,9 +76,9 @@ for (const scenario of [
 	},
 ] as const) {
 	void test(scenario.name, { skip: process.platform === "win32" }, (t) => {
-		const directory = mkdtempSync(join(tmpdir(), "image-scan-subject-"));
+		const directory = mkdtempSync(path.join(tmpdir(), "image-scan-subject-"));
 		t.after(() => rmSync(directory, { recursive: true, force: true }));
-		const docker = join(directory, "docker");
+		const docker = path.join(directory, "docker");
 		writeFileSync(
 			docker,
 			`#!/usr/bin/env node
@@ -90,8 +90,8 @@ process.stdout.write(args.includes('--raw') ? process.env.RAW : process.env.SING
 `,
 		);
 		chmodSync(docker, 0o755);
-		const output = join(directory, "output");
-		const callLog = join(directory, "calls");
+		const output = path.join(directory, "output");
+		const callLog = path.join(directory, "calls");
 		writeFileSync(output, "");
 		writeFileSync(callLog, "");
 		const imageRef = "imageRef" in scenario ? scenario.imageRef : reference;
@@ -99,7 +99,7 @@ process.stdout.write(args.includes('--raw') ? process.env.RAW : process.env.SING
 			encoding: "utf8",
 			env: {
 				...process.env,
-				PATH: `${directory}${delimiter}${process.env.PATH ?? ""}`,
+				PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 				IMAGE_REF: imageRef,
 				INPUT_IMAGE_NAME: "imageName" in scenario ? scenario.imageName : "example/webapp",
 				GITHUB_OUTPUT: output,
@@ -118,10 +118,11 @@ process.stdout.write(args.includes('--raw') ? process.env.RAW : process.env.SING
 			assert.notEqual(result.status, 0);
 			assert.equal(emitted, "", "failed resolution must publish no usable scan subject");
 		}
-		if ("noInspect" in scenario) assert.equal(calls, "");
-		else {
+		if ("noInspect" in scenario) {
+			assert.equal(calls, "");
+		} else {
 			const expectedCalls = [["buildx", "imagetools", "inspect", imageRef, "--raw"]];
-			if ("formatLookup" in scenario)
+			if ("formatLookup" in scenario) {
 				expectedCalls.push([
 					"buildx",
 					"imagetools",
@@ -130,6 +131,7 @@ process.stdout.write(args.includes('--raw') ? process.env.RAW : process.env.SING
 					"{{.Manifest.Digest}}",
 					imageRef,
 				]);
+			}
 			assert.equal(calls, expectedCalls.map((args) => `${JSON.stringify(args)}\n`).join(""));
 		}
 	});

@@ -57,8 +57,9 @@ void test("lightweight PRs cannot make full verification's latency budget pass",
 	for (const webappName of ["Quality / Webapp", "Quality / Webapp / Gates"]) {
 		const jobs = names.map((name) => ({ name: name === "Quality / Webapp" ? webappName : name }));
 		assert.equal(isFullVerification(jobs), true);
-		for (const { name } of jobs)
+		for (const { name } of jobs) {
 			assert.equal(isFullVerification(jobs.filter((job) => job.name !== name)), false, name);
+		}
 	}
 	assert.equal(isFullVerification([{ name: "Quality / Tooling and Docs" }]), false);
 });
@@ -72,7 +73,7 @@ void test("the target constrains both the median and tail, and insufficient data
 	assert.equal(tail.p50Seconds, 5.5);
 	assert.equal(tail.p90Seconds, 1800);
 	assert.equal(tail.status, "exceeded");
-	assert.throws(() => latencyBudget([Number.NaN]), /finite/);
+	assert.throws(() => latencyBudget([Number.NaN]), /finite/u);
 });
 
 void test(
@@ -80,7 +81,7 @@ void test(
 	{ skip: process.platform === "win32" },
 	async (context) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "ci-latency-"));
-		context.after(() => rm(directory, { recursive: true, force: true }));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
 		await mkdir(path.join(directory, ".changeset"));
 		await writeFile(path.join(directory, ".changeset/config.json"), '{"baseBranch":"main"}');
 		await writeFile(
@@ -90,7 +91,7 @@ void test(
 		);
 		const result = spawnSync(
 			process.execPath,
-			[fileURLToPath(new URL("./report-ci-latency.ts", import.meta.url))],
+			[fileURLToPath(new URL("report-ci-latency.ts", import.meta.url))],
 			{
 				cwd: directory,
 				env: {
@@ -102,14 +103,14 @@ void test(
 			},
 		);
 		assert.equal(result.status, 0, result.stderr);
-		assert.match(result.stdout, /::notice title=PR latency baseline incomplete/);
+		assert.match(result.stdout, /::notice title=PR latency baseline incomplete/u);
 		const evidence = await readFile(path.join(directory, "tmp/ci-metrics/ci-latency.json"), "utf8");
-		assert.match(evidence, /"status": "insufficient-data"/);
-		assert.match(evidence, /"runs": \[\]/);
+		assert.match(evidence, /"status": "insufficient-data"/u);
+		assert.match(evidence, /"runs": \[\]/u);
 		await writeFile(path.join(directory, "gh"), "#!/bin/sh\necho '{}'\n", { mode: 0o755 });
 		const invalid = spawnSync(
 			process.execPath,
-			[fileURLToPath(new URL("./report-ci-latency.ts", import.meta.url))],
+			[fileURLToPath(new URL("report-ci-latency.ts", import.meta.url))],
 			{
 				cwd: directory,
 				env: {
@@ -121,18 +122,18 @@ void test(
 			},
 		);
 		assert.notEqual(invalid.status, 0);
-		assert.match(invalid.stderr, /workflow_runs/);
+		assert.match(invalid.stderr, /workflow_runs/u);
 	},
 );
 
 void test("latency summaries preserve exceeded targets and distinguish absent evidence", () => {
 	assert.match(
 		renderLatencyBudget(latencyBudget(Array.from({ length: 10 }, () => 900))),
-		/\*\*exceeded\*\*/,
+		/\*\*exceeded\*\*/u,
 	);
-	assert.match(renderLatencyBudget(latencyBudget([])), /Not available/);
+	assert.match(renderLatencyBudget(latencyBudget([])), /Not available/u);
 	assert.match(
 		renderLatencyBudget(latencyBudget(Array.from({ length: 10 }, () => 300))),
-		/\*\*within-budget\*\*/,
+		/\*\*within-budget\*\*/u,
 	);
 });

@@ -12,6 +12,12 @@ export interface SortButtonProps {
 	children: ReactNode;
 }
 
+const SORT_ICONS = {
+	none: ChevronsUpDownIcon,
+	asc: ArrowUpIcon,
+	desc: ArrowDownIcon,
+};
+
 /**
  * The clickable label in a sortable column header. The icon carries the direction because
  * `aria-sort`, which belongs on the surrounding `<th>`, is invisible to everyone who can see.
@@ -21,15 +27,15 @@ export interface SortButtonProps {
  * look different depending on which one drives it.
  */
 export function SortButton({ sorted, onToggle, reverse = false, children }: SortButtonProps) {
-	const SortIcon = sorted ? (sorted === "asc" ? ArrowUpIcon : ArrowDownIcon) : ChevronsUpDownIcon;
+	const SortIcon = SORT_ICONS[sorted === false ? "none" : sorted];
 
 	return (
 		<button
 			type="button"
 			onClick={onToggle}
 			className={cn(
-				"group inline-flex items-center gap-1 rounded-sm outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
-				sorted ? "text-foreground" : "text-muted-foreground",
+				"group inline-flex items-center gap-1 rounded-sm outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+				sorted === false ? "text-muted-foreground" : "text-foreground",
 				reverse && "flex-row-reverse",
 			)}
 		>
@@ -37,7 +43,7 @@ export function SortButton({ sorted, onToggle, reverse = false, children }: Sort
 			<SortIcon
 				className={cn(
 					"size-3.5 shrink-0",
-					sorted ? "opacity-100" : "opacity-40 group-hover:opacity-70",
+					sorted === false ? "opacity-40 group-hover:opacity-70" : "opacity-100",
 				)}
 				aria-hidden
 			/>

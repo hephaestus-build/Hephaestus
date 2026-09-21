@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
 
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { UserViewBanner } from "./UserViewBanner";
 
@@ -27,7 +27,7 @@ export const Default: Story = {
 export const WithoutAccount: Story = {
 	args: { hasAccount: false },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/No linked Hephaestus account/)).toBeVisible();
+		await expect(canvas.getByText(/No linked Hephaestus account/u)).toBeVisible();
 	},
 };
 

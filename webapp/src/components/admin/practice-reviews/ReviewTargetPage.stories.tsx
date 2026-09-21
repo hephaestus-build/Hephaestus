@@ -3,10 +3,8 @@ import { expect, fn, screen } from "storybook/test";
 
 import type { ReviewArtifact } from "@/api/types.gen";
 import { isKnownArtifactKind } from "@/lib/artifact-kinds";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
-import { REVIEW_PREVIEW_SIZE, type ReviewSectionState } from "./ReviewOutputSections";
-import { ReviewTargetPage } from "./ReviewTargetPage";
 import {
 	gitlabMergeRequest,
 	outlineDocument,
@@ -15,7 +13,9 @@ import {
 	reviewObservations,
 	slackConversation,
 	workspacePractices,
-} from "./story-mock-data";
+} from "./fixtures";
+import { REVIEW_PREVIEW_SIZE, type ReviewSectionState } from "./ReviewOutputSections";
+import { ReviewTargetPage } from "./ReviewTargetPage";
 
 /**
  * The page shows one work's review output, so a story names the work and takes the rows the
@@ -39,7 +39,9 @@ const empty = <T,>(): ReviewSectionState<T> => ({ status: "ready", items: [], to
 
 /** The practice one of this work's observations names, and the one the card is read on. */
 const THIN_CONTROLLERS = workspacePractices.find((p) => p.slug === "thin-controllers");
-if (!THIN_CONTROLLERS) throw new Error("The practice fixtures no longer cover thin-controllers");
+if (!THIN_CONTROLLERS) {
+	throw new Error("The practice fixtures no longer cover thin-controllers");
+}
 
 const argsFor = (artifact: ReviewArtifact) => {
 	if (!isKnownArtifactKind(artifact.type)) {
@@ -54,7 +56,6 @@ const argsFor = (artifact: ReviewArtifact) => {
 };
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Reviewed work",
 	component: ReviewTargetPage,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 768, 1440] } },
 	tags: ["autodocs"],
@@ -93,7 +94,7 @@ export const PullRequest: Story = {
 export const PracticeOpensItsDefinition: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ canvas, userEvent }) => {
-		const link = await canvas.findByRole("link", { name: /Thin controllers/ });
+		const link = await canvas.findByRole("link", { name: /Thin controllers/u });
 		await expect(link).toHaveAttribute("href", "/w/demo/admin/practices/thin-controllers");
 		// The card is a portal, so it is looked for on the whole screen rather than in the canvas.
 		await userEvent.hover(link);

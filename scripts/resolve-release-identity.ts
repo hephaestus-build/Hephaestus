@@ -11,27 +11,33 @@
 import { appendFileSync } from "node:fs";
 import process from "node:process";
 
+import { isSet } from "./lib/env.ts";
 import { releaseCertificateIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 
-const [release, field] = process.argv.slice(2);
-if (!release)
+const [release = "", field] = process.argv.slice(2);
+if (release === "") {
 	throw new Error(
 		"usage: resolve-release-identity <vX.Y.Z | X.Y.Z> [namespace|certificate-identity]",
 	);
+}
 
 const values = {
 	namespace: releaseIdentityFor(release).namespace,
 	"certificate-identity": releaseCertificateIdentity(release, process.env),
 };
 
-if (field !== undefined) {
-	if (field !== "namespace" && field !== "certificate-identity")
-		throw new Error(`unknown field '${field}' (expected namespace or certificate-identity)`);
-	console.log(values[field]);
-} else {
+if (field !== undefined && field !== "namespace" && field !== "certificate-identity") {
+	throw new Error(`unknown field '${field}' (expected namespace or certificate-identity)`);
+}
+if (field === undefined) {
 	const lines = Object.entries(values)
 		.map(([key, value]) => `${key}=${value}\n`)
 		.join("");
 	process.stdout.write(lines);
-	if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, lines);
+	const githubOutput = process.env.GITHUB_OUTPUT;
+	if (isSet(githubOutput)) {
+		appendFileSync(githubOutput, lines);
+	}
+} else {
+	console.log(values[field]);
 }

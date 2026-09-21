@@ -34,8 +34,8 @@ signed-in account. It cannot create an authenticated link from an anonymous requ
 Outline support linking only, not sign-in.
 
 Sign-in and linking also fill [`identity_link.external_actor_id`](./auth-glossary.md), the synced
-git-provider user the link denotes. That join, not a login comparison, is what tells the rest of the
-system which developer an account is.
+git-provider user the link denotes. User views, Slack identity resolution and account erasure use
+this association rather than comparing login names.
 
 ## Key properties
 

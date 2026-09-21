@@ -46,6 +46,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -127,7 +129,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         testJob.setMetadata(metadata);
         ObjectNode snapshot = objectMapper.createObjectNode();
         var sources =
-                snapshot.putObject("manifest").put("contractVersion", "1.0.0").putArray("sources");
+                snapshot.putObject("manifest").put("contractVersion", "1.1.0").putArray("sources");
         var source = sources.addObject().put("kind", "scm.pull-request.diff");
         source.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
         source.putArray("artifacts")
@@ -232,15 +234,121 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 null);
     }
 
-    @Test
-    void shouldRefuseChangingTheTargetOfThePinnedPractice() {
-        PracticeRevision revision = practiceRevisionRepository.findById(11L).orElseThrow();
-        org.mockito.Mockito.when(revision.getCriteria()).thenReturn("TARGET ASSESSMENT: BAD");
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "  Trivio:  # TODO: Adjust Name",
+                "+  Trivio:  # TODO: Adjust Name",
+                "  Trivio:  # TODO: Adjust Name\n",
+                "  Trivio:  # TODO: Adjust Name\r\n",
+                "  Trivio:  # TODO: Adjust Name\r\n\r\n"
+            })
+    void shouldAdmitExactIndentedQuoteWithServerLineSemantics(String quote) {
+        when(cas.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+                .thenReturn(Optional.of(("--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,2 +10,2 @@\n"
+                                + "[L10] +  Trivio:  # TODO: Adjust Name\n[L11] +\n")
+                        .getBytes(StandardCharsets.UTF_8)));
         var observation = validObservation("pr-description-quality", Presence.PRESENT);
+        ((ObjectNode) evidenceOf(observation).withArray("citations").get(0))
+                .put("quote", quote)
+                .put("endLine", 9 + quote.lines().count());
+        assertThat(service.deliver(testJob, List.of(observation)).inserted()).isEqualTo(1);
+        assertThat(evidenceOf(observation)
+                        .path("citations")
+                        .get(0)
+                        .path("quote")
+                        .asString())
+                .isEqualTo(quote);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Trivio:  # TODO: Adjust Name", "[L10] +  Trivio:  # TODO: Adjust Name", " \t\n"})
+    void shouldRejectMissingIndentationDisplayCoordinatesAndBlankQuotes(String quote) {
+        lenient()
+                .when(cas.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+                .thenReturn(Optional.of(("--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n"
+                                + "[L10] +  Trivio:  # TODO: Adjust Name\n")
+                        .getBytes(StandardCharsets.UTF_8)));
+        var observation = validObservation("pr-description-quality", Presence.PRESENT);
+        ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("quote", quote);
+        assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+                .isInstanceOf(JobDeliveryException.class);
+        verifyNoInteractions(observationRepository);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {2147483648L, 4294967306L, Long.MAX_VALUE})
+    void shouldRejectCoordinatesThatWouldOverflowAnInteger(long line) {
+        var observation = validObservation("pr-description-quality", Presence.PRESENT);
+        var citation =
+                (ObjectNode) evidenceOf(observation).withArray("citations").get(0);
+        citation.put("startLine", line).put("endLine", line);
         assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
                 .isInstanceOf(JobDeliveryException.class)
-                .hasMessageContaining("fixed target assessment");
+                .hasMessageContaining("invalid evidence citation");
+        citation.put("startLine", 10);
+        assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessageContaining("invalid evidence citation");
         verifyNoInteractions(observationRepository);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"OLD", "NEW"})
+    void shouldReadAnnotatedHeaderLikeTextAsSourceContent(String side) {
+        when(cas.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+                .thenReturn(Optional.of(("--- a/src/Auth.java\n+++ b/src/Auth.java\n"
+                                + "[L10] --- SQL comment\n[L10] +++ value\u2028tail\u2029end\n")
+                        .getBytes(StandardCharsets.UTF_8)));
+        var observation = validObservation("pr-description-quality", Presence.PRESENT);
+        ((ObjectNode) evidenceOf(observation).withArray("citations").get(0))
+                .put("side", side)
+                .put("quote", side.equals("OLD") ? "-- SQL comment" : "++ value\u2028tail\u2029end");
+        assertThat(service.deliver(testJob, List.of(observation)).inserted()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldRefuseAnEmptyAnnotatedPayloadWithoutThrowingAParserError() {
+        when(cas.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+                .thenReturn(Optional.of(
+                        "--- a/src/Auth.java\n+++ b/src/Auth.java\n[L10] +x\n[L11] ".getBytes(StandardCharsets.UTF_8)));
+        var observation = validObservation("pr-description-quality", Presence.PRESENT);
+        ((ObjectNode) evidenceOf(observation).withArray("citations").get(0))
+                .put("quote", "x\n\n")
+                .put("endLine", 11);
+        assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessageContaining("does not match");
+        verifyNoInteractions(observationRepository);
+    }
+
+    @Test
+    void shouldAdmitContextualAssessmentWithoutParsingPolarityFromCriteria() {
+        PracticeRevision revision = practiceRevisionRepository.findById(11L).orElseThrow();
+        var observation = validObservation("pr-description-quality", Presence.PRESENT);
+        service.deliver(testJob, List.of(observation));
+        verify(revision, org.mockito.Mockito.never()).getCriteria();
+        verify(observationRepository)
+                .insertIfAbsent(
+                        any(),
+                        anyString(),
+                        any(),
+                        anyLong(),
+                        anyLong(),
+                        any(),
+                        anyString(),
+                        anyLong(),
+                        anyLong(),
+                        any(),
+                        anyString(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        anyString(),
+                        any(),
+                        anyString());
     }
 
     @Test

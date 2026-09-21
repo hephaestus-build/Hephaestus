@@ -2,7 +2,6 @@ import { NoEntryIcon } from "@primer/octicons-react";
 import { AwardIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { cn } from "cn";
 import type { LeaderboardEntry, UserInfo } from "@/api/types.gen";
 import { ActivityBadges } from "@/components/leaderboard/ActivityBadges";
 import type { LeaderboardVariant } from "@/components/leaderboard/LeaderboardPage";
@@ -17,7 +16,9 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { getInitials } from "@/lib/avatar";
-import { getTeamAvatarUrl, type ProviderType } from "@/lib/provider";
+import { getTeamAvatarUrl } from "@/lib/provider/avatar";
+import type { ProviderType } from "@/lib/provider/provider-terms";
+import { hasText } from "@/lib/text";
 
 import { LeagueIcon } from "./LeagueIcon";
 
@@ -26,25 +27,28 @@ type TeamLeaderboardEntry = LeaderboardEntry & {
 };
 
 export interface LeaderboardTableProps {
-	leaderboard?: LeaderboardEntry[] | TeamLeaderboardEntry[];
+	leaderboard?: readonly LeaderboardEntry[] | readonly TeamLeaderboardEntry[];
 	isLoading: boolean;
 	variant: LeaderboardVariant;
 	currentUser?: UserInfo;
 	renderUserLink?: (username: string, children: ReactNode) => ReactNode;
 	renderTeamLink?: (teamId: number, children: ReactNode) => ReactNode;
 	teamLabelsById?: Record<number, string>;
-	providerType?: ProviderType;
+	providerType: ProviderType;
 	leaguesEnabled?: boolean;
 }
+
+const NO_ENTRIES: readonly LeaderboardEntry[] = [];
+
 export function LeaderboardTable({
-	leaderboard = [],
+	leaderboard = NO_ENTRIES,
 	isLoading,
 	variant,
 	currentUser,
 	renderUserLink,
 	renderTeamLink,
 	teamLabelsById,
-	providerType = "GITHUB",
+	providerType,
 	leaguesEnabled = true,
 }: LeaderboardTableProps) {
 	if (isLoading) {
@@ -54,7 +58,7 @@ export function LeaderboardTable({
 	if (leaderboard.length === 0) {
 		return (
 			<div className="flex flex-col items-center justify-center px-4 py-8 text-center">
-				<NoEntryIcon className="h-12 w-12 text-provider-danger-foreground mb-2" />
+				<NoEntryIcon className="mb-2 h-12 w-12 text-provider-danger-foreground" />
 				<h2 className="text-lg font-medium">No entries found</h2>
 				<p className="text-muted-foreground">There are no leaderboard entries available.</p>
 			</div>
@@ -62,17 +66,17 @@ export function LeaderboardTable({
 	}
 
 	const isTeam = variant === "TEAM";
-	const entries: LeaderboardEntry[] = leaderboard;
+	const entries: readonly LeaderboardEntry[] = leaderboard;
 
 	return (
 		<Table>
 			<TableHeader>
 				<TableRow>
-					<TableHead className="text-center w-10">Rank</TableHead>
-					{!isTeam && leaguesEnabled && <TableHead className="text-center w-20">League</TableHead>}
+					<TableHead className="w-10 text-center">Rank</TableHead>
+					{!isTeam && leaguesEnabled && <TableHead className="w-20 text-center">League</TableHead>}
 					<TableHead className="w-56">{isTeam ? "Team" : "Contributor"}</TableHead>
 					<TableHead className="text-center">
-						<div className="flex justify-center items-center gap-1 text-provider-done-foreground">
+						<div className="flex items-center justify-center gap-1 text-provider-done-foreground">
 							<span className="flex items-center gap-0.5">
 								<AwardIcon className="size-4" /> Score
 							</span>
@@ -84,8 +88,10 @@ export function LeaderboardTable({
 			<TableBody>
 				{entries.map((entry) => {
 					if (isTeam) {
-						const team = entry.team;
-						if (!team) return null;
+						const { team } = entry;
+						if (!team) {
+							return null;
+						}
 						const displayName = teamLabelsById?.[team.id] ?? team.name;
 						const teamIdentity = (
 							<div className="flex items-center gap-2 font-medium">
@@ -126,12 +132,14 @@ export function LeaderboardTable({
 						);
 					}
 
-					const user = entry.user;
+					const { user } = entry;
 					if (!user) {
 						return null;
 					}
 
-					const currentUserLogin = currentUser?.login ? currentUser.login.toLowerCase() : undefined;
+					const currentUserLogin = hasText(currentUser?.login)
+						? currentUser.login.toLowerCase()
+						: undefined;
 					const isCurrentUser = currentUserLogin === user.login.toLowerCase();
 					const userIdentity = (
 						<div className="flex items-center gap-2 font-medium">
@@ -147,12 +155,12 @@ export function LeaderboardTable({
 						<TableRow
 							key={user.login}
 							id={`rank-${entry.rank}`}
-							className={cn(isCurrentUser && "bg-accent dark:bg-accent/30 dark:hover:bg-accent/50")}
+							variant={isCurrentUser ? "highlighted" : "default"}
 						>
 							<TableCell className="text-center">{entry.rank}</TableCell>
 							{leaguesEnabled && (
 								<TableCell className="px-0">
-									<div className="flex flex-col justify-center items-center">
+									<div className="flex flex-col items-center justify-center">
 										<LeagueIcon leaguePoints={user.leaguePoints} showPoints />
 									</div>
 								</TableCell>
@@ -191,39 +199,33 @@ function LeaderboardTableSkeleton() {
 		<Table>
 			<TableHeader>
 				<TableRow>
-					<TableHead className="text-center w-16">Rank</TableHead>
-					<TableHead className="text-center w-20">League</TableHead>
+					<TableHead className="w-16 text-center">Rank</TableHead>
+					<TableHead className="w-20 text-center">League</TableHead>
 					<TableHead>Contributor</TableHead>
 					<TableHead className="text-center">Score</TableHead>
 					<TableHead>Activity</TableHead>
 				</TableRow>
 			</TableHeader>
 			<TableBody>
-				{Array.from({ length: 10 }, (_, idx) => `skeleton-${idx}`).map((key, idx) => (
+				{Array.from({ length: 10 }, (_, idx) => `skeleton-${idx}`).map((key) => (
 					<TableRow key={key}>
 						<TableCell>
-							<Skeleton className="h-5 w-7" style={{ width: `${20 + 1 * idx}px` }} />
+							<Skeleton className="h-5 w-7" />
 						</TableCell>
 						<TableCell>
-							<Skeleton className="h-8 w-8 mx-auto" />
+							<Skeleton className="mx-auto h-8 w-8" />
 						</TableCell>
 						<TableCell className="py-2">
 							<div className="flex items-center gap-2">
-								<Skeleton className="w-10 h-10 rounded-full" />
-								<Skeleton className="h-5" style={{ width: `${100 + (idx % 3) * 75}px` }} />
+								<Skeleton className="h-10 w-10 rounded-full" />
+								<Skeleton className="h-5 w-40" />
 							</div>
 						</TableCell>
 						<TableCell className="text-center">
-							<Skeleton
-								className="h-5 mx-auto"
-								style={{ width: `${20 + (10 - idx) + (idx % 3) * 4}px` }}
-							/>
+							<Skeleton className="mx-auto h-5 w-8" />
 						</TableCell>
 						<TableCell className="py-2">
-							<Skeleton
-								className="h-5"
-								style={{ width: `${30 + ((idx % 4) * 20) / (idx + 1)}px` }}
-							/>
+							<Skeleton className="h-5 w-10" />
 						</TableCell>
 					</TableRow>
 				))}

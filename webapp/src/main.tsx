@@ -5,20 +5,21 @@ import ReactDOM from "react-dom/client";
 
 import { client } from "@/api/client.gen";
 import environment from "@/environment";
-import { RouteError } from "@/integrations/sentry/RouteError";
+import { RouteError } from "@/runtime/sentry/RouteError";
 
 import "./styles.css";
 
-import { AuthProvider, applyStateChangingHeaders, useAuth } from "@/integrations/auth";
-import { handlePossibleSessionExpiry } from "@/integrations/auth/session-expiry";
-import { SessionKeepAlive } from "@/integrations/auth/use-session-keep-alive";
-import { useCookieConsent } from "@/integrations/consent";
-import { TanstackDevtools } from "@/integrations/devtools/TanstackDevtools";
-import { disableSentry, initSentry } from "@/integrations/sentry";
-import { ThemeProvider } from "@/integrations/theme";
+import { applyStateChangingHeaders } from "@/runtime/auth/auth-client";
+import { AuthProvider, useAuth } from "@/runtime/auth/AuthContext";
+import { handlePossibleSessionExpiry } from "@/runtime/auth/session-expiry";
+import { SessionKeepAlive } from "@/runtime/auth/use-session-keep-alive";
+import { useCookieConsent } from "@/runtime/consent";
+import { TanstackDevtools } from "@/runtime/devtools/TanstackDevtools";
+import { disableSentry, initSentry } from "@/runtime/sentry";
+import { ThemeProvider } from "@/runtime/theme/ThemeContext";
 
-import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 import { routeTree } from "./routeTree.gen";
+import * as TanstackQuery from "./runtime/tanstack-query/root-provider";
 
 // No global timeout: aborting a request does not cancel a server-side mutation.
 client.setConfig({
@@ -33,7 +34,7 @@ client.setConfig({
 	manifestLink.rel = "manifest";
 	manifestLink.href =
 		window.location.hostname === "localhost" ? "/manifest-dev.json" : "/manifest.json";
-	document.head.appendChild(manifestLink);
+	document.head.append(manifestLink);
 }
 
 client.interceptors.request.use((request) => applyStateChangingHeaders(request));
@@ -95,12 +96,12 @@ function Root() {
 	);
 }
 
-const rootElement = document.getElementById("app");
+const rootElement = document.querySelector("#app");
 if (rootElement && !rootElement.innerHTML) {
 	const root = ReactDOM.createRoot(rootElement, {
-		onUncaughtError: Sentry.reactErrorHandler((error, errorInfo) => {
+		onUncaughtError: Sentry.reactErrorHandler((uncaught, errorInfo) => {
 			// oxlint-disable-next-line no-console -- The custom handler replaces React's console report.
-			console.warn("Uncaught error", error, errorInfo.componentStack);
+			console.warn("Uncaught error", uncaught, errorInfo.componentStack);
 		}),
 		onRecoverableError: Sentry.reactErrorHandler(),
 	});

@@ -15,7 +15,7 @@ export function useClampedPage(
 	onPageChange: (page: number) => void,
 ) {
 	useEffect(() => {
-		if (totalPages !== undefined && page && page >= totalPages) {
+		if (totalPages !== undefined && page !== undefined && page >= totalPages) {
 			onPageChange(Math.max(0, totalPages - 1));
 		}
 	}, [onPageChange, page, totalPages]);

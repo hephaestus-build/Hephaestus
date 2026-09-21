@@ -43,7 +43,7 @@ the panel computes to `opacity: 0` and a mounted element reads as invisible. **T
 *duration* problem** — the Playwright context already requests `reducedMotion: "reduce"`, the media
 query matches, and forcing every duration to 1ms does not fix it.
 
-Use `expectSettledVisible` from `@/test/overlay`, which waits for the starting-style frame to pass and
+Use `expectSettledVisible` from `@/stories/overlay`, which waits for the starting-style frame to pass and
 for the enter transition to finish before asserting. It takes the element you actually care about, not
 the panel: the assertion target is usually a `<dt>` or a `<p>` well inside the popup, and it is the
 *ancestor* that is transparent, so the helper looks upward for both signals. Reach for `settledPopup()`

@@ -172,14 +172,6 @@ public class PracticeDetectionDeliveryService {
                                 + ", jobId="
                                 + job.getId());
             }
-            var targetAssessment = Practice.declaredTargetAssessment(revision.getCriteria());
-            if (observation.assessmentStatus() == AssessmentStatus.ASSESSED
-                    && targetAssessment != null
-                    && observation.assessment() != targetAssessment) {
-                throw new JobDeliveryException(
-                        "Observation changes the fixed target assessment for practice " + observation.practiceSlug());
-            }
-
             enforceAttribution(observation, revision, job);
             try {
                 enforceEvidenceBoundary(observation, revision, evidenceBoundary, job);
@@ -258,7 +250,7 @@ public class PracticeDetectionDeliveryService {
                 }
             }
 
-            // Recurrence identity is content-derived and stable across runs (ADR 0021).
+            // The location grouping can be shared by different behaviors; occurrence identity addresses this row.
             String recurrenceKey = ObservationFingerprint.compute(
                     observation.practiceSlug(),
                     artifactKind.value(),
@@ -270,7 +262,7 @@ public class PracticeDetectionDeliveryService {
             Long practiceRevisionId = Objects.requireNonNull(revision.getId(), "Practice revision must be persisted");
 
             // Enforced here because the native insertIfAbsent path bypasses Observation's @PrePersist
-            // (ADR-0022): severity is an impact band for a BAD observation only.
+            // (ADR-0022): severity is an impact band for a negative outcome only.
             String severityName = observation.outcome() == Outcome.NEGATIVE && observation.severity() != null
                     ? observation.severity().name()
                     : null;
@@ -403,9 +395,12 @@ public class PracticeDetectionDeliveryService {
                             && (!side.isString() || !("OLD".equals(side.asString()) || "NEW".equals(side.asString()))))
                     || (!"scm.pull-request.diff".equals(sourceKind.asString()) && !side.isMissingNode())
                     || !startLine.isIntegralNumber()
+                    || !startLine.canConvertToInt()
                     || startLine.asInt() < 1
                     || (!endLine.isMissingNode()
-                            && (!endLine.isIntegralNumber() || endLine.asInt() < startLine.asInt()))
+                            && (!endLine.isIntegralNumber()
+                                    || !endLine.canConvertToInt()
+                                    || endLine.asInt() < startLine.asInt()))
                     || (!quote.isString() && !redactedSecretCitation)) {
                 throw new JobDeliveryException(
                         "Observation has an invalid evidence citation: slug=" + observation.practiceSlug()
@@ -493,8 +488,8 @@ public class PracticeDetectionDeliveryService {
                     return false;
                 }
             }
-            if (line.startsWith("--- ")) oldPath = parseDiffPath(line.substring(4));
-            if (line.startsWith("+++ ")) newPath = parseDiffPath(line.substring(4));
+            if (lineNumber == null && line.startsWith("--- ")) oldPath = parseDiffPath(line.substring(4));
+            if (lineNumber == null && line.startsWith("+++ ")) newPath = parseDiffPath(line.substring(4));
             if (lineNumber == null) continue;
             String lineSide = line.startsWith("-") ? "OLD" : "NEW";
             String linePath = "OLD".equals(lineSide) ? oldPath : newPath;
@@ -661,11 +656,11 @@ public class PracticeDetectionDeliveryService {
                     }
                 }
             }
-            if (line.startsWith("--- ")) {
+            if (annotatedLine == null && line.startsWith("--- ")) {
                 oldPath = parseDiffPath(line.substring(4));
                 continue;
             }
-            if (line.startsWith("+++ ")) {
+            if (annotatedLine == null && line.startsWith("+++ ")) {
                 newPath = parseDiffPath(line.substring(4));
                 continue;
             }
@@ -685,6 +680,7 @@ public class PracticeDetectionDeliveryService {
             String diffLine = citedLines.get(citedStartLine + i);
             String quoteLine = quoteLines.get(i);
             if (diffLine == null
+                    || diffLine.isEmpty()
                     || !(diffLine.equals(quoteLine) || diffLine.substring(1).equals(quoteLine))) {
                 return false;
             }

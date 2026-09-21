@@ -21,6 +21,7 @@ import {
 	ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { hasText } from "@/lib/text";
 
 import { UserViewErrorAlert } from "./UserViewErrorAlert";
 
@@ -39,7 +40,8 @@ export interface UserViewConversationsProps {
 const SKELETON_ROWS = 5;
 
 function titleOf(thread: { title?: string | null }): string {
-	return thread.title?.trim() ? thread.title.trim() : "Untitled conversation";
+	const title = thread.title?.trim();
+	return hasText(title) ? title : "Untitled conversation";
 }
 
 export function UserViewConversations({
@@ -69,7 +71,7 @@ export function UserViewConversations({
 	}
 	if (state.threads.length === 0) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<MessagesSquareIcon />
@@ -99,7 +101,11 @@ export function UserViewConversations({
 									variant="outline"
 									size="sm"
 									aria-label={`Open conversation: ${titleOf(thread)}`}
-									onClick={() => thread.id && onOpen(thread.id)}
+									onClick={() => {
+										if (hasText(thread.id)) {
+											onOpen(thread.id);
+										}
+									}}
 								>
 									Open
 								</Button>

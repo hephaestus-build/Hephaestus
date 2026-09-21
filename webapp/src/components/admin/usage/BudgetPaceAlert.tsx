@@ -35,23 +35,23 @@ export function BudgetPaceAlert({
 		<Alert variant="warning" role="status">
 			<TrendingUp aria-hidden />
 			<AlertTitle>
-				{subjectName != null
-					? `${subjectName} has used ${Math.round(percent)}% of its ${capName}`
-					: `You've used ${Math.round(percent)}% of your ${capName}`}
+				{subjectName == null
+					? `You've used ${Math.round(percent)}% of your ${capName}`
+					: `${subjectName} has used ${Math.round(percent)}% of its ${capName}`}
 			</AlertTitle>
 			<AlertDescription>
 				<p>
 					{formatCostUsd(spendUsd)} of {formatCapUsd(capUsd)}
 					<FxAmount conversion={spendOfCapConversion(spendUsd, capUsd, fx)} />.
 					{projection != null &&
-						(projection.reachedOn != null ? (
-							` At this pace, the ${capNoun} is reached around ${formatDayLabel(projection.reachedOn)}.`
-						) : (
+						(projection.reachedOn == null ? (
 							// The month-end figure converts too, or the sentence switches currency mid-breath.
 							<>
 								{` At this pace, the month finishes around ${formatCostUsd(projection.projectedMonthEndUsd)}`}
 								<FxAmount conversion={spendConversion(projection.projectedMonthEndUsd, fx)} />.
 							</>
+						) : (
+							` At this pace, the ${capNoun} is reached around ${formatDayLabel(projection.reachedOn)}.`
 						))}
 				</p>
 			</AlertDescription>

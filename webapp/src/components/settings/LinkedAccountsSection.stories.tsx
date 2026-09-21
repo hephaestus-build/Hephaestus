@@ -91,10 +91,12 @@ type Story = StoryObj<typeof meta>;
 /** Two connected providers — either can be disconnected (a confirmation dialog gates it). */
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
-		const triggers = await canvas.findAllByRole("button", { name: /^disconnect /i });
+		const triggers = await canvas.findAllByRole("button", { name: /^disconnect /iu });
 		await expect(triggers).toHaveLength(2);
 		const [firstTrigger] = triggers;
-		if (!firstTrigger) throw new Error("No linked account rendered a disconnect control");
+		if (!firstTrigger) {
+			throw new Error("No linked account rendered a disconnect control");
+		}
 		await expect(firstTrigger).toBeEnabled();
 
 		// Drive the confirm flow: open the dialog, then confirm. The dialog renders in a portal,
@@ -117,7 +119,7 @@ export const MultipleIdentities: Story = {
 		await expect(canvas.queryByText("OUTLINE")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("GITHUB")).not.toBeInTheDocument();
 		// Outline is already linked → no Outline connect CTA is offered.
-		await expect(canvas.queryByRole("button", { name: /^Connect ACME Outline$/ })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: /^Connect ACME Outline$/u })).toBeNull();
 	},
 };
 
@@ -127,8 +129,8 @@ export const SingleIdentity: Story = {
 	play: async ({ args, canvas }) => {
 		// The lockout reason is always-visible text (not a disabled button), so SR/keyboard users
 		// can read why disconnect is unavailable.
-		canvas.getByText(/only sign-in method/i);
-		await expect(canvas.queryByRole("button", { name: /^disconnect /i })).toBeNull();
+		canvas.getByText(/only sign-in method/iu);
+		await expect(canvas.queryByRole("button", { name: /^disconnect /iu })).toBeNull();
 		await expect(args.onUnlink).not.toHaveBeenCalled();
 	},
 };
@@ -137,7 +139,7 @@ export const SingleIdentity: Story = {
 export const WithLinkableProvider: Story = {
 	args: { identities: [github] },
 	play: async ({ canvas }) => {
-		canvas.getByRole("button", { name: /connect gitlab/i });
+		canvas.getByRole("button", { name: /connect gitlab/iu });
 	},
 };
 
@@ -169,8 +171,8 @@ export const Disconnecting: Story = {
 export const Empty: Story = {
 	args: { identities: [] },
 	play: async ({ canvas }) => {
-		canvas.getByText(/no connected accounts yet/i);
-		canvas.getByRole("button", { name: /connect github/i });
+		canvas.getByText(/no connected accounts yet/iu);
+		canvas.getByRole("button", { name: /connect github/iu });
 	},
 };
 
@@ -188,8 +190,8 @@ export const ErrorState: Story = {
 		providers: [],
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/could not load connected accounts/i);
-		await userEvent.click(canvas.getByRole("button", { name: /retry/i }));
+		canvas.getByText(/could not load connected accounts/iu);
+		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalled();
 	},
 };

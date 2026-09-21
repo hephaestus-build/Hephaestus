@@ -30,12 +30,14 @@ await test("the committed identity map pins the pre-transfer namespace and ident
 
 await test("versions resolve to the identity they were published under", () => {
 	const boundary = currentReleaseIdentity(identities).firstVersion;
-	for (const old of ["0.1.0", "v0.74.0", "0.74.99"])
+	for (const old of ["0.1.0", "v0.74.0", "0.74.99"]) {
 		assert.equal(releaseIdentityFor(old, identities).namespace, "ghcr.io/ls1intum/hephaestus");
-	for (const current of [boundary, `v${boundary}`, "1.0.0", "12.0.3"])
+	}
+	for (const current of [boundary, `v${boundary}`, "1.0.0", "12.0.3"]) {
 		assert.equal(releaseIdentityFor(current, identities).namespace, "ghcr.io/hephaestus-build");
-	assert.throws(() => releaseIdentityFor("latest", identities), /not a release version/);
-	assert.throws(() => releaseIdentityFor("v1.2", identities), /not a release version/);
+	}
+	assert.throws(() => releaseIdentityFor("latest", identities), /not a release version/u);
+	assert.throws(() => releaseIdentityFor("v1.2", identities), /not a release version/u);
 });
 
 await test("historical certificate identities stay pinned even inside CI", () => {
@@ -65,23 +67,26 @@ await test("the current certificate identity follows the run context, with the m
 	);
 });
 
-await test("the map rejects malformed or unordered entries", () => {
-	const entry = (firstVersion: string) => ({
+function entry(firstVersion: string) {
+	return {
 		firstVersion,
 		namespace: "ghcr.io/example",
 		certificateIdentityRepository: "example/Example",
-	});
+	};
+}
+
+await test("the map rejects malformed or unordered entries", () => {
 	assert.throws(
 		() => parseReleaseIdentities({ schemaVersion: 2, identities: [entry("0.0.0")] }),
-		/schema version 1/,
+		/schema version 1/u,
 	);
 	assert.throws(
 		() => parseReleaseIdentities({ schemaVersion: 1, identities: [] }),
-		/at least one entry/,
+		/at least one entry/u,
 	);
 	assert.throws(
 		() => parseReleaseIdentities({ schemaVersion: 1, identities: [entry("0.1.0")] }),
-		/start at 0\.0\.0/,
+		/start at 0\.0\.0/u,
 	);
 	assert.throws(
 		() =>
@@ -89,7 +94,7 @@ await test("the map rejects malformed or unordered entries", () => {
 				schemaVersion: 1,
 				identities: [entry("0.0.0"), entry("2.0.0"), entry("1.0.0")],
 			}),
-		/strictly ascending/,
+		/strictly ascending/u,
 	);
 	assert.throws(
 		() =>
@@ -97,7 +102,7 @@ await test("the map rejects malformed or unordered entries", () => {
 				schemaVersion: 1,
 				identities: [{ ...entry("0.0.0"), namespace: "ghcr.io/example/" }],
 			}),
-		/trailing slash/,
+		/trailing slash/u,
 	);
 	assert.throws(
 		() =>
@@ -105,7 +110,7 @@ await test("the map rejects malformed or unordered entries", () => {
 				schemaVersion: 1,
 				identities: [{ ...entry("0.0.0"), certificateIdentityRepository: "example" }],
 			}),
-		/owner\/name/,
+		/owner\/name/u,
 	);
 });
 
@@ -114,11 +119,11 @@ await test("a misconfigured CI environment fails instead of using the map fallba
 	assert.equal(releaseRepository(`v${boundary}`, {}, identities), "hephaestus-build/Hephaestus");
 	assert.throws(
 		() => releaseRepository(`v${boundary}`, { CI: "true" }, identities),
-		/GITHUB_REPOSITORY/,
+		/GITHUB_REPOSITORY/u,
 	);
 	assert.throws(
 		() => releaseCertificateIdentity(`v${boundary}`, { CI: "true" }, identities),
-		/GITHUB_REPOSITORY/,
+		/GITHUB_REPOSITORY/u,
 	);
 	assert.equal(releaseRepository("v0.74.0", { CI: "true" }, identities), "ls1intum/Hephaestus");
 });
@@ -139,15 +144,15 @@ await test("image-index signatures resolve the building repository, owner and wo
 
 await test("evidence verification never derives a signer from the run context", () => {
 	const evidence = readFileSync("scripts/verify-release-evidence.ts", "utf8");
-	assert.doesNotMatch(evidence, /requiredEnvironment\("GITHUB_REPOSITORY/);
-	assert.doesNotMatch(evidence, /GITHUB_REPOSITORY_OWNER/);
-	assert.match(evidence, /releaseRepository\(release, process\.env\)/);
-	assert.match(evidence, /releaseOwner\(release, process\.env\)/);
+	assert.doesNotMatch(evidence, /requiredEnvironment\("GITHUB_REPOSITORY/u);
+	assert.doesNotMatch(evidence, /GITHUB_REPOSITORY_OWNER/u);
+	assert.match(evidence, /releaseRepository\(release, process\.env\)/u);
+	assert.match(evidence, /releaseOwner\(release, process\.env\)/u);
 });
 
 await test("the previous-release upgrade gate resolves the previous namespace per version", () => {
 	const resolver = readFileSync("scripts/resolve-release-upgrade-images.ts", "utf8");
-	assert.match(resolver, /releaseIdentityFor\(/);
-	assert.match(resolver, /currentReleaseIdentity\(\)/);
-	assert.doesNotMatch(resolver, /ghcr\.io\//);
+	assert.match(resolver, /releaseIdentityFor\(/u);
+	assert.match(resolver, /currentReleaseIdentity\(\)/u);
+	assert.doesNotMatch(resolver, /ghcr\.io\//u);
 });

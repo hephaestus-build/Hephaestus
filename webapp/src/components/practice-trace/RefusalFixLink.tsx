@@ -27,7 +27,9 @@ export function RefusalFixLink({
 	className,
 }: RefusalFixLinkProps) {
 	const fix = REFUSAL_FIXES[reason];
-	if (!fix || !canAdminister) return null;
+	if (!fix || !canAdminister) {
+		return null;
+	}
 	const linkClass = className ?? "font-medium underline underline-offset-4 hover:no-underline";
 
 	if (fix.section) {

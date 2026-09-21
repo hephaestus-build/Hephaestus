@@ -10,8 +10,16 @@ export function panelState<TData, TSettled>(
 	settled: (data: TData) => TSettled,
 ): PanelState<never> | TSettled {
 	if (query.isError) {
-		return { status: "error", error: query.error, onRetry: () => void query.refetch() };
+		return {
+			status: "error",
+			error: query.error,
+			onRetry: () => {
+				void query.refetch();
+			},
+		};
 	}
-	if (query.isPending) return { status: "loading" };
+	if (query.isPending) {
+		return { status: "loading" };
+	}
 	return settled(query.data);
 }

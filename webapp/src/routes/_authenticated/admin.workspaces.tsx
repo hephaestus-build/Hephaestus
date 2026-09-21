@@ -7,9 +7,9 @@ import { z } from "zod";
 import { adminListWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 import type { AdminWorkspaceView } from "@/api/types.gen";
 import { AdminWorkspacesTable } from "@/components/admin/workspaces/AdminWorkspacesTable";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
-import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { instanceAdminHead } from "@/lib/page-title";
 
@@ -39,7 +39,7 @@ function AdminWorkspacesPage() {
 					ws.providerType,
 				]
 					.filter(Boolean)
-					.some((field) => field?.toLowerCase().includes(term)),
+					.some((field) => field?.toLowerCase().includes(term) === true),
 			)
 		: all;
 
@@ -51,38 +51,39 @@ function AdminWorkspacesPage() {
 				description="View every workspace on this instance and its ownership and status."
 			/>
 
-			<div className="relative w-full sm:max-w-sm">
+			<InputGroup className="w-full sm:max-w-sm">
 				<Label htmlFor="admin-workspaces-search" className="sr-only">
 					Search workspaces
 				</Label>
-				<Building2 className="absolute left-3 top-2.5 size-4 text-muted-foreground" aria-hidden />
-				<Input
+				<InputGroupAddon>
+					<Building2 aria-hidden />
+				</InputGroupAddon>
+				<InputGroupInput
 					id="admin-workspaces-search"
 					type="search"
 					placeholder="Search by name, slug, owner, provider, or status…"
 					value={search}
-					onChange={(event) =>
+					onChange={(event) => {
 						void navigate({
 							search: { q: event.target.value || undefined },
 							replace: true,
-						})
-					}
-					className="pl-9"
+						});
+					}}
 				/>
-			</div>
+			</InputGroup>
 
 			<AdminWorkspacesTable
 				workspaces={workspaces}
 				isLoading={listQuery.isLoading}
 				isError={listQuery.isError}
 				hasSearch={term.length > 0}
-				onViewUsers={(workspace) =>
+				onViewUsers={(workspace) => {
 					void navigate({
 						to: "/admin/workspaces/$workspaceSlug/users",
 						params: { workspaceSlug: workspace.workspaceSlug },
 						search: {},
-					})
-				}
+					});
+				}}
 			/>
 		</PageLayout>
 	);

@@ -12,8 +12,8 @@ import { UserViewNotices } from "@/components/admin/users/UserViewNotices";
 import { UserViewPractices } from "@/components/admin/users/UserViewPractices";
 import { UserViewUsersTable } from "@/components/admin/users/UserViewUsersTable";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useClampedPage } from "@/hooks/use-clamped-page";
@@ -32,6 +32,7 @@ import {
 import { instanceAdminHead } from "@/lib/page-title";
 import { stepUpChallengeOf } from "@/lib/problem-detail";
 import { pageParam, useSearchPatch } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 
 const userViewSearchSchema = z.object({
 	page: z.number().int().nonnegative().optional().catch(undefined),
@@ -151,7 +152,7 @@ function UserViewPanel({
 	onExit,
 }: UserViewPanelProps) {
 	const section = search.section ?? "practices";
-	const selection = search.group
+	const selection = hasText(search.group)
 		? { groupSlug: search.group, practiceSlug: search.practice, observationId: search.observation }
 		: undefined;
 	const practices = useUserPracticeView(viewed);
@@ -218,7 +219,7 @@ function UserViewPanel({
 					/>
 				</TabsContent>
 				<TabsContent value="conversations">
-					{search.thread ? (
+					{hasText(search.thread) ? (
 						<UserViewConversationThread
 							state={conversation}
 							onBack={() => onSearchChange({ thread: undefined })}
@@ -236,7 +237,9 @@ function UserViewPanel({
 			<ConfirmAccessDialog
 				open={askOpen}
 				onOpenChange={(open) => {
-					if (!open) setDismissed(refusal);
+					if (!open) {
+						setDismissed(refusal);
+					}
 				}}
 				maxAgeSeconds={challenge?.maxAgeSeconds}
 				providers={confirmAccess.providers}

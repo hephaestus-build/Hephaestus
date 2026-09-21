@@ -19,8 +19,8 @@ import type {
 import { LoginProviderFormDialog } from "@/components/admin/login-providers/LoginProviderFormDialog";
 import { LoginProvidersTable } from "@/components/admin/login-providers/LoginProvidersTable";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
@@ -42,7 +42,7 @@ function AdminLoginProvidersPage() {
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [editing, setEditing] = useState<LoginProviderView | null>(null);
 
-	const invalidate = () =>
+	const invalidate = async () =>
 		queryClient.invalidateQueries({ queryKey: adminListLoginProvidersQueryKey() });
 
 	const [challenge, setChallenge] = useState<StepUpChallenge | undefined>(undefined);
@@ -135,7 +135,9 @@ function AdminLoginProvidersPage() {
 				isLoading={listQuery.isLoading}
 				isError={listQuery.isError}
 				error={listQuery.error}
-				onRetry={() => void listQuery.refetch()}
+				onRetry={() => {
+					void listQuery.refetch();
+				}}
 				mutatingIds={mutatingIds}
 				onEdit={openEdit}
 				onToggleEnabled={handleToggleEnabled}
@@ -155,7 +157,9 @@ function AdminLoginProvidersPage() {
 			<ConfirmAccessDialog
 				open={challenge !== undefined}
 				onOpenChange={(open) => {
-					if (!open) setChallenge(undefined);
+					if (!open) {
+						setChallenge(undefined);
+					}
 				}}
 				maxAgeSeconds={challenge?.maxAgeSeconds}
 				providers={confirmAccess.providers}

@@ -1,6 +1,6 @@
 import type { PracticeStanding } from "@/api/types.gen";
+import { statusToneClass, statusValues } from "@/components/common/status-def";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
-import { statusToneClass, statusValues } from "@/components/practice-vocabulary/status-def";
 
 type Standing = PracticeStanding["standing"];
 const RING_OPACITY: Partial<Record<Standing, string>> = {
@@ -8,11 +8,11 @@ const RING_OPACITY: Partial<Record<Standing, string>> = {
 	NO_OPPORTUNITY: "text-muted-foreground/45",
 };
 
-const SEGMENTS: ReadonlyArray<{
+const SEGMENTS: readonly {
 	standing: Standing;
 	colorClass: string;
 	label: string;
-}> = statusValues(PRACTICE_GROUP_STANDING_DEFS).map((standing) => ({
+}[] = statusValues(PRACTICE_GROUP_STANDING_DEFS).map((standing) => ({
 	standing,
 	colorClass:
 		RING_OPACITY[standing] ?? statusToneClass(PRACTICE_GROUP_STANDING_DEFS[standing].badgeVariant),
@@ -34,7 +34,9 @@ export interface PracticeGroupStandingRingProps {
 
 export function PracticeGroupStandingRing({ practices }: PracticeGroupStandingRingProps) {
 	const segments = summarizePracticeStandings(practices);
-	if (segments.length === 0) return null;
+	if (segments.length === 0) {
+		return null;
+	}
 
 	const total = practices.length;
 	const gap = segments.length > 1 ? 3 : 0;

@@ -2,18 +2,18 @@ import type { Meta, StoryContext, StoryObj } from "@storybook/react";
 import { expect, fn, within } from "storybook/test";
 
 import type { AdminWorkspaceLlmUsage, WorkspaceLlmUsageReport } from "@/api/types.gen";
-import { expectTargetSize, horizontalScrollParentOf } from "@/test/reflow";
+import { expectTargetSize, horizontalScrollParentOf } from "@/stories/reflow";
 
 import { AdminInstanceLlmUsageTable } from "./AdminInstanceLlmUsageTable";
 
-const FX_DISCLOSURE = /reference rate published on/;
+const FX_DISCLOSURE = /reference rate published on/u;
 
 async function expandedPanelFor(
 	canvas: StoryContext["canvas"],
 	displayName: string,
 ): Promise<HTMLElement> {
 	const toggle = await canvas.findByRole("button", {
-		name: new RegExp(`hide usage details for ${displayName}`, "i"),
+		name: new RegExp(`hide usage details for ${displayName}`, "iu"),
 	});
 	const panelId = toggle.getAttribute("aria-controls");
 	const panel = panelId == null ? null : document.getElementById(panelId);
@@ -117,7 +117,7 @@ const detailReport: WorkspaceLlmUsageReport = {
 			inputTokens: 80_000,
 			outputTokens: 12_000,
 			cacheReadTokens: 10_000,
-			cacheWriteTokens: 2_000,
+			cacheWriteTokens: 2000,
 			totalCalls: 42,
 			events: 18,
 		},
@@ -232,7 +232,7 @@ export const ExpandedMobileReflow: Story = {
 	play: async ({ canvas, canvasElement }) => {
 		const panel = await expandedPanelFor(canvas, pausedOnSharedBudget.displayName);
 		const rollupScroller = horizontalScrollParentOf(
-			canvas.getByRole("table", { name: /Per-workspace AI spend/ }),
+			canvas.getByRole("table", { name: /Per-workspace AI spend/u }),
 		);
 
 		await expect(rollupScroller.contains(panel)).toBe(false);
@@ -341,8 +341,8 @@ export const NoProviderCapsSet: Story = {
 export const PastMonth: Story = {
 	args: { isCurrentMonth: false },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("button", { name: /^Set budget for/ })).toBeNull();
-		await expect(canvas.getAllByRole("button", { name: /^View usage details for/ })).toHaveLength(
+		await expect(canvas.queryByRole("button", { name: /^Set budget for/u })).toBeNull();
+		await expect(canvas.getAllByRole("button", { name: /^View usage details for/u })).toHaveLength(
 			rows.length,
 		);
 	},

@@ -34,7 +34,9 @@ export interface UserViewUsersTableProps {
 const SKELETON_COLUMNS = ["w-40", "w-28", null];
 
 function accountLabel(user: UserViewUser): string {
-	if (user.accountId == null) return "No linked account";
+	if (user.accountId == null) {
+		return "No linked account";
+	}
 	return user.accountStatus === "ACTIVE" ? "Linked account" : "Account unavailable";
 }
 
@@ -42,9 +44,9 @@ function UsersTableHeader() {
 	return (
 		<TableHeader>
 			<TableRow>
-				<TableHead>User</TableHead>
-				<TableHead>Hephaestus account</TableHead>
-				<TableHead className="text-right">
+				<TableHead scope="col">User</TableHead>
+				<TableHead scope="col">Hephaestus account</TableHead>
+				<TableHead scope="col" className="text-right">
 					<span className="sr-only">User view</span>
 				</TableHead>
 			</TableRow>
@@ -72,7 +74,7 @@ export function UserViewUsersTable({ state, page, onPageChange, onView }: UserVi
 	}
 	if (state.users.length === 0) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<UsersIcon />

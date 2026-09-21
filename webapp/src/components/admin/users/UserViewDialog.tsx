@@ -31,14 +31,18 @@ export function UserViewDialog({ name, onClose, onConfirm }: UserViewDialogProps
 
 	const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (trimmed) onConfirm(trimmed);
+		if (trimmed) {
+			onConfirm(trimmed);
+		}
 	};
 
 	return (
 		<Dialog
 			open
 			onOpenChange={(open) => {
-				if (!open) onClose();
+				if (!open) {
+					onClose();
+				}
 			}}
 		>
 			<DialogContent>
@@ -46,7 +50,7 @@ export function UserViewDialog({ name, onClose, onConfirm }: UserViewDialogProps
 					<DialogHeader>
 						<DialogTitle>View as {name}</DialogTitle>
 						<DialogDescription>
-							View this user's private practices and existing conversations, read-only. You stay
+							View this user’s private practices and existing conversations, read-only. You stay
 							signed in as yourself. Each access is audited. No account setup or personal choices
 							will be completed.
 						</DialogDescription>

@@ -23,8 +23,12 @@ export interface AdminWorkspacesTableProps {
 }
 
 function statusVariant(status: string): "secondary" | "destructive" | "outline" {
-	if (status === "ACTIVE") return "secondary";
-	if (status === "SUSPENDED" || status === "PURGED") return "destructive";
+	if (status === "ACTIVE") {
+		return "secondary";
+	}
+	if (status === "SUSPENDED" || status === "PURGED") {
+		return "destructive";
+	}
 	return "outline";
 }
 
@@ -72,12 +76,10 @@ export function AdminWorkspacesTable({
 	}
 	if (isLoading) {
 		return (
-			<div className="rounded-md border">
-				<Table>
-					<WorkspacesTableHeader />
-					<TableRowsSkeleton columns={SKELETON_COLUMNS} />
-				</Table>
-			</div>
+			<Table bordered>
+				<WorkspacesTableHeader />
+				<TableRowsSkeleton columns={SKELETON_COLUMNS} />
+			</Table>
 		);
 	}
 	if (workspaces.length === 0) {
@@ -90,54 +92,52 @@ export function AdminWorkspacesTable({
 	}
 
 	return (
-		<div className="rounded-md border">
-			<Table>
-				<WorkspacesTableHeader />
-				<TableBody>
-					{workspaces.map((ws) => (
-						<TableRow key={ws.id}>
-							<TableCell className="font-medium">{ws.displayName}</TableCell>
-							<TableCell className="font-mono text-xs text-muted-foreground">
-								{ws.workspaceSlug}
-							</TableCell>
-							<TableCell>
-								<Badge variant={statusVariant(ws.status)}>{ws.status}</Badge>
-							</TableCell>
-							<TableCell>
-								{ws.providerType ? (
-									<Badge variant="outline" className="text-xs">
-										{ws.providerType}
-									</Badge>
-								) : (
-									<span className="text-muted-foreground">—</span>
-								)}
-							</TableCell>
-							<TableCell className="text-muted-foreground">{ws.ownerLogin ?? "—"}</TableCell>
-							<TableCell className="text-right tabular-nums">{ws.memberCount}</TableCell>
-							<TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-								{formatDate(ws.createdAt)}
-							</TableCell>
-							<TableCell className="text-right">
-								<Button
-									variant="outline"
-									size="sm"
-									aria-label={`View users of ${ws.displayName}`}
-									disabled={ws.status !== "ACTIVE"}
-									onClick={() => onViewUsers(ws)}
-								>
-									<Users aria-hidden />
-									View users
-								</Button>
-								{ws.status !== "ACTIVE" && (
-									<span className="sr-only">
-										This workspace is {ws.status.toLowerCase()}, so its users cannot be viewed.
-									</span>
-								)}
-							</TableCell>
-						</TableRow>
-					))}
-				</TableBody>
-			</Table>
-		</div>
+		<Table bordered>
+			<WorkspacesTableHeader />
+			<TableBody>
+				{workspaces.map((ws) => (
+					<TableRow key={ws.id}>
+						<TableCell className="font-medium">{ws.displayName}</TableCell>
+						<TableCell className="font-mono text-xs text-muted-foreground">
+							{ws.workspaceSlug}
+						</TableCell>
+						<TableCell>
+							<Badge variant={statusVariant(ws.status)}>{ws.status}</Badge>
+						</TableCell>
+						<TableCell>
+							{ws.providerType ? (
+								<Badge variant="outline">{ws.providerType}</Badge>
+							) : (
+								<span className="text-muted-foreground">—</span>
+							)}
+						</TableCell>
+						<TableCell className="text-muted-foreground">{ws.ownerLogin ?? "—"}</TableCell>
+						<TableCell numeric className="text-right">
+							{ws.memberCount}
+						</TableCell>
+						<TableCell className="text-sm whitespace-nowrap text-muted-foreground">
+							{formatDate(ws.createdAt)}
+						</TableCell>
+						<TableCell className="text-right">
+							<Button
+								variant="outline"
+								size="sm"
+								aria-label={`View users of ${ws.displayName}`}
+								disabled={ws.status !== "ACTIVE"}
+								onClick={() => onViewUsers(ws)}
+							>
+								<Users aria-hidden />
+								View users
+							</Button>
+							{ws.status !== "ACTIVE" && (
+								<span className="sr-only">
+									This workspace is {ws.status.toLowerCase()}, so its users cannot be viewed.
+								</span>
+							)}
+						</TableCell>
+					</TableRow>
+				))}
+			</TableBody>
+		</Table>
 	);
 }

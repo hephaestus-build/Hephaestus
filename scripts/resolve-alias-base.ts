@@ -32,7 +32,9 @@ export async function resolveAliasBase(
 	let commit: string | undefined = base;
 	for (let layer = 0; commit !== undefined && layer < LAYER_LIMIT; layer += 1) {
 		const status = await chain.compare(commit, defaultBranch);
-		if (status === "identical" || status === "ahead") return commit;
+		if (status === "identical" || status === "ahead") {
+			return commit;
+		}
 		commit = await chain.baseOf(commit);
 	}
 	return undefined;
@@ -44,10 +46,10 @@ if (import.meta.main) {
 		requiredEnv(process.env, "BASE_SHA"),
 		requiredEnv(process.env, "DEFAULT_BRANCH"),
 		{
-			compare: (base, head) => compareStatus(repository, base, head),
+			compare: async (base, head) => compareStatus(repository, base, head),
 			// A commit the default branch does not contain answers with the open pull requests whose
 			// branches carry it; only the one it is the head of names the next base up.
-			baseOf: async (head) => {
+			baseOf: async (head): Promise<string | undefined> => {
 				const pulls = asArray(
 					parseJson(await output("gh", ["api", `repos/${repository}/commits/${head}/pulls`])),
 					"pull requests",
@@ -55,8 +57,9 @@ if (import.meta.main) {
 				for (const [index, value] of pulls.entries()) {
 					const pull = asRecord(value, `pull requests[${index}]`);
 					const sha = asString(asRecord(pull.head, "pull request head").sha, "head.sha");
-					if (sha === head)
+					if (sha === head) {
 						return asString(asRecord(pull.base, "pull request base").sha, "base.sha");
+					}
 				}
 				return undefined;
 			},

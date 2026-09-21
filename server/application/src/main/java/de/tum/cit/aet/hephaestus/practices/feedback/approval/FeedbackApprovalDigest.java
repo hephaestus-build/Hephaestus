@@ -28,7 +28,7 @@ public final class FeedbackApprovalDigest {
             append(canonical, placement.path());
             append(canonical, placement.startLine());
             append(canonical, placement.endLine());
-            append(canonical, placement.recurrenceKey());
+            append(canonical, placement.deliveryKey());
         }
         try {
             return HexFormat.of()

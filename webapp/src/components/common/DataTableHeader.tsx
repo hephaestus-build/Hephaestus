@@ -53,8 +53,12 @@ function ariaSort<TData extends RowData>(
 	column: Column<DataTableFeatures, TData>,
 ): "ascending" | "descending" | "none" | undefined {
 	// Undefined rather than "none": "none" advertises a sort control that is not there.
-	if (!column.getCanSort()) return undefined;
+	if (!column.getCanSort()) {
+		return undefined;
+	}
 	const sorted = column.getIsSorted();
-	if (!sorted) return "none";
+	if (sorted === false) {
+		return "none";
+	}
 	return sorted === "asc" ? "ascending" : "descending";
 }
