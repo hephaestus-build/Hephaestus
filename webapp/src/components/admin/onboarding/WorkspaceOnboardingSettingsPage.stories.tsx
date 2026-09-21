@@ -204,7 +204,7 @@ export const ChoiceStillRequired: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getByText("Members still have to choose")).toBeVisible();
 		await expect(
-			canvas.getByText(/Members who haven't chosen get no practice reviews and no Heph/u),
+			canvas.getByText(/Members who haven’t chosen get no practice reviews and no Heph/u),
 		).toBeVisible();
 		// The alert asks for the switch; a draft that turns it on has answered it.
 		await userEvent.click(canvas.getByRole("switch", { name: SWITCH }));
@@ -262,7 +262,7 @@ export const SaveFailed: Story = {
 		await userEvent.click(canvas.getByRole("switch", { name: SWITCH }));
 		await userEvent.click(canvas.getByRole("button", { name: "Save onboarding settings" }));
 		const alert = canvas.getByRole("alert");
-		await expect(alert).toHaveTextContent("Couldn't save onboarding settings");
+		await expect(alert).toHaveTextContent("Couldn’t save onboarding settings");
 		await expect(alert).toHaveTextContent("Onboarding settings changed. Reload before saving.");
 		// The draft survives the failure, so the reader can retry without redoing it.
 		await expect(canvas.getByRole("switch", { name: SWITCH })).toBeChecked();
