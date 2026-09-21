@@ -6,11 +6,14 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMes
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.GitHubSubIssueSyncService;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -26,10 +29,12 @@ public class GitHubIssueMessageHandler extends AbstractIntegrationMessageHandler
 
     private final ProcessingContextFactory contextFactory;
     private final GitHubIssueProcessor issueProcessor;
+    private final GitHubSubIssueSyncService subIssueSyncService;
 
     public GitHubIssueMessageHandler(
             ProcessingContextFactory contextFactory,
             GitHubIssueProcessor issueProcessor,
+            GitHubSubIssueSyncService subIssueSyncService,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -40,6 +45,7 @@ public class GitHubIssueMessageHandler extends AbstractIntegrationMessageHandler
                 transactionTemplate);
         this.contextFactory = contextFactory;
         this.issueProcessor = issueProcessor;
+        this.subIssueSyncService = subIssueSyncService;
     }
 
     @Override
@@ -65,6 +71,12 @@ public class GitHubIssueMessageHandler extends AbstractIntegrationMessageHandler
         routeToProcessor(event, issueDto, context);
     }
 
+    private void recountParent(@Nullable Issue issue) {
+        if (issue != null && issue.getId() != null) {
+            subIssueSyncService.recountParentOf(issue.getId());
+        }
+    }
+
     private void routeToProcessor(GitHubIssueEventDTO event, GitHubIssueDTO issueDto, ProcessingContext context) {
         switch (event.actionType()) {
             case GitHubEventAction.Issue.OPENED,
@@ -80,8 +92,9 @@ public class GitHubIssueMessageHandler extends AbstractIntegrationMessageHandler
             // A transfer moves the issue OUT of this repository. Upserting it here would recreate
             // the phantom the deletion sweep exists to retire.
             case GitHubEventAction.Issue.TRANSFERRED -> issueProcessor.processTransferred(issueDto, context);
-            case GitHubEventAction.Issue.CLOSED -> issueProcessor.processClosed(issueDto, context);
-            case GitHubEventAction.Issue.REOPENED -> issueProcessor.processReopened(issueDto, context);
+            // A child's close or reopen moves its parent's rollup, which this payload does not carry.
+            case GitHubEventAction.Issue.CLOSED -> recountParent(issueProcessor.processClosed(issueDto, context));
+            case GitHubEventAction.Issue.REOPENED -> recountParent(issueProcessor.processReopened(issueDto, context));
             case GitHubEventAction.Issue.DELETED -> issueProcessor.processDeleted(issueDto, context);
             case GitHubEventAction.Issue.LABELED -> {
                 if (event.label() != null) {

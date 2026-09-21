@@ -166,6 +166,96 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
     }
 
     @Test
+    @DisplayName("a replayed approval note re-approves only after an unapproval note of the same pass")
+    void shouldReplayTheThreeNotesInOrder() {
+        PullRequestReview review = approval(MERGED_AT);
+        when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        java.util.Set<Long> unapproved = new java.util.HashSet<>();
+
+        assertThat(reconciler.recordSystemNote(
+                        pr,
+                        approver,
+                        new GitLabReviewReconciler.SystemNote(
+                                "approved this merge request", APPROVED_AT, "gid://gitlab/Note/1", false),
+                        provider,
+                        unapproved))
+                .isTrue();
+        assertThat(review.getSubmittedAt()).isEqualTo(APPROVED_AT);
+
+        reconciler.recordSystemNote(
+                pr,
+                approver,
+                new GitLabReviewReconciler.SystemNote(
+                        "unapproved this merge request", APPROVED_AT.plusSeconds(60), "gid://gitlab/Note/2", false),
+                provider,
+                unapproved);
+        assertThat(review.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
+        assertThat(unapproved).containsExactly(99L);
+
+        reconciler.recordSystemNote(
+                pr,
+                approver,
+                new GitLabReviewReconciler.SystemNote(
+                        "approved this merge request", APPROVED_AT.plusSeconds(120), "gid://gitlab/Note/3", false),
+                provider,
+                unapproved);
+        assertThat(review.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+        assertThat(review.getSubmittedAt()).isEqualTo(APPROVED_AT.plusSeconds(120));
+
+        assertThat(reconciler.recordSystemNote(
+                        pr,
+                        approver,
+                        new GitLabReviewReconciler.SystemNote(
+                                "requested review from @x", APPROVED_AT, "gid://gitlab/Note/4", false),
+                        provider,
+                        unapproved))
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("a live approval note with no approval row yet makes the row at the note's time")
+    void shouldCreateTheApprovalFromALiveNoteWhenTheMergeRequestHookHasNotArrived() {
+        when(reviewRepository.findByNativeIdAndProviderId(any(), any())).thenReturn(Optional.empty());
+        when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        reconciler.recordSystemNote(
+                pr,
+                approver,
+                new GitLabReviewReconciler.SystemNote(
+                        "approved this merge request", APPROVED_AT, "gid://gitlab/Note/1", true),
+                provider,
+                new java.util.HashSet<>());
+
+        assertThat(pr.getReviews()).singleElement().satisfies(review -> {
+            assertThat(review.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(review.getSubmittedAt()).isEqualTo(APPROVED_AT);
+            assertThat(review.getAuthor()).isSameAs(approver);
+            assertThat(review.getNativeId())
+                    .isEqualTo(GitLabMergeRequestProcessor.generateApprovalNativeId(4242L, 99L));
+        });
+    }
+
+    @Test
+    @DisplayName("a live approval note gives a dismissed approval again without an unapproval note")
+    void shouldReapproveFromALiveNote() {
+        PullRequestReview review = approval(APPROVED_AT);
+        review.setState(PullRequestReview.State.DISMISSED);
+        review.setDismissed(true);
+        when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        reconciler.recordSystemNote(
+                pr,
+                approver,
+                new GitLabReviewReconciler.SystemNote(
+                        "approved this merge request", APPROVED_AT.plusSeconds(60), "gid://gitlab/Note/1", true),
+                provider,
+                new java.util.HashSet<>());
+
+        assertThat(review.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+        assertThat(review.isDismissed()).isFalse();
+    }
+
+    @Test
     @DisplayName("a note by a user with no recorded approval records nothing")
     void shouldRecordNothingWithoutAnApproval() {
         when(reviewRepository.findByNativeIdAndProviderId(any(), any())).thenReturn(Optional.empty());

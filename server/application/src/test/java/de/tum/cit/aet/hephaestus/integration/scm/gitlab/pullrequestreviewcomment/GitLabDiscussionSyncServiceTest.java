@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -100,7 +100,7 @@ class GitLabDiscussionSyncServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRecordChangesRequestedByTheNoteAuthorAtTheNoteTime() {
+    void shouldHandARequestedChangesNoteToTheReconcilerAsAReplayedNote() {
         service.recordReviewDecisionFromSystemNote(
                 systemNote("4538627", "requested changes", "2026-04-15T10:23:58.766+02:00"),
                 pr,
@@ -108,12 +108,20 @@ class GitLabDiscussionSyncServiceTest extends BaseUnitTest {
                 new HashSet<>());
 
         verify(reviewReconciler)
-                .recordChangesRequested(
-                        pr, reviewer, "gid://gitlab/Note/4538627", Instant.parse("2026-04-15T08:23:58.766Z"), provider);
+                .recordSystemNote(
+                        eq(pr),
+                        eq(reviewer),
+                        eq(new GitLabReviewReconciler.SystemNote(
+                                "requested changes",
+                                Instant.parse("2026-04-15T08:23:58.766Z"),
+                                "gid://gitlab/Note/4538627",
+                                false)),
+                        eq(provider),
+                        any());
     }
 
     @Test
-    void shouldDismissOnUnapprovalAndGiveTheApprovalAgainOnALaterNote() {
+    void shouldHandEveryDecisionNoteOfOnePassTheSameUnapprovalSet() {
         Set<Long> unapproved = new HashSet<>();
 
         service.recordReviewDecisionFromSystemNote(
@@ -126,19 +134,30 @@ class GitLabDiscussionSyncServiceTest extends BaseUnitTest {
                 pr,
                 PROVIDER_ID,
                 unapproved);
-        service.recordReviewDecisionFromSystemNote(
-                systemNote("3", "approved this merge request", "2026-04-15T12:00:00+02:00"),
-                pr,
-                PROVIDER_ID,
-                unapproved);
 
-        // The first approval is the plain one; the one after the withdrawal says so.
+        // Replayed, never live: the reconciler decides re-approval from the set it is handed.
         verify(reviewReconciler)
-                .recordApprovalTime(pr, reviewer, Instant.parse("2026-04-15T08:00:00Z"), provider, false);
-        verify(reviewReconciler).recordUnapproval(pr, reviewer, Instant.parse("2026-04-15T09:00:00Z"), provider);
+                .recordSystemNote(
+                        eq(pr),
+                        eq(reviewer),
+                        eq(new GitLabReviewReconciler.SystemNote(
+                                "approved this merge request",
+                                Instant.parse("2026-04-15T08:00:00Z"),
+                                "gid://gitlab/Note/1",
+                                false)),
+                        eq(provider),
+                        same(unapproved));
         verify(reviewReconciler)
-                .recordApprovalTime(pr, reviewer, Instant.parse("2026-04-15T10:00:00Z"), provider, true);
-        assertThat(unapproved).containsExactly(31315L);
+                .recordSystemNote(
+                        eq(pr),
+                        eq(reviewer),
+                        eq(new GitLabReviewReconciler.SystemNote(
+                                "unapproved this merge request",
+                                Instant.parse("2026-04-15T09:00:00Z"),
+                                "gid://gitlab/Note/2",
+                                false)),
+                        eq(provider),
+                        same(unapproved));
     }
 
     @Test

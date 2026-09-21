@@ -158,6 +158,26 @@ public class GitHubSubIssueSyncService {
         }
     }
 
+    /**
+     * Recounts the rollup of the parent of {@code issueId} from the children this repository stores,
+     * for an event that changes a child's state and carries no summary of the parent — the
+     * {@code issues} closed and reopened hooks. Nothing happens for an issue with no parent.
+     */
+    @Transactional
+    public void recountParentOf(long issueId) {
+        Issue parent =
+                issueRepository.findById(issueId).map(Issue::getParentIssue).orElse(null);
+        if (parent == null || parent.getId() == null) {
+            return;
+        }
+        IssueRepository.ChildRollup children =
+                issueRepository.countChildrenByParentIssueId(parent.getId(), Issue.State.CLOSED);
+        int total = (int) children.getTotal();
+        int completed = (int) children.getCompleted();
+        updateParentSummary(
+                parent, new SubIssuesSummaryDTO(total, completed, total == 0 ? 0 : (100 * completed) / total));
+    }
+
     /** Convenience overload for tests and cases where summary is not available. */
     @Transactional
     public void processSubIssueEvent(long subIssueId, long parentIssueId, boolean isLink) {

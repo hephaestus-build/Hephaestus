@@ -306,7 +306,9 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                     isPullRequest
                             ? new GitHubIssueDTO.PullRequestRef(
                                     "https://api.github.com/repos/test/pulls/100", "https://github.com/test/pull/100")
-                            : null);
+                            : null,
+                    null // subIssuesSummary
+                    );
         }
 
         private GitHubIssueDTO createIssueDTOForExistingIssue(Long issueId, int number) {
@@ -331,7 +333,9 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null,
-                    null);
+                    null,
+                    null // subIssuesSummary
+                    );
         }
 
         @Test
@@ -440,7 +444,9 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null,
-                    null);
+                    null,
+                    null // subIssuesSummary
+                    );
             ProcessingContext context = createContext();
 
             IssueComment result = processor.processWithParentCreation(commentDto, issueDto, context);

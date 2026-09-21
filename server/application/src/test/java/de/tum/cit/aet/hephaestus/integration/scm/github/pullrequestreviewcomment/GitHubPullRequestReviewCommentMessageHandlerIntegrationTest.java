@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -160,6 +161,8 @@ class GitHubPullRequestReviewCommentMessageHandlerIntegrationTest extends BaseIn
                     assertThat(comment.getThread().getId()).isNotNull();
                     // Verify required fields are populated
                     assertThat(comment.getCommitId()).isNotEmpty();
+                    // The side of the diff the comment sits on, as the payload says it.
+                    assertThat(comment.getSide()).isEqualTo(PullRequestReviewComment.Side.RIGHT);
                 });
     }
 

@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Tag("unit")
@@ -45,6 +48,9 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
     @Mock
     private NatsMessageDeserializer deserializer;
 
+    @Mock
+    private GitLabClosingIssueClient closingIssueClient;
+
     private TransactionTemplate transactionTemplate;
     private GitLabMergeRequestMessageHandler handler;
 
@@ -60,9 +66,13 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                 })
                 .when(transactionTemplate)
                 .executeWithoutResult(any());
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(mock(TransactionStatus.class));
+        });
 
         handler = new GitLabMergeRequestMessageHandler(
-                mergeRequestProcessor, contextResolver, deserializer, transactionTemplate);
+                mergeRequestProcessor, contextResolver, closingIssueClient, deserializer, transactionTemplate);
 
         // Default: context resolver returns a valid context
         lenient()
@@ -105,6 +115,40 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             handler.onMessage(msg);
 
             verify(mergeRequestProcessor).process(eq(event), any(ProcessingContext.class));
+        }
+
+        @Test
+        void shouldReadTheIssuesAnUpdatedMergeRequestClosesAfterStoringTheEvent() throws IOException {
+            // The event stores updated_at, the moment the sync later compares against, so the links
+            // it would read for this change are read here instead.
+            GitLabMergeRequestEventDTO event = createEvent("update", "opened", false);
+            setupRepository();
+            when(closingIssueClient.closesIssues(1L, 278964L, 5)).thenReturn(List.of(41, 42));
+
+            handler.onMessage(mockMessage(event));
+
+            verify(mergeRequestProcessor).replaceClosingIssues(any(), eq(5), eq(List.of(41, 42)));
+        }
+
+        @Test
+        void shouldLeaveTheLinksAloneWhenTheRouteCouldNotBeRead() throws IOException {
+            GitLabMergeRequestEventDTO event = createEvent("open", "opened", false);
+            setupRepository();
+            when(closingIssueClient.closesIssues(1L, 278964L, 5)).thenReturn(null);
+
+            handler.onMessage(mockMessage(event));
+
+            verify(mergeRequestProcessor, never()).replaceClosingIssues(any(), anyInt(), any());
+        }
+
+        @Test
+        void shouldNotReadTheLinksForAnApprovalEvent() throws IOException {
+            GitLabMergeRequestEventDTO event = createEvent("approved", "opened", false);
+            setupRepository();
+
+            handler.onMessage(mockMessage(event));
+
+            verify(closingIssueClient, never()).closesIssues(any(), anyLong(), anyInt());
         }
 
         @Test

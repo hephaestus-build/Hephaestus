@@ -586,46 +586,27 @@ public class GitLabDiscussionSyncService {
     }
 
     /**
-     * GitLab's own wording for the system notes it writes on a review decision, as the notes carry it;
-     * the only place the sync learns who decided what, and when.
-     */
-    static final String APPROVED_SYSTEM_NOTE = "approved this merge request";
-
-    static final String UNAPPROVED_SYSTEM_NOTE = "unapproved this merge request";
-    static final String REQUESTED_CHANGES_SYSTEM_NOTE = "requested changes";
-
-    /**
      * @param unapproved the authors whose "unapproved" note this pass has already seen; an "approved"
      *     note by one of them gives the approval again
      */
     void recordReviewDecisionFromSystemNote(
             Map<String, Object> noteNode, PullRequest pr, Long providerId, Set<Long> unapproved) {
-        String body = String.valueOf(noteNode.get("body")).strip();
-        if (!APPROVED_SYSTEM_NOTE.equals(body)
-                && !UNAPPROVED_SYSTEM_NOTE.equals(body)
-                && !REQUESTED_CHANGES_SYSTEM_NOTE.equals(body)) {
-            return;
-        }
+        String body = String.valueOf(noteNode.get("body"));
+        String noteGlobalId = (String) noteNode.get("id");
         Instant at = parseTimestamp((String) noteNode.get("createdAt"));
-        User author = resolveAuthor(noteNode, providerId);
-        if (at == null || author == null || author.getNativeId() == null) {
+        if (noteGlobalId == null || at == null || !GitLabReviewReconciler.isReviewDecision(body)) {
             return;
         }
-        switch (body) {
-            case APPROVED_SYSTEM_NOTE ->
-                reviewReconciler.recordApprovalTime(
-                        pr, author, at, pr.getProvider(), unapproved.contains(author.getNativeId()));
-            case UNAPPROVED_SYSTEM_NOTE -> {
-                reviewReconciler.recordUnapproval(pr, author, at, pr.getProvider());
-                unapproved.add(author.getNativeId());
-            }
-            default -> {
-                String noteGlobalId = (String) noteNode.get("id");
-                if (noteGlobalId != null) {
-                    reviewReconciler.recordChangesRequested(pr, author, noteGlobalId, at, pr.getProvider());
-                }
-            }
+        User author = resolveAuthor(noteNode, providerId);
+        if (author == null) {
+            return;
         }
+        reviewReconciler.recordSystemNote(
+                pr,
+                author,
+                new GitLabReviewReconciler.SystemNote(body, at, noteGlobalId, false),
+                pr.getProvider(),
+                unapproved);
     }
 
     /**

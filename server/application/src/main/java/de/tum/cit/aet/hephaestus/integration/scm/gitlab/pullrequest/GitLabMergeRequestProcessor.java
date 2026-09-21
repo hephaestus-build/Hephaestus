@@ -108,6 +108,32 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 .orElse(true);
     }
 
+    /**
+     * Replaces what the record says a merge request closes with GitLab's current statement, read from
+     * the closes-issues route after a webhook: the sync compares {@code updatedAt} against the value
+     * that webhook stored, so it would not read the links for this change.
+     */
+    @Transactional
+    public void replaceClosingIssues(Repository repository, int iid, List<Integer> closingIssueNumbers) {
+        pullRequestRepository
+                .findByRepositoryIdAndNumber(repository.getId(), iid)
+                .ifPresent(pr -> {
+                    if (pr.replaceClosingIssues(resolveLocalIssues(repository, closingIssueNumbers))) {
+                        pullRequestRepository.save(pr);
+                    }
+                });
+    }
+
+    private Set<Issue> resolveLocalIssues(Repository repository, List<Integer> numbers) {
+        Set<Issue> issues = new HashSet<>();
+        for (Integer number : numbers) {
+            issueRepository
+                    .findByRepositoryIdAndNumber(repository.getId(), number)
+                    .ifPresent(issues::add);
+        }
+        return issues;
+    }
+
     // Sync Data Records
 
     public record SyncLabelData(
@@ -670,13 +696,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                     Objects.requireNonNull(checkedSha), mapPipelineStatus(data.headPipelineStatus()), true);
         }
         if (data.closingIssueNumbers() != null) {
-            Set<Issue> closing = new HashSet<>();
-            for (Integer number : data.closingIssueNumbers()) {
-                issueRepository
-                        .findByRepositoryIdAndNumber(repository.getId(), number)
-                        .ifPresent(closing::add);
-            }
-            changed |= pr.replaceClosingIssues(closing);
+            changed |= pr.replaceClosingIssues(resolveLocalIssues(repository, data.closingIssueNumbers()));
         }
         if (changed) {
             pr = pullRequestRepository.save(pr);

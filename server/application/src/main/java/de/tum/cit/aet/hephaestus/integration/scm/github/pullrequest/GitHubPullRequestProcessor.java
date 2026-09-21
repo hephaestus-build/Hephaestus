@@ -148,8 +148,10 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
             }
         }
 
-        // Skip update if existing data is newer (prevents stale webhooks from overwriting).
+        // Skip the core upsert if existing data is as new (prevents stale webhooks from overwriting).
         // Skip stale check for promotions — the entity needs all PR fields populated by the upsert.
+        // The facts only the GraphQL sync carries still land: a webhook stored GitHub's updated_at
+        // first, and the sync row that follows carries the same moment with more in it.
         if (!isNew && !promotedFromIssue) {
             PullRequest existing = existingOpt.get();
             if (existing.getUpdatedAt() != null
@@ -160,7 +162,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                         existing.getId(),
                         existing.getUpdatedAt(),
                         dto.updatedAt());
-                return existing;
+                return applySyncOnlyFacts(dto, existing, repository) ? pullRequestRepository.save(existing) : existing;
             }
         }
 
@@ -284,12 +286,36 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                 Objects.requireNonNullElse(dto.requestedReviewers(), List.of()),
                 pr.getRequestedReviewers(),
                 providerId);
-        // Both read by GraphQL only; a webhook payload carries neither and leaves the record as it is.
-        boolean closingIssuesChanged = dto.closingIssueNumbers() != null
+        return assigneesChanged || labelsChanged || reviewersChanged || applySyncOnlyFacts(dto, pr, repository);
+    }
+
+    /**
+     * The facts only the GraphQL sync reads — the closing references, the head's check rollup, the
+     * review decision and the merge state. A webhook payload carries none of them (null) and leaves
+     * the record as it is; a sync row carries them whether or not the core row moved.
+     *
+     * @return whether anything changed
+     */
+    private boolean applySyncOnlyFacts(GitHubPullRequestDTO dto, PullRequest pr, Repository repository) {
+        boolean changed = dto.closingIssueNumbers() != null
                 && pr.replaceClosingIssues(resolveLocalIssues(repository, dto.closingIssueNumbers()));
-        boolean checksChanged = dto.headChecks() != null
-                && pr.observeHeadChecks(dto.headChecks().sha(), dto.headChecks().state(), true);
-        return assigneesChanged || labelsChanged || reviewersChanged || closingIssuesChanged || checksChanged;
+        if (dto.headChecks() != null) {
+            changed |= pr.observeHeadChecks(
+                    dto.headChecks().sha(), dto.headChecks().state(), true);
+        }
+        if (dto.reviewDecision() != null && dto.reviewDecision() != pr.getReviewDecision()) {
+            pr.setReviewDecision(dto.reviewDecision());
+            changed = true;
+        }
+        if (dto.mergeStateStatus() != null && dto.mergeStateStatus() != pr.getMergeStateStatus()) {
+            pr.setMergeStateStatus(dto.mergeStateStatus());
+            changed = true;
+        }
+        if (dto.isMergeable() != null && !dto.isMergeable().equals(pr.getMergeable())) {
+            pr.setMergeable(dto.isMergeable());
+            changed = true;
+        }
+        return changed;
     }
 
     private Set<Issue> resolveLocalIssues(Repository repository, List<Integer> numbers) {
