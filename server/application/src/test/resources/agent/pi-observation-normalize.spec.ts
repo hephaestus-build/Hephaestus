@@ -202,15 +202,28 @@ void test("a field left out, or written as the word null, reads as null", () => 
 	);
 });
 
-void test("a summary longer than the practice page shows is kept up to a sentence end, else refused", () => {
+void test("a summary longer than the practice page shows is kept up to a sentence or clause end, else refused", () => {
 	const long = "The handler swallows the error ".repeat(6).trim();
 	assert.ok(long.length > MAX_SUMMARY_CHARS);
 	assert.throws(
 		() => normalizeObservation(baseObservation({ summary: long })),
 		new RegExp(
-			`at most ${MAX_SUMMARY_CHARS} characters; this one is ${long.length} with no sentence end inside the bound`,
+			`at most ${MAX_SUMMARY_CHARS} characters; this one is ${long.length} with no sentence or clause end inside the bound`,
 			"u",
 		),
+	);
+	// No sentence end, but a clause end past half the bound: kept up to the clause, comma dropped.
+	const clauses = `The handler swallows the error thrown by the network call in the profile loader of the settings screen, ${"and logs nothing ".repeat(6).trim()}`;
+	assert.ok(clauses.length > MAX_SUMMARY_CHARS);
+	assert.equal(
+		normalizeObservation(baseObservation({ summary: clauses })).summary,
+		"The handler swallows the error thrown by the network call in the profile loader of the settings screen",
+	);
+	// A clause end before half the bound is a fragment, not a headline: refused.
+	const early = `Debug print, ${"left in the request handler of the profile loader ".repeat(4).trim()}`;
+	assert.throws(
+		() => normalizeObservation(baseObservation({ summary: early })),
+		/no sentence or clause end/u,
 	);
 	const atTheLimit = "x ".repeat(MAX_SUMMARY_CHARS / 2).trim();
 	assert.equal(normalizeObservation(baseObservation({ summary: atTheLimit })).summary, atTheLimit);
@@ -225,7 +238,7 @@ void test("a summary longer than the practice page shows is kept up to a sentenc
 	);
 	assert.equal(shortened.summary, "The handler swallows the error.");
 	assert.deepEqual(notes, [
-		`summary was ${twoSentences.length} characters; recorded up to its last sentence end within ${MAX_SUMMARY_CHARS}: "The handler swallows the error."`,
+		`summary was ${twoSentences.length} characters; recorded up to its last sentence or clause end within ${MAX_SUMMARY_CHARS}: "The handler swallows the error."`,
 	]);
 	// Runs of whitespace are one space: a summary is one line on the page.
 	assert.equal(

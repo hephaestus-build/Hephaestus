@@ -777,6 +777,17 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 	// The manifest says which source staged an artifact; a citation that names the artifact under
 	// another source kind is read as the manifest reads it, and the correction is echoed back.
 	for (const citation of observation.evidence.citations) {
+		// A quote of a staged record (description.md, comments.json) named as its path under the pinned
+		// change is a quote of that record: the artifact is the path, and a diff side says nothing of it.
+		const stagedAtPath = artifactSources.get(citation.path);
+		if (stagedAtPath !== undefined && citation.artifactPath !== citation.path) {
+			notes.push(
+				`${citation.path} is an artifact of its own, staged by ${stagedAtPath}; recorded against it, not ${citation.artifactPath}`,
+			);
+			citation.artifactPath = citation.path;
+			citation.sourceKind = stagedAtPath;
+			delete citation.side;
+		}
 		const staged = artifactSources.get(citation.artifactPath);
 		if (staged !== undefined && staged !== citation.sourceKind) {
 			notes.push(

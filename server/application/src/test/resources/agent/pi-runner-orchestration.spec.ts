@@ -660,6 +660,15 @@ if (scenario !== undefined && scenario !== "") {
 										...changeCitation,
 										sourceKind: "scm.pull-request.core",
 									}),
+									// The path names a staged record and the artifact the pinned change: the
+									// quote is of the record, and is recorded against it.
+									observation("test-practice", "A record quoted under the change", {
+										...changeCitation,
+										path: "evidence/metadata.json",
+										startLine: 1,
+										endLine: 1,
+										quote: '"title": "Add login"',
+									}),
 								],
 							});
 							record(`batch:${JSON.stringify(reply)}`);
@@ -971,6 +980,10 @@ if (scenario !== undefined && scenario !== "") {
 							assert.match(
 								reply,
 								/#4 test-practice: stored \(negative\)\.\\n {3}evidence\/change\.json is staged by scm\.pull-request\.diff, not scm\.pull-request\.core; recorded as scm\.pull-request\.diff/u,
+							);
+							assert.match(
+								reply,
+								/#5 test-practice: stored \(negative\)\.\\n {3}evidence\/metadata\.json is an artifact of its own, staged by scm\.pull-request\.core; recorded against it, not evidence\/change\.json/u,
 							);
 							assert.match(reply, /Every practice of this turn has a recorded result/u);
 							// One session, one measuring turn, no composition requested.

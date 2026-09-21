@@ -490,9 +490,11 @@ function evidenceBranchOf(
 export const MAX_SUMMARY_CHARS = 160;
 
 /**
- * The text, or as much of it as ends a sentence within `max` characters; undefined when no sentence
- * ends there. A bound on a headline is what the reader's page can show, and a text that runs past it
- * by one clause is worth keeping up to the clause before — the session is told what was kept.
+ * The text, or as much of it as ends a sentence within `max` characters — failing that, a clause,
+ * when what is kept is at least half the bound; undefined otherwise. A bound on a headline is what
+ * the reader's page can show, and a text that runs past it by one clause is worth keeping up to the
+ * clause before — the session is told what was kept. A summary refused for a clause too many was
+ * refused again at the same length as often as not, so the clause is the cut a headline can take.
  */
 export function boundedAtSentenceEnd(text: string, max: number): string | undefined {
 	if (text.length <= max) {
@@ -503,7 +505,14 @@ export function boundedAtSentenceEnd(text: string, max: number): string | undefi
 	for (const match of prefix.matchAll(/[.!?](?=\s|$)/gu)) {
 		end = match.index;
 	}
-	return end < 0 ? undefined : prefix.slice(0, end + 1).trim();
+	if (end >= 0) {
+		return prefix.slice(0, end + 1).trim();
+	}
+	let clause = -1;
+	for (const match of prefix.matchAll(/[,;:](?=\s)|\s[—–-](?=\s)/gu)) {
+		clause = match.index;
+	}
+	return clause < max / 2 ? undefined : prefix.slice(0, clause).trim();
 }
 
 /** The evidence fields, in the order the session tends to put them beside the observation instead. */
@@ -606,17 +615,18 @@ export function normalizeObservation(
 				"'Debug print left in the request handler'",
 		);
 	}
-	// A summary a clause too long is kept up to its last sentence end within the bound: on the cohort
-	// one refusal in five was this, at a median of 175 characters, and each cost the turn a model call.
+	// A summary a clause too long is kept up to its last sentence or clause end within the bound: on
+	// the cohort one refusal in five was this, at a median of 175 characters, and each cost the turn a
+	// model call.
 	const title = boundedAtSentenceEnd(sent, MAX_SUMMARY_CHARS);
 	if (title === undefined) {
 		throw new Error(
-			`summary must be at most ${MAX_SUMMARY_CHARS} characters; this one is ${sent.length} with no sentence end inside the bound. Name the behavior, and keep the reasons for the rationale`,
+			`summary must be at most ${MAX_SUMMARY_CHARS} characters; this one is ${sent.length} with no sentence or clause end inside the bound. Name the behavior, and keep the reasons for the rationale`,
 		);
 	}
 	if (title !== sent) {
 		notes.push(
-			`summary was ${sent.length} characters; recorded up to its last sentence end within ${MAX_SUMMARY_CHARS}: "${title}"`,
+			`summary was ${sent.length} characters; recorded up to its last sentence or clause end within ${MAX_SUMMARY_CHARS}: "${title}"`,
 		);
 	}
 	if (!reasoning) {
