@@ -158,7 +158,7 @@ export default function leavesTheCodeCleanWithIntentRevealingComments(
 		);
 	}
 	return {
-		hints,
+		hints: hints.slice(0, 40),
 		metrics: {
 			debugCandidates,
 			todoCandidates,

@@ -25,6 +25,7 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
             PullRequestContentSource.DESCRIPTION_FILE,
             SandboxLayout.CONTEXT_PREFIX + "comments.json",
             PullRequestContentSource.CHANGE_FILE,
+            PullRequestContentSource.COMMITS_FILE,
             SandboxLayout.CONTEXT_PREFIX + ReviewThreadContentSource.FILE_NAME,
             SandboxLayout.CONTEXT_PREFIX + GeneralReviewCommentContentSource.FILE_NAME,
             LinkedWorkItemContentSource.OUTPUT_FILE,
@@ -42,11 +43,8 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
             SandboxLayout.MANIFEST_PATH));
 
     /** What pi-change.ts derives in the container from the checkout; the prompt must send the model there. */
-    private static final Set<String> DERIVED_CHANGE_PATHS = Set.of(
-            "work/change/diff.patch",
-            "work/change/diff_stat.txt",
-            "work/change/files.json",
-            "work/change/commits.json");
+    private static final Set<String> DERIVED_CHANGE_PATHS =
+            Set.of("work/change/diff.patch", "work/change/diff_stat.txt", "work/change/files.json");
 
     /** Directories and templated paths the prompt names as prefixes rather than as concrete files. */
     private static final Set<String> STAGED_INPUT_PREFIXES = Set.of(
@@ -86,8 +84,7 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                 .as("the workspace section must describe each file of the derived change view")
                 .allSatisfy(path ->
                         assertThat(prompt).as("prompt mentions %s", path).contains(path));
-        assertThat(prompt)
-                .doesNotContain("inputs/context/diff", "inputs/context/commits", "context-map", "diff_summary");
+        assertThat(prompt).doesNotContain("inputs/context/diff", "context-map", "diff_summary");
     }
 
     @Test

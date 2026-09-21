@@ -99,3 +99,13 @@ export async function readProjectInventory(
 ): Promise<ProjectInventory | null> {
 	return parseProjectInventory(await readContextJson(contextDir, "project_inventory.json"));
 }
+
+/** The inventory's issues by number, for a `#N` lookup; empty when no inventory was captured. */
+export function inventoryIssues(inventory: ProjectInventory | null): Map<number, InventoryItem> {
+	return new Map((inventory?.issues ?? []).map((issue) => [issue.number, issue]));
+}
+
+/** Whether an inventory state is the provider's "open" — `OPEN` on GitHub, `OPENED` on GitLab. */
+export function isOpenState(state: string | undefined): boolean {
+	return state !== undefined && /^open(?:ed)?$/iu.test(state);
+}

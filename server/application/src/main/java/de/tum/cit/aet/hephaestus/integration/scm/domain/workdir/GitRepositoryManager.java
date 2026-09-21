@@ -250,7 +250,33 @@ public class GitRepositoryManager {
         });
     }
 
-    public void forEachCommitSubject(RepositoryKey repository, String base, String head, Consumer<String> consumer) {
+    /** Commits a staged record of a change may hold: the record a review reads, not a mirror of the range. */
+    public static final int MAX_STAGED_COMMITS = 500;
+
+    /**
+     * The commits of {@code base..head} with their file changes, oldest first, the newest
+     * {@link #MAX_STAGED_COMMITS} of them.
+     */
+    public List<CommitDetails> commitsBetween(RepositoryKey repository, String base, String head) {
+        if (!isEnabled()) return List.of();
+        List<CommitDetails> commits = read(repository, repo -> {
+            List<CommitDetails> newestFirst = new ArrayList<>();
+            try (RevWalk walk = new RevWalk(repo)) {
+                walk.markStart(walk.parseCommit(repo.resolve(head)));
+                walk.markUninteresting(walk.parseCommit(repo.resolve(base)));
+                for (RevCommit commit : walk) {
+                    checkInterrupted();
+                    if (newestFirst.size() == MAX_STAGED_COMMITS) break;
+                    newestFirst.add(details(repo, commit));
+                }
+            }
+            return List.copyOf(newestFirst.reversed());
+        });
+        return commits == null ? List.of() : commits;
+    }
+
+    /** The full message, subject and body, of every commit in {@code base..head}. */
+    public void forEachCommitMessage(RepositoryKey repository, String base, String head, Consumer<String> consumer) {
         if (!isEnabled()) return;
         read(repository, repo -> {
             try (RevWalk walk = new RevWalk(repo)) {
@@ -258,7 +284,7 @@ public class GitRepositoryManager {
                 walk.markUninteresting(walk.parseCommit(repo.resolve(base)));
                 for (RevCommit commit : walk) {
                     checkInterrupted();
-                    consumer.accept(commit.getShortMessage());
+                    consumer.accept(commit.getFullMessage());
                 }
             }
             return null;

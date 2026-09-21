@@ -11,15 +11,15 @@ const repositoryRoot = fileURLToPath(new URL("../../../../../../", import.meta.u
 
 /**
  * Stages the script beside a `lib/` link, as the runner does, so its runtime `../lib` imports resolve.
- * The change view is written where the script reads it: `work/change/commits.json` under the root.
+ * The commit record is written where the script reads it: `context/commits.json` under the root.
  */
 async function stage(commits: { sha: string; message: string }[]) {
 	const root = mkdtempSync(path.join(tmpdir(), "handoff-precompute-"));
 	mkdirSync(path.join(root, "practices"));
-	mkdirSync(path.join(root, "work/change"), { recursive: true });
+	mkdirSync(path.join(root, "context"), { recursive: true });
 	writeFileSync(path.join(root, "package.json"), '{"type":"module"}\n');
 	symlinkSync(path.join(repositoryRoot, "docker/agents/precompute/lib"), path.join(root, "lib"));
-	writeFileSync(path.join(root, "work/change/commits.json"), JSON.stringify({ commits }));
+	writeFileSync(path.join(root, "context/commits.json"), JSON.stringify({ commits }));
 	const staged = path.join(root, "practices/ready-and-traceable-handoff.ts");
 	cpSync(
 		path.join(
@@ -32,7 +32,7 @@ async function stage(commits: { sha: string; message: string }[]) {
 	if (!isPracticeModule(mod)) {
 		throw new Error("script does not export a default function");
 	}
-	return { root, script: mod.default, changeDir: path.join(root, "work/change") };
+	return { root, script: mod.default, contextDir: path.join(root, "context") };
 }
 
 const metadata = {
@@ -46,15 +46,9 @@ const metadata = {
 };
 
 void test("a testing checklist does not turn a traceable handoff into a test-absence claim", async () => {
-	const { root, script, changeDir } = await stage([]);
+	const { root, script, contextDir } = await stage([]);
 	try {
-		const result = await script(
-			path.join(root, "repo"),
-			new Map(),
-			metadata,
-			path.join(root, "context"),
-			changeDir,
-		);
+		const result = await script(path.join(root, "repo"), new Map(), metadata, contextDir);
 		assert.equal(result.metrics.issueMentionSyntaxCandidateCount, 1);
 		assert.match(result.directions[0] ?? "", /#42/u);
 		// The checklist is counted as written, so a tick is a fact rather than a guess.
@@ -66,8 +60,8 @@ void test("a testing checklist does not turn a traceable handoff into a test-abs
 	}
 });
 
-void test("a reference in a commit message of the change counts, read from the container's change view", async () => {
-	const { root, script, changeDir } = await stage([
+void test("a reference in a commit message of the change counts, read from the staged commit record", async () => {
+	const { root, script, contextDir } = await stage([
 		{ sha: "a".repeat(40), message: "Fix quiz flow\n\nRefs #7" },
 	]);
 	try {
@@ -75,8 +69,7 @@ void test("a reference in a commit message of the change counts, read from the c
 			path.join(root, "repo"),
 			new Map(),
 			{ ...metadata, body: "No mention here.", source_branch: "quiz-flow" },
-			path.join(root, "context"),
-			changeDir,
+			contextDir,
 		);
 		assert.equal(result.metrics.issueMentionSyntaxCandidateCount, 1);
 		assert.equal(result.metrics.commitCount, 1);

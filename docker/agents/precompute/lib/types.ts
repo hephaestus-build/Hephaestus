@@ -76,6 +76,14 @@ export interface PullRequestMetadata {
 	body?: string;
 	state?: string;
 	is_draft?: boolean;
+	/** Stated apart from `state`: a pull request closed by its merge is stored CLOSED with `merged_at` set. */
+	is_merged?: boolean;
+	labels?: string[];
+	assignees?: string[];
+	milestone?: string;
+	/** Filled by the GraphQL sync only. */
+	merge_state_status?: string;
+	review_decision?: string;
 	additions?: number;
 	deletions?: number;
 	changed_files?: number;

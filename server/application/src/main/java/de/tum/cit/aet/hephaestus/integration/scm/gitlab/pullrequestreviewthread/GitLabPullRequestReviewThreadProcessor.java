@@ -108,14 +108,26 @@ public class GitLabPullRequestReviewThreadProcessor {
     }
 
     /**
-     * Groups the webhook-level data needed to find or create a webhook thread.
+     * Groups the webhook-level data needed to find or create a webhook thread. {@code line} is the
+     * {@link #anchoredLine anchored line}, resolved by the caller from the note's position.
      */
     public record WebhookThreadData(
             long noteNativeId,
             @Nullable String filePath,
-            @Nullable Integer newLine,
+            @Nullable Integer line,
             @Nullable Instant createdAt,
             @Nullable Instant updatedAt) {}
+
+    /**
+     * The line a GitLab position anchors on, the pair of
+     * {@link de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabPullRequestReviewCommentProcessor#deriveSide}:
+     * {@code new_line} on the RIGHT side, and {@code old_line} when the note sits on a removed line and
+     * only the LEFT side has one. Null when the position names no line, which is how GitLab reports a
+     * hunk a later push dropped.
+     */
+    public static @Nullable Integer anchoredLine(@Nullable Integer newLine, @Nullable Integer oldLine) {
+        return newLine != null ? newLine : oldLine;
+    }
 
     /**
      * Finds or creates a review thread from a GitLab discussion.
@@ -165,7 +177,7 @@ public class GitLabPullRequestReviewThreadProcessor {
                     thread.setProvider(provider);
                     thread.setPullRequest(pr);
                     thread.setPath(data.filePath());
-                    thread.setLine(data.newLine());
+                    thread.setLine(data.line());
                     thread.setState(PullRequestReviewThread.State.UNRESOLVED);
                     thread.setCreatedAt(data.createdAt());
                     thread.setUpdatedAt(data.updatedAt());
@@ -204,8 +216,9 @@ public class GitLabPullRequestReviewThreadProcessor {
             existing.setPath(data.filePath());
             changed = true;
         }
-        if (existing.getLine() == null && data.newLine() != null) {
-            existing.setLine(data.newLine());
+        Integer line = anchoredLine(data.newLine(), data.oldLine());
+        if (existing.getLine() == null && line != null) {
+            existing.setLine(line);
             changed = true;
         }
         if (existing.getSide() == null && data.side() != null) {
@@ -252,7 +265,7 @@ public class GitLabPullRequestReviewThreadProcessor {
         thread.setProvider(provider);
         thread.setPullRequest(pr);
         thread.setPath(data.filePath());
-        thread.setLine(data.newLine());
+        thread.setLine(anchoredLine(data.newLine(), data.oldLine()));
         thread.setSide(data.side());
         // GraphQL DiffPosition has no line_range so the thread inherits a single-line
         // anchor; startSide mirrors side to match GitHub semantics for single-line threads.

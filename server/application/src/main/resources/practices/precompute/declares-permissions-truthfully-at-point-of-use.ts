@@ -167,6 +167,8 @@ export default async function declaresPermissionsTruthfullyAtPointOfUse(
 			authorizationRequests: requests.length,
 			usageKeysAdded: keysInChange.size,
 			usageKeysInCheckout: keysInCheckout.size,
+			filesScanned: scan.filesScanned,
+			linesAdded: scan.linesAdded,
 		},
 		directions,
 	};

@@ -76,7 +76,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
                 .when(repositoryPreparer.prepare(any()))
                 .thenReturn(new ReviewRepositoryPreparer.PreparedReview(KEY, HEAD, BASE));
         lenient().when(repositoryPreparer.authorize(any())).thenReturn(KEY);
-        // Git disabled by default; the commit-subject scan must no-op. Individual tests enable it.
+        // Git disabled by default; the commit-message scan must no-op. Individual tests enable it.
         lenient().when(gitRepositoryManager.isEnabled()).thenReturn(false);
     }
 
@@ -117,15 +117,15 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
     }
 
-    private void commitSubjects(String... subjects) {
+    private void commitMessages(String... messages) {
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
         doAnswer(invocation -> {
                     Consumer<String> consumer = invocation.getArgument(3);
-                    for (String subject : subjects) consumer.accept(subject);
+                    for (String message : messages) consumer.accept(message);
                     return null;
                 })
                 .when(gitRepositoryManager)
-                .forEachCommitSubject(eq(KEY), eq(BASE), eq(HEAD), any());
+                .forEachCommitMessage(eq(KEY), eq(BASE), eq(HEAD), any());
     }
 
     private JsonNode payload(ObjectNode metadata) throws Exception {
@@ -305,6 +305,38 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldNotResolveANumberThatBelongsToAnotherRepositoryAVersionOrATrackerKey() throws Exception {
+            pullRequestWithBody("Follows other/repo#12 and group/project#13, tested against v1.2#3; see GH-14. "
+                    + "Also issue#15 is unrelated. Closes #42");
+            when(issueRepository.findByRepositoryIdAndNumber(eq(REPO_ID), anyInt()))
+                    .thenAnswer(inv -> {
+                        int number = inv.getArgument(1);
+                        return Optional.of(issue(number, "Issue", ""));
+                    });
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(itemNumbers(root)).containsExactly(42);
+            for (int foreign : List.of(12, 13, 3, 14, 15)) {
+                verify(issueRepository, never()).findByRepositoryIdAndNumber(REPO_ID, foreign);
+            }
+        }
+
+        @Test
+        void shouldReadTheTitleAsWellAsTheBody() throws Exception {
+            var pr = new PullRequest();
+            pr.setTitle("#18: Improve logging");
+            pr.setBody("Implementation only.");
+            when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 18))
+                    .thenReturn(Optional.of(issue(18, "Improve logging", "criteria")));
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(itemNumbers(root)).containsExactly(18);
+        }
+
+        @Test
         void shouldReadTheIssueNumberOpeningABranchSegment() throws Exception {
             pullRequestWithBody("No references in body.");
             when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 18))
@@ -318,9 +350,9 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldReadCommitSubjectsWhenGitIsEnabled() throws Exception {
+        void shouldReadCommitMessagesWhenGitIsEnabled() throws Exception {
             pullRequestWithBody("Implementation only.");
-            commitSubjects("fix: resolve crash, fixes #77");
+            commitMessages("fix: resolve crash, fixes #77");
             when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 77))
                     .thenReturn(Optional.of(issue(77, "Crash on launch", "criteria")));
 
@@ -330,12 +362,24 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldResolveAReferenceAfterFiveHundredCommitSubjects() throws Exception {
+        void shouldReadAReferenceInACommitBodyNotOnlyItsSubject() throws Exception {
+            pullRequestWithBody("Implementation only.");
+            commitMessages("fix: resolve crash\n\nThe launcher read a stale config.\n\nFixes #77\n");
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 77))
+                    .thenReturn(Optional.of(issue(77, "Crash on launch", "criteria")));
+
+            JsonNode root = payload(sampleMetadata());
+
+            assertThat(itemNumbers(root)).containsExactly(77);
+        }
+
+        @Test
+        void shouldResolveAReferenceAfterFiveHundredCommitMessages() throws Exception {
             pullRequestWithBody("No issue references.");
-            String[] subjects = new String[502];
-            Arrays.fill(subjects, "ordinary change");
-            subjects[501] = "Fixes #77";
-            commitSubjects(subjects);
+            String[] messages = new String[502];
+            Arrays.fill(messages, "ordinary change");
+            messages[501] = "Fixes #77";
+            commitMessages(messages);
             when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 77))
                     .thenReturn(Optional.of(issue(77, "Crash", "criteria")));
 
@@ -416,11 +460,11 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         @Test
         void anExhaustiveScanFindingNothingIsStillNotComplete() {
             pullRequestWithBody("No issue references.");
-            commitSubjects("ordinary change");
+            commitMessages("ordinary change");
 
             var captured = provider.capture(request(sampleMetadata()), Set.of(KIND));
 
-            // A link the author never wrote in the description, branch name or a commit subject is
+            // A link the author never wrote in the title, description, branch name or a commit message is
             // invisible to this scan, so even an exhaustive one stays PARTIAL rather than COMPLETE.
             assertThat(captured.completeness()).containsEntry(KIND, SourceCompleteness.PARTIAL);
             assertThat(captured.contentStates()).containsEntry(KIND, SourceContentState.EMPTY);
@@ -475,7 +519,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             doThrow(new IllegalStateException("JGit failed"))
                     .when(gitRepositoryManager)
-                    .forEachCommitSubject(eq(KEY), eq(BASE), eq(HEAD), any());
+                    .forEachCommitMessage(eq(KEY), eq(BASE), eq(HEAD), any());
 
             assertThatExceptionOfType(EvidenceCollectionException.class)
                     .isThrownBy(() -> provider.capture(request(sampleMetadata()), provider.sourceKinds()));
@@ -495,7 +539,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
 
             verify(repositoryPreparer).authorize(any());
             verify(repositoryPreparer, never()).prepare(any());
-            verify(gitRepositoryManager, never()).forEachCommitSubject(any(), any(), any(), any());
+            verify(gitRepositoryManager, never()).forEachCommitMessage(any(), any(), any(), any());
         }
 
         @Test

@@ -19,6 +19,11 @@ export function isJsonObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** A JSON field read as text: the string it holds, or "" for anything else. */
+export function text(value: unknown): string {
+	return typeof value === "string" ? value : "";
+}
+
 /**
  * All a dynamic import can prove about a practice module is that it exports a callable default.
  * The signature is unverifiable at run time; the value the call RETURNS is verified by

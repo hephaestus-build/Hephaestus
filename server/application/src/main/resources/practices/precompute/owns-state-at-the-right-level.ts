@@ -67,6 +67,8 @@ export default async function ownsStateAtTheRightLevel(
 			objectsCreatedInViews,
 			storedVarsInViews,
 			filesWithoutCheckout: scan.filesWithoutCheckout,
+			filesScanned: scan.filesScanned,
+			linesAdded: scan.linesAdded,
 		},
 		directions,
 	};

@@ -45,6 +45,8 @@ export default async function usesStructuredConcurrencySafely(
 		dispatchQueues: count("DispatchQueue"),
 		mainActorMarks: count("@MainActor") + count("MainActor.run"),
 		filesWithoutCheckout: scan.filesWithoutCheckout,
+		filesScanned: scan.filesScanned,
+		linesAdded: scan.linesAdded,
 	};
 	const directions: string[] = [];
 	if (unstructuredInViews > 0) {

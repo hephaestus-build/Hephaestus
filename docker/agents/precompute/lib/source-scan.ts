@@ -28,6 +28,8 @@ export interface Placement {
 
 export interface SourceScan {
 	hints: Hint[];
+	/** Source files of the change in the languages named, tests excluded unless included. */
+	filesScanned: number;
 	/** Added source lines (comments excluded) in the languages named. */
 	linesAdded: number;
 	/** Of those, inside a declaration the scope matched. */
@@ -67,7 +69,13 @@ export async function scanAddedLines(
 	diffFiles: Map<string, DiffFile>,
 	options: SourceScanOptions,
 ): Promise<SourceScan> {
-	const scan: SourceScan = { hints: [], linesAdded: 0, linesInScope: 0, filesWithoutCheckout: 0 };
+	const scan: SourceScan = {
+		hints: [],
+		filesScanned: 0,
+		linesAdded: 0,
+		linesInScope: 0,
+		filesWithoutCheckout: 0,
+	};
 	for (const [path, df] of diffFiles) {
 		const language = languageOf(path);
 		if (language === null || !options.languages.includes(language)) {
@@ -76,6 +84,7 @@ export async function scanAddedLines(
 		if (options.includeTests !== true && isTestPath(path)) {
 			continue;
 		}
+		scan.filesScanned += 1;
 		const decls = hasDeclarationSyntax(language)
 			? await declarationsOf(repoPath, path, language)
 			: null;

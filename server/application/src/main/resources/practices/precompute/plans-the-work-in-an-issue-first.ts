@@ -3,6 +3,7 @@
 // asks one question of two timestamps; the script puts both beside each other so the review reads
 // them rather than reasons around them.
 import { readCommits } from "../lib/change.ts";
+import { text } from "../lib/practice-contract.ts";
 import {
 	branchIssueReferences,
 	closingReferences,
@@ -10,10 +11,6 @@ import {
 } from "../lib/references.ts";
 import { millisBetween, readLinkedWorkItems } from "../lib/review.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
-
-function text(value: unknown): string {
-	return typeof value === "string" ? value : "";
-}
 
 /** The two moments in one sentence, the way the cell reads them. */
 function relationOf(issueToFirstCommit: number | null): string {
@@ -35,7 +32,6 @@ export default async function plansTheWorkInAnIssueFirst(
 	_diffFiles: Map<string, DiffFile>,
 	metadata: PullRequestMetadata,
 	contextDir?: string,
-	changeDir?: string,
 ) {
 	const hints: Hint[] = [];
 	const directions: string[] = [];
@@ -47,8 +43,8 @@ export default async function plansTheWorkInAnIssueFirst(
 		...issueNumberReferences(title),
 		...branchIssueReferences(metadata.source_branch),
 	]);
-	const linked = await readLinkedWorkItems(contextDir);
-	const commits = await readCommits(changeDir);
+	const linked = (await readLinkedWorkItems(contextDir)) ?? [];
+	const commits = await readCommits(contextDir);
 	const authored = commits
 		.filter((commit) => commit.authoredAt !== "")
 		.toSorted((a, b) => Date.parse(a.authoredAt) - Date.parse(b.authoredAt));
@@ -94,7 +90,7 @@ export default async function plansTheWorkInAnIssueFirst(
 		);
 	} else {
 		directions.push(
-			"The cell is decided by the issue's opening time against the earliest authored commit of the change (work/change/commits.json), never against the pull request's creation: a pull request is opened when the work is handed off, and the practice asks whether the plan preceded the work.",
+			"The cell is decided by the issue's opening time against the earliest authored commit of the change (inputs/context/commits.json), never against the pull request's creation: a pull request is opened when the work is handed off, and the practice asks whether the plan preceded the work.",
 			"An earliest commit authored before the issue was opened is work that began without the plan, whatever the commit contains; the size of the gap goes to the severity, not to the cell.",
 		);
 	}

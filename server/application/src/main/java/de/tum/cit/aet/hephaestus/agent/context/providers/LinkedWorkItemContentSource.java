@@ -38,10 +38,10 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * The issues a pull request refers to by number, as this repository stores them.
  *
- * <p>The server's part is the lookup: which numbers the description, the branch name and the commit
- * subjects mention, and what this repository knows about each. How a reference is worded — a closing
- * keyword, a bare mention, where in the text it sits — is read by the review from the same
- * description, branch and commits it has in front of it.
+ * <p>The server's part is the lookup: which numbers the title, the description, the branch name and
+ * the commit messages mention, and what this repository knows about each. How a reference is worded —
+ * a closing keyword, a bare mention, where in the text it sits — is read by the review from the same
+ * title, description, branch and commits it has in front of it.
  */
 @Component
 @Order(200)
@@ -73,11 +73,14 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
     static final int MAX_ITEMS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
     /**
-     * {@code #N}. The trailing boundary {@code (?![\w]|\.[0-9])} rejects what looks like a reference but
-     * is not: a hex colour ({@code #1a2b}), a unit ({@code #42px}), a version ({@code #1.2}). A sentence
-     * period after the number is still a reference.
+     * {@code #N} standing on its own. The leading boundary {@code (?<![\w/.-])} rejects a number that
+     * belongs to another name: {@code owner/repo#12} and {@code group/project#12} point at another
+     * repository, {@code v1.2#3} at a version, {@code GH-12} at a tracker key — none of them this
+     * repository's issue N. The trailing boundary {@code (?![\w]|\.[0-9])} rejects what looks like a
+     * reference but is not: a hex colour ({@code #1a2b}), a unit ({@code #42px}), a version
+     * ({@code #1.2}). A sentence period after the number is still a reference.
      */
-    private static final Pattern NUMBER_REF = Pattern.compile("#(\\d+)(?![\\w]|\\.[0-9])");
+    private static final Pattern NUMBER_REF = Pattern.compile("(?<![\\w/.-])#(\\d+)(?![\\w]|\\.[0-9])");
 
     /** An issue number opening a branch-slug segment: {@code 18-foo}, {@code feat/18-foo}. */
     private static final Pattern BRANCH_REF = Pattern.compile("(?:^|/)(\\d{1,7})-");
@@ -151,6 +154,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
                             .orElse(null);
 
             Set<Integer> numbers = new LinkedHashSet<>();
+            collect(NUMBER_REF, pullRequest == null ? null : pullRequest.getTitle(), numbers);
             collect(NUMBER_REF, pullRequest == null ? null : withoutHtmlComments(pullRequest.getBody()), numbers);
             collect(
                     BRANCH_REF,
@@ -159,11 +163,11 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
                             pullRequest == null ? null : pullRequest.getHeadRefName()),
                     numbers);
             if (prepared != null) {
-                gitRepositoryManager.forEachCommitSubject(
+                gitRepositoryManager.forEachCommitMessage(
                         prepared.key(),
                         prepared.target(),
                         prepared.head(),
-                        subject -> collect(NUMBER_REF, subject, numbers));
+                        message -> collect(NUMBER_REF, message, numbers));
             }
 
             ArrayNode items = objectMapper.createArrayNode();

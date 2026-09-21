@@ -282,9 +282,14 @@ practice-specific is computed on the server. Four rules decide what goes where:
    language-neutral: `languages.ts` (what a path is), `declarations.ts` (the declaration a line
    lies in, for the brace languages, from a syntax table), `source-scan.ts` (the walk over added
    lines with placing and a test-file skip), `references.ts`, `context.ts`, `change.ts`, `grep.ts`,
-   `files.ts`. A technology enters the library as a syntax row and an extension, never as a helper
-   named for it; what makes a SwiftUI view a view (`/\b(?:View|App|Scene)\b/` on the supertypes)
-   is the practice's own fact and stays in its script.
+   `files.ts`, and `review.ts` (the record beside the change: the readers of the comments, threads,
+   decisions, linked items and commits, and the rows a record practice decides on — one row per
+   reviewer comment with the author's reply, the thread's resolution and the commits after it; one
+   per decision placed against the merge; one per unresolved thread). A reader returns `null` for
+   a file the capture did not write and `[]` for an empty one, and a script says which it found,
+   because a missing record is never an empty loop. A technology enters the library as a syntax
+   row and an extension, never as a helper named for it; what makes a SwiftUI view a view
+   (`/\b(?:View|App|Scene)\b/` on the supertypes) is the practice's own fact and stays in its script.
 3. **No parser until a measurement asks for one.** The syntax-table matcher and a tree-sitter
    grammar name the same innermost declaration on 99.1 % of the 99k Swift lines of one cohort, and
    most of the rest is the grammar failing on recent syntax. A grammar per language is a wasm the
@@ -293,6 +298,14 @@ practice-specific is computed on the server. Four rules decide what goes where:
    model, which reads the checkout, and the script says so in its directions.
 4. **Unknown is a value.** A file the checkout does not carry, or a language with no syntax row,
    places its lines as `unknown` and counts them; a script never guesses a placing it cannot read.
+
+The runner renders `work/precompute-out/summary.md`, which the brief inlines: per practice its
+directions, then the changed-line hints cited as `` `path` [L<n>] `` (up to ten in full, else a
+sample and the pointer to the practice's JSON), then the record rows with every flag, true or
+false, since "no reply" is a fact. A script that matched nothing says so with the lines it scanned,
+so the model does not grep again. The summary is trimmed — record rows first, then changed-line
+rows, never the pointers — to stay under the brief's per-file bound, because a summary the brief
+withholds whole is worth nothing.
 
 ### Review the effective definition
 

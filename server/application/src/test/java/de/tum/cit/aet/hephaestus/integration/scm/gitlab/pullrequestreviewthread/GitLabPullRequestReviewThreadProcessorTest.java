@@ -157,6 +157,31 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldKeepTheOldLineAsTheLineWhenTheDiscussionSitsOnARemovedLine() {
+            when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
+                    .thenReturn(Optional.empty());
+            when(threadRepository.save(any(PullRequestReviewThread.class)))
+                    .thenAnswer(inv -> inv.getArgument(0, PullRequestReviewThread.class));
+
+            var data = new GitLabPullRequestReviewThreadProcessor.ThreadData(
+                    DISCUSSION_GID,
+                    false,
+                    null,
+                    "src/Foo.ts",
+                    null,
+                    17,
+                    PullRequestReviewComment.Side.LEFT,
+                    "head-sha",
+                    "base-sha",
+                    CREATED_AT);
+
+            PullRequestReviewThread saved = processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
+
+            assertThat(saved.getLine()).isEqualTo(17);
+            assertThat(saved.getSide()).isEqualTo(PullRequestReviewComment.Side.LEFT);
+        }
+
+        @Test
         void shouldLeavePositionNullWhenDataHasNoPositionInfo() {
             when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
                     .thenReturn(Optional.empty());

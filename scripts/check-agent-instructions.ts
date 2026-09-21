@@ -140,6 +140,21 @@ const INTENTIONALLY_MISSING_PATHS = [
 		reason: "the admitted observations, written inside the agent workspace for the composer",
 	},
 	{
+		document: "docs/contributor/agent/workspace-abi.mdx",
+		value: "inputs/context/commits.json",
+		reason: "the staged commit record, written into the agent workspace",
+	},
+	{
+		document: "docs/contributor/agent/workspace-abi.mdx",
+		value: "inputs/history/observations.json",
+		reason: "the staged history record, written into the agent workspace",
+	},
+	{
+		document: "docs/contributor/practice-catalogue.md",
+		value: "work/precompute-out/summary.md",
+		reason: "the precompute summary, written inside the agent workspace for the brief",
+	},
+	{
 		document: "MIGRATION.md",
 		value: "docker/.env",
 		reason: "a deployment-local secrets file that must stay untracked",

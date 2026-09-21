@@ -18,6 +18,8 @@ const commit = (sha: string, message: string, parents = ["p"]) => ({
 	committer: "a",
 	committedAt: "",
 	parents,
+	files: [],
+	line: 0,
 });
 
 void test("a subject's shape is a fact — bare, repeated, listed, cut off — and a merge is set aside", () => {
@@ -50,10 +52,10 @@ void test("a subject's shape is a fact — bare, repeated, listed, cut off — a
 async function stage(slug: string, commits: unknown[]) {
 	const root = mkdtempSync(path.join(tmpdir(), "commit-precompute-"));
 	mkdirSync(path.join(root, "practices"));
-	mkdirSync(path.join(root, "work/change"), { recursive: true });
+	mkdirSync(path.join(root, "context"), { recursive: true });
 	writeFileSync(path.join(root, "package.json"), '{"type":"module"}\n');
 	symlinkSync(path.join(repositoryRoot, "docker/agents/precompute/lib"), path.join(root, "lib"));
-	writeFileSync(path.join(root, "work/change/commits.json"), JSON.stringify({ commits }));
+	writeFileSync(path.join(root, "context/commits.json"), JSON.stringify({ commits }));
 	const staged = path.join(root, `practices/${slug}.ts`);
 	cpSync(
 		path.join(
@@ -66,7 +68,7 @@ async function stage(slug: string, commits: unknown[]) {
 	if (!isPracticeModule(mod)) {
 		throw new Error("script does not export a default function");
 	}
-	return { root, script: mod.default, changeDir: path.join(root, "work/change") };
+	return { root, script: mod.default, contextDir: path.join(root, "context") };
 }
 
 const metadata = {
@@ -78,31 +80,34 @@ const metadata = {
 	commit_sha: "abc123",
 };
 
-void test("both commit practices read the subjects from the change view and state shapes, not verdicts", async () => {
+void test("both commit practices read the subjects from the commit record and state shapes, not verdicts", async () => {
 	const commits = [
 		commit("1111111", "Add button to start run\n"),
 		commit("2222222", "add location manager, SwiftData persistence, and UI color cleanup\n"),
 		commit("3333333", "Merge branch 'main'\n", ["p1", "p2"]),
 	];
 	for (const slug of ["commit-subjects-explain-each-change", "commits-are-atomic-and-cohesive"]) {
-		const { root, script, changeDir } = await stage(slug, commits);
+		const { root, script, contextDir } = await stage(slug, commits);
 		try {
-			const result = await script(
-				path.join(root, "repo"),
-				new Map(),
-				metadata,
-				path.join(root, "context"),
-				changeDir,
-			);
+			const result = await script(path.join(root, "repo"), new Map(), metadata, contextDir);
 			assert.equal(result.metrics.authoredCommits, 2);
 			assert.equal(result.metrics.mergeCommits, 1);
 			assert.match(
 				result.directions[0] ?? "",
 				/2 authored commit\(s\), 1 merge commit\(s\) excluded/u,
 			);
-			assert.match(
-				result.directions.join("\n"),
-				/2222222 "add location manager, SwiftData persistence, and UI color cleanup" — lists several concerns/u,
+			// One record row per authored commit; the merge is set aside.
+			assert.deepEqual(
+				result.hints.map((h) => [h.file, h.pattern, h.context, h.flags.conjoined]),
+				[
+					["inputs/context/commits.json", "commit", "1111111 Add button to start run", false],
+					[
+						"inputs/context/commits.json",
+						"commit",
+						"2222222 add location manager, SwiftData persistence, and UI color cleanup",
+						true,
+					],
+				],
 			);
 		} finally {
 			rmSync(root, { recursive: true, force: true });

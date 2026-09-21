@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRe
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,7 +51,7 @@ public class ReviewThreadContentSource implements EvidenceSource {
 
     static final int MAX_THREADS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
-    static final int MAX_DECISIONS = 30;
+    static final int MAX_DECISIONS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
     private final ObjectMapper objectMapper;
     private final PullRequestRepository pullRequestRepository;
@@ -104,8 +105,12 @@ public class ReviewThreadContentSource implements EvidenceSource {
             if (reviews.size() > MAX_DECISIONS + 1) {
                 reviews = new java.util.ArrayList<>(reviews.subList(0, MAX_DECISIONS + 1));
             }
+            // The query returns newest first so the bound keeps the latest decision; the file lists
+            // them oldest first, the order comments.json and general_comments.json share.
             boolean decisionsTruncated = reviews.size() > MAX_DECISIONS;
             if (decisionsTruncated) reviews.remove(reviews.size() - 1);
+            reviews.sort(Comparator.comparing(
+                    PullRequestReview::getSubmittedAt, Comparator.nullsLast(Comparator.naturalOrder())));
 
             ObjectNode root = objectMapper.createObjectNode();
 
@@ -125,6 +130,12 @@ public class ReviewThreadContentSource implements EvidenceSource {
                 }
                 if (review.getState() == PullRequestReview.State.PENDING
                         || review.getState() == PullRequestReview.State.UNKNOWN) {
+                    continue;
+                }
+                // A COMMENTED review with no body is the container of inline comments — GitHub's batch, or
+                // the row GitLab's sync makes per discussion and author — and its substance is already in
+                // comments.json. Listing it here would be a decision that decided nothing.
+                if (review.getState() == PullRequestReview.State.COMMENTED && isBlank(review.getBody())) {
                     continue;
                 }
                 decisionArray.add(toDecision(review));
@@ -209,6 +220,10 @@ public class ReviewThreadContentSource implements EvidenceSource {
 
     private ObjectNode toThread(PullRequestReviewThread t) {
         ObjectNode node = objectMapper.createObjectNode();
+        // The stored id, the value a comment in comments.json names as its `thread`.
+        if (t.getId() != null) {
+            node.put("id", t.getId());
+        }
         if (t.getPath() != null) {
             node.put("path", t.getPath());
         }
@@ -222,6 +237,9 @@ public class ReviewThreadContentSource implements EvidenceSource {
         }
         if (t.getOutdated() != null) {
             node.put("outdated", t.getOutdated());
+        }
+        if (t.getCreatedAt() != null) {
+            node.put("createdAt", t.getCreatedAt().toString());
         }
         return node;
     }
@@ -241,7 +259,15 @@ public class ReviewThreadContentSource implements EvidenceSource {
         if (review.getSubmittedAt() != null) {
             node.put("submittedAt", review.getSubmittedAt().toString());
         }
+        // What the reviewer wrote with the decision: the approval's or request's summary.
+        if (!isBlank(review.getBody())) {
+            node.put("body", review.getBody());
+        }
         return node;
+    }
+
+    private static boolean isBlank(@Nullable String text) {
+        return text == null || text.isBlank();
     }
 
     private static @Nullable String login(@Nullable User user) {

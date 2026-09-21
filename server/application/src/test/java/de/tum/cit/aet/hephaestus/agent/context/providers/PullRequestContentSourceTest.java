@@ -19,16 +19,24 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.MergeStateStatus;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,6 +48,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -71,9 +80,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        lenient()
-                .when(pullRequestRepository.findByIdWithAuthorAndRepository(456L))
-                .thenReturn(Optional.of(new PullRequest()));
+        lenient().when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(new PullRequest()));
         provider = new PullRequestContentSource(
                 objectMapper, gitRepositoryManager, pullRequestRepository, reviewCommentRepository, repositoryPreparer);
     }
@@ -109,6 +116,18 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         return new ContextRequest.PracticeReviewRequest(jobWith(metadata));
     }
 
+    private static Label label(String name) {
+        Label label = new Label();
+        label.setName(name);
+        return label;
+    }
+
+    private static User user(String login) {
+        User user = new User();
+        user.setLogin(login);
+        return user;
+    }
+
     private void stubGit() {
         lenient().when(repositoryPreparer.prepare(any())).thenReturn(PREPARED);
         lenient().when(gitRepositoryManager.isEnabled()).thenReturn(true);
@@ -116,6 +135,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         lenient()
                 .when(gitRepositoryManager.changedPaths(REPOSITORY, BASE, HEAD))
                 .thenReturn(Set.of("a.txt"));
+        lenient()
+                .when(gitRepositoryManager.commitsBetween(REPOSITORY, BASE, HEAD))
+                .thenReturn(List.of());
     }
 
     private Map<String, byte[]> captureFiles(ContextRequest request) {
@@ -157,7 +179,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         @Test
         void writesMetadataJson() throws Exception {
             stubGit();
-            when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
                     .thenReturn(List.of());
 
             Map<String, byte[]> files = captureFiles(request(sampleMetadata()));
@@ -182,8 +204,8 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             pr.setAuthor(author);
 
             stubGit();
-            when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.of(pr));
-            when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
+            when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(pr));
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
                     .thenReturn(List.of());
 
             Map<String, byte[]> files = captureFiles(request(sampleMetadata()));
@@ -197,6 +219,56 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(metadataJson.get("created_at").asString()).isEqualTo("2026-04-09T12:39:13Z");
             assertThat(metadataJson.get("merged_at").asString()).isEqualTo("2026-04-09T14:47:18Z");
             assertThat(metadataJson.has("closed_at")).isFalse();
+        }
+
+        @Test
+        void shouldWriteTheRecordsStateBesideItsPeopleAndLabelsWhenThePullRequestCarriesThem() throws Exception {
+            PullRequest pr = new PullRequest();
+            pr.setTitle("Fix authentication bug");
+            // A webhook-synced record: closed by the merge, with the merge flag the state alone does not carry.
+            pr.setState(Issue.State.CLOSED);
+            pr.setMerged(true);
+            pr.setLabels(Set.of(label("security"), label("backend")));
+            pr.setAssignees(Set.of(user("zoe"), user("adam")));
+            Milestone milestone = new Milestone();
+            milestone.setTitle("v1.2");
+            pr.setMilestone(milestone);
+            pr.setMergeStateStatus(MergeStateStatus.CLEAN);
+            pr.setReviewDecision(ReviewDecision.APPROVED);
+
+            stubGit();
+            when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(pr));
+
+            JsonNode metadataJson = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+                    .files()
+                    .get("inputs/context/metadata.json"));
+
+            assertThat(metadataJson.get("state").asString()).isEqualTo("CLOSED");
+            assertThat(metadataJson.get("is_merged").asBoolean()).isTrue();
+            assertThat(metadataJson.get("labels").valueStream().map(JsonNode::asString))
+                    .containsExactly("backend", "security");
+            assertThat(metadataJson.get("assignees").valueStream().map(JsonNode::asString))
+                    .containsExactly("adam", "zoe");
+            assertThat(metadataJson.get("milestone").asString()).isEqualTo("v1.2");
+            assertThat(metadataJson.get("merge_state_status").asString()).isEqualTo("CLEAN");
+            assertThat(metadataJson.get("review_decision").asString()).isEqualTo("APPROVED");
+        }
+
+        @Test
+        void shouldWriteEmptyListsAndNoKeysWhenThePullRequestCarriesNoneOfThem() throws Exception {
+            stubGit();
+
+            JsonNode metadataJson = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+                    .files()
+                    .get("inputs/context/metadata.json"));
+
+            assertThat(metadataJson.get("is_merged").asBoolean()).isFalse();
+            assertThat(metadataJson.get("labels")).isEmpty();
+            assertThat(metadataJson.get("assignees")).isEmpty();
+            // Absent rather than null: a webhook-only record never learned these.
+            assertThat(metadataJson.has("milestone")).isFalse();
+            assertThat(metadataJson.has("merge_state_status")).isFalse();
+            assertThat(metadataJson.has("review_decision")).isFalse();
         }
 
         @Test
@@ -216,7 +288,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             minimal.setBody("Old comment");
 
             stubGit();
-            when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
                     .thenReturn(List.of(full, minimal));
 
             Map<String, byte[]> files = captureFiles(request(sampleMetadata()));
@@ -226,6 +298,65 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(comments.get(0).get("created_at").asString()).isEqualTo("2025-06-01T12:00:00Z");
             assertThat(comments.get(0).get("author").asString()).isEqualTo("reviewer");
             assertThat(comments.get(1).has("author")).isFalse();
+        }
+
+        @Test
+        void shouldNameTheThreadTheParentAndTheSideWhenACommentHasThem() throws Exception {
+            PullRequestReviewThread thread = new PullRequestReviewThread();
+            ReflectionTestUtils.setField(thread, "id", 70L);
+            PullRequestReviewComment root = new PullRequestReviewComment();
+            ReflectionTestUtils.setField(root, "id", 1L);
+            root.setThread(thread);
+            root.setPath("src/Main.java");
+            root.setLine(10);
+            root.setSide(PullRequestReviewComment.Side.LEFT);
+            root.setOutdated(true);
+            root.setBody("This branch was removed on purpose?");
+            root.setCreatedAt(Instant.parse("2025-06-01T12:00:00Z"));
+            PullRequestReviewComment reply = new PullRequestReviewComment();
+            ReflectionTestUtils.setField(reply, "id", 2L);
+            reply.setThread(thread);
+            reply.setInReplyTo(root);
+            reply.setPath("src/Main.java");
+            reply.setLine(10);
+            reply.setSide(PullRequestReviewComment.Side.UNKNOWN);
+            reply.setOutdated(false);
+            reply.setBody("Yes, see the description.");
+            reply.setCreatedAt(Instant.parse("2025-06-01T13:00:00Z"));
+
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
+                    .thenReturn(List.of(reply, root));
+
+            JsonNode comments = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(COMMENTS))
+                    .files()
+                    .get("inputs/context/comments.json"));
+
+            JsonNode first = comments.get(0);
+            assertThat(first.propertyNames())
+                    .containsExactlyInAnyOrder(
+                            "id", "thread", "path", "line", "side", "outdated", "body", "created_at");
+            assertThat(first.get("id").asLong()).isEqualTo(1L);
+            assertThat(first.get("thread").asLong()).isEqualTo(70L);
+            assertThat(first.get("side").asString()).isEqualTo("LEFT");
+            assertThat(first.get("outdated").asBoolean()).isTrue();
+            JsonNode second = comments.get(1);
+            assertThat(second.get("in_reply_to").asLong()).isEqualTo(1L);
+            assertThat(second.get("thread").asLong()).isEqualTo(70L);
+            // UNKNOWN says nothing about the side and a current comment is not marked outdated: both absent.
+            assertThat(second.has("side")).isFalse();
+            assertThat(second.has("outdated")).isFalse();
+        }
+
+        @Test
+        void shouldLeaveHephaestusOwnNotesOutOfTheCommentsItAsksFor() {
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
+                    .thenReturn(List.of());
+
+            provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
+
+            // The marker every note the tool posts on a line carries; the query leaves those out.
+            verify(reviewCommentRepository)
+                    .findRecentHumanByPullRequestIdWithAuthor(eq(456L), eq("<!-- hephaestus"), any());
         }
 
         @Test
@@ -242,7 +373,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             Collections.reverse(comments);
 
             stubGit();
-            when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
                     .thenReturn(comments);
 
             Map<String, byte[]> files = captureFiles(request(sampleMetadata()));
@@ -260,7 +391,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                 comment.setBody("Comment " + i);
                 comments.add(comment);
             }
-            when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
                     .thenReturn(comments);
             assertThat(provider.capture(request(sampleMetadata()), Set.of(COMMENTS))
                             .completeness()
@@ -272,6 +403,91 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                             .completeness()
                             .get(COMMENTS))
                     .isEqualTo(SourceCompleteness.PARTIAL);
+        }
+    }
+
+    @Nested
+    class Commits {
+
+        @Test
+        void shouldStageTheCommitsOfTheChangeOldestFirstWithTheirMessagesAndFiles() throws Exception {
+            stubGit();
+            var first = new CommitDetails(
+                    "1".repeat(40),
+                    "docs: describe usage",
+                    null,
+                    "Ada",
+                    "ada@example.com",
+                    Instant.parse("2026-04-09T10:00:00Z"),
+                    "Ada",
+                    "ada@example.com",
+                    Instant.parse("2026-04-09T10:00:00Z"),
+                    2,
+                    0,
+                    1,
+                    List.of(new CommitDetails.FileChange("README.md", ChangeType.MODIFIED, 2, 0, 2, null)),
+                    List.of(BASE));
+            var second = new CommitDetails(
+                    "2".repeat(40),
+                    "feat: move a to b",
+                    "Closes #7",
+                    "Ada",
+                    "ada@example.com",
+                    Instant.parse("2026-04-09T11:00:00Z"),
+                    "Bot",
+                    "bot@example.com",
+                    Instant.parse("2026-04-09T11:30:00Z"),
+                    1,
+                    1,
+                    1,
+                    List.of(new CommitDetails.FileChange("b.txt", ChangeType.RENAMED, 1, 1, 2, "a.txt")),
+                    List.of("1".repeat(40)));
+            when(gitRepositoryManager.commitsBetween(REPOSITORY, BASE, HEAD)).thenReturn(List.of(first, second));
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(CORE));
+
+            assertThat(provider.sourceKindFor(PullRequestContentSource.COMMITS_FILE))
+                    .isEqualTo(CORE);
+            JsonNode root = objectMapper.readTree(captured.files().get(PullRequestContentSource.COMMITS_FILE));
+            assertThat(root.propertyNames()).containsExactly("commits");
+            JsonNode commits = root.get("commits");
+            assertThat(commits).hasSize(2);
+            JsonNode one = commits.get(0);
+            assertThat(one.propertyNames())
+                    .containsExactly(
+                            "sha", "parents", "author", "authoredAt", "committer", "committedAt", "message", "files");
+            assertThat(one.get("sha").asString()).isEqualTo("1".repeat(40));
+            assertThat(one.get("parents").get(0).asString()).isEqualTo(BASE);
+            assertThat(one.get("author").asString()).isEqualTo("Ada");
+            assertThat(one.get("authoredAt").asString()).isEqualTo("2026-04-09T10:00:00Z");
+            assertThat(one.get("message").asString()).isEqualTo("docs: describe usage");
+            JsonNode readme = one.get("files").get(0);
+            assertThat(readme.propertyNames()).containsExactly("path", "status", "additions", "deletions");
+            assertThat(readme.get("path").asString()).isEqualTo("README.md");
+            assertThat(readme.get("status").asString()).isEqualTo("M");
+            assertThat(readme.get("additions").asInt()).isEqualTo(2);
+            JsonNode two = commits.get(1);
+            // The whole message, subject and body, as one quotable string; the committer beside the author.
+            assertThat(two.get("message").asString()).isEqualTo("feat: move a to b\n\nCloses #7");
+            assertThat(two.get("committer").asString()).isEqualTo("Bot");
+            assertThat(two.get("committedAt").asString()).isEqualTo("2026-04-09T11:30:00Z");
+            JsonNode renamed = two.get("files").get(0);
+            assertThat(renamed.get("status").asString()).isEqualTo("R");
+            assertThat(renamed.get("oldPath").asString()).isEqualTo("a.txt");
+            // No address anywhere in the record.
+            assertThat(new String(captured.files().get(PullRequestContentSource.COMMITS_FILE), StandardCharsets.UTF_8))
+                    .doesNotContain("@example.com");
+        }
+
+        @Test
+        void shouldStageNoCommitsWhenTheCloneIsNotPrepared() {
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
+                    .thenReturn(List.of());
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
+
+            assertThat(captured.files()).doesNotContainKey(PullRequestContentSource.COMMITS_FILE);
+            verify(gitRepositoryManager, never()).commitsBetween(any(), any(), any());
         }
     }
 
@@ -321,7 +537,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
         @Test
         void shouldNotPinAChangeWhenOnlyCommentsAreSelected() {
-            when(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(eq(456L), any()))
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
                     .thenReturn(List.of());
 
             var captured = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
@@ -358,7 +574,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
     @Test
     void shouldReportUnavailableThenAllowCaptureWhenArtifactReturns() {
-        when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.empty());
+        when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.empty());
         for (var kind : provider.sourceKinds()) {
             var captured = provider.capture(request(sampleMetadata()), Set.of(kind));
             assertThat(captured.files()).isEmpty();
@@ -370,7 +586,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         }
         verifyNoInteractions(reviewCommentRepository, gitRepositoryManager, repositoryPreparer);
         var artifact = new PullRequest();
-        when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.of(artifact));
+        when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(artifact));
         var restored = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
         assertThat(restored.stateOverrides()).isEmpty();
         assertThat(restored.files()).isNotEmpty();
@@ -380,7 +596,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     void shouldSkipGitPreparationWhenTheParentIsUnavailable() {
         var deleted = new PullRequest();
         deleted.setDeletedAt(Instant.parse("2026-09-05T00:00:00Z"));
-        when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.of(deleted));
+        when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(deleted));
 
         var captured = provider.capture(request(sampleMetadata()), Set.of(DIFF));
 
@@ -424,6 +640,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                 .containsExactlyInAnyOrder(
                         "inputs/context/metadata.json",
                         PullRequestContentSource.DESCRIPTION_FILE,
+                        PullRequestContentSource.COMMITS_FILE,
                         PullRequestContentSource.CHANGE_FILE);
         assertThat(provider.sourceKindFor(PullRequestContentSource.DESCRIPTION_FILE))
                 .isEqualTo(CORE);

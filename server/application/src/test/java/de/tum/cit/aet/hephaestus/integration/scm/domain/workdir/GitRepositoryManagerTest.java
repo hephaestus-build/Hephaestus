@@ -82,9 +82,40 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             git.branchDelete().setBranchNames("feature").setForce(true).call();
             prepare();
             assertThat(manager.resolveBranchHead(KEY, "feature")).isNull();
-            List<String> subjects = new ArrayList<>();
-            manager.forEachCommitSubject(KEY, main, feature, subjects::add);
-            assertThat(subjects).containsExactly("Feature");
+            List<String> messages = new ArrayList<>();
+            manager.forEachCommitMessage(KEY, main, feature, messages::add);
+            assertThat(messages).containsExactly("Feature");
+        }
+    }
+
+    @Test
+    void shouldListTheCommitsOfARangeOldestFirstWithTheirFileChanges() throws Exception {
+        try (Git git = repository()) {
+            String main = head(git);
+            git.checkout().setCreateBranch(true).setName("feature").call();
+            Files.writeString(source.resolve("README.md"), "Repository\n\nUsage\n");
+            String first = commit(git, "docs: describe usage");
+            Files.writeString(source.resolve("a.txt"), "a\n");
+            Files.writeString(source.resolve("b.txt"), "b\n");
+            String second = commit(git, "feat: add a and b\n\nCloses #7");
+            prepare();
+
+            List<CommitDetails> commits = manager.commitsBetween(KEY, main, second);
+
+            assertThat(commits).extracting(CommitDetails::sha).containsExactly(first, second);
+            assertThat(commits.get(0).fileChanges()).singleElement().satisfies(change -> {
+                assertThat(change.filename()).isEqualTo("README.md");
+                assertThat(change.changeType()).isEqualTo(ChangeType.MODIFIED);
+                assertThat(change.additions()).isEqualTo(2);
+            });
+            assertThat(commits.get(1).fileChanges())
+                    .extracting(CommitDetails.FileChange::filename, CommitDetails.FileChange::changeType)
+                    .containsExactlyInAnyOrder(
+                            org.assertj.core.groups.Tuple.tuple("a.txt", ChangeType.ADDED),
+                            org.assertj.core.groups.Tuple.tuple("b.txt", ChangeType.ADDED));
+            assertThat(commits.get(1).message()).isEqualTo("feat: add a and b");
+            assertThat(commits.get(1).messageBody()).isEqualTo("Closes #7");
+            assertThat(commits.get(1).parentShas()).containsExactly(first);
         }
     }
 

@@ -47,6 +47,8 @@ export default async function keepsViewsFreeOfNetworkingAndPersistence(
 			viewLinesAdded: scan.linesInScope,
 			swiftLinesAdded: scan.linesAdded,
 			filesWithoutCheckout: scan.filesWithoutCheckout,
+			filesScanned: scan.filesScanned,
+			linesAdded: scan.linesAdded,
 		},
 		directions,
 	};

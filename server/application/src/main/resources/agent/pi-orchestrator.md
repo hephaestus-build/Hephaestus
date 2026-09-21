@@ -94,27 +94,29 @@ the sources each may assert absence over); `<practiceRoot>` is its directory and
 directory of `preparedFeedback`.
 
 - `work/change/diff.patch` — (PR) `git diff` base..head, renames detected, every hunk line prefixed `[L<n>]`
-- `work/change/files.json`, `work/change/diff_stat.txt`, `work/change/commits.json` — (PR) changed files with status letters, `git diff --stat`, commits base..head oldest first; `git show <sha>` in `<repositoryRoot>` gives one commit's diff
+- `<contextRoot>/commits.json` — (PR) the commits base..head oldest first, each with its full message and the `files` it touched against its first parent: quote a commit's message from here; `git show <sha>` in `<repositoryRoot>` gives one commit's diff
+- `work/change/files.json`, `work/change/diff_stat.txt` — (PR) changed files with status letters, `git diff --stat`; derived here, not artifacts: cite the change through `diff.patch` or the record through `metadata.json`
 - `<contextRoot>/change.json` — (PR) the pinned `base_sha` and `head_sha`; the artifact a change citation names, never a file to quote
-- `<contextRoot>/metadata.json` — the record as the provider holds it: title, body, author, branches, state, labels, and for a PR the `created_at`, `closed_at` and `merged_at` moments it recorded
+- `<contextRoot>/metadata.json` — the record as the provider holds it: title, body, author, branches, state, labels, assignees, milestone, and for a PR `is_merged`, `merged_by`, `review_decision`, `merge_state_status` and the `created_at`, `closed_at` and `merged_at` moments it recorded
 - `<contextRoot>/description.md` — (PR, ISSUE) the description as written, line by line
 - `work/change/description.authored.md` — (PR) the description's own lines by their line numbers in `description.md`, apart from the merge request template the checkout carries: a heading, a checklist label, a placeholder or an HTML comment the form ships is the form's, not the author's words, and a template checklist item the author ticked is listed apart. What a practice asks of "the description" it asks of the author's lines; a form's "Closes #12" example links nothing and a form's checklist is not the issue's criteria
-- `<contextRoot>/comments.json` — the discussion (for a PR, its line-anchored review comments)
-- `<contextRoot>/review_threads.json`, `<contextRoot>/general_comments.json` — (PR) review threads with state and decisions; the non-inline conversation, Hephaestus's own notes filtered out
+- `<contextRoot>/comments.json` — the discussion (for a PR, its line-anchored review comments, each with its `id`, `thread`, `in_reply_to`, `side` and `outdated` where the provider records them)
+- `<contextRoot>/review_threads.json`, `<contextRoot>/general_comments.json` — (PR) review threads with `id`, state, who resolved and `createdAt`, and every submitted decision oldest first with its `body` when one was written; the non-inline conversation. Hephaestus's own notes are filtered out of all three
 - `<contextRoot>/linked_work_items/<n>.md` — (PR) each linked issue this repository stores, its title on the first line and its body as written: quote an issue from here
-- `<contextRoot>/linked_work_items.json` — (PR) the same issues as records, for every issue number the description, branch or commit subjects mention, plus `unresolvedReferences[]`. How each is referenced — closing keyword, bare mention, branch — you read from `metadata.json`, `source_branch` and the commits; a mention alone does not establish guidance supplied or adopted by the author
+- `<contextRoot>/linked_work_items.json` — (PR) the same issues as records, for every issue number the title, description, branch or commit messages mention, plus `unresolvedReferences[]`. How each is referenced — closing keyword, bare mention, branch — you read from `metadata.json`, `source_branch` and the commits; a mention alone does not establish guidance supplied or adopted by the author
 - `<contextRoot>/project_inventory.json` — a bounded index of this workspace's issues and pull requests, the reviewed one marked `focal`; `truncated:true` means not exhaustive
 - `<contextRoot>/conversation_thread.json` — (CONVERSATION) the ordered verbatim turns of one thread, `_meta.trustLevel: "UNTRUSTED_EXTERNAL"`
 - `<contextRoot>/document.md`, `<contextRoot>/document.json` — (DOCUMENT) the wiki document and its metadata
-- `<contextRoot>/outline/index.json`, `<contextRoot>/outline/<collection>/<doc>.md` — (PR, ISSUE) wiki documents linked from or matched to the work, with bodies; written on every run, an empty `documents` array is the search having happened
+- `<contextRoot>/outline/index.json`, `<contextRoot>/outline/<collection>/<doc>.md` — (PR, ISSUE, when a wiki integration is connected) wiki documents linked from or matched to the work, with bodies; an empty `documents` array is the search having happened, and the brief names the directory as not captured when there is no wiki
 - `<repositoryRoot>/` — (PR, when the manifest lists `scm.repository.tree`) the checkout; `.git` supports log, blame and show through bash; no remote, no credentials
 - `<historyRoot>/observations.json`, `<historyRoot>/feedback.json` — earlier observations about this person and what was already said, newest first; bounded windows
 - `<practiceIndex>` — the practices with `readsSources` and `exhaustiveSources`
 
 ## Tools
 
-`read`, `grep`, `find`, `ls` and `bash` (Git, ripgrep, standard utilities) inspect the evidence; it is
-read-only. `write` and `edit` are for `work/notes/review.md` and scratch under `$TMPDIR`; scratch is not
+`read`, `grep`, `find`, `ls` and `bash` (Git, ripgrep, `node`, standard utilities; no `python3`, no `jq`)
+inspect the evidence; it is read-only. Every line of `work/change/diff.patch` starts with `[L<n>] `, so an
+added line matches `^\[L[0-9]+\] \+`, never `^\+`. `write` and `edit` are for `work/notes/review.md` and scratch under `$TMPDIR`; scratch is not
 evidence. Tool output is bounded: follow pagination, and for an absence claim search with
 `rg --hidden --no-ignore` over the relevant paths. `work/precompute-out/summary.md` holds the hints the
 practices' precompute scripts derived; a hint is a lead to inspect, not evidence.

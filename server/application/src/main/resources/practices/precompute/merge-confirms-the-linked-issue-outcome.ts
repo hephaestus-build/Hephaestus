@@ -1,3 +1,4 @@
+import { text } from "../lib/practice-contract.ts";
 // Precompute FACTS for merge-confirms-the-linked-issue-outcome: every linked issue with a checkable
 // outcome, one row each — its task-list items as captured, ticked and unticked, its state, and how
 // the change names it. The practice's occasion is any linked item that states a checkable outcome,
@@ -13,10 +14,6 @@ import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 /** Headings under which an issue states what "done" means without a task list. */
 const OUTCOME_HEADING =
 	/^\s*#+\s*(?:acceptance criteria|definition of done|dod|expected (?:outcome|result|behaviou?r)|given\b)/imu;
-
-function text(value: unknown): string {
-	return typeof value === "string" ? value : "";
-}
 
 /** How the change names a linked issue, strongest form first. */
 function howLinked(
@@ -45,7 +42,7 @@ export default async function mergeConfirmsTheLinkedIssueOutcome(
 		...issueNumberReferences(body),
 		...branchIssueReferences(metadata.source_branch),
 	]);
-	const linked = await readLinkedWorkItems(contextDir);
+	const linked = (await readLinkedWorkItems(contextDir)) ?? [];
 	const hints: Hint[] = [];
 	for (const item of linked) {
 		const items = checkableItems(item.body);

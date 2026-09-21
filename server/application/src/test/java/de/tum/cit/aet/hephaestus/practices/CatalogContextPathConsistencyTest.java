@@ -29,6 +29,7 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
             "metadata.json",
             "description.md", // PullRequestContentSource.DESCRIPTION_FILE — the description as written, for quoting
             "change.json", // PullRequestContentSource.CHANGE_FILE — the pinned base and head of the change
+            "commits.json", // PullRequestContentSource.COMMITS_FILE — the commits of the change, quotable and citable
             "comments.json",
             // The raw SQL-only projections (the agent cannot get these from the checkout):
             "linked_work_items.json", // LinkedWorkItemContentSource.OUTPUT_FILE — resolved linked-issue rows
@@ -40,13 +41,14 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
             // Slack thread
             "document.json", // DocumentContentSource.METADATA_KEY — where the reviewed document lives and who wrote it
             "document.md" // DocumentContentSource.BODY_KEY — the one mirrored wiki document a review is about
-            // Everything about the change itself — the patch, its statistics, the changed files, the
-            // commits — is derived in the container under work/change/, never staged under inputs/.
+            // The patch, its statistics and the changed files are derived in the container under
+            // work/change/, never staged under inputs/; the commits are staged, since a quote of a
+            // commit message must cite an artifact admission can verify.
             );
 
     /** Workspace-relative files pi-change.ts derives under {@code work/change/} inside the container. */
     private static final Set<String> REAL_CHANGE_FILES =
-            Set.of("diff.patch", "diff_stat.txt", "files.json", "commits.json", "description.authored.md");
+            Set.of("diff.patch", "diff_stat.txt", "files.json", "description.authored.md");
 
     private static final Pattern CONTEXT_PATH = Pattern.compile("inputs/context/([a-z_]+\\.[a-z]+)");
 

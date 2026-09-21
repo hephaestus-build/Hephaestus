@@ -14,8 +14,8 @@ The workspace has three data regions: read-only `inputs/`, writable `work/` scra
 collected `out/` results. The rule that divides them: **the server projects what it stores and
 verifies what comes back; every derived view of the work is produced inside the container.** A file
 under `inputs/` is a stored record or a checkout, shaped into JSON and nothing more; the patch, its
-statistics, the commit list and every precompute hint are written under `work/` by TypeScript running
-here. Mount isolation is defined under [Path conventions](#path-conventions).
+statistics and every precompute hint are written under `work/` by TypeScript running here; the
+commit list is a stored record and is staged under `inputs/context/`. Mount isolation is defined under [Path conventions](#path-conventions).
 
 ```text
 /workspace/
@@ -24,7 +24,7 @@ here. Mount isolation is defined under [Path conventions](#path-conventions).
 │   ├── sources/                     #   Integration-namespaced source materialisations (ADR 0020).
 │   │   └── scm/repo/                #   Pinned, read-only SCM checkout and sanitized Git history.
 │   ├── context/                     #   Stored records as JSON, populated by the ContentSource SPI.
-│   │                                #   Files: metadata.json, description.md, change.json, comments.json, linked_work_items.json,
+│   │                                #   Files: metadata.json, description.md, change.json, commits.json, comments.json, linked_work_items.json,
 │   │                                #   review_threads.json, general_comments.json, project_inventory.json,
 │   │                                #   conversation_thread.json, document.json + document.md,
 │   │                                #   outline/index.json + outline/{collection}/{doc}.md — whichever
@@ -35,7 +35,7 @@ here. Mount isolation is defined under [Path conventions](#path-conventions).
 │   └── practices/                   #   Practice catalog (index.json, {slug}.md).
 ├── work/                            # AGENT + PRECOMPUTE SCRATCH. Never collected back into SQL.
 │   ├── change/                      #   The change view pi-change.ts derives from the checkout with git:
-│   │                                #   diff.patch ([L<n>]-annotated), diff_stat.txt, files.json, commits.json.
+│   │                                #   diff.patch ([L<n>]-annotated), diff_stat.txt, files.json.
 │   ├── notes/review.md              #   What the review has recorded, appended by the runner; read back after compaction.
 │   ├── precompute/                  #   Per-practice precompute scripts (TypeScript, run on Node).
 │   ├── precompute-out/              #   Precompute runtime output (logs, structured hints).
@@ -106,8 +106,9 @@ execute on Node; see
 - **`work/change/`** — what `pi-change.ts` derives from `inputs/sources/scm/repo/` with `git` before
   the precompute scripts and the model run: `git diff` from `base_sha` to `head_sha` with renames
   detected and every hunk line prefixed `[L<n>]` and a space (the coordinate a change citation names),
-  `git diff --stat`, the changed files with their status letters, and the commits of the range with
-  their full messages. Absent when no change was captured (an issue review). A precompute script
+  `git diff --stat` and the changed files with their status letters. The commits of the range are not
+  derived here: they are staged as `inputs/context/commits.json`, so a quote of a commit message cites
+  an artifact admission can verify. Absent when no change was captured (an issue review). A precompute script
   receives this directory as its fifth argument and reads it through `lib/change.ts`.
 - **`work/`** — agent + precompute scratch. The Pi agent may write here; the server never
   collects it.
@@ -122,6 +123,63 @@ execute on Node; see
 - **`.pi*`** / `inputs/practices/` / `work/precompute*` / `work/analysis/` / `out/`
   — internal control surfaces. AI-readable as configured by the orchestrator, but
   *not* part of the public agent ABI; subject to change without a `schemaVersion` bump.
+
+## Pull request records
+
+What each `inputs/context/` file of a pull request review carries, field by field. A key listed as
+*when present* is absent — never `null` — when the provider recorded nothing. Every list runs oldest
+first; the memory bound on each list is `EvidenceLimits.MAX_ITEMS_PER_SOURCE` (10,000), the newest
+entries are the ones kept when it is reached, and the capture is then reported `PARTIAL`.
+
+**`metadata.json`** — the pull request as the provider holds it. `pr_number`, `pr_url`,
+`repository_full_name`, `source_branch`, `target_branch`, `commit_sha`, `title`, `body`, `state`,
+`is_draft`, `is_merged`, `additions`, `deletions`, `changed_files`, `labels` (names, sorted) and
+`assignees` (logins, sorted) are always written. `is_merged` is stated apart from `state` because a
+webhook-synced pull request closed by its merge is stored `CLOSED` with `merged_at` set. When present:
+`created_at`, `closed_at`, `merged_at` (ISO instants), `author`, `merged_by`, `milestone` (its title),
+and `merge_state_status` and `review_decision`, which only the GraphQL sync fills.
+
+**`commits.json`** — `commits`: the commits of `base_sha..head_sha`, oldest first, the newest 500 of
+them when there are more. Written whenever the checkout was prepared, and staged rather than derived
+in the container because a quote of a commit message is verified against the artifact it cites, and
+admission verifies only what the server staged. Each entry: `sha`, `parents` (shas), `author` and
+`committer` (names, never addresses), `authoredAt` and `committedAt` (ISO instants), `message` (the
+whole message, subject and body) and `files`, each with `path`, `status` (`A`, `M`, `D`, `R`, `C`, as
+`git diff --name-status` prints it), `additions`, `deletions` and, for a rename or copy, `oldPath`.
+
+**`comments.json`** — the line-anchored review comments people wrote, as a list; a comment carrying the
+`<!-- hephaestus` marker is the tool's own earlier note and is left out at the query. Each entry:
+`id` (the stored id), `path`, `body`; when present, `thread` (the `id` of an entry in
+`review_threads.json`), `in_reply_to` (the `id` of the comment it answers), `line` (absent for a
+file-level comment), `side` (`LEFT` for a line of the base, `RIGHT` for a line of the head; absent
+when the provider does not say), `outdated` (only when `true`), `created_at` and `author`.
+
+**`review_threads.json`** — `threads`, `reviewDecisions` and `truncated`. A thread: `id` (what a
+comment's `thread` names), `state` (`RESOLVED` or `UNRESOLVED`); when present, `path`, `line`,
+`resolvedBy`, `outdated` and `createdAt`. A thread holding a Hephaestus note is left out. A decision is
+a submitted review that decided something: `state` (`APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`,
+`DISMISSED`), and when present `author`, `submittedAt`, `body` (what the reviewer wrote with it) and
+`dismissed` (only when `true`). Unsubmitted and unmapped reviews are never listed, and neither is a
+`COMMENTED` review with no body — GitHub's container for a batch of inline comments, or the row
+GitLab's sync makes per discussion and author — because its substance is already in `comments.json`.
+The window is the same 10,000 bound as every other list, so an approval on a busy merge request is
+never pushed out by discussion rows.
+
+**`linked_work_items.json`** and **`linked_work_items/<n>.md`** — the issues this repository stores for
+every `#N` the title, the description (HTML comments removed), the branch name and the full commit
+messages of the change mention. A `#N` that continues another name — `owner/repo#12`, `v1.2#3`,
+`GH-12` — is not this repository's issue and is not looked up. `unresolvedReferences[]` lists the
+numbers this repository does not hold.
+
+## History records
+
+**`inputs/history/observations.json`** — `since`, `limit`, `perPracticeLimit` and `observations`: the
+newest `limit` (50) verdicts recorded about this person in the last 90 days, at most `perPracticeLimit`
+(3) of any one practice, newest first. Each entry carries `practiceSlug`, `summary`, `assessmentStatus`,
+`outcome`, `presence`, `assessment`, `severity`, `observedAt` and the `artifact` it was filed against —
+not the recurrence key, which nothing in the sandbox resolves, and not the evidence rationale, a
+paragraph per entry written for the developer. The two bounds keep the file a few kilobytes: fifty
+entries with their rationales overran the model's read cap on a heavily reviewed contributor.
 
 ## Task envelope
 

@@ -1,10 +1,12 @@
 /**
- * Facts about the authored commit subjects of the reviewed range, for the two commit practices. A
- * fact here is a shape the subject has — a merge, a bare word, a repeat, a list of concerns, a cut-off
- * phrase — never a verdict: the criteria say what each shape means, and the model decides.
+ * Facts about the authored commits of the reviewed range, for the two commit practices. A fact here
+ * is a shape the subject has — a merge, a bare word, a repeat, a list of concerns, a cut-off phrase —
+ * and what the commit touched, never a verdict: the criteria say what each shape means, and the model
+ * decides.
  */
 
-import type { ChangeCommit } from "./change.ts";
+import type { ChangeCommit, ChangedFile } from "./change.ts";
+import type { Hint } from "./types.ts";
 
 export interface SubjectFacts {
 	sha: string;
@@ -19,6 +21,9 @@ export interface SubjectFacts {
 	/** Ends mid-phrase: on an article, a preposition or a conjunction, or with an unbalanced quote. */
 	cutOff: boolean;
 	bodyLines: number;
+	files: ChangedFile[];
+	/** The line of commits.json carrying the commit's `sha`; 0 when unknown. */
+	line: number;
 }
 
 const FILLER =
@@ -57,6 +62,8 @@ export function subjectFacts(commits: readonly ChangeCommit[]): SubjectFacts[] {
 			conjoined: !merge && (CONJUNCTION.test(subject) || bulleted),
 			cutOff: !merge && DANGLING.test(subject),
 			bodyLines: body.length,
+			files: commit.files,
+			line: commit.line,
 		});
 		if (!merge) {
 			seen.add(normalized);
@@ -65,22 +72,45 @@ export function subjectFacts(commits: readonly ChangeCommit[]): SubjectFacts[] {
 	return facts;
 }
 
-/** The facts as lines the model reads, one per authored commit, plus the merge count. */
-export function describeSubjects(facts: readonly SubjectFacts[]): string[] {
-	const authored = facts.filter((f) => !f.merge);
-	const lines = authored.map((f) => {
-		const flags = [
-			f.bare ? "bare" : "",
-			f.repeat ? "repeats an earlier subject" : "",
-			f.conjoined ? "lists several concerns" : "",
-			f.cutOff ? "cut off mid-phrase" : "",
-			f.bodyLines ? `${f.bodyLines} body line(s)` : "",
-		].filter(Boolean);
-		return `${f.sha} "${f.subject}"${flags.length > 0 ? ` — ${flags.join("; ")}` : ""}`;
-	});
-	const merges = facts.length - authored.length;
-	return [
-		`${authored.length} authored commit(s)${merges ? `, ${merges} merge commit(s) excluded` : ""}:`,
-		...lines,
-	];
+/** A path's kind: its top-level directory, or its extension when it lives at the root. */
+function kindOf(path: string): string {
+	const slash = path.indexOf("/");
+	if (slash > 0) {
+		return `${path.slice(0, slash)}/`;
+	}
+	const dot = path.lastIndexOf(".");
+	return dot > 0 ? path.slice(dot) : path;
+}
+
+/** One record row per authored commit — its subject's shape and what it touched — for the model to read. */
+export function commitRows(facts: readonly SubjectFacts[]): Hint[] {
+	return facts
+		.filter((f) => !f.merge)
+		.map((f) => {
+			const paths = f.files.map((file) => file.path);
+			return {
+				file: "inputs/context/commits.json",
+				line: f.line,
+				pattern: "commit",
+				context: `${f.sha} ${f.subject}`,
+				inDiff: false,
+				flags: {
+					bare: f.bare,
+					repeat: f.repeat,
+					conjoined: f.conjoined,
+					cutOff: f.cutOff,
+					bodyLines: f.bodyLines,
+					files: paths.length,
+					paths: paths.slice(0, 5).join(", "),
+					kinds: [...new Set(paths.map(kindOf))].slice(0, 5).join(", "),
+				},
+			};
+		});
+}
+
+/** The count line both commit practices open with. */
+export function describeCommitCount(facts: readonly SubjectFacts[]): string {
+	const authored = facts.filter((f) => !f.merge).length;
+	const merges = facts.length - authored;
+	return `${authored} authored commit(s)${merges ? `, ${merges} merge commit(s) excluded` : ""}, one row each under Record facts.`;
 }

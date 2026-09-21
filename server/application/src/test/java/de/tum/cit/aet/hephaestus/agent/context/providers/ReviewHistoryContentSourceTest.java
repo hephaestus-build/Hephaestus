@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPoli
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -183,10 +184,13 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
             // The bound is data the review can compare, not prose it has to parse; how partial the
             // capture is belongs to the manifest.
-            assertThat(observations.propertyNames()).containsExactlyInAnyOrder("since", "limit", "observations");
+            assertThat(observations.propertyNames())
+                    .containsExactlyInAnyOrder("since", "limit", "perPracticeLimit", "observations");
             assertThat(feedback.propertyNames()).containsExactlyInAnyOrder("since", "limit", "feedback");
             assertThat(observations.get("limit").isInt()).isTrue();
             assertThat(observations.get("limit").asInt()).isPositive();
+            assertThat(observations.get("perPracticeLimit").asInt())
+                    .isEqualTo(ReviewHistoryContentSource.MAX_OBSERVATIONS_PER_PRACTICE);
             assertThat(feedback.get("limit").asInt()).isPositive();
             Instant observationsSince = Instant.parse(observations.get("since").asString());
             Instant feedbackSince = Instant.parse(feedback.get("since").asString());
@@ -231,9 +235,9 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         assertThat(read(captureObservationHistory().files().get("inputs/history/observations.json"))
                         .get("observations")
                         .get(0)
-                        .get("evidenceRationale")
+                        .get("summary")
                         .asString())
-                .isEqualTo(rationale);
+                .isEqualTo("Caught and ignored");
         assertThat(read(feedbackCapture.files().get("inputs/history/feedback.json"))
                         .get("feedback")
                         .get(0)
@@ -249,20 +253,53 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void stagesEarlierObservationsWithTheRecurrenceKeyThatLinksThem() {
+    void stagesEarlierObservationsAsThePracticeTheVerdictAndTheSummary() {
         when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
-                .thenReturn(List.of(observation("swallows-errors", "rec-1", "Caught and ignored")));
+                .thenReturn(List.of(observationAgainst(ArtifactKinds.PULL_REQUEST, OBSERVED_ARTIFACT_ROW_ID)));
 
         var captured = captureObservationHistory();
 
         JsonNode entry = read(captured.files().get("inputs/history/observations.json"))
                 .get("observations")
                 .get(0);
+        // Neither the recurrence key nor the rationale: nothing in the sandbox reads them.
+        assertThat(entry.propertyNames())
+                .containsExactlyInAnyOrder(
+                        "practiceSlug",
+                        "summary",
+                        "assessmentStatus",
+                        "outcome",
+                        "presence",
+                        "assessment",
+                        "severity",
+                        "artifact",
+                        "observedAt");
         assertThat(entry.get("practiceSlug").asString()).isEqualTo("swallows-errors");
-        assertThat(entry.get("recurrenceKey").asString()).isEqualTo("rec-1");
         assertThat(entry.get("summary").asString()).isEqualTo("Caught and ignored");
         assertThat(captured.contentStates())
                 .containsEntry(ReviewHistoryContentSource.OBSERVATION_HISTORY, SourceContentState.NON_EMPTY);
+    }
+
+    @Test
+    void shouldKeepOnlyTheNewestFewObservationsOfOnePracticeWhenItRecursMoreOften() {
+        List<Observation> newestFirst = new ArrayList<>();
+        for (int i = 0; i < ReviewHistoryContentSource.MAX_OBSERVATIONS_PER_PRACTICE + 2; i++) {
+            newestFirst.add(observation("swallows-errors", "rec-" + i, "Caught and ignored " + i));
+        }
+        newestFirst.add(observation("verification-guidance", "rec-v", "Missing restart check"));
+        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+                .thenReturn(newestFirst);
+
+        JsonNode records = read(captureObservationHistory().files().get("inputs/history/observations.json"))
+                .get("observations");
+
+        // The newest of the recurring practice survive, in order, and the other practice is untouched.
+        assertThat(records.valueStream().map(r -> r.get("summary").asString()))
+                .containsExactly(
+                        "Caught and ignored 0",
+                        "Caught and ignored 1",
+                        "Caught and ignored 2",
+                        "Missing restart check");
     }
 
     @Test

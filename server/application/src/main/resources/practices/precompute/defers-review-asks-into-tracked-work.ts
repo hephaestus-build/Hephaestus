@@ -8,9 +8,13 @@ import { issueNumberReferences } from "../lib/references.ts";
 import {
 	type GeneralComment,
 	type ReviewComment,
+	changeNear,
+	excerpt,
+	later,
 	readGeneralComments,
 	readReviewComments,
 	readReviewThreads,
+	reviewerCommentRows,
 } from "../lib/review.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
@@ -22,23 +26,6 @@ const DEFERRAL =
 const WAIVER =
 	/\b(?:fine to skip|not needed|no need|never mind|nevermind|ignore|optional|nit|non[- ]blocking|up to you|can be skipped)\b/iu;
 
-function excerpt(body: string): string {
-	return body.replaceAll(/\s+/gu, " ").trim().slice(0, 160);
-}
-
-function later(a: string | undefined, b: string | undefined): boolean {
-	return a !== undefined && b !== undefined && Date.parse(a) > Date.parse(b);
-}
-
-/** Whether the change adds or removes a line within `radius` lines of the ask's anchor. */
-function changeNear(diff: DiffFile | undefined, line: number | undefined, radius = 15): boolean {
-	if (diff === undefined || line === undefined) {
-		return false;
-	}
-	const near = (n: number) => Math.abs(n - line) <= radius;
-	return [...diff.addedLines.keys()].some(near) || [...diff.removedLines.keys()].some(near);
-}
-
 export default async function defersReviewAsksIntoTrackedWork(
 	_repoPath: string,
 	diffFiles: Map<string, DiffFile>,
@@ -48,7 +35,8 @@ export default async function defersReviewAsksIntoTrackedWork(
 	const author = metadata.author ?? "";
 	const inline = await readReviewComments(contextDir);
 	const general = await readGeneralComments(contextDir);
-	const { threads, decisions } = await readReviewThreads(contextDir);
+	const record = await readReviewThreads(contextDir);
+	const decisions = record?.decisions ?? [];
 	const hints: Hint[] = [];
 	const byOthers = (comment: { author?: string }) =>
 		comment.author !== undefined && comment.author !== author;
@@ -56,48 +44,42 @@ export default async function defersReviewAsksIntoTrackedWork(
 		decisions.some(
 			(d) => d.state === "APPROVED" && d.dismissed !== true && later(d.submittedAt, at),
 		);
-	// An inline ask: the first comment on a line by someone other than the author. The author's
-	// later comments on the same line are its thread's answers; the others' later comments there are
-	// the reviewer's last word on it, not new asks.
-	const inlineAsks = inline.filter(
-		(c, index) =>
-			byOthers(c) &&
-			!inline.some(
-				(earlier, j) =>
-					j < index && byOthers(earlier) && earlier.path === c.path && earlier.line === c.line,
-			),
+	// An inline ask: the first comment in a thread by someone other than the author. The author's
+	// later comments in the thread are its answers; the others' later comments there are the
+	// reviewer's last word on it, not new asks.
+	const inlineAsks = reviewerCommentRows(inline ?? [], record?.threads ?? [], author).filter(
+		(r) => r.opensThread,
 	);
 	for (const ask of inlineAsks) {
-		const sameThread = (c: ReviewComment) =>
-			c.path === ask.path && c.line === ask.line && later(c.createdAt, ask.createdAt);
-		const replies = inline.filter((c) => c.author === author && sameThread(c));
-		const followUps = inline.filter((c) => byOthers(c) && sameThread(c));
 		hints.push(
-			row(ask, replies, followUps, diffFiles, {
-				threadResolved: threads.some(
-					(t) => t.path === ask.path && t.line === ask.line && t.state === "RESOLVED",
-				),
-				approvedAfterAsk: approvedAfter(ask.createdAt),
+			row(ask.comment, ask.replies, ask.followUps, diffFiles, {
+				threadResolved: ask.thread?.state === "RESOLVED",
+				approvedAfterAsk: approvedAfter(ask.comment.createdAt),
 			}),
 		);
 	}
 	// A conversation ask: a general comment by someone other than the author; the author's later
 	// general comments are the candidate answers, the others' later ones the follow-ups.
-	for (const ask of general.filter(byOthers)) {
+	const conversationAsks = (general ?? []).filter(byOthers);
+	for (const ask of conversationAsks) {
 		const afterAsk = (c: GeneralComment) => later(c.createdAt, ask.createdAt);
-		const replies = general.filter((c) => c.author === author && afterAsk(c));
-		const followUps = general.filter((c) => byOthers(c) && afterAsk(c));
+		const replies = (general ?? []).filter((c) => c.author === author && afterAsk(c));
+		const followUps = (general ?? []).filter((c) => byOthers(c) && afterAsk(c));
 		hints.push(
-			row({ ...ask, path: "" }, replies, followUps, diffFiles, {
+			row({ ...ask, path: "", outdated: false }, replies, followUps, diffFiles, {
 				threadResolved: false,
 				approvedAfterAsk: approvedAfter(ask.createdAt),
 			}),
 		);
 	}
 	const directions: string[] = [];
-	if (hints.length === 0) {
+	if (inline === null && general === null) {
 		directions.push(
-			"No comment by anyone other than the author was captured: with no ask, the occasion did not arise.",
+			"No comments file was captured (neither comments.json nor general_comments.json): the record of asks is not available here.",
+		);
+	} else if (hints.length === 0) {
+		directions.push(
+			`No comment by anyone other than the author in the captured record (${inline === null ? "comments.json not captured" : `${inline.length} inline comment(s)`}, ${general === null ? "general_comments.json not captured" : `${general.length} conversation comment(s)`}): with no ask, the occasion did not arise.`,
 		);
 	} else {
 		directions.push(
@@ -110,16 +92,18 @@ export default async function defersReviewAsksIntoTrackedWork(
 		metrics: {
 			asks: hints.length,
 			inlineAsks: inlineAsks.length,
-			conversationAsks: general.filter(byOthers).length,
+			conversationAsks: conversationAsks.length,
 			asksWithAuthorReply: hints.filter((h) => h.flags.authorReplied === true).length,
 			asksNamingAnIssueInReply: hints.filter((h) => h.flags.issueNamedInReply === true).length,
+			commentsFileAbsent: inline === null ? 1 : 0,
+			generalCommentsFileAbsent: general === null ? 1 : 0,
 		},
 		directions,
 	};
 }
 
 function row(
-	ask: ReviewComment | (GeneralComment & { path: string }),
+	ask: ReviewComment | (GeneralComment & { path: string; outdated: boolean }),
 	replies: readonly { body: string }[],
 	followUps: readonly { body: string }[],
 	diffFiles: Map<string, DiffFile>,
@@ -143,6 +127,7 @@ function row(
 	if (ask.path !== "") {
 		flags.fileInChange = diffFiles.has(ask.path);
 		flags.changeNearLine = changeNear(diffFiles.get(ask.path), line);
+		flags.outdated = ask.outdated;
 	}
 	return {
 		file: ask.path === "" ? "inputs/context/general_comments.json" : ask.path,

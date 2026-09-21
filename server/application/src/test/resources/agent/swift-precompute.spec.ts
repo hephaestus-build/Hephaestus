@@ -233,6 +233,8 @@ void test("a print beside an existing logger is a lead, a print under a scripts 
 			loggerCallsAdded: 1,
 			printsInToolPaths: 1,
 			checkoutHasLogger: 1,
+			filesScanned: 2,
+			linesAdded: 9,
 		});
 		assert.deepEqual(
 			result.hints.map((h) => [h.pattern, h.flags.kind, h.flags.toolPath]),

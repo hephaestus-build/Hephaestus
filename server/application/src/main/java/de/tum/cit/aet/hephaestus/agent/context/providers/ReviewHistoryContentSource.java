@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +68,15 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     private static final int LOOKBACK_DAYS = 90;
 
     private static final int MAX_OBSERVATIONS = 50;
+
+    /**
+     * Of the newest {@link #MAX_OBSERVATIONS}, how many one practice may take. A record about one person is
+     * mostly the same few practices recurring, and fifty entries of them at a kilobyte each is a file the
+     * reviewing model's read cap cuts short of its end; three per practice keeps the recent pattern of each
+     * and the file whole.
+     */
+    static final int MAX_OBSERVATIONS_PER_PRACTICE = 3;
+
     private static final int MAX_FEEDBACK = 30;
 
     /**
@@ -217,11 +227,15 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                 PageRequest.of(0, MAX_OBSERVATIONS));
         Set<UUID> visible =
                 visibilityPolicy.permitsAll(workspaceId, recent, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
+        Map<String, Integer> perPractice = new HashMap<>();
         return recent.stream()
                 .filter(o -> visible.contains(o.getId()))
                 // Composition receives the current observations separately, with durable ids. Counting them
                 // again as history would turn a first occurrence into an apparent recurrence.
                 .filter(o -> excludedJobId == null || !excludedJobId.equals(o.getAgentJobId()))
+                // Newest first, so the ones a practice keeps are its most recent.
+                .filter(o ->
+                        perPractice.merge(o.getPractice().getSlug(), 1, Integer::sum) <= MAX_OBSERVATIONS_PER_PRACTICE)
                 .toList();
     }
 
@@ -288,9 +302,11 @@ public class ReviewHistoryContentSource implements EvidenceSource {
 
     private ObjectNode observationsPayload(long workspaceId, List<Observation> observations, Instant since) {
         ObjectNode root = objectMapper.createObjectNode();
-        // Recorded since `since`, the most recent MAX_OBSERVATIONS of them, newest first.
+        // Recorded since `since`, the most recent MAX_OBSERVATIONS of them, newest first, at most
+        // perPracticeLimit of any one practice.
         root.put("since", since.toString());
         root.put("limit", MAX_OBSERVATIONS);
+        root.put("perPracticeLimit", MAX_OBSERVATIONS_PER_PRACTICE);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
                 observations.stream()
@@ -299,10 +315,12 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         ArrayNode items = root.putArray("observations");
         for (Observation o : observations) {
             ObjectNode node = items.addObject();
+            // What a composer reads of an earlier observation: the practice, the verdict, the piece of
+            // work and when. Not the recurrence key, which nothing in the sandbox resolves, and not the
+            // rationale, a paragraph per entry that only restates the verdict for the developer.
             node.put(
                     "practiceSlug",
                     o.getPractice() == null ? null : o.getPractice().getSlug());
-            node.put("recurrenceKey", o.getRecurrenceKey());
             node.put("summary", o.getSummary());
             node.put("assessmentStatus", o.getAssessmentStatus().name());
             node.put("outcome", o.getOutcome() == null ? null : o.getOutcome().name());
@@ -317,7 +335,6 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             node.put(
                     "observedAt",
                     o.getObservedAt() == null ? null : o.getObservedAt().toString());
-            node.put("evidenceRationale", o.getEvidenceRationale());
         }
         return root;
     }

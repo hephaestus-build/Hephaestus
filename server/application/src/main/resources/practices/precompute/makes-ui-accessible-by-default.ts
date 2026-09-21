@@ -52,6 +52,8 @@ export default async function makesUiAccessibleByDefault(
 		heightCaps: count("height cap"),
 		colourByState: count("colour by state"),
 		filesWithoutCheckout: scan.filesWithoutCheckout,
+		filesScanned: scan.filesScanned,
+		linesAdded: scan.linesAdded,
 	};
 	const directions: string[] = [];
 	if (metrics.symbolImages + metrics.assetImages > 0) {

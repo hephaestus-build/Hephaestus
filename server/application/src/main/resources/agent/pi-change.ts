@@ -1,13 +1,13 @@
 // The change view: everything a review reads about "what changed", derived here from the checkout
 // with git. The server hands over the checkout and the pinned range (inputs/context/change.json)
-// and nothing else about the change; the patch, its statistics, the changed files and the commits
-// are this container's own reading of the same objects, so the layout below is owned here.
+// and nothing else about the change; the patch, its statistics and the changed files are this
+// container's own reading of the same objects, so the layout below is owned here. The commits are
+// not: the server stages them as inputs/context/commits.json, an artifact a citation can name.
 //
 //   work/change/diff.patch      unified diff, renames detected, every hunk line prefixed `[L<n>] `
 //                               with its NEW-side line number (OLD-side for removed lines)
 //   work/change/diff_stat.txt   `git diff --stat`
 //   work/change/files.json      { files: [{ status, path, oldPath? }] }
-//   work/change/commits.json    { commits: [{ sha, message, author, authoredAt, committedAt, parents }] }
 //   work/change/description.authored.md
 //                               the description's own lines — those not from the merge request
 //                               template the checkout carries — by their line numbers in description.md
@@ -129,33 +129,6 @@ export function parseNameStatus(
 		}
 	}
 	return files;
-}
-
-/**
- * `git log` records: NUL between fields, a record separator after each commit, and the newline git
- * terminates every commit's output with, which is not part of the next record.
- */
-export function parseCommits(output: Buffer) {
-	const records = output
-		.toString("utf8")
-		.split("\u001E")
-		.map((record) => record.replace(/^\n/u, ""))
-		.filter((record) => record !== "");
-	return records.map((record) => {
-		const [sha, parents, author, authoredAt, committer, committedAt, message] = record.split("\0");
-		if (sha === undefined || message === undefined) {
-			throw new Error("git log: truncated record");
-		}
-		return {
-			sha,
-			parents: parents === undefined || parents === "" ? [] : parents.split(" "),
-			author: author ?? "",
-			authoredAt: authoredAt ?? "",
-			committer: committer ?? "",
-			committedAt: committedAt ?? "",
-			message: message.replace(/\n$/u, ""),
-		};
-	});
 }
 
 const RENAMES = "--find-renames=50%";
@@ -354,16 +327,6 @@ export function writeChangeView(
 		git(repository, ["diff", "--no-color", "--name-status", "-z", RENAMES, ...range]),
 	);
 	writeFileSync(path.resolve(out, "files.json"), `${JSON.stringify({ files }, null, 2)}\n`);
-	const commits = parseCommits(
-		git(repository, [
-			"log",
-			"--topo-order",
-			"--reverse",
-			"--format=%H%x00%P%x00%an%x00%aI%x00%cn%x00%cI%x00%B%x1e",
-			`${change.base}..${change.head}`,
-		]),
-	);
-	writeFileSync(path.resolve(out, "commits.json"), `${JSON.stringify({ commits }, null, 2)}\n`);
 	if (description !== null) {
 		const view = authoredDescription(description, descriptionTemplates(repository, change.head));
 		writeFileSync(

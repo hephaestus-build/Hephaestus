@@ -57,7 +57,7 @@ function candidates(root: string, paths: BriefPaths, limits: BriefLimits): Candi
 		change("description.authored.md", "markdown"),
 		change("files.json", "json"),
 		change("diff_stat.txt", "text"),
-		change("commits.json", "json"),
+		context("commits.json"),
 		context("comments.json"),
 		context("review_threads.json"),
 		context("general_comments.json"),
@@ -93,17 +93,35 @@ function linkedWorkItems(root: string, paths: BriefPaths, limits: BriefLimits): 
 		}));
 }
 
+/**
+ * The record files the practices' criteria name as sources: when one was not captured the brief says
+ * so, because the criteria otherwise send the review looking for it. The files of other review kinds
+ * (a document, a conversation) are simply not there.
+ */
+const NAMED_WHEN_ABSENT = new Set([
+	"description.md",
+	"comments.json",
+	"review_threads.json",
+	"general_comments.json",
+	"linked_work_items.json",
+]);
+
 /** The brief's text, or an empty string when nothing it would show exists. */
 export function buildBrief(root: string, paths: BriefPaths, limits = DEFAULT_BRIEF_LIMITS): string {
 	const blocks: string[] = [];
 	const withheld: string[] = [];
+	const absent: string[] = [];
 	let used = 0;
 	for (const candidate of candidates(root, paths, limits)) {
 		if (!existsSync(candidate.absolute)) {
+			if (NAMED_WHEN_ABSENT.has(path.basename(candidate.label))) {
+				absent.push(`\`${candidate.label}\``);
+			}
 			continue;
 		}
 		const { size } = statSync(candidate.absolute);
 		if (size === 0) {
+			absent.push(`\`${candidate.label}\` (empty)`);
 			continue;
 		}
 		if (size > candidate.limit || used + size > limits.totalChars) {
@@ -136,6 +154,15 @@ export function buildBrief(root: string, paths: BriefPaths, limits = DEFAULT_BRI
 		parts.push(
 			`### Too large to show here — read with \`read\`, or \`bash\` for a slice\n${withheld.join("\n")}`,
 		);
+	}
+	// What the capture did not write is named once, so it is not searched for: a file absent here
+	// is absent everywhere, and a practice that needs it reports the gap rather than an absence.
+	const outline = path.resolve(root, paths.contextRoot, "outline");
+	if (!existsSync(outline)) {
+		absent.push(`\`${paths.contextRoot}/outline/\` (no wiki documents were captured)`);
+	}
+	if (absent.length > 0) {
+		parts.push(`### Not captured — do not look for these\n${absent.join(", ")}`);
 	}
 	return parts.join("\n\n");
 }

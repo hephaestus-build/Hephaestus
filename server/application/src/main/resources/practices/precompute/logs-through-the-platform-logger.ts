@@ -85,12 +85,16 @@ export default async function logsThroughThePlatformLogger(
 	let prints = 0;
 	let loggers = 0;
 	let printsInToolPaths = 0;
+	let filesScanned = 0;
+	let linesAdded = 0;
 	for (const [language, shapes] of Object.entries(DIAGNOSTICS)) {
 		const scan = await scanAddedLines(repoPath, diffFiles, {
 			languages: [language],
 			patterns: [...shapes.print, ...shapes.logger],
 			maxHints: 40,
 		});
+		filesScanned += scan.filesScanned;
+		linesAdded += scan.linesAdded;
 		for (const hint of scan.hints) {
 			const isPrint = shapes.print.some(([label]) => label === hint.pattern);
 			const tool = TOOL_PATH.test(hint.file);
@@ -132,6 +136,8 @@ export default async function logsThroughThePlatformLogger(
 			loggerCallsAdded: loggers,
 			printsInToolPaths,
 			checkoutHasLogger: existing.length > 0 ? 1 : 0,
+			filesScanned,
+			linesAdded,
 		},
 		directions,
 	};

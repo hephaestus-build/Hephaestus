@@ -82,7 +82,7 @@ void test("each linked issue's text file follows the linked-items record, in num
 	}
 });
 
-void test("a file over its bound is named with its size instead of shown, and an empty one is skipped", () => {
+void test("a file over its bound is named with its size instead of shown, and an empty one is named as empty", () => {
 	const root = workspace({
 		"inputs/context/metadata.json": '{"title": "t"}',
 		"inputs/context/comments.json": "",
@@ -95,7 +95,13 @@ void test("a file over its bound is named with its size instead of shown, and an
 			totalChars: 10_000,
 		});
 		assert.match(brief, /### `inputs\/context\/metadata\.json`/u);
-		assert.doesNotMatch(brief, /comments\.json/u);
+		// An empty record file is not shown; it is named as empty, with the record files the capture
+		// did not write at all, so the review does not go looking for them.
+		assert.doesNotMatch(brief, /### `inputs\/context\/comments\.json`/u);
+		assert.match(
+			brief,
+			/### Not captured — do not look for these\n`inputs\/context\/description\.md`, `inputs\/context\/comments\.json` \(empty\), `inputs\/context\/review_threads\.json`, `inputs\/context\/general_comments\.json`, `inputs\/context\/linked_work_items\.json`, `inputs\/context\/outline\/` \(no wiki documents were captured\)/u,
+		);
 		assert.match(brief, /Too large to show here[\s\S]*- `work\/change\/diff\.patch` \(60 KB\)/u);
 		assert.doesNotMatch(brief, /```diff/u);
 	} finally {

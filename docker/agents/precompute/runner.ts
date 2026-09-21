@@ -9,7 +9,7 @@ import { globFilesSync } from "./lib/files.ts";
 
 import { parseDiff } from "./lib/diff-parser.ts";
 import { isJsonObject, isPracticeModule, parseFindings } from "./lib/practice-contract.ts";
-import type { ArtifactMetadata, DiffFile, PracticeResult } from "./lib/types.ts";
+import type { ArtifactMetadata, DiffFile, Hint, PracticeResult } from "./lib/types.ts";
 
 const DEFAULT_OUTPUT_DIR = ".precompute";
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -181,84 +181,132 @@ for (const result of practiceResults) {
 }
 
 /** Record rows shown per practice before the rest is left to the practice's JSON file. */
-const RECORD_ROWS = 12;
+const RECORD_ROWS = 20;
+/** Changed-line rows shown in full per practice; above this, a sample and the JSON pointer. */
+const IN_DIFF_ROWS = 10;
+const IN_DIFF_SAMPLE = 5;
+/**
+ * The summary is inlined in the brief whole or withheld whole, so it stays under the brief's per-file
+ * cap with room for the fence and heading: rows are trimmed before the file is.
+ */
+const SUMMARY_CHARS = 20_000;
 
-const lines: string[] = [
-	"# Precomputed Analysis Hints",
-	"",
-	"> These are **pattern matches and directions to investigate** from static analysis — starting points, not verdicts.",
-	"> Use them as starting points — investigate further for things the scripts may have missed.",
-	"",
-];
-
-const errors = practiceResults.filter((r) => r.status === "error");
-if (errors.length > 0) {
-	lines.push(
-		`> **${errors.length} script(s) failed** — perform full manual analysis for: ${errors.map((e) => e.practice).join(", ")}`,
-		"",
-	);
+/** A changed-line row, cited the way the diff view prints the line: `path` [L<n>]. */
+function inDiffRow(h: Hint, contextChars: number, withFlags: boolean): string {
+	const flagStr = withFlags
+		? Object.entries(h.flags)
+				.filter(([, v]) => v !== false && v !== 0 && v !== "")
+				.map(([k, v]) => (v === true ? k : `${k}=${v}`))
+				.join(", ")
+		: "";
+	return `- \`${h.file}\` [L${h.line}] — ${h.pattern}${flagStr ? ` [${flagStr}]` : ""}: \`${h.context.slice(0, contextChars)}\``;
 }
 
-for (const result of practiceResults) {
-	const inDiffHints = result.hints.filter((h) => h.inDiff);
+// A hint about the record rather than a changed line — an ask, a linked issue, a commit — is a row
+// of facts the practice decides on, and a flag that is false is one of them (no reply, no change
+// near the line), so every flag is shown.
+function recordRow(h: Hint): string {
+	const flagStr = Object.entries(h.flags)
+		.map(([k, v]) => `${k}=${String(v)}`)
+		.join(", ");
+	return `- \`${h.file}${h.line > 0 ? `:${h.line}` : ""}\` — ${h.pattern}: \`${h.context.slice(0, 160)}\`${flagStr ? ` [${flagStr}]` : ""}`;
+}
 
-	lines.push(`## ${result.practice}`);
+function renderPractice(result: PracticeResult, recordRows: number, inDiffRows: number): string[] {
+	const json = `\`${outputDir}/${result.practice}.json\``;
+	const lines = [`## ${result.practice}`];
 	if (result.status === "error") {
 		lines.push("", `> **Script failed.** Agent must analyze this practice manually.`);
 	}
 	lines.push("");
-
-	for (const d of result.directions) {
-		lines.push(`- ${d}`);
+	if (result.directions.length > 0) {
+		lines.push(...result.directions.map((d) => `- ${d}`), "");
 	}
-	lines.push("");
 
-	if (inDiffHints.length > 0 && inDiffHints.length <= 10) {
+	if (result.hints.length === 0 && result.status === "ok") {
+		const { linesAdded, filesScanned } = result.metrics;
+		lines.push(
+			linesAdded === undefined
+				? "Nothing matched."
+				: `Scanned ${linesAdded} added lines${filesScanned === undefined ? "" : ` in ${filesScanned} files`}; nothing matched.`,
+			"",
+		);
+	}
+
+	const inDiffHints = result.hints.filter((h) => h.inDiff);
+	if (inDiffHints.length > 0 && inDiffHints.length <= inDiffRows) {
 		lines.push("**Key locations (on changed lines):**");
 		for (const h of inDiffHints) {
-			const flagEntries = Object.entries(h.flags).filter(
-				([, v]) => v !== false && v !== 0 && v !== "",
-			);
-			const flagStr = flagEntries.map(([k, v]) => (v === true ? k : `${k}=${v}`)).join(", ");
-			lines.push(
-				`- \`${h.file}:${h.line}\` — ${h.pattern}${flagStr ? ` [${flagStr}]` : ""}: \`${h.context.slice(0, 100)}\``,
-			);
+			lines.push(inDiffRow(h, 100, true));
 		}
 		lines.push("");
-	} else if (inDiffHints.length > 10) {
-		lines.push(
-			`**${inDiffHints.length} hints on changed lines** — see \`${outputDir}/${result.practice}.json\` for full list.`,
-		);
-		for (const h of inDiffHints.slice(0, 5)) {
-			lines.push(`- \`${h.file}:${h.line}\` — ${h.pattern}: \`${h.context.slice(0, 80)}\``);
+	} else if (inDiffHints.length > inDiffRows) {
+		const shown = Math.min(IN_DIFF_SAMPLE, inDiffRows);
+		lines.push(`**${inDiffHints.length} hints on changed lines** — see ${json} for full list.`);
+		for (const h of inDiffHints.slice(0, shown)) {
+			lines.push(inDiffRow(h, 80, false));
 		}
-		lines.push(`- ... and ${inDiffHints.length - 5} more`, "");
+		lines.push(`- ... and ${inDiffHints.length - shown} more`, "");
 	}
 
-	// A hint about the record rather than a changed line — an ask, a linked issue, an adopted
-	// issue's dates — is a row of facts the practice decides on, and a flag that is false is one of
-	// them (no reply, no change near the line), so every flag is shown.
 	const recordHints = result.hints.filter((h) => !h.inDiff);
 	if (recordHints.length > 0) {
 		lines.push("**Record facts:**");
-		for (const h of recordHints.slice(0, RECORD_ROWS)) {
-			const flagStr = Object.entries(h.flags)
-				.map(([k, v]) => `${k}=${String(v)}`)
-				.join(", ");
-			lines.push(
-				`- \`${h.file}${h.line > 0 ? `:${h.line}` : ""}\` — ${h.pattern}: \`${h.context.slice(0, 160)}\`${flagStr ? ` [${flagStr}]` : ""}`,
-			);
+		for (const h of recordHints.slice(0, recordRows)) {
+			lines.push(recordRow(h));
 		}
-		if (recordHints.length > RECORD_ROWS) {
-			lines.push(
-				`- ... and ${recordHints.length - RECORD_ROWS} more in \`${outputDir}/${result.practice}.json\``,
-			);
+		if (recordHints.length > recordRows) {
+			lines.push(`- ... and ${recordHints.length - recordRows} more in ${json}`);
 		}
 		lines.push("");
 	}
+	return lines;
 }
 
-await writeFile(`${tmpDir}/summary.md`, lines.join("\n"));
+const errors = practiceResults.filter((r) => r.status === "error");
+
+function renderSummary(recordRows: number, inDiffRows: number): string {
+	const lines: string[] = [
+		"# Precomputed Analysis Hints",
+		"",
+		"> These are **pattern matches and directions to investigate** from static analysis — starting points, not verdicts.",
+		"> Use them as starting points — investigate further for things the scripts may have missed.",
+		"> Every line of `work/change/diff.patch` carries a `[L<n>] ` prefix before its diff marker, so an added line matches `^\\[L[0-9]+\\] \\+`, never `^\\+`; a row below cites a changed line as `path` [L<n>].",
+		"",
+	];
+	if (errors.length > 0) {
+		lines.push(
+			`> **${errors.length} script(s) failed** — perform full manual analysis for: ${errors.map((e) => e.practice).join(", ")}`,
+			"",
+		);
+	}
+	for (const result of practiceResults) {
+		lines.push(...renderPractice(result, recordRows, inDiffRows));
+	}
+	return lines.join("\n");
+}
+
+/**
+ * Rows are trimmed until the summary fits its budget: record rows first, then changed-line rows,
+ * and every practice keeps its pointer to the JSON file that holds all of them.
+ */
+const BUDGET_LADDER: [recordRows: number, inDiffRows: number][] = [
+	[RECORD_ROWS, IN_DIFF_ROWS],
+	[10, IN_DIFF_ROWS],
+	[5, IN_DIFF_ROWS],
+	[0, IN_DIFF_ROWS],
+	[0, IN_DIFF_SAMPLE],
+	[0, 0],
+];
+let summary = renderSummary(RECORD_ROWS, IN_DIFF_ROWS);
+for (const [recordRows, inDiffRows] of BUDGET_LADDER) {
+	if (summary.length <= SUMMARY_CHARS) {
+		break;
+	}
+	summary = renderSummary(recordRows, inDiffRows);
+}
+
+await writeFile(`${tmpDir}/summary.md`, summary);
 
 const totalHints = practiceResults.reduce((s, r) => s + r.hints.length, 0);
 const inDiffHints = practiceResults.reduce((s, r) => s + r.hints.filter((h) => h.inDiff).length, 0);

@@ -17,7 +17,12 @@ const repositoryRoot = fileURLToPath(new URL("../../../../../../", import.meta.u
 async function stage(
 	slug: string,
 	context: Record<string, unknown>,
-	commits: { sha: string; message: string; authoredAt: string }[] = [],
+	commits: {
+		sha: string;
+		message: string;
+		authoredAt: string;
+		files?: { status: string; path: string }[];
+	}[] = [],
 ) {
 	const root = mkdtempSync(nodePath.join(tmpdir(), "lifecycle-precompute-"));
 	mkdirSync(nodePath.join(root, "practices"));
@@ -32,16 +37,21 @@ async function stage(
 		writeFileSync(nodePath.join(root, "context", name), JSON.stringify(value));
 	}
 	writeFileSync(
-		nodePath.join(root, "work/change/commits.json"),
-		JSON.stringify({
-			commits: commits.map((c) => ({
-				...c,
-				author: "ada",
-				committer: "ada",
-				committedAt: c.authoredAt,
-				parents: [],
-			})),
-		}),
+		nodePath.join(root, "context/commits.json"),
+		JSON.stringify(
+			{
+				commits: commits.map((c) => ({
+					files: [],
+					...c,
+					author: "ada",
+					committer: "ada",
+					committedAt: c.authoredAt,
+					parents: [],
+				})),
+			},
+			null,
+			2,
+		),
 	);
 	const staged = nodePath.join(root, "practices", `${slug}.ts`);
 	cpSync(
@@ -286,5 +296,378 @@ void test("every linked issue with a checkable outcome is an occasion, not only 
 		assert.match(open.directions[0] ?? "", /not merged/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("every authored commit is one record row, however many there are", async () => {
+	const commits = Array.from({ length: 12 }, (_, i) => ({
+		sha: `${String(i).padStart(7, "0")}abcd`,
+		message: i === 3 ? "fix" : `Add step ${String(i)} and wire it`,
+		authoredAt: `2026-04-12T1${String(i % 10)}:00:00Z`,
+		files: [
+			{ status: "M", path: `App/Step${String(i)}.swift` },
+			{ status: "A", path: "README.md" },
+		],
+	}));
+	for (const slug of ["commit-subjects-explain-each-change", "commits-are-atomic-and-cohesive"]) {
+		const { root, script, contextDir, changeDir } = await stage(slug, {}, commits);
+		try {
+			const result = await script(
+				nodePath.join(root, "repo"),
+				new Map(),
+				metadata,
+				contextDir,
+				changeDir,
+			);
+			assert.equal(result.hints.length, 12);
+			assert.equal(result.directions.length, 2);
+			const first = result.hints[0];
+			const bare = result.hints[3];
+			assert.ok(first && bare);
+			assert.equal(first.file, "inputs/context/commits.json");
+			assert.equal(first.pattern, "commit");
+			assert.equal(first.context, "0000000 Add step 0 and wire it");
+			// The row cites the line of commits.json that carries the commit's sha.
+			assert.ok(first.line > 0);
+			assert.deepEqual(first.flags, {
+				bare: false,
+				repeat: false,
+				conjoined: true,
+				cutOff: false,
+				bodyLines: 0,
+				files: 2,
+				paths: "App/Step0.swift, README.md",
+				kinds: "App/, .md",
+			});
+			assert.equal(bare.flags.bare, true);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	}
+});
+
+void test("an issue reference is resolved against the inventory and the linked items", async () => {
+	const { root, script, contextDir, changeDir } = await stage("links-the-change-to-its-issue", {
+		"linked_work_items.json": { workItems: [{ number: 18, title: "Add ingredients", body: "" }] },
+		"project_inventory.json": {
+			issues: [
+				{ number: 18, title: "Add ingredients", state: "OPEN" },
+				{ number: 21, title: "Confetti", state: "CLOSED" },
+			],
+		},
+	});
+	try {
+		const result = await script(
+			nodePath.join(root, "repo"),
+			new Map(),
+			{ ...metadata, body: "Closes #18\n\nSee also #21 and #99." },
+			contextDir,
+			changeDir,
+		);
+		// The first row for a number is the title's; the same number in the body and branch follows.
+		const byNumber = new Map(result.hints.toReversed().map((h) => [h.flags.number, h.flags]));
+		assert.deepEqual(byNumber.get(18), {
+			number: 18,
+			where: "inputs/context/metadata.json (title)",
+			inInventory: true,
+			title: "Add ingredients",
+			state: "OPEN",
+			inLinkedItems: true,
+		});
+		assert.equal(byNumber.get(21)?.inInventory, true);
+		assert.equal(byNumber.get(21)?.inLinkedItems, false);
+		assert.equal(byNumber.get(99)?.inInventory, false);
+		assert.equal(byNumber.get(99)?.title, "");
+		// The provider's enum casing is the one the inventory holds.
+		assert.equal(result.metrics.inventoryOpenIssues, 1);
+		assert.equal(result.metrics.referencesInInventory, 2);
+		assert.equal(result.metrics.linkedWorkItems, 1);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("every reviewer comment is one row with the reply, the thread and the later commits beside it", async () => {
+	const { root, script, contextDir, changeDir } = await stage(
+		"engaging-with-inline-review-comments",
+		{
+			"comments.json": [
+				{
+					id: 1,
+					thread: 10,
+					path: "App/AddIngredientView.swift",
+					line: 55,
+					side: "RIGHT",
+					body: "Maybe a visual indication when the stock value is wrong?",
+					author: "jennifer",
+					created_at: "2026-04-13T14:18:20Z",
+				},
+				{
+					id: 2,
+					thread: 10,
+					in_reply_to: 1,
+					path: "App/AddIngredientView.swift",
+					line: 55,
+					body: "Good idea, done in the next commit — it now turns the field red.",
+					author: "ada",
+					created_at: "2026-04-13T14:40:00Z",
+				},
+				{
+					id: 3,
+					thread: 11,
+					path: "App/Model.swift",
+					line: 9,
+					outdated: true,
+					body: "Rename this",
+					author: "dependabot[bot]",
+					created_at: "2026-04-13T14:19:00Z",
+				},
+			],
+			"review_threads.json": {
+				threads: [
+					{
+						id: 10,
+						path: "App/AddIngredientView.swift",
+						line: 55,
+						state: "RESOLVED",
+						resolvedBy: "ada",
+					},
+					{ id: 11, path: "App/Model.swift", line: 9, state: "UNRESOLVED" },
+				],
+				reviewDecisions: [],
+			},
+		},
+		[
+			{
+				sha: "aaaaaaa1111",
+				message: "Add the view",
+				authoredAt: "2026-04-13T10:00:00Z",
+				files: [{ status: "A", path: "App/AddIngredientView.swift" }],
+			},
+			{
+				sha: "bbbbbbb2222",
+				message: "Turn the field red",
+				authoredAt: "2026-04-13T14:50:00Z",
+				files: [{ status: "M", path: "App/AddIngredientView.swift" }],
+			},
+			{
+				sha: "ccccccc3333",
+				message: "Tidy",
+				authoredAt: "2026-04-13T15:00:00Z",
+				files: [{ status: "M", path: "App/Other.swift" }],
+			},
+		],
+	);
+	try {
+		const result = await script(
+			nodePath.join(root, "repo"),
+			new Map([diffFile("App/AddIngredientView.swift", [54, 56])]),
+			metadata,
+			contextDir,
+			changeDir,
+		);
+		assert.equal(result.hints.length, 2);
+		const [stock, rename] = result.hints;
+		assert.ok(stock && rename);
+		assert.equal(stock.pattern, "reviewer comment");
+		assert.deepEqual(stock.flags, {
+			by: "jennifer",
+			bot: false,
+			at: "2026-04-13T14:18:20Z",
+			side: "RIGHT",
+			outdated: false,
+			authorReplied: true,
+			replyExcerpt: "Good idea, done in the next commit — it now turns the field red.",
+			threadResolved: true,
+			resolvedBy: "ada",
+			fileInChange: true,
+			changeNearLine: true,
+			commitsAfter: 2,
+			commitsAfterTouchingFile: 1,
+		});
+		assert.equal(rename.flags.bot, true);
+		assert.equal(rename.flags.outdated, true);
+		assert.equal(rename.flags.authorReplied, false);
+		assert.equal(rename.flags.threadResolved, false);
+		assert.equal(result.metrics.reviewerComments, 1);
+		assert.equal(result.metrics.botComments, 1);
+		assert.match(
+			result.directions[0] ?? "",
+			/^1 reviewer comment\(s\) \(1 more by bots\); 1 have a later author reply in the thread; 1 have a later authored commit touching the file/u,
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a comments file that was not captured is told apart from one with no comment by others", async () => {
+	const absent = await stage("defers-review-asks-into-tracked-work", {});
+	const empty = await stage("defers-review-asks-into-tracked-work", {
+		"comments.json": [],
+		"general_comments.json": {
+			comments: [{ author: "ada", body: "Ready", createdAt: "2026-04-13T14:00:00Z" }],
+		},
+	});
+	const engagingAbsent = await stage("engaging-with-inline-review-comments", {});
+	const engagingEmpty = await stage("engaging-with-inline-review-comments", {
+		"comments.json": [],
+	});
+	try {
+		const run = async (staged: typeof absent) =>
+			staged.script(
+				nodePath.join(staged.root, "repo"),
+				new Map(),
+				metadata,
+				staged.contextDir,
+				staged.changeDir,
+			);
+		const noFile = await run(absent);
+		assert.match(noFile.directions[0] ?? "", /^No comments file was captured/u);
+		assert.equal(noFile.metrics.commentsFileAbsent, 1);
+		const noOthers = await run(empty);
+		assert.match(
+			noOthers.directions[0] ?? "",
+			/^No comment by anyone other than the author in the captured record \(0 inline comment\(s\), 1 conversation comment\(s\)\)/u,
+		);
+		assert.equal(noOthers.metrics.commentsFileAbsent, 0);
+		const inlineNoFile = await run(engagingAbsent);
+		assert.match(inlineNoFile.directions[0] ?? "", /^No comments file was captured/u);
+		const inlineNoOthers = await run(engagingEmpty);
+		assert.match(
+			inlineNoOthers.directions[0] ?? "",
+			/^No inline comment by anyone other than the author among the 0 captured/u,
+		);
+	} finally {
+		for (const staged of [absent, empty, engagingAbsent, engagingEmpty]) {
+			rmSync(staged.root, { recursive: true, force: true });
+		}
+	}
+});
+
+void test("the merge practices read the threads and decisions as rows against the merge", async () => {
+	const record = {
+		"review_threads.json": {
+			threads: [
+				{
+					id: 10,
+					path: "App/View.swift",
+					line: 55,
+					state: "RESOLVED",
+					resolvedBy: "ada",
+					createdAt: "2026-04-13T14:18:20Z",
+				},
+				{
+					id: 11,
+					path: "App/Model.swift",
+					line: 9,
+					state: "UNRESOLVED",
+					outdated: true,
+					createdAt: "2026-04-13T14:19:00Z",
+				},
+			],
+			reviewDecisions: [
+				{
+					state: "CHANGES_REQUESTED",
+					author: "jennifer",
+					submittedAt: "2026-04-13T14:20:00Z",
+					body: "Please fix the stock check",
+				},
+				{ state: "APPROVED", author: "ada", submittedAt: "2026-04-13T14:30:00Z" },
+				{ state: "APPROVED", author: "jennifer", submittedAt: "2026-04-13T15:00:00Z" },
+				{ state: "APPROVED", author: "tom", submittedAt: "2026-04-13T16:00:00Z" },
+			],
+		},
+	};
+	const merged = { ...metadata, is_merged: true, merged_by: "ada", review_decision: "APPROVED" };
+	const threads = await stage("merged-past-unresolved-review-threads", record);
+	const approval = await stage("merges-only-after-approval", record);
+	const noRecord = await stage("merges-only-after-approval", {});
+	try {
+		const unresolved = await threads.script(
+			nodePath.join(threads.root, "repo"),
+			new Map(),
+			merged,
+			threads.contextDir,
+			threads.changeDir,
+		);
+		assert.equal(unresolved.metrics.unresolvedThreads, 1);
+		assert.equal(unresolved.metrics.resolvedThreads, 1);
+		assert.equal(unresolved.metrics.mergedByIsAuthor, 1);
+		assert.equal(unresolved.metrics.threadsFileAbsent, 0);
+		const [merge, thread] = unresolved.hints;
+		assert.ok(merge && thread);
+		assert.equal(merge.pattern, "merge");
+		assert.equal(merge.flags.mergedBy, "ada");
+		assert.equal(merge.flags.mergedByIsAuthor, true);
+		assert.equal(merge.flags.reviewDecision, "APPROVED");
+		assert.equal(thread.pattern, "unresolved thread");
+		assert.deepEqual(thread.flags, {
+			id: 11,
+			state: "UNRESOLVED",
+			createdAt: "2026-04-13T14:19:00Z",
+			path: "App/Model.swift",
+			line: 9,
+			outdated: true,
+		});
+		assert.match(
+			unresolved.directions[0] ?? "",
+			/^Merged by ada \(the author\); 2 thread\(s\) captured, 1 not marked RESOLVED/u,
+		);
+
+		const decisions = await approval.script(
+			nodePath.join(approval.root, "repo"),
+			new Map(),
+			merged,
+			approval.contextDir,
+			approval.changeDir,
+		);
+		assert.equal(decisions.metrics.decisions, 4);
+		// Jennifer's approval at 15:00 is before the 15:06 merge and by someone else; Ada's is the author's, Tom's is after.
+		assert.equal(decisions.metrics.approvalsBeforeMergeByOthers, 1);
+		const rows = decisions.hints.filter((h) => h.pattern === "review decision");
+		assert.deepEqual(
+			rows.map((h) => [h.flags.author, h.flags.state, h.flags.beforeMerge, h.flags.isAuthor]),
+			[
+				["jennifer", "CHANGES_REQUESTED", true, false],
+				["ada", "APPROVED", true, true],
+				["jennifer", "APPROVED", true, false],
+				["tom", "APPROVED", false, false],
+			],
+		);
+		assert.match(
+			rows[0]?.context ?? "",
+			/^jennifer: CHANGES_REQUESTED — Please fix the stock check$/u,
+		);
+		const last = decisions.hints.filter((h) => h.pattern === "last decision by reviewer");
+		assert.deepEqual(
+			last.map((h) => [h.flags.author, h.flags.state]),
+			[
+				["jennifer", "APPROVED"],
+				["ada", "APPROVED"],
+				["tom", "APPROVED"],
+			],
+		);
+
+		const absent = await noRecord.script(
+			nodePath.join(noRecord.root, "repo"),
+			new Map(),
+			merged,
+			noRecord.contextDir,
+			noRecord.changeDir,
+		);
+		assert.equal(absent.metrics.threadsFileAbsent, 1);
+		assert.match(absent.directions[0] ?? "", /^No review threads file was captured/u);
+		const open = await noRecord.script(
+			nodePath.join(noRecord.root, "repo"),
+			new Map(),
+			{ ...metadata, state: "OPEN", merged_at: undefined },
+			noRecord.contextDir,
+			noRecord.changeDir,
+		);
+		assert.match(open.directions[0] ?? "", /not merged/u);
+	} finally {
+		for (const staged of [threads, approval, noRecord]) {
+			rmSync(staged.root, { recursive: true, force: true });
+		}
 	}
 });

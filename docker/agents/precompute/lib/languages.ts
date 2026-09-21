@@ -22,6 +22,7 @@ const EXTENSION_LANGUAGE: Record<string, string> = {
 	rs: "rust",
 	py: "python",
 	rb: "ruby",
+	php: "php",
 	m: "objective-c",
 	mm: "objective-c",
 	c: "c",

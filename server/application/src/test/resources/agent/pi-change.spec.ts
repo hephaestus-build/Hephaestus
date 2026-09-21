@@ -8,7 +8,6 @@ import test from "node:test";
 import {
 	annotateDiff,
 	authoredDescription,
-	parseCommits,
 	parseNameStatus,
 	readChange,
 	renderAuthoredDescription,
@@ -163,23 +162,11 @@ void test("bytes that are not UTF-8 survive annotation unchanged", () => {
 	assert.ok(annotated.includes(Buffer.concat([Buffer.from("[L1] -"), Buffer.from([0xff, 0xfe])])));
 });
 
-void test("name-status records carry the old path of a rename and commits keep their full message", () => {
+void test("name-status records carry the old path of a rename", () => {
 	assert.deepEqual(parseNameStatus(Buffer.from("R100\0old.ts\0new.ts\0A\0added.ts\0")), [
 		{ status: "R", path: "new.ts", oldPath: "old.ts" },
 		{ status: "A", path: "added.ts" },
 	]);
-	const commits = parseCommits(
-		Buffer.from(
-			`${"a".repeat(40)}\0${"b".repeat(40)}\0Ada\0t1\0Ada\0t2\0Subject\n\nBody\n\u001E${"c".repeat(40)}\0${"a".repeat(40)} ${"d".repeat(40)}\0Bob\0t3\0Bob\0t4\0Merge\n\u001E`,
-		),
-	);
-	assert.deepEqual(
-		commits.map((commit) => [commit.sha.charAt(0), commit.parents.length, commit.message]),
-		[
-			["a", 1, "Subject\n\nBody"],
-			["c", 2, "Merge"],
-		],
-	);
 });
 
 void test("derives the change view from a real checkout with git", () => {
@@ -215,19 +202,6 @@ void test("derives the change view from a real checkout with git", () => {
 				{ status: "R", path: "lib.ts", oldPath: "app.ts" },
 			],
 		});
-		const commits: unknown = JSON.parse(
-			readFileSync(path.join(root, "work/change/commits.json"), "utf8"),
-		);
-		assert.ok(typeof commits === "object" && commits !== null);
-		const list: unknown = Reflect.get(commits, "commits");
-		assert.ok(Array.isArray(list));
-		const messages = list.map((commit: unknown): unknown =>
-			typeof commit === "object" && commit !== null ? Reflect.get(commit, "message") : null,
-		);
-		assert.deepEqual(messages, ["Rename app to lib\n\nRefs #7", "Add a test"]);
-		const last: unknown = list[1];
-		assert.ok(typeof last === "object" && last !== null);
-		assert.equal(Reflect.get(last, "sha"), head);
 		// The template is read from the checkout at the reviewed head, and the authored view written.
 		assert.match(
 			readFileSync(path.join(root, "work/change/description.authored.md"), "utf8"),

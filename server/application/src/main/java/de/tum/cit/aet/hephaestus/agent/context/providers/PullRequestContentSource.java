@@ -16,11 +16,15 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewContextBuilder;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import java.nio.charset.StandardCharsets;
@@ -38,6 +42,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 @Component
@@ -73,6 +78,14 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
      */
     public static final String DESCRIPTION_FILE = OUTPUT_PREFIX + "description.md";
 
+    /**
+     * The commits of the change, oldest first, each with its message and file changes. Staged rather
+     * than derived in the container because a quote of a commit message is verified against the
+     * artifact it cites, and admission verifies only what the server staged: a review that reads the
+     * commits from a file git wrote under {@code work/} has nothing it may cite.
+     */
+    public static final String COMMITS_FILE = OUTPUT_PREFIX + "commits.json";
+
     @Override
     public SourceKind sourceKindFor(String path) {
         if (path.endsWith("comments.json")) return COMMENTS;
@@ -81,6 +94,13 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     }
 
     static final int MAX_COMMENTS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
+
+    /**
+     * The prefix every note Hephaestus posts on a line carries ({@code <!-- hephaestus-diff-note -->},
+     * {@code <!-- hephaestus-approved-package:… -->}): a comment holding it is the tool's own earlier
+     * feedback, not a reviewer's, and is never fed back as one.
+     */
+    static final String HEPHAESTUS_MARKER = "<!-- hephaestus";
 
     private final ObjectMapper objectMapper;
     private final GitRepositoryManager gitRepositoryManager;
@@ -124,9 +144,8 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         }
         long repositoryId = requireLong(metadata, "repository_id");
         long pullRequestId = requireLong(metadata, "pull_request_id");
-        PullRequest pullRequest = pullRequestRepository
-                .findByIdWithAuthorAndRepository(pullRequestId)
-                .orElse(null);
+        PullRequest pullRequest =
+                pullRequestRepository.findByIdForReviewContext(pullRequestId).orElse(null);
         if (pullRequest == null || pullRequest.getDeletedAt() != null) {
             return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
         }
@@ -164,7 +183,10 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         }
         if (prepared != null) {
             String range = prepared.target() + ":" + prepared.head();
-            if (selectedKinds.contains(CORE)) identities.put(CORE, range);
+            if (selectedKinds.contains(CORE)) {
+                identities.put(CORE, range);
+                storeCommits(files, prepared);
+            }
             if (selectedKinds.contains(DIFF)) {
                 storeChange(files, prepared);
                 completeness.put(DIFF, SourceCompleteness.COMPLETE);
@@ -218,6 +240,58 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         }
     }
 
+    private void storeCommits(Map<String, byte[]> files, ReviewRepositoryPreparer.PreparedReview prepared) {
+        List<CommitDetails> commits =
+                gitRepositoryManager.commitsBetween(prepared.key(), prepared.target(), prepared.head());
+        ObjectNode root = objectMapper.createObjectNode();
+        ArrayNode array = root.putArray("commits");
+        for (CommitDetails commit : commits) {
+            ObjectNode node = array.addObject();
+            node.put("sha", commit.sha());
+            ArrayNode parents = node.putArray("parents");
+            commit.parentShas().forEach(parents::add);
+            // Names, never addresses: the record names who did what, and an address is not that.
+            node.put("author", commit.authorName());
+            node.put("authoredAt", commit.authoredAt().toString());
+            node.put("committer", commit.committerName());
+            node.put("committedAt", commit.committedAt().toString());
+            node.put(
+                    "message",
+                    commit.messageBody() == null ? commit.message() : commit.message() + "\n\n" + commit.messageBody());
+            ArrayNode changes = node.putArray("files");
+            for (CommitDetails.FileChange change : commit.fileChanges()) {
+                ObjectNode file = changes.addObject();
+                file.put("path", change.filename());
+                file.put("status", statusLetter(change.changeType()));
+                if (change.previousFilename() != null) {
+                    file.put("oldPath", change.previousFilename());
+                }
+                file.put("additions", change.additions());
+                file.put("deletions", change.deletions());
+            }
+        }
+        try {
+            files.put(
+                    COMMITS_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
+        } catch (JacksonException e) {
+            throw new JobPreparationException("Failed to serialize the commits of the change", e);
+        }
+    }
+
+    /** The status letter {@code git diff --name-status} prints, which is what the container's readers parse. */
+    private static String statusLetter(ChangeType changeType) {
+        return switch (changeType) {
+            case ADDED -> "A";
+            case MODIFIED -> "M";
+            case REMOVED -> "D";
+            case RENAMED -> "R";
+            case COPIED -> "C";
+            // The mirror's diff never yields these two; a provider's own sync does.
+            case CHANGED -> "M";
+            case UNKNOWN -> "M";
+        };
+    }
+
     private void storeComments(Map<String, byte[]> files, List<PullRequestReviewComment> comments) {
         JsonNode serialized = buildReviewComments(comments);
         try {
@@ -244,6 +318,9 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             result.put("state", pullRequest.getState().name());
         }
         result.put("is_draft", pullRequest.isDraft());
+        // Stated on its own because state alone does not carry it: a pull request the webhook closed
+        // after the merge is stored CLOSED with merged_at set, and is merged.
+        result.put("is_merged", pullRequest.isMerged());
         // The moments a review places the state of the work against: a merge before the last thread
         // was resolved is a different fact from one after it, and only a dated record can tell them apart.
         putInstant(result, "created_at", pullRequest.getCreatedAt());
@@ -260,6 +337,21 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         if (pullRequest.getMergedBy() != null) {
             result.put("merged_by", pullRequest.getMergedBy().getLogin());
         }
+        ArrayNode labels = result.putArray("labels");
+        pullRequest.getLabels().stream().map(Label::getName).sorted().forEach(labels::add);
+        ArrayNode assignees = result.putArray("assignees");
+        pullRequest.getAssignees().stream().map(User::getLogin).sorted().forEach(assignees::add);
+        if (pullRequest.getMilestone() != null) {
+            result.put("milestone", pullRequest.getMilestone().getTitle());
+        }
+        // Both come from the GraphQL sync only; a webhook-only record has neither, and an absent key
+        // says so rather than a null a program might read as a value.
+        if (pullRequest.getMergeStateStatus() != null) {
+            result.put("merge_state_status", pullRequest.getMergeStateStatus().name());
+        }
+        if (pullRequest.getReviewDecision() != null) {
+            result.put("review_decision", pullRequest.getReviewDecision().name());
+        }
 
         return result;
     }
@@ -269,8 +361,8 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     }
 
     private CommentCapture loadComments(long pullRequestId) {
-        var comments = new ArrayList<>(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(
-                pullRequestId, PageRequest.of(0, MAX_COMMENTS + 1)));
+        var comments = new ArrayList<>(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(
+                pullRequestId, HEPHAESTUS_MARKER, PageRequest.of(0, MAX_COMMENTS + 1)));
         if (comments.size() > MAX_COMMENTS + 1) {
             comments = new ArrayList<>(comments.subList(0, MAX_COMMENTS + 1));
         }
@@ -285,11 +377,31 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         var commentsArray = objectMapper.createArrayNode();
         for (var comment : comments) {
             var commentNode = objectMapper.createObjectNode();
+            // The stored ids, so a review can say which thread a comment belongs to and which comment it
+            // answers: `thread` is the `id` of an entry in review_threads.json, `in_reply_to` the `id` of
+            // another comment here.
+            if (comment.getId() != null) {
+                commentNode.put("id", comment.getId());
+            }
+            if (comment.getThread() != null && comment.getThread().getId() != null) {
+                commentNode.put("thread", comment.getThread().getId());
+            }
+            if (comment.getInReplyTo() != null && comment.getInReplyTo().getId() != null) {
+                commentNode.put("in_reply_to", comment.getInReplyTo().getId());
+            }
             commentNode.put("path", comment.getPath());
             // line is a primitive int; a file-level comment has no anchor and reports 0. Omit the key then,
             // so an absent anchor reads as absent rather than as a literal line-0 anchor.
             if (comment.getLine() > 0) {
                 commentNode.put("line", comment.getLine());
+            }
+            // LEFT is a line of the base, RIGHT a line of the head; the provider's UNKNOWN says nothing.
+            PullRequestReviewComment.Side side = comment.getSide();
+            if (side != null && side != PullRequestReviewComment.Side.UNKNOWN) {
+                commentNode.put("side", side.name());
+            }
+            if (Boolean.TRUE.equals(comment.getOutdated())) {
+                commentNode.put("outdated", true);
             }
             commentNode.put("body", comment.getBody());
             if (comment.getCreatedAt() != null) {

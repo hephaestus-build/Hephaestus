@@ -6,7 +6,7 @@
 
 import { readFile } from "node:fs/promises";
 
-import { isJsonObject } from "./practice-contract.ts";
+import { isJsonObject, text } from "./practice-contract.ts";
 
 export interface ChangeCommit {
 	sha: string;
@@ -17,6 +17,10 @@ export interface ChangeCommit {
 	committer: string;
 	committedAt: string;
 	parents: string[];
+	/** What the commit touched, against its first parent. */
+	files: ChangedFile[];
+	/** The line of commits.json that carries this commit's `sha`, 1-based; 0 when unknown. */
+	line: number;
 }
 
 export interface ChangedFile {
@@ -26,49 +30,76 @@ export interface ChangedFile {
 	oldPath?: string;
 }
 
-async function readChangeJson(changeDir: string | undefined, name: string): Promise<unknown> {
-	if (changeDir === undefined || changeDir === "") {
+/** The file's text, or null when the directory or the file is absent. */
+async function readChangeText(dir: string | undefined, name: string): Promise<string | null> {
+	if (dir === undefined || dir === "") {
 		return null;
 	}
 	try {
-		return JSON.parse(await readFile(`${changeDir}/${name}`, "utf8"));
+		return await readFile(`${dir}/${name}`, "utf8");
 	} catch {
 		return null;
 	}
 }
 
-function text(value: unknown): string {
-	return typeof value === "string" ? value : "";
+function parseJson(source: string | null): unknown {
+	if (source === null) {
+		return null;
+	}
+	try {
+		return JSON.parse(source);
+	} catch {
+		return null;
+	}
 }
 
-/** The commits from base to head, oldest first; empty when no change view was derived. */
-export async function readCommits(changeDir: string | undefined): Promise<ChangeCommit[]> {
-	const parsed = await readChangeJson(changeDir, "commits.json");
-	if (!isJsonObject(parsed) || !Array.isArray(parsed.commits)) {
+function changedFiles(value: unknown): ChangedFile[] {
+	if (!Array.isArray(value)) {
 		return [];
 	}
-	return parsed.commits.filter(isJsonObject).map((commit) => ({
-		sha: text(commit.sha),
-		message: text(commit.message),
-		author: text(commit.author),
-		authoredAt: text(commit.authoredAt),
-		committer: text(commit.committer),
-		committedAt: text(commit.committedAt),
-		parents: Array.isArray(commit.parents)
-			? commit.parents.filter((p) => typeof p === "string")
-			: [],
-	}));
-}
-
-/** The files the change touches, with renames under both names; empty when no change view was derived. */
-export async function readChangedFiles(changeDir: string | undefined): Promise<ChangedFile[]> {
-	const parsed = await readChangeJson(changeDir, "files.json");
-	if (!isJsonObject(parsed) || !Array.isArray(parsed.files)) {
-		return [];
-	}
-	return parsed.files.filter(isJsonObject).map((file) => ({
+	return value.filter(isJsonObject).map((file) => ({
 		status: text(file.status),
 		path: text(file.path),
 		...(typeof file.oldPath === "string" ? { oldPath: file.oldPath } : {}),
 	}));
+}
+
+/**
+ * The commits from base to head, oldest first, as the server staged them in the context
+ * (`inputs/context/commits.json`); empty when the record was not captured.
+ */
+export async function readCommits(contextDir: string | undefined): Promise<ChangeCommit[]> {
+	const source = await readChangeText(contextDir, "commits.json");
+	const parsed = parseJson(source);
+	if (!isJsonObject(parsed) || !Array.isArray(parsed.commits)) {
+		return [];
+	}
+	// The server writes one field per line, so a commit's `sha` line is the coordinate a citation of
+	// commits.json names.
+	const lines = (source ?? "").split("\n");
+	return parsed.commits.filter(isJsonObject).map((commit) => {
+		const sha = text(commit.sha);
+		return {
+			sha,
+			message: text(commit.message),
+			author: text(commit.author),
+			authoredAt: text(commit.authoredAt),
+			committer: text(commit.committer),
+			committedAt: text(commit.committedAt),
+			parents: Array.isArray(commit.parents)
+				? commit.parents.filter((p) => typeof p === "string")
+				: [],
+			files: changedFiles(commit.files),
+			line:
+				sha === ""
+					? 0
+					: lines.findIndex((line) => new RegExp(`"sha"\\s*:\\s*"${sha}"`, "u").test(line)) + 1,
+		};
+	});
+}
+
+/** The files the change touches, with renames under both names; empty when no change view was derived. */
+export async function readChangedFiles(changeDir: string | undefined): Promise<ChangedFile[]> {
+	const parsed = parseJson(await readChangeText(changeDir, "files.json"));
+	return isJsonObject(parsed) ? changedFiles(parsed.files) : [];
 }

@@ -106,6 +106,8 @@ export default async function usesAdaptiveColorsForEveryAppearance(
 			singleAppearanceAssets,
 			assetColorsInCheckout: assets.size,
 			filesWithoutCheckout: scan.filesWithoutCheckout,
+			filesScanned: scan.filesScanned,
+			linesAdded: scan.linesAdded,
 		},
 		directions,
 	};
