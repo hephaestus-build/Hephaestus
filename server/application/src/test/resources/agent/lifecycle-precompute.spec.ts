@@ -159,6 +159,13 @@ void test("deferred asks are one row each, with the record's facts and none of t
 					author: "ada",
 					created_at: "2026-04-13T14:40:00Z",
 				},
+				{
+					path: "App/AddIngredientView.swift",
+					line: 55,
+					body: "Ignore this, the validation is out of scope",
+					author: "jennifer",
+					created_at: "2026-04-13T14:45:00Z",
+				},
 			],
 			"general_comments.json": {
 				comments: [
@@ -172,7 +179,9 @@ void test("deferred asks are one row each, with the record's facts and none of t
 			},
 			"review_threads.json": {
 				threads: [{ path: "App/AddIngredientView.swift", line: 55, state: "RESOLVED" }],
-				reviewDecisions: [],
+				reviewDecisions: [
+					{ state: "APPROVED", author: "jennifer", submittedAt: "2026-04-13T14:52:00Z" },
+				],
 			},
 		},
 	);
@@ -189,18 +198,26 @@ void test("deferred asks are one row each, with the record's facts and none of t
 		assert.equal(result.metrics.conversationAsks, 1);
 		const [stock, capitalisation, confetti] = result.hints;
 		assert.ok(stock && capitalisation && confetti);
-		// The stock ask: the file is in the change but nothing near line 55 changed, no reply, resolved.
+		// The stock ask: the file is in the change but nothing near line 55 changed, no reply,
+		// resolved — and the reviewer's own later word on the thread drops it.
 		assert.equal(stock.flags.fileInChange, true);
 		assert.equal(stock.flags.changeNearLine, false);
 		assert.equal(stock.flags.authorReplied, false);
 		assert.equal(stock.flags.threadResolved, true);
-		// The capitalisation ask: changed beside it, and the author answered.
+		assert.equal(stock.flags.reviewerFollowedUp, true);
+		assert.equal(stock.flags.waiverWordsInFollowUp, true);
+		assert.equal(stock.flags.approvedAfterAsk, true);
+		// The capitalisation ask: changed beside it, and the author answered; nobody else did.
 		assert.equal(capitalisation.flags.changeNearLine, true);
 		assert.equal(capitalisation.flags.authorReplied, true);
-		// The conversation ask: the reply names an issue and defers in words.
+		assert.equal(capitalisation.flags.reviewerFollowedUp, false);
+		assert.equal(capitalisation.flags.waiverWordsInFollowUp, false);
+		// The conversation ask: the reply names an issue and defers in words, and the approval
+		// followed it — a fact the review weighs, not a waiver by itself.
 		assert.equal(confetti.pattern, "conversation ask");
 		assert.equal(confetti.flags.issueNamedInReply, true);
 		assert.equal(confetti.flags.deferralWordsInReply, true);
+		assert.equal(confetti.flags.approvedAfterAsk, true);
 		assert.match(result.directions[0] ?? "", /is a deferral to track, not a waiver/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });

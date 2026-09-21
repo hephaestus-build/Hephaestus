@@ -1,8 +1,9 @@
 // Precompute FACTS for defers-review-asks-into-tracked-work: every ask a reviewer made, one row
 // each, with what the record shows beside it — whether the change touches the file the ask is on,
-// whether the author replied and what the reply names, whether the thread was marked resolved. The
-// review decides for each row whether the ask was addressed, deferred into tracked work, waived or
-// merged past; a thread's RESOLVED mark is who clicked it, not what happened to the ask.
+// whether the author replied and what the reply names, whether the reviewer had a later word on it
+// or approved after it, whether the thread was marked resolved. The review decides for each row
+// whether the ask was addressed, deferred into tracked work, waived or merged past; a thread's
+// RESOLVED mark is who clicked it, not what happened to the ask.
 import { issueNumberReferences } from "../lib/references.ts";
 import {
 	type GeneralComment,
@@ -47,34 +48,51 @@ export default async function defersReviewAsksIntoTrackedWork(
 	const author = metadata.author ?? "";
 	const inline = await readReviewComments(contextDir);
 	const general = await readGeneralComments(contextDir);
-	const { threads } = await readReviewThreads(contextDir);
+	const { threads, decisions } = await readReviewThreads(contextDir);
 	const hints: Hint[] = [];
 	const byOthers = (comment: { author?: string }) =>
 		comment.author !== undefined && comment.author !== author;
-	// An inline ask: a comment on a line by someone other than the author. The author's later
-	// comments on the same line are its thread's answers.
-	for (const ask of inline.filter(byOthers)) {
-		const replies = inline.filter(
-			(c) =>
-				c.author === author &&
-				c.path === ask.path &&
-				c.line === ask.line &&
-				later(c.createdAt, ask.createdAt),
+	const approvedAfter = (at: string | undefined) =>
+		decisions.some(
+			(d) => d.state === "APPROVED" && d.dismissed !== true && later(d.submittedAt, at),
 		);
-		hints.push(
-			row(
-				ask,
-				replies,
-				threads.some((t) => t.path === ask.path && t.line === ask.line && t.state === "RESOLVED"),
-				diffFiles,
+	// An inline ask: the first comment on a line by someone other than the author. The author's
+	// later comments on the same line are its thread's answers; the others' later comments there are
+	// the reviewer's last word on it, not new asks.
+	const inlineAsks = inline.filter(
+		(c, index) =>
+			byOthers(c) &&
+			!inline.some(
+				(earlier, j) =>
+					j < index && byOthers(earlier) && earlier.path === c.path && earlier.line === c.line,
 			),
+	);
+	for (const ask of inlineAsks) {
+		const sameThread = (c: ReviewComment) =>
+			c.path === ask.path && c.line === ask.line && later(c.createdAt, ask.createdAt);
+		const replies = inline.filter((c) => c.author === author && sameThread(c));
+		const followUps = inline.filter((c) => byOthers(c) && sameThread(c));
+		hints.push(
+			row(ask, replies, followUps, diffFiles, {
+				threadResolved: threads.some(
+					(t) => t.path === ask.path && t.line === ask.line && t.state === "RESOLVED",
+				),
+				approvedAfterAsk: approvedAfter(ask.createdAt),
+			}),
 		);
 	}
 	// A conversation ask: a general comment by someone other than the author; the author's later
-	// general comments are the candidate answers.
+	// general comments are the candidate answers, the others' later ones the follow-ups.
 	for (const ask of general.filter(byOthers)) {
-		const replies = general.filter((c) => c.author === author && later(c.createdAt, ask.createdAt));
-		hints.push(row({ ...ask, path: "" }, replies, false, diffFiles));
+		const afterAsk = (c: GeneralComment) => later(c.createdAt, ask.createdAt);
+		const replies = general.filter((c) => c.author === author && afterAsk(c));
+		const followUps = general.filter((c) => byOthers(c) && afterAsk(c));
+		hints.push(
+			row({ ...ask, path: "" }, replies, followUps, diffFiles, {
+				threadResolved: false,
+				approvedAfterAsk: approvedAfter(ask.createdAt),
+			}),
+		);
 	}
 	const directions: string[] = [];
 	if (hints.length === 0) {
@@ -83,7 +101,7 @@ export default async function defersReviewAsksIntoTrackedWork(
 		);
 	} else {
 		directions.push(
-			`${String(hints.length)} ask(s) by others are listed, one row each. Decide every row against the head diff: addressed when the diff carries the change asked for; deferred into tracked work when the author's reply names an issue or the description defers it to one; waived when the reviewer drops the ask in their own words; otherwise deferred bare. A RESOLVED thread and an approval say nothing by themselves, and "approved on the condition that you do it next time" is a deferral to track, not a waiver.`,
+			`${String(hints.length)} comment(s) by others are listed, one row each; a remark that asks nothing of this change is not an ask. Decide every ask against the head diff: addressed when the diff carries the change asked for; deferred into tracked work when the author's reply names an issue or the description defers it to one; waived when the reviewer drops the ask in their own words, in the ask or in a follow-up, or approves after the author's stated reason; otherwise deferred bare. A RESOLVED thread says nothing by itself, and "approved on the condition that you do it next time" is a deferral to track, not a waiver.`,
 			"A two-part ask is two asks: address one part and the other still stands.",
 		);
 	}
@@ -91,7 +109,7 @@ export default async function defersReviewAsksIntoTrackedWork(
 		hints,
 		metrics: {
 			asks: hints.length,
-			inlineAsks: inline.filter(byOthers).length,
+			inlineAsks: inlineAsks.length,
 			conversationAsks: general.filter(byOthers).length,
 			asksWithAuthorReply: hints.filter((h) => h.flags.authorReplied === true).length,
 			asksNamingAnIssueInReply: hints.filter((h) => h.flags.issueNamedInReply === true).length,
@@ -103,10 +121,12 @@ export default async function defersReviewAsksIntoTrackedWork(
 function row(
 	ask: ReviewComment | (GeneralComment & { path: string }),
 	replies: readonly { body: string }[],
-	resolved: boolean,
+	followUps: readonly { body: string }[],
 	diffFiles: Map<string, DiffFile>,
+	record: { threadResolved: boolean; approvedAfterAsk: boolean },
 ): Hint {
 	const replyText = replies.map((r) => r.body).join("\n");
+	const followUpText = followUps.map((r) => r.body).join("\n");
 	const line = "line" in ask ? ask.line : undefined;
 	const flags: Hint["flags"] = {
 		by: ask.author ?? "",
@@ -115,7 +135,10 @@ function row(
 		issueNamedInReply: issueNumberReferences(replyText).length > 0,
 		deferralWordsInReply: DEFERRAL.test(replyText),
 		waiverWordsInAsk: WAIVER.test(ask.body),
-		threadResolved: resolved,
+		reviewerFollowedUp: followUps.length > 0,
+		waiverWordsInFollowUp: WAIVER.test(followUpText),
+		approvedAfterAsk: record.approvedAfterAsk,
+		threadResolved: record.threadResolved,
 	};
 	if (ask.path !== "") {
 		flags.fileInChange = diffFiles.has(ask.path);
