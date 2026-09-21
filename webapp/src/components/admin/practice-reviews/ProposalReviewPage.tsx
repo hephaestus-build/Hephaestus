@@ -117,7 +117,7 @@ export function ProposalReviewPage({
 				<ReviewFact label="Reviewed work">
 					<div className="space-y-1">
 						<ReviewArtifactLink artifact={feedback.artifact} />
-						{feedback.artifact && (
+						{feedback.artifact?.title && (
 							<p className="break-words text-muted-foreground">{feedback.artifact.title}</p>
 						)}
 					</div>

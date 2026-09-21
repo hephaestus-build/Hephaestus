@@ -3,15 +3,17 @@ import type {
 	AutonomyAssignment,
 	EvidenceCitation,
 	Practice,
-	ReviewArtifact,
+	ReviewedWorkRef,
 	ReviewFeedback,
 	ReviewFeedbackDetail,
 	ReviewObservation,
 	ReviewObservationDetail,
 	ReviewRunSummary,
+	ReviewRunTarget,
 	ReviewSubject,
 	WorkspaceMembership,
 } from "@/api/types.gen";
+import { ARTIFACT_KIND, type KnownArtifactKind } from "@/lib/artifact-kinds";
 
 // The only thing written by hand is REVIEW_FIXTURE: reviews, their observations and the feedback
 // those drove. Every count, preview, truncation flag and summary is computed from it below, so a
@@ -39,88 +41,118 @@ export const workspaceMembers: WorkspaceMembership[] = [
 // The work under review
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * A run's target, written once per piece of work. The ref an observation or a piece of feedback
+ * carries is `reviewedWork`, labelled the way the server's `ReviewedWorkLabels` labels it: `#22` for
+ * a pull request or an issue, `!425` for a merge request, `#channel` for a conversation, its title
+ * for a document.
+ */
+export type ReviewWork = ReviewRunTarget & {
+	reviewedWork: ReviewedWorkRef & { kind: KnownArtifactKind };
+};
+
+const reviewOf = (
+	provider: ReviewRunTarget["provider"],
+	title: string,
+	reviewedWork: ReviewWork["reviewedWork"],
+): ReviewWork => ({
+	type: reviewedWork.kind,
+	provider,
+	title,
+	// The server names the work on the ref as well; a conversation thread has no title of its own.
+	reviewedWork:
+		reviewedWork.kind === ARTIFACT_KIND.conversationThread
+			? reviewedWork
+			: { ...reviewedWork, title },
+});
+
 // Every list row and every detail header draws its glyph from the provider and its words from the
 // kind, so a fixture on a single provider would let a wrong mark or a missing label ship.
-export const reviewArtifact: ReviewArtifact = {
-	id: 42,
-	type: "scm.pull_request",
-	provider: "GITHUB",
-	number: 1423,
-	repositoryName: "ls1intum/Hephaestus",
-	title: "Cache the workspace member lookup on the review path",
-	url: "https://github.com/ls1intum/Hephaestus/pull/1423",
-};
+export const reviewArtifact = reviewOf(
+	"GITHUB",
+	"Cache the workspace member lookup on the review path",
+	{
+		id: "42",
+		kind: ARTIFACT_KIND.pullRequest,
+		label: "#1423",
+		repositoryName: "ls1intum/Hephaestus",
+		url: "https://github.com/ls1intum/Hephaestus/pull/1423",
+	},
+);
 
-export const gitlabMergeRequest: ReviewArtifact = {
-	id: 43,
-	type: "scm.pull_request",
-	provider: "GITLAB",
-	number: 88,
-	repositoryName: "platform/billing-service",
-	title: "Move invoice numbering behind the billing boundary",
-	url: "https://gitlab.example.com/platform/billing-service/-/merge_requests/88",
-};
+export const gitlabMergeRequest = reviewOf(
+	"GITLAB",
+	"Move invoice numbering behind the billing boundary",
+	{
+		id: "43",
+		kind: ARTIFACT_KIND.pullRequest,
+		label: "!88",
+		repositoryName: "platform/billing-service",
+		url: "https://gitlab.example.com/platform/billing-service/-/merge_requests/88",
+	},
+);
 
-export const slackConversation: ReviewArtifact = {
-	id: 81,
-	type: "chat.conversation_thread",
-	provider: "SLACK",
-	channelName: "engineering",
-	title: "How should we roll back the pricing migration?",
-	url: "https://example.slack.com/archives/C01/p1721400000",
-};
+export const slackConversation = reviewOf(
+	"SLACK",
+	"How should we roll back the pricing migration?",
+	{
+		id: "81",
+		kind: ARTIFACT_KIND.conversationThread,
+		label: "#engineering",
+		url: "https://example.slack.com/archives/C01/p1721400000",
+	},
+);
 
-export const outlineDocument: ReviewArtifact = {
-	id: 96,
-	type: "docs.document",
-	provider: "OUTLINE",
-	title: "Runbook: restoring a workspace from backup",
+export const outlineDocument = reviewOf("OUTLINE", "Runbook: restoring a workspace from backup", {
+	id: "96",
+	kind: ARTIFACT_KIND.document,
+	label: "Runbook: restoring a workspace from backup",
 	url: "https://docs.example.com/doc/runbook-restore",
-};
+});
 
 /**
  * No review in the fixture reaches an issue, but `scm.issue` is a kind this build has copy and a
  * glyph for, so something has to render it.
  */
-export const trackerIssue: ReviewArtifact = {
-	id: 204,
-	type: "scm.issue",
-	provider: "GITHUB",
-	number: 204,
-	repositoryName: "ls1intum/Hephaestus",
-	title: "Reviews of documents do not record which revision they read",
-	url: "https://github.com/ls1intum/Hephaestus/issues/204",
-};
+export const trackerIssue = reviewOf(
+	"GITHUB",
+	"Reviews of documents do not record which revision they read",
+	{
+		id: "204",
+		kind: ARTIFACT_KIND.issue,
+		label: "#204",
+		repositoryName: "ls1intum/Hephaestus",
+		url: "https://github.com/ls1intum/Hephaestus/issues/204",
+	},
+);
 
-const webhookRetryPullRequest: ReviewArtifact = {
-	id: 44,
-	type: "scm.pull_request",
-	provider: "GITHUB",
-	number: 1431,
-	repositoryName: "ls1intum/Hephaestus",
-	title: "Retry webhook deliveries with backoff instead of dropping them",
-	url: "https://github.com/ls1intum/Hephaestus/pull/1431",
-};
+const webhookRetryPullRequest = reviewOf(
+	"GITHUB",
+	"Retry webhook deliveries with backoff instead of dropping them",
+	{
+		id: "44",
+		kind: ARTIFACT_KIND.pullRequest,
+		label: "#1431",
+		repositoryName: "ls1intum/Hephaestus",
+		url: "https://github.com/ls1intum/Hephaestus/pull/1431",
+	},
+);
 
-const leagueColumnsPullRequest: ReviewArtifact = {
-	id: 45,
-	type: "scm.pull_request",
-	provider: "GITHUB",
-	number: 1436,
+const leagueColumnsPullRequest = reviewOf("GITHUB", "Drop the unused league columns", {
+	id: "45",
+	kind: ARTIFACT_KIND.pullRequest,
+	label: "#1436",
 	repositoryName: "ls1intum/Hephaestus",
-	title: "Drop the unused league columns",
 	url: "https://github.com/ls1intum/Hephaestus/pull/1436",
-};
+});
 
-const invoiceBackfillMergeRequest: ReviewArtifact = {
-	id: 46,
-	type: "scm.pull_request",
-	provider: "GITLAB",
-	number: 91,
+const invoiceBackfillMergeRequest = reviewOf("GITLAB", "Backfill the invoice sequence table", {
+	id: "46",
+	kind: ARTIFACT_KIND.pullRequest,
+	label: "!91",
 	repositoryName: "platform/billing-service",
-	title: "Backfill the invoice sequence table",
 	url: "https://gitlab.example.com/platform/billing-service/-/merge_requests/91",
-};
+});
 
 // ---------------------------------------------------------------------------------------------
 // The catalogue
@@ -305,7 +337,7 @@ interface ObservationSpec {
 
 interface RunSpec {
 	id: string;
-	work: ReviewArtifact;
+	work: ReviewWork;
 	status: ReviewRunSummary["status"];
 	startedAt: string;
 	/** Whose work this review was about; every observation and every recipient inherits it. */
@@ -907,7 +939,7 @@ function toObservation(run: RunSpec, spec: ObservationSpec): ReviewObservation {
 	return {
 		id: spec.id,
 		agentJobId: run.id,
-		artifact: run.work,
+		artifact: run.work.reviewedWork,
 		group: group(spec.group),
 		assessment: spec.assessment,
 		claimCurrentness: spec.claimCurrentness ?? "CURRENT",
@@ -927,7 +959,7 @@ function toFeedback(run: RunSpec, spec: FeedbackSpec): ReviewFeedback {
 	return {
 		id: spec.id,
 		agentJobId: run.id,
-		artifact: run.work,
+		artifact: run.work.reviewedWork,
 		...preview(spec.body),
 		channel: spec.channel,
 		createdAt: new Date(spec.composedAt),
@@ -975,11 +1007,11 @@ export const reviewRuns: ReviewRunSummary[] = allRuns
 	}))
 	.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-const JOB_TYPE_BY_ARTIFACT: Record<string, AgentJob["jobType"]> = {
-	"scm.pull_request": "PULL_REQUEST_REVIEW",
-	"scm.issue": "ISSUE_REVIEW",
-	"chat.conversation_thread": "CONVERSATION_REVIEW",
-	"docs.document": "DOCUMENT_REVIEW",
+const JOB_TYPE_BY_ARTIFACT: Record<KnownArtifactKind, AgentJob["jobType"]> = {
+	[ARTIFACT_KIND.pullRequest]: "PULL_REQUEST_REVIEW",
+	[ARTIFACT_KIND.issue]: "ISSUE_REVIEW",
+	[ARTIFACT_KIND.conversationThread]: "CONVERSATION_REVIEW",
+	[ARTIFACT_KIND.document]: "DOCUMENT_REVIEW",
 };
 
 /**
@@ -997,7 +1029,7 @@ export function reviewJob(runId: string): AgentJob {
 	);
 	return {
 		id: run.id,
-		jobType: JOB_TYPE_BY_ARTIFACT[run.work.type] ?? "PULL_REQUEST_REVIEW",
+		jobType: JOB_TYPE_BY_ARTIFACT[run.work.reviewedWork.kind],
 		reviewOutcome: "REVIEWED",
 		target: run.work,
 		status: run.status,
@@ -1052,7 +1084,7 @@ export function feedbackDetail(feedbackId: string): ReviewFeedbackDetail {
 	return {
 		id: item.id,
 		agentJobId: run.id,
-		artifact: run.work,
+		artifact: run.work.reviewedWork,
 		body: item.body,
 		channel: item.channel,
 		createdAt: new Date(item.composedAt),

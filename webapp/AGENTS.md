@@ -289,6 +289,22 @@ unlayered while Tailwind sits in `@layer utilities`. That inversion is the whole
 system, so **own a property in one place or the other, never both** — a margin the module changes at
 a breakpoint belongs to the module at every width, not to `mt-8` at one of them.
 
+### Practice surfaces palette
+
+The practice profile, the levels over it and the feedback cards share one 60-30-10 palette. **60,
+surfaces**: `bg-background`, `bg-card`, `bg-sidebar` — the page ground, the cards, a card's footer or
+next-step band, a table's box, the comment band; nothing else paints a ground. **30, structure**:
+`border`, `text-muted-foreground`, the grey practice pills, the tabs' active bar, the timeline rail and
+its dots. **10, the accent** (`mentor`), and only for: the one `PrimaryButton` per surface at rest
+("See all practices", "Send" in an open comment band), a new card's "New" badge and its wash, the open
+row's leading bar in `PracticeTable`, the sorted arrow of `SortButton`, and a link on hover or focus —
+`InlineLink` and a row's "Open …" are plain text at rest, nothing dashed and nothing visible, then
+mentor blue with a solid underline. Status colours (`success`, `warning`, `destructive`) are semantic,
+not accent: only in the registry badges, the outcome and standing icons, the ring's segments, the
+pressed rating tints and the card's meter and tick — never coloured prose. A status colour is a card
+wash in exactly two states, a new card's mentor-blue wash and a resolved card's success-green wash,
+and nowhere else. The user profile (`profile/ProfilePage`) predates this palette and is not covered.
+
 ## Testing
 
 `getByRole` > `getByLabelText` > `getByText`, and the ladder ends there: a `data-testid` skips past the
@@ -369,6 +385,8 @@ reaches both edges of the panel; only `DrawerBody` scrolls.
   the full viewport at 320px and the dismiss, the padding and a leading chip already spend 40% of it.
   Anything that is itself text — a badge, a status, provenance — goes *below* the title, inside that
   block. The row wraps as a backstop, but a third column is a design mistake, not a wrap case.
+  The one exception is a standing summary (ring and counts) beside a group's title, which wraps
+  under it below `sm`.
 
 ### Guarded levels
 

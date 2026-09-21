@@ -98,12 +98,24 @@ const drawerContentVariants = cva("", {
 			default:
 				"[--peek:1rem] data-[swipe-axis=x]:[--drawer-content-width:75%] data-[swipe-axis=x]:sm:[--drawer-content-width:24rem]",
 			/**
-			 * A panel that replaces a page, so it has to hold what that page held. Full width below
-			 * `sm`, where a partial cover is unreadable. `--peek` is far above the default: the column
-			 * a covered panel keeps on screen is the reason to stack rather than replace.
+			 * ⚠️ Diverges from the shadcn registry: a panel that replaces a page, so it has to hold
+			 * what that page held. Full width below `sm`, where a partial cover is unreadable. `--peek`
+			 * is far above the default: the column a covered panel keeps on screen is the reason to
+			 * stack rather than replace.
 			 */
 			detail:
 				"[--peek:6rem] data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:min(44rem,92vw)] data-[swipe-axis=x]:xl:[--drawer-content-width:min(62rem,75vw)]",
+			/**
+			 * ⚠️ Diverges from the shadcn registry: `detail` for a surface whose content needs most of
+			 * the viewport, e.g. a two-column standing with a run feed. Same peek; from `sm` the width
+			 * is 60rem where `detail` is 44rem, and from `xl` it holds 75vw instead of capping at
+			 * 62rem. Both widths are rounded to a whole pixel, and `will-change-auto` replaces the base
+			 * `will-change-transform`: at these widths the panel edge is rarely on a whole pixel, and a
+			 * panel kept on a GPU layer at rest rasterises its text soft, so demoting the layer after
+			 * the animation lets the text snap back to the pixel grid.
+			 */
+			detailWide:
+				"[--peek:6rem] will-change-auto data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:round(min(60rem,92vw),1px)] data-[swipe-axis=x]:xl:[--drawer-content-width:round(75vw,1px)]",
 		},
 	},
 	defaultVariants: { size: "default" },

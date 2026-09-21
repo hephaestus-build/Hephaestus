@@ -142,6 +142,7 @@ const preview: Preview = {
 					"Practice trace",
 					"Workspace",
 					"Profile",
+					"Practice profile",
 					"Surveys",
 					"Common",
 					"Shared",

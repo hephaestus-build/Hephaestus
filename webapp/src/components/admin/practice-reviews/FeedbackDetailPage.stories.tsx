@@ -148,7 +148,7 @@ export const PreparedForConversation: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
 		await canvas.findAllByText(/for conversation/);
-		canvas.getByText("How should we roll back the pricing migration?");
+		canvas.getByText("#engineering");
 	},
 };
 

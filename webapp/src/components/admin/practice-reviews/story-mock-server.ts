@@ -40,14 +40,14 @@ function matches(selected: string[], actual: string | undefined): boolean {
 
 function withinScope(
 	url: URL,
-	row: { agentJobId: string; artifact?: { id: number; type: string } },
+	row: { agentJobId: string; artifact?: { id: string; kind: string } },
 ) {
 	const agentJobId = single(url, "agentJobId");
 	const artifactKind = single(url, "artifactKind");
 	const artifactId = single(url, "artifactId");
 	if (agentJobId && row.agentJobId !== agentJobId) return false;
-	if (artifactKind && row.artifact?.type !== artifactKind) return false;
-	if (artifactId && String(row.artifact?.id) !== artifactId) return false;
+	if (artifactKind && row.artifact?.kind !== artifactKind) return false;
+	if (artifactId && row.artifact?.id !== artifactId) return false;
 	return true;
 }
 

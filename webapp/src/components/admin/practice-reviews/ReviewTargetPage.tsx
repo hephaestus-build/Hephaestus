@@ -33,12 +33,9 @@ const itemsOf = <T,>(state: ReviewSectionState<T>): T[] =>
 	state.status === "ready" ? state.items : [];
 
 /**
- * No eyebrow above the heading: the link's own mark and words say what kind of work this is, which
- * is a fact about *this* work, while a label for the page restates the breadcrumb one line above it.
- *
- * <p>The work is not fetched by name — nothing on this route knows its title until a review of it
- * comes back — so the heading is read off whichever section answered first, and is a skeleton until
- * one of them does.
+ * The heading is the kind of work, which the route knows, and the work itself is the link under it:
+ * nothing on this route knows what to call the work until a review of it comes back, so the link is
+ * read off whichever section answered first, and is a skeleton until one of them does.
  */
 export function ReviewTargetPage({
 	workspaceSlug,
@@ -81,19 +78,14 @@ export function ReviewTargetPage({
 			) : (
 				<>
 					<ReviewDetailHeader
-						title={
-							!artifact && stillLoading ? (
-								// A heading whose only content is a skeleton is an empty heading to a screen
-								// reader, which is a landmark that announces nothing at all.
-								<>
-									<span className="sr-only">Loading the reviewed work</span>
-									<Skeleton className="h-8 w-72 max-w-full" />
-								</>
+						title={artifact?.title ?? artifactKindLabel(artifactKind)}
+						provenance={
+							artifact ? (
+								<ReviewArtifactLink artifact={artifact} className="text-sm" />
 							) : (
-								(artifact?.title ?? artifactKindLabel(artifactKind))
+								stillLoading && <Skeleton className="h-5 w-72 max-w-full" />
 							)
 						}
-						provenance={artifact && <ReviewArtifactLink artifact={artifact} className="text-sm" />}
 					/>
 
 					<ReviewOutputSections

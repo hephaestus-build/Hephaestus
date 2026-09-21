@@ -10,6 +10,8 @@ const sectionTitleVariants = cva("text-foreground", {
 			sm: "text-sm font-medium",
 			/** A section of an admin page, one step below the page title. */
 			md: "text-lg font-semibold",
+			/** A section of a practice surface, where the page title is `text-2xl` and the levels' titles match it. */
+			lg: "text-xl font-semibold",
 		},
 	},
 	defaultVariants: { size: "md" },

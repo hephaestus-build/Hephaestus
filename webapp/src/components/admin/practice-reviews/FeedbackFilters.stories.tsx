@@ -125,12 +125,12 @@ export const ScopedToOnePieceOfWork: Story = {
 			artifactKind: "scm.pull_request",
 			artifactId: 42,
 		},
-		scopedArtifact: reviewArtifact,
+		scopedArtifact: reviewArtifact.reviewedWork,
 		total: 4,
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText(/Reviewed work/);
-		canvas.getByText(/PR #1423/);
+		canvas.getByText(/ls1intum\/Hephaestus · #1423/);
 	},
 };
 

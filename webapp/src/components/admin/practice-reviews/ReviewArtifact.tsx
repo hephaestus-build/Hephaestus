@@ -1,7 +1,7 @@
 import { ExternalLinkIcon } from "lucide-react";
 import type { ComponentType } from "react";
 
-import type { ReviewArtifact as ReviewArtifactData, ReviewRunTarget } from "@/api/types.gen";
+import type { ReviewedWorkRef, ReviewRunTarget } from "@/api/types.gen";
 import { GithubIcon, GitlabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import {
 	ARTIFACT_KIND,
@@ -13,8 +13,6 @@ import {
 	type KnownArtifactKind,
 } from "@/lib/artifact-kinds";
 import { cn } from "@/lib/utils";
-
-export type ReviewArtifactDisplay = ReviewArtifactData | ReviewRunTarget;
 
 /**
  * URL-facing spelling of a kind: the wire id carries a dot, which reads badly in a path segment, so
@@ -39,49 +37,33 @@ export function reviewArtifactTypeFromSlug(slug: string): KnownArtifactKind | un
 
 type ArtifactGlyph = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 
+type Provider = NonNullable<ReviewRunTarget["provider"]>;
+
 const PROVIDER_ICONS = {
 	GITHUB: GithubIcon,
 	GITLAB: GitlabIcon,
 	SLACK: SlackIcon,
 	OUTLINE: OutlineIcon,
-} satisfies Record<NonNullable<ReviewArtifactData["provider"]>, ArtifactGlyph>;
+} satisfies Record<Provider, ArtifactGlyph>;
 
 /**
- * The provider's mark, falling back to the kind's. The label beside it already carries the kind
- * (`PR #1423`, `MR !88`), so a kind glyph there would say the same thing twice and leave the reader
- * no way to tell a GitHub request from a GitLab one.
+ * The provider's mark where the caller has one — a run records its provider — falling back to the
+ * kind's. Beside the work's label (`#1423`, `!88`) a kind glyph would say the same thing twice and
+ * leave the reader no way to tell a GitHub request from a GitLab one.
  */
-export function reviewArtifactIcon(artifact: ReviewArtifactDisplay): ArtifactGlyph {
-	return artifact.provider ? PROVIDER_ICONS[artifact.provider] : artifactKindIcon(artifact.type);
+export function reviewArtifactIcon(kind: string, provider?: Provider): ArtifactGlyph {
+	return provider ? PROVIDER_ICONS[provider] : artifactKindIcon(kind);
 }
 
-export function reviewArtifactLabel(artifact: ReviewArtifactDisplay): string {
-	switch (artifact.type) {
-		case ARTIFACT_KIND.pullRequest:
-			if (artifact.provider === "GITLAB")
-				return artifact.number == null ? "Merge request" : `MR !${artifact.number}`;
-			return artifact.number == null ? "Pull request" : `PR #${artifact.number}`;
-		case ARTIFACT_KIND.issue:
-			return artifact.number == null ? "Issue" : `Issue #${artifact.number}`;
-		case ARTIFACT_KIND.conversationThread:
-			return artifact.channelName ? `#${artifact.channelName}` : "Conversation";
-		case ARTIFACT_KIND.document:
-			return "Document";
-		default:
-			// A kind this build has no copy for still names itself rather than rendering blank.
-			return artifactKindLabel(artifact.type);
-	}
-}
-
-/** The repository and the item, when a repository is recorded: `ls1intum/Hephaestus · PR #1423`. */
-function qualifiedLabel(artifact: ReviewArtifactDisplay): string {
-	return [artifact.repositoryName, reviewArtifactLabel(artifact)].filter(Boolean).join(" · ");
+/** The repository and the item, when a repository is recorded: `ls1intum/Hephaestus · #1423`. */
+function qualifiedLabel(artifact: ReviewedWorkRef): string {
+	return [artifact.repositoryName, artifact.label].filter(Boolean).join(" · ");
 }
 
 export function reviewArtifactScopeLabel(
 	kind: string,
 	id: number | undefined,
-	artifact: ReviewArtifactDisplay | undefined,
+	artifact: ReviewedWorkRef | undefined,
 ): string {
 	if (id != null && artifact) {
 		return qualifiedLabel(artifact);
@@ -96,19 +78,21 @@ export function reviewArtifactScopeLabel(
 }
 
 export interface ReviewArtifactProps {
-	artifact: ReviewArtifactDisplay | undefined;
+	artifact: ReviewedWorkRef | undefined;
+	/** The run's provider, when the caller has a run; an observation or a piece of feedback has none. */
+	provider?: Provider;
 	className?: string;
 }
 
 /**
  * Never the work's title: it is long, and every surface that shows one already has somewhere better
- * to put it — the run row uses it as the row's own name, the detail pages as the heading.
+ * to put it — the run row uses it as the row's own name, the run page as the heading.
  */
-export function ReviewArtifactLabel({ artifact, className }: ReviewArtifactProps) {
+export function ReviewArtifactLabel({ artifact, provider, className }: ReviewArtifactProps) {
 	if (!artifact) {
 		return <span className={cn("text-muted-foreground", className)}>No reviewed work</span>;
 	}
-	const Icon = reviewArtifactIcon(artifact);
+	const Icon = reviewArtifactIcon(artifact.kind, provider);
 	return (
 		<span className={cn("inline-flex min-w-0 max-w-full items-center gap-1.5", className)}>
 			<Icon className="size-3.5 shrink-0" aria-hidden />
@@ -121,11 +105,11 @@ export function ReviewArtifactLabel({ artifact, className }: ReviewArtifactProps
  * The anchor contains the label and nothing else, so a hover affordance can never reach text that is
  * not the link's name. A caller that wants the work's title renders it outside.
  */
-export function ReviewArtifactLink({ artifact, className }: ReviewArtifactProps) {
+export function ReviewArtifactLink({ artifact, provider, className }: ReviewArtifactProps) {
 	if (!artifact?.url) {
-		return <ReviewArtifactLabel artifact={artifact} className={className} />;
+		return <ReviewArtifactLabel artifact={artifact} provider={provider} className={className} />;
 	}
-	const Icon = reviewArtifactIcon(artifact);
+	const Icon = reviewArtifactIcon(artifact.kind, provider);
 	return (
 		<a
 			href={artifact.url}

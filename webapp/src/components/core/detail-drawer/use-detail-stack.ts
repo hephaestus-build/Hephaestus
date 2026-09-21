@@ -5,9 +5,22 @@ import { useSearchState } from "@/lib/search-params";
 import { type DetailStackEntry, encodeDetailStack } from "./detail-stack";
 
 export interface DetailStackControls {
-	/** Prefer {@link import("./DetailStackLink").DetailStackLink}; this is for openers that cannot be links. */
+	/**
+	 * Prefer {@link import("./DetailStackLink").DetailStackLink}; this is for openers that cannot be
+	 * links.
+	 */
 	open: (entry: DetailStackEntry) => void;
 	close: (depth: number) => void;
+}
+
+export interface DetailStackOptions {
+	/**
+	 * Search params that mean something only inside a level — an open card, a tab — cleared in the
+	 * same write that changes the stack. Going back restores the entry before the level was pushed,
+	 * which never held them; a forward write would otherwise leave them dangling under a level
+	 * that no longer shows them, or hand them to the next level opened.
+	 */
+	levelParams?: readonly string[];
 }
 
 /**
@@ -16,14 +29,21 @@ export interface DetailStackControls {
  * this visit pushed, which is why the history entry is stamped rather than counted: a deep-linked
  * stack has nothing behind it, and going back would leave the app.
  */
-export function useDetailStack(stack: DetailStackEntry[]): DetailStackControls {
+export function useDetailStack(
+	stack: DetailStackEntry[],
+	{ levelParams = [] }: DetailStackOptions = {},
+): DetailStackControls {
 	const setSearch = useSearchState();
 	const router = useRouter();
 
 	const goToStack = (next: DetailStackEntry[], detailPush: boolean) => {
 		void setSearch(
-			(previous) => ({ ...previous, detail: encodeDetailStack(next) }),
-			(previous) => ({ ...previous, detailPush }),
+			(previous) => ({
+				...previous,
+				...Object.fromEntries(levelParams.map((param) => [param, undefined])),
+				detail: encodeDetailStack(next),
+			}),
+			{ state: (previous) => ({ ...previous, detailPush }) },
 		);
 	};
 

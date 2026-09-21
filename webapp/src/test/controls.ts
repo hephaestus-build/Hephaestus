@@ -36,3 +36,21 @@ export async function expectUnavailable(control: HTMLElement) {
 	await expect(control).toHaveAttribute("aria-disabled", "true");
 	await expect(control).toHaveAttribute("tabindex", "-1");
 }
+
+/**
+ * SC 2.5.8: a pointer target is at least 24 CSS px a side. A control smaller than its target draws
+ * the rest with a `before:absolute before:-inset-*` pseudo-element, which no bounding box reports,
+ * so the target is the control's box widened by those insets.
+ */
+export async function expectTouchTarget(control: HTMLElement, minimum = 24) {
+	const box = control.getBoundingClientRect();
+	const before = getComputedStyle(control, "::before");
+	const drawn = before.content !== "none" && before.position === "absolute";
+	const outset = (inset: string) => (drawn ? -Number.parseFloat(inset) || 0 : 0);
+	await expect(box.width + outset(before.left) + outset(before.right)).toBeGreaterThanOrEqual(
+		minimum,
+	);
+	await expect(box.height + outset(before.top) + outset(before.bottom)).toBeGreaterThanOrEqual(
+		minimum,
+	);
+}

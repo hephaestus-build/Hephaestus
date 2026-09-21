@@ -12,6 +12,16 @@ import type { StatusDef } from "./status-def";
 
 export type PracticeGroupStandingValue = PracticeGroupStanding["standing"];
 
+/** Whose standing or trend a surface shows: one practice's, or a group's over its practices. */
+export type StandingScope = "practice" | "group";
+
+/**
+ * A standing a review has settled; the other two say why none could be formed, and carry no trend.
+ */
+export function isSettledStanding(standing: PracticeGroupStandingValue): boolean {
+	return standing !== "NOT_OBSERVED" && standing !== "NO_OPPORTUNITY";
+}
+
 export interface PracticeGroupStandingDef extends StatusDef {
 	shortLabel: string;
 }
@@ -46,7 +56,7 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		icon: CircleSlashIcon,
 		badgeVariant: "outline",
 		description:
-			"Your work was reviewed, but nothing here could be judged — either these practices did not apply to it, or the evidence did not settle the question.",
+			"Your work was reviewed, but nothing here could be judged: either these practices did not apply to it, or the evidence did not settle the question.",
 	},
 	NOT_OBSERVED: {
 		shortLabel: "Not observed",
@@ -56,3 +66,21 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		description: "No practice in this group has a current verdict for you.",
 	},
 };
+
+/**
+ * The same standings read for one practice. The sentences are the group's, except where the
+ * group's names its practices: a practice no review has settled is one practice with no verdict,
+ * not a group with none.
+ */
+export const PRACTICE_STANDING_DEFS: Record<PracticeGroupStandingValue, PracticeGroupStandingDef> =
+	{
+		...PRACTICE_GROUP_STANDING_DEFS,
+		NOT_OBSERVED: {
+			...PRACTICE_GROUP_STANDING_DEFS.NOT_OBSERVED,
+			description: "This practice has no current verdict for you yet.",
+		},
+	};
+
+/** The registry whose sentences are worded for whose standing it is. */
+export const standingDefs = (scope: StandingScope) =>
+	scope === "practice" ? PRACTICE_STANDING_DEFS : PRACTICE_GROUP_STANDING_DEFS;

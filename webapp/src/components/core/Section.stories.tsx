@@ -30,10 +30,15 @@ export const Default: Story = {
 export const Sizes: Story = {
 	render: (args) => (
 		<div className="space-y-8">
+			<Section {...args} size="lg" title="Large — a section of a practice surface" />
 			<Section {...args} size="md" title="Medium — a section of an admin page" />
 			<Section {...args} size="sm" title="Small — a subsection inside a panel" />
 		</div>
 	),
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("heading", { name: /^Large/ })).toHaveClass("text-xl");
+		await expect(canvas.getByRole("heading", { name: /^Medium/ })).toHaveClass("text-lg");
+	},
 };
 
 export const WithActions: Story = {

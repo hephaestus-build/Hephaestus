@@ -96,7 +96,7 @@ export function ObservationDetailPage({
 			</article>
 		);
 	}
-	const artifactSlug = reviewArtifactTypeSlug(observation.artifact.type);
+	const artifactSlug = reviewArtifactTypeSlug(observation.artifact.kind);
 
 	return (
 		<article className="min-w-0 max-w-4xl space-y-8">
@@ -136,7 +136,9 @@ export function ObservationDetailPage({
 				<ReviewFact label="Reviewed work">
 					<div className="space-y-1">
 						<ReviewArtifactLink artifact={observation.artifact} />
-						<p className="break-words text-muted-foreground">{observation.artifact.title}</p>
+						{observation.artifact.title && (
+							<p className="break-words text-muted-foreground">{observation.artifact.title}</p>
+						)}
 						{artifactSlug && (
 							<Link
 								className="font-medium underline underline-offset-4"
@@ -144,7 +146,7 @@ export function ObservationDetailPage({
 								params={{
 									workspaceSlug,
 									artifactKind: artifactSlug,
-									artifactId: String(observation.artifact.id),
+									artifactId: observation.artifact.id,
 								}}
 							>
 								See everything reviewed on this work

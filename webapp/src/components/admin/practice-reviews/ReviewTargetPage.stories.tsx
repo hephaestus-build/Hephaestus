@@ -1,8 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen } from "storybook/test";
 
-import type { ReviewArtifact } from "@/api/types.gen";
-import { isKnownArtifactKind } from "@/lib/artifact-kinds";
 import { expectNoPageOverflow } from "@/test/reflow";
 
 import { REVIEW_PREVIEW_SIZE, type ReviewSectionState } from "./ReviewOutputSections";
@@ -13,6 +11,7 @@ import {
 	reviewArtifact,
 	reviewFeedback,
 	reviewObservations,
+	type ReviewWork,
 	slackConversation,
 	workspacePractices,
 } from "./story-mock-data";
@@ -23,11 +22,11 @@ import {
  * The section shows a preview and links on to the full list, so `total` is the whole count while
  * `items` is only the first page of it.
  */
-const outputFor = <T extends { artifact?: ReviewArtifact }>(
+const outputFor = <T extends { artifact?: { id: string } }>(
 	rows: T[],
-	artifact: ReviewArtifact,
+	{ reviewedWork }: ReviewWork,
 ): ReviewSectionState<T> => {
-	const matching = rows.filter((row) => row.artifact?.id === artifact.id);
+	const matching = rows.filter((row) => row.artifact?.id === reviewedWork.id);
 	return {
 		status: "ready",
 		items: matching.slice(0, REVIEW_PREVIEW_SIZE),
@@ -41,17 +40,12 @@ const empty = <T,>(): ReviewSectionState<T> => ({ status: "ready", items: [], to
 const THIN_CONTROLLERS = workspacePractices.find((p) => p.slug === "thin-controllers");
 if (!THIN_CONTROLLERS) throw new Error("The practice fixtures no longer cover thin-controllers");
 
-const argsFor = (artifact: ReviewArtifact) => {
-	if (!isKnownArtifactKind(artifact.type)) {
-		throw new Error(`Fixture artifact ${artifact.id} has an unlabelled kind: ${artifact.type}`);
-	}
-	return {
-		artifactKind: artifact.type,
-		artifactId: artifact.id,
-		feedback: outputFor(reviewFeedback, artifact),
-		observations: outputFor(reviewObservations, artifact),
-	};
-};
+const argsFor = (work: ReviewWork) => ({
+	artifactKind: work.reviewedWork.kind,
+	artifactId: Number(work.reviewedWork.id),
+	feedback: outputFor(reviewFeedback, work),
+	observations: outputFor(reviewObservations, work),
+});
 
 const meta = {
 	title: "Workspace admin/Practice reviews/Reviewed work",
@@ -73,14 +67,12 @@ type Story = StoryObj<typeof meta>;
 export const PullRequest: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" } },
 	play: async ({ canvas }) => {
-		await canvas.findByRole("heading", {
-			name: "Cache the workspace member lookup on the review path",
-			level: 2,
-		});
-		// Nothing labels the page as "Reviewed work": the breadcrumb stops before the heading, and the
-		// work names itself.
-		await expect(canvas.queryAllByText("Reviewed work")).toHaveLength(0);
-		await expect(canvas.getAllByText("ls1intum/Hephaestus · PR #1423").length).toBeGreaterThan(0);
+		// The heading is the work's own title, as the server names it; the work is the link under it,
+		// named as its rows name it.
+		await canvas.findByRole("heading", { name: reviewArtifact.title, level: 2 });
+		await expect(
+			await canvas.findByRole("link", { name: /ls1intum\/Hephaestus · #1423/ }),
+		).toHaveAttribute("href", reviewArtifact.reviewedWork.url);
 		await expectNoPageOverflow();
 	},
 };
@@ -107,13 +99,7 @@ export const MergeRequest: Story = {
 	args: argsFor(gitlabMergeRequest),
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByRole("heading", {
-			name: "Move invoice numbering behind the billing boundary",
-			level: 2,
-		});
-		await expect(canvas.getAllByText("platform/billing-service · MR !88").length).toBeGreaterThan(
-			0,
-		);
+		await canvas.findByRole("link", { name: /platform\/billing-service · !88/ });
 	},
 };
 
@@ -121,23 +107,16 @@ export const Conversation: Story = {
 	args: argsFor(slackConversation),
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByRole("heading", {
-			name: "How should we roll back the pricing migration?",
-			level: 2,
-		});
-		await expect(canvas.getAllByText("#engineering").length).toBeGreaterThan(0);
+		await canvas.findByRole("link", { name: /#engineering/ });
 	},
 };
 
-/** A document's label is its kind, because it has no number to be known by. */
+/** A document is known by its title, having no number to be known by. */
 export const Document: Story = {
 	args: argsFor(outlineDocument),
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByRole("heading", {
-			name: "Runbook: restoring a workspace from backup",
-			level: 2,
-		});
+		await canvas.findByRole("link", { name: /Runbook: restoring a workspace from backup/ });
 	},
 };
 
@@ -153,7 +132,7 @@ export const NothingReviewed: Story = {
 	},
 };
 
-/** Neither section has answered yet: the heading is a skeleton rather than a guess at the title. */
+/** Neither section has answered yet: the work's link is a skeleton rather than a guess at its name. */
 export const Loading: Story = {
 	args: { feedback: { status: "loading" }, observations: { status: "loading" } },
 	parameters: { chromatic: { viewports: [1440] } },
@@ -176,10 +155,7 @@ export const ObservationsFailed: Story = {
 	},
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByRole("heading", {
-			name: "Cache the workspace member lookup on the review path",
-			level: 2,
-		});
+		await canvas.findByRole("link", { name: /ls1intum\/Hephaestus · #1423/ });
 		await canvas.findByText("Couldn't load observations");
 		await expect(
 			canvas.queryByText("Nothing has been reviewed on this work"),

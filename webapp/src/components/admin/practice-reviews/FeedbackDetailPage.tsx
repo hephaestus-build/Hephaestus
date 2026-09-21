@@ -97,7 +97,7 @@ export function FeedbackDetailPage({
 	const feedback = state.feedback;
 	const subjectDiffers = feedback.subject && feedback.subject.id !== feedback.recipient?.id;
 	const artifactSlug = feedback.artifact
-		? reviewArtifactTypeSlug(feedback.artifact.type)
+		? reviewArtifactTypeSlug(feedback.artifact.kind)
 		: undefined;
 	const anchoredPlacements = feedback.placements.filter((placement) => placement.anchorPath);
 	const packageSize = feedback.proposedPlacements.length;
@@ -134,7 +134,7 @@ export function FeedbackDetailPage({
 				<ReviewFact label="Reviewed work">
 					<div className="space-y-1">
 						<ReviewArtifactLink artifact={feedback.artifact} />
-						{feedback.artifact && (
+						{feedback.artifact?.title && (
 							<p className="break-words text-muted-foreground">{feedback.artifact.title}</p>
 						)}
 						{feedback.artifact && artifactSlug && (
@@ -144,7 +144,7 @@ export function FeedbackDetailPage({
 								params={{
 									workspaceSlug,
 									artifactKind: artifactSlug,
-									artifactId: String(feedback.artifact.id),
+									artifactId: feedback.artifact.id,
 								}}
 							>
 								See everything reviewed on this work
