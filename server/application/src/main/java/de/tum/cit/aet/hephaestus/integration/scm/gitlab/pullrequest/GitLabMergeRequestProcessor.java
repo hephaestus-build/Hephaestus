@@ -883,7 +883,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
      * and user native IDs fit in 32 bits. When either exceeds its safe range,
      * collisions become possible due to bit truncation, and a warning is logged.
      */
-    static long generateApprovalNativeId(long mrNativeId, long userNativeId) {
+    public static long generateApprovalNativeId(long mrNativeId, long userNativeId) {
         if (mrNativeId > Integer.MAX_VALUE || userNativeId > Integer.MAX_VALUE) {
             log.warn(
                     "Native IDs exceed safe range, review nativeId may collide: mrNativeId={}, userNativeId={}",

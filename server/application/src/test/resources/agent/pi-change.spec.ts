@@ -7,11 +7,88 @@ import test from "node:test";
 
 import {
 	annotateDiff,
+	authoredDescription,
 	parseCommits,
 	parseNameStatus,
 	readChange,
+	renderAuthoredDescription,
 	writeChangeView,
 } from "../../../main/resources/agent/pi-change.ts";
+
+/** The form a GitLab project ships under `.gitlab/merge_request_templates/`, as one cohort did. */
+const TEMPLATE = `<!-- MR title format: #<IssueNumber>: <Short, imperative description> — Example: #12: Add login screen -->
+
+## Description
+Closes #<!-- issue number -->
+
+<!-- Briefly describe what you implemented and why. -->
+
+## Intro Course App Requirements
+<!-- Fill this in when your MR fulfills a course requirement. Leave empty if not applicable. -->
+
+- [ ] **Requirement:** <!-- e.g., Persistence --> — <!-- short explanation -->
+
+## Testing Instructions
+<!-- List steps to verify the changes, or write "N/A" if not applicable. -->
+
+## Definition of Done
+- [ ] MR title follows the \`#<IssueNumber>: <Description>\` format
+- [ ] Description explains what was changed and why
+- [ ] Related issue is linked (e.g., \`Closes #12\`)
+`;
+
+/** A description as an author left it: the form with three lines of their own and two boxes ticked. */
+const DESCRIPTION = `<!--MR title format: #<IssueNumber>: <Short, imperative description> — Example: #12: Add login screen-->
+
+## Description
+
+Closes #11
+
+Implement guess logic to all quiztypes
+
+## Intro Course App Requirements
+
+<!--Fill this in when your MR fulfills a course requirement. Leave empty if not applicable.-->
+
+- [ ] **Requirement:**
+
+  <!--e.g., Persistence-->
+
+  —
+
+## Testing Instructions
+
+N/A
+
+## Definition of Done
+
+- [x] MR title follows the \`#<IssueNumber>: <Description>\` format
+- [x] Description explains what was changed and why
+- [ ] Related issue is linked (e.g., \`Closes #12\`)
+`;
+
+void test("the author's lines are told apart from the template's, comments and ticks included", () => {
+	const view = authoredDescription(DESCRIPTION, new Map([["templates/Default.md", TEMPLATE]]));
+	assert.equal(view.template, "templates/Default.md");
+	// "Closes #11", the sentence and "N/A"; the label line and the placeholder dash are the form's.
+	assert.deepEqual(view.authored, [5, 7, 21]);
+	assert.deepEqual(view.ticked, [25, 26]);
+	const rendered = renderAuthoredDescription(DESCRIPTION, view);
+	assert.match(rendered, /Template `templates\/Default\.md`: 25 of the description's 28 lines/u);
+	assert.match(
+		rendered,
+		/\[L5\] Closes #11\n\[L7\] Implement guess logic to all quiztypes\n\[L21\] N\/A/u,
+	);
+	assert.match(rendered, /ticked:\n\[L25\] - \[x\] MR title follows/u);
+	// With no template, only the comments are left out and every other line is the author's.
+	const bare = authoredDescription("Closes #3\n<!-- how -->\nBecause it is slow.\n", new Map());
+	assert.equal(bare.template, null);
+	assert.deepEqual(bare.authored, [1, 3]);
+	assert.match(
+		renderAuthoredDescription("x", bare),
+		/No merge request template is in the checkout/u,
+	);
+});
 
 function git(repository: string, ...args: string[]): string {
 	return execFileSync("git", ["-C", repository, ...args], {
@@ -38,6 +115,8 @@ function repositoryWithChange() {
 		path.join(repo, "app.ts"),
 		"export const a = 1;\nexport const b = 2;\nexport const c = 3;\n",
 	);
+	mkdirSync(path.join(repo, ".gitlab/merge_request_templates"), { recursive: true });
+	writeFileSync(path.join(repo, ".gitlab/merge_request_templates/Default.md"), TEMPLATE);
 	git(repo, "add", ".");
 	git(repo, "commit", "-q", "-m", "Base");
 	const base = git(repo, "rev-parse", "HEAD");
@@ -113,7 +192,7 @@ void test("derives the change view from a real checkout with git", () => {
 		);
 		const change = readChange(path.join(root, "context"));
 		assert.deepEqual(change, { base, head });
-		writeChangeView(root, repo, change);
+		writeChangeView(root, repo, change, DESCRIPTION);
 
 		const diff = readFileSync(path.join(root, "work/change/diff.patch"), "utf8");
 		assert.match(diff, /rename from app\.ts\nrename to lib\.ts/u);
@@ -149,6 +228,11 @@ void test("derives the change view from a real checkout with git", () => {
 		const last: unknown = list[1];
 		assert.ok(typeof last === "object" && last !== null);
 		assert.equal(Reflect.get(last, "sha"), head);
+		// The template is read from the checkout at the reviewed head, and the authored view written.
+		assert.match(
+			readFileSync(path.join(root, "work/change/description.authored.md"), "utf8"),
+			/Template `\.gitlab\/merge_request_templates\/Default\.md`[\s\S]*\[L5\] Closes #11/u,
+		);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

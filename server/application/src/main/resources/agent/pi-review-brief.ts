@@ -54,6 +54,7 @@ function candidates(root: string, paths: BriefPaths, limits: BriefLimits): Candi
 	return [
 		context("metadata.json"),
 		context("description.md", "markdown"),
+		change("description.authored.md", "markdown"),
 		change("files.json", "json"),
 		change("diff_stat.txt", "text"),
 		change("commits.json", "json"),

@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
 import java.time.Instant;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -100,6 +101,40 @@ public class GitLabReviewReconciler {
                 .findByNativeIdAndProviderId(reviewNativeId, providerId)
                 .map(existing -> updateReview(existing, earliestNoteCreatedAt, ctx))
                 .orElseGet(() -> createReview(reviewNativeId, pr, author, provider, earliestNoteCreatedAt, ctx));
+    }
+
+    /**
+     * Records when an approval was given. GitLab's {@code approvedBy} carries no time, so the approval
+     * review is created at the merge request's merged or updated time; the system note "approved this
+     * merge request" is the moment the approver acted, and it is the moment a practice about approving
+     * before merging needs. The earliest such note by the approver stands; an approval later than the
+     * note is moved back, one earlier is left alone.
+     *
+     * @return the review as it stands after the note, or {@code null} when no approval by this user is
+     *     recorded for the merge request
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public @Nullable PullRequestReview recordApprovalTime(
+            PullRequest pr, User approver, Instant approvedAt, IdentityProvider provider) {
+        if (pr.getNativeId() == null || approver.getNativeId() == null || provider.getId() == null) {
+            return null;
+        }
+        long approvalNativeId =
+                GitLabMergeRequestProcessor.generateApprovalNativeId(pr.getNativeId(), approver.getNativeId());
+        PullRequestReview review = reviewRepository
+                .findByNativeIdAndProviderId(approvalNativeId, provider.getId())
+                .orElse(null);
+        if (review == null || review.getState() != PullRequestReview.State.APPROVED) {
+            return review;
+        }
+        Instant recorded = review.getSubmittedAt();
+        if (recorded == null || approvedAt.isBefore(recorded)) {
+            review.setSubmittedAt(approvedAt);
+            review.setCreatedAt(approvedAt);
+            review.setUpdatedAt(Instant.now());
+            return reviewRepository.save(review);
+        }
+        return review;
     }
 
     private PullRequestReview updateReview(

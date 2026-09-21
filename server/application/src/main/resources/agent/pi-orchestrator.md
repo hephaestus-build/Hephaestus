@@ -98,6 +98,7 @@ directory of `preparedFeedback`.
 - `<contextRoot>/change.json` — (PR) the pinned `base_sha` and `head_sha`; the artifact a change citation names, never a file to quote
 - `<contextRoot>/metadata.json` — the record as the provider holds it: title, body, author, branches, state, labels, and for a PR the `created_at`, `closed_at` and `merged_at` moments it recorded
 - `<contextRoot>/description.md` — (PR, ISSUE) the description as written, line by line
+- `work/change/description.authored.md` — (PR) the description's own lines by their line numbers in `description.md`, apart from the merge request template the checkout carries: a heading, a checklist label, a placeholder or an HTML comment the form ships is the form's, not the author's words, and a template checklist item the author ticked is listed apart. What a practice asks of "the description" it asks of the author's lines; a form's "Closes #12" example links nothing and a form's checklist is not the issue's criteria
 - `<contextRoot>/comments.json` — the discussion (for a PR, its line-anchored review comments)
 - `<contextRoot>/review_threads.json`, `<contextRoot>/general_comments.json` — (PR) review threads with state and decisions; the non-inline conversation, Hephaestus's own notes filtered out
 - `<contextRoot>/linked_work_items/<n>.md` — (PR) each linked issue this repository stores, its title on the first line and its body as written: quote an issue from here

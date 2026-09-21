@@ -46,11 +46,11 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
 
     /** Workspace-relative files pi-change.ts derives under {@code work/change/} inside the container. */
     private static final Set<String> REAL_CHANGE_FILES =
-            Set.of("diff.patch", "diff_stat.txt", "files.json", "commits.json");
+            Set.of("diff.patch", "diff_stat.txt", "files.json", "commits.json", "description.authored.md");
 
     private static final Pattern CONTEXT_PATH = Pattern.compile("inputs/context/([a-z_]+\\.[a-z]+)");
 
-    private static final Pattern CHANGE_PATH = Pattern.compile("work/change/([a-z_]+\\.[a-z]+)");
+    private static final Pattern CHANGE_PATH = Pattern.compile("work/change/([a-z_.]+\\.[a-z]+)");
 
     @Test
     @DisplayName("default-catalog.json names no fictional context/target/ paths and every inputs/context/ path is real")

@@ -80,4 +80,8 @@ export interface PullRequestMetadata {
 	deletions?: number;
 	changed_files?: number;
 	author?: string;
+	merged_by?: string;
+	created_at?: string;
+	closed_at?: string;
+	merged_at?: string;
 }

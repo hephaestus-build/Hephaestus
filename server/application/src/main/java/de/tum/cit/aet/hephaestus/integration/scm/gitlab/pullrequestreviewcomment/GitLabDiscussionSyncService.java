@@ -529,8 +529,13 @@ public class GitLabDiscussionSyncService {
         int generalNotes = 0;
 
         for (Map<String, Object> noteNode : noteNodes) {
-            // Skip system and internal notes
-            if (Boolean.TRUE.equals(noteNode.get("system")) || Boolean.TRUE.equals(noteNode.get("internal"))) {
+            // A system note is not a comment, but the one that records an approval is the only place
+            // GitLab says when the approval was given.
+            if (Boolean.TRUE.equals(noteNode.get("system"))) {
+                recordApprovalFromSystemNote(noteNode, pr, providerId);
+                continue;
+            }
+            if (Boolean.TRUE.equals(noteNode.get("internal"))) {
                 continue;
             }
 
@@ -569,6 +574,21 @@ public class GitLabDiscussionSyncService {
         }
 
         return new int[] {0, generalNotes, 0};
+    }
+
+    /** GitLab's own wording for the system note it writes when a user approves a merge request. */
+    static final String APPROVED_SYSTEM_NOTE = "approved this merge request";
+
+    private void recordApprovalFromSystemNote(Map<String, Object> noteNode, PullRequest pr, Long providerId) {
+        if (!APPROVED_SYSTEM_NOTE.equals(String.valueOf(noteNode.get("body")).strip())) {
+            return;
+        }
+        Instant approvedAt = parseTimestamp((String) noteNode.get("createdAt"));
+        User approver = resolveAuthor(noteNode, providerId);
+        if (approvedAt == null || approver == null) {
+            return;
+        }
+        reviewReconciler.recordApprovalTime(pr, approver, approvedAt, pr.getProvider());
     }
 
     /**
