@@ -75,13 +75,14 @@ void test("runner executes a staged practice and writes its public artifact cont
 	assert.ok(await readFile(path.join(output, ".complete"), "utf8"));
 });
 
-void test("a practice with nothing to show says what it scanned, so the model does not grep again", async () => {
+void test("a practice that scanned the diff and found nothing says what it scanned; one that scanned nothing says only its directions", async () => {
 	const { summary } = await run({
 		scanned: script({ hints: [], metrics: { linesAdded: 120, filesScanned: 4 }, directions: [] }),
 		bare: script({ hints: [], metrics: {}, directions: ["no record captured"] }),
 	});
 	assert.match(summary, /## scanned\n\nScanned 120 added lines in 4 files; nothing matched\./u);
-	assert.match(summary, /## bare\n\n- no record captured\n\nNothing matched\./u);
+	assert.match(summary, /## bare\n\n- no record captured\n\n(?!Nothing matched)/u);
+	assert.doesNotMatch(summary, /Nothing matched/u);
 });
 
 /** A long row of the given kind, so a handful of practices overrun the budget. */

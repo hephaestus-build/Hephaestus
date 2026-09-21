@@ -223,12 +223,13 @@ function renderPractice(result: PracticeResult, recordRows: number, inDiffRows: 
 		lines.push(...result.directions.map((d) => `- ${d}`), "");
 	}
 
-	if (result.hints.length === 0 && result.status === "ok") {
-		const { linesAdded, filesScanned } = result.metrics;
+	// A scan of the diff that matched nothing says so with its extent, so the model does not grep
+	// again. A script that scanned nothing — a record script, a census — has its directions and no
+	// such line: "nothing matched" under "no test files were found" reads as a second absence.
+	const { linesAdded, filesScanned } = result.metrics;
+	if (result.hints.length === 0 && result.status === "ok" && linesAdded !== undefined) {
 		lines.push(
-			linesAdded === undefined
-				? "Nothing matched."
-				: `Scanned ${linesAdded} added lines${filesScanned === undefined ? "" : ` in ${filesScanned} files`}; nothing matched.`,
+			`Scanned ${linesAdded} added lines${filesScanned === undefined ? "" : ` in ${filesScanned} files`}; nothing matched.`,
 			"",
 		);
 	}
