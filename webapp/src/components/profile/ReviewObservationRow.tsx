@@ -10,6 +10,7 @@ import {
 	toneOf,
 } from "@/components/common/ResponseCommentBand";
 import { SectionLabel } from "@/components/common/SectionLabel";
+import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { CLAIM_CURRENTNESS_NOTES } from "@/components/practice-vocabulary/claim-currentness-notes";
 import {
 	FEEDBACK_RESOLUTION_DEFS,
@@ -33,6 +34,19 @@ import { cn } from "@/lib/utils";
 import { toEvidenceCheck, toEvidenceLocations } from "./evidence";
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
 import { type FeedbackResponse, feedbackResponseOf } from "./review-runs";
+
+/**
+ * The reviewer's own words about this observation, in the Markdown it writes them in: a file, a
+ * field or a value it quotes comes back as code rather than as a line of stray backticks. The
+ * same restricted rendering the feedback card's body gets, so the two never drift apart.
+ */
+function ReviewerText({ children }: { children: string }) {
+	return (
+		<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "text-sm text-pretty")}>
+			<UntrustedMarkdown>{children}</UntrustedMarkdown>
+		</div>
+	);
+}
 
 interface DetailSectionProps {
 	label: string;
@@ -224,7 +238,7 @@ export function ReviewObservationRow({
 						{note && <p className="text-sm text-muted-foreground">{note}</p>}
 						{observation.evidenceRationale && (
 							<DetailSection label="Why it was noted">
-								<p className="text-sm text-pretty">{observation.evidenceRationale}</p>
+								<ReviewerText>{observation.evidenceRationale}</ReviewerText>
 							</DetailSection>
 						)}
 						{checks.length > 0 && (
@@ -235,7 +249,9 @@ export function ReviewObservationRow({
 									{checks.map(({ term, detail }) => (
 										<Fragment key={term}>
 											<dt className="text-muted-foreground">{term}:</dt>
-											<dd className="min-w-0 text-pretty">{detail}</dd>
+											<dd className="min-w-0">
+												<ReviewerText>{detail}</ReviewerText>
+											</dd>
 										</Fragment>
 									))}
 								</dl>
@@ -270,7 +286,7 @@ export function ReviewObservationRow({
 						)}
 						{nextStep && (
 							<DetailSection label="Next step">
-								<p className="text-sm text-pretty">{nextStep}</p>
+								<ReviewerText>{nextStep}</ReviewerText>
 							</DetailSection>
 						)}
 						{canRespond && (

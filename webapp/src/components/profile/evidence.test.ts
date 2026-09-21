@@ -236,13 +236,16 @@ describe("toEvidenceCheck", () => {
 				search: {
 					lookedFor: "a test exercising the new branch",
 					consulted: ["scm.pull-request.diff", "scm.repository.tree"],
-					boundary: "test files outside the paths this change touched",
+					boundary: "every test file the diff touches and the repository's own test tree",
 				},
 			}),
 		).toStrictEqual([
 			{ term: "Looked for", detail: "a test exercising the new branch" },
 			{ term: "Read", detail: "The code changes and Files in the repository" },
-			{ term: "Not covered", detail: "test files outside the paths this change touched" },
+			{
+				term: "How far it reached",
+				detail: "every test file the diff touches and the repository's own test tree",
+			},
 		]);
 	});
 
@@ -284,7 +287,7 @@ describe("toEvidenceCheck", () => {
 	it("names an unknown source kind verbatim and drops the pair when nothing was consulted", () => {
 		const search = {
 			lookedFor: "a changelog entry",
-			boundary: "files this change did not touch",
+			boundary: "the files this change touches",
 		};
 		expect(
 			toEvidenceCheck({ citations: [], search: { ...search, consulted: ["future.source"] } })[1],
@@ -293,7 +296,7 @@ describe("toEvidenceCheck", () => {
 			toEvidenceCheck({ citations: [], search: { ...search, consulted: [] } }).map(
 				({ term }) => term,
 			),
-		).toStrictEqual(["Looked for", "Not covered"]);
+		).toStrictEqual(["Looked for", "How far it reached"]);
 	});
 
 	it("has nothing to say about an observation with no warrant at all", () => {

@@ -882,7 +882,7 @@ describe("composeNextStep", () => {
 		groupSlug: "review-ready-work",
 		groupName: "Packaging work for review",
 		headline: "Merge requests bundle a fix with a refactor",
-		body: [],
+		body: "",
 		reviewedWork: [
 			{ ref: pullRequest(418), date: "2026-09-06", outcome: "COMMISSION_PROBLEM" },
 			{ ref: pullRequest(421), date: "2026-09-03", outcome: "OMISSION_GAP" },

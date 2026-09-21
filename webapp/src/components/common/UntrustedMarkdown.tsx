@@ -1,4 +1,11 @@
-import type { AnchorHTMLAttributes, HTMLAttributes } from "react";
+import {
+	type AnchorHTMLAttributes,
+	createContext,
+	Fragment,
+	type HTMLAttributes,
+	type ReactNode,
+	useContext,
+} from "react";
 import { Streamdown } from "streamdown";
 
 import { MarkdownCode } from "@/components/common/MarkdownCode";
@@ -25,6 +32,28 @@ function DemotedHeading({ children, className }: HTMLAttributes<HTMLHeadingEleme
 	return <h4 className={className}>{children}</h4>;
 }
 
+/**
+ * What a run of plain text in the Markdown renders as. The default is the words themselves; a
+ * caller with something to say about them — the feedback card, which links every piece of work it
+ * can vouch for — hands over its own, and every paragraph, list item, bold and italic run goes
+ * through it. What a backtick or a fence holds never does: code is quoted, not prose.
+ */
+const RenderTextContext = createContext<(value: string) => ReactNode>((value) => value);
+
+/**
+ * The strings among an element's children as the caller writes them; everything else stands. The
+ * renderer hands over a single node or an array of them, and only the strings are text runs — a
+ * nested element carries its own, through its own `TextRuns`.
+ */
+function TextRuns({ children }: { children?: ReactNode }) {
+	const renderText = useContext(RenderTextContext);
+	if (typeof children === "string") return renderText(children);
+	if (!Array.isArray(children)) return children;
+	return children.map((child: ReactNode, index) =>
+		typeof child === "string" ? <Fragment key={index}>{renderText(child)}</Fragment> : child,
+	);
+}
+
 const UNTRUSTED_MARKDOWN_COMPONENTS = {
 	a: SafeAnchor,
 	code: MarkdownCode,
@@ -35,6 +64,35 @@ const UNTRUSTED_MARKDOWN_COMPONENTS = {
 	h4: DemotedHeading,
 	h5: DemotedHeading,
 	h6: DemotedHeading,
+};
+
+/**
+ * The elements the Markdown puts prose in. Overriding one costs the renderer's own styling for it,
+ * so they stand in only for a caller that rewrites the words — the rest keep what the renderer
+ * gives them.
+ */
+const RENDERED_TEXT_COMPONENTS = {
+	...UNTRUSTED_MARKDOWN_COMPONENTS,
+	p: ({ children, className }: HTMLAttributes<HTMLParagraphElement>) => (
+		<p className={className}>
+			<TextRuns>{children}</TextRuns>
+		</p>
+	),
+	li: ({ children, className }: HTMLAttributes<HTMLLIElement>) => (
+		<li className={className}>
+			<TextRuns>{children}</TextRuns>
+		</li>
+	),
+	strong: ({ children, className }: HTMLAttributes<HTMLElement>) => (
+		<strong className={className}>
+			<TextRuns>{children}</TextRuns>
+		</strong>
+	),
+	em: ({ children, className }: HTMLAttributes<HTMLElement>) => (
+		<em className={className}>
+			<TextRuns>{children}</TextRuns>
+		</em>
+	),
 };
 
 /**
@@ -54,6 +112,12 @@ export const UNTRUSTED_MARKDOWN_PROSE =
 
 export interface UntrustedMarkdownProps {
 	children: string;
+	/**
+	 * Rewrites every run of plain text — a feedback card hands over the one that links the work it
+	 * can vouch for, so a reference the composer wrote stays a link once the words around it are
+	 * Markdown. Code is left alone.
+	 */
+	renderText?: (value: string) => ReactNode;
 }
 
 /**
@@ -65,15 +129,17 @@ export interface UntrustedMarkdownProps {
  * <p>Brings no wrapper of its own. Callers put {@link UNTRUSTED_MARKDOWN_PROSE} on whichever element
  * they already have, so the prose scope cannot end up nested inside itself.
  */
-export function UntrustedMarkdown({ children }: UntrustedMarkdownProps) {
-	return (
+export function UntrustedMarkdown({ children, renderText }: UntrustedMarkdownProps) {
+	const markdown = (
 		<Streamdown
 			mode="static"
 			rehypePlugins={[]}
 			remarkRehypeOptions={{ allowDangerousHtml: false }}
-			components={UNTRUSTED_MARKDOWN_COMPONENTS}
+			components={renderText ? RENDERED_TEXT_COMPONENTS : UNTRUSTED_MARKDOWN_COMPONENTS}
 		>
 			{children}
 		</Streamdown>
 	);
+	if (!renderText) return markdown;
+	return <RenderTextContext.Provider value={renderText}>{markdown}</RenderTextContext.Provider>;
 }

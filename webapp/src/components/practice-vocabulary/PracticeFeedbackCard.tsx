@@ -3,7 +3,12 @@ import { type ComponentType, useId } from "react";
 
 import type { PracticeStandingObservation, ReviewedWorkRef } from "@/api/types.gen";
 import { pillClasses } from "@/components/admin/practice-catalog/group-visuals";
-import { count, countedWork, type FeedbackTextSegment } from "@/components/common/feedback-text";
+import {
+	count,
+	countedWork,
+	type FeedbackTextSegment,
+	linkWork,
+} from "@/components/common/feedback-text";
 import { FeedbackText } from "@/components/common/FeedbackText";
 import { FOCUS_RING, HIT_AREA_24 } from "@/components/common/focus";
 import { InlineLink } from "@/components/common/InlineLink";
@@ -14,6 +19,7 @@ import {
 	type ResponseReason,
 	toneOf,
 } from "@/components/common/ResponseCommentBand";
+import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { artifactKindIcon } from "@/lib/artifact-kinds";
@@ -85,7 +91,12 @@ export interface PracticeFeedbackCardEntry {
 	groupColor?: string | null;
 	groupIcon?: ComponentType<{ className?: string; size?: number }>;
 	headline: string;
-	body: FeedbackTextSegment[];
+	/**
+	 * What was seen, in the composer's own Markdown: paragraphs, bullet lists, bold, italic and
+	 * inline code. Every reference to a piece of work the card carries — its evidence and its clean
+	 * work — becomes that piece's link wherever it stands in the text.
+	 */
+	body: string;
 	/**
 	 * The evidence behind the feedback; the strip lists the newest that fit, oldest to newest, in
 	 * any order given. Each piece carries its own kind and provider, which is what the strip's
@@ -222,6 +233,9 @@ export function PracticeFeedbackCard({
 		...cleanWork.map((ref) => ({ key: ref.id, ref, outcome: "DEMONSTRATED_STRENGTH" as const })),
 	];
 	const stripLabel = countedStrip(strip.map((piece) => piece.ref));
+	// The work the body may name: everything the card can vouch for, whether the strip shows it or
+	// gave way to a newer piece.
+	const knownWork = [...reviewedWork.map((piece) => piece.ref), ...cleanWork];
 	const KindIcon = artifactKindIcon(stripLabel.kind);
 
 	return (
@@ -262,9 +276,13 @@ export function PracticeFeedbackCard({
 					<h3 id={headingId} className="max-w-3xl text-lg font-semibold">
 						{headline}
 					</h3>
-					<p className="max-w-3xl text-sm text-muted-foreground">
-						<FeedbackText segments={body} onOpenPractice={onOpenPractice} />
-					</p>
+					<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "max-w-3xl text-sm text-muted-foreground")}>
+						<UntrustedMarkdown
+							renderText={(value) => <FeedbackText segments={linkWork(value, knownWork)} />}
+						>
+							{body}
+						</UntrustedMarkdown>
+					</div>
 				</div>
 
 				<div className="flex flex-wrap items-center gap-x-4 gap-y-3 text-sm">

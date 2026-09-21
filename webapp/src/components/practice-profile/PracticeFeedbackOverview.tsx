@@ -2,7 +2,7 @@ import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 
 import type { PracticeGroup } from "@/api/types.gen";
-import { spell } from "@/components/common/feedback-text";
+import { count } from "@/components/common/feedback-text";
 import { FeedbackText } from "@/components/common/FeedbackText";
 import { Section } from "@/components/core/Section";
 import {
@@ -69,8 +69,15 @@ export function PracticeFeedbackOverview({
 }
 
 /**
- * The paragraph and, under it, what it only counted: "See the other seven" unfolds one paragraph
- * per kind in place. The disclosure is this block's own state, not a place in the URL.
+ * What the trigger offers: the one change the paragraph folded away, or the several it counted.
+ * With one there is no "other" to see — the paragraph named none of them.
+ */
+const showChanges = (restCount: number): string =>
+	`Show the ${restCount === 1 ? "change" : count(restCount, "change", "changes")}`;
+
+/**
+ * The paragraph and, under it, what it only counted: "Show the seven changes" unfolds one
+ * paragraph per kind in place. The disclosure is this block's own state, not a place in the URL.
  */
 function ChangedContent({
 	overview: { changed, rest, restCount },
@@ -96,7 +103,7 @@ function ChangedContent({
 					<CollapsibleTrigger
 						render={<Button variant="link" size="inline" className="group w-fit text-sm" />}
 					>
-						{open ? "Show less" : `See the other ${spell(restCount)}`}
+						{open ? "Show less" : showChanges(restCount)}
 						<ChevronDownIcon
 							className="size-3.5 transition-transform group-aria-expanded:rotate-180"
 							aria-hidden

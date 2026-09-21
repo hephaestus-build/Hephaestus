@@ -240,14 +240,15 @@ export const searchedAndFoundNothing: ObservationDetail = {
 	assessment: "BAD",
 	severity: "MAJOR",
 	evidenceRationale:
-		"The branch is new in this change and no test file in the diff names the loader at all.",
+		"The branch is new in this change: `loadFromCache` is called in `DocumentLoader`, and no test file in the diff names it at all.",
 	evidence: {
 		detector: "practice-observer",
 		citations: [],
 		search: {
 			lookedFor: "a test exercising the new caching branch of the loader",
 			consulted: ["scm.pull-request.diff", "scm.repository.tree"],
-			boundary: "test files outside the paths this change touched",
+			boundary:
+				"every test file the diff touches and the repository's own test tree; I did not read test sources outside it",
 		},
 	},
 };

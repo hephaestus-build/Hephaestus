@@ -8,7 +8,7 @@ import { EyeIcon, MessageCircleIcon, MessageSquareReplyIcon, PackageIcon } from 
 import { text, work } from "@/components/common/feedback-text";
 import type { PracticeFeedbackCardEntry } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 
-import { conversation, issue, pullRequest } from "./practice-profile-story-mock-data";
+import { conversation, pullRequest } from "./practice-profile-story-mock-data";
 
 const PACKAGING_GROUP = {
 	groupSlug: "review-ready-work",
@@ -24,15 +24,7 @@ const SCOPE_ONE_CONCERN = {
 	practiceSlug: "scope-one-reviewable-change",
 	practiceName: "Scope the change to one concern",
 	headline: "Merge requests bundle a fix with a refactor",
-	body: [
-		text("In "),
-		work(pullRequest(19)),
-		text(" the fix for the retry loop travelled with a rename of the module it lives in, and "),
-		work(pullRequest(20)),
-		text(
-			" carried a dependency bump alongside a behaviour change. Reviewers had to follow two intentions in one diff.",
-		),
-	],
+	body: "In #19 the fix for the retry loop travelled with a rename of the module it lives in, and #20 carried a dependency bump alongside a behaviour change. Reviewers had to follow two intentions in one diff.",
 	nextStep:
 		"Next time a fix and a refactor meet in the same branch, open the fix first as its own merge request, let it be reviewed on its own, and put the refactor on top of it once the fix is in. The reviewer then reads one intention at a time.",
 	condition: CLEAN_CONDITION,
@@ -65,16 +57,7 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		practiceSlug: "ready-and-traceable-handoff",
 		practiceName: "Mark the change ready and link its issue",
 		headline: "Changes were marked ready while still carrying a draft label",
-		body: [
-			work(pullRequest(17)),
-			text(" and "),
-			work(pullRequest(19)),
-			text(" were marked ready with a 'do not merge' label still on them, and "),
-			work(pullRequest(20)),
-			text(
-				" opened without a link to its issue. Reviewers had to ask whether the change was done and why it existed.",
-			),
-		],
+		body: "#17 and #19 were marked ready with a 'do not merge' label still on them, and #20 opened without a link to its issue. Reviewers had to ask whether the change was done and why it existed.",
 		nextStep:
 			"Before marking a change ready, take the draft label off and add a 'Closes #…' line, so the reviewer knows it is finished and which need it answers.",
 		condition: CLEAN_CONDITION,
@@ -94,14 +77,7 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		practiceSlug: "describe-what-and-why",
 		practiceName: "Describe what changed and why",
 		headline: "Descriptions named the what, rarely the why",
-		body: [
-			work(pullRequest(16)),
-			text(" and "),
-			work(pullRequest(19)),
-			text(
-				" listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
-			),
-		],
+		body: "#16 and #19 listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
 		reviewedWork: [
 			{ ref: pullRequest(16), date: "2026-08-24", outcome: "OMISSION_GAP" },
 			{ ref: pullRequest(19), date: "2026-09-06", outcome: "OMISSION_GAP" },
@@ -119,14 +95,7 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		practiceSlug: "reviewable-diff-size",
 		practiceName: "Keep the diff reviewable in one sitting",
 		headline: "Two merge requests grew past what one review can hold",
-		body: [
-			work(pullRequest(21)),
-			text(" touched 41 files and "),
-			work(pullRequest(22)),
-			text(
-				" 38; both went through two rounds of review, and the second round of each reopened a file the first had already approved.",
-			),
-		],
+		body: "#21 touched 41 files and #22 38; both went through two rounds of review, and the second round of each reopened a file the first had already approved.",
 		reviewedWork: [
 			{
 				ref: pullRequest(19),
@@ -157,14 +126,7 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		practiceSlug: "merged-past-unresolved-review-threads",
 		practiceName: "Resolve open threads before merging",
 		headline: "Merge requests were merged over open review threads",
-		body: [
-			work(pullRequest(17)),
-			text(" merged with two threads still open, and on "),
-			work(pullRequest(20)),
-			text(
-				" the reviewer's question about the retry limit was never answered; the reviewer had to reopen it in the next review.",
-			),
-		],
+		body: "#17 merged with two threads still open, and on #20 the reviewer's question about the retry limit was never answered; the reviewer had to reopen it in the next review.",
 		reviewedWork: [
 			{ ref: pullRequest(17), date: "2026-08-28", outcome: "COMMISSION_PROBLEM" },
 			{ ref: pullRequest(20), date: "2026-09-03", outcome: "COMMISSION_PROBLEM" },
@@ -183,14 +145,7 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		practiceSlug: "honours-linked-issue-acceptance-criteria",
 		practiceName: "Say which acceptance criteria are done",
 		headline: "Merge requests closed their issue without saying what was met",
-		body: [
-			work(pullRequest(16)),
-			text(" and "),
-			work(pullRequest(19)),
-			text(" each closed an issue with three acceptance criteria and mentioned none of them; "),
-			work(issue(13)),
-			text(" was reopened a week later for the criterion the change had skipped."),
-		],
+		body: "#16 and #19 each closed an issue with three acceptance criteria and mentioned none of them; #13 was reopened a week later for the criterion the change had skipped.",
 		reviewedWork: [
 			{ ref: pullRequest(16), date: "2026-08-24", outcome: "OMISSION_GAP" },
 			{ ref: pullRequest(19), date: "2026-09-06", outcome: "OMISSION_GAP" },
@@ -216,14 +171,7 @@ export const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		practiceSlug: "describe-what-and-why",
 		practiceName: "Describe what changed and why",
 		headline: "Descriptions named the what, rarely the why",
-		body: [
-			work(pullRequest(16)),
-			text(" and "),
-			work(pullRequest(19)),
-			text(
-				" listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
-			),
-		],
+		body: "#16 and #19 listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
 		reviewedWork: [{ ref: pullRequest(19), date: "2026-09-06", outcome: "OMISSION_GAP" }],
 		cleanWork: [20, 21, 22].map(pullRequest),
 		nextStep: "Before the file list, write one paragraph on the problem and the decision you took.",
@@ -249,13 +197,7 @@ export const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		practiceSlug: "leaves-useful-specific-review-comments",
 		practiceName: "Leave specific, actionable review comments",
 		headline: "Review comments said something was off, not what",
-		body: [
-			text("On "),
-			work(pullRequest(2)),
-			text(
-				' the comments read "this looks wrong" and "can we do better here?", and the author replied to each one asking what to change.',
-			),
-		],
+		body: 'On #2 the comments read "this looks wrong" and "can we do better here?", and the author replied to each one asking what to change.',
 		reviewedWork: [{ ref: pullRequest(2), date: "2026-08-20", outcome: "COMMISSION_PROBLEM" }],
 		cleanWork: [1, 4, 23].map(pullRequest),
 		nextStep:
@@ -282,13 +224,7 @@ export const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		practiceSlug: "posts-clear-status-and-blocker-updates",
 		practiceName: "Post clear status and blocker updates",
 		headline: "Blockers surfaced in stand-up, not in the channel",
-		body: [
-			text("In "),
-			work(conversation("#backend-review")),
-			text(
-				" the runner outage that held the release for two days was first mentioned in the next morning's stand-up; the thread on it stayed silent.",
-			),
-		],
+		body: "In #backend-review the runner outage that held the release for two days was first mentioned in the next morning's stand-up; the thread on it stayed silent.",
 		reviewedWork: [
 			{
 				ref: conversation("#backend-review"),

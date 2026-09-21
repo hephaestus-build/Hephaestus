@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn, screen } from "storybook/test";
+import { expect, fn, screen, within } from "storybook/test";
 
 import type { ObservationDetail } from "@/api/types.gen";
 import { daysBefore } from "@/components/common/story-clock";
@@ -408,8 +408,8 @@ export const MobileReflow: Story = {
 
 /**
  * Nothing found where the review looked. "What was checked" says what it looked for, the sources
- * it read in the registry's words, and how far the absence reaches — so an expected practice
- * reported missing can be judged against the search that reported it.
+ * it read in the registry's words, and how far it reached — so an expected practice reported
+ * missing can be judged against the search that reported it.
  */
 export const SearchedAndFoundNothing: Story = {
 	args: { observation: searchedAndFoundNothing },
@@ -421,10 +421,15 @@ export const SearchedAndFoundNothing: Story = {
 		).toBeVisible();
 		// The sources are named as the registry names them, never by their wire kind.
 		await expect(canvas.getByText("The code changes and Files in the repository")).toBeVisible();
-		await expect(canvas.getByText("Not covered:")).toBeVisible();
+		// The boundary says how far the search reached, so the term says the same.
+		await expect(canvas.getByText("How far it reached:")).toBeVisible();
 		await expect(
-			canvas.getByText("test files outside the paths this change touched"),
+			canvas.getByText(/^every test file the diff touches/, { selector: "p" }),
 		).toBeVisible();
+		// The reviewer writes Markdown: what it quotes is code, not a line of stray backticks.
+		const rationale = canvas.getByText(/^The branch is new in this change/, { selector: "p" });
+		await expect(within(rationale).getByText("loadFromCache").tagName).toBe("CODE");
+		await expect(canvas.queryByText(/`/)).toBeNull();
 	},
 };
 

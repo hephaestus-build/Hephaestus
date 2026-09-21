@@ -1,48 +1,12 @@
-import type { InAppFeedback, PracticeGroup, ReviewedWorkRef } from "@/api/types.gen";
+import type { InAppFeedback, PracticeGroup } from "@/api/types.gen";
 import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
-import {
-	count,
-	type FeedbackTextSegment,
-	refs,
-	text,
-	work,
-} from "@/components/common/feedback-text";
+import { count, type FeedbackTextSegment, refs, text } from "@/components/common/feedback-text";
 import type {
 	PracticeFeedbackCardEntry,
 	ReviewedWorkOutcome,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { formatDay } from "@/lib/dates";
 import { capitalise } from "@/lib/text";
-
-/**
- * How the composer names a piece of work in the body: the provider's number after its sigil,
- * "#418" or "!421" — `feedback-composer.md` allows no other way to refer to work.
- */
-const WORK_REFERENCE = /[#!]\d+/g;
-
-/**
- * The body as text with every reference to a piece of work the card knows — its evidence and its
- * clean work — as a link to that piece. A number no known piece carries stays words: the card links
- * what it can vouch for and invents nothing.
- */
-export function linkWork(body: string, known: ReviewedWorkRef[]): FeedbackTextSegment[] {
-	const byNumber = new Map(
-		known
-			.filter((ref) => /^[#!]\d+$/.test(ref.label))
-			.map((ref) => [ref.label.slice(1), ref] as const),
-	);
-	const segments: FeedbackTextSegment[] = [];
-	let cursor = 0;
-	for (const match of body.matchAll(WORK_REFERENCE)) {
-		const ref = byNumber.get(match[0].slice(1));
-		if (!ref) continue;
-		if (match.index > cursor) segments.push(text(body.slice(cursor, match.index)));
-		segments.push(work(ref));
-		cursor = match.index + match[0].length;
-	}
-	if (cursor < body.length || segments.length === 0) segments.push(text(body.slice(cursor)));
-	return segments;
-}
 
 /** The line under an open card's next step, with the wire's own count. */
 const cleanCondition = (needed: number): FeedbackTextSegment[] => [
@@ -129,10 +93,8 @@ export function toFeedbackCard(
 		groupColor: group?.color,
 		groupIcon: group ? getGroupVisual(group.icon, group.color).Icon : undefined,
 		headline: feedback.headline,
-		body: linkWork(feedback.body, [
-			...feedback.evidence.map((evidence) => evidence.work),
-			...feedback.cleanWork,
-		]),
+		// The composer's own Markdown; the card renders it and links the work it can vouch for.
+		body: feedback.body,
 		reviewedWork,
 		// The composer writes the step as a clause; the card shows it as a sentence.
 		nextStep: capitalise(feedback.nextStep ?? ""),

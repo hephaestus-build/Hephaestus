@@ -90,7 +90,7 @@ export const Default: Story = {
 export const SharedMoves: Story = {
 	args: { overview: composeOverview(SHARED_TRANSITION_OVERVIEW) },
 	play: async ({ canvas, args, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /^See the other/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /^Show the/ }));
 
 		// One sentence for the three practices whose trend turned the same way, each still its own
 		// pill, and the predicate agreeing with all three.
@@ -130,7 +130,8 @@ export const SharedMoves: Story = {
  */
 export const RestUnfolded: Story = {
 	play: async ({ canvas, userEvent }) => {
-		const toggle = canvas.getByRole("button", { name: /^See the other/ });
+		// The trigger counts what it holds: the spelled number and the plural.
+		const toggle = canvas.getByRole("button", { name: /^Show the \w+ changes$/ });
 		await expect(toggle).toHaveAttribute("aria-expanded", "false");
 		await expect(canvas.queryByText("Moved up.")).toBeNull();
 		await userEvent.click(toggle);
@@ -140,6 +141,18 @@ export const RestUnfolded: Story = {
 		await expect(canvas.getByText("Trends turned.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Show less" }));
 		await expect(canvas.queryByText("Moved up.")).toBeNull();
+	},
+};
+
+/**
+ * One event folded away: the trigger names that change, since the paragraph named none of them
+ * and there is no other one to see.
+ */
+export const OneChangeFolded: Story = {
+	args: { overview: { ...composed, rest: composed.rest.slice(0, 1), restCount: 1 } },
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Show the change" }));
+		await expect(canvas.getByRole("button", { name: "Show less" })).toBeVisible();
 	},
 };
 
@@ -177,7 +190,7 @@ export const OnlyReviewedWork: Story = {
 		await expect(canvas.getByText("pull requests")).toBeVisible();
 		await expect(canvas.queryByText("What is holding up well")).toBeNull();
 		await expect(canvas.queryByText("What changed")).toBeNull();
-		await expect(canvas.queryByRole("button", { name: /^See the other/ })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: /^Show the/ })).toBeNull();
 	},
 };
 

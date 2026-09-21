@@ -104,6 +104,47 @@ export const New: Story = {
 };
 
 /**
+ * The body is the composer's own Markdown: a lead-in, then one bullet per piece of work with its
+ * name in bold and the value it turns on in code. Every reference to a piece of work the card
+ * carries is still that piece's link, wherever the Markdown puts it.
+ */
+export const MarkdownBody: Story = {
+	args: {
+		card: {
+			...card,
+			state: "open",
+			practiceSlug: "state-the-value-under-test",
+			practiceName: "State the value the change exists to set",
+			headline: "The thing a change exists to set is the thing no test states",
+			body: [
+				"Three changes here set a value that no test says out loud.",
+				"",
+				"- **Page size (#17)** — the paging test asserts the response is not empty, never that it holds `20` items.",
+				"- **Retry ceiling (#19)** — the retry test waits for success and never states the ceiling of *three* attempts.",
+				"- **Timeout (#20)** — the timeout moved to 90 seconds with nothing naming the new bound.",
+			].join("\n"),
+			nextStep:
+				"When a change picks a number, write the test that fails if the number changes back.",
+		},
+	},
+	play: async ({ canvas }) => {
+		const [pageSize, retries, ...rest] = within(canvas.getByRole("list")).getAllByRole("listitem");
+		if (!pageSize || !retries) throw new Error("One bullet per change the body names");
+		await expect(rest).toHaveLength(1);
+		// The lead-in is a bold run inside the item, and the raw Markdown is nowhere on screen.
+		await expect(pageSize.querySelector("strong")).toHaveTextContent(/^Page size \(#17/);
+		await expect(canvas.queryByText(/\*\*/)).toBeNull();
+		// A backticked value is code, and the reference beside it is still the work's own link.
+		await expect(within(pageSize).getByText("20", { selector: "code" })).toBeVisible();
+		await expect(within(pageSize).getByRole("link", { name: /^#17/ })).toHaveAttribute(
+			"target",
+			"_blank",
+		);
+		await expect(retries.querySelector("em")).toHaveTextContent("three");
+	},
+};
+
+/**
  * Two of the three clean pieces of work are in: the strip lists them after the evidence, each a
  * strength shown, and the meter is two-thirds full.
  */
@@ -335,14 +376,7 @@ export const EveryOutcome: Story = {
 			practiceSlug: "describe-what-and-why",
 			practiceName: "Describe what changed and why",
 			headline: "Descriptions named the what, rarely the why",
-			body: [
-				work(pullRequest(16)),
-				text(" and "),
-				work(pullRequest(19)),
-				text(
-					" listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
-				),
-			],
+			body: "#16 and #19 listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
 			reviewedWork: [
 				{ ref: pullRequest(16), date: "2026-08-24", outcome: "OMISSION_GAP" },
 				{ ref: pullRequest(19), date: "2026-09-06", outcome: "COMMISSION_PROBLEM" },
@@ -425,11 +459,7 @@ export const WorkWithoutAnAddress: Story = {
 		card: {
 			...card,
 			state: "open",
-			body: [
-				text("In "),
-				work(conversation("#backend-review")),
-				text(" the outage that held the release was first mentioned the next morning."),
-			],
+			body: "In #backend-review the outage that held the release was first mentioned the next morning.",
 			reviewedWork: [
 				{
 					ref: conversation("#backend-review"),
@@ -442,7 +472,9 @@ export const WorkWithoutAnAddress: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("link")).toBeNull();
-		for (const word of [...canvas.getAllByText("#backend-review"), canvas.getByText("#releases")]) {
+		// The body names it in its own words, since only a number carries an address to link to.
+		await expect(canvas.getByText(/^In #backend-review the outage/)).toBeVisible();
+		for (const word of [canvas.getByText("#backend-review"), canvas.getByText("#releases")]) {
 			await expect(word.tagName).toBe("SPAN");
 			await expect(word).not.toHaveClass("hover:underline");
 		}

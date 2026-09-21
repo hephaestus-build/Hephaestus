@@ -190,7 +190,7 @@ export const Default: Story = {
 		await expect(canvas.getByText("Newest first")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "See all practices" })).toBeVisible();
 		// The paragraph names two things and counts the rest, which unfolds in place.
-		await expect(canvas.getByRole("button", { name: /^See the other/ })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: /^Show the/ })).toBeVisible();
 		// A card's practice pill opens the level on its observations; "Learn more" on its About tab.
 		const [card] = canvas.getAllByRole("article");
 		if (!card) throw new Error("The Newest tab shows a card");

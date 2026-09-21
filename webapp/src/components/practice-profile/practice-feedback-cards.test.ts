@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { InAppFeedback, PracticeGroup, ReviewedWorkRef } from "@/api/types.gen";
 
-import { linkWork, toFeedbackCard } from "./practice-feedback-cards";
+import { toFeedbackCard } from "./practice-feedback-cards";
 
 const group: PracticeGroup = {
 	id: 1,
@@ -47,35 +47,6 @@ const RESOLVED_BY_WORK = {
 	cleanWork: [pullRequest(8), pullRequest(9), pullRequest(10)],
 };
 
-describe("linkWork", () => {
-	it("links the work the card knows and leaves a number it does not as words", () => {
-		const known = [pullRequest(6), pullRequest(7), pullRequest(8)];
-		expect(linkWork("#6 and #7 list the files touched; #99 is elsewhere.", known)).toStrictEqual([
-			{ type: "work", ref: pullRequest(6) },
-			{ type: "text", text: " and " },
-			{ type: "work", ref: pullRequest(7) },
-			{ type: "text", text: " list the files touched; #99 is elsewhere." },
-		]);
-	});
-
-	it("links a merge request named with either sigil, in the provider's own label", () => {
-		const mergeRequest = { ...pullRequest(21), label: "!21" };
-		expect(linkWork("In #21 and !21 the fix rode along.", [mergeRequest])).toStrictEqual([
-			{ type: "text", text: "In " },
-			{ type: "work", ref: mergeRequest },
-			{ type: "text", text: " and " },
-			{ type: "work", ref: mergeRequest },
-			{ type: "text", text: " the fix rode along." },
-		]);
-	});
-
-	it("keeps a body with no reference as one piece of text", () => {
-		expect(linkWork("Just a note.", [pullRequest(6)])).toStrictEqual([
-			{ type: "text", text: "Just a note." },
-		]);
-	});
-});
-
 describe("toFeedbackCard", () => {
 	it("reads an unread card as new, with each piece of work named, linked and judged as the wire says", () => {
 		const card = toFeedbackCard(feedback, [group]);
@@ -83,6 +54,8 @@ describe("toFeedbackCard", () => {
 			feedbackId: "f1",
 			state: "new",
 			headline: "Descriptions name the what, rarely the why",
+			// The composer's Markdown reaches the card as it was written; the card renders it.
+			body: "#16 and #17 list the files touched.",
 			nextStep: "Write one paragraph on the problem.",
 			groupColor: "sky",
 			cleanWork: [pullRequest(8)],

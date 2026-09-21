@@ -110,9 +110,10 @@ export interface EvidenceCheck {
 
 /**
  * What the review checked when it recorded no strength and no problem, in the warrant it wrote:
- * where it looked and found nothing (a search), why this practice had nothing to judge here (an
- * inapplicability), or what it could not settle (an undecidability). A review writes at most one
- * of the three about one observation, so the first one present is the whole list.
+ * what it looked for and how far it reached before finding nothing (a search), why this practice
+ * had nothing to judge here (an inapplicability), or what it could not settle (an undecidability).
+ * A review writes at most one of the three about one observation, so the first one present is the
+ * whole list.
  *
  * Nothing here is inferred: a pair exists only where the reviewer wrote the sentence behind it,
  * and the sources it consulted are named in the registry's words rather than by their wire kind.
@@ -123,7 +124,7 @@ export function toEvidenceCheck(evidence: ObservationDetail["evidence"]): Eviden
 		return [
 			{ term: "Looked for", detail: search.lookedFor },
 			...consultedCheck(search.consulted),
-			{ term: "Not covered", detail: search.boundary },
+			{ term: "How far it reached", detail: search.boundary },
 		];
 	}
 	const inapplicability = evidence?.inapplicability;
