@@ -502,7 +502,7 @@ public class GitHubSubIssueSyncService {
      * Using REQUIRES_NEW ensures each page is committed independently,
      * providing better resilience if a single page fails.
      */
-    private int processIssueNodes(GHIssueConnection issueConnection, Repository repository, Long scopeId) {
+    int processIssueNodes(GHIssueConnection issueConnection, Repository repository, Long scopeId) {
         if (issueConnection.getNodes() == null) {
             return 0;
         }
@@ -585,7 +585,10 @@ public class GitHubSubIssueSyncService {
         }
 
         long issueId = graphQlIssue.getFullDatabaseId().longValue();
-        Optional<Issue> existingOpt = issueRepository.findById(issueId);
+        // Rows are keyed by (provider, native id), not by GitHub's id: the row is found the way the
+        // issue processor re-reads it after its upsert, by repository and number.
+        Optional<Issue> existingOpt =
+                issueRepository.findByRepositoryIdAndNumber(repo.getId(), graphQlIssue.getNumber());
         if (existingOpt.isPresent()) {
             return existingOpt.get();
         }
@@ -624,20 +627,22 @@ public class GitHubSubIssueSyncService {
         }
 
         long parentId = parentGraphQl.getFullDatabaseId().longValue();
-        Optional<Issue> existingOpt = issueRepository.findById(parentId);
+        // The parent may live in another repository; it is found there by number, as the child is.
+        Repository parentRepo = resolveParentRepository(parentGraphQl);
+        if (parentRepo == null) {
+            log.debug(
+                    "Skipped parent lookup: reason=repositoryNotFound, parentId={}, parentNumber={}",
+                    parentId,
+                    parentGraphQl.getNumber());
+            return null;
+        }
+        Optional<Issue> existingOpt =
+                issueRepository.findByRepositoryIdAndNumber(parentRepo.getId(), parentGraphQl.getNumber());
         if (existingOpt.isPresent()) {
             return existingOpt.get();
         }
 
         // Parent doesn't exist - create it from GraphQL data as a stub
-        Repository parentRepo = resolveParentRepository(parentGraphQl);
-        if (parentRepo == null) {
-            log.debug(
-                    "Skipped creating parent: reason=repositoryNotFound, parentId={}, parentNumber={}",
-                    parentId,
-                    parentGraphQl.getNumber());
-            return null;
-        }
 
         log.debug(
                 "Creating stub parent issue from sub-issue sync: parentId={}, parentNumber={}, repoName={}",
