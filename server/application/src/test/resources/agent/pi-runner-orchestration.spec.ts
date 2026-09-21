@@ -257,7 +257,7 @@ if (scenario !== undefined && scenario !== "") {
 								settleIdle();
 								return;
 							}
-							if (text.includes("## Nothing persisted")) {
+							if (text.includes("## Undecided")) {
 								// The composer's finishing prompt: the runner asks once more for the practices
 								// with a NEGATIVE observation, and a WITHHOLD is a recorded decision.
 								const withheld = await tool("report_feedback").execute("f-9", {
@@ -1184,11 +1184,11 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8"),
-								/## Nothing persisted[\s\S]*NEGATIVE observation: test-practice/u,
+								/## Undecided[\s\S]*NEGATIVE observation: test-practice/u,
 							);
 							assert.match(
 								child.stderr,
-								/composition recorded nothing for 1 NEGATIVE practice\(s\) — asking once more/u,
+								/composition left 1 NEGATIVE practice\(s\) undecided — asking once more/u,
 							);
 							assert.equal(
 								(

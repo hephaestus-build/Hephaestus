@@ -57,6 +57,7 @@ import {
 	type ComposedFeedbackUnit,
 	type PreparedFeedbackTarget,
 	notReachedNote,
+	sameLinesNote,
 	undeliverableUnits,
 	validateFeedbackEvidence,
 } from "./pi-runner-composition.ts";
@@ -2478,6 +2479,7 @@ function buildCompositionTurn(
 		? ` IN_CONTEXT placements available here: ${request.inContextPlacementKinds.join(", ")}.`
 		: "";
 	const coverageNote = notReachedNote(notReached);
+	const sameLines = sameLinesNote(observations);
 	const admitted = JSON.stringify({ observations: observations.map(composerView) }, null, 1);
 	const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
 	const context = [
@@ -2502,7 +2504,7 @@ ${context}
 Lanes open this turn: ${lanes}.${closedNote}${placementNote}
 A pattern claim needs at least ${request.minDistinctArtifacts} distinct pieces of work.
 
-${coverageNote}Persist the units with report_feedback — every unit you have in one call — and call report_summary once for how the review opens. Writing nothing on a lane is a correct and common outcome; say in one line why, and stop.`;
+${sameLines}${coverageNote}Persist the units with report_feedback — every unit you have in one call — and call report_summary once for how the review opens. Writing nothing on a lane is a correct and common outcome; say in one line why, and stop.`;
 }
 
 /** A transport failure or a server that is not answering yet; a refusal is a decision, not a blip. */
@@ -2893,7 +2895,7 @@ async function askComposerOnceMore(
 	deadline: Promise<undefined>,
 ): Promise<void> {
 	console.error(
-		`[pi-runner] composition recorded nothing for ${negatives.length} NEGATIVE practice(s) — asking once more`,
+		`[pi-runner] composition left ${negatives.length} NEGATIVE practice(s) undecided — asking once more`,
 	);
 	if (!(await settleSession(session, "composition", ABORT_SETTLE_MS))) {
 		throw new Error("the session was still busy when the composition was asked once more");
@@ -2904,7 +2906,7 @@ async function askComposerOnceMore(
 
 function finishCompositionText(negatives: readonly string[]): string {
 	return (
-		`## Nothing persisted\nThe turn ended without a report_feedback call, and these practices have a ` +
+		`## Undecided\nThe turn ended with no unit and no WITHHOLD for these practices, each with a ` +
 		`NEGATIVE observation: ${negatives.join(", ")}. For each, persist the unit you decided on, or a ` +
 		`WITHHOLD with its reason (NO_MATERIAL_CHANGE, ALREADY_SAID, BELOW_BAR), in one report_feedback ` +
 		`call. The admitted observations are in \`work/composition/observations.json\`. Use tools only ` +
@@ -3283,13 +3285,16 @@ async function main() {
 					throw new Error("the composition budget ran out while the session was compacted");
 				}
 				await Promise.race([session.prompt(compositionText), deadline.elapsed]);
-				// A composition that ended without one recording call left every lane empty and said
-				// nothing about why. Asked once more, in the same session, like the measurement's
-				// finishing turn: on the cohort, one composition in five ended this way.
-				const negatives = negativePractices(admittedObservations);
-				const silent = trace.recordingCalls === 0 && composedFeedback.units.length === 0;
-				if (!deadline.expired() && silent && negatives.length > 0) {
-					await askComposerOnceMore(session, negatives, deadline.elapsed);
+				// A NEGATIVE practice the composition neither wrote a unit for nor withheld reaches the
+				// developer as a bare observation headline with no next step. Asked once more, in the
+				// same session, like the measurement's finishing turn, naming only what is undecided: on
+				// the cohort, one composition in five ended with nothing at all, and most of the rest
+				// left one or two practices without a decision.
+				const undecided = negativePractices(admittedObservations).filter(
+					(slug) => !composedFeedback.units.some((unit) => unit.practiceSlug === slug),
+				);
+				if (!deadline.expired() && undecided.length > 0) {
+					await askComposerOnceMore(session, undecided, deadline.elapsed);
 				}
 			} catch (error) {
 				console.error(`[pi-runner] composition failed: ${errorText(error)}`);
