@@ -12,7 +12,7 @@ void test("runner executes a staged practice and writes its public artifact cont
 	await writeFile(path.join(root, "package.json"), '{"type":"module"}\n');
 	await writeFile(
 		path.join(output, "practices", "sample.ts"),
-		'export default () => ({hints: [], metrics: {found: 1}, directions: ["inspect sample"]});\n',
+		'export default () => ({hints: [{file: "inputs/context/general_comments.json", line: 0, pattern: "conversation ask", context: "Please add the confetti", inDiff: false, flags: {by: "jennifer", authorReplied: false, threadResolved: true}}], metrics: {found: 1}, directions: ["inspect sample"]});\n',
 	);
 
 	const { status, stderr } = spawnSync(
@@ -22,13 +22,17 @@ void test("runner executes a staged practice and writes its public artifact cont
 	);
 
 	assert.equal(status, 0, stderr);
-	assert.deepEqual(JSON.parse(await readFile(path.join(output, "sample.json"), "utf8")), {
-		practice: "sample",
-		status: "ok",
-		hints: [],
-		metrics: { found: 1 },
-		directions: ["inspect sample"],
-	});
-	assert.match(await readFile(path.join(output, "summary.md"), "utf8"), /## sample/u);
+	const written: unknown = JSON.parse(await readFile(path.join(output, "sample.json"), "utf8"));
+	assert.ok(typeof written === "object" && written !== null);
+	assert.equal(Reflect.get(written, "practice"), "sample");
+	assert.equal(Reflect.get(written, "status"), "ok");
+	assert.deepEqual(Reflect.get(written, "metrics"), { found: 1 });
+	const summary = await readFile(path.join(output, "summary.md"), "utf8");
+	assert.match(summary, /## sample/u);
+	// A record hint is a row of facts, shown with every flag — a false one is a fact too.
+	assert.match(
+		summary,
+		/\*\*Record facts:\*\*\n- `inputs\/context\/general_comments\.json` — conversation ask: `Please add the confetti` \[by=jennifer, authorReplied=false, threadResolved=true\]/u,
+	);
 	assert.ok(await readFile(path.join(output, ".complete"), "utf8"));
 });

@@ -180,6 +180,9 @@ for (const result of practiceResults) {
 	await writeFile(`${tmpDir}/${result.practice}.json`, JSON.stringify(result, null, 2));
 }
 
+/** Record rows shown per practice before the rest is left to the practice's JSON file. */
+const RECORD_ROWS = 12;
+
 const lines: string[] = [
 	"# Precomputed Analysis Hints",
 	"",
@@ -230,6 +233,28 @@ for (const result of practiceResults) {
 			lines.push(`- \`${h.file}:${h.line}\` — ${h.pattern}: \`${h.context.slice(0, 80)}\``);
 		}
 		lines.push(`- ... and ${inDiffHints.length - 5} more`, "");
+	}
+
+	// A hint about the record rather than a changed line — an ask, a linked issue, an adopted
+	// issue's dates — is a row of facts the practice decides on, and a flag that is false is one of
+	// them (no reply, no change near the line), so every flag is shown.
+	const recordHints = result.hints.filter((h) => !h.inDiff);
+	if (recordHints.length > 0) {
+		lines.push("**Record facts:**");
+		for (const h of recordHints.slice(0, RECORD_ROWS)) {
+			const flagStr = Object.entries(h.flags)
+				.map(([k, v]) => `${k}=${String(v)}`)
+				.join(", ");
+			lines.push(
+				`- \`${h.file}${h.line > 0 ? `:${h.line}` : ""}\` — ${h.pattern}: \`${h.context.slice(0, 160)}\`${flagStr ? ` [${flagStr}]` : ""}`,
+			);
+		}
+		if (recordHints.length > RECORD_ROWS) {
+			lines.push(
+				`- ... and ${recordHints.length - RECORD_ROWS} more in \`${outputDir}/${result.practice}.json\``,
+			);
+		}
+		lines.push("");
 	}
 }
 
