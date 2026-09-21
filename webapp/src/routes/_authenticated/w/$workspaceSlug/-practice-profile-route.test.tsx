@@ -1,0 +1,206 @@
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { server } from "@/mocks/server";
+import { detailObservation, detailRun } from "@/stories/practice-detail-story-mock-data";
+import {
+	groups,
+	groupStandings,
+	OVERVIEW_FIXTURE,
+	packagingGroup,
+	practiceStandings,
+} from "@/stories/practice-profile-story-mock-data";
+import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+
+// Mounting the real route pulls in the whole app shell and its lazy modules.
+vi.setConfig({ testTimeout: 15_000 });
+
+const PAGE = "/w/acme/practice-profile";
+
+const [first] = practiceStandings;
+if (!first) throw new Error("The fixtures carry at least one practice with a standing");
+/** Narrowed once, so the helpers below can read it without a guard each. */
+const practice = first;
+
+/** One review of the first practice, so its level has an observation to show. */
+const observation = {
+	...detailObservation,
+	practiceSlug: practice.slug,
+	practiceName: practice.name,
+};
+const run = { ...detailRun, observations: [observation] };
+
+beforeEach(() => {
+	server.use(
+		// A plain MEMBER: the profile is the developer's own page, not an admin surface.
+		http.get("*/workspaces/:workspaceSlug/members/me", () =>
+			HttpResponse.json({ role: "MEMBER", userId: 1, userLogin: "ada", userName: "Ada" }),
+		),
+		http.get("*/workspaces/:workspaceSlug/practice-groups", () => HttpResponse.json(groups)),
+		http.get("*/workspaces/:workspaceSlug/practice-groups/standings", () =>
+			HttpResponse.json(Object.values(groupStandings)),
+		),
+		http.get("*/workspaces/:workspaceSlug/practices/standings", () =>
+			HttpResponse.json(practiceStandings),
+		),
+		http.get("*/workspaces/:workspaceSlug/practice-profile/overview", () =>
+			HttpResponse.json(OVERVIEW_FIXTURE),
+		),
+		http.get("*/workspaces/:workspaceSlug/practices/feedback/in-app", () => HttpResponse.json([])),
+		// The practice level's one query, answered as soon as it opens; it carries every
+		// observation in full, so opening one asks for nothing more.
+		http.get("*/workspaces/:workspaceSlug/practice-groups/:groupSlug/review-runs", () =>
+			HttpResponse.json({ content: [run], hasNext: false, page: 0, size: 10 }),
+		),
+	);
+});
+
+async function renderProfile(path = PAGE) {
+	const { router } = renderRouteAtWithRouter(path);
+	await screen.findByRole("heading", { level: 1, name: "Practice profile" }, ROUTE_RENDER_WAIT);
+	return router;
+}
+
+const group = `practice-group:${packagingGroup.slug}`;
+const practiceEntry = `practice:${practice.slug}`;
+
+/** Through the page to the first practice's level, one level per history entry. */
+async function openPractice(router: Awaited<ReturnType<typeof renderProfile>>) {
+	fireEvent.click(
+		await screen.findByRole("button", { name: "See all practices" }, ROUTE_RENDER_WAIT),
+	);
+	fireEvent.click(
+		await screen.findByRole(
+			"button",
+			{ name: `Open group ${packagingGroup.name}` },
+			ROUTE_RENDER_WAIT,
+		),
+	);
+	fireEvent.click(
+		await screen.findByRole("button", { name: `Open ${practice.name}` }, ROUTE_RENDER_WAIT),
+	);
+	await waitFor(() =>
+		expect(router.state.location.search.detail).toStrictEqual([
+			"practices:all",
+			group,
+			practiceEntry,
+		]),
+	);
+}
+
+/**
+ * What the route owns and no story can see: how the page's controls are spelled in the URL. The
+ * drawer's levels are addressed by the `detail` stack, and the page's tab and the table's sort are
+ * silent at their defaults so the address a reader shares is the shortest one that means the same.
+ */
+describe("practice profile route", () => {
+	it("stacks the list, a group and a practice in the detail param, one history entry each", async () => {
+		const router = await renderProfile();
+		const entries = router.history.length;
+
+		const detail = () => router.state.location.search.detail;
+
+		fireEvent.click(
+			await screen.findByRole("button", { name: "See all practices" }, ROUTE_RENDER_WAIT),
+		);
+		await waitFor(() => expect(detail()).toStrictEqual(["practices:all"]));
+		fireEvent.click(
+			await screen.findByRole(
+				"button",
+				{ name: `Open group ${packagingGroup.name}` },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		await waitFor(() => expect(detail()).toStrictEqual(["practices:all", group]));
+		fireEvent.click(
+			await screen.findByRole("button", { name: `Open ${practice.name}` }, ROUTE_RENDER_WAIT),
+		);
+
+		await waitFor(() => expect(detail()).toStrictEqual(["practices:all", group, practiceEntry]));
+		// The list, the group and the practice: three levels, and Back pops exactly one.
+		expect(router.history).toHaveLength(entries + 3);
+		router.history.back();
+		await waitFor(() => expect(detail()).toStrictEqual(["practices:all", group]));
+	});
+
+	it("opens and closes an observation without writing the URL, so leaving the level takes one step", async () => {
+		const router = await renderProfile();
+		await openPractice(router);
+		const entries = router.history.length;
+		const searchStr = () => router.state.location.searchStr;
+		const before = searchStr();
+
+		// The observation arrives open, with what the feed carries; a press closes it in place.
+		const rowName = { name: new RegExp(observation.summary) };
+		const row = () => screen.getByRole("button", rowName);
+		// The feed is its own request: under load it lands after the level does.
+		await screen.findByRole("button", rowName, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(row().getAttribute("aria-expanded")).toBe("true"));
+		await screen.findByText("Why it was noted");
+		fireEvent.click(row());
+		await waitFor(() => expect(row().getAttribute("aria-expanded")).toBe("false"));
+		fireEvent.click(row());
+		await waitFor(() => expect(row().getAttribute("aria-expanded")).toBe("true"));
+		// Neither press is a navigation: the address and the history are as they were.
+		expect(searchStr()).toBe(before);
+		expect(router.history).toHaveLength(entries);
+
+		// The level was pushed on this visit, so its Back goes back in history — to the group.
+		fireEvent.click(screen.getByRole("button", { name: "Back" }));
+		await waitFor(() =>
+			expect(router.state.location.search.detail).toStrictEqual(["practices:all", group]),
+		);
+	});
+
+	it("clears the selection with the level when the level is closed forward", async () => {
+		// Arrived by address: nothing behind the level to go back to, so closing writes a new one.
+		// The page under the open drawer is hidden from the accessibility tree, so the level's own
+		// heading is what says the route has rendered.
+		const { router } = renderRouteAtWithRouter(
+			`${PAGE}?detail=${encodeURIComponent(JSON.stringify([group, practiceEntry]))}&practiceTab=about`,
+		);
+		await screen.findByRole("heading", { name: practice.name }, ROUTE_RENDER_WAIT);
+		const search = () => router.state.location.search;
+		expect(search().practiceTab).toBe("about");
+
+		fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+		await waitFor(() => expect(search().detail).toStrictEqual([group]));
+		expect(search().practiceTab).toBeUndefined();
+	});
+
+	it("keeps the URL silent on the default feedback tab and spells every other one", async () => {
+		const router = await renderProfile();
+
+		fireEvent.click(await screen.findByRole("tab", { name: /^Resolved/ }));
+		await waitFor(() => expect(router.state.location.search.feedback).toBe("resolved"));
+		// The tab is selected once the page has read it back from the URL; a press on a tab that is
+		// still selected in the DOM is not a change.
+		fireEvent.click(await screen.findByRole("tab", { name: /^Newest/, selected: false }));
+
+		await waitFor(() => expect(router.state.location.search.feedback).toBeUndefined());
+		expect(router.state.location.searchStr).toBe("");
+	});
+
+	it("keeps the URL silent on the default sort direction", async () => {
+		const router = await renderProfile(`${PAGE}?dir=asc`);
+
+		fireEvent.click(
+			await screen.findByRole("button", { name: "See all practices" }, ROUTE_RENDER_WAIT),
+		);
+		const table = await screen.findByRole("table", { name: "All practices" });
+		const standing = () => within(table).getByRole("button", { name: /Standing/ });
+		// One press flips the sort away from the default, the next lands back on it — once the
+		// header has read the first press back from the URL.
+		fireEvent.click(standing());
+		await waitFor(() => expect(router.state.location.search.dir).toBe("desc"));
+		await waitFor(() =>
+			expect(standing().closest("th")?.getAttribute("aria-sort")).toBe("descending"),
+		);
+		fireEvent.click(standing());
+
+		await waitFor(() => expect(router.state.location.search.dir).toBeUndefined());
+		expect(router.state.location.searchStr).not.toContain("dir=");
+	});
+});

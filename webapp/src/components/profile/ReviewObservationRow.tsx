@@ -1,253 +1,342 @@
 import { ChevronDownIcon } from "lucide-react";
-import { useState } from "react";
-import type { PracticeGroupReviewObservation } from "@/api/types.gen";
-import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { Fragment, type ReactNode, useState } from "react";
+
+import type { ObservationDetail } from "@/api/types.gen";
+import { FOCUS_RING, FOCUS_RING_INSET } from "@/components/common/focus";
+import { InlineLink } from "@/components/common/InlineLink";
+import {
+	ResponseButton,
+	ResponseCommentBand,
+	toneOf,
+} from "@/components/common/ResponseCommentBand";
+import { SectionLabel } from "@/components/common/SectionLabel";
+import { CLAIM_CURRENTNESS_NOTES } from "@/components/practice-vocabulary/claim-currentness-notes";
 import {
 	FEEDBACK_RESOLUTION_DEFS,
 	type FeedbackResolution,
 } from "@/components/practice-vocabulary/feedback-resolution-defs";
+import { FEEDBACK_USEFULNESS_DEFS } from "@/components/practice-vocabulary/feedback-usefulness-defs";
+import { OBSERVATION_ORIGIN_DEFS } from "@/components/practice-vocabulary/observation-origin-defs";
 import {
-	FEEDBACK_USEFULNESS_DEFS,
-	type FeedbackUsefulness,
-} from "@/components/practice-vocabulary/feedback-usefulness-defs";
-import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import {
-	type StatusDefs,
-	statusToneClass,
-	statusValues,
-} from "@/components/practice-vocabulary/status-def";
+	OBSERVATION_OUTCOME_PRESENTATION,
+	observationOutcome,
+} from "@/components/practice-vocabulary/observation-outcome";
+import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
+import { statusValues } from "@/components/practice-vocabulary/status-def";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
-import { Button } from "@/components/ui/button";
+import { StatusTooltip } from "@/components/practice-vocabulary/StatusTooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Skeleton } from "@/components/ui/skeleton";
+import { artifactKindLabel } from "@/lib/artifact-kinds";
+import { capitalise } from "@/lib/text";
 import { cn } from "@/lib/utils";
-import { toEvidenceLocations } from "./evidence";
-import { EvidenceFileBlock } from "./EvidenceFileBlock";
-import { FeedbackComment } from "./FeedbackComment";
-import { OBSERVATION_OUTCOME_PRESENTATION, observationOutcome } from "./observation-outcome";
-import {
-	type FeedbackResponse,
-	feedbackResponseOf,
-	type ObservationDetailState,
-} from "./review-runs";
 
-interface ResponseChoiceProps<TValue extends string> {
-	legend: string;
-	defs: StatusDefs<TValue>;
-	chosen?: TValue;
-	isPending: boolean;
-	onChoose: (value: TValue) => void;
+import { toEvidenceCheck, toEvidenceLocations } from "./evidence";
+import { EvidenceFileBlock } from "./EvidenceFileBlock";
+import { type FeedbackResponse, feedbackResponseOf } from "./review-runs";
+
+interface DetailSectionProps {
+	label: string;
+	className?: string;
+	children: ReactNode;
 }
-function ResponseChoice<TValue extends string>({
-	legend,
-	defs,
-	chosen,
-	isPending,
-	onChoose,
-}: ResponseChoiceProps<TValue>) {
+
+/** A section of the open row: its label in the muted kicker, then what it carries. */
+function DetailSection({ label, className, children }: DetailSectionProps) {
 	return (
-		<div className="flex flex-wrap items-center gap-2">
-			<p className="me-auto text-xs font-medium text-muted-foreground">{legend}</p>
-			{statusValues(defs).map((value) => {
-				const def = defs[value];
-				const Icon = def.icon;
-				const isChosen = chosen === value;
-				return (
-					<Button
-						key={value}
-						type="button"
-						variant="outline"
-						size="sm"
-						aria-pressed={isChosen}
-						disabled={isPending}
-						className={cn(isChosen && "bg-muted", isChosen && statusToneClass(def.badgeVariant))}
-						onClick={() => onChoose(value)}
-					>
-						<Icon aria-hidden />
-						{def.label}
-					</Button>
-				);
-			})}
+		<div className={cn("flex min-w-0 flex-col gap-1", className)}>
+			{/* The row's anchor is its summary, so a label naming one of its details carries no
+			    weight of its own. */}
+			<SectionLabel as="span" className="font-normal">
+				{label}
+			</SectionLabel>
+			{children}
 		</div>
 	);
 }
 
 export interface ReviewObservationRowProps {
-	observation: PracticeGroupReviewObservation;
-	isOpen?: boolean;
-	detailState?: ObservationDetailState;
+	observation: ObservationDetail;
+	/** Open on arrival; a closed row waits for a press. The card placing the row decides which. */
+	defaultOpen?: boolean;
+	/** Off where every row is the level's own practice, so no row repeats its name. */
 	showPracticeName?: boolean;
-	onToggle?: (observationId: string) => void;
-	onRespond?: (observation: PracticeGroupReviewObservation, response: FeedbackResponse) => void;
+	/** Off where the row sits under the work's own head, as it does in a review run's card. */
+	showWorkLink?: boolean;
+	/**
+	 * The reviewed work, as a small line under the summary. A run's card gives it when the run
+	 * carries this one observation and the two are one block; otherwise the card's own head names
+	 * the work above the rows and this is left out.
+	 */
+	work?: ReactNode;
+	onRespond?: (observation: ObservationDetail, response: FeedbackResponse) => void;
 	isFeedbackResponsePending?: boolean;
 }
 
+/**
+ * One observation as a row of its review's card, showing everything the feed carries about it:
+ * its summary and outcome on one line and, when not live, where it came from; then why it was
+ * noted, what the review checked to say it, the evidence, the next step and the reader's
+ * response. The outcome is what the reader
+ * acts on, so the severity behind it stays in the admin console rather than ranking the reader's
+ * own work here. The day is the card's, named once
+ * on the timeline above these rows, so no row repeats it; the work is the card's too, unless the
+ * card handed this row a `work` line because the two are one block. Each row opens and closes on its own,
+ * and nothing is loaded when it does — the feed already brought it all — so the open state is the
+ * row's, through the collapsible's own `defaultOpen`. A block whose field is absent is left out
+ * rather than headed over nothing.
+ */
 export function ReviewObservationRow({
 	observation,
-	isOpen,
-	detailState,
+	defaultOpen = true,
 	showPracticeName = true,
-	onToggle,
+	showWorkLink = true,
+	work,
 	onRespond,
 	isFeedbackResponsePending = false,
 }: ReviewObservationRowProps) {
+	// The resolution whose comment band is open; recorded only once Send or Skip closes it.
 	const [pendingResolution, setPendingResolution] = useState<FeedbackResolution>();
-	const outcome = observationOutcome(observation);
-	const status = OBSERVATION_OUTCOME_PRESENTATION[outcome];
-	const StatusIcon = status.icon;
+	const outcome = OBSERVATION_OUTCOME_PRESENTATION[observationOutcome(observation)];
+	const OutcomeIcon = outcome.icon;
+	const note =
+		observation.claimCurrentness === "CURRENT"
+			? undefined
+			: CLAIM_CURRENTNESS_NOTES[observation.claimCurrentness];
+	const evidenceLocations = toEvidenceLocations(observation.evidence);
+	const checks = toEvidenceCheck(observation.evidence);
+	// The sentence the review wrote about this work stands over the one that was delivered: the
+	// delivery may have been withheld, replaced or rewritten, and only one next step can be acted on.
+	// Either is written as a clause, and the row shows it as a sentence.
+	const nextStep = capitalise(observation.nextStep ?? observation.deliveredFeedback ?? "");
+	const workLink = showWorkLink ? observation.artifactUrl : undefined;
+	const detector = observation.evidence?.detector;
 	const canRespond = Boolean(observation.feedbackId && onRespond);
-	const canOpen = onToggle !== undefined || canRespond;
-	const detail = detailState?.detail;
-	const evidenceLocations = toEvidenceLocations(detail?.evidence);
-	const reasoning = detail?.evidenceRationale;
-	const guidance = detail?.deliveredFeedback;
-	const hasDetails = Boolean(reasoning) || Boolean(guidance) || evidenceLocations.length > 0;
-	const trimmedTitle = observation.title.trim();
-	const title = trimmedTitle.length > 0 ? trimmedTitle : observation.practiceName;
+	const hasBody =
+		note !== undefined ||
+		Boolean(observation.evidenceRationale) ||
+		checks.length > 0 ||
+		evidenceLocations.length > 0 ||
+		workLink !== undefined ||
+		Boolean(nextStep) ||
+		canRespond;
+	// The summary is the row's anchor and the heaviest text in it; the practice under it is the pill
+	// every practice surface names a practice with, and it stands alone when the observation has no
+	// words of its own.
+	const summary = observation.summary.trim();
+	const showPill = showPracticeName || summary.length === 0;
 
 	const recorded = feedbackResponseOf(observation);
-	const selectedResolution =
-		pendingResolution === recorded.resolution ? undefined : pendingResolution;
-	const respond = (change: FeedbackResponse) => {
+	const shownResolution = pendingResolution ?? recorded.resolution;
+	// The endpoint replaces, so the usefulness the observation arrived with travels every time.
+	const respond = (change: Pick<FeedbackResponse, "resolution" | "comment">) => {
 		if (!observation.feedbackId || !onRespond) return;
-		onRespond(observation, { ...recorded, ...change });
+		onRespond(observation, { usefulness: recorded.usefulness, ...change });
 	};
-	const toggleUsefulness = (usefulness: FeedbackUsefulness) =>
-		respond({ usefulness: recorded.usefulness === usefulness ? undefined : usefulness });
-	const toggleResolution = (resolution: FeedbackResolution) => {
-		if (selectedResolution === resolution) {
+	// A press opens the band for that choice; the chosen one pressed again withdraws it, comment
+	// and all, and a band still open closes without recording anything.
+	const chooseResolution = (resolution: FeedbackResolution) => {
+		if (pendingResolution === resolution) {
 			setPendingResolution(undefined);
 			return;
 		}
-		if (resolution === "DISPUTED" && !recorded.comment?.trim()) {
-			setPendingResolution(resolution);
+		if (recorded.resolution === resolution) {
+			setPendingResolution(undefined);
+			respond({ resolution: undefined, comment: undefined });
 			return;
 		}
-		setPendingResolution(undefined);
-		respond({ resolution: recorded.resolution === resolution ? undefined : resolution });
+		setPendingResolution(resolution);
 	};
+	const record = (comment: string | undefined) => {
+		if (!pendingResolution) return;
+		setPendingResolution(undefined);
+		respond({ resolution: pendingResolution, comment });
+	};
+
+	// At the reflow width the summary takes the whole line and the outcome and the badges sit under
+	// it, at the right, wrapping among themselves when even that line is too narrow; from `sm` up
+	// they share the line with the summary.
+	const headLineClassName = cn(
+		"flex w-full min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 px-4 pt-2.5",
+		// The work line below is the same block's second line, so the padding closes under it.
+		work ? "pb-1" : "pb-2.5",
+	);
+	const headLine = (
+		<>
+			<span className="flex min-w-0 basis-full flex-col items-start gap-1 text-sm sm:flex-1 sm:basis-0">
+				{summary.length > 0 && <span className="font-medium text-foreground">{summary}</span>}
+				{showPill && <PracticePill name={observation.practiceName} />}
+			</span>
+			<span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-2.5 gap-y-1">
+				{observation.origin !== "LIVE" && (
+					<StatusBadge def={OBSERVATION_ORIGIN_DEFS[observation.origin]} />
+				)}
+				{/* Inside the row's own button the chip is a span, the words visible beside the icon;
+				    on a row that is no control it is the button a keyboard reaches the sentence by. */}
+				<StatusTooltip
+					def={outcome}
+					render={hasBody ? <span /> : <button type="button" />}
+					className={cn(
+						"whitespace-nowrap inline-flex items-center gap-1.5 text-sm font-medium",
+						outcome.className,
+						!hasBody && ["rounded-sm", FOCUS_RING],
+					)}
+				>
+					<OutcomeIcon className="size-3.5 shrink-0" aria-hidden />
+					{outcome.label}
+				</StatusTooltip>
+				{hasBody && (
+					<ChevronDownIcon
+						className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/observation:rotate-180"
+						aria-hidden
+					/>
+				)}
+			</span>
+		</>
+	);
+
+	// A row with nothing under its head line is not a control: a button that opens nothing would
+	// still take focus and a pointer.
+	if (!hasBody) {
+		return (
+			<li>
+				<div className={headLineClassName}>{headLine}</div>
+				{work && <div className="px-4 pb-2.5">{work}</div>}
+			</li>
+		);
+	}
 
 	return (
 		<li>
-			<Collapsible
-				className="group/observation"
-				open={onToggle ? Boolean(isOpen) : undefined}
-				onOpenChange={
-					onToggle
-						? (open) => {
-								if (open !== Boolean(isOpen)) onToggle(observation.observationId);
-							}
-						: undefined
-				}
-			>
-				<CollapsibleTrigger
-					disabled={!canOpen}
-					className="grid w-full min-w-0 gap-2 px-4 py-3 text-left transition-colors enabled:hover:bg-muted/30 enabled:focus-visible:outline-none enabled:focus-visible:ring-2 enabled:focus-visible:ring-ring/50 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-4"
-				>
-					<div className="min-w-0">
-						<p className="truncate text-sm font-medium">{title}</p>
-						{showPracticeName && title !== observation.practiceName && (
-							<p className="mt-0.5 truncate text-xs text-muted-foreground">
-								{observation.practiceName}
-							</p>
+			<Collapsible className="group/observation" defaultOpen={defaultOpen}>
+				{/* The tint is the wrapper's, not the trigger's: with a work line under it the head is
+				    two lines of one block, and tinting only the first would draw back the seam this
+				    layout exists to remove. */}
+				<div className="transition-colors hover:bg-muted/50">
+					<CollapsibleTrigger
+						className={cn(headLineClassName, "cursor-pointer text-left", FOCUS_RING_INSET)}
+					>
+						{headLine}
+					</CollapsibleTrigger>
+					{work && <div className="px-4 pb-2.5">{work}</div>}
+				</div>
+				<CollapsibleContent className="border-t bg-sidebar">
+					<div className="flex min-w-0 flex-col gap-3.5 px-4 pt-3.5 pb-4">
+						{note && <p className="text-sm text-muted-foreground">{note}</p>}
+						{observation.evidenceRationale && (
+							<DetailSection label="Why it was noted">
+								<p className="text-sm text-pretty">{observation.evidenceRationale}</p>
+							</DetailSection>
 						)}
-					</div>
-					<div className="flex flex-wrap items-center gap-2 sm:justify-end">
-						{observation.assessment === "BAD" && observation.severity && (
-							<StatusBadge def={SEVERITY_DEFS[observation.severity]} />
+						{checks.length > 0 && (
+							<DetailSection label="What was checked">
+								{/* A definition list, so the term and what the review wrote for it reach a screen
+								    reader as one pair rather than as two sentences in a row. */}
+								<dl className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+									{checks.map(({ term, detail }) => (
+										<Fragment key={term}>
+											<dt className="text-muted-foreground">{term}:</dt>
+											<dd className="min-w-0 text-pretty">{detail}</dd>
+										</Fragment>
+									))}
+								</dl>
+							</DetailSection>
 						)}
-						<span
-							className={cn("inline-flex items-center gap-1 text-xs font-medium", status.className)}
-						>
-							<StatusIcon className="size-3.5" aria-hidden />
-							{status.label}
-						</span>
-						{canOpen && (
-							<ChevronDownIcon
-								className="size-4 text-muted-foreground transition-transform group-data-[panel-open]/observation:rotate-180"
-								aria-hidden
-							/>
-						)}
-					</div>
-				</CollapsibleTrigger>
-				{canOpen && (
-					<CollapsibleContent className="border-t bg-muted/20 px-4 py-4">
-						{detailState?.isLoading ? (
-							<div className="flex flex-col gap-2">
-								<Skeleton className="h-4 w-3/4" />
-								<Skeleton className="h-4 w-2/3" />
-							</div>
-						) : detailState?.error ? (
-							<QueryErrorAlert error={detailState.error} title="Could not load this observation" />
-						) : (
-							<div className="flex min-w-0 flex-col gap-4">
-								<div className="grid min-w-0 gap-4 sm:grid-cols-2">
-									{reasoning && (
-										<div className="flex flex-col gap-1">
-											<p className="text-xs font-medium text-muted-foreground">
-												Why this was noted
-											</p>
-											<p className="text-sm text-pretty">{reasoning}</p>
-										</div>
-									)}
-									{guidance && (
-										<div className="flex flex-col gap-1">
-											<p className="text-xs font-medium text-muted-foreground">What to try next</p>
-											<p className="text-sm text-pretty">{guidance}</p>
-										</div>
+						{(evidenceLocations.length > 0 || workLink) && (
+							<DetailSection label="Evidence" className="gap-1.5">
+								<div className="flex min-w-0 flex-col gap-2">
+									{evidenceLocations.map((location) => (
+										<EvidenceFileBlock
+											key={`${location.sourceKind}-${location.path}-${location.startLine}`}
+											location={location}
+											detector={detector}
+										/>
+									))}
+									{(detector !== undefined || workLink !== undefined) && (
+										<p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+											{detector && (
+												<span>
+													Captured by <code className="font-mono">{detector}</code>
+												</span>
+											)}
+											{workLink && (
+												<InlineLink href={workLink} external className="text-xs">
+													Open the {artifactKindLabel(observation.artifactKind).toLowerCase()}
+												</InlineLink>
+											)}
+										</p>
 									)}
 								</div>
-								{evidenceLocations.length > 0 && (
-									<div className="flex min-w-0 flex-col gap-2">
-										<p className="text-xs font-medium text-muted-foreground">Evidence</p>
-										{evidenceLocations.map((location, index) => (
-											<EvidenceFileBlock
-												key={`${location.path}-${location.startLine}`}
-												location={location}
-												detector={detail?.evidence?.detector}
-												defaultOpen={index === 0}
-											/>
-										))}
-									</div>
-								)}
-								{detailState && !hasDetails && (
-									<p className="text-sm text-muted-foreground">
-										No further detail was recorded for this observation.
+							</DetailSection>
+						)}
+						{nextStep && (
+							<DetailSection label="Next step">
+								<p className="text-sm text-pretty">{nextStep}</p>
+							</DetailSection>
+						)}
+						{canRespond && (
+							<DetailSection label="Your response" className="gap-2.5">
+								<div className="flex flex-wrap items-center gap-2">
+									{statusValues(FEEDBACK_RESOLUTION_DEFS).map((value) => {
+										const def = FEEDBACK_RESOLUTION_DEFS[value];
+										const isChosen = shownResolution === value;
+										return (
+											<ResponseButton
+												key={value}
+												tone={toneOf(def.badgeVariant)}
+												pressed={isChosen}
+												disabled={isFeedbackResponsePending}
+												className="bg-background"
+												onClick={() => chooseResolution(value)}
+											>
+												{def.label}
+											</ResponseButton>
+										);
+									})}
+								</div>
+								{/* What the reader already said: the rating given on the feedback card, and
+									    the comment sent with the response that stands. */}
+								{(recorded.usefulness !== undefined || recorded.comment !== undefined) && (
+									<p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+										{recorded.usefulness && (
+											<StatusBadge def={FEEDBACK_USEFULNESS_DEFS[recorded.usefulness]} />
+										)}
+										{recorded.comment && <q>{recorded.comment}</q>}
 									</p>
 								)}
-								{canRespond && (
-									<div className="flex flex-col gap-3 border-t pt-3">
-										<ResponseChoice
-											legend="Was this feedback helpful?"
-											defs={FEEDBACK_USEFULNESS_DEFS}
-											chosen={recorded.usefulness}
-											isPending={isFeedbackResponsePending}
-											onChoose={toggleUsefulness}
-										/>
-										<ResponseChoice
-											legend="What did you do about it?"
-											defs={FEEDBACK_RESOLUTION_DEFS}
-											chosen={selectedResolution ?? recorded.resolution}
-											isPending={isFeedbackResponsePending}
-											onChoose={toggleResolution}
-										/>
-										<FeedbackComment
-											key={`${observation.observationId}:${recorded.comment ?? ""}`}
-											comment={recorded.comment}
-											isRequired={
-												selectedResolution === "DISPUTED" || recorded.resolution === "DISPUTED"
-											}
-											isPending={isFeedbackResponsePending}
-											onSave={(comment) => {
-												respond({ comment, resolution: selectedResolution ?? recorded.resolution });
-											}}
-										/>
-									</div>
-								)}
-							</div>
+							</DetailSection>
 						)}
-					</CollapsibleContent>
-				)}
+					</div>
+					{canRespond &&
+						pendingResolution === "DISPUTED" && (
+							// The sentence is what a dispute has to carry, so Skip only closes the band.
+							<ResponseCommentBand
+								key={pendingResolution}
+								name="Why you dispute this"
+								label="What was missed?"
+								placeholder="One or two sentences on what is off"
+								required
+								isPending={isFeedbackResponsePending}
+								onSend={({ comment }) => {
+									const sentence = comment.trim();
+									if (sentence) record(sentence);
+								}}
+								onSkip={() => setPendingResolution(undefined)}
+							/>
+						)}
+					{canRespond && pendingResolution && pendingResolution !== "DISPUTED" && (
+						<ResponseCommentBand
+							key={pendingResolution}
+							name={
+								pendingResolution === "ADDRESSED" ? "What you changed" : "Why this does not apply"
+							}
+							label="Anything to add?"
+							placeholder="Optional: a note to yourself"
+							isPending={isFeedbackResponsePending}
+							onSend={({ comment }) => record(comment.trim() || undefined)}
+							onSkip={() => record(undefined)}
+						/>
+					)}
+				</CollapsibleContent>
 			</Collapsible>
 		</li>
 	);

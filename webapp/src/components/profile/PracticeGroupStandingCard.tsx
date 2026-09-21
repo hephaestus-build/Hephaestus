@@ -4,19 +4,20 @@ import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/a
 import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
+import {
+	countPracticeStandings,
+	PracticeGroupStandingRing,
+	STANDING_LEGEND,
+	summarizeStandingCounts,
+} from "@/components/practice-vocabulary/PracticeGroupStandingRing";
+import { PracticeTrendChip } from "@/components/practice-vocabulary/PracticeTrendChip";
 import { statusToneClass, statusValues } from "@/components/practice-vocabulary/status-def";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { artifactKindCountLabel, artifactKindIcon } from "@/lib/artifact-kinds";
+import { artifactKindIcon, artifactKindNoun } from "@/lib/artifact-kinds";
 import { cn } from "@/lib/utils";
-import {
-	PracticeGroupStandingRing,
-	STANDING_LEGEND,
-	summarizePracticeStandings,
-} from "./PracticeGroupStandingRing";
-import { PracticeTrendChip } from "./PracticeTrendChip";
 
 const COLLAPSED_GROUP_COUNT = 3;
 const STANDING_ORDER = statusValues(PRACTICE_GROUP_STANDING_DEFS);
@@ -100,7 +101,8 @@ export function PracticeGroupStandingCard({
 					const presentation =
 						PRACTICE_GROUP_STANDING_DEFS[groupStanding?.standing ?? "NOT_OBSERVED"];
 					const practices = practicesByGroup?.[group.slug] ?? [];
-					const breakdown = summarizePracticeStandings(practices);
+					const counts = countPracticeStandings(practices);
+					const breakdown = summarizeStandingCounts(counts);
 					const { Icon, pill } = getGroupVisual(group.icon, group.color);
 					return (
 						<Card key={group.slug} className="relative flex h-full flex-col overflow-hidden pt-0">
@@ -134,7 +136,7 @@ export function PracticeGroupStandingCard({
 											/>
 										)}
 									</div>
-									{practices.length > 0 && <PracticeGroupStandingRing practices={practices} />}
+									{practices.length > 0 && <PracticeGroupStandingRing counts={counts} />}
 								</div>
 								{breakdown.length > 0 && (
 									<ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -164,7 +166,7 @@ export function PracticeGroupStandingCard({
 												return (
 													<li key={workKind} className="flex items-center gap-1">
 														<SourceIcon className="size-3.5 shrink-0" aria-hidden />
-														{artifactKindCountLabel(workKind, count)}
+														{count} {artifactKindNoun(workKind, count)}
 													</li>
 												);
 											})}

@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { z } from "zod";
 import {
 	deleteFeedbackResponseMutation,
-	getObservationOptions,
 	getPracticeGroupTrendOptions,
 	listGroupsOptions,
 	listPracticeGroupReviewRunsInfiniteOptions,
@@ -15,14 +14,8 @@ import {
 	replaceFeedbackResponseMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { PracticeStanding } from "@/api/types.gen";
-import {
-	PracticeGroupDetailPage,
-	type ReviewRunFeedState,
-} from "@/components/profile/PracticeGroupDetailPage";
-import {
-	isEmptyFeedbackResponse,
-	type ObservationDetailState,
-} from "@/components/profile/review-runs";
+import { PracticeGroupDetailPage } from "@/components/profile/PracticeGroupDetailPage";
+import { isEmptyFeedbackResponse, type ReviewRunFeedState } from "@/components/profile/review-runs";
 import { resolveCurrentUser } from "@/integrations/auth/guard";
 import { loadedPages } from "@/integrations/tanstack-query/spring-page";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -31,7 +24,6 @@ const ACTIVITY_PAGE_SIZE = 10;
 
 const practiceGroupDetailSearchSchema = z.object({
 	practice: z.string().optional(),
-	observation: z.string().optional(),
 });
 function nextStepOf(practiceStanding?: PracticeStanding): string | undefined {
 	const firstAction = practiceStanding?.toWorkOn[0];
@@ -63,10 +55,10 @@ export const Route = createFileRoute(
 
 function PracticeGroupDetail() {
 	const { workspaceSlug, username, groupSlug } = Route.useParams();
-	const { practice: selectedPracticeSlug, observation: openObservationId } = Route.useSearch();
+	const { practice: selectedPracticeSlug } = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
 	const queryClient = useQueryClient();
-	const updateSelection = (search: { practice?: string; observation?: string }) =>
+	const updateSelection = (search: { practice?: string }) =>
 		void navigate({ search: (previous) => ({ ...previous, ...search }) });
 
 	const groupsQuery = useQuery({
@@ -115,13 +107,6 @@ function PracticeGroupDetail() {
 		onError: (error) =>
 			toast.error(problemDetailOf(error, "Could not withdraw your feedback response")),
 	});
-	const observationQuery = useQuery({
-		...getObservationOptions({
-			path: { workspaceSlug, observationId: openObservationId ?? "" },
-		}),
-		enabled: Boolean(openObservationId),
-	});
-
 	const group = groupsQuery.data?.find((candidate) => candidate.slug === groupSlug);
 	const standing = statusesQuery.data?.find((candidate) => candidate.groupSlug === groupSlug);
 	const standingsBySlug = new Map(
@@ -159,14 +144,6 @@ function PracticeGroupDetail() {
 					onLoadMore: () => void activityQuery.fetchNextPage(),
 				};
 
-	const observationDetail: ObservationDetailState | undefined = openObservationId
-		? {
-				isLoading: observationQuery.isPending,
-				detail: observationQuery.data,
-				error: observationQuery.error ?? undefined,
-			}
-		: undefined;
-
 	return (
 		<PracticeGroupDetailPage
 			group={group}
@@ -175,17 +152,10 @@ function PracticeGroupDetail() {
 			groupTrend={trendQuery.data?.group}
 			selectedPracticeSlug={selectedPracticeSlug}
 			onSelectPractice={(practiceSlug) => {
-				updateSelection({ practice: practiceSlug, observation: undefined });
+				updateSelection({ practice: practiceSlug });
 			}}
 			feed={reviewRunFeed}
 			skeletonRows={ACTIVITY_PAGE_SIZE}
-			openObservationId={openObservationId}
-			observationDetail={observationDetail}
-			onToggleObservation={(observationId) =>
-				updateSelection({
-					observation: openObservationId === observationId ? undefined : observationId,
-				})
-			}
 			onRespond={(observation, response) => {
 				const feedbackId = observation.feedbackId;
 				if (!feedbackId) return;

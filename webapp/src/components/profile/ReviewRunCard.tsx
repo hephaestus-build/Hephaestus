@@ -1,70 +1,57 @@
-import { ChevronDownIcon, ChevronUpIcon, ExternalLinkIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useState } from "react";
-import type { PracticeGroupReviewObservation, PracticeGroupReviewRun } from "@/api/types.gen";
-import { GithubIcon, GitlabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ARTIFACT_KIND, artifactKindIcon, artifactKindLabel } from "@/lib/artifact-kinds";
-import { asDate } from "@/lib/dates";
-import { getProviderLabel } from "@/lib/provider";
-import type { FeedbackResponse, ObservationDetailState } from "./review-runs";
-import { ReviewObservationRow } from "./ReviewObservationRow";
 
-const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
-const TIME = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
-const PROVIDER_ICONS = {
-	GITHUB: GithubIcon,
-	SLACK: SlackIcon,
-	GITLAB: GitlabIcon,
-	OUTLINE: OutlineIcon,
-} satisfies Record<
-	NonNullable<PracticeGroupReviewRun["reviewedWork"]["provider"]>,
-	typeof GithubIcon
->;
-function providerMeta(run: PracticeGroupReviewRun) {
-	const provider = run.reviewedWork.provider;
-	return provider
-		? { label: getProviderLabel(provider), Icon: PROVIDER_ICONS[provider] }
-		: undefined;
-}
-function workIdentity(run: PracticeGroupReviewRun, providerLabel?: string) {
-	const work = run.reviewedWork;
-	if (work.type === ARTIFACT_KIND.conversationThread && work.channelName) {
-		return `#${work.channelName}`;
-	}
-	const numbered = [work.number !== undefined && `#${work.number}`, work.title]
-		.filter(Boolean)
-		.join(" · ");
-	if (numbered) return numbered;
-	const kind = artifactKindLabel(work.type);
-	return providerLabel ? `${kind} on ${providerLabel}` : kind;
-}
+import type { PracticeGroupReviewRun, ReviewedWorkRef } from "@/api/types.gen";
+import { InlineLink } from "@/components/common/InlineLink";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { artifactKindIcon } from "@/lib/artifact-kinds";
+import { asDate, formatShortDay, formatTime } from "@/lib/dates";
+
+import type { ObservationControls } from "./review-runs";
+import { ReviewObservationRow } from "./ReviewObservationRow";
+import { TimelineItem } from "./TimelineItem";
 
 export interface ReviewRunCardProps {
 	run: PracticeGroupReviewRun;
 	initialObservationCount?: number;
-	openObservationId?: string;
-	observationDetail?: ObservationDetailState;
-	onToggleObservation?: (observationId: string) => void;
-	onRespond?: (observation: PracticeGroupReviewObservation, response: FeedbackResponse) => void;
-	pendingFeedbackId?: string;
+	/** The reader's response to an observation, handed to every row. */
+	observations?: ObservationControls;
+	/** Off on a practice's own level, where every row is that practice and no row repeats it. */
+	showPracticeName?: boolean;
+	/**
+	 * Which of this card's observations arrive open: every one, only the first, or none. Whoever
+	 * places the card decides — a feed of one practice opens its newest row and leaves the reader
+	 * to open the rest.
+	 */
+	initiallyOpen?: "all" | "first" | "none";
+	/** Set on the last card while earlier runs exist below the fold. */
+	tailContinues?: boolean;
 }
 
+/**
+ * One review run as a row of the timeline: the day and time in the date column, a dot on the
+ * rail, and the card with the reviewed work at its head and the observations as its rows. The head
+ * names the work and nothing else: what the run is worth reading is what it observed, and a
+ * sentence about the run as a whole only stood between the reader and those rows.
+ *
+ * A run that carries one observation has no two things to separate — on a practice's own level a
+ * run reviews that practice once, so every card there is that case. It drops the head and merges
+ * into one block: the observation's summary and outcome are the block's first line, and the work
+ * the head would have named is the small line under it.
+ */
 export function ReviewRunCard({
 	run,
 	initialObservationCount = 3,
-	openObservationId,
-	observationDetail,
-	onToggleObservation,
-	onRespond,
-	pendingFeedbackId,
+	observations = {},
+	showPracticeName = true,
+	initiallyOpen = "all",
+	tailContinues = false,
 }: ReviewRunCardProps) {
 	const [showAllObservations, setShowAllObservations] = useState(false);
-	const provider = providerMeta(run);
-	const KindIcon = artifactKindIcon(run.reviewedWork.type);
 	const reviewedAt = asDate(run.reviewedAt);
-	const identity = workIdentity(run, provider?.label);
+	// One observation is one block: the row takes the work line and the card grows no head over it.
+	const merged = run.observations.length === 1;
 	const collapsedCount = Math.max(1, initialObservationCount);
 	const hiddenCount = Math.max(0, run.observations.length - collapsedCount);
 	const visibleObservations = showAllObservations
@@ -72,97 +59,126 @@ export function ReviewRunCard({
 		: run.observations.slice(0, collapsedCount);
 
 	return (
-		<li className="group grid min-w-0 grid-cols-[1rem_minmax(0,1fr)] gap-x-3 sm:grid-cols-[4.5rem_1rem_minmax(0,1fr)]">
-			{reviewedAt && (
-				<time
-					dateTime={reviewedAt.toISOString()}
-					className="col-start-2 mb-1 flex w-fit gap-1 text-xs text-muted-foreground sm:col-start-1 sm:row-start-1 sm:mt-3 sm:flex-col sm:items-end"
-				>
-					<span className="font-medium text-foreground">{DAY.format(reviewedAt)}</span>
-					<span>{TIME.format(reviewedAt)}</span>
-				</time>
-			)}
-			<div className="relative col-start-1 row-start-1 row-end-3 sm:col-start-2">
-				<span
-					className="absolute left-1/2 top-3 z-10 size-2.5 -translate-x-1/2 rounded-full border-2 border-background bg-muted-foreground"
-					aria-hidden
-				/>
-				<span
-					className="absolute bottom-0 left-1/2 top-5 w-px -translate-x-1/2 bg-border group-last:hidden"
-					aria-hidden
-				/>
-			</div>
-			<Card className="col-start-2 mb-3 min-w-0 gap-0 overflow-hidden py-0 shadow-none sm:col-start-3 sm:row-start-1">
-				<CardContent className="min-w-0 p-0">
-					<div className="flex min-w-0 items-start gap-2 border-b bg-muted/50 px-4 py-3">
-						{provider && (
-							<provider.Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-						)}
-						<KindIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-						<div className="min-w-0">
-							{run.reviewedWork.url ? (
-								<Tooltip>
-									<TooltipTrigger
-										render={
-											<a
-												href={run.reviewedWork.url}
-												target="_blank"
-												rel="noopener noreferrer"
-												className="flex min-w-0 items-center gap-1 text-sm font-medium underline decoration-dotted underline-offset-2 hover:text-foreground"
-											/>
-										}
-									>
-										<span className="truncate">{identity}</span>
-										<ExternalLinkIcon className="size-3 shrink-0" aria-hidden />
-										<span className="sr-only"> (opens in a new tab)</span>
-									</TooltipTrigger>
-									<TooltipContent className="max-w-80 text-pretty">{identity}</TooltipContent>
-								</Tooltip>
+		<TimelineItem
+			at={reviewedAt}
+			label={
+				reviewedAt && (
+					<>
+						<span className="text-sm font-semibold text-foreground">
+							{formatShortDay(reviewedAt)}
+						</span>
+						{formatTime(reviewedAt)}
+					</>
+				)
+			}
+			tailContinues={tailContinues}
+		>
+			<div className="min-w-0 overflow-hidden rounded-xl border bg-background">
+				{!merged && <ReviewedWorkHead work={run.reviewedWork} />}
+				<ul className="divide-y">
+					{visibleObservations.map((observation, index) => (
+						<ReviewObservationRow
+							key={observation.id}
+							observation={observation}
+							defaultOpen={initiallyOpen === "all" || (initiallyOpen === "first" && index === 0)}
+							showPracticeName={showPracticeName}
+							// Either the card's head or the row's own work line links the work every
+							// observation here was seen on, so the evidence block never links it again.
+							showWorkLink={false}
+							work={merged ? <ReviewedWorkLine work={run.reviewedWork} /> : undefined}
+							onRespond={observations.onRespond}
+							isFeedbackResponsePending={observations.pendingFeedbackId === observation.feedbackId}
+						/>
+					))}
+				</ul>
+				{hiddenCount > 0 && (
+					<div className="border-t px-4 py-2">
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							className="h-8 px-2 text-muted-foreground hover:text-foreground"
+							onClick={() => setShowAllObservations((current) => !current)}
+						>
+							{showAllObservations ? "Show less" : `Show more (${hiddenCount})`}
+							{showAllObservations ? (
+								<ChevronUpIcon data-icon="inline-end" />
 							) : (
-								<p className="truncate text-sm font-medium">{identity}</p>
+								<ChevronDownIcon data-icon="inline-end" />
 							)}
-							{run.reviewedWork.repositoryName && (
-								<p className="truncate text-xs text-muted-foreground">
-									{run.reviewedWork.repositoryName}
-								</p>
-							)}
-						</div>
+						</Button>
 					</div>
-					<ul className="divide-y">
-						{visibleObservations.map((observation) => (
-							<ReviewObservationRow
-								key={observation.observationId}
-								observation={observation}
-								isOpen={openObservationId === observation.observationId}
-								detailState={
-									openObservationId === observation.observationId ? observationDetail : undefined
-								}
-								onToggle={onToggleObservation}
-								onRespond={onRespond}
-								isFeedbackResponsePending={pendingFeedbackId === observation.feedbackId}
-							/>
-						))}
-					</ul>
-					{hiddenCount > 0 && (
-						<div className="border-t px-4 py-2">
-							<Button
-								type="button"
-								variant="ghost"
-								size="sm"
-								className="h-8 px-2 text-muted-foreground hover:text-foreground"
-								onClick={() => setShowAllObservations((current) => !current)}
-							>
-								{showAllObservations ? "Show less" : `Show more (${hiddenCount})`}
-								{showAllObservations ? (
-									<ChevronUpIcon data-icon="inline-end" />
-								) : (
-									<ChevronDownIcon data-icon="inline-end" />
-								)}
-							</Button>
-						</div>
-					)}
-				</CardContent>
-			</Card>
-		</li>
+				)}
+			</div>
+		</TimelineItem>
+	);
+}
+
+/**
+ * The work a run reviewed, at the head of a card whose observations are several: the link the
+ * rows below it share, with the repository under it.
+ */
+function ReviewedWorkHead({ work }: { work: ReviewedWorkRef }) {
+	const KindIcon = artifactKindIcon(work.kind);
+	// The wire names the work: "#902", "#backend-guild", a document's title.
+	const identity = work.label;
+	return (
+		<div className="flex min-w-0 items-start gap-2.5 border-b px-4 py-3">
+			<KindIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+			<div className="flex min-w-0 flex-col gap-0.5">
+				{work.url ? (
+					<Tooltip>
+						<TooltipTrigger
+							render={
+								<InlineLink href={work.url} external className="flex min-w-0 text-sm font-medium">
+									<span className="truncate">{identity}</span>
+								</InlineLink>
+							}
+						/>
+						<TooltipContent className="max-w-80 text-pretty">{identity}</TooltipContent>
+					</Tooltip>
+				) : (
+					<p className="truncate text-sm font-medium">{identity}</p>
+				)}
+				{work.repositoryName && (
+					<p className="truncate text-xs text-muted-foreground">{work.repositoryName}</p>
+				)}
+			</div>
+		</div>
+	);
+}
+
+/**
+ * The same work under a merged card's summary, on one small line: "#902 ·
+ * HephaestusTest/practice-validation". The summary is the block's anchor, so the work it was seen
+ * on reads as the note beneath it rather than as a second head.
+ */
+function ReviewedWorkLine({ work }: { work: ReviewedWorkRef }) {
+	const KindIcon = artifactKindIcon(work.kind);
+	const identity = work.label;
+	return (
+		<span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+			<KindIcon className="size-3.5 shrink-0" aria-hidden />
+			{work.url ? (
+				<Tooltip>
+					<TooltipTrigger
+						render={
+							<InlineLink href={work.url} external className="flex min-w-0 text-xs">
+								<span className="truncate">{identity}</span>
+							</InlineLink>
+						}
+					/>
+					<TooltipContent className="max-w-80 text-pretty">{identity}</TooltipContent>
+				</Tooltip>
+			) : (
+				<span className="truncate">{identity}</span>
+			)}
+			{work.repositoryName && (
+				<>
+					<span aria-hidden>·</span>
+					<span className="truncate">{work.repositoryName}</span>
+				</>
+			)}
+		</span>
 	);
 }

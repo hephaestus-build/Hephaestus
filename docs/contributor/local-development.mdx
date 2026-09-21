@@ -126,6 +126,26 @@ Never commit `application-local.yml`. It may contain secrets and machine-specifi
 
 To wipe the local database (e.g. after a bad migration or sync), run `vp run dev:reset`. The Postgres data is a bind-mounted folder (`server/postgres-data`), so `docker compose down -v` alone does not clear it — `dev:reset` removes the folder and recreates the stack.
 
+To try the Practice profile against the server, `vp run dev:seed-practice-profile` writes review
+runs, observations and in-app feedback for one developer into the local database. Whose work it
+seeds comes from flags, or from the environment, or from the defaults the `HephaestusTest`
+fixtures are synced under:
+
+| Flag                        | Environment                    | Default                              |
+| --------------------------- | ------------------------------ | ------------------------------------ |
+| `--workspace`               | `SEED_WORKSPACE_SLUG`          | `hephaestustest`                     |
+| `--developer`               | `SEED_DEVELOPER_LOGIN`         | `ValentinGruener`                    |
+| `--pull-request-repository` | `SEED_PULL_REQUEST_REPOSITORY` | `HephaestusTest/practice-validation` |
+| `--issue-repository`        | `SEED_ISSUE_REPOSITORY`        | `HephaestusTest/MaxTestRepo`         |
+
+Flags follow the task name, `vp run dev:seed-practice-profile --developer you`. The runs name
+their pull requests and issues by number in those two repositories, and the seed refuses to run
+against a database that has not synced them. It connects with the `POSTGRES_*` values in
+`server/.env` and refuses any `POSTGRES_HOST` that is not a loopback address, so it cannot be
+pointed at a shared database. Every seeded row carries a recognisable id, so the seed replaces
+itself on re-run and `vp run dev:seed-practice-profile:reset` removes exactly those rows. Nothing
+it writes is addressed to a provider: the runs are complete and only in-app feedback is seeded.
+
 ### Port overrides
 
 Every host-side port is configurable so multiple Hephaestus instances (or other services) can coexist on the same machine. Container-internal ports never change – only the `localhost` binding moves.

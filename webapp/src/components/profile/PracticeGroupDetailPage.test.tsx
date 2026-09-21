@@ -25,7 +25,7 @@ const standing: PracticeGroupStanding = {
 const run: PracticeGroupReviewRun = {
 	reviewId: "00000000-0000-0000-0000-000000000901",
 	reviewedAt: daysBefore(2),
-	reviewedWork: { id: 902, type: "scm.pull_request", provider: "GITHUB", number: 902 },
+	reviewedWork: { id: "902", kind: "scm.pull_request", label: "#902" },
 	observations: [],
 };
 

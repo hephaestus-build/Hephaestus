@@ -1,14 +1,15 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn } from "storybook/test";
 import type {
+	ObservationDetail,
 	PracticeGroup,
-	PracticeGroupReviewObservation,
 	PracticeGroupReviewRun,
 	PracticeGroupStanding,
 } from "@/api/types.gen";
 import { daysBefore } from "@/components/common/story-clock";
 import { expectNoPageOverflow } from "@/test/reflow";
-import { PracticeGroupDetailPage, type ReviewRunFeedState } from "./PracticeGroupDetailPage";
+import { PracticeGroupDetailPage } from "./PracticeGroupDetailPage";
+import type { ReviewRunFeedState } from "./review-runs";
 
 const group: PracticeGroup = {
 	id: 1,
@@ -55,26 +56,32 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const observation: PracticeGroupReviewObservation = {
-	observationId: "00000000-0000-0000-0000-000000000102",
+const observation: ObservationDetail = {
+	id: "00000000-0000-0000-0000-000000000102",
 	feedbackId: "00000000-0000-0000-0000-000000000103",
 	practiceSlug: "small-changes",
 	practiceName: "Keep changes focused",
-	title: "The refactor and the fix arrived together",
+	summary: "The refactor and the fix arrived together",
 	presence: "PRESENT",
 	assessment: "BAD",
 	severity: "MAJOR",
+	observedAt: daysBefore(2),
+	origin: "LIVE",
+	claimCurrentness: "CURRENT",
+	artifactId: 902,
+	artifactKind: "scm.pull_request",
+	evidenceRationale:
+		"The diff renames the loader's package and changes its caching in the same commit.",
+	deliveredFeedback: "Land the rename on its own first.",
 };
 
 const run: PracticeGroupReviewRun = {
 	reviewId: "00000000-0000-0000-0000-000000000101",
 	reviewedAt: daysBefore(2),
 	reviewedWork: {
-		id: 902,
-		type: "scm.pull_request",
-		provider: "GITHUB",
-		number: 902,
-		title: "Split the practice catalog loader per workspace",
+		id: "902",
+		kind: "scm.pull_request",
+		label: "#902",
 		repositoryName: "ls1intum/Hephaestus",
 		url: "https://github.com/ls1intum/Hephaestus/pull/902",
 	},
@@ -94,11 +101,7 @@ export const Loading: Story = { args: { isLoading: true } };
 export const Missing: Story = { args: { group: undefined } };
 export const Failure: Story = { args: { error: new Error("Unavailable") } };
 export const WithReviewRuns: Story = {
-	args: {
-		feed: readyFeed,
-		onToggleObservation: fn(),
-		onRespond: fn(),
-	},
+	args: { feed: readyFeed, onRespond: fn() },
 };
 export const MoreToLoad: Story = {
 	args: {

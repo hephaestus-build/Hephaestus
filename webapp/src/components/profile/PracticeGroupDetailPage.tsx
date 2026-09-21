@@ -2,17 +2,16 @@ import { PulseIcon } from "@primer/octicons-react";
 import { ArrowLeftIcon, ChevronDownIcon, CircleDashedIcon, InfoIcon } from "lucide-react";
 import { useState } from "react";
 import type {
+	ObservationDetail,
 	PracticeGroup,
-	PracticeGroupReviewObservation,
-	PracticeGroupReviewRun,
 	PracticeGroupStanding,
 	PracticeStanding,
 	PracticeTrend,
 } from "@/api/types.gen";
 import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
-import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
+import { PracticeTrendChip } from "@/components/practice-vocabulary/PracticeTrendChip";
 import { type StatusDef, statusToneClass } from "@/components/practice-vocabulary/status-def";
 import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -26,9 +25,9 @@ import {
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import type { ContributingPractice } from "./practice-detail";
 import { PracticeNextStepCallout } from "./PracticeNextStepCallout";
-import { PracticeTrendChip } from "./PracticeTrendChip";
-import type { FeedbackResponse, ObservationDetailState } from "./review-runs";
+import type { FeedbackResponse, ReviewRunFeedState } from "./review-runs";
 import { ReviewRunTimeline } from "./ReviewRunTimeline";
 
 type PracticeStandingKey = NonNullable<PracticeStanding["standing"]> | "UNMEASURED";
@@ -42,13 +41,6 @@ const UNMEASURED_NODE = {
 function standingNode(standing: PracticeStandingKey): StatusDef {
 	return standing === "UNMEASURED" ? UNMEASURED_NODE : PRACTICE_GROUP_STANDING_DEFS[standing];
 }
-export type ReviewRunFeedState = PanelState<{
-	runs: PracticeGroupReviewRun[];
-	hasMore: boolean;
-	isLoadingMore: boolean;
-	onLoadMore: () => void;
-}>;
-
 const EMPTY_FEED: ReviewRunFeedState = {
 	status: "ready",
 	runs: [],
@@ -56,16 +48,6 @@ const EMPTY_FEED: ReviewRunFeedState = {
 	isLoadingMore: false,
 	onLoadMore: () => undefined,
 };
-export interface ContributingPractice {
-	slug: string;
-	name: string;
-	whyItMatters?: string;
-	whatGoodLooksLike?: string;
-	standing?: PracticeStanding["standing"];
-	trend?: PracticeTrend;
-	nextStep?: string;
-}
-
 export interface PracticeGroupDetailPageProps {
 	group?: PracticeGroup;
 	standing?: PracticeGroupStanding;
@@ -75,10 +57,7 @@ export interface PracticeGroupDetailPageProps {
 	onSelectPractice?: (practiceSlug: string | undefined) => void;
 	feed?: ReviewRunFeedState;
 	skeletonRows?: number;
-	openObservationId?: string;
-	observationDetail?: ObservationDetailState;
-	onToggleObservation?: (observationId: string) => void;
-	onRespond?: (observation: PracticeGroupReviewObservation, response: FeedbackResponse) => void;
+	onRespond?: (observation: ObservationDetail, response: FeedbackResponse) => void;
 	pendingFeedbackId?: string;
 	isLoading: boolean;
 	error?: unknown;
@@ -111,9 +90,6 @@ export function PracticeGroupDetailPage({
 	onSelectPractice,
 	feed = EMPTY_FEED,
 	skeletonRows = 3,
-	openObservationId,
-	observationDetail,
-	onToggleObservation,
 	onRespond,
 	pendingFeedbackId,
 	isLoading,
@@ -412,14 +388,7 @@ export function PracticeGroupDetailPage({
 					</div>
 				) : feed.runs.length > 0 ? (
 					<>
-						<ReviewRunTimeline
-							runs={feed.runs}
-							openObservationId={openObservationId}
-							observationDetail={observationDetail}
-							onToggleObservation={onToggleObservation}
-							onRespond={onRespond}
-							pendingFeedbackId={pendingFeedbackId}
-						/>
+						<ReviewRunTimeline runs={feed.runs} observations={{ onRespond, pendingFeedbackId }} />
 						{feed.hasMore && (
 							<Button
 								type="button"

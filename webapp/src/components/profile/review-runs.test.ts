@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { PracticeGroupReviewObservation } from "@/api/types.gen";
+import type { ObservationDetail } from "@/api/types.gen";
+import { detailObservation } from "@/stories/practice-detail-story-mock-data";
+
 import { feedbackResponseOf, isEmptyFeedbackResponse } from "./review-runs";
 
-const observation = (
-	overrides: Partial<PracticeGroupReviewObservation> = {},
-): PracticeGroupReviewObservation => ({
-	observationId: "00000000-0000-0000-0000-000000000001",
-	practiceSlug: "records-decisions",
-	practiceName: "Record significant decisions",
-	title: "The workspace trade-off is documented",
-	presence: "PRESENT",
-	assessment: "GOOD",
+const observation = (overrides: Partial<ObservationDetail> = {}): ObservationDetail => ({
+	...detailObservation,
+	feedbackUsefulness: undefined,
+	feedbackResolution: undefined,
+	feedbackResponseComment: undefined,
 	...overrides,
 });
 
