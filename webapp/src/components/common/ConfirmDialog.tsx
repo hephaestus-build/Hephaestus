@@ -55,7 +55,9 @@ export function ConfirmDialog<T>({
 		<AlertDialog
 			open={subject != null}
 			onOpenChange={(open) => {
-				if (!open) onClose();
+				if (!open) {
+					onClose();
+				}
 			}}
 		>
 			<AlertDialogContent>
@@ -73,7 +75,9 @@ export function ConfirmDialog<T>({
 								variant="destructive"
 								onClick={() => {
 									// `subject`, not `shown`: `shown` outlives a row the caller has already let go of.
-									if (subject == null) return;
+									if (subject == null) {
+										return;
+									}
 									onConfirm(subject);
 									onClose();
 								}}

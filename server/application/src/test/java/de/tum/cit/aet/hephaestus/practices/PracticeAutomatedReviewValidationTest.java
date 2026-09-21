@@ -57,7 +57,7 @@ class PracticeAutomatedReviewValidationTest extends BaseUnitTest {
 
     private static PracticeAutomatedReviewPolicy requirements(List<PracticeEvidenceLimitation> knownLimitations) {
         return new PracticeAutomatedReviewPolicy(
-                new SourceContractVersion("1.0.0"),
+                new SourceContractVersion("1.1.0"),
                 new PracticeAutomatedReview(
                         PracticeAutomatedReviewMode.LANGUAGE_MODEL,
                         PracticeEvidenceSufficiency.SUFFICIENT_WHEN_REQUIREMENTS_MET),

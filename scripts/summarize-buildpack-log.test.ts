@@ -27,10 +27,10 @@ void test("CDS reporting collapses only known archive exclusions and retains raw
 	});
 	assert.equal(result.status, 0, result.stderr);
 	assert.equal(readFileSync(log, "utf8"), input);
-	assert.match(result.stdout, /Proxy1/);
-	assert.doesNotMatch(result.stdout, /Proxy2/);
-	assert.match(result.stdout, /Unsupported location: 2/);
-	assert.match(result.stdout, /Signed JAR: 1/);
+	assert.match(result.stdout, /Proxy1/u);
+	assert.doesNotMatch(result.stdout, /Proxy2/u);
+	assert.match(result.stdout, /Unsupported location: 2/u);
+	assert.match(result.stdout, /Signed JAR: 1/u);
 	// Past linkage evidence is not a permanent exemption: the same adapter can fail differently.
 	assert.ok(
 		result.stdout.includes(
@@ -47,6 +47,7 @@ void test("CDS reporting collapses only known archive exclusions and retains raw
 		"Preload Warning",
 		"Unknown exclusion",
 		"ERROR:",
-	])
+	]) {
 		assert.ok(result.stdout.includes(diagnostic), diagnostic);
+	}
 });

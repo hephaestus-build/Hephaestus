@@ -42,7 +42,7 @@ describe("instance overview release card", () => {
 		renderRouteAt("/admin");
 		await screen.findByText("Not checked yet", {}, ROUTE_RENDER_WAIT);
 		await user.click(screen.getByRole("button", { name: "Check now" }));
-		await screen.findByText(/GitHub rate-limited the request/, {}, ROUTE_RENDER_WAIT);
+		await screen.findByText(/GitHub rate-limited the request/u, {}, ROUTE_RENDER_WAIT);
 		expect(checks).toBe(1);
 		expect(screen.queryByText("Up to date")).toBeNull();
 		expect(screen.getByRole("status").textContent).toBe("Check failed");

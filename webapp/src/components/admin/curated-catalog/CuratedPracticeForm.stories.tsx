@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
@@ -10,9 +10,9 @@ import {
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
+import { settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow, expectPanelContentInset } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { settledDrawerPanel } from "@/test/overlay";
-import { expectNoPanelOverflow, expectPanelContentInset } from "@/test/reflow";
 
 import { curatedPracticeLevel, GUARDED_CURATED_LEVEL_KINDS } from "./curated-catalog-search";
 import { CuratedFormLevel } from "./CuratedFormLevel";
@@ -43,7 +43,6 @@ const initialData: CuratedPracticeFormInitialValue = {
 };
 
 const meta = {
-	title: "Instance admin/Practice catalog/Practice editor",
 	component: CuratedPracticeForm,
 	parameters: {
 		layout: "fullscreen",
@@ -153,7 +152,7 @@ export const HephaestusUpdateAvailable: Story = {
 		await expectPanelContentInset(popup);
 		// The full label, since colour alone cannot carry which kind of update it is.
 		await expect(screen.getByText("Hephaestus update available: review rules")).toBeVisible();
-		await expect(screen.getByText(/would change review rules/)).toBeVisible();
+		await expect(screen.getByText(/would change review rules/u)).toBeVisible();
 		await expect(screen.getByRole("button", { name: "Review Hephaestus update" })).toBeVisible();
 		await expect(screen.getByRole("button", { name: "Apply Hephaestus update" })).toBeVisible();
 		await expect(screen.getByRole("button", { name: "Keep saved version" })).toBeVisible();
@@ -176,7 +175,7 @@ export const ValidationErrors: Story = {
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
 		await expect(screen.getByText("Name must be at least 3 characters")).toBeVisible();
 		await expect(screen.queryByText("Select at least one trigger event")).not.toBeInTheDocument();
-		await expect(screen.getByRole("textbox", { name: /Name/ })).toHaveAttribute(
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toHaveAttribute(
 			"aria-describedby",
 			"practice-name-error",
 		);
@@ -193,6 +192,6 @@ export const Submitting: Story = {
 	},
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByRole("textbox", { name: /Name/ })).toBeDisabled();
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toBeDisabled();
 	},
 };

@@ -1,10 +1,10 @@
-#### 🔴 Observation status, target assessment and outcome are now distinct
+#### 🔴 Observation status, behavior assessment and outcome are distinct
 
 Upgrade the server, sandbox runtime and webapp together. Drain running practice reviews before the
 upgrade: old runtimes emit a combined outcome contract that the new server deliberately rejects.
 Before resuming reviews, use the existing catalogue adoption flow to apply the updated bundled
 practice definitions to installed workspace practices. Review instance-level overrides and custom
-criteria for obsolete combined outcome labels and missing-capture instructions. Each automated practice must name one fixed target and declare `TARGET ASSESSMENT: GOOD` for desirable behaviour or `TARGET ASSESSMENT: BAD` for undesirable behaviour. Do not change target desirability when its presence changes. Adoption creates
+criteria for obsolete combined outcome labels and missing-capture instructions. Each observation must identify the specific behavior it assesses and explain that behavior’s desirability in context. Keep the behavior referent stable within the observation; different behaviors under one practice can receive different assessments. Adoption creates
 new practice revisions; historical revisions are deliberately not rewritten, and workspace
 customizations are not silently overwritten.
 
@@ -12,7 +12,7 @@ Custom API consumers and custom runtime integrations must use:
 
 - `assessmentStatus`: `ASSESSED`, `NOT_APPLICABLE` or `UNDETERMINED`.
 - `presence`: `PRESENT` or `ABSENT` only for assessed observations, otherwise null.
-- `assessment`: target desirability, `GOOD` or `BAD` only for assessed observations, otherwise null.
+- `assessment`: contextual desirability of the specified behavior, `GOOD` or `BAD` only for assessed observations, otherwise null.
 - `outcome`: read-only `POSITIVE` for PRESENT/GOOD or ABSENT/BAD, `NEGATIVE` for PRESENT/BAD or ABSENT/GOOD, null when unassessed. Never annotate it independently.
 - `severity`: required exactly for negative outcomes, null otherwise.
 

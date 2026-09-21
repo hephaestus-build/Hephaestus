@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
+import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 
 export interface PracticeFormLevelProps {

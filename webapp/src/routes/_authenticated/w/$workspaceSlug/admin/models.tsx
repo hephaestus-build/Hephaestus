@@ -14,15 +14,15 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import { configureAgent, deleteAgent } from "@/api/sdk.gen";
 import type { AgentBinding, AgentBindingRequest } from "@/api/types.gen";
+import { currentMonthUtc } from "@/components/admin/usage/usage-utils";
 import {
 	AgentBindingsPage,
 	type BindingTarget,
 	bindingTargetKey,
 	isPurpose,
 	PURPOSE_TITLES,
-} from "@/components/admin/ai/AgentBindingsPage";
-import { WorkspaceLlmProviderPanel } from "@/components/admin/ai/WorkspaceLlmProviderPanel";
-import { currentMonthUtc } from "@/components/admin/usage/usage-utils";
+} from "@/components/admin/workspace-llm/AgentBindingsPage";
+import { WorkspaceLlmProviderPanel } from "@/components/admin/workspace-llm/WorkspaceLlmProviderPanel";
 import {
 	DATA_HANDLING_DEFS,
 	DATA_HANDLING_TIERS,
@@ -55,7 +55,9 @@ interface BindingSave extends BindingWrite {
 
 /** The mutation cache types `variables` as `unknown`; only a write that names a real row counts. */
 function targetKeyOf(variables: unknown): string | undefined {
-	if (!isRecord(variables) || !isRecord(variables.target)) return undefined;
+	if (!isRecord(variables) || !isRecord(variables.target)) {
+		return undefined;
+	}
 	const { purpose, tier } = variables.target;
 	return typeof purpose === "string" && isPurpose(purpose) && isDataHandlingTier(tier)
 		? bindingTargetKey({ purpose, tier })
@@ -104,7 +106,7 @@ function ModelsContainer() {
 	];
 
 	const agentsKey = listAgentsQueryKey({ path: { workspaceSlug } });
-	const invalidateBindings = () => queryClient.invalidateQueries({ queryKey: agentsKey });
+	const invalidateBindings = async () => queryClient.invalidateQueries({ queryKey: agentsKey });
 
 	const cacheSavedBinding = (saved: AgentBinding) =>
 		queryClient.setQueryData<AgentBinding[]>(agentsKey, (current) => {

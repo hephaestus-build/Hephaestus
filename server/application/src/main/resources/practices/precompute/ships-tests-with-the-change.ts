@@ -3,8 +3,8 @@ import { globFilesSync } from "../lib/files.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
 const TEST =
-	/(^|\/)(tests?|specs?|__tests__)(\/)|[._-](test|tests|spec|specs)\.[a-z]+$|Tests?\.[a-z0-9]+$|Spec\.[a-z0-9]+$/i;
-const CODE = /\.(swift|ts|tsx|js|jsx|py|java|kt|go|rb|cs|cpp|cc|cxx|c|m|mm|h|hpp)$/i;
+	/(?:^|\/)(?:tests?|specs?|__tests__)(?:\/)|[._-](?:test|tests|spec|specs)\.[a-z]+$|Tests?\.[a-z0-9]+$|Spec\.[a-z0-9]+$/iu;
+const CODE = /\.(?:swift|ts|tsx|js|jsx|py|java|kt|go|rb|cs|cpp|cc|cxx|c|m|mm|h|hpp)$/iu;
 const isTest = (p: string) => TEST.test(p);
 // Mirrors lib/grep.ts#shouldIncludeDiscoveredFile: skip node_modules, .build, and dotfile dirs.
 const isExcluded = (p: string) =>

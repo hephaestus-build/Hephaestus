@@ -33,7 +33,7 @@ function renderDialog(overrides: Partial<BudgetAmountDialogProps> = {}) {
 describe("the cap editor's currency hint", () => {
 	it("withdraws the estimate when the month behind the open dialog closes", () => {
 		const { rerender } = renderDialog();
-		screen.getByText(/at today's rate/i);
+		screen.getByText(/at today's rate/iu);
 
 		rerender(
 			<BudgetAmountDialog
@@ -50,13 +50,13 @@ describe("the cap editor's currency hint", () => {
 			/>,
 		);
 
-		expect(screen.queryByText(/at today's rate/i)).toBeNull();
-		expect(screen.queryByLabelText(/approximately 44 euros/i)).toBeNull();
+		expect(screen.queryByText(/at today's rate/iu)).toBeNull();
+		expect(screen.queryByLabelText(/approximately 44 euros/iu)).toBeNull();
 	});
 
 	it("says nothing about a rate a caller never claimed a month for", () => {
 		renderDialog({ isCurrentMonth: undefined });
 
-		expect(screen.queryByText(/at today's rate/i)).toBeNull();
+		expect(screen.queryByText(/at today's rate/iu)).toBeNull();
 	});
 });

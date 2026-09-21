@@ -8,7 +8,7 @@ export function saveTextFile(text: string, filename: string, mimeType: string): 
 	const anchor = document.createElement("a");
 	anchor.href = url;
 	anchor.download = filename;
-	document.body.appendChild(anchor);
+	document.body.append(anchor);
 	anchor.click();
 	anchor.remove();
 	URL.revokeObjectURL(url);

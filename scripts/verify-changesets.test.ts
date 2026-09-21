@@ -29,41 +29,41 @@ void test("accepts root releases and explained opt-outs", () => {
 });
 
 void test("rejects blank notes, non-root releases, and pre-1.0 majors", () => {
-	assert.throws(() => verifyChangesets(status([], ""), [".changeset/note.md"]), /must explain/);
+	assert.throws(() => verifyChangesets(status([], ""), [".changeset/note.md"]), /must explain/u);
 	assert.throws(
 		() =>
 			verifyChangesets(status([{ name: "webapp", type: "patch" }], "Fix."), [".changeset/note.md"]),
-		/must release only/,
+		/must release only/u,
 	);
 	assert.throws(
 		() =>
 			verifyChangesets(status([...rootRelease(), ...rootRelease()], "Fix."), [
 				".changeset/note.md",
 			]),
-		/must release only/,
+		/must release only/u,
 	);
 	assert.throws(
 		() => verifyChangesets(status(rootRelease("major"), "Breaks API."), [".changeset/note.md"]),
-		/pre-1.0 major/,
+		/pre-1.0 major/u,
 	);
 	assert.throws(
 		() =>
 			verifyChangesets(status(rootRelease("major"), "Breaks API."), [".changeset/note.md"], false),
-		/must contain \*\*Operators:/,
+		/must contain \*\*Operators:/u,
 	);
 });
 
 void test("rejects files Changesets did not parse and release-note trailers", () => {
 	assert.throws(
 		() => verifyChangesets({ changesets: [] }, [".changeset/note.md"]),
-		/did not parse/,
+		/did not parse/u,
 	);
 	assert.throws(
 		() =>
 			verifyChangesets(status(rootRelease(), "Fix.\n\nCo-authored-by: Bot"), [
 				".changeset/note.md",
 			]),
-		/must not contain Co-authored-by/,
+		/must not contain Co-authored-by/u,
 	);
 });
 
@@ -84,7 +84,7 @@ void test("migration fragments require an operator marker and one entry", () => 
 	);
 	assert.throws(
 		() => verifyMigrationFragment(".migration/note.md", "Change.", "#### 🔴 Act\n"),
-		/must contain \*\*Operators:/,
+		/must contain \*\*Operators:/u,
 	);
 	assert.throws(
 		() =>
@@ -93,7 +93,7 @@ void test("migration fragments require an operator marker and one entry", () => 
 				"**Operators:** act.",
 				"### Next release\n\n#### 🔴 Act\n",
 			),
-		/no level 1-3 headings/,
+		/no level 1-3 headings/u,
 	);
 	assert.throws(
 		() =>
@@ -102,15 +102,15 @@ void test("migration fragments require an operator marker and one entry", () => 
 				"**Operators:** act.",
 				"#### 🔴 First\n\n#### 🔴 Second\n",
 			),
-		/exactly one/,
+		/exactly one/u,
 	);
 	assert.throws(
 		() => verifyChangesetMigration(".changeset/note.md", "**Operators:** act.", undefined),
-		/requires \.migration\/note\.md/,
+		/requires \.migration\/note\.md/u,
 	);
 	assert.throws(
 		() => verifyChangesetMigration(".changeset/note.md", "No action.", "#### 🔴 Act\n"),
-		/must contain \*\*Operators:/,
+		/must contain \*\*Operators:/u,
 	);
 	assert.doesNotThrow(() =>
 		verifyChangesetMigration(".changeset/note.md", "No action.", undefined),

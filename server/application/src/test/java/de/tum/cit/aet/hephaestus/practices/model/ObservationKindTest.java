@@ -55,16 +55,4 @@ class ObservationKindTest {
         assertThat(ObservationKind.NOT_APPLICABLE.isApplicable()).isFalse();
         assertThat(ObservationKind.OMISSION_GAP.isApplicable()).isTrue();
     }
-
-    @Test
-    @DisplayName("denies a defect detector the demonstrated strength that would be its own defect")
-    void shouldDenyDefectDetectorAnIncoherentStrength() {
-        assertThat(ObservationKind.DEMONSTRATED_STRENGTH.isCoherentStrengthFor(true))
-                .isFalse();
-        assertThat(ObservationKind.SAFE_AVOIDANCE.isCoherentStrengthFor(true)).isTrue();
-
-        assertThat(ObservationKind.DEMONSTRATED_STRENGTH.isCoherentStrengthFor(false))
-                .isTrue();
-        assertThat(ObservationKind.SAFE_AVOIDANCE.isCoherentStrengthFor(false)).isTrue();
-    }
 }

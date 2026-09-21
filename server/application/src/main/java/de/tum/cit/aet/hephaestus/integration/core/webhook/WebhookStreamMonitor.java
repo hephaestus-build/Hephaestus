@@ -147,6 +147,8 @@ class WebhookStreamMonitor {
     @PreDestroy
     void stop() {
         scheduler.shutdownNow();
+        // Context teardown must not leave a poll using the broker or logging after this bean is gone.
+        scheduler.close();
     }
 
     /** Package-private so loss accounting is testable without waiting on the scheduler. */

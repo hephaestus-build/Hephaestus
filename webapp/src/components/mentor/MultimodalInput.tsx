@@ -11,18 +11,21 @@ import type { Attachment } from "@/lib/types";
 
 import { PreviewAttachment } from "./PreviewAttachment";
 
+export interface AttachmentUpload {
+	onFileUpload: (files: File[]) => Promise<(Attachment | undefined)[]>;
+	onAttachmentsChange: (attachments: Attachment[]) => void;
+}
+
 export interface MultimodalInputProps {
 	status: "ready" | "submitted" | "error";
 	onStop: () => void;
-	attachments: Array<Attachment>;
-	onAttachmentsChange: (attachments: Array<Attachment>) => void;
-	onFileUpload: (files: File[]) => Promise<Array<Attachment | undefined>>;
-	onSubmit: (data: { text: string; attachments: Array<Attachment> }) => void;
+	attachments: Attachment[];
+	attachmentUpload?: AttachmentUpload;
+	onSubmit: (data: { text: string; attachments: Attachment[] }) => void;
 	className?: string;
 	placeholder?: string;
 	initialInput?: string;
 	readonly?: boolean;
-	disableAttachments?: boolean;
 	isAtBottom?: boolean;
 	scrollToBottom?: () => void;
 	isCurrentVersion?: boolean;
@@ -32,14 +35,12 @@ export function MultimodalInput({
 	status,
 	onStop,
 	attachments,
-	onAttachmentsChange,
-	onFileUpload,
+	attachmentUpload,
 	onSubmit,
 	className,
 	placeholder = "Send a message...",
 	initialInput = "",
 	readonly = false,
-	disableAttachments = false,
 	isAtBottom = true,
 	scrollToBottom,
 	isCurrentVersion = true,
@@ -47,7 +48,7 @@ export function MultimodalInput({
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const { width } = useWindowSize();
-	const [uploadQueue, setUploadQueue] = useState<Array<string>>([]);
+	const [uploadQueue, setUploadQueue] = useState<string[]>([]);
 
 	const [input, setInput] = useState(initialInput);
 
@@ -59,7 +60,9 @@ export function MultimodalInput({
 
 	useEffect(() => {
 		const textarea = textareaRef.current;
-		if (!textarea) return;
+		if (!textarea) {
+			return;
+		}
 		textarea.style.height = "auto";
 		textarea.style.height = `${textarea.scrollHeight + 2}px`;
 	}, []);
@@ -85,24 +88,25 @@ export function MultimodalInput({
 	};
 
 	const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-		const files = Array.from(event.target.files ?? []);
-		if (files.length === 0) return;
+		const files = [...(event.target.files ?? [])];
+		if (files.length === 0 || attachmentUpload === undefined) {
+			return;
+		}
 
 		setUploadQueue(files.map((file) => file.name));
 
 		try {
-			const uploadedAttachments = await onFileUpload(files);
+			const uploadedAttachments = await attachmentUpload.onFileUpload(files);
 			const successfullyUploadedAttachments = uploadedAttachments.filter(
 				(attachment) => attachment !== undefined,
 			);
 
-			onAttachmentsChange([...attachments, ...successfullyUploadedAttachments]);
+			attachmentUpload.onAttachmentsChange([...attachments, ...successfullyUploadedAttachments]);
 		} catch {
-			// `finally` empties the queue either way, so without this the files vanish with no symptom.
+			// The queue empties either way, so without this the files vanish with no symptom.
 			toast.error("Could not attach those files. Please try again.");
-		} finally {
-			setUploadQueue([]);
 		}
+		setUploadQueue([]);
 	};
 
 	useEffect(() => {
@@ -114,7 +118,7 @@ export function MultimodalInput({
 	const canSubmit = input.trim().length > 0 && uploadQueue.length === 0 && !readonly;
 
 	return (
-		<div className="relative w-full flex flex-col gap-4">
+		<div className="relative flex w-full flex-col gap-4">
 			<AnimatePresence>
 				{!isAtBottom && isCurrentVersion && (
 					<motion.div
@@ -122,11 +126,12 @@ export function MultimodalInput({
 						animate={{ opacity: 1, y: 0 }}
 						exit={{ opacity: 0, y: 10 }}
 						transition={{ type: "spring", stiffness: 300, damping: 20 }}
-						className="absolute left-1/2 -top-12 -translate-x-1/2 z-[95] backdrop-blur-sm rounded-full"
+						className="absolute -top-12 left-1/2 z-[95] -translate-x-1/2 rounded-full backdrop-blur-sm"
 					>
 						<Button
 							aria-label="Scroll to latest message"
-							className="rounded-full bg-background/80 dark:bg-background/80 border-border/50 shadow-lg hover:bg-background/90 dark:hover:bg-background/90"
+							shape="pill"
+							className="border-border/50 bg-background/80 shadow-lg hover:bg-background/90 dark:bg-background/80 dark:hover:bg-background/90"
 							size="icon"
 							variant="outline"
 							onClick={(event) => {
@@ -140,20 +145,22 @@ export function MultimodalInput({
 				)}
 			</AnimatePresence>
 
-			{!disableAttachments && (
+			{attachmentUpload !== undefined && (
 				<input
 					type="file"
-					className="fixed -top-4 -left-4 size-0.5 opacity-0 pointer-events-none"
+					className="pointer-events-none fixed -top-4 -left-4 size-0.5 opacity-0"
 					ref={fileInputRef}
 					multiple
 					aria-label="Attach files"
-					onChange={(event) => void handleFileChange(event)}
+					onChange={(event) => {
+						void handleFileChange(event);
+					}}
 					tabIndex={-1}
 				/>
 			)}
 
 			{(attachments.length > 0 || uploadQueue.length > 0) && (
-				<div className="flex flex-row gap-2 overflow-x-scroll items-end">
+				<div className="flex flex-row items-end gap-2 overflow-x-scroll">
 					{attachments.map((attachment) => (
 						<PreviewAttachment key={attachment.url} attachment={attachment} />
 					))}
@@ -166,7 +173,7 @@ export function MultimodalInput({
 								name: filename,
 								contentType: "",
 							}}
-							isUploading={true}
+							isUploading
 						/>
 					))}
 				</div>
@@ -174,7 +181,7 @@ export function MultimodalInput({
 
 			<div
 				className={cn(
-					"border-input placeholder:text-muted-foreground focus-within:border-ring focus-within:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-xl border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-within:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+					"flex field-sizing-content min-h-16 w-full rounded-xl border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:aria-invalid:ring-destructive/40",
 					"flex-col gap-1",
 					readonly && "cursor-not-allowed opacity-60",
 					className,
@@ -188,7 +195,8 @@ export function MultimodalInput({
 						value={input}
 						onChange={handleInput}
 						readOnly={readonly}
-						className="border-0 bg-transparent outline-none overflow-hidden resize-none !text-base w-full p-0 shadow-none focus-visible:ring-0 min-h-0"
+						variant="bare"
+						className="min-h-0 w-full resize-none overflow-hidden"
 						rows={2}
 						// oxlint-disable-next-line jsx-a11y/no-autofocus -- The composer is the only writable control on every surface that mounts it, each reached in order to type. A read-only replay takes no focus.
 						autoFocus={!readonly}
@@ -208,9 +216,9 @@ export function MultimodalInput({
 					/>
 				</div>
 
-				<div className="flex gap-2 justify-between">
+				<div className="flex justify-between gap-2">
 					<div className="flex gap-2">
-						{!disableAttachments && (
+						{attachmentUpload !== undefined && (
 							<AttachmentsButton fileInputRef={fileInputRef} status={status} readonly={readonly} />
 						)}
 					</div>
@@ -239,7 +247,6 @@ function AttachmentsButton({
 	return (
 		<Button
 			aria-label="Attach a file"
-			className="rounded-md rounded-bl-lg p-[7px] dark:border-zinc-700 hover:dark:bg-zinc-900 hover:bg-zinc-200"
 			onClick={(event) => {
 				event.preventDefault();
 				fileInputRef.current?.click();
@@ -257,7 +264,8 @@ function StopButton({ onStop }: { onStop: () => void }) {
 	return (
 		<Button
 			aria-label="Stop generating"
-			className="rounded-full p-1.5 border dark:border-zinc-600"
+			shape="pill"
+			className="border border-border"
 			onClick={(event) => {
 				event.preventDefault();
 				onStop();
@@ -273,7 +281,8 @@ function SendButton({ onSubmit, disabled }: { onSubmit: () => void; disabled: bo
 	return (
 		<Button
 			aria-label="Send message"
-			className="rounded-full p-1.5 border dark:border-zinc-600"
+			shape="pill"
+			className="border border-border"
 			onClick={(event) => {
 				event.preventDefault();
 				onSubmit();

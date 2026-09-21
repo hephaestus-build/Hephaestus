@@ -1,14 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { readdir, writeFile } from "node:fs/promises";
-import { posix, resolve } from "node:path";
+import path from "node:path";
 
+import { isSet } from "./lib/env.ts";
 import { asRecord, asString, isRecord, readJsonFile } from "./lib/json.ts";
 import { compareLinks, renderPreviewComments, type PreviewLink } from "./lib/preview-comment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 function argument(index: number): string {
 	const value = process.argv[index];
-	if (!value) {
+	if (!isSet(value)) {
 		throw new Error(
 			"Usage: render-preview-comment <docs|storybook> <artifact-directory> <preview-url> <base-sha> <output>",
 		);
@@ -36,21 +37,26 @@ const baseUrl = new URL(previewUrl);
 async function renderDocs(): Promise<string[]> {
 	const links = new Map<string, PreviewLink>();
 	for (const file of await readdir(artifactDirectory, { recursive: true })) {
-		if (!file.endsWith(".json")) continue;
-		const metadata = await readJsonFile(resolve(artifactDirectory, file));
-		if (!isRecord(metadata)) continue;
+		if (!file.endsWith(".json")) {
+			continue;
+		}
+		const metadata = await readJsonFile(path.resolve(artifactDirectory, file));
+		if (!isRecord(metadata)) {
+			continue;
+		}
 		const { source: sourcePath, permalink, title } = metadata;
 		if (
 			typeof sourcePath !== "string" ||
 			typeof permalink !== "string" ||
 			typeof title !== "string"
-		)
+		) {
 			continue;
-		const source = `docs/${sourcePath.replace(/^@site\//, "")}`;
+		}
+		const source = `docs/${sourcePath.replace(/^@site\//u, "")}`;
 		if (changedFiles.has(source)) {
 			const url = new URL(permalink, baseUrl);
 			const existing = links.get(url.href);
-			const link = { group: posix.dirname(source), title, url: url.href };
+			const link = { group: path.posix.dirname(source), title, url: url.href };
 			if (
 				url.origin === baseUrl.origin &&
 				(existing === undefined || compareLinks(link, existing) < 0)
@@ -70,17 +76,21 @@ async function renderDocs(): Promise<string[]> {
 
 async function renderStorybook(): Promise<string[]> {
 	const index = asRecord(
-		await readJsonFile(resolve(artifactDirectory, "index.json")),
+		await readJsonFile(path.resolve(artifactDirectory, "index.json")),
 		"Storybook index",
 	);
 	const links = Object.entries(asRecord(index.entries, "Storybook index.entries")).flatMap(
 		([id, value]) => {
 			const entry = asRecord(value, `Storybook entry ${id}`);
-			if (entry.type !== "story") return [];
+			if (entry.type !== "story") {
+				return [];
+			}
 			const importPath = asString(entry.importPath, `Storybook entry ${id}.importPath`);
 			const name = asString(entry.name, `Storybook entry ${id}.name`);
 			const title = asString(entry.title, `Storybook entry ${id}.title`);
-			if (!changedFiles.has(`webapp/${importPath.replace(/^\.\//, "")}`)) return [];
+			if (!changedFiles.has(`webapp/${importPath.replace(/^\.\//u, "")}`)) {
+				return [];
+			}
 			return [
 				{
 					group: title,
@@ -106,11 +116,11 @@ function comment(
 	linksHeading: string,
 	emptyMessage: string,
 ): string[] {
-	const count = links.length ? ` (${links.length})` : "";
+	const count = links.length > 0 ? ` (${links.length})` : "";
 	const introduction = `## ${heading}\n\n[${previewLabel}](<${baseUrl.href}>)\n\n### ${linksHeading}${count}`;
 	let footer = "";
 	const { GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID } = process.env;
-	if (GITHUB_SERVER_URL && GITHUB_REPOSITORY && GITHUB_RUN_ID) {
+	if (isSet(GITHUB_SERVER_URL) && isSet(GITHUB_REPOSITORY) && isSet(GITHUB_RUN_ID)) {
 		const sha = execFileSync("git", ["rev-parse", "HEAD"], {
 			encoding: "utf8",
 			maxBuffer: CAPTURE_LIMIT_BYTES,
@@ -121,7 +131,8 @@ function comment(
 	return renderPreviewComments(introduction, links, emptyMessage, footer);
 }
 
-const rendered =
-	kind === "docs" ? await renderDocs() : kind === "storybook" ? await renderStorybook() : undefined;
-if (!rendered) throw new Error(`Unknown preview kind: ${kind}`);
+if (kind !== "docs" && kind !== "storybook") {
+	throw new Error(`Unknown preview kind: ${kind}`);
+}
+const rendered = kind === "docs" ? await renderDocs() : await renderStorybook();
 await writeFile(output, `${JSON.stringify(rendered)}\n`);

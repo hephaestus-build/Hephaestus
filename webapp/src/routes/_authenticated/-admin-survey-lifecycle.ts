@@ -71,12 +71,20 @@ export function useSurveyLifecycle() {
 		toggleActive: (survey: Survey, active: boolean) =>
 			update.mutate(
 				{ path: { surveyId: survey.id }, body: { ...editOf(survey), active } },
-				{ onSuccess: () => toast.success(active ? "Survey resumed." : "Survey paused.") },
+				{
+					onSuccess: () => {
+						toast.success(active ? "Survey resumed." : "Survey paused.");
+					},
+				},
 			),
 		end: (survey: Survey) =>
 			update.mutate(
 				{ path: { surveyId: survey.id }, body: { ...editOf(survey), endsAt: new Date() } },
-				{ onSuccess: () => toast.success("Survey ended.") },
+				{
+					onSuccess: () => {
+						toast.success("Survey ended.");
+					},
+				},
 			),
 		remove: (survey: Survey) => remove.mutate({ path: { surveyId: survey.id } }),
 	};

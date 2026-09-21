@@ -2,8 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import { useState } from "react";
 import type { AutonomyRollup, Practice, PracticeReviewSettings } from "@/api/types.gen";
-import { automatedReviewLimitationLabel } from "@/components/admin/practice-catalog/evidence-presentation";
-import { PracticeDetailHoverCard } from "@/components/admin/practice-catalog/PracticeDetailHoverCard";
+import { automatedReviewLimitationLabel } from "@/components/admin/practice-editor/evidence-presentation";
+import { PracticeDetailHoverCard } from "@/components/admin/practice-editor/PracticeDetailHoverCard";
 import { AUTONOMY_DEFS } from "@/components/practice-vocabulary/autonomy-defs";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
 import {
@@ -137,8 +137,11 @@ export function PracticeAutonomyPage({
 	const toggle = (slug: string, checked: boolean) => {
 		setSelected((current) => {
 			const next = new Set(current);
-			if (checked) next.add(slug);
-			else next.delete(slug);
+			if (checked) {
+				next.add(slug);
+			} else {
+				next.delete(slug);
+			}
 			return next;
 		});
 	};
@@ -147,7 +150,11 @@ export function PracticeAutonomyPage({
 		<div className="space-y-6">
 			<AlertDialog
 				open={automaticPromotion !== null}
-				onOpenChange={(open) => !open && setAutomaticPromotion(null)}
+				onOpenChange={(open) => {
+					if (!open) {
+						setAutomaticPromotion(null);
+					}
+				}}
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
@@ -210,7 +217,7 @@ export function PracticeAutonomyPage({
 			</div>
 
 			{groups.length === 0 ? (
-				<Empty className="border">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyTitle>
 							{overridesOnly ? "Nothing was set by hand" : "No practices yet"}
@@ -240,8 +247,11 @@ export function PracticeAutonomyPage({
 								setSelected((current) => {
 									const next = new Set(current);
 									for (const slug of slugs) {
-										if (checked) next.add(slug);
-										else next.delete(slug);
+										if (checked) {
+											next.add(slug);
+										} else {
+											next.delete(slug);
+										}
 									}
 									return next;
 								})
@@ -280,10 +290,18 @@ export function PracticeAutonomyPage({
 }
 
 function automaticPromotionLabel(promotion: AutomaticPromotion | null): string {
-	if (promotion === null) return "this selection";
-	if (promotion.scope === "workspace") return "the workspace default";
-	if (promotion.scope === "group") return `the ${promotion.name} group`;
-	if (promotion.scope === "practice") return promotion.name;
+	if (promotion === null) {
+		return "this selection";
+	}
+	if (promotion.scope === "workspace") {
+		return "the workspace default";
+	}
+	if (promotion.scope === "group") {
+		return `the ${promotion.name} group`;
+	}
+	if (promotion.scope === "practice") {
+		return promotion.name;
+	}
 	return `${promotion.slugs.length} selected ${promotion.slugs.length === 1 ? "practice" : "practices"}`;
 }
 
@@ -295,17 +313,21 @@ function applyAutomaticPromotion(
 	>,
 ) {
 	switch (promotion.scope) {
-		case "workspace":
+		case "workspace": {
 			actions.onSetWorkspaceDefault("AUTOMATIC");
 			return;
-		case "group":
+		}
+		case "group": {
 			actions.onSetGroupAutonomy(promotion.slug, "AUTOMATIC");
 			return;
-		case "practice":
+		}
+		case "practice": {
 			actions.onSetPracticeAutonomy(promotion.slug, "AUTOMATIC");
 			return;
-		case "bulk":
+		}
+		case "bulk": {
 			actions.onBulkSetAutonomy(promotion.slugs, "AUTOMATIC");
+		}
 	}
 }
 
@@ -371,7 +393,7 @@ function AutonomySummary({
 	overrides: { practices: number; groups: number };
 }) {
 	return (
-		<p className="min-w-0 text-muted-foreground text-sm" aria-live="polite" aria-atomic="true">
+		<p className="min-w-0 text-sm text-muted-foreground" aria-live="polite" aria-atomic="true">
 			{autonomyDistributionSentence(counts)} {byHandSentence(overrides)}
 		</p>
 	);
@@ -415,7 +437,9 @@ function BulkActionBar({
 	onSet: (autonomy: PracticeAutonomy | null) => void;
 	onClear: () => void;
 }) {
-	if (count === 0 && bulk === null) return null;
+	if (count === 0 && bulk === null) {
+		return null;
+	}
 
 	return (
 		<Item variant="muted" size="sm" role="group" aria-label="Selected practices">
@@ -487,7 +511,7 @@ function GroupGroup({
 	onSetPracticeAutonomy: (practiceSlug: string, autonomy: PracticeAutonomy) => void;
 	onClearPracticeAutonomy: (practiceSlug: string) => void;
 }) {
-	const groupSlug = group.groupSlug;
+	const { groupSlug } = group;
 	const groupPending = groupSlug !== null && pending.groupSlugs.has(groupSlug);
 	const selectableSlugs = group.practices
 		.filter((practice) => reviewableByHephaestus(practice.automatedReviewPolicy))
@@ -496,7 +520,7 @@ function GroupGroup({
 		selectableSlugs.length > 0 && selectableSlugs.every((slug) => selected.has(slug));
 
 	return (
-		<AccordionItem value={group.key} className="scroll-mt-24 rounded-lg border bg-card px-3">
+		<AccordionItem value={group.key} variant="card" className="scroll-mt-24 px-3">
 			<div className={cn("grid gap-2 py-1 sm:items-center sm:gap-4", GROUP_GRID)}>
 				<AccordionTrigger>
 					<span className="flex min-w-0 flex-col gap-1">
@@ -506,13 +530,13 @@ function GroupGroup({
 								<Badge variant="outline">{group.overriddenCount} set by hand</Badge>
 							)}
 						</span>
-						<span className="font-normal text-muted-foreground text-xs">
+						<span className="text-xs font-normal text-muted-foreground">
 							{autonomyDistributionSentence(group.counts)}
 						</span>
 					</span>
 				</AccordionTrigger>
 				{groupSlug === null ? (
-					<span className={cn("min-w-0 text-muted-foreground text-xs", DECISION_COLUMN)}>
+					<span className={cn("min-w-0 text-xs text-muted-foreground", DECISION_COLUMN)}>
 						Follows the workspace default
 					</span>
 				) : (
@@ -535,7 +559,7 @@ function GroupGroup({
 			</div>
 			<AccordionContent className="pb-3">
 				{group.practices.length === 0 ? (
-					<p className="py-2 text-muted-foreground text-sm">
+					<p className="py-2 text-sm text-muted-foreground">
 						{group.totalPractices === 0
 							? "No practices here."
 							: "No practices here were set by hand."}
@@ -553,7 +577,7 @@ function GroupGroup({
 								{allSelected ? "Deselect" : "Select"} all {selectableSlugs.length}
 							</Button>
 						)}
-						<ul className="mt-2 divide-y border-t">
+						<ul className="mt-2 border-t">
 							{group.practices.map((practice) => (
 								<PracticeAutonomyRow
 									key={practice.slug}
@@ -600,8 +624,8 @@ function PracticeAutonomyRow({
 	return (
 		<Item
 			render={<li />}
-			variant="default"
-			className={cn("grid items-start gap-2 rounded-none px-0 py-3 sm:gap-4", ROW_GRID)}
+			variant="row"
+			className={cn("grid items-start gap-2 px-0 py-3 sm:gap-4", ROW_GRID)}
 		>
 			<ItemMedia>
 				<Checkbox
@@ -612,12 +636,12 @@ function PracticeAutonomyRow({
 				/>
 			</ItemMedia>
 			<ItemContent className="min-w-0 gap-0.5">
-				<ItemTitle className="w-full min-w-0 line-clamp-none">
+				<ItemTitle className="line-clamp-none w-full min-w-0">
 					<PracticeDetailHoverCard practice={practice}>
 						<Link
 							to="/w/$workspaceSlug/admin/practices/$practiceSlug"
 							params={{ workspaceSlug, practiceSlug: practice.slug }}
-							className="break-words rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 						>
 							{practice.name}
 						</Link>
@@ -652,8 +676,8 @@ function PracticeAutonomyRow({
 						onClear={() => onClearAutonomy(practice.slug)}
 					/>
 				) : (
-					<p className="text-muted-foreground text-xs">
-						This practice can't be reviewed automatically, so it stays off.
+					<p className="text-xs text-muted-foreground">
+						This practice can’t be reviewed automatically, so it stays off.
 					</p>
 				)}
 			</ItemActions>
@@ -679,7 +703,7 @@ function inheritedSentenceOrNull(
 
 function DecisionNote({ follows, resetLabel, disabled, onClear }: DecisionNoteProps) {
 	return (
-		<p className="text-muted-foreground text-xs">
+		<p className="text-xs text-muted-foreground">
 			{follows ?? (
 				<>
 					Set here.{" "}

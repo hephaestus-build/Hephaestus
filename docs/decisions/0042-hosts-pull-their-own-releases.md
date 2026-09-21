@@ -4,8 +4,9 @@ Date: 2026-09-03
 
 ## Status
 
-Accepted. Supersedes the SSH-push half of ADR 0005's deployment story; the release evidence and
-image-lock decisions it builds on are unchanged.
+Accepted. Replaces the CI-driven SSH push deployment, which no ADR had recorded; the release
+evidence and image-lock decisions it builds on ([0034](0034-signed-release-image-lock.md)) are
+unchanged.
 
 ## Context
 

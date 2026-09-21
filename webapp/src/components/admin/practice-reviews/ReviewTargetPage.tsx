@@ -62,10 +62,10 @@ export function ReviewTargetPage({
 		observationItems.length === 0;
 
 	return (
-		<article className="min-w-0 max-w-4xl space-y-8">
+		<article className="max-w-4xl min-w-0 space-y-8">
 			<ReviewBreadcrumbs workspaceSlug={workspaceSlug} />
 			{noOutput ? (
-				<Empty className="border">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
 							<FileQuestionIcon />

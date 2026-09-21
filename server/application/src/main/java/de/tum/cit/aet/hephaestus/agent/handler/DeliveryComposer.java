@@ -694,7 +694,12 @@ class DeliveryComposer {
 
             String body = composeDiffNoteBody(f, rendering);
             if (body != null && !body.isBlank()) {
-                notes.add(new DiffNote(repoRelative(path), startLine, endLine, body, f.recurrenceKey()));
+                notes.add(new DiffNote(
+                        repoRelative(path),
+                        startLine,
+                        endLine,
+                        body,
+                        f.occurrenceKey() == null ? null : "observation:" + f.occurrenceKey()));
             } else {
                 unplaced.add(f);
             }

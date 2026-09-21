@@ -95,15 +95,15 @@ export const ASSESSMENT_STATUS_DESCRIPTIONS: Record<AssessmentStatus, string> = 
 };
 export const PRESENCE_DESCRIPTIONS: Record<Presence, string> = {
 	PRESENT:
-		"The practice’s fixed target criterion is satisfied. For a desirable target such as usable guidance, inadequate partial guidance does not satisfy it; explain what exists and what is missing.",
+		"The specific behavior named in the observation occurred. Cite it and assess its desirability in context. Partial or misleading guidance is present; name a missing component precisely if assessing its absence.",
 	ABSENT:
-		"The practice applies, the bounded corpus was searched, and the fixed target is absent. Record evidence.search. A missing GOOD target yields NEGATIVE; an absent BAD target yields POSITIVE. Assessment stays fixed.",
+		"The practice applies and the specified behavior is absent from the bounded searched corpus. Record that same behavior in evidence.search. Missing desirable behavior yields NEGATIVE; absent undesirable behavior yields POSITIVE only with an applicable opportunity and complete coverage.",
 };
 
-/** Desirability of the fixed target, independent of its presence. */
+/** Contextual desirability of the specified behavior, independent of its presence. */
 export const ASSESSMENT_DESCRIPTIONS: Record<Assessment, string> = {
-	GOOD: "The practice’s defined target is desirable. PRESENT yields POSITIVE; ABSENT yields NEGATIVE. Do not change this assessment when the criterion is missing.",
-	BAD: "The practice’s defined target is undesirable. PRESENT yields NEGATIVE; ABSENT yields POSITIVE. Do not mistake absent harmful behaviour for a negative outcome.",
+	GOOD: "The specified behavior is desirable in the evidenced context. PRESENT yields POSITIVE; ABSENT yields NEGATIVE. Explain why the behavior is desirable here.",
+	BAD: "The specified behavior is undesirable in the evidenced context. PRESENT yields NEGATIVE; ABSENT yields POSITIVE. Optional or unnecessary behavior is not automatically undesirable.",
 };
 
 /**
@@ -138,7 +138,9 @@ export function describeVocabulary<T extends string>(
 	return values
 		.map((value) => {
 			const description = descriptions[value];
-			if (!description) throw new Error(`vocabulary value '${value}' has no description`);
+			if (!description) {
+				throw new Error(`vocabulary value '${value}' has no description`);
+			}
 			return `${value} — ${description}`;
 		})
 		.join("\n");
@@ -153,7 +155,9 @@ export function describeVocabulary<T extends string>(
  * absent instead, which is the case those checks already answer.
  */
 function trimmedText(value: unknown): string {
-	if (typeof value === "string") return value.trim();
+	if (typeof value === "string") {
+		return value.trim();
+	}
 	if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
 		return String(value);
 	}
@@ -171,42 +175,116 @@ function trimmedStrings(value: unknown): string[] {
 		: [];
 }
 
-/**
- * The recorded scope of a search that came up empty. An ABSENT observation is a universal claim —
- * "it is not there" — and the one thing a fragment of a corpus can never support. Narrating the
- * search in `reasoning` is the honour-system version of this; a structured block is what a validator
- * can actually hold against the domain the practice declared.
- */
+/** Requires the source list, named behavior and boundary of an absence claim. */
 export function normalizeSearch(search: unknown): RecordedSearch {
-	if (!isRecord(search)) throw new Error("search is required");
+	if (!isRecord(search)) {
+		throw new Error("search is required");
+	}
 	const consulted = trimmedStrings(search.consulted);
 	const lookedFor = trimmedText(search.lookedFor);
 	const boundary = trimmedText(search.boundary);
-	if (consulted.length === 0)
+	if (consulted.length === 0) {
 		throw new Error("search.consulted must name at least one source you searched");
-	if (!lookedFor) throw new Error("search.lookedFor is required");
-	if (!boundary) throw new Error("search.boundary is required");
+	}
+	if (!lookedFor) {
+		throw new Error("search.lookedFor is required");
+	}
+	if (!boundary) {
+		throw new Error("search.boundary is required");
+	}
 	return { consulted: [...new Set(consulted)].toSorted(), lookedFor, boundary };
 }
 
 /** A citation alone cannot establish inapplicability: require the prerequisite and its exclusion. */
 export function normalizeInapplicability(inapplicability: unknown): RecordedInapplicability {
-	if (!isRecord(inapplicability)) throw new Error("inapplicability is required");
+	if (!isRecord(inapplicability)) {
+		throw new Error("inapplicability is required");
+	}
 	const consulted = trimmedStrings(inapplicability.consulted);
 	const subject = trimmedText(inapplicability.subject);
 	const ruledOutBy = trimmedText(inapplicability.ruledOutBy);
-	if (consulted.length === 0)
+	if (consulted.length === 0) {
 		throw new Error(
 			"inapplicability.consulted must name at least one source you read to conclude this",
 		);
-	if (!subject)
+	}
+	if (!subject) {
 		throw new Error("inapplicability.subject is required: name what this practice looks for");
-	if (!ruledOutBy)
+	}
+	if (!ruledOutBy) {
 		throw new Error(
 			"inapplicability.ruledOutBy is required: state the fact about THIS work that means the subject " +
 				"cannot occur in it. If you are merely unsure, the answer is UNDETERMINED, not NOT_APPLICABLE",
 		);
+	}
 	return { consulted: [...new Set(consulted)].toSorted(), subject, ruledOutBy };
+}
+
+/** The side a citation may carry: OLD or NEW for diff evidence, and none for anything else. */
+function citationSide(sourceKind: string, declared: unknown): DiffSide | null {
+	const side = declared == null ? null : trimmedText(declared).toUpperCase();
+	if (sourceKind === "scm.pull-request.diff") {
+		if (side !== "OLD" && side !== "NEW") {
+			throw new Error("diff evidence citation side must be OLD or NEW");
+		}
+		return side;
+	}
+	if (side !== null) {
+		throw new Error("non-diff evidence citation must not specify side");
+	}
+	return null;
+}
+
+function citationLines(fields: Record<string, unknown>): { startLine: number; endLine: number } {
+	const startLine = Number(fields.startLine);
+	const endLine = fields.endLine == null ? startLine : Number(fields.endLine);
+	if (!Number.isSafeInteger(startLine) || startLine <= 0 || startLine > 2_147_483_647) {
+		throw new Error("evidence citation startLine must be a positive integer");
+	}
+	if (!Number.isSafeInteger(endLine) || endLine < startLine || endLine > 2_147_483_647) {
+		throw new Error("evidence citation endLine must be >= startLine");
+	}
+	return { startLine, endLine };
+}
+
+function normalizeCitation(citation: unknown): NormalizedCitation {
+	// A citation that is not an object reads as one with every field missing, which is what the
+	// required-field checks below already reject by name.
+	const fields: Record<string, unknown> = isRecord(citation) ? citation : {};
+	const sourceKind = trimmedText(fields.sourceKind);
+	const artifactPath = typeof fields.artifactPath === "string" ? fields.artifactPath : "";
+	const path = typeof fields.path === "string" ? fields.path : "";
+	const quote = typeof fields.quote === "string" ? fields.quote : "";
+	if (!sourceKind) {
+		throw new Error("evidence citation sourceKind is required");
+	}
+	if (!artifactPath.trim()) {
+		throw new Error("evidence citation artifactPath is required");
+	}
+	if (!path.trim()) {
+		throw new Error("evidence citation path is required");
+	}
+	const side = citationSide(sourceKind, fields.side);
+	const { startLine, endLine } = citationLines(fields);
+	if (
+		!quote
+			.replaceAll("\u001C", "")
+			.replaceAll("\u001D", "")
+			.replaceAll("\u001E", "")
+			.replaceAll("\u001F", "")
+			.trim()
+	) {
+		throw new Error("evidence citation quote is required");
+	}
+	return {
+		sourceKind,
+		artifactPath,
+		path,
+		...(side == null ? {} : { side }),
+		startLine,
+		endLine,
+		quote,
+	};
 }
 
 export function normalizeEvidence(
@@ -214,45 +292,14 @@ export function normalizeEvidence(
 	assessmentStatus: AssessmentStatus,
 	presence: Presence | null,
 ): NormalizedEvidence {
-	if (!isRecord(evidence) || !Array.isArray(evidence.citations) || evidence.citations.length === 0)
+	if (
+		!isRecord(evidence) ||
+		!Array.isArray(evidence.citations) ||
+		evidence.citations.length === 0
+	) {
 		throw new Error("evidence citations are required");
-	const citations = evidence.citations.map((citation: unknown): NormalizedCitation => {
-		// A citation that is not an object reads as one with every field missing, which is what the
-		// required-field checks below already reject by name.
-		const fields: Record<string, unknown> = isRecord(citation) ? citation : {};
-		const sourceKind = trimmedText(fields.sourceKind);
-		const artifactPath = trimmedText(fields.artifactPath);
-		const path = trimmedText(fields.path);
-		const declaredSide = fields.side == null ? null : trimmedText(fields.side).toUpperCase();
-		const startLine = Number(fields.startLine);
-		const endLine = fields.endLine == null ? startLine : Number(fields.endLine);
-		const quote = trimmedText(fields.quote);
-		if (!sourceKind) throw new Error("evidence citation sourceKind is required");
-		if (!artifactPath) throw new Error("evidence citation artifactPath is required");
-		if (!path) throw new Error("evidence citation path is required");
-		if (sourceKind === "scm.pull-request.diff" && declaredSide !== "OLD" && declaredSide !== "NEW")
-			throw new Error("diff evidence citation side must be OLD or NEW");
-		if (sourceKind !== "scm.pull-request.diff" && declaredSide !== null)
-			throw new Error("non-diff evidence citation must not specify side");
-		if (!Number.isInteger(startLine) || startLine <= 0)
-			throw new Error("evidence citation startLine must be a positive integer");
-		if (!Number.isInteger(endLine) || endLine < startLine)
-			throw new Error("evidence citation endLine must be >= startLine");
-		if (!quote) throw new Error("evidence citation quote is required");
-		// Only the two checks above can let a side through, so this is a re-reading of what they proved
-		// rather than a second rule: anything else already threw.
-		const side: DiffSide | null =
-			declaredSide === "OLD" || declaredSide === "NEW" ? declaredSide : null;
-		return {
-			sourceKind,
-			artifactPath,
-			path,
-			...(side == null ? {} : { side }),
-			startLine,
-			endLine,
-			quote,
-		};
-	});
+	}
+	const citations = evidence.citations.map(normalizeCitation);
 	// Absence needs a bounded search, not just a citation to something else.
 	if (presence === "ABSENT") {
 		if (evidence.search == null) {
@@ -293,11 +340,17 @@ export function normalizeEvidence(
  * {@link normalizeInapplicability}: each presence that makes a claim beyond its citations has to ground it.
  */
 export function normalizeUndecidability(undecidability: unknown): RecordedUndecidability {
-	if (!isRecord(undecidability)) throw new Error("undecidability is required");
+	if (!isRecord(undecidability)) {
+		throw new Error("undecidability is required");
+	}
 	const openQuestion = trimmedText(undecidability.openQuestion);
 	const wouldSettleIt = trimmedText(undecidability.wouldSettleIt);
-	if (!openQuestion) throw new Error("undecidability.openQuestion is required");
-	if (!wouldSettleIt) throw new Error("undecidability.wouldSettleIt is required");
+	if (!openQuestion) {
+		throw new Error("undecidability.openQuestion is required");
+	}
+	if (!wouldSettleIt) {
+		throw new Error("undecidability.wouldSettleIt is required");
+	}
 	return { openQuestion, wouldSettleIt };
 }
 
@@ -305,7 +358,9 @@ function parseVocabulary<T extends string>(values: readonly T[], value: unknown,
 	const admitted = values.find(
 		(candidate) => candidate === (typeof value === "string" ? value.toUpperCase() : value),
 	);
-	if (!admitted) throw new Error(`invalid ${field} '${String(value)}'`);
+	if (admitted === undefined) {
+		throw new Error(`invalid ${field} '${String(value)}'`);
+	}
 	return admitted;
 }
 
@@ -315,9 +370,12 @@ export function deriveOutcome(
 	presence: Presence | null,
 	assessment: Assessment | null,
 ): Outcome | null {
-	if (presence === null && assessment === null) return null;
-	if (presence === null || assessment === null)
+	if (presence === null && assessment === null) {
+		return null;
+	}
+	if (presence === null || assessment === null) {
 		throw new Error("Presence and assessment must agree on whether the observation is assessed");
+	}
 	return (presence === "PRESENT") === (assessment === "GOOD") ? "POSITIVE" : "NEGATIVE";
 }
 
@@ -342,24 +400,46 @@ function parseAssessment(fields: Record<string, unknown>): ObservationAssessment
 		"assessmentStatus",
 	);
 	if (assessmentStatus !== "ASSESSED") {
-		if (fields.presence !== null || fields.assessment !== null || fields.severity !== null)
+		if (fields.presence !== null || fields.assessment !== null || fields.severity !== null) {
 			throw new Error(
 				"Unassessed observations require explicit null presence, assessment and severity",
 			);
+		}
 		return { assessmentStatus, presence: null, assessment: null, severity: null };
 	}
 	const presence = parseVocabulary(PRESENCE_VALUES, fields.presence, "presence");
 	const assessment = parseVocabulary(ASSESSMENT_VALUES, fields.assessment, "assessment");
 	if (deriveOutcome(presence, assessment) === "POSITIVE") {
-		if (fields.severity !== null) throw new Error("POSITIVE outcome requires null severity");
+		if (fields.severity !== null) {
+			throw new Error("POSITIVE outcome requires null severity");
+		}
 		return { assessmentStatus, presence, assessment, severity: null };
 	}
 	const severity = parseVocabulary(SEVERITY_VALUES, fields.severity, "severity");
 	return { assessmentStatus, presence, assessment, severity };
 }
 
+/** The one evidence branch an observation of this status must carry, or none for an assessed presence. */
+function expectedEvidenceBranch(
+	presence: Presence | null,
+	assessmentStatus: AssessmentStatus,
+): string | null {
+	if (presence === "ABSENT") {
+		return "search";
+	}
+	if (assessmentStatus === "NOT_APPLICABLE") {
+		return "inapplicability";
+	}
+	if (assessmentStatus === "UNDETERMINED") {
+		return "undecidability";
+	}
+	return null;
+}
+
 export function normalizeObservation(observation: unknown): NormalizedObservation {
-	if (!isRecord(observation)) throw new Error("observation must be an object");
+	if (!isRecord(observation)) {
+		throw new Error("observation must be an object");
+	}
 	const allowed = new Set([
 		"practiceSlug",
 		"summary",
@@ -371,41 +451,43 @@ export function normalizeObservation(observation: unknown): NormalizedObservatio
 		"evidenceRationale",
 	]);
 	const unknownFields = Object.keys(observation).filter((key) => !allowed.has(key));
-	if (unknownFields.length)
+	if (unknownFields.length > 0) {
 		throw new Error(`unknown observation field(s): ${unknownFields.join(", ")}`);
-	const practiceSlug = trimmedText(observation.practiceSlug).toLowerCase().replace(/_/g, "-");
+	}
+	const practiceSlug = trimmedText(observation.practiceSlug).toLowerCase().replaceAll("_", "-");
 	const title = trimmedText(observation.summary);
 	const reasoning = trimmedText(observation.evidenceRationale);
 	const result = parseAssessment(observation);
 	const { assessmentStatus, presence } = result;
-	if (!practiceSlug) throw new Error("practiceSlug is required");
-	if (!title) throw new Error("summary is required");
+	if (!practiceSlug) {
+		throw new Error("practiceSlug is required");
+	}
+	if (!title) {
+		throw new Error("summary is required");
+	}
 	// The summary is what the developer reads on their practice page, above the practice's own name and
 	// with no evidence beside it, so a single word there ("Test") names nothing the practice did not.
-	if (!/\S\s+\S/.test(title))
+	if (!/\S\s+\S/u.test(title)) {
 		throw new Error(
 			"summary must say what was observed as a short phrase, not one word — e.g. " +
 				"'Debug print left in the request handler'",
 		);
-	if (!reasoning) throw new Error("evidenceRationale is required");
+	}
+	if (!reasoning) {
+		throw new Error("evidenceRationale is required");
+	}
 	const externalEvidence: Record<string, unknown> = isRecord(observation.evidence)
 		? observation.evidence
 		: {};
 	const evidenceFields = new Set(["citations", "search", "inapplicability", "undecidability"]);
 	const unknownEvidence = Object.keys(externalEvidence).filter((key) => !evidenceFields.has(key));
-	if (unknownEvidence.length)
+	if (unknownEvidence.length > 0) {
 		throw new Error(`unknown evidence field(s): ${unknownEvidence.join(", ")}`);
+	}
 	const branchCount = ["search", "inapplicability", "undecidability"].filter(
 		(key) => externalEvidence[key] != null,
 	).length;
-	const expectedBranch: string | null =
-		presence === "ABSENT"
-			? "search"
-			: assessmentStatus === "NOT_APPLICABLE"
-				? "inapplicability"
-				: assessmentStatus === "UNDETERMINED"
-					? "undecidability"
-					: null;
+	const expectedBranch = expectedEvidenceBranch(presence, assessmentStatus);
 	if (
 		(expectedBranch == null && branchCount !== 0) ||
 		(expectedBranch != null && (branchCount !== 1 || externalEvidence[expectedBranch] == null))
@@ -432,22 +514,14 @@ export function dedupeKeyForObservation(observation: NormalizedObservation): str
 	return `${observation.practiceSlug}|${observation.summary}|${citations}`;
 }
 
-/**
- * Holds every citation to bytes this run actually staged, under the source that produced them.
- *
- * <p>The run stages every source that applies to the artifact, so the question is no longer whether
- * the practice predicted it would read this one — it is whether the source was there and the quote
- * really came out of it. A practice whose subject turns out to live in a source its author did not
- * name is exactly the case full context exists to catch, and rejecting its citation would have thrown
- * away the observation for being observant.
- */
+/** Requires each citation to name an artifact staged by its declared source. */
 export function validateEvidenceSources(
 	observation: NormalizedObservation,
 	availableSourceKinds: ReadonlySet<string>,
 	artifactSources: ReadonlyMap<string, string> = new Map(),
 ): void {
 	for (const citation of observation.evidence.citations) {
-		const sourceKind = citation.sourceKind;
+		const { sourceKind } = citation;
 		if (!availableSourceKinds.has(sourceKind)) {
 			throw new Error(
 				`evidence source '${sourceKind}' was not available; copy one of these source kinds from ` +
@@ -470,33 +544,22 @@ function describeAvailableSources(sourceKinds: ReadonlySet<string>): string {
 }
 
 /**
- * Holds a recorded search against the domain the practice declared it would search.
- *
- * <p>`EXHAUSTIVE` is the practice saying "this claim asserts something is NOT in this source", which
- * is the only stance under which absence is assertable at all. So the sources held that way ARE the
- * domain: an ABSENT observation that did not consult one of them is asserting a universal over a
- * corpus it never opened, and the honest answer is UNDETERMINED instead.
- *
- * <p>The two directions of an absence do not need the same proof, and the difference is what lets a
- * clean surface be recorded as a strength at all. An ABSENT/BAD says a good behaviour is missing from
- * the place the citation points at — the claim is anchored to that locus, so the search only has to
- * reach as far as the locus does. An ABSENT/BAD says a harmful behaviour is nowhere in the work, which
- * ranges over the WHOLE corpus and is provable only if that corpus is closed and was covered whole.
- * A practice that has not declared an exhaustive stance has not closed a corpus, so it cannot make that
- * claim, and UNDETERMINED is the honest answer; one that has, can. This is what the eight defect
- * detectors used to buy by refusing GOOD outright and paying for it in false NOT_APPLICABLEs.
- *
- * <p>Consulting something this run never staged is the same error the citation check already rejects —
- * the bytes were not there, so they cannot have been searched.
+ * Requires searched sources to be staged and every declared exhaustive source to be consulted.
+ * ABSENT/BAD additionally requires an exhaustive source policy: a positive absence claim needs a
+ * closed search boundary. These checks validate the declared search, not whether the model read it.
  */
 export function validateSearchScope(
 	observation: NormalizedObservation,
 	exhaustiveSourceKinds: ReadonlySet<string>,
 	availableSourceKinds: ReadonlySet<string>,
 ): void {
-	if (observation.presence !== "ABSENT") return;
-	const search = observation.evidence.search;
-	if (!search) throw new Error("an ABSENT observation must record its search");
+	if (observation.presence !== "ABSENT") {
+		return;
+	}
+	const { search } = observation.evidence;
+	if (!search) {
+		throw new Error("an ABSENT observation must record its search");
+	}
 	if (
 		deriveOutcome(observation.presence, observation.assessment) === "POSITIVE" &&
 		exhaustiveSourceKinds.size === 0
@@ -538,10 +601,13 @@ export function validateInapplicabilityScope(
 	observation: NormalizedObservation,
 	availableSourceKinds: ReadonlySet<string>,
 ): void {
-	if (observation.assessmentStatus !== "NOT_APPLICABLE") return;
-	const inapplicability = observation.evidence.inapplicability;
-	if (!inapplicability)
+	if (observation.assessmentStatus !== "NOT_APPLICABLE") {
+		return;
+	}
+	const { inapplicability } = observation.evidence;
+	if (!inapplicability) {
 		throw new Error("a NOT_APPLICABLE observation must say why the practice does not apply");
+	}
 	for (const sourceKind of inapplicability.consulted) {
 		if (!availableSourceKinds.has(sourceKind)) {
 			throw new Error(
@@ -552,43 +618,47 @@ export function validateInapplicabilityScope(
 	}
 }
 
-/** ASCII-equivalent punctuation folded before citation comparison. */
-const CONFUSABLES = new Map(
-	Object.entries({
-		"‘": "'",
-		"’": "'",
-		"‚": "'",
-		"‛": "'",
-		"“": '"',
-		"”": '"',
-		"„": '"',
-		"‟": '"',
-		"‐": "-",
-		"‑": "-",
-		"‒": "-",
-		"–": "-",
-		"—": "-",
-		"―": "-",
-		" ": " ",
-		" ": " ",
-		" ": " ",
-		" ": " ",
-	}),
-);
-
-/** Fold the substitutions above; everything else is compared as written. */
-function foldConfusables(text: string): string {
-	let out = "";
-	for (const ch of text) out += CONFUSABLES.get(ch) ?? ch;
-	return out;
-}
-
 /** How much of a diff line a refusal quotes back; enough to see the difference, not the whole line. */
 const MISMATCH_EXCERPT_CHARS = 160;
 
 /** Whether an observation's citation is really in the artifact it names. */
 export function citationMatchesArtifact(citation: NormalizedCitation, content: string): boolean {
 	return describeCitationMismatch(citation, content) === null;
+}
+
+/** The stored diff's lines on the cited side of the cited path, by line number. */
+function citedDiffLines(
+	citation: NormalizedCitation,
+	content: string,
+): { lines: Map<number, string> } | { mismatch: string } {
+	let oldPath: string | null = null;
+	let newPath: string | null = null;
+	const lines = new Map<number, string>();
+	for (const storedLine of content.split("\n")) {
+		// Both groups are mandatory, so binding them here is what lets the annotated branch below turn
+		// on a value the compiler has seen rather than on the match object being non-null.
+		const annotated = /^\[L(?<lineNumber>\d+)\] (?<text>[\s\S]*)$/u.exec(storedLine)?.groups;
+		const annotatedLineNumber = annotated?.lineNumber;
+		const line = annotated?.text ?? storedLine;
+		if (annotatedLineNumber === undefined) {
+			if (line.startsWith("--- ")) {
+				oldPath = diffPath(line.slice(4));
+			} else if (line.startsWith("+++ ")) {
+				newPath = diffPath(line.slice(4));
+			}
+			continue;
+		}
+		const lineNumber = Number(annotatedLineNumber);
+		if (!Number.isSafeInteger(lineNumber) || lineNumber > 2_147_483_647) {
+			return { mismatch: "invalid annotated line number" };
+		}
+		const side: DiffSide = line.startsWith("-") ? "OLD" : "NEW";
+		const path = side === "OLD" ? oldPath : newPath;
+		if (side === citation.side && path === citation.path) {
+			lines.set(lineNumber, line);
+		}
+	}
+	return { lines };
 }
 
 /**
@@ -602,89 +672,38 @@ export function describeCitationMismatch(
 	content: string,
 ): string | null {
 	if (citation.sourceKind !== "scm.pull-request.diff") {
-		const found =
-			content.includes(citation.quote) ||
-			foldConfusables(content).includes(foldConfusables(citation.quote));
+		const found = content.includes(citation.quote);
 		return found ? null : "that text is not in the artifact";
 	}
-	let oldPath: string | null = null;
-	let newPath: string | null = null;
-	const citedLines = new Map<number, string>();
-	for (const storedLine of content.split("\n")) {
-		// Both groups are mandatory, so binding them here is what lets the annotated branch below turn
-		// on a value the compiler has seen rather than on the match object being non-null.
-		const [, annotatedLineNumber, annotatedText] = storedLine.match(/^\[L(\d+)] (.*)$/) ?? [];
-		const line = annotatedText ?? storedLine;
-		if (line.startsWith("--- ")) {
-			oldPath = diffPath(line.slice(4));
-			continue;
-		}
-		if (line.startsWith("+++ ")) {
-			newPath = diffPath(line.slice(4));
-			continue;
-		}
-		if (annotatedLineNumber !== undefined) {
-			const lineNumber = Number(annotatedLineNumber);
-			const side: DiffSide = line.startsWith("-") ? "OLD" : "NEW";
-			const path = side === "OLD" ? oldPath : newPath;
-			if (side === citation.side && path === citation.path) citedLines.set(lineNumber, line);
-		}
+	const cited = citedDiffLines(citation, content);
+	if ("mismatch" in cited) {
+		return cited.mismatch;
 	}
-	const quoteLines = citation.quote.split("\n");
+	// Match Java String.lines(): CR/LF delimiters, without the final terminator's empty item.
+	const quoteLines = citation.quote.split(/\r\n|\r|\n/u);
+	if (quoteLines.at(-1) === "") {
+		quoteLines.pop();
+	}
 	const citedLineCount = citation.endLine - citation.startLine + 1;
 	if (quoteLines.length !== citedLineCount) {
 		return `the quote is ${quoteLines.length} line(s) and the citation covers ${citedLineCount}`;
 	}
 	for (const [index, quoteLine] of quoteLines.entries()) {
 		const lineNumber = citation.startLine + index;
-		const diffLine = citedLines.get(lineNumber);
+		const diffLine = cited.lines.get(lineNumber);
 		if (diffLine === undefined) {
 			return `the diff has no [L${lineNumber}] on the ${citation.side ?? "NEW"} side of ${citation.path}`;
 		}
-		if (!quotesDiffLine(diffLine, withoutOwnCoordinate(quoteLine, lineNumber))) {
+		if (!quotesDiffLine(diffLine, quoteLine)) {
 			return `[L${lineNumber}] reads ${excerpt(diffLine)}, not ${excerpt(quoteLine)}`;
 		}
 	}
 	return null;
 }
 
-/**
- * Whether a quote is the diff line it claims — as displayed, without the +/- marker, or without the
- * indentation the diff shows in front of the code. What a citation proves is that the observer read
- * the line at that coordinate on that side, and the coordinate has already pinned which line is being
- * compared: two lines cannot be confused by trimming, because only one is ever a candidate. A quote
- * whose text differs, or that belongs to the other side of the change, still fails.
- */
+/** Match server admission: exact displayed diff text or its text without the single diff marker. */
 function quotesDiffLine(diffLine: string, quoted: string): boolean {
-	if (diffLine === quoted || diffLine.slice(1) === quoted) {
-		return true;
-	}
-	const shown = diffLine.slice(1).trimStart();
-	if (shown.length === 0) {
-		return false;
-	}
-	// As written first, so a line of code that begins with a `-` or a `+` keeps it; only then as a
-	// quote that dropped the diff's own marker along with the indentation.
-	const trimmed = quoted.trimStart();
-	return shown === trimmed || shown === withoutMarker(trimmed).trimStart();
-}
-
-/** A quote that dropped the diff's own +/- or context marker along with the indentation. */
-function withoutMarker(quoted: string): string {
-	return quoted.startsWith("+") || quoted.startsWith("-") || quoted.startsWith(" ")
-		? quoted.slice(1)
-		: quoted;
-}
-
-/**
- * The line as the artifact shows it, when the quote copied the coordinate the artifact prints in
- * front of it. Reading a diff line as `[L39] +public class Foo {` and quoting it back whole is the
- * commonest refusal there is, and it proves the same thing an unprefixed quote proves: the coordinate
- * has to be the one being matched, so a quote cannot claim a line it did not read.
- */
-function withoutOwnCoordinate(quoteLine: string, lineNumber: number): string {
-	const [, quotedNumber, quotedText] = quoteLine.match(/^\[L(\d+)] (.*)$/) ?? [];
-	return quotedText !== undefined && quotedNumber === String(lineNumber) ? quotedText : quoteLine;
+	return diffLine.length > 0 && (diffLine === quoted || diffLine.slice(1) === quoted);
 }
 
 /** One line as evidence in a refusal: quoted, and cut where a reader has already seen the difference. */
@@ -696,8 +715,11 @@ function excerpt(line: string): string {
 
 function diffPath(rawPath: string): string | null {
 	let value = rawPath.trim();
-	if (value === "/dev/null") return null;
-	if (value.startsWith('"') && value.endsWith('"'))
-		value = value.slice(1, -1).replaceAll('\\"', '"');
+	if (value === "/dev/null") {
+		return null;
+	}
+	if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+		value = value.slice(1, -1).replaceAll(String.raw`\"`, '"');
+	}
 	return value.startsWith("a/") || value.startsWith("b/") ? value.slice(2) : value;
 }

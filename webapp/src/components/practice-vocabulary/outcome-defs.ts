@@ -1,5 +1,5 @@
 import { CircleCheckIcon, WrenchIcon } from "lucide-react";
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type Outcome = "POSITIVE" | "NEGATIVE";
 export const OUTCOME_DEFS: StatusDefs<Outcome> = {

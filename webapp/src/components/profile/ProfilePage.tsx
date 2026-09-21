@@ -4,14 +4,15 @@ import type { Profile, ProfileActivityMonitor } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Separator } from "@/components/ui/separator";
 import type { ActivityMonitorFilters } from "@/lib/activity-monitor";
-import type { ProviderType } from "@/lib/provider";
+import type { ProviderType } from "@/lib/provider/provider-terms";
+import { rendersContent } from "@/lib/react-node";
 import type { LeaderboardSchedule } from "@/lib/timeframe";
 
 import { ProfileContent } from "./ProfileContent";
 import { ProfileHeader } from "./ProfileHeader";
 
 interface ProfileProps {
-	providerType?: ProviderType;
+	providerType: ProviderType;
 	profileData?: Profile;
 	activityMonitorData?: ProfileActivityMonitor;
 	activityMonitorError?: unknown;
@@ -35,7 +36,7 @@ interface ProfileProps {
 }
 
 export function ProfilePage({
-	providerType = "GITHUB",
+	providerType,
 	profileData,
 	activityMonitorData,
 	activityMonitorError,
@@ -57,7 +58,7 @@ export function ProfilePage({
 	leaguesEnabled = true,
 	practiceGroupStandings,
 }: ProfileProps) {
-	if (error) {
+	if (error != null) {
 		return (
 			<div className="mx-auto w-full max-w-xl">
 				<QueryErrorAlert error={error} title="Could not load this profile" onRetry={onRetry} />
@@ -77,19 +78,13 @@ export function ProfilePage({
 				progressionEnabled={progressionEnabled}
 				leaguesEnabled={leaguesEnabled}
 			/>
-			{practiceGroupStandings && (
+			{rendersContent(practiceGroupStandings) && (
 				<>
 					{practiceGroupStandings}
 					<Separator />
 				</>
 			)}
-			{activityMonitorError ? (
-				<QueryErrorAlert
-					error={activityMonitorError}
-					title="Could not load activity"
-					onRetry={onRetryActivityMonitor}
-				/>
-			) : (
+			{activityMonitorError == null ? (
 				<ProfileContent
 					providerType={providerType}
 					activityMonitorData={activityMonitorData}
@@ -104,6 +99,12 @@ export function ProfilePage({
 					beforeDate={before}
 					onTimeframeChange={onTimeframeChange}
 					schedule={schedule}
+				/>
+			) : (
+				<QueryErrorAlert
+					error={activityMonitorError}
+					title="Could not load activity"
+					onRetry={onRetryActivityMonitor}
 				/>
 			)}
 		</div>

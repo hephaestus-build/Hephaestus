@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 import { expectGenuinelyDisabled } from "@/test/controls";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import {
 	ConsentPage,
@@ -34,7 +34,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 async function acceptTerms() {
-	await userEvent.click(await screen.findByRole("checkbox", { name: /terms of use/i }));
+	await userEvent.click(await screen.findByRole("checkbox", { name: /terms of use/iu }));
 }
 
 async function answer(name: RegExp) {
@@ -48,7 +48,9 @@ async function answer(name: RegExp) {
  */
 function AfterSubmit({ outcome, ...args }: ConsentPageProps & { outcome: ConsentSubmission }) {
 	const { state } = args;
-	if (state.status !== "ready") return <ConsentPage {...args} />;
+	if (state.status !== "ready") {
+		return <ConsentPage {...args} />;
+	}
 	return (
 		<Stateful<ConsentSubmission> initial={{ status: "idle" }}>
 			{(submission, setSubmission) => (
@@ -71,12 +73,12 @@ function AfterSubmit({ outcome, ...args }: ConsentPageProps & { outcome: Consent
 export const Default: Story = {
 	play: async () => {
 		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Continue" }));
-		await expect(screen.getByRole("radio", { name: /Yes, take part/ })).not.toBeChecked();
-		await expect(screen.getByRole("radio", { name: /don't take part/ })).not.toBeChecked();
-		await expect(screen.getByText(/Two things first/)).toBeVisible();
+		await expect(screen.getByRole("radio", { name: /Yes, take part/u })).not.toBeChecked();
+		await expect(screen.getByRole("radio", { name: /don't take part/u })).not.toBeChecked();
+		await expect(screen.getByText(/Two things first/u)).toBeVisible();
 		// Facts are rows: each term sits beside its sentence, not above it.
 		const term = screen.getByText("What it reads");
-		const detail = screen.getByText(/The work in the tools your project connects/);
+		const detail = screen.getByText(/The work in the tools your project connects/u);
 		await expect(term.getBoundingClientRect().top).toBe(detail.getBoundingClientRect().top);
 		await expect(detail.getBoundingClientRect().left).toBeGreaterThan(
 			term.getBoundingClientRect().right,
@@ -95,7 +97,7 @@ export const TermsAcceptedOnly: Story = {
 export const BothAnswered: Story = {
 	play: async () => {
 		await acceptTerms();
-		await answer(/Yes, take part/);
+		await answer(/Yes, take part/u);
 		await expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
 		await expect(screen.getByText("You can change your answer later in settings.")).toBeVisible();
 		await expect(screen.getByText("That's everything. Let's get to work.")).toBeVisible();
@@ -132,7 +134,7 @@ export const Submitting: Story = {
 	render: (args) => <AfterSubmit {...args} outcome={{ status: "saving" }} />,
 	play: async () => {
 		await acceptTerms();
-		await answer(/Yes, take part/);
+		await answer(/Yes, take part/u);
 		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Saving…" }));
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Sign out" }));
@@ -143,9 +145,9 @@ export const SubmitFailed: Story = {
 	render: (args) => <AfterSubmit {...args} outcome={{ status: "error" }} />,
 	play: async () => {
 		await acceptTerms();
-		await answer(/don't take part/);
+		await answer(/don't take part/u);
 		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
-		await expect(screen.getByRole("alert")).toHaveTextContent(/weren't saved/i);
+		await expect(screen.getByRole("alert")).toHaveTextContent(/weren’t saved/iu);
 		await expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
 	},
 };
@@ -164,7 +166,7 @@ export const Narrow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async () => {
 		await acceptTerms();
-		await answer(/Yes, take part/);
+		await answer(/Yes, take part/u);
 		await expectNoPageOverflow();
 	},
 };
@@ -173,7 +175,7 @@ export const Dark: Story = {
 	globals: { theme: "dark" },
 	play: async () => {
 		await acceptTerms();
-		await answer(/Yes, take part/);
-		await expect(screen.getByRole("radio", { name: /Yes, take part/ })).toBeChecked();
+		await answer(/Yes, take part/u);
+		await expect(screen.getByRole("radio", { name: /Yes, take part/u })).toBeChecked();
 	},
 };

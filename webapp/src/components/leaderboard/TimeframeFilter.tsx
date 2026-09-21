@@ -48,16 +48,20 @@ function PresetIcon({ preset, className }: { preset: TimeframePreset; className?
 	const iconClass = cn("h-4 w-4 shrink-0", className);
 
 	switch (preset) {
-		case "all-activity":
+		case "all-activity": {
 			return <Clock className={iconClass} />;
+		}
 		case "this-week":
-		case "last-week":
+		case "last-week": {
 			return <CalendarDays className={iconClass} />;
+		}
 		case "this-month":
-		case "last-month":
+		case "last-month": {
 			return <CalendarIcon className={iconClass} />;
-		case "custom":
+		}
+		case "custom": {
 			return <CalendarRange className={iconClass} />;
+		}
 	}
 }
 
@@ -104,15 +108,21 @@ export function TimeframeFilter({
 		setCustomRangeOpen(false);
 		const range = getDateRangeForPreset(now, preset, schedule);
 		if (!openEndedPresets && !range.before) {
-			if (preset === "this-week") range.before = addWeeks(range.after, 1);
-			if (preset === "this-month") range.before = startOfMonth(addDays(endOfMonth(range.after), 1));
+			if (preset === "this-week") {
+				range.before = addWeeks(range.after, 1);
+			}
+			if (preset === "this-month") {
+				range.before = startOfMonth(addDays(endOfMonth(range.after), 1));
+			}
 		}
 		const dates = formatDateRangeForApi(range);
 		onTimeframeChange?.(dates.after, dates.before, preset);
 	};
 
 	const handleCustomRangeChange = (range: DateRange | undefined) => {
-		if (!range?.from) return;
+		if (!range?.from) {
+			return;
+		}
 		const dates = formatDateRangeForApi(
 			getDateRangeForPreset(now, "custom", schedule, { from: range.from, to: range.to }),
 		);
@@ -120,9 +130,11 @@ export function TimeframeFilter({
 	};
 
 	const formatCustomRangeLabel = () => {
-		if (!customRange?.from) return "Pick dates";
-		const from = customRange.from;
-		const to = customRange.to;
+		if (!customRange?.from) {
+			return "Pick dates";
+		}
+		const { from } = customRange;
+		const { to } = customRange;
 
 		if (!to) {
 			return `since ${format(from, "MMM d")}`;
@@ -144,7 +156,11 @@ export function TimeframeFilter({
 			</Label>
 			<Select
 				value={selectedPreset}
-				onValueChange={(value) => value && handlePresetChange(value)}
+				onValueChange={(value) => {
+					if (value) {
+						handlePresetChange(value);
+					}
+				}}
 				items={items}
 			>
 				<SelectTrigger id="timeframe" className="w-full">

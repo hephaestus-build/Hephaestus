@@ -12,7 +12,6 @@ const readyModel = {
 };
 
 const meta = {
-	title: "Workspace admin/Practices/Review/Running banner",
 	component: ReviewRunningBanner,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],

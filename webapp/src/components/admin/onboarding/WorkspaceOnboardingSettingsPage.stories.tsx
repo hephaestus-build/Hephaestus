@@ -1,11 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
+import { pending } from "@/test/async";
 
 import type { WorkspaceOnboardingLink, WorkspaceOnboardingSettings } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 import { expectGenuinelyDisabled, expectUnavailable } from "@/test/controls";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import {
 	type SettingsSubmission,
@@ -53,11 +54,13 @@ const ready = {
 	settings,
 	links: [],
 	submission: { status: "idle" },
-	onSave: fn(() => new Promise<never>(() => {})),
+	onSave: fn(async () => pending()),
 } satisfies ReadyState;
 
 function readyState(state: State): ReadyState {
-	if (state.status !== "ready") throw new Error("This story is not in the ready state.");
+	if (state.status !== "ready") {
+		throw new Error("This story is not in the ready state.");
+	}
 	return state;
 }
 
@@ -72,7 +75,9 @@ function AfterSave({
 	...args
 }: WorkspaceOnboardingSettingsPageProps & { outcome: SettingsSubmission | { status: "saved" } }) {
 	const { state } = args;
-	if (state.status !== "ready") return <WorkspaceOnboardingSettingsPage {...args} />;
+	if (state.status !== "ready") {
+		return <WorkspaceOnboardingSettingsPage {...args} />;
+	}
 	return (
 		<Stateful<Pick<ReadyState, "settings" | "submission">>
 			initial={{ settings: state.settings, submission: { status: "idle" } }}
@@ -83,19 +88,19 @@ function AfterSave({
 					state={{
 						...state,
 						...value,
-						onSave: (payload) => {
+						onSave: async (payload) => {
 							void state.onSave(payload);
 							if (outcome.status === "saved") {
 								setValue({
 									settings: { ...payload, revision: payload.revision + 1 },
 									submission: { status: "idle" },
 								});
-								return Promise.resolve();
+								return;
 							}
 							setValue({ ...value, submission: outcome });
 							return outcome.status === "error"
 								? Promise.reject(new Error(outcome.message))
-								: new Promise<never>(() => {});
+								: pending();
 						},
 					}}
 				/>
@@ -107,7 +112,9 @@ function AfterSave({
 /** Another owner's save, reaching the form as new `settings` under a draft in progress. */
 function ChangedElsewhere(args: WorkspaceOnboardingSettingsPageProps) {
 	const { state } = args;
-	if (state.status !== "ready") return <WorkspaceOnboardingSettingsPage {...args} />;
+	if (state.status !== "ready") {
+		return <WorkspaceOnboardingSettingsPage {...args} />;
+	}
 	return (
 		<Stateful initial={state.settings}>
 			{(current, setCurrent) => (
@@ -148,7 +155,6 @@ function ChangedElsewhere(args: WorkspaceOnboardingSettingsPageProps) {
  * it happens on the models page.
  */
 const meta = {
-	title: "Workspace admin/Member onboarding",
 	component: WorkspaceOnboardingSettingsPage,
 	tags: ["autodocs"],
 	parameters: { layout: "fullscreen" },
@@ -165,7 +171,7 @@ export const Empty: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No integrations to require")).toBeVisible();
 		// "Members connect these…" would point at cards that are not on screen.
-		await expect(canvas.queryByText(/Members connect these/)).toBeNull();
+		await expect(canvas.queryByText(/Members connect these/u)).toBeNull();
 		await expect(canvas.getByRole("link", { name: "Integrations" })).toHaveAttribute(
 			"href",
 			"/w/engineering/admin/integrations",
@@ -180,7 +186,9 @@ export const LoadFailed: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		const { state } = args;
-		if (state.status !== "error") throw new Error("This story is not in the error state.");
+		if (state.status !== "error") {
+			throw new Error("This story is not in the error state.");
+		}
 		await expect(state.onRetry).toHaveBeenCalledTimes(1);
 	},
 };
@@ -196,7 +204,7 @@ export const ChoiceStillRequired: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getByText("Members still have to choose")).toBeVisible();
 		await expect(
-			canvas.getByText(/Members who haven't chosen get no practice reviews and no Heph/),
+			canvas.getByText(/Members who haven't chosen get no practice reviews and no Heph/u),
 		).toBeVisible();
 		// The alert asks for the switch; a draft that turns it on has answered it.
 		await userEvent.click(canvas.getByRole("switch", { name: SWITCH }));
@@ -207,7 +215,7 @@ export const EditAndDiscard: Story = {
 	play: async ({ canvas, userEvent }) => {
 		const save = canvas.getByRole("button", { name: "Save onboarding settings" });
 		const ask = canvas.getByRole("switch", { name: SWITCH });
-		await expect(ask).toHaveAccessibleDescription(/finish it later from Your AI choice/);
+		await expect(ask).toHaveAccessibleDescription(/finish it later from Your AI choice/u);
 		await expectGenuinelyDisabled(save);
 		await userEvent.click(ask);
 		await expect(save).toBeEnabled();
@@ -276,7 +284,7 @@ export const Conflicted: Story = {
 		const save = canvas.getByRole("button", { name: "Save onboarding settings" });
 		await expectGenuinelyDisabled(save);
 		// Out of the tab order, so the reason has to reach a reader through the description.
-		await expect(save).toHaveAccessibleDescription(/Someone changed these settings/);
+		await expect(save).toHaveAccessibleDescription(/Someone changed these settings/u);
 		await userEvent.click(canvas.getByRole("button", { name: "Load current settings" }));
 		await expect(canvas.getByRole("checkbox", { name: "Outline" })).toBeChecked();
 		await expect(canvas.getByRole("checkbox", { name: "Slack" })).not.toBeChecked();

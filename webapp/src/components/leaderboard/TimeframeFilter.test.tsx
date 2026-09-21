@@ -57,9 +57,9 @@ describe("TimeframeFilter", () => {
 		expect(screen.getByLabelText("Selected interval").textContent).toBe(
 			`${bookmark.after}/${bookmark.before}`,
 		);
-		await user.click(screen.getByRole("button", { name: /September 12th, 2026/ }));
+		await user.click(screen.getByRole("button", { name: /September 12th, 2026/u }));
 		expect(screen.getByLabelText("Selected interval").textContent).toMatch(
-			/^2026-09-02T00:00:00(?:Z|[+-]\d{2}:\d{2})\/2026-09-13T00:00:00(?:Z|[+-]\d{2}:\d{2})$/,
+			/^2026-09-02T00:00:00(?:Z|[+-]\d{2}:\d{2})\/2026-09-13T00:00:00(?:Z|[+-]\d{2}:\d{2})$/u,
 		);
 		screen.getByRole("dialog");
 	});
@@ -85,7 +85,7 @@ describe("TimeframeFilter", () => {
 		await user.click(screen.getByRole("combobox", { name: "Timeframe" }));
 		await user.click(await screen.findByRole("option", { name: "This month" }));
 		expect(screen.getByLabelText("Selected interval").textContent).toMatch(
-			/^2026-09-01T00:00:00(?:Z|[+-]\d{2}:\d{2})\/$/,
+			/^2026-09-01T00:00:00(?:Z|[+-]\d{2}:\d{2})\/$/u,
 		);
 	});
 });

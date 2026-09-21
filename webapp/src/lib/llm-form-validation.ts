@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { LlmModel } from "@/api/types.gen";
 import type { PricingMode } from "@/lib/llm-pricing";
+import { hasText } from "@/lib/text";
 
 /**
  * The LLM forms set `noValidate`, so the native constraint attributes never fire and this is the
@@ -73,11 +74,11 @@ const tokenCountSchema = z
 	.string()
 	.trim()
 	.refine(
-		(value) => value === "" || /^\d+$/.test(value),
+		(value) => value === "" || /^\d+$/u.test(value),
 		"Enter a whole number of tokens, or leave it blank.",
 	)
 	.refine(
-		(value) => value === "" || !/^\d+$/.test(value) || Number(value) <= MAX_TOKEN_COUNT,
+		(value) => value === "" || !/^\d+$/u.test(value) || Number(value) <= MAX_TOKEN_COUNT,
 		`Enter ${MAX_TOKEN_COUNT.toLocaleString("en-US")} tokens or fewer.`,
 	);
 
@@ -213,7 +214,7 @@ const llmModelFormSchema = z
 				});
 			}
 		}
-		if (value.pricingMode === "NO_CHARGE" && !value.note?.trim()) {
+		if (value.pricingMode === "NO_CHARGE" && !hasText(value.note?.trim())) {
 			ctx.addIssue({
 				code: "custom",
 				path: ["note"],

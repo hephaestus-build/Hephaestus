@@ -19,7 +19,7 @@ describe("validateLlmConnectionForm", () => {
 
 	it("rejects a base URL that is not a URL", () => {
 		const errors = validateLlmConnectionForm({ displayName: "OpenAI", baseUrl: "api.openai.com" });
-		expect(errors.baseUrl).toMatch(/full URL/);
+		expect(errors.baseUrl).toMatch(/full URL/u);
 	});
 
 	it("rejects a URL carrying a credential, which would leak the key into logs", () => {
@@ -27,7 +27,7 @@ describe("validateLlmConnectionForm", () => {
 			displayName: "Gateway",
 			baseUrl: "https://gw.example.com/v1?api-key=SECRET",
 		});
-		expect(errors.baseUrl).toMatch(/credentials, query string or fragment/);
+		expect(errors.baseUrl).toMatch(/credentials, query string or fragment/u);
 	});
 
 	it("skips the base URL on edit, where the form cannot change it", () => {
@@ -39,7 +39,7 @@ describe("validateLlmConnectionForm", () => {
 			displayName: "   ",
 			baseUrl: "https://api.openai.com/v1",
 		});
-		expect(errors.displayName).toMatch(/display name is required/);
+		expect(errors.displayName).toMatch(/display name is required/u);
 	});
 });
 
@@ -50,18 +50,18 @@ describe("validateLlmModelForm", () => {
 
 	it("rejects a negative token limit, which the number input's min alone cannot", () => {
 		const errors = validateLlmModelForm({ ...validModel, maxOutputTokens: "-1" });
-		expect(errors.maxOutputTokens).toMatch(/whole number/);
+		expect(errors.maxOutputTokens).toMatch(/whole number/u);
 	});
 
 	it("rejects a fractional token limit", () => {
 		const errors = validateLlmModelForm({ ...validModel, contextWindow: "1.5" });
-		expect(errors.contextWindow).toMatch(/whole number/);
+		expect(errors.contextWindow).toMatch(/whole number/u);
 	});
 
 	it("rejects a token count the server's int column cannot hold", () => {
 		expect(
 			validateLlmModelForm({ ...validModel, contextWindow: "2147483648" }).contextWindow,
-		).toMatch(/2,147,483,647 tokens or fewer/);
+		).toMatch(/2,147,483,647 tokens or fewer/u);
 		expect(
 			validateLlmModelForm({ ...validModel, contextWindow: "2147483647" }).contextWindow,
 		).toBeUndefined();
@@ -73,7 +73,7 @@ describe("validateLlmModelForm", () => {
 			pricingMode: "PRICED",
 			per1mInputUsd: 1.25,
 		});
-		expect(errors.per1mOutputUsd).toMatch(/Required/);
+		expect(errors.per1mOutputUsd).toMatch(/Required/u);
 		expect(errors.per1mInputUsd).toBeUndefined();
 	});
 
@@ -84,7 +84,7 @@ describe("validateLlmModelForm", () => {
 			per1mInputUsd: -1,
 			per1mOutputUsd: 2,
 		});
-		expect(errors.per1mInputUsd).toMatch(/negative/);
+		expect(errors.per1mInputUsd).toMatch(/negative/u);
 	});
 
 	it("rejects an all-zero price, which would record verified $0 spend forever", () => {
@@ -94,7 +94,7 @@ describe("validateLlmModelForm", () => {
 			per1mInputUsd: 0,
 			per1mOutputUsd: 0,
 		});
-		expect(errors.per1mInputUsd).toMatch(/above zero/);
+		expect(errors.per1mInputUsd).toMatch(/above zero/u);
 	});
 
 	it("accepts a price where only one rate is above zero", () => {
@@ -110,7 +110,7 @@ describe("validateLlmModelForm", () => {
 
 	it("requires a note for a no-charge model", () => {
 		const errors = validateLlmModelForm({ ...validModel, pricingMode: "NO_CHARGE", note: " " });
-		expect(errors.note).toMatch(/why no metered API rate applies/);
+		expect(errors.note).toMatch(/why no metered API rate applies/u);
 	});
 
 	it("skips the upstream id on edit, where the form cannot change it", () => {
@@ -136,6 +136,6 @@ describe("validateLlmModelForm", () => {
 
 	it("bounds the admin note to the column that stores it", () => {
 		const errors = validateLlmModelForm({ ...validModel, dataHandlingNote: "x".repeat(201) });
-		expect(errors.dataHandlingNote).toMatch(/200 characters or fewer/);
+		expect(errors.dataHandlingNote).toMatch(/200 characters or fewer/u);
 	});
 });

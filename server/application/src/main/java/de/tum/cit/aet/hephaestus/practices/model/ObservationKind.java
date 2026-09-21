@@ -55,16 +55,4 @@ public enum ObservationKind {
     public boolean isApplicable() {
         return this != NOT_APPLICABLE && this != UNDETERMINED;
     }
-
-    /**
-     * Whether a defect-detector practice may claim this outcome as a strength.
-     *
-     * <p>Such a practice hunts an undesirable behaviour, so {@link #DEMONSTRATED_STRENGTH} is incoherent for
-     * it, since what would be demonstrated is the defect. {@link #SAFE_AVOIDANCE} is the opposite case and is
-     * exactly what a clean detector run proves: the behaviour could have appeared in the corpus the practice
-     * bounds and did not.
-     */
-    public boolean isCoherentStrengthFor(boolean defectDetector) {
-        return this == SAFE_AVOIDANCE || (this == DEMONSTRATED_STRENGTH && !defectDetector);
-    }
 }

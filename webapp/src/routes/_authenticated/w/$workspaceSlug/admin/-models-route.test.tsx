@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
 import { describe, expect, it, vi } from "vitest";
+import { deferred } from "@/test/async";
 
 import { listAgentsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { AgentBinding } from "@/api/types.gen";
@@ -110,10 +111,7 @@ function mockModelsRoute(bindings: () => AgentBinding[], aiChoiceRequired = fals
 }
 
 function deferredBindingsRefetch(bindings: () => AgentBinding[]) {
-	let release = () => {};
-	const pending = new Promise<void>((resolve) => {
-		release = resolve;
-	});
+	const { promise: pending, resolve: release } = deferred();
 	return {
 		handler: http.get("*/workspaces/:workspaceSlug/agents", async () => {
 			await pending;
@@ -144,13 +142,13 @@ const previewTerm = (purpose: PurposeTitle, term: string) =>
 	within(screen.getByRole("region", { name: purpose })).queryByText(term, { selector: "dt" });
 
 const saveButton = (purpose: PurposeTitle, title: string = UNCHOSEN) =>
-	within(row(purpose, title)).getByRole<HTMLButtonElement>("button", { name: /^Save assignment/ });
+	within(row(purpose, title)).getByRole<HTMLButtonElement>("button", { name: /^Save assignment/u });
 const clearButton = (scope: HTMLElement) =>
-	within(scope).getByRole("button", { name: /^Clear assignment/ });
+	within(scope).getByRole("button", { name: /^Clear assignment/u });
 const advancedButton = (scope: HTMLElement) =>
-	within(scope).getByRole("button", { name: /^Advanced/ });
+	within(scope).getByRole("button", { name: /^Advanced/u });
 const timeoutInput = (scope: HTMLElement) =>
-	within(scope).getByLabelText<HTMLInputElement>(/^Timeout \(seconds\)/);
+	within(scope).getByLabelText<HTMLInputElement>(/^Timeout \(seconds\)/u);
 /** One picker per row, so the row is the disambiguation. */
 const pickerOf = (scope: HTMLElement) => within(scope).getByRole("combobox");
 
@@ -162,18 +160,15 @@ describe("workspace AI models route", () => {
 		fireEvent.click(advancedButton(reviews));
 		fireEvent.click(advancedButton(mentor));
 		expect(
-			within(reviews).getByRole<HTMLInputElement>("spinbutton", { name: /^Max concurrent runs/ })
+			within(reviews).getByRole<HTMLInputElement>("spinbutton", { name: /^Max concurrent runs/u })
 				.value,
 		).toBe("3");
-		expect(within(mentor).queryByRole("spinbutton", { name: /^Max concurrent runs/ })).toBeNull();
+		expect(within(mentor).queryByRole("spinbutton", { name: /^Max concurrent runs/u })).toBeNull();
 		expect(timeoutInput(mentor).value).toBe("600");
 	});
 
 	it("keeps each purpose's row pending independently when two saves run at once", async () => {
-		let releaseSlowSave: (() => void) | undefined;
-		const slowSave = new Promise<void>((resolve) => {
-			releaseSlowSave = resolve;
-		});
+		const { promise: slowSave, resolve: releaseSlowSave } = deferred();
 		let detectionSaves = 0;
 		server.use(
 			http.put("*/workspaces/:workspaceSlug/agents/PRACTICE_REVIEW", async () => {
@@ -195,7 +190,7 @@ describe("workspace AI models route", () => {
 		await waitFor(() => expect(saveButton("Heph").disabled).toBe(false));
 		expect(saveButton("Practice reviews").disabled).toBe(true);
 
-		releaseSlowSave?.();
+		releaseSlowSave();
 		await waitFor(() => expect(saveButton("Practice reviews").disabled).toBe(false));
 		expect(detectionSaves).toBe(1);
 	});
@@ -276,7 +271,7 @@ describe("workspace AI models route", () => {
 
 		await waitFor(() =>
 			expect(
-				within(row("Practice reviews")).queryByRole("button", { name: /^Clear assignment/ }),
+				within(row("Practice reviews")).queryByRole("button", { name: /^Clear assignment/u }),
 			).toBeNull(),
 		);
 		const reset = row("Practice reviews");
@@ -293,20 +288,17 @@ describe("workspace AI models route", () => {
 		expect(previewTerm("Practice reviews", UNCHOSEN)?.nextElementSibling?.textContent).toBe(
 			"→ Not declared: GPT Test",
 		);
-		expect(within(row("Practice reviews")).queryByText(/serves no one now/)).toBeNull();
+		expect(within(row("Practice reviews")).queryByText(/serves no one now/u)).toBeNull();
 	});
 
 	it("drops the unchosen preview row once the workspace requires the choice", async () => {
 		await renderModelsRoute(() => [binding("PRACTICE_REVIEW", 20)], true);
 		expect(previewTerm("Practice reviews", UNCHOSEN)).toBeNull();
-		within(row("Practice reviews")).getByText(/serves no one now/);
+		within(row("Practice reviews")).getByText(/serves no one now/u);
 	});
 
 	it("keeps one row pending while its sibling of the same purpose stays editable", async () => {
-		let releaseSlowSave: (() => void) | undefined;
-		const slowSave = new Promise<void>((resolve) => {
-			releaseSlowSave = resolve;
-		});
+		const { promise: slowSave, resolve: releaseSlowSave } = deferred();
 		server.use(
 			http.put("*/workspaces/:workspaceSlug/agents/PRACTICE_REVIEW", async () => {
 				await slowSave;
@@ -328,7 +320,7 @@ describe("workspace AI models route", () => {
 			pickerOf(row("Practice reviews", "Provider, nothing kept")).hasAttribute("disabled"),
 		).toBe(false);
 
-		releaseSlowSave?.();
+		releaseSlowSave();
 		await waitFor(() =>
 			expect(saveButton("Practice reviews", "Stays in-house").disabled).toBe(false),
 		);
@@ -410,9 +402,9 @@ it("saves and clears only the selected tier and lists only that tier's models", 
 	await screen.findByRole("region", { name: "Practice reviews" }, ROUTE_RENDER_WAIT);
 	const reviews = within(screen.getByRole("region", { name: "Practice reviews" }));
 
-	await user.click(reviews.getByRole("combobox", { name: /Provider, nothing kept/ }));
-	const compatible = await screen.findByRole("option", { name: /GPT Other/ });
-	expect(screen.queryByRole("option", { name: /GPT Test/ })).toBeNull();
+	await user.click(reviews.getByRole("combobox", { name: /Provider, nothing kept/u }));
+	const compatible = await screen.findByRole("option", { name: /GPT Other/u });
+	expect(screen.queryByRole("option", { name: /GPT Test/u })).toBeNull();
 	await user.click(compatible);
 	await user.click(saveButton("Practice reviews", "Provider, nothing kept"));
 	await waitFor(() => expect(savedTier).toBe("PROVIDER_NOT_KEPT"));
@@ -436,10 +428,7 @@ it("saves and clears only the selected tier and lists only that tier's models", 
 it("resets model drafts on workspace navigation while a previous workspace save completes", async () => {
 	mockModelsRoute(() => [binding("PRACTICE_REVIEW", 20)]);
 	let savedAcme = binding("PRACTICE_REVIEW", 20);
-	let release = () => {};
-	const response = new Promise<void>((resolve) => {
-		release = resolve;
-	});
+	const { promise: response, resolve: release } = deferred();
 	let started = false;
 	server.use(
 		http.get("*/workspaces", () =>

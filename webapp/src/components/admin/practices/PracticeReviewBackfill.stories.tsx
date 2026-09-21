@@ -1,14 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { expectClosedSelectShows } from "@/test/controls";
-import { expectNoPageOverflow } from "@/test/reflow";
 
+import { backfillRun as run } from "./fixtures";
 import { PracticeReviewBackfill } from "./PracticeReviewBackfill";
-import { backfillRun as run } from "./story-mock-data";
 
 const meta = {
-	title: "Workspace admin/Practices/Review/Past work",
 	component: PracticeReviewBackfill,
 	parameters: {
 		layout: "padded",
@@ -44,9 +43,9 @@ export const ChooseARange: Story = {
 		chromatic: { viewports: [320, 1440] },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/nothing is reviewed until you confirm/i);
-		await expectClosedSelectShows(canvas, /Kind of work/, "Pull or merge requests");
-		await expectClosedSelectShows(canvas, /How far back/, "The last 30 days");
+		canvas.getByText(/nothing is reviewed until you confirm/iu);
+		await expectClosedSelectShows(canvas, /Kind of work/u, "Pull or merge requests");
+		await expectClosedSelectShows(canvas, /How far back/u, "The last 30 days");
 		await expectNoPageOverflow();
 	},
 };
@@ -56,7 +55,7 @@ export const AwaitingConfirmation: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("128 pull or merge requests");
 		canvas.getByText("$15.36");
-		canvas.getByRole("button", { name: /review 128 pull or merge requests/i });
+		canvas.getByRole("button", { name: /review 128 pull or merge requests/iu });
 	},
 };
 
@@ -74,8 +73,8 @@ export const CostUnknown: Story = {
 export const NothingInRange: Story = {
 	args: { runs: [run({ estimatedArtifacts: 0, estimatedCostUsd: 0 })] },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /nothing to review/i })).toBeDisabled();
-		canvas.getByText(/discard this and try a longer one/i);
+		await expect(canvas.getByRole("button", { name: /nothing to review/iu })).toBeDisabled();
+		canvas.getByText(/discard this and try a longer one/iu);
 	},
 };
 
@@ -104,8 +103,8 @@ export const SomeCouldNotBeRead: Story = {
 		],
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/3 could not be read, and stay unmeasured/i)).toBeVisible();
-		await expect(canvas.getByText(/12 already measured/i)).toBeVisible();
+		await expect(canvas.getByText(/3 could not be read, and stay unmeasured/iu)).toBeVisible();
+		await expect(canvas.getByText(/12 already measured/iu)).toBeVisible();
 	},
 };
 
@@ -126,7 +125,7 @@ export const PausedOnBudget: Story = {
 		chromatic: { viewports: [320, 1440] },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/nothing has been skipped/i);
+		canvas.getByText(/nothing has been skipped/iu);
 		await expectNoPageOverflow();
 	},
 };
@@ -167,7 +166,7 @@ export const Loading: Story = {
 export const LoadFailed: Story = {
 	args: { isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/backfills couldn't be loaded/i);
-		canvas.getByText(/already running is unaffected/i);
+		canvas.getByText(/backfills couldn’t be loaded/iu);
+		canvas.getByText(/already running is unaffected/iu);
 	},
 };

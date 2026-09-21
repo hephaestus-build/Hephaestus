@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { MetaRow } from "./MetaRow";
 
 const meta = {
-	title: "Common/Meta row",
 	component: MetaRow,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

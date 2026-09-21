@@ -2,6 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+// oxlint-disable-next-line typescript/strict-void-return -- the rule reads the callback overload; tsc resolves the CustomPromisify one to { stdout, stderr }.
 const execFileAsync = promisify(execFile);
 
 /**
@@ -33,14 +34,16 @@ export async function run(
 		stdio: [options.stdin ?? "inherit", options.stdout ?? "inherit", options.stderr ?? "inherit"],
 		signal: options.signal,
 	});
-	await new Promise<void>((resolve, reject) => {
-		child.once("error", reject);
-		child.once("exit", (code, signal) =>
-			code === 0
-				? resolve()
-				: reject(new Error(`${command} exited with ${signal ?? `code ${code}`}`)),
-		);
+	const exited = Promise.withResolvers<undefined>();
+	child.once("error", exited.reject);
+	child.once("exit", (code, signal) => {
+		if (code === 0) {
+			exited.resolve(undefined);
+		} else {
+			exited.reject(new Error(`${command} exited with ${signal ?? `code ${code}`}`));
+		}
 	});
+	await exited.promise;
 }
 
 export async function succeeds(

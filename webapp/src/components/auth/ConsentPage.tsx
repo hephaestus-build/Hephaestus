@@ -8,7 +8,7 @@ import {
 	TrendingUpIcon,
 	TriangleAlertIcon,
 } from "lucide-react";
-import { type SubmitEvent, useId, useState } from "react";
+import { type ReactNode, type SubmitEvent, useId, useState } from "react";
 
 import type { ConsentStatus } from "@/api/types.gen";
 import { type Fact, FactList } from "@/components/auth/FactList";
@@ -16,8 +16,8 @@ import { LegalLink, LegalLinks } from "@/components/auth/LegalLinks";
 import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageLayout } from "@/components/core/PageLayout";
-import { Section } from "@/components/core/Section";
+import { PageLayout } from "@/components/layout/PageLayout";
+import { Section } from "@/components/layout/Section";
 import { HephSays } from "@/components/mentor/HephSays";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -151,6 +151,7 @@ type Answer = (typeof ANSWERS)[number]["value"];
  */
 export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 	const submitting = state.status === "ready" && state.submission.status === "saving";
+	const submissionFailed = state.status === "ready" && state.submission.status === "error";
 	const [termsAccepted, setTermsAccepted] = useState(false);
 	const [answer, setAnswer] = useState<Answer>();
 	const id = useId();
@@ -164,39 +165,55 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 
 	// Heph narrates, and only Heph is a live region. The footer hint says the same thing factually
 	// and reaches the button through `aria-describedby`, so focusing Continue does not replay it.
-	const narration =
-		state.status === "loading"
-			? "Give me a moment — I'm fetching your setup."
-			: state.status === "error"
-				? "I couldn't fetch your setup just now."
-				: stale
-					? "Hephaestus was updated while this page was open."
-					: termsAccepted && answered
-						? "That's everything. Let's get to work."
-						: !asksAboutResearch
-							? "One thing first: the rules."
-							: termsAccepted
-								? "Thanks. One question to go, and either answer is fine by me."
-								: answer !== undefined
-									? "Noted. Just the terms left."
-									: "Two things first: the rules, and whether you'd like to take part in the research.";
+	function narrate() {
+		if (state.status === "loading") {
+			return "Give me a moment — I'm fetching your setup.";
+		}
+		if (state.status === "error") {
+			return "I couldn't fetch your setup just now.";
+		}
+		if (stale) {
+			return "Hephaestus was updated while this page was open.";
+		}
+		if (termsAccepted && answered) {
+			return "That's everything. Let's get to work.";
+		}
+		if (!asksAboutResearch) {
+			return "One thing first: the rules.";
+		}
+		if (termsAccepted) {
+			return "Thanks. One question to go, and either answer is fine by me.";
+		}
+		if (answer === undefined) {
+			return "Two things first: the rules, and whether you'd like to take part in the research.";
+		}
+		return "Noted. Just the terms left.";
+	}
 
-	const hint =
-		state.status !== "ready" || stale
-			? undefined
-			: !termsAccepted && !answered
-				? "Accept the terms and answer the research question."
-				: !termsAccepted
-					? "Accept the terms to continue."
-					: !answered
-						? "Answer the research question to continue."
-						: asksAboutResearch
-							? "You can change your answer later in settings."
-							: undefined;
+	function footerHint() {
+		if (state.status !== "ready" || stale) {
+			return;
+		}
+		if (!termsAccepted && !answered) {
+			return "Accept the terms and answer the research question.";
+		}
+		if (!termsAccepted) {
+			return "Accept the terms to continue.";
+		}
+		if (!answered) {
+			return "Answer the research question to continue.";
+		}
+		return asksAboutResearch ? "You can change your answer later in settings." : undefined;
+	}
+
+	const narration = narrate();
+	const hint = footerHint();
 
 	function submit(event: SubmitEvent<HTMLFormElement>) {
 		event.preventDefault();
-		if (state.status !== "ready" || !ready || submitting) return;
+		if (state.status !== "ready" || !ready || submitting) {
+			return;
+		}
 		state.onSubmit({
 			noticeVersion: state.notice.noticeVersion,
 			termsAccepted: true,
@@ -217,8 +234,8 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 					<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
 
 					<header className="space-y-4">
-						<h1 className="break-words text-2xl font-semibold tracking-tight">
-							Let's get you set up
+						<h1 className="text-2xl font-semibold tracking-tight break-words">
+							Let’s get you set up
 						</h1>
 						<HephSays
 							intro="I'm Heph, the mentor in Hephaestus. I read the work you already do, give you feedback on the practices your project cares about, and talk it through whenever you ask."
@@ -228,119 +245,89 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 
 					<Separator />
 
-					{state.status === "error" ? (
-						<QueryErrorAlert
-							error={state.error}
-							title="Couldn't load your setup"
-							onRetry={state.onRetry}
-						/>
-					) : state.status === "loading" ? (
-						<div className="space-y-6" aria-busy="true">
-							<span className="sr-only">Loading…</span>
-							<Skeleton className="h-32 w-full" />
-							<div className="grid gap-3 sm:grid-cols-2">
-								<Skeleton className="h-20" />
-								<Skeleton className="h-20" />
-							</div>
-						</div>
-					) : stale ? (
-						/* The words below come from this bundle and the version comes with them, so a bundle
-					   the server has moved past must not be answered — it would record an acceptance of
-					   terms nobody was shown. Only a document load replaces the bundle. */
-						<Alert>
-							<AlertTitle>The terms changed while this page was open</AlertTitle>
-							<AlertDescription className="flex flex-col items-start gap-3">
-								Reload to read the current version before you accept it.
-								<Button type="button" variant="outline" onClick={onReload}>
-									Reload
-								</Button>
-							</AlertDescription>
-						</Alert>
-					) : (
-						<>
-							<Section
-								title={
-									<span className="flex items-start gap-3">
-										<StepMarker icon={FileTextIcon} done={termsAccepted} />
-										<span className="min-w-0">Terms and privacy</span>
-									</span>
-								}
-							>
-								<FactList facts={TERMS} />
-								<Field orientation="horizontal">
-									<Checkbox
-										id={`${id}-terms`}
-										checked={termsAccepted}
-										disabled={submitting}
-										onCheckedChange={setTermsAccepted}
-									/>
-									<FieldContent>
-										<FieldLabel htmlFor={`${id}-terms`}>I accept the terms of use</FieldLabel>
-										{/* The obligations sit with the box that accepts them. The points above are
+					<ConsentBody state={state} stale={stale} onReload={onReload}>
+						<Section
+							title={
+								<span className="flex items-start gap-3">
+									<StepMarker icon={FileTextIcon} done={termsAccepted} />
+									<span className="min-w-0">Terms and privacy</span>
+								</span>
+							}
+						>
+							<FactList facts={TERMS} />
+							<Field orientation="horizontal">
+								<Checkbox
+									id={`${id}-terms`}
+									checked={termsAccepted}
+									disabled={submitting}
+									onCheckedChange={setTermsAccepted}
+								/>
+								<FieldContent>
+									<FieldLabel htmlFor={`${id}-terms`}>I accept the terms of use</FieldLabel>
+									{/* The obligations sit with the box that accepts them. The points above are
 										    what the reader needs in order to decide, not things anyone agrees to. */}
-										<FieldDescription>
-											Keep to the work you are entitled to see, and treat feedback as guidance for
-											the person it is addressed to rather than an assessment to pass on.
-										</FieldDescription>
-									</FieldContent>
-								</Field>
-							</Section>
+									<FieldDescription>
+										Keep to the work you are entitled to see, and treat feedback as guidance for the
+										person it is addressed to rather than an assessment to pass on.
+									</FieldDescription>
+								</FieldContent>
+							</Field>
+						</Section>
 
-							{asksAboutResearch && (
-								<>
-									<Separator />
+						{asksAboutResearch && (
+							<>
+								<Separator />
 
-									<Section
-										id={`${id}-research`}
-										title={
-											<span className="flex items-start gap-3">
-												<StepMarker icon={FlaskConicalIcon} done={answer !== undefined} />
-												<span className="min-w-0">Take part in the research?</span>
-											</span>
-										}
-										description={`Optional, and Hephaestus works the same either way. The research is run by ${researchOrganization}.`}
+								<Section
+									id={`${id}-research`}
+									title={
+										<span className="flex items-start gap-3">
+											<StepMarker icon={FlaskConicalIcon} done={answer !== undefined} />
+											<span className="min-w-0">Take part in the research?</span>
+										</span>
+									}
+									description={`Optional, and Hephaestus works the same either way. The research is run by ${researchOrganization}.`}
+								>
+									<FactList facts={RESEARCH} />
+
+									<RadioGroup
+										value={answer ?? null}
+										onValueChange={(value) => setAnswer(value ?? undefined)}
+										disabled={submitting}
+										aria-labelledby={`${id}-research-title`}
+										aria-describedby={`${id}-research-description`}
+										className="grid gap-3 sm:grid-cols-2"
 									>
-										<FactList facts={RESEARCH} />
+										{ANSWERS.map(({ value, title, detail }) => (
+											<FieldLabel key={value} htmlFor={`${id}-${value}`}>
+												<Field orientation="horizontal">
+													<FieldContent>
+														<FieldTitle id={`${id}-${value}-title`}>{title}</FieldTitle>
+														<FieldDescription id={`${id}-${value}-detail`}>
+															{detail}
+														</FieldDescription>
+													</FieldContent>
+													<RadioGroupItem
+														id={`${id}-${value}`}
+														value={value}
+														aria-labelledby={`${id}-${value}-title`}
+														aria-describedby={`${id}-${value}-detail`}
+													/>
+												</Field>
+											</FieldLabel>
+										))}
+									</RadioGroup>
+								</Section>
+							</>
+						)}
 
-										<RadioGroup
-											value={answer ?? null}
-											onValueChange={(value) => setAnswer(value ?? undefined)}
-											disabled={submitting}
-											aria-labelledby={`${id}-research-title`}
-											aria-describedby={`${id}-research-description`}
-											className="grid gap-3 sm:grid-cols-2"
-										>
-											{ANSWERS.map(({ value, title, detail }) => (
-												<FieldLabel key={value} htmlFor={`${id}-${value}`}>
-													<Field orientation="horizontal">
-														<FieldContent>
-															<FieldTitle id={`${id}-${value}-title`}>{title}</FieldTitle>
-															<FieldDescription id={`${id}-${value}-detail`}>
-																{detail}
-															</FieldDescription>
-														</FieldContent>
-														<RadioGroupItem
-															id={`${id}-${value}`}
-															value={value}
-															aria-labelledby={`${id}-${value}-title`}
-															aria-describedby={`${id}-${value}-detail`}
-														/>
-													</Field>
-												</FieldLabel>
-											))}
-										</RadioGroup>
-									</Section>
-								</>
-							)}
-
-							{state.submission.status === "error" && (
-								<Alert variant="destructive">
-									<AlertTitle>Your answers weren't saved</AlertTitle>
-									<AlertDescription>Please try again.</AlertDescription>
-								</Alert>
-							)}
-						</>
-					)}
+						{submissionFailed && (
+							<Alert variant="destructive">
+								<AlertTitle>Your answers weren’t saved</AlertTitle>
+								<AlertDescription>Please try again.</AlertDescription>
+							</Alert>
+						)}
+					</ConsentBody>
 
 					<Separator />
 
@@ -365,10 +352,10 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 						</div>
 						<Button
 							type="button"
-							variant="ghost"
+							variant="quiet"
 							disabled={submitting}
 							onClick={onSignOut}
-							className="self-start text-muted-foreground sm:-ml-3"
+							className="self-start sm:-ml-3"
 						>
 							Sign out
 						</Button>
@@ -379,4 +366,55 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 			</form>
 		</div>
 	);
+}
+
+function ConsentBody({
+	state,
+	stale,
+	onReload,
+	children,
+}: {
+	state: ConsentPageProps["state"];
+	stale: boolean;
+	onReload: () => void;
+	children: ReactNode;
+}): ReactNode {
+	if (state.status === "error") {
+		return (
+			<QueryErrorAlert
+				error={state.error}
+				title="Couldn't load your setup"
+				onRetry={state.onRetry}
+			/>
+		);
+	}
+	if (state.status === "loading") {
+		return (
+			<div className="space-y-6" aria-busy="true">
+				<span className="sr-only">Loading…</span>
+				<Skeleton className="h-32 w-full" />
+				<div className="grid gap-3 sm:grid-cols-2">
+					<Skeleton className="h-20" />
+					<Skeleton className="h-20" />
+				</div>
+			</div>
+		);
+	}
+	if (stale) {
+		// The words in the form come from this bundle and the version comes with them, so a bundle
+		// the server has moved past must not be answered — it would record an acceptance of
+		// terms nobody was shown. Only a document load replaces the bundle.
+		return (
+			<Alert>
+				<AlertTitle>The terms changed while this page was open</AlertTitle>
+				<AlertDescription className="flex flex-col items-start gap-3">
+					Reload to read the current version before you accept it.
+					<Button type="button" variant="outline" onClick={onReload}>
+						Reload
+					</Button>
+				</AlertDescription>
+			</Alert>
+		);
+	}
+	return children;
 }

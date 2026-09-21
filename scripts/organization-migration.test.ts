@@ -28,7 +28,7 @@ const SKIPPED_EXTENSIONS = new Set([
 ]);
 
 // Sample repository names in stories and test fixtures are not the shipped rename (#1599).
-const SAMPLE_DATA = /(\.stories\.tsx|\.test\.tsx?|story-mock-data\.ts)$/;
+const SAMPLE_DATA = /(?:\.stories\.tsx|\.test\.tsx?|fixtures\.ts)$/u;
 
 // Historical records of where a past release's images actually live, or a sample-format doc
 // comment — #1599 explicitly excludes both from the rename.
@@ -45,7 +45,9 @@ await test("default GitHub workspace follows Hephaestus without moving Artemis",
 	const documents = parseAllDocuments(
 		source("server/application/src/main/resources/application.yml"),
 	);
-	for (const document of documents) assert.deepEqual(document.errors, []);
+	for (const document of documents) {
+		assert.deepEqual(document.errors, []);
+	}
 	const config = documents[0];
 	assert.ok(config);
 	const workspacePath = ["hephaestus", "workspace", "default"];
@@ -95,16 +97,22 @@ await test("no shipped surface drifts back to ls1intum/Hephaestus", () => {
 				relative.startsWith("docs/db/archive/") ||
 				SAMPLE_DATA.test(relative) ||
 				HISTORICAL_ALLOWLIST.has(relative)
-			)
+			) {
 				continue;
-			if (SKIPPED_EXTENSIONS.has(path.extname(relative))) continue;
+			}
+			if (SKIPPED_EXTENSIONS.has(path.extname(relative))) {
+				continue;
+			}
 			let content: string;
 			try {
 				content = source(relative);
 			} catch {
-				continue; // a directory entry, not a file
+				// a directory entry, not a file
+				continue;
 			}
-			if (/ls1intum\/[Hh]ephaestus/.test(content)) offenders.push(relative);
+			if (/ls1intum\/[Hh]ephaestus/u.test(content)) {
+				offenders.push(relative);
+			}
 		}
 	}
 	assert.deepEqual(

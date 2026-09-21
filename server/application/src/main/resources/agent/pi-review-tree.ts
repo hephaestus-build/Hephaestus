@@ -57,16 +57,27 @@ export function resolveReviewConcurrency(value: string | undefined, practiceCoun
 }
 
 function evidenceLane(sources: readonly string[]): EvidenceLane {
-	if (sources.some((source) => source.startsWith("chat."))) return "conversation";
-	if (sources.some((source) => source.startsWith("docs.") || source === "outline.documents"))
+	if (sources.some((source) => source.startsWith("chat."))) {
+		return "conversation";
+	}
+	if (sources.some((source) => source.startsWith("docs.") || source === "outline.documents")) {
 		return "document";
-	if (sources.some((source) => source.startsWith("scm.issue."))) return "issue";
-	if (sources.includes("scm.review-threads") || sources.includes("scm.pull-request.comments"))
+	}
+	if (sources.some((source) => source.startsWith("scm.issue."))) {
+		return "issue";
+	}
+	if (sources.includes("scm.review-threads") || sources.includes("scm.pull-request.comments")) {
 		return "review";
-	if (sources.includes("scm.linked-work-items")) return "linked-work";
-	if (sources.includes("scm.pull-request.diff") || sources.includes("scm.repository.tree"))
+	}
+	if (sources.includes("scm.linked-work-items")) {
+		return "linked-work";
+	}
+	if (sources.includes("scm.pull-request.diff") || sources.includes("scm.repository.tree")) {
 		return "code";
-	if (sources.some((source) => source.startsWith("scm.pull-request."))) return "pull-request";
+	}
+	if (sources.some((source) => source.startsWith("scm.pull-request."))) {
+		return "pull-request";
+	}
 	return "unknown";
 }
 
@@ -87,12 +98,16 @@ export function buildReviewTree(
 	const seen = new Set<string>();
 	const byGroup = new Map<
 		string,
-		{ lane: EvidenceLane; area: string | null; entries: Array<{ slug: string; sources: string[] }> }
+		{ lane: EvidenceLane; area: string | null; entries: { slug: string; sources: string[] }[] }
 	>();
 	for (const practice of practices) {
 		const slug = practice.slug.trim();
-		if (!slug) throw new Error("every practice needs a non-empty slug");
-		if (seen.has(slug)) throw new Error(`duplicate practice slug: ${slug}`);
+		if (!slug) {
+			throw new Error("every practice needs a non-empty slug");
+		}
+		if (seen.has(slug)) {
+			throw new Error(`duplicate practice slug: ${slug}`);
+		}
 		seen.add(slug);
 
 		const sources = normalizedSources(practice.readsSources);
@@ -115,7 +130,7 @@ export function buildReviewTree(
 			const entries = group.entries.toSorted((left, right) => left.slug.localeCompare(right.slug));
 			for (let offset = 0; offset < entries.length; offset += maxPracticesPerGroup) {
 				const chunk = entries.slice(offset, offset + maxPracticesPerGroup);
-				laneGroupIndex++;
+				laneGroupIndex += 1;
 				groups.push({
 					id: `${lane}-${laneGroupIndex}`,
 					lane,
@@ -142,11 +157,18 @@ export async function mapConcurrent<T, R>(
 	let nextIndex = 0;
 	const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
 		for (;;) {
-			if (signal?.aborted) return;
-			const index = nextIndex++;
-			if (index >= items.length) return;
+			if (signal?.aborted === true) {
+				return;
+			}
+			const index = nextIndex;
+			nextIndex += 1;
+			if (index >= items.length) {
+				return;
+			}
 			const item = items[index];
-			if (item !== undefined) results[index] = await work(item, index);
+			if (item !== undefined) {
+				results[index] = await work(item, index);
+			}
 		}
 	});
 	await Promise.all(workers);

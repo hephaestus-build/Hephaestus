@@ -120,9 +120,16 @@ those terms expose implementation or depend on who is reading.
 ## Observation assessment axes
 
 An observation first records whether the practice could be assessed. For assessed observations,
-`presence` says whether the practice's fixed target behaviour meets its criterion; `assessment` says
-whether that target is desirable (`GOOD`) or undesirable (`BAD`). Assessment is not the verdict on the
-work. The outcome is derived, never separately annotated:
+`presence` records whether the specific behavior named by the observation occurred; `assessment`
+records whether that behavior is desirable (`GOOD`) or undesirable (`BAD`) in the evidenced context.
+The practice supplies the stable expectation. Each observation identifies a precise behavior and keeps
+that referent unchanged through its presence claim, assessment, rationale and evidence. Different
+behaviors under one practice may have different assessments.
+
+A practice review may record zero, one or several observations for the same practice and reviewed
+work. Each assessed observation names one behavior; independent material concerns may need separate
+observations. One positive observation does not declare the whole piece of work satisfactory.
+Outcome is derived:
 
 | Status | Presence | Assessment | Derived outcome | Severity |
 | --- | --- | --- | --- | --- |
@@ -133,11 +140,16 @@ work. The outcome is derived, never separately annotated:
 | NOT_APPLICABLE | null | null | null | null |
 | UNDETERMINED | null | null | null | null |
 
-Keep the target and its assessment fixed across observations of the same practice revision. For the
-GOOD target “usable verification guidance,” inadequate partial guidance is ABSENT/GOOD: acknowledge
-what exists in the rationale and explain which required part is missing. Do not switch to a BAD target
-mid-review. For a BAD target such as swallowed exceptions, bounded, evidenced absence is
-ABSENT/BAD, a positive outcome—not NOT_APPLICABLE and not proof of general correctness.
+For verification guidance, relevant instructions may be PRESENT/GOOD, misleading instructions
+PRESENT/BAD, and a needed restart check ABSENT/GOOD. State which behavior the evidence establishes:
+partial instructions are present even when a necessary part is absent. Select the observation that
+best explains the correction; do not count both formulations of the same problem as separate lapses.
+
+ABSENT/GOOD requires an evidenced need for the named behavior in this context; an omitted optional
+improvement is not a lapse. ABSENT/BAD requires a relevant opportunity for the undesirable behavior and a complete bounded
+search establishing its absence. Optional guidance is not undesirable merely because it is unnecessary.
+An empty change supplies no meaningful verification occasion and can be NOT_APPLICABLE. A positive
+outcome establishes neither general correctness nor a requirement to send praise.
 
 NOT_APPLICABLE needs an evidenced fact ruling out the prerequisite occasion. UNDETERMINED needs an
 unresolved question after the relevant evidence was captured and read. Neither is a judgment of the
@@ -148,6 +160,27 @@ Severity, feedback routing and result counts use the derived outcome, not assess
 server, sandbox tool contract and database reject contradictory axes. They never manufacture a
 judgment by defaulting status, presence, assessment or severity. See the
 [review pipeline](./practice-review-pipeline.mdx) for capture and delivery boundaries.
+
+### Reading an observation without reversing its meaning
+
+Read an assessed observation as: **“This behavior is present or absent. Doing that behavior would
+be good or bad in this context. Together, those facts yield the outcome.”** For absence,
+GOOD/BAD still evaluates the named behavior, not the act of omitting it.
+
+For example, consider a change to saved settings and its verification instructions:
+
+| Named behavior | Evidence and context | Presence / assessment | Outcome |
+| --- | --- | --- | --- |
+| Describe a restart check for saved settings | The instructions say to save a setting, restart, and confirm the saved value. The change makes persistence material. | PRESENT / GOOD | POSITIVE |
+| Describe a restart check for saved settings | The same persistence requirement applies, but the complete recorded guidance supplies no restart check. | ABSENT / GOOD | NEGATIVE |
+| Tell the reviewer to erase their personal settings before checking persistence | The instructions require erasing the very state the check needs to preserve, without an isolated disposable fixture. | PRESENT / BAD | NEGATIVE |
+| Tell the reviewer to erase their personal settings before checking persistence | The revision removes that destructive step and supplies a non-destructive check; inspection of the complete guidance confirms the step is absent. | ABSENT / BAD | POSITIVE |
+
+These are illustrative observations, not four labels to assign to the same deficiency. In each pair,
+the named behavior and its assessment stay fixed; the evidence for presence changes. The last row
+has a concrete avoidance occasion. Merely failing to mention deletion on unrelated work does not
+earn that observation. If required guidance was not captured, none of these absence claims is
+available. If there is no material change to check, record the evidenced lack of occasion instead.
 
 ## Member onboarding and AI choices
 

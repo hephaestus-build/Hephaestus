@@ -7,7 +7,7 @@
  */
 
 import { mkdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import path from "node:path";
 
 import {
 	buildClientSchema,
@@ -16,13 +16,14 @@ import {
 	printSchema,
 } from "graphql";
 
+import { isSet } from "./lib/env.ts";
 import { isRecord, parseJson } from "./lib/json.ts";
 
-const SCHEMA_DIR = resolve(
+const SCHEMA_DIR = path.resolve(
 	import.meta.dirname,
 	"../server/generated-clients/src/main/resources/graphql/gitlab",
 );
-const SCHEMA_FILE = join(SCHEMA_DIR, "schema.gitlab.graphql");
+const SCHEMA_FILE = path.join(SCHEMA_DIR, "schema.gitlab.graphql");
 const DEFAULT_GITLAB_URL = "https://gitlab.lrz.de";
 
 // The printed schema runs to megabytes, so size alone rejects an error page or a login redirect.
@@ -32,9 +33,9 @@ const MAX_SIZE_BYTES = 50_000_000;
 // introspecting a whole GitLab instance is slow enough that a person would keep waiting with it.
 const REQUEST_TIMEOUT_MS = 60_000;
 
-const HAS_TYPE = /^type\s+\w+/m;
-const HAS_INPUT = /^input\s+\w+/m;
-const HAS_QUERY = /^type\s+Query\s*\{/m;
+const HAS_TYPE = /^type\s+\w+/mu;
+const HAS_INPUT = /^input\s+\w+/mu;
+const HAS_QUERY = /^type\s+Query\s*\{/mu;
 
 interface IntrospectionResponse {
 	data?: IntrospectionQuery;
@@ -70,14 +71,17 @@ Options:
 	// An empty GITLAB_TOKEN reads as "not set" rather than as a token that will be rejected.
 	let token: string | undefined = environmentToken === "" ? undefined : environmentToken;
 
-	for (let i = 0; i < args.length; i++) {
-		const nextArg = args[i + 1];
-		if (args[i] === "--url" && nextArg?.trim()) {
-			url = nextArg.trim();
-			i++;
-		} else if (args[i] === "--token" && nextArg?.trim()) {
-			token = nextArg.trim();
-			i++;
+	for (let i = 0; i < args.length; i += 1) {
+		const nextArg = args[i + 1]?.trim();
+		if (!isSet(nextArg)) {
+			continue;
+		}
+		if (args[i] === "--url") {
+			url = nextArg;
+			i += 1;
+		} else if (args[i] === "--token") {
+			token = nextArg;
+			i += 1;
 		}
 	}
 
@@ -122,7 +126,7 @@ async function main(): Promise<void> {
 	const { url, token } = parseArgs();
 
 	// `--url` is given as an instance, so the endpoint is appended — unless the caller already did.
-	let graphqlEndpoint = url.replace(/\/+$/, "");
+	let graphqlEndpoint = url.replace(/\/+$/u, "");
 	if (!graphqlEndpoint.endsWith("/api/graphql")) {
 		graphqlEndpoint = `${graphqlEndpoint}/api/graphql`;
 	}
@@ -134,7 +138,7 @@ async function main(): Promise<void> {
 		"Content-Type": "application/json",
 	};
 
-	if (token) {
+	if (token !== undefined) {
 		// GitLab takes a Personal Access Token here, not as a bearer.
 		headers["PRIVATE-TOKEN"] = token;
 	}
@@ -172,12 +176,12 @@ async function main(): Promise<void> {
 		parsed = parseJson(responseText);
 	} catch {
 		console.error("Failed to parse response as JSON");
-		console.error(`Response preview: ${responseText.substring(0, 200)}`);
+		console.error(`Response preview: ${responseText.slice(0, 200)}`);
 		process.exit(1);
 	}
 	if (!isIntrospectionResponse(parsed)) {
 		console.error("Invalid response: expected a JSON object");
-		console.error(`Response preview: ${responseText.substring(0, 200)}`);
+		console.error(`Response preview: ${responseText.slice(0, 200)}`);
 		process.exit(1);
 	}
 	const result = parsed;
@@ -230,7 +234,9 @@ async function main(): Promise<void> {
 	}
 }
 
-main().catch((error) => {
+try {
+	await main();
+} catch (error) {
 	console.error("Error updating schema:", error);
 	process.exit(1);
-});
+}

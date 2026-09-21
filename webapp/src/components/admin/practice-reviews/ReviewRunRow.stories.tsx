@@ -2,15 +2,17 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 
 import type { ReviewRunSummary } from "@/api/types.gen";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
+import { reviewRuns } from "./fixtures";
 import { ReviewRowList } from "./ReviewRow";
 import { ReviewRunRow } from "./ReviewRunRow";
-import { reviewRuns } from "./story-mock-data";
 
 function run(id: string): ReviewRunSummary {
 	const found = reviewRuns.find((review) => review.id === id);
-	if (!found) throw new Error(`No review ${id} in the fixture`);
+	if (!found) {
+		throw new Error(`No review ${id} in the fixture`);
+	}
 	return found;
 }
 
@@ -29,7 +31,6 @@ const failed = run("bbbbbbbb-8888-8888-8888-888888888888");
  * review that found nothing.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Review run row",
 	component: ReviewRunRow,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],
@@ -62,7 +63,7 @@ export const AConversation: Story = {
 	args: { review: conversation },
 	play: async ({ canvas }) => {
 		canvas.getByRole("link", { name: "How should we roll back the pricing migration?" });
-		canvas.getByText(/engineering/);
+		canvas.getByText(/engineering/u);
 	},
 };
 

@@ -46,7 +46,8 @@ describe("workspace route gate", () => {
 				}),
 			),
 		);
-		expect((await land("/w/acme")).pathname).toBe("/w/acme/onboarding");
+		const location = await land("/w/acme");
+		expect(location.pathname).toBe("/w/acme/onboarding");
 	});
 	it("preserves the original destination including search and fragment", async () => {
 		listWorkspaces("acme");
@@ -67,36 +68,42 @@ describe("workspace route gate", () => {
 				HttpResponse.json({ ...workspaceOnboarding(), enabled: true, needsWelcome: true }),
 			),
 		);
-		expect((await land("/w/acme/onboarding")).pathname).toBe("/w/acme/onboarding");
+		const location = await land("/w/acme/onboarding");
+		expect(location.pathname).toBe("/w/acme/onboarding");
 	});
 	it("does not revoke membership when onboarding cannot load", async () => {
 		listWorkspaces("acme");
 		server.use(
 			http.get("*/workspaces/acme/onboarding/me", () => new HttpResponse(null, { status: 503 })),
 		);
-		expect(
-			(await land("/w/acme", new QueryClient({ defaultOptions: { queries: { retry: false } } })))
-				.pathname,
-		).toBe("/w/acme");
+		const location = await land(
+			"/w/acme",
+			new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+		);
+		expect(location.pathname).toBe("/w/acme");
 	});
 	it("opens a workspace the account can reach", async () => {
 		listWorkspaces("acme");
-		expect((await land("/w/acme")).href).toBe("/w/acme");
+		const location = await land("/w/acme");
+		expect(location.href).toBe("/w/acme");
 	});
 
 	it("returns an inaccessible workspace's deep link to an accessible workspace home", async () => {
 		listWorkspaces("acme");
-		expect((await land(DEEP_LINK)).href).toBe(WORKSPACE_HOME);
+		const location = await land(DEEP_LINK);
+		expect(location.href).toBe(WORKSPACE_HOME);
 	});
 
 	it("returns to the home page when no workspace is accessible", async () => {
 		listWorkspaces();
-		expect((await land(DEEP_LINK)).href).toBe("/");
+		const location = await land(DEEP_LINK);
+		expect(location.href).toBe("/");
 	});
 
 	it("keeps the route when the workspace list cannot be fetched", async () => {
 		server.use(http.get("*/workspaces", () => HttpResponse.error()));
-		expect((await land(DEEP_LINK)).href).toBe(DEEP_LINK);
+		const location = await land(DEEP_LINK);
+		expect(location.href).toBe(DEEP_LINK);
 	});
 
 	it("opens a just-created workspace the cache carries before the server lists it", async () => {
@@ -109,6 +116,7 @@ describe("workspace route gate", () => {
 			workspaceListItem("brand-new"),
 		]);
 
-		expect((await land("/w/brand-new", queryClient)).href).toBe("/w/brand-new");
+		const location = await land("/w/brand-new", queryClient);
+		expect(location.href).toBe("/w/brand-new");
 	});
 });

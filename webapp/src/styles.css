@@ -162,10 +162,21 @@ code {
 	--color-chart-3: var(--chart-3);
 	--color-chart-4: var(--chart-4);
 	--color-chart-5: var(--chart-5);
+	/* Overrides Tailwind's flat 2px so the step below `sm` tracks `--radius` like the rest of the scale. */
+	--radius-xs: calc(var(--radius) - 6px);
 	--radius-sm: calc(var(--radius) - 4px);
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-lg: var(--radius);
 	--radius-xl: calc(var(--radius) + 4px);
+	/* Tailwind's scale stops at `xs` (12px); counters, meta lines and shortcut hints need one step below it. */
+	--text-2xs: 0.6875rem;
+	--text-2xs--line-height: calc(1 / 0.6875);
+	/* Hero headings sit between `tight` and `tighter`; one named step keeps every display heading on it. */
+	--tracking-display: -0.04em;
+	/* The drawer's fade pair: the backdrop on vaul's curve, the panel on one that settles sooner, so
+	   the panel lands before the backdrop. */
+	--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+	--ease-drawer-panel: cubic-bezier(0.45, 1.005, 0, 1.005);
 	--color-sidebar: var(--sidebar);
 	--color-sidebar-foreground: var(--sidebar-foreground);
 	--color-sidebar-primary: var(--sidebar-primary);
@@ -327,16 +338,16 @@ code {
 		@apply bg-background text-foreground;
 	}
 	code.textCode {
-		@apply bg-provider-muted tracking-tight rounded px-1 py-0.5;
+		@apply rounded bg-provider-muted px-1 py-0.5 tracking-tight;
 	}
 }
 
 .shiki {
-	@apply text-sm bg-card text-card-foreground rounded-xl border p-4;
+	@apply rounded-xl border bg-card p-4 text-sm text-card-foreground;
 }
 
 .shiki code {
-	@apply whitespace-pre-wrap wrap-break-word;
+	@apply wrap-break-word whitespace-pre-wrap;
 	background: transparent !important;
 }
 

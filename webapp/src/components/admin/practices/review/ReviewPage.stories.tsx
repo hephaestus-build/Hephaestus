@@ -1,12 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, waitFor, within } from "storybook/test";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
-import { expectNoPageOverflow } from "@/test/reflow";
 import type { ReviewSectionId } from "./review-sections";
 import { ReviewPage } from "./ReviewPage";
 
 const sectionBody = (id: ReviewSectionId) => (
-	<p className="rounded-md border border-dashed p-6 text-muted-foreground text-sm">
+	<p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
 		Section body: {id}
 	</p>
 );
@@ -25,7 +25,6 @@ const readyBinding = {
 } as const;
 
 const meta = {
-	title: "Workspace admin/Practices/Review/Overview",
 	component: ReviewPage,
 	parameters: {
 		layout: "padded",
@@ -119,7 +118,7 @@ export const SectionsAreRealTabs: Story = {
 		await userEvent.click(canvas.getByRole("tab", { name: "When and where" }));
 		await expect(args.onSectionChange).toHaveBeenCalledWith("when-and-where");
 		await expect(await canvas.findByText("Section body: when-and-where")).toBeVisible();
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(canvas.queryByText("Section body: how-much")).not.toBeInTheDocument(),
 		);
 	},

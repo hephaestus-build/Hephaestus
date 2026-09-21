@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { once } from "node:events";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -16,9 +17,10 @@ import {
 
 import { ReviewTrace } from "../../../main/resources/agent/pi-review-trace.ts";
 import { stopSession } from "../../../main/resources/agent/pi-session-lifecycle.ts";
+import { hasText } from "../../../main/resources/agent/pi-text.ts";
 
-function json(path: string): object {
-	const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+function json(file: string): object {
+	const value: unknown = JSON.parse(readFileSync(file, "utf8"));
 	assert.ok(typeof value === "object" && value !== null);
 	return value;
 }
@@ -26,15 +28,19 @@ function json(path: string): object {
 for (const abortStream of [false, true]) {
 	void test(
 		`native Pi captures provider payloads and recoverable sessions (abort=${abortStream})`,
-		{ timeout: 15000 },
+		{ timeout: 15_000 },
 		async () => {
-			const root = mkdtempSync(join(tmpdir(), "pi-review-trace-"));
+			const root = mkdtempSync(path.join(tmpdir(), "pi-review-trace-"));
 			const received: unknown[] = [];
 			const server = createServer((request, response) => {
-				request.on("error", () => response.destroy());
+				request.on("error", () => {
+					response.destroy();
+				});
 				const chunks: Buffer[] = [];
 				request.on("data", (chunk: unknown) => {
-					if (chunk instanceof Uint8Array) chunks.push(Buffer.from(chunk));
+					if (chunk instanceof Uint8Array) {
+						chunks.push(Buffer.from(chunk));
+					}
 				});
 				request.on("end", () => {
 					received.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
@@ -77,17 +83,17 @@ for (const abortStream of [false, true]) {
 					);
 				});
 			});
-			await new Promise<void>((resolve) => {
-				server.listen(0, "127.0.0.1", resolve);
-			});
+			server.listen(0, "127.0.0.1");
+			await once(server, "listening");
 			const address = server.address();
-			assert.ok(address && typeof address !== "string");
-			writeFileSync(join(root, "evidence.txt"), "Exact private evidence from the tool.");
-			const agentDir = join(root, ".pi");
+			assert.ok(address !== null && typeof address !== "string");
+			writeFileSync(path.join(root, "evidence.txt"), "Exact private evidence from the tool.");
+			const agentDir = path.join(root, ".pi");
 			mkdirSync(agentDir);
-			for (const name of ["auth.json", "models.json", "settings.json"])
-				writeFileSync(join(agentDir, name), "{}");
-			const capture = new ReviewTrace(join(root, "out"));
+			for (const name of ["auth.json", "models.json", "settings.json"]) {
+				writeFileSync(path.join(agentDir, name), "{}");
+			}
+			const capture = new ReviewTrace(path.join(root, "out"));
 			const settingsManager = SettingsManager.create(root, agentDir, { projectTrusted: false });
 			const loader = new DefaultResourceLoader({
 				cwd: root,
@@ -99,8 +105,8 @@ for (const abortStream of [false, true]) {
 			});
 			await loader.reload();
 			const runtime = await ModelRuntime.create({
-				authPath: join(agentDir, "auth.json"),
-				modelsPath: join(agentDir, "models.json"),
+				authPath: path.join(agentDir, "auth.json"),
+				modelsPath: path.join(agentDir, "models.json"),
 				allowModelNetwork: false,
 			});
 			runtime.registerProvider("capture-test", {
@@ -137,8 +143,12 @@ for (const abortStream of [false, true]) {
 			const partial = Promise.withResolvers<boolean>();
 			const unsubscribe = session.subscribe((event) => {
 				capture.event(sessionId, event);
-				if (event.type === "message_update" && JSON.stringify(event).includes("Captured response"))
+				if (
+					event.type === "message_update" &&
+					JSON.stringify(event).includes("Captured response")
+				) {
 					partial.resolve(true);
+				}
 			});
 			try {
 				const prompt = session.prompt("Inspect only the captured evidence.");
@@ -149,48 +159,47 @@ for (const abortStream of [false, true]) {
 				await prompt;
 				capture.finish(0);
 				assert.equal(received.length, 2);
-				const requests = readdirSync(join(root, "out/trace/requests"));
+				const requests = readdirSync(path.join(root, "out/trace/requests"));
 				assert.equal(requests.length, 2);
-				const requestPath = join(root, "out/trace/requests", requests[0] ?? "");
+				const requestPath = path.join(root, "out/trace/requests", requests[0] ?? "");
 				for (const body of received) {
 					const hash = createHash("sha256").update(JSON.stringify(body)).digest("hex");
-					assert.deepEqual(json(join(root, "out/trace/requests", `${hash}.json`)), body);
+					assert.deepEqual(json(path.join(root, "out/trace/requests", `${hash}.json`)), body);
 				}
-				assert.match(JSON.stringify(received[1]), /Exact private evidence from the tool/);
+				assert.match(JSON.stringify(received[1]), /Exact private evidence from the tool/u);
 				assert.equal(
 					requests[0],
 					`${createHash("sha256").update(readFileSync(requestPath)).digest("hex")}.json`,
 				);
 				const file = manager.getSessionFile();
-				assert.ok(file);
-				const archivedFile = join(root, "out/trace/sessions", basename(file));
+				assert.ok(hasText(file));
+				const archivedFile = path.join(root, "out/trace/sessions", path.basename(file));
 				assert.equal(readFileSync(archivedFile, "utf8"), readFileSync(file, "utf8"));
 				const reopened = SessionManager.open(archivedFile, capture.sessionDir);
 				assert.equal(
 					JSON.stringify(reopened.buildSessionContext().messages),
 					JSON.stringify(manager.buildSessionContext().messages),
 				);
-				assert.match(readFileSync(file, "utf8"), /Captured response/);
-				assert.match(readFileSync(file, "utf8"), /Exact private evidence from the tool/);
-				const events = readFileSync(join(root, "out/trace/events-00000.jsonl"), "utf8");
-				assert.match(events, /tool_execution_start/);
-				assert.match(events, /tool_execution_end/);
-				assert.match(events, /agent_settled/);
+				assert.match(readFileSync(file, "utf8"), /Captured response/u);
+				assert.match(readFileSync(file, "utf8"), /Exact private evidence from the tool/u);
+				const events = readFileSync(path.join(root, "out/trace/events-00000.jsonl"), "utf8");
+				assert.match(events, /tool_execution_start/u);
+				assert.match(events, /tool_execution_end/u);
+				assert.match(events, /agent_settled/u);
 				if (abortStream) {
-					assert.match(readFileSync(file, "utf8"), /"stopReason":"aborted"/);
-					assert.match(events, /"stopReason":"aborted"/);
+					assert.match(readFileSync(file, "utf8"), /"stopReason":"aborted"/u);
+					assert.match(events, /"stopReason":"aborted"/u);
 				}
-				assert.doesNotMatch(readFileSync(requestPath, "utf8"), /private-transport-credential/);
-				const status = json(join(root, "out/trace/capture.json"));
+				assert.doesNotMatch(readFileSync(requestPath, "utf8"), /private-transport-credential/u);
+				const status = json(path.join(root, "out/trace/capture.json"));
 				assert.equal(Reflect.get(status, "complete"), true);
 				assert.equal(Reflect.get(status, "providerRequests"), 2);
 			} finally {
 				unsubscribe();
 				session.dispose();
 				server.closeAllConnections();
-				await new Promise<void>((resolve) => {
-					server.close(() => resolve());
-				});
+				server.close();
+				await once(server, "close");
 				rmSync(root, { recursive: true, force: true });
 			}
 		},
@@ -198,14 +207,14 @@ for (const abortStream of [false, true]) {
 }
 
 void test("capture reports interruption and capacity loss instead of claiming a complete transcript", () => {
-	const root = mkdtempSync(join(tmpdir(), "pi-trace-limit-"));
+	const root = mkdtempSync(path.join(tmpdir(), "pi-trace-limit-"));
 	try {
-		const capture = new ReviewTrace(join(root, "out"), 8);
-		const initial = json(join(root, "out/trace/capture.json"));
+		const capture = new ReviewTrace(path.join(root, "out"), 8);
+		const initial = json(path.join(root, "out/trace/capture.json"));
 		assert.equal(Reflect.get(initial, "complete"), false);
 		capture.session("session", "observer", undefined);
 		capture.finish(137);
-		const final = json(join(root, "out/trace/capture.json"));
+		const final = json(path.join(root, "out/trace/capture.json"));
 		assert.equal(Reflect.get(final, "complete"), false);
 		assert.equal(Reflect.get(final, "droppedRecords"), 1);
 		assert.equal(Reflect.get(final, "exitCode"), 137);
@@ -214,29 +223,57 @@ void test("capture reports interruption and capacity loss instead of claiming a 
 	}
 });
 
-void test("a missing native session and a nonzero exit cannot be called complete", () => {
-	const root = mkdtempSync(join(tmpdir(), "pi-trace-missing-"));
+void test("a missing native session cannot be called complete", () => {
+	const root = mkdtempSync(path.join(tmpdir(), "pi-trace-missing-"));
 	try {
-		const capture = new ReviewTrace(join(root, "out"));
-		capture.session("missing", "observer", join(root, "never-written.jsonl"));
+		const capture = new ReviewTrace(path.join(root, "out"));
+		capture.session("missing", "observer", path.join(root, "never-written.jsonl"));
 		capture.finish(0);
-		assert.equal(Reflect.get(json(join(root, "out/trace/capture.json")), "complete"), false);
-		const failed = new ReviewTrace(join(root, "failed"));
-		failed.finish(1);
-		assert.equal(Reflect.get(json(join(root, "failed/trace/capture.json")), "complete"), false);
+		assert.equal(Reflect.get(json(path.join(root, "out/trace/capture.json")), "complete"), false);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a settled failed review has complete capture without becoming a successful review", () => {
+	const root = mkdtempSync(path.join(tmpdir(), "pi-trace-failed-"));
+	try {
+		const capture = new ReviewTrace(path.join(root, "out"));
+		const file = path.join(capture.sessionDir, "review.jsonl");
+		writeFileSync(file, '{"type":"session"}\n');
+		capture.session("review", "observer", file);
+		capture.event("review", { type: "agent_start" });
+		capture.event("review", { type: "agent_end", messages: [], willRetry: false });
+		capture.event("review", { type: "agent_settled" });
+		capture.finish(2);
+		const status = json(path.join(root, "out/trace/capture.json"));
+		assert.equal(Reflect.get(status, "complete"), true);
+		assert.equal(Reflect.get(status, "exitCode"), 2);
+		assert.equal(
+			readFileSync(path.join(root, "out/trace/sessions/review.jsonl"), "utf8"),
+			readFileSync(file, "utf8"),
+		);
+		const interrupted = new ReviewTrace(path.join(root, "interrupted"));
+		interrupted.session("review", "observer", file);
+		interrupted.event("review", { type: "agent_start" });
+		interrupted.event("review", { type: "agent_end", messages: [], willRetry: true });
+		interrupted.finish(137);
+		const partial = json(path.join(root, "interrupted/trace/capture.json"));
+		assert.equal(Reflect.get(partial, "complete"), false);
+		assert.equal(Reflect.get(partial, "unfinishedSessions"), 1);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
 
 void test("journal write failure is recorded rather than changing the review", () => {
-	const root = mkdtempSync(join(tmpdir(), "pi-trace-io-"));
+	const root = mkdtempSync(path.join(tmpdir(), "pi-trace-io-"));
 	try {
-		const capture = new ReviewTrace(join(root, "out"));
-		mkdirSync(join(root, "out/trace/events-00000.jsonl"));
+		const capture = new ReviewTrace(path.join(root, "out"));
+		mkdirSync(path.join(root, "out/trace/events-00000.jsonl"));
 		assert.doesNotThrow(() => capture.session("session", "observer", undefined));
 		capture.finish(0);
-		const status = json(join(root, "out/trace/capture.json"));
+		const status = json(path.join(root, "out/trace/capture.json"));
 		assert.equal(Reflect.get(status, "complete"), false);
 		assert.equal(Reflect.get(status, "droppedRecords"), 1);
 	} finally {
@@ -245,20 +282,20 @@ void test("journal write failure is recorded rather than changing the review", (
 });
 
 void test("oversized native sessions cannot invalidate mandatory review outputs", () => {
-	const root = mkdtempSync(join(tmpdir(), "pi-trace-native-limit-"));
+	const root = mkdtempSync(path.join(tmpdir(), "pi-trace-native-limit-"));
 	try {
-		const output = join(root, "out");
+		const output = path.join(root, "out");
 		const capture = new ReviewTrace(output);
-		const file = join(capture.sessionDir, "oversized.jsonl");
+		const file = path.join(capture.sessionDir, "oversized.jsonl");
 		writeFileSync(file, Buffer.alloc(11 * 1024 * 1024));
-		writeFileSync(join(output, "result.json"), "{}\n");
+		writeFileSync(path.join(output, "result.json"), "{}\n");
 		capture.session("large", "observer", file);
 		// Abrupt termination is safe too: live native files are never inside the host output archive.
-		assert.deepEqual(readdirSync(join(output, "trace/sessions")), []);
+		assert.deepEqual(readdirSync(path.join(output, "trace/sessions")), []);
 		capture.finish(0);
-		assert.deepEqual(readdirSync(join(output, "trace/sessions")), []);
-		assert.equal(readFileSync(join(output, "result.json"), "utf8"), "{}\n");
-		const status = json(join(output, "trace/capture.json"));
+		assert.deepEqual(readdirSync(path.join(output, "trace/sessions")), []);
+		assert.equal(readFileSync(path.join(output, "result.json"), "utf8"), "{}\n");
+		const status = json(path.join(output, "trace/capture.json"));
 		assert.equal(Reflect.get(status, "complete"), false);
 		assert.equal(Reflect.get(status, "droppedRecords"), 1);
 	} finally {
@@ -267,21 +304,21 @@ void test("oversized native sessions cannot invalidate mandatory review outputs"
 });
 
 void test("whole native sessions share the aggregate capture budget with the journal", () => {
-	const root = mkdtempSync(join(tmpdir(), "pi-trace-native-total-"));
+	const root = mkdtempSync(path.join(tmpdir(), "pi-trace-native-total-"));
 	try {
-		const capture = new ReviewTrace(join(root, "out"), 1024);
+		const capture = new ReviewTrace(path.join(root, "out"), 1024);
 		for (const id of ["first", "second"]) {
-			const file = join(capture.sessionDir, `${id}.jsonl`);
+			const file = path.join(capture.sessionDir, `${id}.jsonl`);
 			writeFileSync(file, "x".repeat(400));
 			capture.session(id, "observer", file);
 		}
 		capture.finish(0);
-		const status = json(join(root, "out/trace/capture.json"));
+		const status = json(path.join(root, "out/trace/capture.json"));
 		assert.equal(Reflect.get(status, "complete"), false);
 		assert.equal(Reflect.get(status, "droppedRecords"), 1);
-		assert.deepEqual(readdirSync(join(root, "out/trace/sessions")), ["first.jsonl"]);
+		assert.deepEqual(readdirSync(path.join(root, "out/trace/sessions")), ["first.jsonl"]);
 		assert.equal(
-			readFileSync(join(root, "out/trace/sessions/first.jsonl"), "utf8"),
+			readFileSync(path.join(root, "out/trace/sessions/first.jsonl"), "utf8"),
 			"x".repeat(400),
 		);
 		assert.ok(Number(Reflect.get(status, "captureBytes")) <= 1024);

@@ -8283,8 +8283,10 @@ components:
           description: Git provider comment/note ID for posted feedback
         deliveryStatus:
           type: string
-          description: "Delivery status: null = not applicable, PENDING = awaiting\
-            \ delivery, DELIVERED = posted, FAILED = delivery error"
+          description: "Result-processing status: null = not applicable, PENDING =\
+            \ awaiting processing, DELIVERED = processing finished, FAILED = processing\
+            \ error. Processing may include delivery; this status alone does not establish\
+            \ feedback publication."
           enum:
           - PENDING
           - DELIVERED
@@ -11666,8 +11668,8 @@ components:
             cannot be resolved)
         assessment:
           type: string
-          description: "Target desirability: GOOD or BAD; null unless assessmentStatus\
-            \ is ASSESSED"
+          description: "Contextual desirability of the specified behavior: GOOD or\
+            \ BAD; null unless assessmentStatus is ASSESSED"
           enum:
           - GOOD
           - BAD
@@ -11712,7 +11714,8 @@ components:
           - BACKFILL
         outcome:
           type: string
-          description: Derived from presence and target assessment; null unless assessed
+          description: Derived from presence and contextual behavior assessment; null
+            unless assessed
           enum:
           - POSITIVE
           - NEGATIVE
@@ -11776,8 +11779,8 @@ components:
           description: Artifact type (e.g. PULL_REQUEST)
         assessment:
           type: string
-          description: "Target desirability: GOOD or BAD; null unless assessmentStatus\
-            \ is ASSESSED"
+          description: "Contextual desirability of the specified behavior: GOOD or\
+            \ BAD; null unless assessmentStatus is ASSESSED"
           enum:
           - GOOD
           - BAD
@@ -11813,7 +11816,8 @@ components:
           - BACKFILL
         outcome:
           type: string
-          description: Derived from presence and target assessment; null unless assessed
+          description: Derived from presence and contextual behavior assessment; null
+            unless assessed
           enum:
           - POSITIVE
           - NEGATIVE
@@ -12769,7 +12773,8 @@ components:
           format: uuid
         outcome:
           type: string
-          description: Derived from presence and target assessment; null unless assessed
+          description: Derived from presence and contextual behavior assessment; null
+            unless assessed
           enum:
           - POSITIVE
           - NEGATIVE
@@ -14384,8 +14389,8 @@ components:
       properties:
         assessment:
           type: string
-          description: "Target behaviour: GOOD means desirable, BAD means undesirable\
-            \ (null unless ASSESSED)"
+          description: "Specified behavior in context: GOOD means desirable, BAD means\
+            \ undesirable (null unless ASSESSED)"
           enum:
           - GOOD
           - BAD
@@ -14418,7 +14423,8 @@ components:
           description: Render order within the feedback (lower renders earlier)
         outcome:
           type: string
-          description: Derived from presence and target assessment; null unless assessed
+          description: Derived from presence and contextual behavior assessment; null
+            unless assessed
           enum:
           - POSITIVE
           - NEGATIVE
@@ -14735,8 +14741,8 @@ components:
           $ref: "#/components/schemas/ReviewArtifact"
         assessment:
           type: string
-          description: "Target behaviour: GOOD means desirable, BAD means undesirable\
-            \ (null unless ASSESSED)"
+          description: "Specified behavior in context: GOOD means desirable, BAD means\
+            \ undesirable (null unless ASSESSED)"
           enum:
           - GOOD
           - BAD
@@ -14777,7 +14783,8 @@ components:
           - BACKFILL
         outcome:
           type: string
-          description: Derived from presence and target assessment; null unless assessed
+          description: Derived from presence and contextual behavior assessment; null
+            unless assessed
           enum:
           - POSITIVE
           - NEGATIVE
@@ -14856,8 +14863,8 @@ components:
           $ref: "#/components/schemas/ReviewArtifact"
         assessment:
           type: string
-          description: "Target behaviour: GOOD means desirable, BAD means undesirable\
-            \ (null unless ASSESSED)"
+          description: "Specified behavior in context: GOOD means desirable, BAD means\
+            \ undesirable (null unless ASSESSED)"
           enum:
           - GOOD
           - BAD
@@ -14895,7 +14902,8 @@ components:
           format: date-time
         outcome:
           type: string
-          description: Derived from presence and target assessment; null unless assessed
+          description: Derived from presence and contextual behavior assessment; null
+            unless assessed
           enum:
           - POSITIVE
           - NEGATIVE
@@ -16446,7 +16454,7 @@ components:
           description: Practice review criteria
           maxLength: 50000
           minLength: 0
-          pattern: .*\S.*
+          pattern: "[\\s\\S]*\\S[\\s\\S]*"
         group:
           $ref: "#/components/schemas/BindPracticeGroupRequest"
           description: Catalog placement to apply with the definition update; omit
@@ -16468,13 +16476,13 @@ components:
           description: Concrete example shown to the developer; not review criteria
           maxLength: 2000
           minLength: 0
-          pattern: .*\S.*
+          pattern: "[\\s\\S]*\\S[\\s\\S]*"
         whyItMatters:
           type: string
           description: Plain-language rationale shown to the developer
           maxLength: 2000
           minLength: 0
-          pattern: .*\S.*
+          pattern: "[\\s\\S]*\\S[\\s\\S]*"
     UpdatePracticeReviewSettingsRequest:
       type: object
       description: Update per-workspace practice-review policy. Null fields unchanged;

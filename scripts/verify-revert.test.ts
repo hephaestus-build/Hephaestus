@@ -2,25 +2,27 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { after, test } from "node:test";
 
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { verifyRevert } from "./verify-revert.ts";
 
-const SCRIPT = join(import.meta.dirname, "verify-revert.ts");
+const SCRIPT = path.join(import.meta.dirname, "verify-revert.ts");
 
 type Git = (...args: string[]) => string;
 
 const repositories: string[] = [];
 
 after(() => {
-	for (const repo of repositories) rmSync(repo, { recursive: true, force: true });
+	for (const repo of repositories) {
+		rmSync(repo, { recursive: true, force: true });
+	}
 });
 
 /** A repository whose `main` carries a release-shaped commit, with a branch checked out from it. */
 function fixture(): { repo: string; git: Git; write: (file: string, content: string) => void } {
-	const repo = mkdtempSync(join(tmpdir(), "verify-revert-"));
+	const repo = mkdtempSync(path.join(tmpdir(), "verify-revert-"));
 	repositories.push(repo);
 	const git: Git = (...args) =>
 		execFileSync("git", args, {
@@ -29,7 +31,8 @@ function fixture(): { repo: string; git: Git; write: (file: string, content: str
 			stdio: ["ignore", "pipe", "pipe"],
 			env: environmentForGitFixture(),
 		}).trim();
-	const write = (file: string, content: string): void => writeFileSync(join(repo, file), content);
+	const write = (file: string, content: string): void =>
+		writeFileSync(path.join(repo, file), content);
 	git("init", "--quiet", "--initial-branch=main");
 	git("config", "user.email", "test@example.invalid");
 	git("config", "user.name", "Test");
@@ -67,7 +70,7 @@ void test("verifies a git revert of a commit already on the base", () => {
 		[released],
 	);
 	// The revert restores exactly what the guard freezes.
-	assert.equal(readFileSync(join(repo, "MIGRATION.md"), "utf8"), "# Migration\n");
+	assert.equal(readFileSync(path.join(repo, "MIGRATION.md"), "utf8"), "# Migration\n");
 });
 
 void test("verifies a revert taken after unrelated work landed on the base", () => {
@@ -83,7 +86,10 @@ void test("verifies a revert taken after unrelated work landed on the base", () 
 
 	assert.equal(verifyRevert(base, "HEAD", repo).verified, true);
 	// The changesets that landed after the release are untouched by the revert.
-	assert.equal(readFileSync(join(repo, "changeset-later.md"), "utf8").includes("later note"), true);
+	assert.equal(
+		readFileSync(path.join(repo, "changeset-later.md"), "utf8").includes("later note"),
+		true,
+	);
 });
 
 void test("rejects a claimed revert that smuggles an extra change", () => {
@@ -98,7 +104,7 @@ void test("rejects a claimed revert that smuggles an extra change", () => {
 
 	const verdict = verifyRevert(base, "HEAD", repo);
 	assert.equal(verdict.verified, false);
-	assert.match(verdict.reason, /not the exact inverse/);
+	assert.match(verdict.reason, /not the exact inverse/u);
 });
 
 void test("rejects a revert commit paired with an unrelated commit", () => {
@@ -113,7 +119,7 @@ void test("rejects a revert commit paired with an unrelated commit", () => {
 
 	const verdict = verifyRevert(base, "HEAD", repo);
 	assert.equal(verdict.verified, false);
-	assert.match(verdict.reason, /does not record exactly one/);
+	assert.match(verdict.reason, /does not record exactly one/u);
 });
 
 void test("rejects a trailer that names a commit which is not on the base", () => {
@@ -129,7 +135,7 @@ void test("rejects a trailer that names a commit which is not on the base", () =
 
 	const verdict = verifyRevert(base, "HEAD", repo);
 	assert.equal(verdict.verified, false);
-	assert.match(verdict.reason, /is not an ancestor of the base/);
+	assert.match(verdict.reason, /is not an ancestor of the base/u);
 });
 
 void test("rejects a fabricated trailer naming an unknown commit", () => {
@@ -144,7 +150,7 @@ void test("rejects a fabricated trailer naming an unknown commit", () => {
 
 	const verdict = verifyRevert(base, "HEAD", repo);
 	assert.equal(verdict.verified, false);
-	assert.match(verdict.reason, /reverts unknown commit/);
+	assert.match(verdict.reason, /reverts unknown commit/u);
 });
 
 void test("rejects a revert whose title says revert but whose body does not", () => {
@@ -158,27 +164,27 @@ void test("rejects a revert whose title says revert but whose body does not", ()
 
 	const verdict = verifyRevert(base, "HEAD", repo);
 	assert.equal(verdict.verified, false);
-	assert.match(verdict.reason, /does not record exactly one/);
+	assert.match(verdict.reason, /does not record exactly one/u);
 });
 
 void test("rejects a binary payload swapped under a revert trailer", () => {
 	const { repo, git } = fixture();
-	writeFileSync(join(repo, "logo.png"), Buffer.from([0, 1, 2, 65]));
+	writeFileSync(path.join(repo, "logo.png"), Buffer.from([0, 1, 2, 65]));
 	git("add", "-A");
 	git("commit", "--quiet", "-m", "add a binary");
-	writeFileSync(join(repo, "logo.png"), Buffer.from([0, 1, 2, 66, 66]));
+	writeFileSync(path.join(repo, "logo.png"), Buffer.from([0, 1, 2, 66, 66]));
 	git("add", "-A");
 	git("commit", "--quiet", "-m", "change the binary");
 	const released = git("rev-parse", "HEAD");
 	const base = git("rev-parse", "HEAD");
 	git("checkout", "--quiet", "-b", "revert/binary");
-	writeFileSync(join(repo, "logo.png"), Buffer.from([9, 9, 9, 67, 67, 67]));
+	writeFileSync(path.join(repo, "logo.png"), Buffer.from([9, 9, 9, 67, 67, 67]));
 	git("add", "-A");
 	git("commit", "--quiet", "-m", `revert the binary\n\nThis reverts commit ${released}.`);
 
 	const verdict = verifyRevert(base, "HEAD", repo);
 	assert.equal(verdict.verified, false);
-	assert.match(verdict.reason, /not the exact inverse/);
+	assert.match(verdict.reason, /not the exact inverse/u);
 });
 
 void test("rejects a branch that adds nothing over the base", () => {
@@ -188,7 +194,7 @@ void test("rejects a branch that adds nothing over the base", () => {
 
 	const verdict = verifyRevert(base, "HEAD", repo);
 	assert.equal(verdict.verified, false);
-	assert.match(verdict.reason, /adds no commit/);
+	assert.match(verdict.reason, /adds no commit/u);
 });
 
 void test("rejects a revert of a merge commit", () => {
@@ -209,7 +215,7 @@ void test("rejects a revert of a merge commit", () => {
 
 	const verdict = verifyRevert(base, "HEAD", repo);
 	assert.equal(verdict.verified, false);
-	assert.match(verdict.reason, /which has 2 parents/);
+	assert.match(verdict.reason, /which has 2 parents/u);
 });
 
 void test("rejects the trailer git writes for a reverted merge", () => {
@@ -227,7 +233,7 @@ void test("rejects the trailer git writes for a reverted merge", () => {
 
 	const verdict = verifyRevert(base, "HEAD", repo);
 	assert.equal(verdict.verified, false);
-	assert.match(verdict.reason, /does not record exactly one/);
+	assert.match(verdict.reason, /does not record exactly one/u);
 });
 
 void test("reports the verdict to GITHUB_OUTPUT", () => {
@@ -236,7 +242,7 @@ void test("reports the verdict to GITHUB_OUTPUT", () => {
 	const base = git("rev-parse", "HEAD");
 	git("checkout", "--quiet", "-b", "revert/version");
 	git("revert", "--no-edit", released);
-	const output = join(repo, "github-output");
+	const output = path.join(repo, "github-output");
 	writeFileSync(output, "");
 
 	const stdout = execFileSync(process.execPath, [SCRIPT, base, "HEAD"], {
@@ -244,7 +250,7 @@ void test("reports the verdict to GITHUB_OUTPUT", () => {
 		encoding: "utf8",
 		env: environmentForGitFixture({ GITHUB_OUTPUT: output }),
 	});
-	assert.match(stdout, /::notice::Verified revert of/);
+	assert.match(stdout, /::notice::Verified revert of/u);
 	assert.equal(readFileSync(output, "utf8"), "verified-revert=true\n");
 
 	git("reset", "--quiet", "--hard", base);
@@ -253,6 +259,6 @@ void test("reports the verdict to GITHUB_OUTPUT", () => {
 		encoding: "utf8",
 		env: environmentForGitFixture({ GITHUB_OUTPUT: output }),
 	});
-	assert.match(denied, /Not a verified revert/);
+	assert.match(denied, /Not a verified revert/u);
 	assert.equal(readFileSync(output, "utf8"), "verified-revert=true\nverified-revert=false\n");
 });

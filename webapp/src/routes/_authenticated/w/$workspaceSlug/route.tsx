@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { hasText } from "@/lib/text";
 
 import { getMemberOnboardingOptions, listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 
@@ -13,30 +14,36 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 			.catch(() => undefined);
 		// A list that cannot be fetched is not revoked access: keep the route rather than evicting
 		// the reader on a network error.
-		if (!workspaces) return;
+		if (!workspaces) {
+			return;
+		}
 		if (workspaces.some((workspace) => workspace.workspaceSlug === params.workspaceSlug)) {
 			const base = `/w/${encodeURIComponent(params.workspaceSlug)}`;
 			// Owners must be able to repair setup; an outage must never revoke membership.
 			if (
 				location.pathname === `${base}/onboarding` ||
 				location.pathname.startsWith(`${base}/admin`)
-			)
+			) {
 				return;
+			}
 			const onboarding = await context.queryClient
 				.query(getMemberOnboardingOptions({ path: { workspaceSlug: params.workspaceSlug } }))
 				.catch(() => undefined);
-			if (onboarding?.needsWelcome)
+			if (onboarding?.needsWelcome === true) {
 				throw redirect({
 					to: "/w/$workspaceSlug/onboarding",
 					params,
 					search: { returnTo: location.href },
 					replace: true,
 				});
+			}
 			return;
 		}
 
 		const fallbackSlug = workspaces[0]?.workspaceSlug;
-		if (!fallbackSlug) throw redirect({ to: "/", replace: true });
+		if (!hasText(fallbackSlug)) {
+			throw redirect({ to: "/", replace: true });
+		}
 		throw redirect({
 			to: "/w/$workspaceSlug",
 			params: { workspaceSlug: fallbackSlug },

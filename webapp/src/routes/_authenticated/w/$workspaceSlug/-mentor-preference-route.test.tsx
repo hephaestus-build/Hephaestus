@@ -46,7 +46,7 @@ it("keeps an existing conversation readable under No AI and restores its compose
 		"/w/acme/onboarding?returnTo=%2Fw%2Facme%2Fmentor%2F65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed",
 	);
 	expect(screen.queryByRole("textbox")).toBeNull();
-	expect(screen.queryByRole("button", { name: /edit|try again/i })).toBeNull();
+	expect(screen.queryByRole("button", { name: /edit|try again/iu })).toBeNull();
 
 	await act(async () => {
 		queryClient.setQueryData<WorkspaceOnboarding>(

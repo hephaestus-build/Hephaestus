@@ -180,13 +180,14 @@ const meta = {
 		layout: "padded",
 	},
 	args: {
+		providerType: "GITHUB",
 		renderUserLink: (username, children) => <a href={`/users/${username}`}>{children}</a>,
 		variant: "INDIVIDUAL",
 	},
 } satisfies Meta<typeof LeaderboardTable>;
 
 export default meta;
-type Story = StoryObj<typeof LeaderboardTable>;
+type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	args: {

@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import {
 	Beaker,
 	Bike,
@@ -47,6 +48,8 @@ import {
 	Wrench,
 	Zap,
 } from "lucide-react";
+
+import { hasText } from "@/lib/text";
 
 /**
  * Outline stores a collection icon as ONE string that is either a named icon from its own registry,
@@ -126,11 +129,15 @@ export interface OutlineCollectionIconProps {
 export function OutlineCollectionIcon({ icon, color, className }: OutlineCollectionIconProps) {
 	const tint = color ?? "var(--muted-foreground)";
 
-	if (icon) {
+	if (hasText(icon)) {
 		const NamedIcon = NAMED_ICONS[icon];
 		if (NamedIcon) {
 			return (
-				<NamedIcon aria-hidden className={className ?? "size-4 shrink-0"} style={{ color: tint }} />
+				<NamedIcon
+					aria-hidden
+					className={cn("text-(--tint)", className ?? "size-4 shrink-0")}
+					style={{ "--tint": tint }}
+				/>
 			);
 		}
 		if (EMOJI_PATTERN.test(icon)) {
@@ -145,8 +152,8 @@ export function OutlineCollectionIcon({ icon, color, className }: OutlineCollect
 	return (
 		<span
 			aria-hidden
-			className="size-2.5 shrink-0 rounded-full"
-			style={{ backgroundColor: tint }}
+			className="size-2.5 shrink-0 rounded-full bg-(--tint)"
+			style={{ "--tint": tint }}
 		/>
 	);
 }

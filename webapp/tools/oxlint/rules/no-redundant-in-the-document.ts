@@ -7,14 +7,18 @@ import { memberName } from "../property.ts";
  * `findBy*` and `findAllBy*` reject. `queryBy*` is deliberately absent — it returns null, so there
  * the matcher is the assertion.
  */
-const THROWING_QUERY = /^(?:get|find)(?:All)?By[A-Z]/;
+const THROWING_QUERY = /^(?:get|find)(?:All)?By[A-Z]/u;
 
 const VACUOUS_MATCHERS = new Set(["toBeInTheDocument", "toBeTruthy", "toBeDefined"]);
 
 /** The name a call is made under: `getByRole`, `canvas.getByRole` and `within(row).getByRole` all name the same query. */
 const calleeName = (callee: ESTree.Node): string | undefined => {
-	if (callee.type === "Identifier") return callee.name;
-	if (callee.type === "MemberExpression") return memberName(callee);
+	if (callee.type === "Identifier") {
+		return callee.name;
+	}
+	if (callee.type === "MemberExpression") {
+		return memberName(callee);
+	}
 	return undefined;
 };
 
@@ -34,22 +38,34 @@ export const noRedundantInTheDocument = defineRule({
 		return {
 			CallExpression(node) {
 				const matcher = node.callee;
-				if (matcher.type !== "MemberExpression") return;
+				if (matcher.type !== "MemberExpression") {
+					return;
+				}
 				const matcherName = memberName(matcher);
-				if (matcherName === undefined || !VACUOUS_MATCHERS.has(matcherName)) return;
+				if (matcherName === undefined || !VACUOUS_MATCHERS.has(matcherName)) {
+					return;
+				}
 
 				const expectCall = matcher.object;
-				if (expectCall.type !== "CallExpression") return;
-				if (expectCall.callee.type !== "Identifier" || expectCall.callee.name !== "expect") return;
+				if (expectCall.type !== "CallExpression") {
+					return;
+				}
+				if (expectCall.callee.type !== "Identifier" || expectCall.callee.name !== "expect") {
+					return;
+				}
 
 				// `expect(await canvas.findByRole(…))` puts the query one level down; the await is the
 				// caller's business, not a different subject.
 				const [argument] = expectCall.arguments;
 				const subject = argument?.type === "AwaitExpression" ? argument.argument : argument;
-				if (subject?.type !== "CallExpression") return;
+				if (subject?.type !== "CallExpression") {
+					return;
+				}
 
 				const query = calleeName(subject.callee);
-				if (query === undefined || !THROWING_QUERY.test(query)) return;
+				if (query === undefined || !THROWING_QUERY.test(query)) {
+					return;
+				}
 
 				context.report({ node: subject, messageId: "vacuous" });
 			},

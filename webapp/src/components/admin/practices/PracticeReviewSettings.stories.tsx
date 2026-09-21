@@ -1,10 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 import type { AgentBinding, PracticeReviewCoveragePreview } from "@/api/types.gen";
+import { expectNoPageOverflow } from "@/stories/reflow";
+import { pending } from "@/test/async";
 import { expectGenuinelyDisabled, expectUnavailable } from "@/test/controls";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { mockReviewSettings } from "./fixtures";
 import { PracticeReviewSettings } from "./PracticeReviewSettings";
-import { mockReviewSettings } from "./story-mock-data";
 
 const settings = mockReviewSettings({ deliverToMerged: false });
 const readyBinding: AgentBinding = {
@@ -64,7 +65,6 @@ const selectedSettings = mockReviewSettings({
 });
 
 const meta = {
-	title: "Workspace admin/Practices/Review/When and where",
 	component: PracticeReviewSettings,
 	parameters: { layout: "padded", chromatic: { viewports: [1440] } },
 	tags: ["autodocs"],
@@ -230,7 +230,7 @@ export const CumulativeWideningDraft: Story = {
 		await expect(canvas.getByText("You have unsaved coverage changes.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
 		const dialog = within(await screen.findByRole("alertdialog"));
-		await expect(dialog.getByText(/Monitored repositories covered:/)).toHaveTextContent(
+		await expect(dialog.getByText(/Monitored repositories covered:/u)).toHaveTextContent(
 			"Monitored repositories covered: 1 → 3 of 3",
 		);
 		await expectNoPageOverflow();
@@ -276,7 +276,7 @@ export const CoveragePreviewPending: Story = {
 		policy: { ...policy, settings: selectedSettings },
 		coverage: {
 			...coverage,
-			preview: fn(() => new Promise<PracticeReviewCoveragePreview>(() => {})),
+			preview: fn(pending<PracticeReviewCoveragePreview>),
 		},
 	},
 	play: async ({ canvas }) => {
@@ -312,7 +312,7 @@ export const CoverageSavePending: Story = {
 	args: {
 		policy: {
 			...policy,
-			onUpdate: fn(() => new Promise<void>(() => {})),
+			onUpdate: fn(pending),
 		},
 		coverage: {
 			...coverage,

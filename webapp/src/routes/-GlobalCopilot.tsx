@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { copyToClipboard } from "@/lib/clipboard";
+import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 
 import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
 import { Chat } from "@/components/mentor/Chat";
 import { Copilot } from "@/components/mentor/Copilot";
-import { defaultPartRenderers } from "@/components/mentor/renderers";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
@@ -17,19 +19,26 @@ import { mentorPreferenceReason } from "@/lib/mentor-preference";
  */
 export default function GlobalCopilot() {
 	const { workspaceSlug } = useActiveWorkspaceSlug();
+	const { isAuthenticated, isLoading } = useAuth();
+	const { enabled: hasMentorAccess, isLoading: accessLoading } = useFeatureFlag("MENTOR_ACCESS");
 	const { features, isLoading: featuresLoading } = useWorkspaceFeatures(workspaceSlug);
 	const preference = useQuery({
 		...getMemberOnboardingOptions({ path: { workspaceSlug: workspaceSlug ?? "" } }),
 		enabled: Boolean(workspaceSlug),
 	});
 	if (
-		!workspaceSlug ||
+		!hasText(workspaceSlug) ||
+		isLoading ||
+		!isAuthenticated ||
+		accessLoading ||
+		!hasMentorAccess ||
 		featuresLoading ||
-		!features?.mentorEnabled ||
+		features?.mentorEnabled !== true ||
 		!preference.isSuccess ||
 		mentorPreferenceReason(preference.data)
-	)
+	) {
 		return null;
+	}
 	return <WorkspaceCopilot key={workspaceSlug} workspaceSlug={workspaceSlug} />;
 }
 
@@ -41,7 +50,9 @@ function WorkspaceCopilot({ workspaceSlug }: { workspaceSlug: string }) {
 	const router = useRouter();
 
 	const handleMessageSubmit = ({ text }: { text: string }) => {
-		if (!text.trim()) return;
+		if (!text.trim()) {
+			return;
+		}
 		mentorChat.sendMessage(text);
 	};
 
@@ -51,15 +62,11 @@ function WorkspaceCopilot({ workspaceSlug }: { workspaceSlug: string }) {
 
 	const handleMessageEdit = (messageId: string, content: string) => {
 		const messageIndex = mentorChat.messages.findIndex((message) => message.id === messageId);
-		if (messageIndex === -1) return;
+		if (messageIndex === -1) {
+			return;
+		}
 		mentorChat.setMessages(mentorChat.messages.slice(0, messageIndex));
 		mentorChat.sendMessage(content);
-	};
-
-	const handleCopy = (content: string) => {
-		navigator.clipboard.writeText(content).catch(() => {
-			toast.error("Couldn't copy that to the clipboard.");
-		});
 	};
 
 	return (
@@ -86,15 +93,13 @@ function WorkspaceCopilot({ workspaceSlug }: { workspaceSlug: string }) {
 				attachments={[]}
 				onMessageSubmit={handleMessageSubmit}
 				onMessageEdit={handleMessageEdit}
-				onStop={() => void mentorChat.stop()}
-				onFileUpload={() => Promise.resolve([])}
-				onAttachmentsChange={() => {}}
-				onCopy={handleCopy}
+				onStop={() => {
+					void mentorChat.stop();
+				}}
+				onCopy={copyToClipboard}
 				onVote={handleVote}
 				inputPlaceholder="Ask me anything..."
-				disableAttachments
 				className="h-full max-h-none"
-				partRenderers={defaultPartRenderers}
 			/>
 		</Copilot>
 	);

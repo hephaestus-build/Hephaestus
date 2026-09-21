@@ -79,7 +79,7 @@ public class Reaction {
     @Column(name = "explanation", columnDefinition = "TEXT")
     private String explanation;
 
-    /** Compatibility mapping for a deprecated column; recurrence is derived from bound observations. */
+    /** Read-only mapping of a historical column; response decisions use exact bound observations. */
     @Deprecated(forRemoval = true)
     @Getter(AccessLevel.NONE)
     @Column(name = "recurrence_key", length = 64, insertable = false, updatable = false)

@@ -2,7 +2,7 @@ import { CircleCheckIcon, CircleSlashIcon, MessageCircleQuestionMarkIcon } from 
 
 import type { PracticeGroupReviewObservation } from "@/api/types.gen";
 
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type FeedbackResolution = NonNullable<PracticeGroupReviewObservation["feedbackResolution"]>;
 export const FEEDBACK_RESOLUTION_DEFS: StatusDefs<FeedbackResolution> = {

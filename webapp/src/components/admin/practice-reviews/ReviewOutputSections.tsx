@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { MessageSquareTextIcon, ScanSearchIcon } from "lucide-react";
-import { useId } from "react";
+import { type ReactNode, useId } from "react";
 
 import type { AgentJob, Practice, ReviewFeedback, ReviewObservation } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -120,44 +120,17 @@ function FeedbackSection({
 				total={state.status === "ready" ? state.total : 0}
 				shown={items.length}
 			/>
-			{state.status === "loading" ? (
-				<ReviewResultsSkeleton label="Loading feedback" rows={REVIEW_PREVIEW_SIZE} />
-			) : state.status === "error" ? (
-				<QueryErrorAlert
-					error={state.error}
-					title="Couldn't load feedback"
-					onRetry={state.onRetry}
-				/>
-			) : state.status === "pending" ? (
-				<p className="text-sm text-muted-foreground">
-					Feedback will appear when the review finishes.
-				</p>
-			) : items.length === 0 ? (
-				<Empty className="border">
-					<EmptyHeader>
-						<EmptyMedia variant="icon">
-							<MessageSquareTextIcon />
-						</EmptyMedia>
-						<EmptyTitle>
-							{outcome === "INSUFFICIENT_EVIDENCE" ? "Nothing was assessed" : "No feedback"}
-						</EmptyTitle>
-						{outcome === "INSUFFICIENT_EVIDENCE" && (
-							<EmptyDescription>{INSUFFICIENT_EVIDENCE_EXPLANATION}</EmptyDescription>
-						)}
-					</EmptyHeader>
-				</Empty>
-			) : (
-				<ReviewRowList label="Feedback">
-					{items.map((item) => (
-						<FeedbackRow
-							key={item.id}
-							workspaceSlug={workspaceSlug}
-							feedback={item}
-							scope={scope}
-						/>
-					))}
-				</ReviewRowList>
-			)}
+			<ReviewResultsBody
+				state={state}
+				outcome={outcome}
+				label="Feedback"
+				icon={<MessageSquareTextIcon />}
+				emptyTitle="No feedback"
+			>
+				{items.map((item) => (
+					<FeedbackRow key={item.id} workspaceSlug={workspaceSlug} feedback={item} scope={scope} />
+				))}
+			</ReviewResultsBody>
 		</section>
 	);
 }
@@ -188,49 +161,76 @@ function ObservationsSection({
 				total={state.status === "ready" ? state.total : 0}
 				shown={items.length}
 			/>
-			{state.status === "loading" ? (
-				<ReviewResultsSkeleton label="Loading observations" rows={REVIEW_PREVIEW_SIZE} />
-			) : state.status === "error" ? (
-				<QueryErrorAlert
-					error={state.error}
-					title="Couldn't load observations"
-					onRetry={state.onRetry}
-				/>
-			) : state.status === "pending" ? (
-				<p className="text-sm text-muted-foreground">
-					Observations will appear when the review finishes.
-				</p>
-			) : items.length === 0 ? (
-				<Empty className="border">
-					<EmptyHeader>
-						<EmptyMedia variant="icon">
-							<ScanSearchIcon />
-						</EmptyMedia>
-						<EmptyTitle>
-							{outcome === "INSUFFICIENT_EVIDENCE"
-								? "Nothing was assessed"
-								: "No observations were recorded"}
-						</EmptyTitle>
-						{outcome === "INSUFFICIENT_EVIDENCE" && (
-							<EmptyDescription>{INSUFFICIENT_EVIDENCE_EXPLANATION}</EmptyDescription>
-						)}
-					</EmptyHeader>
-				</Empty>
-			) : (
-				<ReviewRowList label="Observations">
-					{items.map((observation) => (
-						<ObservationRow
-							key={observation.id}
-							workspaceSlug={workspaceSlug}
-							observation={observation}
-							practice={practices?.find((practice) => practice.slug === observation.practiceSlug)}
-							scope={scope}
-						/>
-					))}
-				</ReviewRowList>
-			)}
+			<ReviewResultsBody
+				state={state}
+				outcome={outcome}
+				label="Observations"
+				icon={<ScanSearchIcon />}
+				emptyTitle="No observations were recorded"
+			>
+				{items.map((observation) => (
+					<ObservationRow
+						key={observation.id}
+						workspaceSlug={workspaceSlug}
+						observation={observation}
+						practice={practices?.find((practice) => practice.slug === observation.practiceSlug)}
+						scope={scope}
+					/>
+				))}
+			</ReviewResultsBody>
 		</section>
 	);
+}
+
+function ReviewResultsBody({
+	state,
+	outcome,
+	label,
+	icon,
+	emptyTitle,
+	children,
+}: {
+	state: ReviewSectionState<unknown>;
+	outcome: AgentJob["reviewOutcome"] | undefined;
+	label: "Feedback" | "Observations";
+	icon: ReactNode;
+	emptyTitle: string;
+	children: ReactNode;
+}) {
+	const noun = label.toLowerCase();
+	if (state.status === "loading") {
+		return <ReviewResultsSkeleton label={`Loading ${noun}`} rows={REVIEW_PREVIEW_SIZE} />;
+	}
+	if (state.status === "error") {
+		return (
+			<QueryErrorAlert
+				error={state.error}
+				title={`Couldn't load ${noun}`}
+				onRetry={state.onRetry}
+			/>
+		);
+	}
+	if (state.status === "pending") {
+		return (
+			<p className="text-sm text-muted-foreground">{label} will appear when the review finishes.</p>
+		);
+	}
+	if (state.items.length === 0) {
+		return (
+			<Empty variant="outlined">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">{icon}</EmptyMedia>
+					<EmptyTitle>
+						{outcome === "INSUFFICIENT_EVIDENCE" ? "Nothing was assessed" : emptyTitle}
+					</EmptyTitle>
+					{outcome === "INSUFFICIENT_EVIDENCE" && (
+						<EmptyDescription>{INSUFFICIENT_EVIDENCE_EXPLANATION}</EmptyDescription>
+					)}
+				</EmptyHeader>
+			</Empty>
+		);
+	}
+	return <ReviewRowList label={label}>{children}</ReviewRowList>;
 }
 
 interface SectionHeaderProps {

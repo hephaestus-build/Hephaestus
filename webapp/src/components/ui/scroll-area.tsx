@@ -32,7 +32,7 @@ function ScrollArea({
 				ref={viewportRef}
 				data-slot="scroll-area-viewport"
 				className={cn(
-					"focus-visible:ring-ring/50 size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:outline-1",
+					"size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-1",
 					viewportClassName,
 				)}
 			>
@@ -58,14 +58,14 @@ function ScrollBar({
 			// `[data-horizontal]` and matches nothing — and these utilities are the scrollbar's whole
 			// box, so it would render as a bare strip of padding with no width and no border.
 			className={cn(
-				"data-[orientation=horizontal]:h-2.5 data-[orientation=horizontal]:flex-col data-[orientation=horizontal]:border-t data-[orientation=horizontal]:border-t-transparent data-[orientation=vertical]:h-full data-[orientation=vertical]:w-2.5 data-[orientation=vertical]:border-l data-[orientation=vertical]:border-l-transparent flex touch-none p-px transition-colors select-none",
+				"flex touch-none p-px transition-colors select-none data-[orientation=horizontal]:h-2.5 data-[orientation=horizontal]:flex-col data-[orientation=horizontal]:border-t data-[orientation=horizontal]:border-t-transparent data-[orientation=vertical]:h-full data-[orientation=vertical]:w-2.5 data-[orientation=vertical]:border-l data-[orientation=vertical]:border-l-transparent",
 				className,
 			)}
 			{...props}
 		>
 			<ScrollAreaPrimitive.Thumb
 				data-slot="scroll-area-thumb"
-				className="rounded-full bg-border relative flex-1"
+				className="relative flex-1 rounded-full bg-border"
 			/>
 		</ScrollAreaPrimitive.Scrollbar>
 	);

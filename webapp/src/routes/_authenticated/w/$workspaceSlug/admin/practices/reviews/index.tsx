@@ -24,7 +24,7 @@ function ReviewRunsRoute() {
 	const { workspaceSlug } = Route.useParams();
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
-	const updateSearch = (patch: Partial<RunsSearch>) =>
+	const updateSearch = (patch: Partial<RunsSearch>) => {
 		void navigate({
 			search: (previous) => {
 				const next = { ...previous, ...patch };
@@ -32,6 +32,7 @@ function ReviewRunsRoute() {
 			},
 			replace: true,
 		});
+	};
 	const reviewsQuery = useQuery({
 		...listPracticeReviewsOptions({
 			path: { workspaceSlug },
@@ -44,7 +45,7 @@ function ReviewRunsRoute() {
 		refetchInterval: (result) =>
 			result.state.data?.content?.some(
 				(review) => review.status === "QUEUED" || review.status === "RUNNING",
-			)
+			) === true
 				? ACTIVE_REVIEW_POLL_MS
 				: false,
 	});
@@ -61,7 +62,9 @@ function ReviewRunsRoute() {
 			reviews={reviewsQuery.data}
 			isLoading={reviewsQuery.isLoading}
 			error={reviewsQuery.error}
-			onRetry={() => void reviewsQuery.refetch()}
+			onRetry={() => {
+				void reviewsQuery.refetch();
+			}}
 		/>
 	);
 }

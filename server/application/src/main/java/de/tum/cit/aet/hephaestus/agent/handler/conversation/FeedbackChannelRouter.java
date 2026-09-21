@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.handler.conversation;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
@@ -27,7 +26,7 @@ import tools.jackson.databind.JsonNode;
  * Decides which of a cycle's observations are eligible for conversational delivery. An observation is
  * {@link ConversationRoutingDecision#ADMIT admitted} to the IN_CHAT channel iff ALL of: its provenance admits the
  * conversation channel, its practice autonomy admits the conversation channel, author-targeted, a
- * {@link Assessment#BAD} problem, has no natural inline anchor, and does not share a {@code recurrence_key} with a
+ * negative outcome, has no natural inline anchor, and is not already bound to a
  * DELIVERED IN_CONTEXT unit for the same recipient. Every other case is a named, testable non-admission reason.
  *
  * <p>Pure routing - it reads the feedback ledger but writes nothing. The {@link ConversationalFeedbackPreparer}
@@ -81,10 +80,8 @@ public class FeedbackChannelRouter {
         if (hasNaturalInlineAnchor(observation)) {
             return ConversationRoutingDecision.HAS_INLINE_ANCHOR;
         }
-        String recurrenceKey = observation.getRecurrenceKey();
-        if (recurrenceKey != null
-                && feedbackRepository.existsDeliveredInContextForRecurrenceKey(
-                        workspaceId, observation.getAboutUserId(), recurrenceKey)) {
+        if (feedbackRepository.existsDeliveredInContextForObservation(
+                workspaceId, observation.getAboutUserId(), observation.getId())) {
             return ConversationRoutingDecision.ALREADY_DELIVERED_IN_CONTEXT;
         }
         return ConversationRoutingDecision.ADMIT;

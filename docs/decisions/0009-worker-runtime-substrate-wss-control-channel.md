@@ -1,6 +1,6 @@
 # ADR 0009: Worker runtime substrate + WSS-over-443 control channel
 
-**Status:** Accepted (amended 2026-07-21 #1368, 2026-09-03 #1719 and 2026-09-05 — see the updates below)
+**Status:** Accepted (amended 2026-07-21 #1368 — drain requeues in-flight jobs; 2026-09-03 #1719 — remote-worker premise superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-05 — frame type names corrected)
 **Date:** 2026-05-21
 
 ## Context

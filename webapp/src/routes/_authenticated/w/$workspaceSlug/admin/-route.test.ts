@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { isRecord } from "@/lib/is-record";
+import { hasText } from "@/lib/text";
 import type { WorkspaceRole } from "@/lib/workspace-roles";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
@@ -16,7 +17,7 @@ vi.setConfig({ testTimeout: 15_000 });
 function newRouter(url?: string) {
 	return createRouter({
 		routeTree,
-		...(url ? { history: createMemoryHistory({ initialEntries: [url] }) } : {}),
+		...(hasText(url) ? { history: createMemoryHistory({ initialEntries: [url] }) } : {}),
 		context: {
 			// A fresh client per case: a shared cache would let one role's answer satisfy another's guard.
 			queryClient: new QueryClient(),
@@ -36,12 +37,13 @@ const adminUrls = routePaths
 
 function mockMembership(role: WorkspaceRole | null) {
 	server.use(
-		http.get("*/workspaces/:workspaceSlug/members/me", () =>
-			role
-				? HttpResponse.json({ role, userId: 1, userLogin: "ada", userName: "Ada" })
-				: // The server answers a non-member with 400, not 403.
-					HttpResponse.json({ status: 400, title: "Bad Request" }, { status: 400 }),
-		),
+		http.get("*/workspaces/:workspaceSlug/members/me", () => {
+			if (role) {
+				return HttpResponse.json({ role, userId: 1, userLogin: "ada", userName: "Ada" });
+			}
+			// The server answers a non-member with 400, not 403.
+			return HttpResponse.json({ status: 400, title: "Bad Request" }, { status: 400 });
+		}),
 	);
 }
 
@@ -70,33 +72,33 @@ describe("workspace-admin route gate", () => {
 
 	it.each(adminUrls)("redirects a MEMBER away from %s", async (url) => {
 		mockMembership("MEMBER");
-		expect(await land(url)).toBe(WORKSPACE_HOME);
+		await expect(land(url)).resolves.toBe(WORKSPACE_HOME);
 	});
 
 	it("admits an ADMIN", async () => {
 		mockMembership("ADMIN");
-		expect(await land("/w/acme/admin/settings")).toBe("/w/acme/admin/settings");
+		await expect(land("/w/acme/admin/settings")).resolves.toBe("/w/acme/admin/settings");
 	});
 
 	// Member onboarding is the one admin page that needs OWNER: the route's own `beforeLoad` sends
 	// an ADMIN on to settings, which the layout gate above it cannot express.
 	it("sends an ADMIN from member onboarding to settings", async () => {
 		mockMembership("ADMIN");
-		expect(await land("/w/acme/admin/onboarding")).toBe("/w/acme/admin/settings");
+		await expect(land("/w/acme/admin/onboarding")).resolves.toBe("/w/acme/admin/settings");
 	});
 
 	it("admits an OWNER to member onboarding", async () => {
 		mockMembership("OWNER");
-		expect(await land("/w/acme/admin/onboarding")).toBe("/w/acme/admin/onboarding");
+		await expect(land("/w/acme/admin/onboarding")).resolves.toBe("/w/acme/admin/onboarding");
 	});
 
 	it("redirects a non-member", async () => {
 		mockMembership(null);
-		expect(await land("/w/acme/admin/settings")).toBe(WORKSPACE_HOME);
+		await expect(land("/w/acme/admin/settings")).resolves.toBe(WORKSPACE_HOME);
 	});
 
 	it("redirects when the membership cannot be resolved", async () => {
 		server.use(http.get("*/workspaces/:workspaceSlug/members/me", () => HttpResponse.error()));
-		expect(await land("/w/acme/admin/settings")).toBe(WORKSPACE_HOME);
+		await expect(land("/w/acme/admin/settings")).resolves.toBe(WORKSPACE_HOME);
 	});
 });

@@ -1,18 +1,20 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
-import { mockPractices } from "@/components/admin/practices/story-mock-data";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
+import { mockPractices } from "@/components/admin/practices/fixtures";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { mockPracticeDefinitionOptions } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
+import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { expectSettledVisible, settledDrawerPanel } from "@/test/overlay";
-import { expectNoPanelOverflow } from "@/test/reflow";
 
 import { WorkspacePracticePanel, type WorkspacePracticeState } from "./WorkspacePracticePanel";
 
 const [practice] = mockPractices;
-if (!practice) throw new Error("The shared practice fixtures no longer hold a practice to show");
+if (!practice) {
+	throw new Error("The shared practice fixtures no longer hold a practice to show");
+}
 
 type ReadyState = Extract<WorkspacePracticeState, { status: "ready" }>;
 
@@ -25,7 +27,6 @@ const ready = (over: Partial<ReadyState> = {}): ReadyState => ({
 });
 
 const meta = {
-	title: "Workspace admin/Practices/Workspace practice",
 	component: WorkspacePracticePanel,
 	parameters: { layout: "fullscreen" },
 	decorators: [withPageBehind],
@@ -75,7 +76,7 @@ export const InheritedAutonomy: Story = {
 	},
 	play: async () => {
 		// An inherited value says where it came from, so the reader knows where to go to change it.
-		await expectSettledVisible(await screen.findByText(/Follows Review-ready work/));
+		await expectSettledVisible(await screen.findByText(/Follows Review-ready work/u));
 	},
 };
 
@@ -102,7 +103,7 @@ export const FailedToLoad: Story = {
 		const retry = await screen.findByRole("button", { name: "Retry" });
 		await expectSettledVisible(retry);
 		await userEvent.click(retry);
-		const state = args.state;
+		const { state } = args;
 		await expect(state.status === "error" && state.onRetry).toHaveBeenCalledOnce();
 	},
 };

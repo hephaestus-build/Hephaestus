@@ -49,12 +49,12 @@ describe("ChannelHistorySheet — failed load offers a retry", () => {
 			<ChannelHistorySheet workspaceSlug="demo" channel={channel} onOpenChange={vi.fn()} />,
 		);
 
-		await screen.findByText(/could not load the consent history/i);
-		const retry = screen.getByRole("button", { name: /^retry$/i });
+		await screen.findByText(/could not load the consent history/iu);
+		const retry = screen.getByRole("button", { name: /^retry$/iu });
 
 		fireEvent.click(retry);
 
-		await waitFor(() => screen.getByText(/no consent changes recorded yet/i));
+		await waitFor(() => screen.getByText(/no consent changes recorded yet/iu));
 		expect(requestCount).toBe(2);
 	});
 });

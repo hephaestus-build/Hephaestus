@@ -20,6 +20,9 @@ export interface SweepScheduleMutations {
 	onDelete: (scheduleId: string) => void;
 }
 
+const failed = (verb: string) => (error: unknown) =>
+	toast.error(`Couldn't ${verb} this recurring check`, { description: problemDetailOf(error) });
+
 /**
  * The three writes to a workspace's recurring checks, shaped as the props the schedule editor takes.
  *
@@ -31,12 +34,10 @@ export interface SweepScheduleMutations {
 export function useSweepScheduleMutations(workspaceSlug: string): SweepScheduleMutations {
 	const queryClient = useQueryClient();
 
-	const invalidate = () =>
+	const invalidate = async () =>
 		queryClient.invalidateQueries({
 			queryKey: listSweepSchedulesQueryKey({ path: { workspaceSlug } }),
 		});
-	const failed = (verb: string) => (error: unknown) =>
-		toast.error(`Couldn't ${verb} this recurring check`, { description: problemDetailOf(error) });
 
 	const create = useMutation({
 		...createSweepScheduleMutation(),
@@ -48,7 +49,9 @@ export function useSweepScheduleMutations(workspaceSlug: string): SweepScheduleM
 	});
 	const replace = useMutation({
 		...replaceSweepScheduleMutation(),
-		onSuccess: () => void invalidate(),
+		onSuccess: () => {
+			void invalidate();
+		},
 		onError: failed("update"),
 	});
 	const remove = useMutation({

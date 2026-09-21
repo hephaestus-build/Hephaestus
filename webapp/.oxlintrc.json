@@ -1,21 +1,10 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 
-	"plugins": ["typescript", "unicorn", "oxc", "import", "react", "jsx-a11y", "vitest", "promise"],
-	"jsPlugins": ["./tools/oxlint/index.ts"],
+	"extends": ["../.oxlintrc.json", "../oxlint.react.jsonc"],
 
-	// No `warn` tier: oxlint exits 0 on warnings unless `--deny-warnings` is passed.
-	"categories": {
-		"correctness": "error",
-		"suspicious": "error",
-		// React Compiler runs at build time and this repo bans hand-written `useMemo`/`useCallback`
-		// (`AGENTS.md`), so `perf` — and the `react-perf` plugin, left out of `plugins` — asks for the
-		// memoisation the compiler exists to remove.
-		"perf": "off",
-		"pedantic": "off",
-		"style": "off",
-		"restriction": "off"
-	},
+	"plugins": ["vitest"],
+	"jsPlugins": ["./tools/oxlint/index.ts", "@shadcn/lint"],
 
 	// Kept in step with `tsconfig.json`'s `lib`.
 	"env": { "browser": true, "es2022": true },
@@ -36,248 +25,145 @@
 	],
 
 	"rules": {
-		// -- On, despite their category being off ---------------------------------------------------
-		"no-else-return": "error",
-		"prefer-const": "error",
-		"prefer-template": "error",
-		"operator-assignment": "error",
-		"typescript/prefer-for-of": "error",
-		"typescript/no-explicit-any": "error",
-		"typescript/require-await": "error",
-		// `no-explicit-any` catches the `any` this repo writes; the `no-unsafe-*` rules catch the `any`
-		// that arrives — from a library, from `JSON.parse`, from an untyped `vi.fn()`.
-		"typescript/no-unsafe-call": "error",
-		"typescript/no-unsafe-assignment": "error",
-		"typescript/no-unsafe-argument": "error",
-		"typescript/no-unsafe-return": "error",
-		"typescript/no-unsafe-member-access": "error",
-		// Without it, `!` is an unchecked way to make the claim `no-unsafe-type-assertion` rejects.
-		"typescript/no-non-null-assertion": "error",
-		// `FC` annotates the binding rather than the props, so it only reaches an arrow assigned to a
-		// `const`; its call signature returns `ReactNode | Promise<ReactNode>`, so an accidentally
-		// `async` component type-checks; and it has nowhere to bind a type parameter, so a generic
-		// component cannot be spelled with it at all.
-		"typescript/no-restricted-types": [
+		// -- Design system ---------------------------------------------------------------------------
+		// No `settings.shadcn`: `components.json` names the theme CSS and the registry path.
+		// `shadcn/require-static-classes` stays off: it cannot resolve an imported vocabulary map or a
+		// CVA result without duplicating their owners.
+		"shadcn/no-unknown-classes": "error",
+		"shadcn/no-raw-colors": "error",
+		"shadcn/no-inline-styles": "error",
+		// Allow-listed, so a value not named here is reported and each addition argues for itself.
+		// `layout` keeps measured tracks, viewport maths and the sizes a library asks for; the rest are
+		// formulas over theme variables, CSS keywords, transition property lists and the drawer's swipe
+		// physics. A one-off elsewhere is a call-site suppression with its reason, and the registry's
+		// own arbitrary sizes and radii snap to the nearest step of the scale.
+		"shadcn/no-arbitrary-values": [
 			"error",
 			{
-				"types": {
-					"FC": "Annotate the props parameter instead: `function Thing({ a }: ThingProps)`.",
-					"React.FC": "Annotate the props parameter instead: `function Thing({ a }: ThingProps)`.",
-					"FunctionComponent": "Annotate the props parameter instead.",
-					"React.FunctionComponent": "Annotate the props parameter instead."
-				}
+				"allow": [
+					"layout",
+					"transition-*",
+					"rounded-[inherit]",
+					"rounded-[min(var(--radius-md),10px)]",
+					"rounded-[min(var(--radius-md),12px)]",
+					"rounded-[calc(var(--radius)-3px)]",
+					"rounded-[calc(var(--radius)-5px)]",
+					"text-[length:inherit]",
+					"opacity-[0.9999]",
+					"opacity-[max(var(--drawer-overlay-min-opacity,0),calc(1-var(--drawer-swipe-progress)))]",
+					"duration-[calc(var(--drawer-swipe-strength)*400ms)]"
+				]
 			}
 		],
-		// This kit is Base UI, not Radix: a slot is passed as an element through `render=`.
-		"react/forbid-component-props": [
+		"shadcn/no-restyle": [
 			"error",
-			{ "forbid": [{ "propName": "asChild", "message": "Base UI slots through `render={<X/>}`." }] }
+			{
+				// A caller styles a component only where its role makes that property the caller's;
+				// everywhere else it picks a variant. Each contract names that role, and restates
+				// `layout` because a contract's `allow` replaces the global one.
+				"allow": ["layout"],
+				"contracts": [
+					// Button: `size` owns the padding box and `shape` the radius scale, so `rounded` is
+					// denied while squaring one corner to meet an edge stays composition. Tone comes from
+					// vocabularies Button does not own (status tones, the provider palette, a placeholder
+					// state), `size="inline"` takes its type from the prose around it, and a floating
+					// button carries its own lift and transition because Button has no elevation axis.
+					{
+						"pattern": "^Button$",
+						"allow": ["layout", "typography", "color", "shape", "effects", "motion"],
+						"deny": ["rounded"]
+					},
+					// Badge: monospace is a content decision for an identifier, not a restyle.
+					{ "pattern": "^Badge$", "allow": ["layout", "font-mono"] },
+					// Card: elevation depends on where the card sits; `outline-none` is for a region focused
+					// by script, which must not ring.
+					{ "pattern": "^Card$", "allow": ["layout", "effects", "outline-none"] },
+					// A box the caller fills: its padding and gap are the caller's.
+					{
+						"pattern": "^(AlertDescription|CardContent|CardHeader|CardFooter|DialogBody|DialogHeader|DrawerBody|DrawerHeader|FieldGroup|HoverCardContent|ItemActions|ItemContent|ItemGroup|PaginationContent|PopoverContent|QuestionnaireChoices|SidebarGroup|Tabs|TabsList|ToggleGroup)$",
+						"allow": ["layout", "spacing"]
+					},
+					// A layout root — a grid, a flex column, a bare trigger — has nothing to restyle;
+					// whatever is written on it is the caller composing.
+					{
+						"pattern": "^(Accordion|CollapsibleContent|CollapsibleTrigger|Field|FieldSet|RadioGroup)$",
+						"allow": ["*"]
+					},
+					// A text slot: its type, tone, and the padding or gap around what it holds follow the
+					// text around it.
+					{
+						"pattern": "^(AccordionContent|ButtonGroupText|CardTitle|DialogTitle|DrawerTitle|DropdownMenuLabel|FieldDescription|FieldLegend|ItemDescription|ItemTitle|Label|PopoverTitle|TableCell|TableHead)$",
+						"allow": ["layout", "typography", "color", "spacing"]
+					},
+					// A label that wraps its control takes that control's surface, dimming and easing, and
+					// its weight and tone from the field's place in the form.
+					{
+						"pattern": "^FieldLabel$",
+						"allow": ["layout", "typography", "color", "spacing", "effects", "motion"]
+					},
+					// Renders the caller's content: what is inside is typeset and spaced by the caller.
+					{
+						"pattern": "^(ComboboxItem|DropdownMenuCheckboxItem|DropdownMenuItem|TabsTrigger|TooltipContent|TooltipTrigger)$",
+						"allow": ["layout", "typography", "spacing"]
+					},
+					// The contract above, and a trigger disabled to pin an item open is not unavailable and
+					// must not look it.
+					{
+						"pattern": "^AccordionTrigger$",
+						"allow": ["layout", "typography", "spacing", "effects"]
+					},
+					// The contract above, plus the faceted-filter idiom: a dashed edge says the filter is not
+					// yet set.
+					{ "pattern": "^ComboboxTrigger$", "allow": ["layout", "typography", "border-dashed"] },
+					// A row being dragged fades — the drag's state, not the component's — and its padding
+					// and gap are the list's.
+					{ "pattern": "^(AccordionItem|Item)$", "allow": ["layout", "spacing", "effects"] },
+					// The leading icon's tone follows the row's meaning.
+					{ "pattern": "^ItemMedia$", "allow": ["layout", "color"] },
+					// A stand-in takes the shape, and for a toned badge the tint, of what it stands for.
+					{ "pattern": "^Skeleton$", "allow": ["layout", "shape", "color"] },
+					// An avatar's corner says what it depicts — round for a person, squared for a workspace —
+					// and its ring, lift and the fallback's type and tone follow the surface it sits on.
+					{
+						"pattern": "^(Avatar|AvatarFallback)$",
+						"allow": ["layout", "shape", "typography", "color", "effects"]
+					},
+					// A scroll region clips to the radius of what it sits in and pads what it scrolls.
+					{ "pattern": "^ScrollArea$", "allow": ["layout", "spacing", "shape"] },
+					// A meter's fill carries the meter's meaning — severity, league, level — in its tone,
+					// gradient, shape and pace; the primitive draws it and does not decide it.
+					{
+						"pattern": "^(ProgressTrack|ProgressIndicator)$",
+						"allow": ["layout", "color", "shape", "motion", "effects"]
+					},
+					// A spinner inherits `currentColor`; where it sits decides its tone.
+					{ "pattern": "^Spinner$", "allow": ["layout", "color"] },
+					// A swatch is painted by the group-colour vocabulary; the cell itself is a variant.
+					{ "pattern": "^ToggleGroupItem$", "allow": ["layout", "color"] }
+				]
+			}
 		],
-		"unicorn/prefer-node-protocol": "error",
-		// `import.meta.dirname` and `import.meta.filename` are the spelling of what
-		// `dirname(fileURLToPath(import.meta.url))` builds by hand, and they need no imports.
-		"unicorn/prefer-import-meta-properties": "error",
-		"oxc/no-accumulating-spread": "error",
-		"react/no-danger": "error",
-		// `null == x` is the idiomatic "null or undefined" check and stays allowed.
-		"eqeqeq": ["error", "always", { "null": "ignore" }],
-		"unicorn/no-abusive-eslint-disable": "error",
 
-		// -- Taken by name out of `pedantic` and `perf` ----------------------------------------------
-		"react/rules-of-hooks": "error",
-		"react/jsx-no-target-blank": "error",
-		"react/display-name": "error",
-		"react/checked-requires-onchange-or-readonly": "error",
-		"react/no-deriving-state-in-effects": "error",
-		"no-fallthrough": "error",
-		"no-case-declarations": "error",
-		"no-inner-declarations": "error",
-		"no-prototype-builtins": "error",
-		"no-self-compare": "error",
-		"no-shadow": "error",
-		"no-throw-literal": "error",
-		"no-constructor-return": "error",
-		"no-promise-executor-return": "error",
-		"no-loop-func": "error",
-		"no-new-wrappers": "error",
-		"no-object-constructor": "error",
-		"no-array-constructor": "error",
-		"no-useless-call": "error",
-		"prefer-promise-reject-errors": "error",
-		"array-callback-return": "error",
-		"accessor-pairs": "error",
-		"radix": "error",
-		"symbol-description": "error",
-		"typescript/no-unsafe-function-type": "error",
-		"typescript/prefer-enum-initializers": "error",
-		"typescript/no-mixed-enums": "error",
-		"unicorn/new-for-builtins": "error",
-		"unicorn/no-instanceof-array": "error",
-		"unicorn/no-immediate-mutation": "error",
-		"unicorn/no-this-assignment": "error",
-		"unicorn/no-static-only-class": "error",
-		"unicorn/no-unreadable-iife": "error",
-		"unicorn/no-negation-in-equality-check": "error",
-		"unicorn/no-useless-promise-resolve-reject": "error",
-		"unicorn/no-unnecessary-array-flat-depth": "error",
-		"unicorn/no-unnecessary-array-splice-count": "error",
-		"unicorn/no-unnecessary-slice-end": "error",
-		"unicorn/consistent-assert": "error",
-		"unicorn/consistent-empty-array-spread": "error",
-		"unicorn/prefer-array-find": "error",
-		"unicorn/prefer-array-flat": "error",
-		"unicorn/prefer-array-flat-map": "error",
-		"unicorn/prefer-array-some": "error",
-		"unicorn/prefer-date-now": "error",
-		"unicorn/prefer-dom-node-remove": "error",
-		"unicorn/prefer-math-min-max": "error",
-		"unicorn/prefer-prototype-methods": "error",
-		"unicorn/prefer-regexp-test": "error",
-		"unicorn/prefer-single-call": "error",
-		"unicorn/prefer-blob-reading-methods": "error",
-		"unicorn/require-number-to-fixed-digits-argument": "error",
-
-		// -- Taken by name out of `restriction` ------------------------------------------------------
-		"no-proto": "error",
-		"no-script-url": "error",
-		"no-var": "error",
-		"no-empty": "error",
-		"typescript/no-namespace": "error",
-		"typescript/ban-ts-comment": "error",
-		"jsx-a11y/anchor-ambiguous-text": "error",
-		"unicorn/prefer-number-properties": "error",
-		"unicorn/prefer-array-index-of": "error",
-		"react/no-unknown-property": "error",
-		"no-alert": "error",
-		"no-sequences": "error",
-		"no-implicit-globals": "error",
-		"no-regex-spaces": "error",
-		"no-div-regex": "error",
-		"unicode-bom": "error",
-		"typescript/no-require-imports": "error",
-		"typescript/no-var-requires": "error",
-		"typescript/no-empty-object-type": "error",
-		"typescript/no-import-type-side-effects": "error",
-		"typescript/no-non-null-asserted-nullish-coalescing": "error",
-		"typescript/prefer-literal-enum-member": "error",
-		"react/no-clone-element": "error",
-		"react/no-react-children": "error",
-		"react/prefer-function-component": "error",
-		"import/no-commonjs": "error",
-		"import/no-amd": "error",
-		"import/no-dynamic-require": "error",
-		"import/no-webpack-loader-syntax": "error",
-		"unicorn/no-anonymous-default-export": "error",
-		"unicorn/no-process-exit": "error",
-		"unicorn/no-length-as-slice-end": "error",
-		"unicorn/no-magic-array-flat-depth": "error",
-		"unicorn/no-useless-error-capture-stack-trace": "error",
-		"oxc/no-const-enum": "error",
-		"oxc/bad-bitwise-operator": "error",
-		"promise/catch-or-return": "error",
-		// -- Taken by name out of `style`, which is not adoptable whole: it holds `sort-keys` and both
-		// `no-named-export` and `prefer-default-export` -----------------------------------------------
-		"no-template-curly-in-string": "error",
-		"no-new-func": "error",
-		"no-return-assign": "error",
-		"no-multi-assign": "error",
-		"no-lone-blocks": "error",
-		"no-labels": "error",
-		"no-label-var": "error",
-		"no-extra-label": "error",
-		"no-multi-str": "error",
-		"no-useless-computed-key": "error",
-		"no-lonely-if": "error",
-		"default-case-last": "error",
-		"default-param-last": "error",
-		"grouped-accessor-pairs": "error",
-		"func-name-matching": "error",
-		"prefer-regex-literals": "error",
-		"prefer-object-has-own": "error",
-		"prefer-object-spread": "error",
-		"prefer-spread": "error",
-		"prefer-rest-params": "error",
-		"prefer-numeric-literals": "error",
-		"prefer-exponentiation-operator": "error",
-		"prefer-arrow-callback": "error",
-		// `@/` is the house spelling, and a `../` survives moving the file only by accident.
-		"import/no-relative-parent-imports": "error",
-		// `import/no-duplicates` accepts a type-only import standing beside a value import from the same
-		// module; `no-duplicate-imports` does not, and one import list per module is the point.
-		"import/no-duplicates": "error",
-		"no-duplicate-imports": "error",
-		"import/no-mutable-exports": "error",
-		"import/no-named-default": "error",
-		"import/no-anonymous-default-export": "error",
-		"promise/no-nesting": "error",
-		"promise/no-return-wrap": "error",
-		"promise/prefer-catch": "error",
-		"react/jsx-pascal-case": "error",
-		"react/self-closing-comp": "error",
-		"react/jsx-fragments": "error",
-		"typescript/adjacent-overload-signatures": "error",
-		"typescript/ban-tslint-comment": "error",
-		"typescript/no-empty-interface": "error",
-		"typescript/no-inferrable-types": "error",
-		"typescript/no-unnecessary-qualifier": "error",
-		"typescript/prefer-function-type": "error",
-		"typescript/unified-signatures": "error",
-		"typescript/consistent-type-assertions": "error",
-		"import/export": "error",
-		"import/named": "error",
-		"no-unreachable-loop": "error",
-		"promise/no-return-in-finally": "error",
-		"promise/spec-only": "error",
-		"typescript/no-invalid-void-type": "error",
-		"typescript/prefer-find": "error",
-		"typescript/consistent-type-exports": "error",
-		"typescript/related-getter-setter-pairs": "error",
-		"typescript/prefer-reduce-type-parameter": "error",
-		"typescript/prefer-return-this-type": "error",
-		"typescript/restrict-plus-operands": "error",
-		"typescript/prefer-readonly": "error",
-		// `strictFunctionTypes` only checks property syntax; a method shorthand stays bivariant, so
-		// `handler(e: MouseEvent): void` accepts a handler that will be called with something else.
-		"typescript/method-signature-style": "error",
-		"typescript/prefer-ts-expect-error": "error",
-		"unicorn/no-useless-switch-case": "error",
-		"unicorn/no-useless-iterator-to-array": "error",
-		"unicorn/prefer-event-target": "error",
-		"unicorn/prefer-type-error": "error",
-		"unicorn/prefer-classlist-toggle": "error",
-		"unicorn/prefer-reflect-apply": "error",
-		"unicorn/prefer-response-static-json": "error",
-		"unicorn/prefer-bigint-literals": "error",
-		"unicorn/require-module-attributes": "error",
-		"oxc/no-barrel-file": "error",
-		"react/no-set-state": "error",
-		"react/prefer-es6-class": "error",
-		"react/require-render-return": "error",
-		"react/state-in-constructor": "error",
-		"react/no-redundant-should-component-update": "error",
-		"vitest/prefer-called-exactly-once-with": "error",
-		"vitest/prefer-to-be-object": "error",
-		"vitest/prefer-to-have-been-called-times": "error",
-		"vitest/no-large-snapshots": "error",
-
-		"typescript/no-misused-promises": "error",
-		"typescript/no-deprecated": "error",
-		"typescript/no-misused-spread": "error",
-		// Where a blank string should fall through, the question is asked by name (`hasText` /
+		// -- Where this tree decides a base rule differently -----------------------------------------
+		// Both want `toSorted`/`toReversed`, past `tsconfig.json`'s `lib` (it says why). Copy before
+		// sorting an array a caller can observe — that mutation is the bug these describe.
+		"unicorn/no-array-sort": "off",
+		"unicorn/no-array-reverse": "off",
+		// The `??=` and `||=` these two propose are ones the React Compiler does not lower
+		// (`react/todo` names them), and a ref initialiser is exactly where that `if` sits. Where a
+		// blank string should fall through, the question is asked by name (`hasText` /
 		// `firstNonBlank` in `@/lib/text`), so `ignorePrimitives` stays off.
-		"typescript/prefer-nullish-coalescing": "error",
-		"typescript/require-array-sort-compare": "error",
-		"typescript/prefer-promise-reject-errors": "error",
-		"typescript/no-meaningless-void-operator": "error",
-		"typescript/no-unnecessary-template-expression": "error",
-		// Truthful only with `noUncheckedIndexedAccess` (`tsconfig.json`), which is what makes an array
-		// index nullable. A finding is as often a type claiming more than the wire delivers — fix the
-		// type, keep the guard — as it is a dead branch.
-		"typescript/no-unnecessary-condition": "error",
-		"typescript/switch-exhaustiveness-check": [
-			"error",
-			{ "considerDefaultExhaustiveForUnions": true }
-		],
+		"typescript/prefer-nullish-coalescing": ["error", { "ignoreIfStatements": true }],
+		"logical-assignment-operators": "off",
+		// Reads `.catch` by name, so zod's `.catch(undefined)` on every search-param schema is reported
+		// as a promise chain.
+		"promise/prefer-await-to-then": "off",
+		// Cyclomatic complexity counts every `&&`, `??` and `?.` in JSX, so at the default 20 it grades
+		// how many optional props a page has. Forty is the line between that and a function doing
+		// several components' work.
+		"complexity": ["error", { "max": 40 }],
+		// `webapp/AGENTS.md` § File naming: a file that exports a component is PascalCase.
+		"unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }],
 		// TanStack Router signals redirects and 404s by throwing them; everything else must be an Error.
 		"typescript/only-throw-error": [
 			"error",
@@ -288,25 +174,67 @@
 				]
 			}
 		],
-		"unicorn/error-message": "error",
-		"unicorn/throw-new-error": "error",
-		"unicorn/no-array-method-this-argument": "error",
-		"unicorn/no-unreadable-array-destructuring": "error",
-		"unicorn/consistent-date-clone": "error",
-		"unicorn/prefer-keyboard-event-key": "error",
-		"unicorn/require-array-join-separator": "error",
-		"unicorn/no-useless-collection-argument": "error",
-		"unicorn/explicit-timer-delay": "error",
-		"unicorn/prefer-structured-clone": "error",
-		"unicorn/prefer-dom-node-text-content": "error",
-		"unicorn/prefer-modern-dom-apis": "error",
-		"unicorn/switch-case-break-position": "error",
-		"unicorn/prefer-object-from-entries": "error",
-		"unicorn/prefer-includes": "error",
-		"unicorn/prefer-logical-operator-over-ternary": "error",
-		"unicorn/prefer-string-trim-start-end": "error",
-		"unicorn/consistent-template-literal-escape": "error",
-		"unicorn/text-encoding-identifier-case": "error",
+
+		// -- What only this tree has -----------------------------------------------------------------
+		// CSS side effects and module augmentation.
+		"import/no-unassigned-import": [
+			"error",
+			{ "allow": ["**/*.css", "@tanstack/react-router", "react"] }
+		],
+		"no-console": "error",
+		// Every override that sets `no-restricted-imports` restates this entry because options replace
+		// rather than merge.
+		"no-restricted-imports": [
+			"error",
+			{
+				"paths": [
+					{
+						"name": "react",
+						"importNames": ["useMemo", "useCallback", "memo", "forwardRef"],
+						"allowTypeImports": true,
+						"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
+					}
+				]
+			}
+		],
+		// This kit is Base UI, not Radix: a slot is passed as an element through `render=`.
+		"react/forbid-component-props": [
+			"error",
+			{ "forbid": [{ "propName": "asChild", "message": "Base UI slots through `render={<X/>}`." }] }
+		],
+		// The React Compiler memoises a Provider's value object like any other; the `useMemo` the rule
+		// asks for is the one the import ban above removes.
+		"react/jsx-no-constructed-context-values": "off",
+		// Maps a role to a tag without asking whether the tag's other semantics fit — `<output>` for
+		// `status` carries a form association, `<li>` for `listitem` is only valid inside a list,
+		// `<fieldset>` for `group` is a form control group, `<img>` cannot replace an inline SVG — and
+		// half of what it reports is vendored registry markup.
+		"jsx-a11y/prefer-tag-over-role": "off",
+		// Base UI passes the control through `render=` and keeps the label in the wrapper's children,
+		// where no jsx-a11y rule can see it. It also does not model `<datalist>`, where a valueless
+		// `<option>` is the correct spelling. Expect this from any rule that inspects children.
+		"jsx-a11y/control-has-associated-label": "off",
+		// Same shape, plus `renderPageLink`: the `<a>`'s content comes from whoever renders it.
+		"jsx-a11y/anchor-has-content": "off",
+		// Flags `const Icon = iconFor(kind)`, where the helper returns one of a fixed set of
+		// module-level icons. `react/no-unstable-nested-components` still catches a component defined
+		// inside another's body.
+		"react/static-components": "off",
+
+		// -- Tests -----------------------------------------------------------------------------------
+		"vitest/prefer-called-once": "error",
+		"vitest/prefer-called-with": "error",
+		"vitest/prefer-called-exactly-once-with": "error",
+		"vitest/prefer-to-have-been-called-times": "error",
+		"vitest/prefer-expect-resolves": "error",
+		"vitest/prefer-expect-type-of": "error",
+		"vitest/prefer-spy-on": "error",
+		"vitest/prefer-to-be-object": "error",
+		"vitest/no-large-snapshots": "error",
+		// `it` everywhere: two spellings of the same call are two things to grep for.
+		"vitest/consistent-test-it": ["error", { "fn": "it", "withinDescribe": "it" }],
+		// A `describe` names the unit under test as written, so only the `it` titles are sentences.
+		"vitest/prefer-lowercase-title": ["error", { "ignore": ["describe"] }],
 		"vitest/no-identical-title": "error",
 		"vitest/no-duplicate-hooks": "error",
 		"vitest/no-alias-methods": "error",
@@ -334,70 +262,10 @@
 		// missing attribute into an empty string the assertion then accepts. Setup that really does
 		// branch belongs in the mock handler, not the test body.
 		"vitest/no-conditional-in-test": "error",
-
-		// -- Off -------------------------------------------------------------------------------------
-		// React 19's automatic JSX runtime.
-		"react/react-in-jsx-scope": "off",
-		// Every effect it reports here lists a value it deliberately does not read — a ref reset keyed on
-		// the location, focus keyed on the wizard step — which reads to the rule as an extra dependency.
-		// Dropping one changes when the effect fires, which is the reason it is listed.
-		"react/exhaustive-effect-dependencies": "off",
-		// It maps a role to a tag without asking whether that tag's other semantics fit: `<output>` for
-		// `role="status"` carries a form association a live region does not, `<li>` for `role="listitem"`
-		// is only valid inside a list, and `<img>` for `role="img"` would replace the inline SVG that role
-		// exists to name. Every role it reports here fails the same way.
-		"jsx-a11y/prefer-tag-over-role": "off",
-		// Base UI passes the control through `render=` and keeps the label in the wrapper's children,
-		// where no jsx-a11y rule can see it. It also does not model `<datalist>`, where a valueless
-		// `<option>` is the correct spelling. Expect this from any rule that inspects children.
-		"jsx-a11y/control-has-associated-label": "off",
-		// Same shape, plus `renderPageLink`: the `<a>`'s content comes from whoever renders it.
-		"jsx-a11y/anchor-has-content": "off",
-		// Both want ES2023 `toSorted`/`toReversed`, which this package's `tsconfig.json` does not declare
-		// — its `lib` is `ES2022`. (The Node trees are on `ES2023`, so this reason does not travel to the
-		// root config.) Copy before sorting an array a caller can observe — that mutation is the bug they
-		// describe.
-		"unicorn/no-array-sort": "off",
-		"unicorn/no-array-reverse": "off",
-		// Its two shapes here are both things TypeScript has already settled: an effect that bails early
-		// and otherwise returns a cleanup, which is React's idiom, and an annotated `switch` that returns
-		// from every arm of a union. TS2366 is what catches a return that is genuinely missing, and it
-		// stays silent on an exhaustive switch — so every report here is one TypeScript declined to make.
-		"typescript/consistent-return": "off",
-		// `toHaveBeenCalledWith` is not type-narrowed by this Vitest/TS setup — a wrong argument against
-		// `vi.fn<(open: boolean) => void>()` type-checks clean — so the parameter buys nothing.
-		"vitest/require-mock-type-parameters": "off",
-		// Flags `const Icon = iconFor(kind)`, where the helper returns one of a fixed set of
-		// module-level icons. `react/no-unstable-nested-components` still catches a component defined
-		// inside another's body.
-		"react/static-components": "off",
-		// The diagnostic names the helper but points at the *enclosing* function, so the line it sends you
-		// to is a component or a `describe` that is not the thing to change. What it finds is a helper
-		// deliberately scoped to the block that owns it; hoisting one widens what it is visible to and
-		// buys nothing.
-		"unicorn/consistent-function-scoping": "off",
-		// Server field names (`_id`), test hooks (`__resetSessionRecoveryForTests`), the runtime config
-		// global (`__ENV__`), exhaustiveness bindings (`_exhaustive`) and XSS sentinels a test has to name.
-		"no-underscore-dangle": "off",
-
-		// -- Options ---------------------------------------------------------------------------------
-		// Every `autoFocus` here is spelled on a component — `<Input>`, `<Textarea>`, `<Calendar>` — so
-		// `ignoreNonDOM: true` would make the rule blind to all of them. Each already carries a
-		// suppression stating why, and `reportUnusedDisableDirectives` would then fail every one.
-		"jsx-a11y/no-autofocus": ["error", { "ignoreNonDOM": false }],
-		// TanStack Table column defs are `cell: ({ row }) => <Badge …/>` — a component passed as a prop.
-		"react/no-unstable-nested-components": ["error", { "allowAsProps": true }],
-		// `void somePromise.then(sideEffect)` is fire-and-forget; only a chain's interior needs a return.
-		"promise/always-return": ["error", { "ignoreLastCallback": true }],
 		// Vitest's `expect(actual, message)` takes a second argument, which the default of 1 rejects. A
 		// literal message is tolerated even at 1, so this is load-bearing only where the label is
 		// computed — which is every assertion inside a loop, the shape that needs a label most.
 		"vitest/valid-expect": ["error", { "maxArgs": 2 }],
-		// CSS side effects and module augmentation.
-		"import/no-unassigned-import": [
-			"error",
-			{ "allow": ["**/*.css", "@tanstack/react-router", "react"] }
-		],
 		// A Testing Library query IS the assertion: `getBy*` throws when it finds nothing. Supplying
 		// this option replaces oxlint's defaults rather than extending them, so the first four restate
 		// its list — drop one and a plain `expect()` stops counting.
@@ -420,56 +288,33 @@
 				]
 			}
 		],
-		"no-console": "error",
-		// A circular import leaves one side reading `undefined` at module-init time, and which side
-		// depends on entry order.
-		"import/no-cycle": "error",
-		// `AGENTS.md` § Testing states the query priority. A `data-testid` skips straight past it, and
-		// the accessible name it stands in for is the thing a screen reader needs anyway.
-		"react/forbid-dom-props": ["error", { "forbid": ["data-testid"] }],
-		// Import `cn()` directly from `cn`; see `AGENTS.md` § Styling. Do not restore the
-		// previous class-composition dependencies. Every override that sets `no-restricted-imports`
-		// restates these restrictions because options replace rather than merge.
-		"no-restricted-imports": [
-			"error",
-			{
-				"paths": [
-					{
-						"name": "react",
-						"importNames": ["useMemo", "useCallback", "memo", "forwardRef"],
-						"allowTypeImports": true,
-						"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
-					},
-					{ "name": "clsx", "message": "Compose classes with `cn()` from `cn`." },
-					{ "name": "tailwind-merge", "message": "Compose classes with `cn()` from `cn`." }
-				]
-			}
-		],
-		// `varsIgnorePattern` buys less than it looks: tsc's `noUnusedLocals` (`tsconfig.json`) still
-		// fails an unused `_local`. Only the parameter and caught-error escapes hold on both sides.
-		"no-unused-vars": [
-			"error",
-			{
-				"argsIgnorePattern": "^_",
-				"varsIgnorePattern": "^_",
-				"caughtErrorsIgnorePattern": "^_"
-			}
-		],
+		// `toHaveBeenCalledWith` is not type-narrowed by this Vitest/TS setup — a wrong argument against
+		// `vi.fn<(open: boolean) => void>()` type-checks clean — so the parameter buys nothing.
+		"vitest/require-mock-type-parameters": "off",
 
 		// -- House rules, defined in `tools/oxlint/` --------------------------------------------------
-		// Each states in its own `meta.docs.description` what it asks and why no shipped rule does.
+		// Each states in its own `meta.docs.description` what it asks.
 		"hephaestus/no-manual-query-key": "error",
-		"hephaestus/no-non-ascii-filename": "error",
 		"hephaestus/no-nondeterministic-render": "error",
 		"hephaestus/no-redundant-in-the-document": "error",
 		"hephaestus/svg-needs-accessible-name": "error"
-		// The other four read a Storybook story object and are scoped to story files in `overrides`.
+		// The rules that read a Storybook story object are scoped to story files in `overrides`.
 	},
 
 	// Never configure one rule for the same file from two entries: where two overrides match a file,
 	// the later one's copy of a rule REPLACES the earlier one's options instead of merging with them.
 	// Entries whose globs overlap but set different rules are fine, and there are several below.
 	"overrides": [
+		{
+			// Vocabulary maps are consumed indirectly, beyond the plugin's one-hop analysis.
+			// Scanning all strings everywhere misreads element ids such as "outline-token" as CSS.
+			"files": [
+				"src/lib/**",
+				"src/components/layout/Header.tsx",
+				"src/components/site/landing/LandingVisuals.tsx"
+			],
+			"rules": { "shadcn/no-raw-colors": ["error", { "scanAllStrings": true }] }
+		},
 		{
 			// `@/` maps to `src/`, so nothing here can spell a sibling any other way. This is a
 			// self-contained tool, not part of the app tree.
@@ -488,11 +333,6 @@
 								"importNames": ["useMemo", "useCallback", "memo", "forwardRef"],
 								"allowTypeImports": true,
 								"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
-							},
-							{ "name": "clsx", "message": "Compose classes with `cn()` from `cn`." },
-							{
-								"name": "tailwind-merge",
-								"message": "Compose classes with `cn()` from `cn`."
 							}
 						],
 						"patterns": [
@@ -512,6 +352,8 @@
 		{
 			"files": ["src/components/ui/**"],
 			"rules": {
+				// A registry file styles the primitives it composes; the contract is with callers outside it.
+				"shadcn/no-restyle": "off",
 				"no-restricted-imports": [
 					"error",
 					{
@@ -521,11 +363,6 @@
 								"importNames": ["useMemo", "useCallback", "memo", "forwardRef"],
 								"allowTypeImports": true,
 								"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
-							},
-							{ "name": "clsx", "message": "Compose classes with `cn()` from `cn`." },
-							{
-								"name": "tailwind-merge",
-								"message": "Compose classes with `cn()` from `cn`."
 							}
 						],
 						"patterns": [
@@ -556,11 +393,6 @@
 								"importNames": ["useMemo", "useCallback", "memo", "forwardRef"],
 								"allowTypeImports": true,
 								"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19."
-							},
-							{ "name": "clsx", "message": "Compose classes with `cn()` from `cn`." },
-							{
-								"name": "tailwind-merge",
-								"message": "Compose classes with `cn()` from `cn`."
 							}
 						],
 						"patterns": [
@@ -613,11 +445,9 @@
 			}
 		},
 		{
-			// The directories this repo writes by hand; `AGENTS.md` § File naming is the rule itself.
-			"files": ["src/components/**", "src/lib/**", "src/hooks/**", "src/integrations/**"],
-			"rules": {
-				"unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }]
-			}
+			// TanStack Router derives URL segments from these filenames and owns their naming.
+			"files": ["src/routes/**"],
+			"rules": { "unicorn/filename-case": "off" }
 		},
 		{
 			// A test that asserts a `javascript:` URL is rejected has to name one. And jest-dom is not
@@ -640,13 +470,7 @@
 			}
 		},
 		{
-			// A double for an async API is `async` so it returns a promise like the real thing; having
-			// nothing to await is the point.
-			"files": ["**/*.test.ts", "**/*.test.tsx", "**/*.stories.tsx", "src/test/**", "src/mocks/**"],
-			"rules": { "typescript/require-await": "off" }
-		},
-		{
-			// All four read a Storybook story object, and only a story file holds one. `parameters.a11y`
+			// Each reads a Storybook story object, and only a story file holds one. `parameters.a11y`
 			// is also how `.storybook/preview.tsx` sets the project-wide bar none of them may lower; a
 			// `play` property elsewhere belongs to a media element; `canvasElement` exists only inside a
 			// play; and `meta`/`Meta` are recognised by name, which is Storybook's convention and
@@ -659,8 +483,7 @@
 				// so anything counted there is counted here. A literal cannot be shared across JSON and
 				// TypeScript, so it is that relation `play-must-assert.test.ts` pins.
 				"hephaestus/play-must-assert": "error",
-				// The file path is the component tree's source of truth. An explicit title is only for a
-				// deliberate reader-facing relocation, never a differently-cased copy of that path.
+				// The sidebar mirrors the source tree: a title cannot drift from a path it never restates.
 				"hephaestus/prefer-auto-story-title": "error",
 				// One story quietly exempting itself leaves the whole suite green.
 				"hephaestus/no-story-a11y-override": "error",

@@ -17,7 +17,9 @@ function subscribe(onStoreChange: () => void): () => void {
 		now = readClock();
 		intervalId = setInterval(() => {
 			now = readClock();
-			for (const listener of listeners) listener();
+			for (const listener of listeners) {
+				listener();
+			}
 		}, TICK_MS);
 	}
 	return () => {

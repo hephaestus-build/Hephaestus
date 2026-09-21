@@ -44,11 +44,14 @@ const contractsRoot = path.join(
 	root,
 	"server/application/src/main/resources/contracts/artifact-source",
 );
-const contractVersions = (await readdir(contractsRoot, { withFileTypes: true }))
+const contractEntries = await readdir(contractsRoot, { withFileTypes: true });
+const contractVersions = contractEntries
 	.filter((entry) => entry.isDirectory())
 	.map((entry) => entry.name)
 	.toSorted();
-if (contractVersions.length === 0) throw new Error("No artifact-source contract versions found");
+if (contractVersions.length === 0) {
+	throw new Error("No artifact-source contract versions found");
+}
 const schemaId = (version: string, file: string): string =>
 	`https://hephaestus.aet.cit.tum.de/contracts/artifact-source/${version}/${file}`;
 
@@ -89,7 +92,7 @@ const propertyEntries = (value: unknown): [string, unknown][] => {
  * contract exists to prevent.
  */
 const validateSchemaDocumentation = (schema: Record<string, unknown>, label: string): void => {
-	const title = schema.title;
+	const { title } = schema;
 	if (typeof title !== "string" || title.trim() === "") {
 		throw new Error(`${label} needs a title`);
 	}
@@ -144,13 +147,17 @@ const validate = (id: string, value: unknown, label: string): void => {
 const rejectDuplicates = (values: readonly string[], label: string): void => {
 	const seen = new Set<string>();
 	for (const value of values) {
-		if (seen.has(value)) throw new Error(`${label} duplicates '${value}'`);
+		if (seen.has(value)) {
+			throw new Error(`${label} duplicates '${value}'`);
+		}
 		seen.add(value);
 	}
 };
 
 const expectRejection = (id: string, value: unknown, label: string): void => {
-	if (ajv.validate(id, value)) throw new Error(label);
+	if (ajv.validate(id, value)) {
+		throw new Error(label);
+	}
 };
 
 const sameSet = (actual: readonly string[], expected: readonly string[]): boolean => {
@@ -293,8 +300,9 @@ const validateSchemasTrackTheCatalog = async (
 	// The rejection paths that are not about the allow-list, exercised against the same fixtures.
 	const pullRequestKind =
 		artifactKinds.find((kind) => sourcesFor(kind).length > 1) ?? artifactKinds[0];
-	if (pullRequestKind === undefined)
+	if (pullRequestKind === undefined) {
 		throw new Error(`${version} catalog supplies no artifact kind`);
+	}
 	const applicable = sourcesFor(pullRequestKind);
 	const [firstKind] = applicable;
 	if (firstKind === undefined) {
@@ -532,7 +540,9 @@ const validateContractVersion = async (version: string): Promise<void> => {
 	validatePolicySchema(version);
 };
 
-for (const version of contractVersions) await validateContractVersion(version);
+for (const version of contractVersions) {
+	await validateContractVersion(version);
+}
 
 const PRACTICE_CATALOG = "practices/default-catalog.json";
 const practiceCatalogPath = path.join(
@@ -575,14 +585,19 @@ const bundledPractices = (value: unknown, label: string): BundledPractice[] =>
 const practices = bundledPractices(parsedPracticeCatalog, PRACTICE_CATALOG);
 
 const precomputeResourcePrefix = "practices/precompute/";
+const precomputeFiles = await readdir(
+	path.join(root, "server/application/src/main/resources/practices/precompute"),
+);
 const precomputeScripts = new Set(
-	(await readdir(path.join(root, "server/application/src/main/resources/practices/precompute")))
+	precomputeFiles
 		.filter((file) => file.endsWith(".ts"))
 		.map((file) => precomputeResourcePrefix + file),
 );
 const referencedPrecomputeScripts = new Set<string>();
 for (const practice of practices) {
-	if (practice.precomputeScript === undefined) continue;
+	if (practice.precomputeScript === undefined) {
+		continue;
+	}
 	// The loader checks the script exists. Nothing checks it belongs to the practice that names it,
 	// and a script named after a slug is the only thing that keeps the pair findable from either side.
 	const expected = `${precomputeResourcePrefix}${practice.slug}.ts`;

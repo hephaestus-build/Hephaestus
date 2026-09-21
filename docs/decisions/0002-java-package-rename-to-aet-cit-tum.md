@@ -1,6 +1,6 @@
 # ADR 0002: Rename Java base package to `de.tum.cit.aet.hephaestus`
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-09-17 — deploy domain moved, package kept)
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -50,3 +50,19 @@ all 1,121 Java source files in one mechanical commit.
 
 A future chair reorganisation, or a decision to move the deploy domain (which would close
 the package-vs-host-URL gap noted above).
+
+## Update — 2026-09-17
+
+Supersedes the last bullet of § Consequences and answers the revisit trigger: the deploy domain
+moved, and the package stays `de.tum.cit.aet.hephaestus`.
+
+- The hosted deployment is `https://hephaestus.build` and the GitHub organisation is
+  `hephaestus-build` (`README.md`); `hephaestus.host-url` in
+  `server/application/src/main/resources/application.yml` defaults to
+  `${APPLICATION_HOST_URL:http://localhost:4200}`, so no application host URL names a TUM chair.
+- `aet.cit.tum.de` survives as the base package, as the `$id` of the artifact-source and
+  practice-catalog JSON schemas (`server/application/src/main/resources/contracts/`,
+  `practices/default-catalog.schema.json`, read by `scripts/validate-artifact-source-contracts.ts`),
+  as the commented `HEPHAESTUS_AUTH_ISSUER` example in `server/.env.example`, and in
+  `docker/.env.example` as the `APP_HOSTNAME` example (`hephaestus.cit.tum.de`) and as the
+  deployment the `tumaet` legal profile describes (`hephaestus.aet.cit.tum.de`).

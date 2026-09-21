@@ -11,9 +11,9 @@ import {
 import {
 	AdminSurveyComposer,
 	AdminSurveyComposerHeader,
-} from "@/components/admin/feedback/AdminSurveyComposer";
+} from "@/components/admin/product-feedback/AdminSurveyComposer";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { DrawerBody } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
@@ -59,7 +59,7 @@ export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreat
 				researchOrganization={consentQuery.data.researchOrganization}
 				isPending={create.isPending}
 				cancel={<LevelCancel />}
-				onSubmit={(body) => create.mutateAsync({ body })}
+				onSubmit={async (body) => create.mutateAsync({ body })}
 			/>
 		);
 	}

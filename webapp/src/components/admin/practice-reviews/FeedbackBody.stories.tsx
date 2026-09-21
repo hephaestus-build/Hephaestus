@@ -7,7 +7,6 @@ const body =
 	"## What worked\n\nThe controller stays focused on HTTP concerns.\n\n[Read the guide](https://example.com/guide).";
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Feedback preview",
 	component: FeedbackBody,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 768] } },
 	tags: ["autodocs"],
@@ -94,7 +93,7 @@ export const PreparedForConversation: Story = {
 	args: { feedback: { body, channel: "IN_CHAT", deliveryState: "PREPARED" } },
 	play: async ({ canvas }) => {
 		// The lane, not the exact wording: the `PREPARED` label lives in `delivery-outcome-defs`.
-		canvas.getByText(/for conversation/);
+		canvas.getByText(/for conversation/u);
 	},
 };
 

@@ -14,7 +14,7 @@ import {
 import type { AgentBinding, LlmModel, WorkspaceOnboarding } from "@/api/types.gen";
 import type { Fact } from "@/components/auth/FactList";
 
-import { type StatusDef, type StatusDefs, statusValues } from "./status-def";
+import { type StatusDef, type StatusDefs, statusValues } from "@/components/common/status-def";
 
 export type DataHandlingTier = LlmModel["dataHandlingTier"];
 export type OperatedBy = NonNullable<LlmModel["operatedBy"]>;
@@ -110,8 +110,12 @@ export function deriveDataHandlingTier(
 	operatedBy: OperatedBy | undefined,
 	keptAfterReply: KeptAfterReply | undefined,
 ): DataHandlingTier {
-	if (operatedBy === undefined || keptAfterReply === undefined) return "UNDECLARED";
-	if (operatedBy === "OWN_ORGANISATION") return "IN_HOUSE";
+	if (operatedBy === undefined || keptAfterReply === undefined) {
+		return "UNDECLARED";
+	}
+	if (operatedBy === "OWN_ORGANISATION") {
+		return "IN_HOUSE";
+	}
 	return keptAfterReply === "NONE" ? "PROVIDER_NOT_KEPT" : "PROVIDER_KEPT";
 }
 
@@ -226,9 +230,13 @@ export function bindingFor<TBinding extends RoutableBinding>(
 	bindings: readonly TBinding[],
 ): TBinding | undefined {
 	const live = bindings.filter((binding) => binding.enabled && binding.ready);
-	if (choice === null) return live.find((binding) => binding.dataHandlingTier === "UNDECLARED");
+	if (choice === null) {
+		return live.find((binding) => binding.dataHandlingTier === "UNDECLARED");
+	}
 	const { ceiling } = MEMBER_AI_CHOICE_DEFS[choice];
-	if (ceiling === null) return undefined;
+	if (ceiling === null) {
+		return undefined;
+	}
 	return live
 		.filter((binding) => tierIsWithin(binding.dataHandlingTier, ceiling))
 		.sort(

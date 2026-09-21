@@ -6,11 +6,11 @@ import {
 	TriangleAlertIcon,
 } from "lucide-react";
 import type { AgentBinding } from "@/api/types.gen";
+import type { StatusDefs } from "@/components/common/status-def";
 import {
 	DATA_HANDLING_DEFS,
 	DATA_HANDLING_TIERS,
 } from "@/components/practice-vocabulary/data-handling-defs";
-import type { StatusDefs } from "@/components/practice-vocabulary/status-def";
 
 export type ReviewModelState =
 	| { status: "loading" }
@@ -64,10 +64,18 @@ export const REVIEW_RUNNING_DEFS: StatusDefs<ReviewRunningTone> = {
 };
 
 export function reviewRunningTone({ enabled, model }: ReviewRunningState): ReviewRunningTone {
-	if (!enabled) return "off";
-	if (model.status === "loading") return "checking";
-	if (model.status === "error") return "unconfirmed";
-	if (!reviewModelRunnable(model)) return "blocked";
+	if (!enabled) {
+		return "off";
+	}
+	if (model.status === "loading") {
+		return "checking";
+	}
+	if (model.status === "error") {
+		return "unconfirmed";
+	}
+	if (!reviewModelRunnable(model)) {
+		return "blocked";
+	}
 	return "running";
 }
 

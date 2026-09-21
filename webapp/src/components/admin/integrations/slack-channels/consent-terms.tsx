@@ -1,6 +1,5 @@
 import { BanIcon, CheckIcon, ClockIcon, type LucideIcon, PauseIcon } from "lucide-react";
 
-import { cn } from "cn";
 import type { SlackMonitoredChannel } from "@/api/types.gen";
 import { Badge } from "@/components/ui/badge";
 
@@ -41,7 +40,7 @@ export interface ConsentStateBadgeProps {
 export function ConsentStateBadge({ state, className }: ConsentStateBadgeProps) {
 	const term = consentTerm(state);
 	return (
-		<Badge variant={term.variant} className={cn("gap-1", className)}>
+		<Badge variant={term.variant} className={className}>
 			<term.Icon className="size-3" aria-hidden />
 			{term.label}
 		</Badge>

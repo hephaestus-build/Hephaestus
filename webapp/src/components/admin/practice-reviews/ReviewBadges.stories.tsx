@@ -4,7 +4,6 @@ import { expect } from "storybook/test";
 import { ClaimCurrentnessAlert } from "./ReviewBadges";
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Claim currentness alert",
 	component: ClaimCurrentnessAlert,
 	args: { currentness: "STALE" },
 	parameters: { layout: "padded" },

@@ -1,5 +1,5 @@
+import { StatusBadge, type StatusBadgeProps } from "@/components/common/StatusBadge";
 import { DATA_HANDLING_DEFS, type DataHandlingTier } from "./data-handling-defs";
-import { StatusBadge, type StatusBadgeProps } from "./StatusBadge";
 
 export interface DataHandlingBadgeProps extends Omit<StatusBadgeProps, "def"> {
 	tier: DataHandlingTier;

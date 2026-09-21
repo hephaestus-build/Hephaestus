@@ -2,7 +2,7 @@ import { CircleAlertIcon, CircleCheckIcon } from "lucide-react";
 
 import type { AgentBinding } from "@/api/types.gen";
 
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type BindingReadiness = "READY" | "NOT_READY";
 

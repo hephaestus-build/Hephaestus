@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { PracticeGroupReviewObservation, PracticeGroupReviewRun } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
-import { ReviewRunTimeline } from "./ReviewRunTimeline";
+import { daysBefore } from "@/stories/story-clock";
+import { ReviewRunTimeline, type ReviewRunTimelineProps } from "./ReviewRunTimeline";
 
 const baseObservation = {
 	observationId: "00000000-0000-0000-0000-000000000102",
@@ -46,7 +46,7 @@ describe("ReviewRunTimeline", () => {
 	});
 
 	it("sends the whole response when one part of it changes", () => {
-		const onRespond = vi.fn();
+		const onRespond = vi.fn<NonNullable<ReviewRunTimelineProps["onRespond"]>>();
 		render(
 			<ReviewRunTimeline
 				runs={runs}
@@ -65,7 +65,7 @@ describe("ReviewRunTimeline", () => {
 	});
 
 	it("records a resolution without disturbing the usefulness already given", () => {
-		const onRespond = vi.fn();
+		const onRespond = vi.fn<NonNullable<ReviewRunTimelineProps["onRespond"]>>();
 		render(
 			<ReviewRunTimeline
 				runs={runs}

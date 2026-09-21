@@ -6,8 +6,8 @@ import type {
 	PracticeGroupReviewRun,
 	PracticeGroupStanding,
 } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
+import { daysBefore } from "@/stories/story-clock";
 import { PracticeGroupDetailPage, type ReviewRunFeedState } from "./PracticeGroupDetailPage";
 
 const group: PracticeGroup = {
@@ -32,7 +32,6 @@ const standing: PracticeGroupStanding = {
 };
 
 const meta = {
-	title: "Profile/PracticeGroupDetailPage",
 	component: PracticeGroupDetailPage,
 	tags: ["autodocs"],
 	args: {

@@ -7,6 +7,7 @@ import {
 	SparklesIcon,
 } from "lucide-react";
 import { type SubmitEvent, useEffect, useId, useRef, useState } from "react";
+import { hasText } from "@/lib/text";
 
 import type { WorkspaceOnboarding } from "@/api/types.gen";
 import { type Fact, FactList } from "@/components/auth/FactList";
@@ -14,16 +15,16 @@ import { LegalLinks } from "@/components/auth/LegalLinks";
 import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageLayout } from "@/components/core/PageLayout";
-import { Section } from "@/components/core/Section";
-import { getProviderIcon } from "@/components/icons/provider-icons";
+import { statusValues } from "@/components/common/status-def";
+import { getProviderIcon } from "@/components/icons/integration-provider-icons";
+import { PageLayout } from "@/components/layout/PageLayout";
+import { Section } from "@/components/layout/Section";
 import { HephSays } from "@/components/mentor/HephSays";
 import {
 	MEMBER_AI_CHOICE_DEFS,
 	type MemberAiChoice,
 	memberAiChoiceTitle,
 } from "@/components/practice-vocabulary/data-handling-defs";
-import { statusValues } from "@/components/practice-vocabulary/status-def";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -116,7 +117,9 @@ const AI_CHOICES = statusValues(MEMBER_AI_CHOICE_DEFS);
  * word. No AI needs nothing set up, so it is always covered.
  */
 function coverage(data: WorkspaceOnboarding, choice: MemberAiChoice) {
-	if (choice === "NO_AI") return { practiceReviews: true, mentor: true };
+	if (choice === "NO_AI") {
+		return { practiceReviews: true, mentor: true };
+	}
 	const option = data.aiOptions.find((entry) => entry.choice === choice);
 	return {
 		practiceReviews: option?.practiceReviewsReady === true,
@@ -127,10 +130,15 @@ function coverage(data: WorkspaceOnboarding, choice: MemberAiChoice) {
 /** The sentence a card appends when part of the answer runs nothing here; `undefined` when all of it runs. */
 function readinessSentence(data: WorkspaceOnboarding, choice: MemberAiChoice): string | undefined {
 	const { practiceReviews, mentor } = coverage(data, choice);
-	if (!practiceReviews && !mentor)
+	if (!practiceReviews && !mentor) {
 		return "Not set up here yet — nothing runs for you until a workspace owner adds a model.";
-	if (!mentor) return "Heph isn't set up for this answer yet.";
-	if (!practiceReviews) return "Practice reviews aren't set up for this answer yet.";
+	}
+	if (!mentor) {
+		return "Heph isn't set up for this answer yet.";
+	}
+	if (!practiceReviews) {
+		return "Practice reviews aren't set up for this answer yet.";
+	}
 	return undefined;
 }
 
@@ -147,21 +155,19 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 
 	const ready = state.status === "ready" ? state : undefined;
 	const data = ready?.data;
-	const firstVisit = data?.needsWelcome === true;
-	const choice = draft ?? data?.aiChoice;
-	const changed = choice !== data?.aiChoice;
-	const savedCoverage =
-		data !== undefined && data.aiChoice != null ? coverage(data, data.aiChoice) : undefined;
-	const savedUncovered =
-		savedCoverage !== undefined && !(savedCoverage.practiceReviews && savedCoverage.mentor);
-	const savedFullyUncovered =
-		savedCoverage !== undefined && !savedCoverage.practiceReviews && !savedCoverage.mentor;
-	const links = data?.links ?? [];
-	const openRequired = openRequiredLinks(links);
-	const openRequiredNames = joinNames(openRequired.map((link) => link.displayName));
-	const requiredSatisfied = openRequired.length === 0;
-	// Saving an AI choice is independent of connecting accounts, even on a first visit.
-	const canSubmit = choice !== undefined && (changed || (firstVisit && requiredSatisfied));
+	const {
+		firstVisit,
+		choice,
+		changed,
+		links,
+		openRequiredNames,
+		requiredSatisfied,
+		canSubmit,
+		savedFullyUncovered,
+		savedUncovered,
+		heading,
+		hint,
+	} = memberSetupState(data, draft);
 	const submission: OnboardingSubmission = ready?.submission ?? { status: "idle" };
 	const saving = submission.status === "saving";
 	const savingAction = submission.status === "saving" ? submission.action : undefined;
@@ -171,67 +177,51 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 	// The Section is not in the DOM until setup has loaded, so this waits for it rather than for
 	// mount: after an OAuth round-trip the page is a fresh document and loads before it renders.
 	useEffect(() => {
-		if (focus === "accounts" && accountsMounted) accountsRef.current?.focus();
+		if (focus === "accounts" && accountsMounted) {
+			accountsRef.current?.focus();
+		}
 	}, [focus, accountsMounted]);
 
 	useEffect(() => {
-		if (submissionStatus === "error") alertRef.current?.focus();
+		if (submissionStatus === "error") {
+			alertRef.current?.focus();
+		}
 	}, [submissionStatus]);
-
-	const heading =
-		data === undefined
-			? "Workspace setup"
-			: firstVisit
-				? `Welcome to ${data.workspaceName}`
-				: `Your AI choice in ${data.workspaceName}`;
 
 	const intro = `Choose how AI may handle your work in ${data?.workspaceName ?? "this workspace"}. This choice is separate from your account setup and applies only here.`;
 
 	// Heph narrates the reader's answers; the footer hint says the same thing factually and reaches
 	// the button through `aria-describedby`, so focusing it does not replay the line.
-	const narration =
-		state.status === "loading"
-			? "Give me a moment — I'm fetching your setup."
-			: state.status === "error"
-				? "I couldn't fetch your setup just now."
-				: changed && firstVisit
-					? requiredSatisfied
-						? "Noted. Press Continue and I'll remember that."
-						: "Save your AI choice now. You can connect your accounts separately."
-					: changed
-						? "Save to apply your new choice. Requests already sent cannot be recalled."
-						: choice === undefined
-							? "One question: which AI may handle your work. Any answer is fine by me, including none."
-							: savedFullyUncovered
-								? "Your choice isn't set up here yet. I won't switch you anywhere else."
-								: savedUncovered
-									? "Part of your choice isn't set up here yet. I won't switch you anywhere else."
-									: !firstVisit
-										? `You chose ${memberAiChoiceTitle(choice)}. Change it whenever you like.`
-										: openRequired.length > 0
-											? `Noted. Connect ${openRequiredNames} and you're in.`
-											: "That's everything. Let's get to work.";
+	const narration = onboardingNarration({
+		status: state.status,
+		changed,
+		firstVisit,
+		requiredSatisfied,
+		choice,
+		savedFullyUncovered,
+		savedUncovered,
+		openRequiredNames,
+	});
 
-	const hint =
-		data === undefined
-			? undefined
-			: choice === undefined
-				? firstVisit
-					? "Choose an answer to continue."
-					: "Choose an answer, then save."
-				: firstVisit && openRequired.length > 0
-					? changed
-						? `Save your AI choice now; connect ${openRequiredNames} to finish setup.`
-						: `Connect ${openRequiredNames} to finish setup.`
-					: !firstVisit && !changed
-						? "You can change this any time from the sidebar."
-						: undefined;
+	let saveLabel = firstVisit ? "Continue" : "Save";
+	if (firstVisit && !requiredSatisfied && changed) {
+		saveLabel = "Save AI choice";
+	}
+	if (savingAction === "save") {
+		saveLabel = "Saving…";
+	}
+	let leaveLabel = firstVisit ? "Skip for now" : "Back to workspace";
+	if (savingAction === "continue") {
+		leaveLabel = "Skipping…";
+	}
 
 	const accountsRequired = links.some((link) => link.required && link.available);
 
 	function submit(event: SubmitEvent<HTMLFormElement>) {
 		event.preventDefault();
-		if (ready === undefined || choice === undefined || !canSubmit || saving) return;
+		if (ready === undefined || choice === undefined || !canSubmit || saving) {
+			return;
+		}
 		ready.onSubmit(choice);
 	}
 
@@ -242,13 +232,13 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 					<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
 
 					<header className="space-y-4">
-						<h1 className="break-words text-2xl font-semibold tracking-tight">{heading}</h1>
+						<h1 className="text-2xl font-semibold tracking-tight break-words">{heading}</h1>
 						<HephSays intro={intro} narration={narration} />
 					</header>
 
 					<Separator />
 
-					{state.status === "loading" ? (
+					{state.status === "loading" && (
 						<div className="space-y-6" aria-busy="true">
 							<span className="sr-only">Loading…</span>
 							<Skeleton className="h-32 w-full" />
@@ -259,18 +249,22 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 								<Skeleton className="h-20" />
 							</div>
 						</div>
-					) : state.status === "error" ? (
+					)}
+					{state.status === "error" && (
 						<QueryErrorAlert
 							error={state.error}
 							title="Couldn't load your setup"
 							onRetry={state.onRetry}
 						/>
-					) : (
+					)}
+					{state.status === "ready" && (
 						<>
 							<QuestionnaireItem name="ai-choice" required disabled={saving}>
-								<QuestionnaireTitle className="flex items-start gap-3 text-lg">
-									<StepMarker icon={SparklesIcon} done={data?.aiChoice != null} />
-									Which AI may handle your work?
+								<QuestionnaireTitle>
+									<span className="flex items-start gap-3">
+										<StepMarker icon={SparklesIcon} done={data?.aiChoice != null} />
+										Which AI may handle your work?
+									</span>
 								</QuestionnaireTitle>
 								<QuestionnaireDescription>
 									For you, in this workspace only. Allowing a provider also allows in-house models.
@@ -279,78 +273,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 									does not guarantee better results.
 								</QuestionnaireDescription>
 								<FactList facts={AI_FACTS} />
-								<QuestionnaireChoices className="gap-3 sm:grid-cols-2">
-									{AI_CHOICES.map((value) => {
-										const {
-											icon: Icon,
-											label,
-											description,
-											consideration,
-										} = MEMBER_AI_CHOICE_DEFS[value];
-										const readiness = readinessSentence(state.data, value);
-										const setup = coverage(state.data, value);
-										const sameModelsAs = state.data.aiOptions.find(
-											(option) => option.choice === value,
-										)?.sameModelsAs;
-										return (
-											<QuestionnaireChoice
-												key={value}
-												value={value}
-												checked={choice === value}
-												onChange={(event) => {
-													if (event.target.checked) setDraft(value);
-												}}
-												className="p-4"
-											>
-												<span className="mb-2 flex items-center gap-2 font-medium">
-													<Icon className="size-5 shrink-0 text-mentor" aria-hidden="true" />
-													{label}
-												</span>{" "}
-												<QuestionnaireChoiceDescription>
-													<span className="block">
-														<span className="font-medium text-foreground">Allows</span>{" "}
-														{description}
-													</span>{" "}
-													<span className="mt-3 block">
-														<span className="font-medium text-foreground">Consider</span>{" "}
-														{consideration}
-													</span>{" "}
-													<span className="mt-3 block border-t pt-3">
-														<span className="block font-medium text-foreground">
-															In this workspace
-														</span>{" "}
-														<span className="flex justify-between gap-2">
-															<span>Practice reviews</span>{" "}
-															<span>
-																{value === "NO_AI"
-																	? "Off for you"
-																	: setup.practiceReviews
-																		? "Set up"
-																		: "Not set up"}
-															</span>
-														</span>{" "}
-														<span className="flex justify-between gap-2">
-															<span>Heph</span>{" "}
-															<span>
-																{value === "NO_AI"
-																	? "Off for you"
-																	: setup.mentor
-																		? "Set up"
-																		: "Not set up"}
-															</span>
-														</span>{" "}
-														{sameModelsAs && (
-															<span className="mt-2 block">
-																Same models as “{MEMBER_AI_CHOICE_DEFS[sameModelsAs].label}” today.
-															</span>
-														)}
-														{readiness && <span className="mt-2 block">{readiness}</span>}
-													</span>
-												</QuestionnaireChoiceDescription>
-											</QuestionnaireChoice>
-										);
-									})}
-								</QuestionnaireChoices>
+								<AiChoiceCards data={state.data} choice={choice} onChoice={setDraft} />
 								<p className="text-sm text-muted-foreground">
 									“Set up” describes this workspace’s configuration, not current service health.
 								</p>
@@ -380,7 +303,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 										<ItemGroup>
 											{links.map((link) => {
 												const Icon = getProviderIcon(link.providerType);
-												const prefix = link.teamName ? `${link.teamName} · ` : "";
+												const prefix = hasText(link.teamName) ? `${link.teamName} · ` : "";
 												const rowDescription =
 													!link.available && !link.linked
 														? `${prefix}Unavailable right now — it doesn't hold you up.`
@@ -407,12 +330,15 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 																<Button
 																	type="button"
 																	variant="outline"
-																	disabled={!link.available || !link.registrationId || saving}
+																	disabled={
+																		!link.available || !hasText(link.registrationId) || saving
+																	}
 																	aria-describedby={descriptionId}
 																	aria-label={`${changed ? "Save AI choice and connect" : "Connect"} ${link.displayName}`}
 																	onClick={() => {
-																		if (link.registrationId)
+																		if (hasText(link.registrationId)) {
 																			state.onLink(link.registrationId, draft);
+																		}
 																	}}
 																>
 																	{changed ? "Save & connect" : "Connect"}
@@ -456,7 +382,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 							{/* The exit sits at the far edge from the primary: only one of the two moves the flow on. */}
 							<footer className="flex flex-col gap-4 sm:flex-row-reverse sm:items-center sm:justify-between">
 								<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-									{hint && (
+									{hasText(hint) && (
 										<p id={`${id}-hint`} className="text-sm text-muted-foreground">
 											{hint}
 										</p>
@@ -465,16 +391,10 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 										<Button
 											type="submit"
 											disabled={!canSubmit || saving}
-											aria-describedby={hint ? `${id}-hint` : undefined}
+											aria-describedby={hasText(hint) ? `${id}-hint` : undefined}
 										>
 											{savingAction === "save" && <Spinner />}
-											{savingAction === "save"
-												? "Saving…"
-												: firstVisit && !requiredSatisfied && changed
-													? "Save AI choice"
-													: firstVisit
-														? "Continue"
-														: "Save"}
+											{saveLabel}
 										</Button>
 									)}
 								</div>
@@ -487,19 +407,15 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 									className="self-start text-muted-foreground sm:-ml-3"
 								>
 									{savingAction === "continue" && <Spinner />}
-									{savingAction === "continue"
-										? "Skipping…"
-										: firstVisit
-											? "Skip for now"
-											: "Back to workspace"}
+									{leaveLabel}
 								</Button>
 							</footer>
 							{firstVisit && (
 								<p id={`${id}-skip-hint`} className="text-sm text-muted-foreground">
 									Skipping does not save an answer selected above.{" "}
-									{data.aiChoice
-										? `Your saved choice (${memberAiChoiceTitle(data.aiChoice)}) stays in effect.`
-										: "AI stays off until you save a choice."}
+									{data?.aiChoice == null
+										? "AI stays off until you save a choice."
+										: `Your saved choice (${memberAiChoiceTitle(data.aiChoice)}) stays in effect.`}
 								</p>
 							)}
 						</>
@@ -510,4 +426,176 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 			</Questionnaire>
 		</div>
 	);
+}
+
+function AiChoiceCards({
+	data,
+	choice,
+	onChoice,
+}: {
+	data: WorkspaceOnboarding;
+	choice: MemberAiChoice | undefined;
+	onChoice: (choice: MemberAiChoice) => void;
+}) {
+	return (
+		<QuestionnaireChoices className="gap-3 sm:grid-cols-2">
+			{AI_CHOICES.map((value) => {
+				const { icon: Icon, label, description, consideration } = MEMBER_AI_CHOICE_DEFS[value];
+				const readiness = readinessSentence(data, value);
+				const setup = coverage(data, value);
+				const sameModelsAs = data.aiOptions.find((option) => option.choice === value)?.sameModelsAs;
+				return (
+					<QuestionnaireChoice
+						key={value}
+						value={value}
+						checked={choice === value}
+						onChange={(event) => {
+							if (event.target.checked) {
+								onChoice(value);
+							}
+						}}
+					>
+						<span className="mb-2 flex items-center gap-2 font-medium">
+							<Icon className="size-5 shrink-0 text-mentor" aria-hidden="true" />
+							{label}
+						</span>{" "}
+						<QuestionnaireChoiceDescription>
+							<span className="block">
+								<span className="font-medium text-foreground">Allows</span> {description}
+							</span>{" "}
+							<span className="mt-3 block">
+								<span className="font-medium text-foreground">Consider</span> {consideration}
+							</span>{" "}
+							<span className="mt-3 block border-t pt-3">
+								<span className="block font-medium text-foreground">In this workspace</span>{" "}
+								<span className="flex justify-between gap-2">
+									<span>Practice reviews</span>{" "}
+									<span>{setupLabel(value, setup.practiceReviews)}</span>
+								</span>{" "}
+								<span className="flex justify-between gap-2">
+									<span>Heph</span> <span>{setupLabel(value, setup.mentor)}</span>
+								</span>{" "}
+								{sameModelsAs && (
+									<span className="mt-2 block">
+										Same models as “{MEMBER_AI_CHOICE_DEFS[sameModelsAs].label}” today.
+									</span>
+								)}
+								{hasText(readiness) && <span className="mt-2 block">{readiness}</span>}
+							</span>
+						</QuestionnaireChoiceDescription>
+					</QuestionnaireChoice>
+				);
+			})}
+		</QuestionnaireChoices>
+	);
+}
+
+function setupLabel(choice: MemberAiChoice, ready: boolean): string {
+	if (choice === "NO_AI") {
+		return "Off for you";
+	}
+	return ready ? "Set up" : "Not set up";
+}
+
+function onboardingNarration({
+	status,
+	changed,
+	firstVisit,
+	requiredSatisfied,
+	choice,
+	savedFullyUncovered,
+	savedUncovered,
+	openRequiredNames,
+}: {
+	status: WorkspaceOnboardingPageProps["state"]["status"];
+	changed: boolean;
+	firstVisit: boolean;
+	requiredSatisfied: boolean;
+	choice: MemberAiChoice | undefined;
+	savedFullyUncovered: boolean;
+	savedUncovered: boolean;
+	openRequiredNames: string;
+}): string {
+	if (status === "loading") {
+		return "Give me a moment — I'm fetching your setup.";
+	}
+	if (status === "error") {
+		return "I couldn't fetch your setup just now.";
+	}
+	if (changed && firstVisit) {
+		return requiredSatisfied
+			? "Noted. Press Continue and I'll remember that."
+			: "Save your AI choice now. You can connect your accounts separately.";
+	}
+	if (changed) {
+		return "Save to apply your new choice. Requests already sent cannot be recalled.";
+	}
+	if (choice === undefined) {
+		return "One question: which AI may handle your work. Any answer is fine by me, including none.";
+	}
+	if (savedFullyUncovered) {
+		return "Your choice isn't set up here yet. I won't switch you anywhere else.";
+	}
+	if (savedUncovered) {
+		return "Part of your choice isn't set up here yet. I won't switch you anywhere else.";
+	}
+	if (firstVisit) {
+		return requiredSatisfied
+			? "That's everything. Let's get to work."
+			: `Noted. Connect ${openRequiredNames} and you're in.`;
+	}
+	return `You chose ${memberAiChoiceTitle(choice)}. Change it whenever you like.`;
+}
+
+function memberSetupState(
+	data: WorkspaceOnboarding | undefined,
+	draft: MemberAiChoice | undefined,
+) {
+	const firstVisit = data?.needsWelcome === true;
+	const choice = draft ?? data?.aiChoice;
+	const changed = choice !== data?.aiChoice;
+	const savedCoverage =
+		data !== undefined && data.aiChoice != null ? coverage(data, data.aiChoice) : undefined;
+	const savedUncovered =
+		savedCoverage !== undefined && !(savedCoverage.practiceReviews && savedCoverage.mentor);
+	const savedFullyUncovered =
+		savedCoverage !== undefined && !savedCoverage.practiceReviews && !savedCoverage.mentor;
+	const links = data?.links ?? [];
+	const openRequired = openRequiredLinks(links);
+	const openRequiredNames = joinNames(openRequired.map((link) => link.displayName));
+	const requiredSatisfied = openRequired.length === 0;
+	// Saving an AI choice is independent of connecting accounts, even on a first visit.
+	const canSubmit = choice !== undefined && (changed || (firstVisit && requiredSatisfied));
+	let heading = "Workspace setup";
+	if (data !== undefined) {
+		heading = firstVisit
+			? `Welcome to ${data.workspaceName}`
+			: `Your AI choice in ${data.workspaceName}`;
+	}
+	let hint: string | undefined;
+	if (data !== undefined) {
+		if (choice === undefined) {
+			hint = firstVisit ? "Choose an answer to continue." : "Choose an answer, then save.";
+		} else if (firstVisit && !requiredSatisfied) {
+			hint = changed
+				? `Save your AI choice now; connect ${openRequiredNames} to finish setup.`
+				: `Connect ${openRequiredNames} to finish setup.`;
+		} else if (!firstVisit && !changed) {
+			hint = "You can change this any time from the sidebar.";
+		}
+	}
+
+	return {
+		firstVisit,
+		choice,
+		changed,
+		links,
+		openRequiredNames,
+		requiredSatisfied,
+		canSubmit,
+		savedFullyUncovered,
+		savedUncovered,
+		heading,
+		hint,
+	};
 }

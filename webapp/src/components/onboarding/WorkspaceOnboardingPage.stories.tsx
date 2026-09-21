@@ -2,9 +2,9 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, waitFor } from "storybook/test";
 
 import type { WorkspaceOnboarding, WorkspaceOnboardingLink } from "@/api/types.gen";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 import { expectGenuinelyDisabled } from "@/test/controls";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import {
 	type OnboardingSubmission,
@@ -12,10 +12,10 @@ import {
 	type WorkspaceOnboardingPageProps,
 } from "./WorkspaceOnboardingPage";
 
-const IN_HOUSE = /^Only in-house /;
-const NOT_KEPT = /^Allow providers without content storage /;
-const ANY = /^Allow storage for safety checks /;
-const NO_AI = /^No AI /;
+const IN_HOUSE = /^Only in-house /u;
+const NOT_KEPT = /^Allow providers without content storage /u;
+const ANY = /^Allow storage for safety checks /u;
+const NO_AI = /^No AI /u;
 
 const slack = {
 	connectionId: 1,
@@ -65,7 +65,6 @@ const ready = {
 
 /** Equal, unselected choices; saving AI preferences never depends on connecting accounts. */
 const meta = {
-	title: "Onboarding/Workspace setup",
 	component: WorkspaceOnboardingPage,
 	tags: ["autodocs"],
 	parameters: { layout: "fullscreen" },
@@ -91,7 +90,9 @@ function Harness({
 	afterLeave?: OnboardingSubmission;
 }) {
 	const { state } = args;
-	if (state.status !== "ready") return <WorkspaceOnboardingPage {...args} />;
+	if (state.status !== "ready") {
+		return <WorkspaceOnboardingPage {...args} />;
+	}
 	return (
 		<Stateful initial={{ submission: state.submission, aiChoice: state.data.aiChoice }}>
 			{({ submission, aiChoice }, setValue) => (
@@ -111,7 +112,9 @@ function Harness({
 						},
 						onLeave: () => {
 							state.onLeave();
-							if (afterLeave) setValue({ submission: afterLeave, aiChoice });
+							if (afterLeave) {
+								setValue({ submission: afterLeave, aiChoice });
+							}
 						},
 					}}
 				/>
@@ -121,14 +124,18 @@ function Harness({
 }
 
 function readyArgs(args: WorkspaceOnboardingPageProps) {
-	if (args.state.status !== "ready") throw new Error("Expected the ready state");
+	if (args.state.status !== "ready") {
+		throw new Error("Expected the ready state");
+	}
 	return args.state;
 }
 
 /** The card a radio sits in, which is what the grid lays out. */
 function cardOf(radio: HTMLElement) {
 	const card = radio.closest("label");
-	if (!card) throw new Error("Expected the radio inside its card");
+	if (!card) {
+		throw new Error("Expected the radio inside its card");
+	}
 	return card.getBoundingClientRect();
 }
 
@@ -146,13 +153,15 @@ export const Default: Story = {
 		await expect(canvas.queryByRole("button", { name: "From your team" })).toBeNull();
 		// Two columns: the first two cards share a row and a height, the third starts below them.
 		const [first, second, third] = radios.map(cardOf);
-		if (!first || !second || !third) throw new Error("Expected four cards");
+		if (!first || !second || !third) {
+			throw new Error("Expected four cards");
+		}
 		await expect(first.top).toBe(second.top);
 		await expect(first.height).toBe(second.height);
 		await expect(third.top).toBeGreaterThan(first.bottom);
 		// Facts are rows: each term sits beside its sentence, not above it.
 		const term = canvas.getByText("What AI does");
-		const detail = canvas.getByText(/Practice reviews about your work/);
+		const detail = canvas.getByText(/Practice reviews about your work/u);
 		await expect(term.getBoundingClientRect().top).toBe(detail.getBoundingClientRect().top);
 		await expect(detail.getBoundingClientRect().left).toBeGreaterThan(
 			term.getBoundingClientRect().right,
@@ -162,8 +171,9 @@ export const Default: Story = {
 
 export const FirstVisit: Story = {
 	play: async ({ canvas }) => {
-		for (const name of [IN_HOUSE, NOT_KEPT, ANY, NO_AI])
+		for (const name of [IN_HOUSE, NOT_KEPT, ANY, NO_AI]) {
 			await expect(canvas.getByRole("radio", { name })).not.toBeChecked();
+		}
 		await expect(
 			canvas.getByRole("heading", { level: 1, name: "Welcome to Engineering" }),
 		).toBeVisible();
@@ -172,7 +182,7 @@ export const FirstVisit: Story = {
 				"One question: which AI may handle your work. Any answer is fine by me, including none.",
 			),
 		).toBeVisible();
-		await expect(canvas.getByRole("heading", { name: /Connect your accounts/ })).toBeVisible();
+		await expect(canvas.getByRole("heading", { name: /Connect your accounts/u })).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Skip for now" })).toBeEnabled();
 	},
 };
@@ -193,10 +203,10 @@ export const NoAi: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
-			/No AI Allows No new practice reviews.*Consider.*Membership and existing feedback.*Practice reviews Off for you.*Heph Off for you/,
+			/No AI Allows No new practice reviews.*Consider.*Membership and existing feedback.*Practice reviews Off for you.*Heph Off for you/u,
 		);
 		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toHaveAccessibleName(
-			/Only in-house Allows Runs only on systems your organisation operates.*Consider.*models and capacity/,
+			/Only in-house Allows Runs only on systems your organisation operates.*Consider.*models and capacity/u,
 		);
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
@@ -246,7 +256,7 @@ export const RequiredLinkBroken: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
-		await expect(canvas.getByText(/doesn't hold you up/)).toBeVisible();
+		await expect(canvas.getByText(/doesn't hold you up/u)).toBeVisible();
 		const connect = canvas.getByRole("button", { name: "Connect Slack" });
 		await expectGenuinelyDisabled(connect);
 		await expect(connect).toHaveAccessibleDescription(
@@ -296,7 +306,7 @@ export const OptionUncovered: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
 		await expect(inHouse).toHaveAccessibleName(
-			/Only in-house.*Practice reviews Not set up.*Heph Not set up.*nothing runs for you/,
+			/Only in-house.*Practice reviews Not set up.*Heph Not set up.*nothing runs for you/u,
 		);
 		// A ceiling nobody has built up to is still a valid answer, so the card is not disabled.
 		await expect(inHouse).not.toHaveAttribute("aria-disabled");
@@ -331,13 +341,13 @@ export const HephNotCovered: Story = {
 			),
 		).toBeVisible();
 		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toHaveAccessibleName(
-			/Heph isn't set up for this answer yet\.$/,
+			/Heph isn't set up for this answer yet\.$/u,
 		);
 		await expect(canvas.getByRole("radio", { name: NOT_KEPT })).toHaveAccessibleName(
-			/Practice reviews aren't set up for this answer yet\.$/,
+			/Practice reviews aren't set up for this answer yet\.$/u,
 		);
 		await expect(canvas.getByRole("radio", { name: ANY })).toHaveAccessibleName(
-			/provider staff may read flagged content.*Practice reviews Set up.*Heph Set up/,
+			/provider staff may read flagged content.*Practice reviews Set up.*Heph Set up/u,
 		);
 	},
 };
@@ -429,7 +439,7 @@ export const ReturnVisitRequiredLinkOpen: Story = {
 			canvas.getByText("Save to apply your new choice. Requests already sent cannot be recalled."),
 		).toBeVisible();
 		await expect(save).toBeEnabled();
-		await expect(save).not.toHaveAccessibleDescription(/finish setup/);
+		await expect(save).not.toHaveAccessibleDescription(/finish setup/u);
 		await userEvent.click(save);
 		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("NO_AI");
 	},
@@ -441,8 +451,8 @@ export const OAuthReturn: Story = {
 		state: { ...ready, data: { ...welcome, aiChoice: "IN_HOUSE_ONLY" } },
 	},
 	play: async ({ canvas }) => {
-		await waitFor(() =>
-			expect(canvas.getByRole("region", { name: /Connect your accounts/ })).toHaveFocus(),
+		await waitFor(async () =>
+			expect(canvas.getByRole("region", { name: /Connect your accounts/u })).toHaveFocus(),
 		);
 	},
 };
@@ -455,8 +465,9 @@ export const Saving: Story = {
 		await userEvent.click(noAi);
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Saving…" }));
-		for (const radio of canvas.getAllByRole("radio", { hidden: true }))
+		for (const radio of canvas.getAllByRole("radio", { hidden: true })) {
 			await expect(radio).toBeDisabled();
+		}
 		await expect(noAi).toBeChecked();
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Skip for now" }));
 	},
@@ -480,7 +491,7 @@ export const SaveFailed: Story = {
 		const alert = canvas.getByRole("alert");
 		await expect(alert).toHaveTextContent("Couldn't save your AI choice");
 		await expect(alert).toHaveTextContent("Your choice could not be saved.");
-		await waitFor(() => expect(alert).toHaveFocus());
+		await waitFor(async () => expect(alert).toHaveFocus());
 		await expect(canvas.getByRole("radio", { name: NOT_KEPT })).toBeChecked();
 	},
 };
@@ -516,7 +527,9 @@ export const RefreshFailed: Story = {
 		await expect(canvas.getByText("Couldn't refresh your setup")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		const { refresh } = readyArgs(args);
-		if (refresh?.status !== "error") throw new Error("Expected a retryable refresh error");
+		if (refresh?.status !== "error") {
+			throw new Error("Expected a retryable refresh error");
+		}
 		await expect(refresh.onRetry).toHaveBeenCalledOnce();
 	},
 };
@@ -536,7 +549,9 @@ export const LoadFailed: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByText("I couldn't fetch your setup just now.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
-		if (args.state.status !== "error") throw new Error("Expected the retryable error state");
+		if (args.state.status !== "error") {
+			throw new Error("Expected the retryable error state");
+		}
 		await expect(args.state.onRetry).toHaveBeenCalledOnce();
 		await expect(canvas.getByRole("button", { name: "Back to workspace" })).toBeEnabled();
 	},
@@ -568,10 +583,12 @@ export const Narrow: Story = {
 		await expectNoPageOverflow();
 		// One column: every card starts below the one before it.
 		const cards = canvas.getAllByRole("radio").map(cardOf);
-		for (let index = 1; index < cards.length; index++) {
+		for (let index = 1; index < cards.length; index += 1) {
 			const above = cards[index - 1];
 			const card = cards[index];
-			if (!above || !card) throw new Error("Expected four cards");
+			if (!above || !card) {
+				throw new Error("Expected four cards");
+			}
 			await expect(card.top).toBeGreaterThanOrEqual(above.bottom);
 			await expect(card.left).toBe(above.left);
 		}
@@ -649,7 +666,7 @@ export const SameModelsForBroaderChoice: Story = {
 	},
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByRole("radio", { name: NOT_KEPT })).toHaveAccessibleName(
-			/Same models as “Only in-house” today/,
+			/Same models as “Only in-house” today/u,
 		);
 		await userEvent.click(canvas.getByRole("radio", { name: IN_HOUSE }));
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 import type { ReleaseStatus } from "@/api/types.gen";
-import type { StatusDefs } from "@/components/practice-vocabulary/status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type ReleaseCheckStatus = ReleaseStatus["status"];
 

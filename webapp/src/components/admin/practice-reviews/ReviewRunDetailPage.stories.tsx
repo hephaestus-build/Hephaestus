@@ -2,17 +2,17 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, waitFor } from "storybook/test";
 
 import type { ReviewFeedback, ReviewObservation } from "@/api/types.gen";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
-import { REVIEW_PREVIEW_SIZE, type ReviewSectionState } from "./ReviewOutputSections";
-import { ReviewRunDetailPage } from "./ReviewRunDetailPage";
 import {
 	manyObservations,
 	reviewFeedback,
 	reviewJob,
 	reviewObservations,
 	workspacePractices,
-} from "./story-mock-data";
+} from "./fixtures";
+import { REVIEW_PREVIEW_SIZE, type ReviewSectionState } from "./ReviewOutputSections";
+import { ReviewRunDetailPage } from "./ReviewRunDetailPage";
 
 const COMPLETED_RUN = "11111111-1111-1111-1111-111111111111";
 const CONVERSATION_RUN = "33333333-3333-3333-3333-333333333333";
@@ -41,7 +41,9 @@ const NOT_YET: ReviewSectionState<never> = { status: "pending" };
 
 /** The practice one of the completed run's observations names, and the one the card is read on. */
 const THIN_CONTROLLERS = workspacePractices.find((p) => p.slug === "thin-controllers");
-if (!THIN_CONTROLLERS) throw new Error("The practice fixtures no longer cover thin-controllers");
+if (!THIN_CONTROLLERS) {
+	throw new Error("The practice fixtures no longer cover thin-controllers");
+}
 
 /**
  * One review, end to end: what it looked at, what it concluded, what it said, and how it ran.
@@ -51,7 +53,6 @@ if (!THIN_CONTROLLERS) throw new Error("The practice fixtures no longer cover th
  * prop here rather than a moment you have to catch.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Review details",
 	component: ReviewRunDetailPage,
 	parameters: {
 		layout: "padded",
@@ -74,8 +75,8 @@ const meta = {
 		practices: workspacePractices,
 		onCancel: fn(),
 		cancelPending: false,
-		onRetryDelivery: fn(),
-		retryDeliveryPending: false,
+		onRetryResultProcessing: fn(),
+		retryResultProcessingPending: false,
 	},
 } satisfies Meta<typeof ReviewRunDetailPage>;
 
@@ -87,14 +88,34 @@ export const CompletedWithMixedOutput: Story = {
 		await canvas.findByRole("heading", {
 			name: "Cache the workspace member lookup on the review path",
 		});
-		canvas.getByText("Summary posted");
+		canvas.getByText("Results processed");
 		await canvas.findByText("A cache miss and a permission failure come back as the same 404");
-		await canvas.findByText(/2 issues to tighten in this change/);
+		await canvas.findByText(/2 issues to tighten in this change/u);
 		await canvas.findByRole("heading", { name: "How this review ran", level: 3 });
 		canvas.getByRole("button", { name: "Copy configuration" });
 		canvas.getByText("Tokens read");
 		await expect(canvas.queryByText("Configuration snapshot")).not.toBeInTheDocument();
 		await expectNoPageOverflow();
+	},
+};
+
+/** Processing can finish while approval still prevents publication. */
+export const ProcessedWithFeedbackAwaitingApproval: Story = {
+	args: {
+		feedback: ready(
+			feedbackOf(COMPLETED_RUN)
+				.slice(0, 1)
+				.map((item) => ({
+					...item,
+					deliveryState: "AWAITING_APPROVAL" as const,
+				})),
+		),
+	},
+	play: async ({ canvas }) => {
+		await canvas.findByText("Results processed");
+		await canvas.findByText("Awaiting approval");
+		await expect(canvas.queryByText("Summary posted")).not.toBeInTheDocument();
+		await expect(canvas.queryByText("Delivered")).not.toBeInTheDocument();
 	},
 };
 
@@ -106,7 +127,7 @@ export const CompletedWithMixedOutput: Story = {
 export const PracticeOpensItsDefinition: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ canvas, userEvent }) => {
-		const link = await canvas.findByRole("link", { name: /Thin controllers/ });
+		const link = await canvas.findByRole("link", { name: /Thin controllers/u });
 		await expect(link).toHaveAttribute("href", "/w/demo/admin/practices/thin-controllers");
 		// The card is a portal, so it is looked for on the whole screen rather than in the canvas.
 		await userEvent.hover(link);
@@ -152,7 +173,7 @@ export const DeclinedForInsufficientEvidence: Story = {
 		await expect(canvas.queryByText("No observations were recorded")).toBeNull();
 		await expect(canvas.queryByText("No feedback")).toBeNull();
 		await expect(
-			await canvas.findAllByText(/the material it needed was missing, unreadable, out of date/),
+			await canvas.findAllByText(/the material it needed was missing, unreadable, out of date/u),
 		).not.toHaveLength(0);
 	},
 };
@@ -191,13 +212,13 @@ export const FailedWithoutOutput: Story = {
 	},
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText("Review couldn't be completed")).toBeVisible();
+		await expect(await canvas.findByText("Review couldn’t be completed")).toBeVisible();
 		await expect(
 			await canvas.findByText("This review ended before it produced observations or feedback."),
 		).toBeVisible();
 		// The failure text is on the page rather than behind a disclosure: this is the only screen that
 		// can say why a review produced nothing.
-		await canvas.findByText(/Cannot compute diff/);
+		await canvas.findByText(/Cannot compute diff/u);
 		await expect(canvas.queryByText("Technical details")).not.toBeInTheDocument();
 	},
 };
@@ -288,6 +309,6 @@ export const OneSectionFailed: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("Couldn't load observations");
 		// The other section is unaffected, which is the whole point of two states rather than one.
-		await canvas.findByText(/2 issues to tighten in this change/);
+		await canvas.findByText(/2 issues to tighten in this change/u);
 	},
 };

@@ -26,12 +26,8 @@ const meta = {
 			description: "Array of current attachments",
 			control: "object",
 		},
-		onAttachmentsChange: {
-			description: "Handler for attachment changes",
-			control: false,
-		},
-		onFileUpload: {
-			description: "Handler for file upload processing",
+		attachmentUpload: {
+			description: "Upload and attachment-change handlers; absent on a surface without attachments",
 			control: false,
 		},
 		onSubmit: {
@@ -50,27 +46,21 @@ const meta = {
 			description: "Whether the input should be readonly",
 			control: "boolean",
 		},
-		disableAttachments: {
-			description: "Whether to disable attachment functionality",
-			control: "boolean",
-		},
 	},
 	args: {
 		status: "ready",
 		onStop: fn(),
 		attachments: [],
-		onAttachmentsChange: fn(),
-		onFileUpload: fn(async () => []),
+		attachmentUpload: { onFileUpload: fn(async () => []), onAttachmentsChange: fn() },
 		onSubmit: fn(),
 		// Suggested actions send immediately via onSubmit; no handler required
 		placeholder: "Send a message...",
 		initialInput: "",
 		readonly: false,
-		disableAttachments: false,
 	},
 	decorators: [
 		(Story) => (
-			<div className="max-w-2xl w-full pt-20">
+			<div className="w-full max-w-2xl pt-20">
 				<Story />
 			</div>
 		),
@@ -83,7 +73,11 @@ type Story = StoryObj<typeof meta>;
 /**
  * Default empty state.
  */
-export const Default: Story = {};
+export const Default: Story = {
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Attach a file" })).toBeVisible();
+	},
+};
 
 /**
  * Input with some initial text.
@@ -143,12 +137,15 @@ export const ReadonlyInput: Story = {
 };
 
 /**
- * Input with attachments disabled - no attachment button or file upload.
+ * Input on a surface without attachments - no attachment button or file input.
  */
-export const DisabledAttachments: Story = {
+export const WithoutAttachments: Story = {
 	args: {
-		disableAttachments: true,
+		attachmentUpload: undefined,
 		placeholder: "Send a message (attachments disabled)...",
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("button", { name: "Attach a file" })).toBeNull();
 	},
 };
 
@@ -174,9 +171,9 @@ export const ScrollToLatest: Story = {
 		await expect(canvas.queryByRole("button", { name: "Scroll to latest message" })).toBeNull();
 		await userEvent.click(canvas.getByRole("button", { name: "Read earlier messages" }));
 		const latest = await canvas.findByRole("button", { name: "Scroll to latest message" });
-		await waitFor(() => expect(latest).toBeVisible());
+		await waitFor(async () => expect(latest).toBeVisible());
 		await userEvent.click(latest);
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(canvas.queryByRole("button", { name: "Scroll to latest message" })).toBeNull(),
 		);
 	},

@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
 import { PRACTICE_AUTONOMY_ADDS } from "@/lib/practice-autonomy";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import { AutonomyLadder } from "./AutonomyLadder";
 
@@ -18,7 +18,9 @@ const LAYOUT_SLACK_PX = 1;
 async function expectRungsConnected(rungs: HTMLElement[]) {
 	await expect(rungs.length).toBeGreaterThan(1);
 	const [firstBox, ...laterBoxes] = rungs.map((rung) => rung.getBoundingClientRect());
-	if (!firstBox) throw new Error("The ladder rendered no rungs.");
+	if (!firstBox) {
+		throw new Error("The ladder rendered no rungs.");
+	}
 	let previous = firstBox;
 	for (const [offset, current] of laterBoxes.entries()) {
 		const stacked =
@@ -46,7 +48,6 @@ function rungsOf(radios: HTMLElement[]): HTMLElement[] {
 }
 
 const meta = {
-	title: "Workspace admin/Practices/Review/Autonomy ladder",
 	component: AutonomyLadder,
 	parameters: {
 		layout: "padded",

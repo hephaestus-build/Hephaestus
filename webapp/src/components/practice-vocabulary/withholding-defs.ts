@@ -1,6 +1,6 @@
 import { ArchiveIcon, BrushCleaningIcon, UserRoundXIcon, VolumeOffIcon } from "lucide-react";
 import type { ReviewFeedback } from "@/api/types.gen";
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type WithholdingReason = NonNullable<ReviewFeedback["suppressionReason"]>;
 export type WithholdingFamily = "WORK_MOVED_ON" | "POLICY" | "DEVELOPER_CHOICE" | "HOUSEKEEPING";
@@ -104,20 +104,15 @@ function isWithholdingReason(value: string): value is WithholdingReason {
 	return Object.hasOwn(REASON_FAMILY, value);
 }
 
-const WITHHOLDING_FAMILY_REASONS = Object.keys(REASON_FAMILY)
-	.filter(isWithholdingReason)
-	.reduce<Record<WithholdingFamily, WithholdingReason[]>>(
-		(families, reason) => {
-			families[withholdingFamily(reason)].push(reason);
-			return families;
-		},
-		{
-			WORK_MOVED_ON: [],
-			POLICY: [],
-			DEVELOPER_CHOICE: [],
-			HOUSEKEEPING: [],
-		},
-	);
+const WITHHOLDING_FAMILY_REASONS: Record<WithholdingFamily, WithholdingReason[]> = {
+	WORK_MOVED_ON: [],
+	POLICY: [],
+	DEVELOPER_CHOICE: [],
+	HOUSEKEEPING: [],
+};
+for (const reason of Object.keys(REASON_FAMILY).filter(isWithholdingReason)) {
+	WITHHOLDING_FAMILY_REASONS[withholdingFamily(reason)].push(reason);
+}
 
 export function reasonsInFamilies(families: readonly WithholdingFamily[]): WithholdingReason[] {
 	return families.flatMap((family) => WITHHOLDING_FAMILY_REASONS[family]);

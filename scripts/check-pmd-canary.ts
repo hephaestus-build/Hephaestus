@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import path from "node:path";
 
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
@@ -31,11 +31,11 @@ export function pmdResult(xml: string) {
 }
 
 async function main(): Promise<void> {
-	const root = resolve(import.meta.dirname, "..");
-	await mkdir(join(root, "tmp"), { recursive: true });
-	const directory = await mkdtemp(join(root, "tmp", "pmd-"));
-	const initScript = join(directory, "init.gradle.kts");
-	const report = join(directory, "report.xml");
+	const root = path.resolve(import.meta.dirname, "..");
+	await mkdir(path.join(root, "tmp"), { recursive: true });
+	const directory = await mkdtemp(path.join(root, "tmp", "pmd-"));
+	const initScript = path.join(directory, "init.gradle.kts");
+	const report = path.join(directory, "report.xml");
 	try {
 		// Exercise the real task and its annotation policy without changing or compiling production sources.
 		await writeFile(
@@ -95,15 +95,15 @@ gradle.projectsEvaluated {
 				errors: 1,
 			},
 		]) {
-			await writeFile(join(directory, "Canary.java"), scenario.source);
+			await writeFile(path.join(directory, "Canary.java"), scenario.source);
 			await rm(report, { force: true });
 			const result = spawnSync(
 				process.execPath,
 				[
-					resolve(import.meta.dirname, "run-gradlew.ts"),
+					path.resolve(import.meta.dirname, "run-gradlew.ts"),
 					"--init-script",
 					// A relative argument stays space-free even when the Windows checkout path is not.
-					relative(resolve(root, "server"), initScript),
+					path.relative(path.resolve(root, "server"), initScript),
 					":application:pmdMain",
 					"--console=plain",
 				],
@@ -133,4 +133,6 @@ gradle.projectsEvaluated {
 	}
 }
 
-if (import.meta.main) await main();
+if (import.meta.main) {
+	await main();
+}

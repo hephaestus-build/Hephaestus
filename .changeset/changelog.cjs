@@ -3,7 +3,7 @@
 // adds PR links + "Thanks @user!"). Operators read this file; git metadata
 // lives in git.
 module.exports = {
-	/** @param {{ summary: string }} changeset */
+	/** @param {{ summary: string }} changeset The changeset whose summary becomes the entry. */
 	getReleaseLine: (changeset) => `- ${changeset.summary.trim().split("\n").join("\n  ")}`,
 	getDependencyReleaseLine: () => "",
 };

@@ -1,12 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { HandshakeIcon, InfoIcon, Link2Icon } from "lucide-react";
 import { useId, useRef, useState } from "react";
+import { hasText } from "@/lib/text";
 
 import type { WorkspaceOnboardingLink, WorkspaceOnboardingSettings } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
-import { Section } from "@/components/core/Section";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
+import { Section } from "@/components/layout/Section";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // A plain `Link` in button clothes rather than `Button render={<Link/>}`: with `nativeButton={false}`
 // Base UI stamps `role="button"` on the anchor, and both of these are navigations.
@@ -70,7 +71,7 @@ export function WorkspaceOnboardingSettingsPage({
 				title="Member onboarding"
 				description="Set up developers after they join this workspace. This does not grant membership or change how people join."
 			/>
-			{state.status === "loading" ? (
+			{state.status === "loading" && (
 				<div
 					role="region"
 					aria-label="Loading onboarding settings"
@@ -81,13 +82,15 @@ export function WorkspaceOnboardingSettingsPage({
 					<Skeleton className="h-48 w-full" />
 					<Skeleton className="h-32 w-full" />
 				</div>
-			) : state.status === "error" ? (
+			)}
+			{state.status === "error" && (
 				<QueryErrorAlert
 					title="Couldn't load onboarding settings"
 					error={state.error}
 					onRetry={state.onRetry}
 				/>
-			) : (
+			)}
+			{state.status === "ready" && (
 				<SettingsForm key={workspaceSlug} workspaceSlug={workspaceSlug} {...state} />
 			)}
 		</PageLayout>
@@ -142,7 +145,9 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 			patch: { ...current?.patch, ...patch },
 		}));
 	const save = async () => {
-		if (!edits || !changed || conflicted) return;
+		if (!edits || !changed || conflicted) {
+			return;
+		}
 		try {
 			await onSave({ ...draft, revision: edits.baseRevision });
 			setEdits(undefined);
@@ -205,7 +210,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 						<InfoIcon aria-hidden="true" />
 						<AlertTitle>Members still have to choose</AlertTitle>
 						<AlertDescription>
-							Members who haven't chosen get no practice reviews and no Heph. Turn the setup page on
+							Members who haven’t chosen get no practice reviews and no Heph. Turn the setup page on
 							so they can choose.
 						</AlertDescription>
 					</Alert>
@@ -220,7 +225,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 				}
 			>
 				{links.length === 0 ? (
-					<Empty className="border">
+					<Empty variant="outlined">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<Link2Icon />
@@ -248,11 +253,12 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 							// Clearing a broken link's requirement must stay possible, so only an unavailable
 							// link that is not yet required is out of reach.
 							const unavailable = !link.available && !required;
-							const detail = link.available
-								? link.teamName
-								: required
+							let detail = link.teamName;
+							if (!link.available) {
+								detail = required
 									? "Unavailable — repair it under Integrations or clear this requirement."
 									: "Unavailable — repair it under Integrations before requiring it.";
+							}
 							const controlId = `${id}-link-${link.connectionId}`;
 							return (
 								<FieldLabel key={link.connectionId} htmlFor={controlId}>
@@ -262,7 +268,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 											checked={required}
 											disabled={saving || unavailable}
 											aria-labelledby={`${controlId}-title`}
-											aria-describedby={detail ? `${controlId}-detail` : undefined}
+											aria-describedby={hasText(detail) ? `${controlId}-detail` : undefined}
 											onCheckedChange={(checked) =>
 												edit({
 													requiredConnectionIds: checked
@@ -275,7 +281,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 										/>
 										<FieldContent>
 											<FieldTitle id={`${controlId}-title`}>{link.displayName}</FieldTitle>
-											{detail && (
+											{hasText(detail) && (
 												<FieldDescription id={`${controlId}-detail`}>{detail}</FieldDescription>
 											)}
 										</FieldContent>
@@ -303,7 +309,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 			)}
 			{submission.status === "error" && edits?.refused && (
 				<Alert variant="destructive">
-					<AlertTitle>Couldn't save onboarding settings</AlertTitle>
+					<AlertTitle>Couldn’t save onboarding settings</AlertTitle>
 					<AlertDescription>{submission.message}</AlertDescription>
 				</Alert>
 			)}

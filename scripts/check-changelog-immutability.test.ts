@@ -38,8 +38,11 @@ function squashed(): ChangelogSnapshot {
 
 function changed(snapshot: ChangelogSnapshot, path: string, blob?: string): ChangelogSnapshot {
 	const blobs = new Map(snapshot.blobs);
-	if (blob === undefined) blobs.delete(path);
-	else blobs.set(path, blob);
+	if (blob === undefined) {
+		blobs.delete(path);
+	} else {
+		blobs.set(path, blob);
+	}
 	return { ...snapshot, blobs };
 }
 
@@ -75,8 +78,9 @@ void test("rejects incomplete retirement and unapproved replacement includes", (
 		include("different.xml"),
 		`${include(baseline)}${include("next.xml")}`,
 		`${include(baseline)}<includeAll path="extra"/>`,
-	])
+	]) {
 		assert.notDeepEqual(violations(original(), { ...squashed(), master: xml(content) }), []);
+	}
 });
 
 void test("rejects ordinary edits, deletion, and reordering of released migrations", () => {
@@ -128,6 +132,7 @@ void test("include attributes remain immutable but their XML ordering is irrelev
 });
 
 void test("malformed XML and the wrong root fail closed", () => {
-	for (const content of ["<databaseChangeLog>", "<other/>"])
+	for (const content of ["<databaseChangeLog>", "<other/>"]) {
 		assert.notDeepEqual(violations(squashed(), { ...squashed(), master: content }), []);
+	}
 });

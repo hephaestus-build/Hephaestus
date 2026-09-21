@@ -11,7 +11,6 @@ import { WorkspaceMentorPreferenceNotice } from "./WorkspaceMentorPreferenceNoti
  * left.
  */
 const meta = {
-	title: "Onboarding/Mentor preference notice",
 	component: WorkspaceMentorPreferenceNotice,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],

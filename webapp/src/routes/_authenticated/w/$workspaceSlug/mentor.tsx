@@ -9,18 +9,18 @@ import {
 
 import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { StandardPageSurface } from "@/components/core/StandardPageSurface";
+import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import { WorkspaceMentorPreferenceNotice } from "@/components/onboarding/WorkspaceMentorPreferenceNotice";
 import { Spinner } from "@/components/ui/spinner";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { useFeatureFlag } from "@/integrations/feature-flags";
 import { mentorPreferenceReason } from "@/lib/mentor-preference";
+import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor")({
 	staticData: { surface: "fullscreen" },
 	// Usually a cache hit, since the workspace gate fetched this on the way in; when the gate's
 	// fetch failed, a cold-load outage reaches the router error surface rather than a skeleton.
-	loader: ({ context, params }) =>
+	loader: async ({ context, params }) =>
 		context.queryClient.query({
 			...getMemberOnboardingOptions({ path: params }),
 			staleTime: "static",
@@ -69,7 +69,7 @@ function MentorLayout() {
 	}
 
 	const notice = mentorPreferenceReason(preference.data);
-	if (notice)
+	if (notice) {
 		return (
 			<div className="flex min-h-0 flex-1 flex-col">
 				<WorkspaceMentorPreferenceNotice
@@ -80,5 +80,6 @@ function MentorLayout() {
 				{isThread && <Outlet />}
 			</div>
 		);
+	}
 	return <Outlet />;
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { SlackChannelCandidate } from "@/components/admin/integrations/AdminSlackChannelsSettings";
+import type { SlackChannelCandidate } from "@/components/admin/integrations/WorkspaceSlackChannelsSettings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +15,7 @@ import {
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { parseSlackChannelReference } from "@/lib/slack-channel-reference";
+import { hasText } from "@/lib/text";
 
 import { SlackChannelCombobox } from "./SlackChannelCombobox";
 import { SlackChannelPasteField } from "./SlackChannelPasteField";
@@ -22,14 +23,24 @@ import { SlackChannelPasteField } from "./SlackChannelPasteField";
 export interface AddChannelDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	candidates?: SlackChannelCandidate[];
+	candidates: readonly SlackChannelCandidate[];
 	onSubmit: (input: { slackChannelId: string; channelName?: string }) => Promise<void> | void;
+}
+
+function candidateDisabledReason(candidate: SlackChannelCandidate): string | undefined {
+	if (candidate.archived === true) {
+		return "Archived";
+	}
+	if (candidate.consentState === "ACTIVE") {
+		return "Already listed";
+	}
+	return undefined;
 }
 
 export function AddChannelDialog({
 	open,
 	onOpenChange,
-	candidates = [],
+	candidates,
 	onSubmit,
 }: AddChannelDialogProps) {
 	const [selectedCandidate, setSelectedCandidate] = useState<SlackChannelCandidate | null>(null);
@@ -43,18 +54,18 @@ export function AddChannelDialog({
 	const parsedReference = parseSlackChannelReference(channelReference);
 	const referenceInvalid = channelReference.trim().length > 0 && parsedReference == null;
 
-	const resolved = selectedCandidate
-		? {
-				slackChannelId: selectedCandidate.slackChannelId,
-				channelName: selectedCandidate.channelName,
-			}
-		: parsedReference
-			? {
-					slackChannelId: parsedReference.channelId,
-					channelName:
-						channelName.trim().length > 0 ? channelName.trim() : parsedReference.channelName,
-				}
-			: null;
+	let resolved: { slackChannelId: string; channelName?: string } | null = null;
+	if (selectedCandidate) {
+		resolved = {
+			slackChannelId: selectedCandidate.slackChannelId,
+			channelName: selectedCandidate.channelName,
+		};
+	} else if (parsedReference) {
+		resolved = {
+			slackChannelId: parsedReference.channelId,
+			channelName: channelName.trim().length > 0 ? channelName.trim() : parsedReference.channelName,
+		};
+	}
 
 	function handleOpenChange(next: boolean) {
 		if (!next) {
@@ -69,7 +80,9 @@ export function AddChannelDialog({
 	}
 
 	async function submit() {
-		if (submitting) return;
+		if (submitting) {
+			return;
+		}
 		if (!resolved) {
 			setSubmitError(
 				hasCandidates
@@ -85,10 +98,10 @@ export function AddChannelDialog({
 			await onSubmit(resolved);
 			handleOpenChange(false);
 		} catch {
-			return;
-		} finally {
-			setSubmitting(false);
+			// Rejection = keep the dialog open. The mutation's onError already surfaced the
+			// toast, so swallow here rather than let it escape as an unhandled rejection.
 		}
+		setSubmitting(false);
 	}
 
 	return (
@@ -124,13 +137,7 @@ export function AddChannelDialog({
 									selectedChannelName={
 										parsedReference ? channelName.trim() || undefined : undefined
 									}
-									getDisabledReason={(candidate) =>
-										candidate.archived
-											? "Archived"
-											: candidate.consentState === "ACTIVE"
-												? "Already listed"
-												: undefined
-									}
+									getDisabledReason={candidateDisabledReason}
 									renderBadges={(candidate) =>
 										candidate.consentState === "REVOKED" ? (
 											<Badge variant="outline">Revoked</Badge>
@@ -146,7 +153,7 @@ export function AddChannelDialog({
 								<FieldDescription>
 									Private channels appear here after someone invites Hephaestus to them in Slack.
 								</FieldDescription>
-								{submitError && <FieldError>{submitError}</FieldError>}
+								{hasText(submitError) && <FieldError>{submitError}</FieldError>}
 							</Field>
 						)}
 
@@ -166,15 +173,15 @@ export function AddChannelDialog({
 							<Button
 								type="button"
 								variant="link"
-								size="sm"
-								className="h-auto w-fit p-0"
+								size="inline"
+								className="w-fit text-sm"
 								onClick={() => setPasteOpen(true)}
 							>
 								Paste a channel link or ID instead
 							</Button>
 						)}
 
-						{!hasCandidates && submitError && <FieldError>{submitError}</FieldError>}
+						{!hasCandidates && hasText(submitError) && <FieldError>{submitError}</FieldError>}
 
 						{parsedReference && !selectedCandidate && (
 							<Field>
@@ -188,7 +195,7 @@ export function AddChannelDialog({
 									autoComplete="off"
 								/>
 								<FieldDescription>
-									Shown in the table. Slack's own name is used when you leave this blank.
+									Shown in the table. Slack’s own name is used when you leave this blank.
 								</FieldDescription>
 							</Field>
 						)}

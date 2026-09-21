@@ -18,15 +18,19 @@ export type MentorNotice =
  * are served by the undeclared slot.
  */
 export function mentorPreferenceReason(preference: WorkspaceOnboarding): MentorNotice | undefined {
-	if (preference.aiChoice === "NO_AI") return { reason: "no-ai" };
-	if (preference.aiChoice == null)
+	if (preference.aiChoice === "NO_AI") {
+		return { reason: "no-ai" };
+	}
+	if (preference.aiChoice == null) {
 		return preference.aiChoiceRequired ? { reason: "choice-required" } : undefined;
+	}
 	if (
 		!preference.aiOptions.some(
 			(option) => option.choice === preference.aiChoice && option.mentorReady,
 		)
-	)
+	) {
 		return { reason: "unavailable", choice: preference.aiChoice };
+	}
 	return undefined;
 }
 

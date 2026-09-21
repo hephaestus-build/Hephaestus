@@ -4,8 +4,9 @@ import { parseArgs } from "node:util";
 
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
 const targetImage = values["target-image"];
-if (targetImage !== undefined && targetImage.trim() === "")
+if (targetImage !== undefined && targetImage.trim() === "") {
 	throw new Error("--target-image must name an existing local PostgreSQL image");
+}
 
 const id = `postgres-restore-${randomUUID().slice(0, 8)}`;
 const source = `${id}-source`;
@@ -41,7 +42,7 @@ function sql(container: string, query: string): string {
 }
 
 function wait(container: string): void {
-	for (let attempt = 0; attempt < 60; attempt++) {
+	for (let attempt = 0; attempt < 60; attempt += 1) {
 		const result = spawnSync("docker", [
 			"exec",
 			container,
@@ -53,8 +54,10 @@ function wait(container: string): void {
 			"-c",
 			"SELECT 1",
 		]);
-		if (result.status === 0) return;
-		Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1_000);
+		if (result.status === 0) {
+			return;
+		}
+		Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
 	}
 	throw new Error(`${container} did not become ready`);
 }
@@ -90,13 +93,17 @@ function fingerprint(container: string): string {
 }
 
 try {
-	if (targetImage !== undefined) docker("image", "inspect", targetImage);
-	else run("docker", ["build", "-t", `${id}:18`, "docker/postgres"]);
+	if (targetImage === undefined) {
+		run("docker", ["build", "-t", `${id}:18`, "docker/postgres"]);
+	} else {
+		docker("image", "inspect", targetImage);
+	}
 	docker("volume", "create", volume);
 
 	const sourcePort = start(source, volume, "/var/lib/postgresql", targetImage ?? `${id}:18`);
-	if (sql(source, "SHOW server_version_num").slice(0, 2) !== "18")
+	if (!sql(source, "SHOW server_version_num").startsWith("18")) {
 		throw new Error("source is not PostgreSQL 18");
+	}
 
 	run("node", [
 		"scripts/run-gradlew.ts",
@@ -118,7 +125,9 @@ try {
 		source,
 		"SELECT parent_table || ':' || partition_interval || ':' || premake || ':' || retention FROM partman.part_config WHERE parent_table='public.auth_event'",
 	);
-	if (!partmanConfig) throw new Error("auth_event is not registered with pg_partman");
+	if (!partmanConfig) {
+		throw new Error("auth_event is not registered with pg_partman");
+	}
 
 	const capture = spawnSync(
 		"docker",
@@ -127,13 +136,19 @@ try {
 			maxBuffer: 64 * 1024 * 1024,
 		},
 	);
-	if (capture.status !== 0) throw new Error(`backup failed:\n${capture.stderr.toString("utf8")}`);
+	if (capture.status !== 0) {
+		throw new Error(`backup failed:\n${capture.stderr.toString("utf8")}`);
+	}
 	const dump = capture.stdout;
-	if (!(dump instanceof Buffer) || dump.length === 0) throw new Error("source dump is empty");
+	if (!(dump instanceof Buffer) || dump.length === 0) {
+		throw new Error("source dump is empty");
+	}
 	const listing = spawnSync("docker", ["exec", "-i", source, "pg_restore", "--list"], {
 		input: dump,
 	});
-	if (listing.status !== 0) throw new Error("source dump is unreadable");
+	if (listing.status !== 0) {
+		throw new Error("source dump is unreadable");
+	}
 	docker("rm", "-f", source);
 
 	docker("volume", "rm", volume);
@@ -159,33 +174,45 @@ try {
 		],
 		{ input: dump, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
 	);
-	if (restore.status !== 0) throw new Error(`restore failed:\n${restore.stdout}${restore.stderr}`);
+	if (restore.status !== 0) {
+		throw new Error(`restore failed:\n${restore.stdout}${restore.stderr}`);
+	}
 
-	if (sql(target, "SHOW server_version_num").slice(0, 2) !== "18")
+	if (!sql(target, "SHOW server_version_num").startsWith("18")) {
 		throw new Error("target is not PostgreSQL 18");
-	if (sql(target, "SELECT extversion FROM pg_extension WHERE extname='pg_partman'") !== "5.5.0")
+	}
+	if (sql(target, "SELECT extversion FROM pg_extension WHERE extname='pg_partman'") !== "5.5.0") {
 		throw new Error("target pg_partman is not 5.5.0");
-	if (sql(target, "SELECT value FROM restore_qualification WHERE id=1") !== "preserved")
+	}
+	if (sql(target, "SELECT value FROM restore_qualification WHERE id=1") !== "preserved") {
 		throw new Error("qualification row was not restored");
-	if (fingerprint(target) !== sourceFingerprint)
+	}
+	if (fingerprint(target) !== sourceFingerprint) {
 		throw new Error("Liquibase history changed during restore");
+	}
 	if (
 		sql(
 			target,
 			"SELECT parent_table || ':' || partition_interval || ':' || premake || ':' || retention FROM partman.part_config WHERE parent_table='public.auth_event'",
 		) !== partmanConfig
-	)
+	) {
 		throw new Error("pg_partman configuration changed during restore");
+	}
 	sql(target, "CALL partman.run_maintenance_proc()");
 	if (
 		sql(
 			target,
 			"SELECT count(*) > 0 FROM pg_inherits WHERE inhparent = 'public.auth_event'::regclass",
 		) !== "t"
-	)
+	) {
 		throw new Error("auth_event partitions were not restored");
+	}
 } finally {
-	for (const container of [source, target]) spawnSync("docker", ["rm", "-f", container]);
+	for (const container of [source, target]) {
+		spawnSync("docker", ["rm", "-f", container]);
+	}
 	spawnSync("docker", ["volume", "rm", "-f", volume]);
-	if (targetImage === undefined) spawnSync("docker", ["rmi", "-f", `${id}:18`]);
+	if (targetImage === undefined) {
+		spawnSync("docker", ["rmi", "-f", `${id}:18`]);
+	}
 }

@@ -65,11 +65,11 @@ export const Default: Story = {
 		// disabled state, not a click: a disabled Base UI item has pointer-events:none so it can't be
 		// clicked — the positive path is covered by ChangeAnotherUsersRole.)
 		const revokeSelf = await screen.findByRole("menuitem", {
-			name: /can't revoke your own admin/i,
+			name: /can't revoke your own admin/iu,
 		});
 		await expect(revokeSelf).toHaveAttribute("data-disabled");
 		await expect(
-			screen.getByRole("menuitem", { name: /cannot impersonate self/i }),
+			screen.getByRole("menuitem", { name: /cannot impersonate self/iu }),
 		).toHaveAttribute("data-disabled");
 	},
 };
@@ -96,14 +96,14 @@ export const Empty: Story = {
 export const EmptySearch: Story = {
 	args: { users: [], hasSearch: true, totalLoaded: 3 },
 	play: async ({ canvas }) => {
-		canvas.getByText(/adjusting your search/i);
+		canvas.getByText(/adjusting your search/iu);
 	},
 };
 
 export const ErrorState: Story = {
 	args: { users: [], isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/failed to load users/i);
+		canvas.getByText(/failed to load users/iu);
 	},
 };
 

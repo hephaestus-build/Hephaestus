@@ -57,9 +57,9 @@ describe("workspace review model readiness", () => {
 				enabled: true,
 				model: { status: "ready", binding: { ...undeclared, ready: true } },
 			}),
-		).toMatch(/ready for members who have not chosen/);
+		).toMatch(/ready for members who have not chosen/u);
 		expect(reviewRunningDescription({ enabled: true, model: { status: "ready" } })).toMatch(
-			/no review model is ready/,
+			/no review model is ready/u,
 		);
 	});
 });

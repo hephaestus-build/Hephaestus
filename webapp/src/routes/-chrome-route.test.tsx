@@ -37,7 +37,7 @@ describe("app chrome on a route with no workspace in the URL", () => {
 	it("names the account's workspace in the switcher", async () => {
 		renderRouteAt("/settings");
 
-		await screen.findByRole("button", { name: /Acme/ }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("button", { name: /Acme/u }, ROUTE_RENDER_WAIT);
 	});
 
 	it.each(["/settings", "/admin"])("keeps My Profile reachable on %s", async (path) => {

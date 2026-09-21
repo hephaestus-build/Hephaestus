@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 
+import { isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
@@ -20,18 +21,43 @@ export interface ChangelogSnapshot {
 const parser = new XMLParser({ ignoreAttributes: false, isArray: (name) => name === "include" });
 
 function includes(xml: string): string[] {
-	if (!xml) return [];
+	if (!xml) {
+		return [];
+	}
 	SyntaxValidator.validate(xml);
 	const document: unknown = parser.parse(xml);
 	const root = asRecord(document, "changelog document").databaseChangeLog;
-	if (root === "") return [];
+	if (root === "") {
+		return [];
+	}
 	const changelog = asRecord(root, "databaseChangeLog");
-	if (changelog.includeAll !== undefined) throw new Error("Use explicit includes, not includeAll.");
+	if (changelog.includeAll !== undefined) {
+		throw new Error("Use explicit includes, not includeAll.");
+	}
 	return asArray(changelog.include ?? [], "changelog includes").map((value) => {
 		const attributes = asRecord(value, "include attributes");
 		asString(attributes["@_file"], "include file");
 		return JSON.stringify(Object.entries(attributes).toSorted(([a], [b]) => a.localeCompare(b)));
 	});
+}
+
+/** Whether the change is the one permitted archival rewrite: the released master retired whole. */
+function isArchivalTransition(
+	before: ChangelogSnapshot,
+	after: ChangelogSnapshot,
+	newIncludes: readonly string[],
+): boolean {
+	return (
+		before.blobs.get(master) === releasedMasterBlob &&
+		!before.blobs.has(`${archive}archive-master.xml`) &&
+		after.blobs.get(`${archive}archive-master.xml`) === releasedMasterBlob &&
+		newIncludes.length === 1 &&
+		newIncludes[0] ===
+			includes(
+				`<databaseChangeLog><include file="./changelog/${baseline}" relativeToChangelogFile="true"/></databaseChangeLog>`,
+			)[0] &&
+		after.blobs.has(`${directory}${baseline}`)
+	);
 }
 
 export function violations(before: ChangelogSnapshot, after: ChangelogSnapshot): string[] {
@@ -44,31 +70,26 @@ export function violations(before: ChangelogSnapshot, after: ChangelogSnapshot):
 	} catch (error) {
 		return [`Invalid changelog: ${error instanceof Error ? error.message : String(error)}`];
 	}
-	const transition =
-		before.blobs.get(master) === releasedMasterBlob &&
-		!before.blobs.has(`${archive}archive-master.xml`) &&
-		after.blobs.get(`${archive}archive-master.xml`) === releasedMasterBlob &&
-		newIncludes.length === 1 &&
-		newIncludes[0] ===
-			includes(
-				`<databaseChangeLog><include file="./changelog/${baseline}" relativeToChangelogFile="true"/></databaseChangeLog>`,
-			)[0] &&
-		after.blobs.has(`${directory}${baseline}`);
+	const transition = isArchivalTransition(before, after, newIncludes);
 
 	for (const [path, blob] of before.blobs) {
 		if (path.startsWith("docs/db/archive/")) {
-			if (after.blobs.get(path) !== blob) errors.push(`Archived migration changed: ${path}`);
+			if (after.blobs.get(path) !== blob) {
+				errors.push(`Archived migration changed: ${path}`);
+			}
 		} else if (path.startsWith(directory) && after.blobs.get(path) !== blob) {
 			const archivedPath = `${archive}changelog/${path.slice(directory.length)}`;
-			if (!transition || after.blobs.has(path) || after.blobs.get(archivedPath) !== blob)
+			if (!transition || after.blobs.has(path) || after.blobs.get(archivedPath) !== blob) {
 				errors.push(`Released migration changed without a byte-identical archive: ${path}`);
+			}
 		}
 	}
 
 	if (transition) {
 		for (const path of before.blobs.keys()) {
-			if (path.startsWith(directory) && after.blobs.has(path))
+			if (path.startsWith(directory) && after.blobs.has(path)) {
 				errors.push(`Retired migration remains on the production classpath: ${path}`);
+			}
 		}
 	} else if (oldIncludes.some((include, index) => newIncludes[index] !== include)) {
 		errors.push("master.xml is append-only; existing includes must not change or move.");
@@ -76,26 +97,36 @@ export function violations(before: ChangelogSnapshot, after: ChangelogSnapshot):
 	return errors;
 }
 
+function git(...args: string[]): string {
+	return execFileSync("git", args, { encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES });
+}
+
 function snapshot(revision: string): ChangelogSnapshot {
-	const git = (...args: string[]): string =>
-		execFileSync("git", args, { encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES });
 	const commit = git("rev-parse", "--verify", "--end-of-options", `${revision}^{commit}`).trim();
 	const entries = git("ls-tree", "-r", "-z", commit, "--", directory, master, "docs/db/archive/");
 	const blobs = new Map<string, string>();
 	for (const entry of entries.split("\0").filter(Boolean)) {
 		const [metadata, path] = entry.split("\t");
 		const blob = metadata?.split(" ")[2];
-		if (path !== undefined && blob !== undefined) blobs.set(path, blob);
+		if (path !== undefined && blob !== undefined) {
+			blobs.set(path, blob);
+		}
 	}
 	return { blobs, master: blobs.has(master) ? git("show", `${commit}:${master}`) : "" };
 }
 
 if (import.meta.main) {
 	const [base, head = "HEAD"] = process.argv.slice(2);
-	if (!base || process.argv.length > 4)
+	if (!isSet(base) || process.argv.length > 4) {
 		throw new Error("Usage: node scripts/check-changelog-immutability.ts <base> [head]");
+	}
 	const errors = violations(snapshot(base), snapshot(head));
-	for (const error of errors) console.error(`::error::${error}`);
-	if (errors.length > 0) process.exitCode = 1;
-	else console.log("Released migrations and archived history are unchanged.");
+	for (const error of errors) {
+		console.error(`::error::${error}`);
+	}
+	if (errors.length > 0) {
+		process.exitCode = 1;
+	} else {
+		console.log("Released migrations and archived history are unchanged.");
+	}
 }

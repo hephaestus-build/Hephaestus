@@ -25,10 +25,11 @@ import {
 	type ObservationDetailState,
 } from "@/components/profile/review-runs";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { resolveCurrentUser } from "@/integrations/auth/guard";
-import { loadedPages } from "@/integrations/tanstack-query/spring-page";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { useSearchState } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
+import { resolveCurrentUser } from "@/runtime/auth/guard";
+import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 
 const ACTIVITY_PAGE_SIZE = 10;
 
@@ -38,11 +39,13 @@ const practiceGroupDetailSearchSchema = z.object({
 });
 function nextStepOf(practiceStanding?: PracticeStanding): string | undefined {
 	const firstAction = practiceStanding?.toWorkOn[0];
-	if (!firstAction) return undefined;
+	if (!firstAction) {
+		return undefined;
+	}
 	const deliveredGuidance = firstAction.deliveredFeedback?.trim();
 	const observationTitle = firstAction.title.trim();
 	const distinctTitle =
-		observationTitle !== practiceStanding.name.trim() ? observationTitle : undefined;
+		observationTitle === practiceStanding.name.trim() ? undefined : observationTitle;
 	return [deliveredGuidance, distinctTitle].find((value) => value !== undefined && value !== "");
 }
 
@@ -98,8 +101,9 @@ function PracticeGroupDetail() {
 	const navigate = useNavigate({ from: Route.fullPath });
 	const queryClient = useQueryClient();
 	const setSearch = useSearchState();
-	const updateSelection = (search: { practice?: string; observation?: string }) =>
+	const updateSelection = (search: { practice?: string; observation?: string }) => {
 		void setSearch((previous) => ({ ...previous, ...search }));
+	};
 
 	const groupsQuery = useQuery({
 		...listGroupsOptions({
@@ -129,9 +133,10 @@ function PracticeGroupDetail() {
 	const activityQuery = useInfiniteQuery({
 		...listPracticeGroupReviewRunsInfiniteOptions(reviewRunsRequest),
 		initialPageParam: 0,
-		getNextPageParam: (lastPage) => (lastPage.hasNext ? (lastPage.page ?? 0) + 1 : undefined),
+		getNextPageParam: (lastPage) =>
+			lastPage.hasNext === true ? (lastPage.page ?? 0) + 1 : undefined,
 	});
-	const invalidateReviewRuns = () =>
+	const invalidateReviewRuns = async () =>
 		queryClient.invalidateQueries({
 			queryKey: listPracticeGroupReviewRunsInfiniteQueryKey({ path: { workspaceSlug, groupSlug } }),
 		});
@@ -175,23 +180,31 @@ function PracticeGroupDetail() {
 				nextStep: nextStepOf(practiceStanding),
 			};
 		});
-	const reviewRunFeed: ReviewRunFeedState = activityQuery.isPending
-		? { status: "loading" }
-		: activityQuery.error
-			? {
-					status: "error",
-					error: activityQuery.error,
-					onRetry: () => void activityQuery.refetch(),
-				}
-			: {
-					status: "ready",
-					runs: loadedPages(activityQuery.data).flatMap((page) => page.content),
-					hasMore: activityQuery.hasNextPage,
-					isLoadingMore: activityQuery.isFetchingNextPage,
-					onLoadMore: () => void activityQuery.fetchNextPage(),
-				};
+	const activityFailed = activityQuery.error != null;
+	let reviewRunFeed: ReviewRunFeedState;
+	if (activityQuery.isPending) {
+		reviewRunFeed = { status: "loading" };
+	} else if (activityFailed) {
+		reviewRunFeed = {
+			status: "error",
+			error: activityQuery.error,
+			onRetry: () => {
+				void activityQuery.refetch();
+			},
+		};
+	} else {
+		reviewRunFeed = {
+			status: "ready",
+			runs: loadedPages(activityQuery.data).flatMap((page) => page.content),
+			hasMore: activityQuery.hasNextPage,
+			isLoadingMore: activityQuery.isFetchingNextPage,
+			onLoadMore: () => {
+				void activityQuery.fetchNextPage();
+			},
+		};
+	}
 
-	const observationDetail: ObservationDetailState | undefined = openObservationId
+	const observationDetail: ObservationDetailState | undefined = hasText(openObservationId)
 		? {
 				isLoading: observationQuery.isPending,
 				detail: observationQuery.data,
@@ -219,8 +232,10 @@ function PracticeGroupDetail() {
 				})
 			}
 			onRespond={(observation, response) => {
-				const feedbackId = observation.feedbackId;
-				if (!feedbackId) return;
+				const { feedbackId } = observation;
+				if (!hasText(feedbackId)) {
+					return;
+				}
 				if (isEmptyFeedbackResponse(response)) {
 					deleteResponseMutation.mutate({ path: { workspaceSlug, feedbackId } });
 					return;
@@ -231,11 +246,8 @@ function PracticeGroupDetail() {
 				});
 			}}
 			pendingFeedbackId={
-				replaceResponseMutation.isPending
-					? replaceResponseMutation.variables.path.feedbackId
-					: deleteResponseMutation.isPending
-						? deleteResponseMutation.variables.path.feedbackId
-						: undefined
+				[replaceResponseMutation, deleteResponseMutation].find((mutation) => mutation.isPending)
+					?.variables.path.feedbackId
 			}
 			isLoading={
 				groupsQuery.isPending ||
@@ -253,19 +265,29 @@ function PracticeGroupDetail() {
 				undefined
 			}
 			onRetry={() => {
-				if (groupsQuery.isError) void groupsQuery.refetch();
-				if (statusesQuery.isError) void statusesQuery.refetch();
-				if (practicesQuery.isError) void practicesQuery.refetch();
-				if (standingsQuery.isError) void standingsQuery.refetch();
-				if (trendQuery.isError) void trendQuery.refetch();
+				if (groupsQuery.isError) {
+					void groupsQuery.refetch();
+				}
+				if (statusesQuery.isError) {
+					void statusesQuery.refetch();
+				}
+				if (practicesQuery.isError) {
+					void practicesQuery.refetch();
+				}
+				if (standingsQuery.isError) {
+					void standingsQuery.refetch();
+				}
+				if (trendQuery.isError) {
+					void trendQuery.refetch();
+				}
 			}}
-			onBack={() =>
+			onBack={() => {
 				void navigate({
 					to: "/w/$workspaceSlug/user/$username",
 					params: { workspaceSlug, username },
 					search: {},
-				})
-			}
+				});
+			}}
 		/>
 	);
 }

@@ -113,7 +113,7 @@ class DiffNotePosterTest extends BaseUnitTest {
                 .contains("<sub>AI-generated &middot; React with 👍 or 👎, or reply, to give feedback.</sub>")
                 .doesNotContain("Why you're seeing this");
         assertThat(anchor.startLine()).isEqualTo(10);
-        assertThat(f.recurrenceKey()).isEqualTo("ck-multi");
+        assertThat(f.deliveryKey()).isEqualTo("ck-multi");
     }
 
     @Test
@@ -145,7 +145,7 @@ class DiffNotePosterTest extends BaseUnitTest {
         assertThat(channel.immutable).isTrue();
         assertThat(delivered.body()).isEqualTo("Exact body");
         assertThat(delivered.marker()).isEqualTo("<!-- hephaestus-approved-package:" + feedbackId + " -->");
-        assertThat(delivered.recurrenceKey()).isEqualTo("approved:" + feedbackId + ":0");
+        assertThat(delivered.deliveryKey()).isEqualTo("approved:" + feedbackId + ":0");
     }
 
     @Test

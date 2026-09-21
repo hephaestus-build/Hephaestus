@@ -32,7 +32,7 @@ function ObservationsListRoute() {
 	const { workspaceSlug } = Route.useParams();
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
-	const updateSearch = (patch: Partial<ObservationsSearch>) =>
+	const updateSearch = (patch: Partial<ObservationsSearch>) => {
 		void navigate({
 			search: (previous) => {
 				const next = { ...previous, ...patch };
@@ -40,6 +40,7 @@ function ObservationsListRoute() {
 			},
 			replace: true,
 		});
+	};
 
 	const observationsQueryResult = useQuery({
 		...listPracticeReviewObservationsOptions({
@@ -63,7 +64,9 @@ function ObservationsListRoute() {
 			observations={observationsQueryResult.data}
 			isLoading={observationsQueryResult.isLoading}
 			error={observationsQueryResult.isError ? observationsQueryResult.error : undefined}
-			onRetry={() => void observationsQueryResult.refetch()}
+			onRetry={() => {
+				void observationsQueryResult.refetch();
+			}}
 			groups={{
 				options: groupFacetOptions(groupsQuery.data),
 				isLoading: groupsQuery.isLoading,

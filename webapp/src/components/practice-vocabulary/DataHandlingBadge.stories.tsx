@@ -10,7 +10,6 @@ import { DataHandlingBadge } from "./DataHandlingBadge";
  * icon is what tells them apart. Only *Not declared* escalates, because it is an admin to-do.
  */
 const meta = {
-	title: "Shared/Practice vocabulary/Data handling badge",
 	component: DataHandlingBadge,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
