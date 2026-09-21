@@ -287,16 +287,20 @@ function renderSummary(recordRows: number, inDiffRows: number): string {
 }
 
 /**
- * Rows are trimmed until the summary fits its budget: record rows first, then changed-line rows,
- * and every practice keeps its pointer to the JSON file that holds all of them.
+ * Rows are trimmed until the summary fits its budget, and every practice keeps its pointer to the
+ * JSON file that holds all of them. A record row is a fact the practice decides on and a changed-line
+ * row is a lead the model can grep for, so the leads go first and the last few record rows stay:
+ * on one cohort change the summary ran over by three per cent and a record practice saw none of
+ * its rows while a lead practice kept ten.
  */
+const MIN_RECORD_ROWS = 3;
 const BUDGET_LADDER: [recordRows: number, inDiffRows: number][] = [
 	[RECORD_ROWS, IN_DIFF_ROWS],
-	[10, IN_DIFF_ROWS],
-	[5, IN_DIFF_ROWS],
-	[0, IN_DIFF_ROWS],
-	[0, IN_DIFF_SAMPLE],
-	[0, 0],
+	[RECORD_ROWS, IN_DIFF_SAMPLE],
+	[10, IN_DIFF_SAMPLE],
+	[5, IN_DIFF_SAMPLE],
+	[5, 0],
+	[MIN_RECORD_ROWS, 0],
 ];
 let summary = renderSummary(RECORD_ROWS, IN_DIFF_ROWS);
 for (const [recordRows, inDiffRows] of BUDGET_LADDER) {

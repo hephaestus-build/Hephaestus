@@ -96,7 +96,7 @@ function row(i: number, inDiff: boolean) {
 	};
 }
 
-void test("the summary stays under its budget by trimming record rows first, never the JSON pointer", async () => {
+void test("the summary stays under its budget by trimming changed-line rows first, never the JSON pointer nor the last record rows", async () => {
 	const record = Array.from({ length: 60 }, (_, i) => row(i, false));
 	const inDiff = Array.from({ length: 30 }, (_, i) => row(i, true));
 	const scripts = Object.fromEntries(
@@ -107,7 +107,8 @@ void test("the summary stays under its budget by trimming record rows first, nev
 	);
 	const { summary } = await run(scripts);
 	assert.ok(summary.length <= 20_000, `summary is ${summary.length} chars`);
-	// Every practice keeps the pointer to the file that holds all of its rows.
+	// Every practice keeps the pointer to the file that holds all of its rows, and at least three of
+	// its record rows: the facts a record practice decides on are never all trimmed away.
 	for (let n = 0; n < 8; n += 1) {
 		assert.match(summary, new RegExp(`- \\.\\.\\. and \\d+ more in \`[^\`]*/p${n}\\.json\``, "u"));
 		assert.match(
@@ -115,6 +116,7 @@ void test("the summary stays under its budget by trimming record rows first, nev
 			new RegExp(`\\*\\*30 hints on changed lines\\*\\* — see \`[^\`]*/p${n}\\.json\``, "u"),
 		);
 	}
+	assert.ok((summary.match(/reviewer comment:/gu)?.length ?? 0) >= 8 * 3);
 	// Under budget, twenty record rows are shown before the pointer.
 	const small = await run({ one: script({ hints: record, metrics: {}, directions: [] }) });
 	assert.equal(small.summary.match(/reviewer comment:/gu)?.length, 20);
