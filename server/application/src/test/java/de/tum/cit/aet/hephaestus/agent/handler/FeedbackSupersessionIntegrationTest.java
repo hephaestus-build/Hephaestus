@@ -42,8 +42,10 @@ import tools.jackson.databind.ObjectMapper;
  * rewritten under them, are properties of the SQL and of when each transaction commits — no verified
  * method call can answer either.
  *
- * <p>The rule under test, in one sentence: <b>a card may be replaced only while it is still queued and
- * unread, and replacing it must never cost the developer the message.</b>
+ * <p>The rules under test, in two sentences: <b>a queued message may be claimed by exactly one run, and
+ * replacing it must never cost the developer the message.</b> On the in-app lane <b>an open card is
+ * replaced whether or not it was read, and only the caller, who read it the way the page does, decides
+ * that it is open.</b>
  */
 class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
 
@@ -153,8 +155,8 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
             Future<Integer> read = contenders.submit(() -> {
                 atTheLine.countDown();
                 go.await(PATIENCE_SECONDS, TimeUnit.SECONDS);
-                return transactionTemplate.execute(
-                        status -> feedbackRepository.markInAppDelivered(workspace.getId(), queued, Instant.now()));
+                return transactionTemplate.execute(status ->
+                        feedbackRepository.markInAppDelivered(workspace.getId(), List.of(queued), Instant.now()));
             });
             Future<FeedbackSupersession.Disposition> replace = contenders.submit(replacement(0, atTheLine, go));
             assertThat(atTheLine.await(PATIENCE_SECONDS, TimeUnit.SECONDS)).isTrue();
@@ -182,24 +184,78 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
     }
 
     /**
-     * A card the developer has already opened is the case the rule is named for. It keeps its state, and
-     * the new card is written beside it pointing back at it, so the page reads as one habit raised twice
-     * over time rather than as an edit to something they have in their head.
+     * A mentor unit the developer has already read is the case the un-saying rule is named for. It keeps
+     * its state, and the new unit is written beside it pointing back at it, so the thread reads as one
+     * habit raised twice over time rather than as an edit to something they have in their head.
      */
     @Test
-    @DisplayName("a card that has been read is followed rather than replaced")
-    void aCardThatWasReadIsFollowedRatherThanReplaced() {
-        UUID read = queuedCard("The card they opened").getId();
-        assertThat(feedbackRepository.markInAppDelivered(workspace.getId(), read, Instant.now()))
-                .isEqualTo(1);
+    @DisplayName("a mentor unit that has been read is followed rather than replaced")
+    void aMentorUnitThatWasReadIsFollowedRatherThanReplaced() {
+        String mentorThread = FeedbackThreadKey.forPractice(PRACTICE, RECIPIENT, FeedbackChannel.IN_CHAT);
+        UUID read = feedbackRepository
+                .save(cardBuilder("The unit they read", FeedbackDeliveryState.DELIVERED, null)
+                        .channel(FeedbackChannel.IN_CHAT)
+                        .threadKey(mentorThread)
+                        .deliveredAt(Instant.now())
+                        .build())
+                .getId();
 
         FeedbackSupersession.Outcome outcome = transactionTemplate.execute(
-                status -> supersession.supersede(workspace.getId(), RECIPIENT, FeedbackChannel.IN_APP, threadKey));
+                status -> supersession.supersede(workspace.getId(), RECIPIENT, FeedbackChannel.IN_CHAT, mentorThread));
 
         assertThat(outcome.disposition()).isEqualTo(FeedbackSupersession.Disposition.CONTINUED);
         assertThat(outcome.replacesId()).isEqualTo(read);
         assertThat(outcome.retiredSomething()).isFalse();
         assertThat(state(read)).isEqualTo(FeedbackDeliveryState.DELIVERED);
+    }
+
+    /**
+     * The in-app lane: the page is a list of habits to work on, so the card still open about a habit is
+     * retired by the newer card about it, whether it was waiting to be read or already read. The ledger
+     * keeps the retired row, and the new card points back at it.
+     */
+    @Test
+    @DisplayName("an open in-app card is replaced whether or not it was read")
+    void anOpenInAppCardIsReplacedReadOrNot() {
+        UUID queued = queuedCard("The card that was waiting").getId();
+        UUID read = queuedCard("The card they opened").getId();
+        assertThat(feedbackRepository.markInAppDelivered(workspace.getId(), List.of(read), Instant.now()))
+                .isEqualTo(1);
+
+        FeedbackSupersession.Outcome queuedOutcome =
+                transactionTemplate.execute(status -> supersession.replaceOpen(workspace.getId(), queued));
+        FeedbackSupersession.Outcome readOutcome =
+                transactionTemplate.execute(status -> supersession.replaceOpen(workspace.getId(), read));
+
+        assertThat(queuedOutcome.disposition()).isEqualTo(FeedbackSupersession.Disposition.SUPERSEDED);
+        assertThat(queuedOutcome.replacesId()).isEqualTo(queued);
+        assertThat(readOutcome.disposition()).isEqualTo(FeedbackSupersession.Disposition.SUPERSEDED);
+        assertThat(readOutcome.replacesId()).isEqualTo(read);
+        assertThat(state(queued)).isEqualTo(FeedbackDeliveryState.SUPERSEDED);
+        assertThat(state(read)).isEqualTo(FeedbackDeliveryState.SUPERSEDED);
+    }
+
+    /** A card another run already retired, or that was withheld, is not claimed twice and not followed. */
+    @Test
+    @DisplayName("an in-app card that is no longer live is neither claimed again nor followed")
+    void anInAppCardNoLongerLiveIsNotClaimedAgain() {
+        UUID retired = queuedCard("Already replaced").getId();
+        assertThat(transactionTemplate
+                        .execute(status -> supersession.replaceOpen(workspace.getId(), retired))
+                        .retiredSomething())
+                .isTrue();
+        UUID withheld = card("Never sent", FeedbackDeliveryState.SUPPRESSED, FeedbackSuppressionReason.VOLUME_CAPPED)
+                .getId();
+
+        FeedbackSupersession.Outcome again =
+                transactionTemplate.execute(status -> supersession.replaceOpen(workspace.getId(), retired));
+        FeedbackSupersession.Outcome never =
+                transactionTemplate.execute(status -> supersession.replaceOpen(workspace.getId(), withheld));
+
+        assertThat(again.disposition()).isEqualTo(FeedbackSupersession.Disposition.NEW);
+        assertThat(again.replacesId()).isNull();
+        assertThat(never.disposition()).isEqualTo(FeedbackSupersession.Disposition.NEW);
+        assertThat(state(withheld)).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
     }
 
     /**

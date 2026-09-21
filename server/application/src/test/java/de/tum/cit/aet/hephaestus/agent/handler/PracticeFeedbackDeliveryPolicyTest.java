@@ -142,6 +142,35 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                 .isTrue();
     }
 
+    @ParameterizedTest
+    @CsvSource({"scm.pull_request", "scm.issue"})
+    void silentModeStopsWhatLeavesTheInstanceAndLeavesTheDevelopersOwnPageAloneForScmWork(String artifactKind) {
+        AgentJob job = scmJob(artifactKind);
+        when(silentModeQuery.isSilentModeEngaged()).thenReturn(true);
+
+        var conversation = policy().evaluateForRecipient(
+                        job,
+                        DeliveryPolicyStage.COMPOSITION,
+                        null,
+                        DeliveryPolicySurface.CONVERSATION,
+                        AUTHOR_ID,
+                        java.util.Set.of());
+        assertThat(conversation.allowed()).isFalse();
+        assertThat(conversation.refusal()).isEqualTo(FeedbackSuppressionReason.INSTANCE_SILENCED);
+
+        var inApp = policy().evaluateForRecipient(
+                        job,
+                        DeliveryPolicyStage.COMPOSITION,
+                        null,
+                        DeliveryPolicySurface.IN_APP,
+                        AUTHOR_ID,
+                        java.util.Set.of());
+        assertThat(inApp.allowed()).isTrue();
+        assertThat(inApp.suppressionReason()).isNull();
+        assertThat(policy().allowsComposition(job, DeliveryPolicySurface.IN_APP))
+                .isTrue();
+    }
+
     @Test
     void shouldStopConversationWithPauseReasonButKeepInAppReadableWhenSendingIsPaused() {
         AgentJob job = conversationJob();
@@ -387,6 +416,37 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         metadata.put("repository_full_name", "owner/repo");
         metadata.put("pr_number", 17);
         job.setMetadata(metadata);
+        return job;
+    }
+
+    /** A job about a live, monitored, covered pull request or issue whose author allows delivery. */
+    private AgentJob scmJob(String artifactKind) {
+        AgentJob job = pullRequestJob();
+        job.setArtifactKind(ArtifactKind.of(artifactKind));
+        PullRequest pullRequest = openPullRequest();
+        if ("scm.issue".equals(artifactKind)) {
+            var metadata =
+                    tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+            metadata.put("issue_id", PULL_REQUEST_ID);
+            metadata.put("issue_number", 17);
+            metadata.put("repository_id", REPOSITORY_ID);
+            metadata.put("repository_full_name", "owner/repo");
+            job.setMetadata(metadata);
+            Issue issue = new Issue();
+            issue.setId(pullRequest.getId());
+            issue.setNumber(pullRequest.getNumber());
+            issue.setAuthor(pullRequest.getAuthor());
+            issue.setRepository(pullRequest.getRepository());
+            issue.setState(pullRequest.getState());
+            when(issueRepository.findByIdWithAuthorAndRepository(PULL_REQUEST_ID))
+                    .thenReturn(Optional.of(issue));
+            when(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, "owner/repo"))
+                    .thenReturn(true);
+            when(coverageService.assess(any(), eq("owner/repo"), eq(null), any(), eq(false)))
+                    .thenReturn(coverage(true));
+        } else {
+            stubPullRequestEvaluation(pullRequest, coverage(true));
+        }
         return job;
     }
 

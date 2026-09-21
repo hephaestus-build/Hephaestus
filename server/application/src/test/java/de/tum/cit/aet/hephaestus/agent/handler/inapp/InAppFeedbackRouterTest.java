@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.handler.inapp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
@@ -35,7 +34,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
 
     @Test
     void refusesAMessageMissingItsNextStep() {
-        ComposedInAppMessage incomplete = new ComposedInAppMessage("ships-tests", "Title", "Body", "  ", null);
+        ComposedInAppMessage incomplete = new ComposedInAppMessage("ships-tests", "Title", "Body", "  ");
 
         assertThat(InAppFeedbackRouter.route(
                         incomplete,
@@ -100,11 +99,58 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
     /** Twice on the same pull request is one occurrence — the unit of proof here is separate work. */
     @Test
     void countsTwoProblemsOnOneArtifactAsOneOccurrence() {
-        Observation first = observation(42L, ObservationOrigin.LIVE, Assessment.BAD);
-        Observation second = observation(42L, ObservationOrigin.LIVE, Assessment.BAD);
+        UUID run = UUID.randomUUID();
+        Observation first = observation(42L, run, NOW, ObservationOrigin.LIVE, Assessment.BAD);
+        Observation second = observation(42L, run, NOW, ObservationOrigin.LIVE, Assessment.BAD);
 
         assertThat(route(List.of(first, second), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, null))
                 .isEqualTo(InAppRoutingDecision.UNCORROBORATED);
+        assertThat(InAppFeedbackRouter.problemsIn(List.of(first, second))).containsExactly(first);
+    }
+
+    /**
+     * A piece of work counts once, at its newest review. A pull request whose re-review came back clean is
+     * not a problem any more, so it corroborates nothing: one slip on another pull request stays one.
+     */
+    @Test
+    void aProblemTheReReviewNoLongerFoundDoesNotCorroborate() {
+        Observation slipped = observation(
+                7L, UUID.randomUUID(), NOW.minus(Duration.ofDays(2)), ObservationOrigin.LIVE, Assessment.BAD);
+        Observation recovered = observation(
+                7L, UUID.randomUUID(), NOW.minus(Duration.ofDays(1)), ObservationOrigin.LIVE, Assessment.GOOD);
+        Observation other = observation(8L, UUID.randomUUID(), NOW, ObservationOrigin.LIVE, Assessment.BAD);
+
+        assertThat(route(List.of(other, recovered, slipped), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, null))
+                .isEqualTo(InAppRoutingDecision.UNCORROBORATED);
+    }
+
+    /** Two pull requests that slipped and one that slipped and recovered: exactly two rows to cite. */
+    @Test
+    void citesOneRowPerPieceOfWorkAtItsNewestReview() {
+        Observation first = observation(
+                1L, UUID.randomUUID(), NOW.minus(Duration.ofDays(3)), ObservationOrigin.LIVE, Assessment.BAD);
+        Observation second = observation(
+                2L, UUID.randomUUID(), NOW.minus(Duration.ofDays(2)), ObservationOrigin.LIVE, Assessment.BAD);
+        Observation slipped = observation(
+                3L, UUID.randomUUID(), NOW.minus(Duration.ofDays(1)), ObservationOrigin.LIVE, Assessment.BAD);
+        Observation recovered = observation(3L, UUID.randomUUID(), NOW, ObservationOrigin.LIVE, Assessment.GOOD);
+
+        assertThat(InAppFeedbackRouter.problemsIn(List.of(recovered, slipped, second, first)))
+                .containsExactly(second, first);
+    }
+
+    private static Observation observation(
+            long artifactId, UUID run, Instant observedAt, ObservationOrigin origin, Assessment assessment) {
+        return Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(run)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(artifactId)
+                .presence(Presence.PRESENT)
+                .assessment(assessment)
+                .origin(origin)
+                .observedAt(observedAt)
+                .build();
     }
 
     @Test
@@ -140,6 +186,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
         Observation strength = observation(2L, ObservationOrigin.LIVE, Assessment.GOOD);
         Observation abstention = Observation.builder()
                 .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(3L)
                 .presence(Presence.NOT_APPLICABLE)
@@ -164,8 +211,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
                 "ships-tests-with-the-change",
                 "Tests are arriving one commit late",
                 "On your last few changes the test landed a push after the behaviour did.",
-                "Write the assertion that distinguishes the new branch before you write the branch.",
-                null);
+                "Write the assertion that distinguishes the new branch before you write the branch.");
     }
 
     /** {@code count} problems, each on a different piece of work. */
@@ -176,15 +222,6 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
     }
 
     private static Observation observation(long artifactId, ObservationOrigin origin, Assessment assessment) {
-        ArtifactKind kind = ArtifactKinds.PULL_REQUEST;
-        return Observation.builder()
-                .id(UUID.randomUUID())
-                .artifactKind(kind)
-                .artifactId(artifactId)
-                .presence(Presence.PRESENT)
-                .assessment(assessment)
-                .origin(origin)
-                .observedAt(NOW)
-                .build();
+        return observation(artifactId, UUID.randomUUID(), NOW, origin, assessment);
     }
 }

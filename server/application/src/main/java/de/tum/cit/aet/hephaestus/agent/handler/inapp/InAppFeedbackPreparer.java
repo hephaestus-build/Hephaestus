@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -28,10 +29,13 @@ import org.springframework.transaction.annotation.Transactional;
  * in {@code FeedbackRepository#markInAppDelivered}). We own this surface, so "delivered" can be an
  * observation instead of an assumption.
  *
- * <p>Because it can be observed, a card that has been read is never rewritten. A newer card about the
- * same habit replaces the one still waiting to be read — one live card per habit, not a pile — but if the
- * developer opened it first, the new card is written beside it and points back at it instead. That is
- * {@link de.tum.cit.aet.hephaestus.agent.handler.FeedbackSupersession}, and the swap happens inside this
+ * <p>One open card per habit, not a pile. A newer card about a habit replaces the card still open about
+ * it, queued or already read: the page is a list of habits to work on, and the newer card is the live
+ * statement of this one. A card that is closed — resolved by the work or the developer, or closed because
+ * the practice changed — is left as the record and the new card is written beside it. Which it is was
+ * decided by whoever routed the message, from the same read the page makes
+ * ({@code PreviousInAppFeedback}); the swap itself is
+ * {@link de.tum.cit.aet.hephaestus.agent.handler.FeedbackSupersession#replaceOpen} and happens inside this
  * method's transaction so a retirement can never outlive its replacement.
  *
  * <p>No {@code OutboundEgressGuard} check, deliberately, and unlike every other preparer here: that
@@ -76,9 +80,14 @@ public class InAppFeedbackPreparer {
      * @param decision {@link InAppRoutingDecision#ADMIT} for a message the recipient will see; any
      *     other value is skipped without a row — a refusal that is a property of the evidence is not a
      *     withholding to explain, it is a message that was never owed.
+     * @param replaces the card about this habit still open on the recipient's page, which this message
+     *     retires; {@code null} when there is none, or when the previous card is closed and stays as the record
      */
     public record RoutedMessage(
-            ComposedInAppMessage message, InAppRoutingDecision decision, List<Observation> evidence) {}
+            ComposedInAppMessage message,
+            InAppRoutingDecision decision,
+            List<Observation> evidence,
+            @Nullable UUID replaces) {}
 
     /**
      * Prepare IN_APP units for one recipient in one cycle. Runs REQUIRES_NEW so a preparation failure is
@@ -135,9 +144,10 @@ public class InAppFeedbackPreparer {
             // The claim and the write below are one swap, and this method's REQUIRES_NEW transaction is
             // what makes them one: a retired card with no replacement leaves the recipient with less than
             // they had before the run.
-            FeedbackSupersession.Outcome outcome = supersedes(message, threadKey)
-                    ? supersession.supersede(workspaceId, recipientUserId, FeedbackChannel.IN_APP, threadKey)
-                    : FeedbackSupersession.Outcome.standalone();
+            UUID replaces = routedMessage.replaces();
+            FeedbackSupersession.Outcome outcome = replaces == null
+                    ? FeedbackSupersession.Outcome.standalone()
+                    : supersession.replaceOpen(workspaceId, replaces);
             if (outcome.retiredSomething()) {
                 superseded++;
             }
@@ -157,9 +167,8 @@ public class InAppFeedbackPreparer {
                     // Cross-run identity for this habit, so a later message about the same practice
                     // supersedes this one rather than stacking beside it.
                     .threadKey(threadKey)
-                    // What this card follows, whether or not it managed to retire it: the chain is the
-                    // temporal record of one habit being raised over time, and a card that arrived after
-                    // its predecessor was read still follows it.
+                    // What this card retired: the chain is the temporal record of one habit being raised
+                    // over time.
                     .replacesId(outcome.replacesId())
                     .createdAt(now)
                     .build());
@@ -187,28 +196,5 @@ public class InAppFeedbackPreparer {
     /** The stored body — layout owned by {@link InAppFeedbackBody}, which is also what reads it back. */
     static String body(ComposedInAppMessage message) {
         return InAppFeedbackBody.render(message.title(), message.body(), message.nextStep());
-    }
-
-    /**
-     * Whether this message may retire the card it named.
-     *
-     * <p>A card is only ever allowed to replace a card <em>about the same habit</em>. The runner already
-     * refuses a key that was never staged, so the composer cannot invent one; what it can still do is name
-     * a real key belonging to somebody's other habit, and acting on that would retire a message about
-     * something else and leave it unsaid forever. The check is an equality because the key is derived from
-     * the practice: the only key this message could legitimately name is its own thread's.
-     */
-    private static boolean supersedes(ComposedInAppMessage message, String ownThreadKey) {
-        String named = message.supersedesThreadKey();
-        if (named == null) {
-            return false;
-        }
-        if (named.equals(ownThreadKey)) {
-            return true;
-        }
-        log.warn(
-                "In-app message named a supersession target on another habit's thread; written as new: practice={}",
-                message.practiceSlug());
-        return false;
     }
 }

@@ -368,7 +368,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     void reReview_priorDeliveredUnit_isSupersededAndNewRowReplacesIt() {
         // B1: the re-review SUPERSEDED branch (every other test stubs the prior lookup to Optional.empty()).
         // A prior live DELIVERED unit on this continuity line → the new row's replacesId points at it AND the
-        // prior is flipped to SUPERSEDED via the native updateState, AFTER the new row lands (never zero live).
+        // prior is flipped to SUPERSEDED via the native supersedeDelivered, AFTER the new row lands (never zero live).
         var observation = problem();
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(observation));
@@ -386,8 +386,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 "summary-ref",
                 false);
 
-        // The prior is superseded by id+name.
-        verify(feedbackRepository).updateState(priorId, FeedbackDeliveryState.SUPERSEDED.name());
+        // The prior is superseded by id, inside its workspace.
+        verify(feedbackRepository).supersedeDelivered(1L, priorId);
         // The freshly saved DELIVERED unit carries replacesId = the prior id.
         var saved = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
@@ -448,7 +448,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 false);
 
         verify(feedbackRepository, org.mockito.Mockito.never()).save(any());
-        verify(feedbackRepository, org.mockito.Mockito.never()).updateState(any(), any());
+        verify(feedbackRepository, org.mockito.Mockito.never()).supersedeDelivered(any(), any());
         verify(feedbackObservationRepository, org.mockito.Mockito.never())
                 .insertIfAbsent(any(), any(), any(), anyInt());
     }
@@ -479,7 +479,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         verify(feedbackRepository).save(savedFeedback.capture());
         assertThat(savedFeedback.getValue().getBody()).isNull();
         assertThat(savedFeedback.getValue().getReplacesId()).isNull();
-        verify(feedbackRepository, org.mockito.Mockito.never()).updateState(any(), any());
+        verify(feedbackRepository, org.mockito.Mockito.never()).supersedeDelivered(any(), any());
 
         var savedPlacement = ArgumentCaptor.forClass(FeedbackPlacement.class);
         verify(feedbackPlacementRepository).save(savedPlacement.capture());
@@ -561,7 +561,34 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         verify(feedbackRepository).save(saved.capture());
         assertThat(saved.getValue().getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
         assertThat(saved.getValue().getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.INSTANCE_SILENCED);
-        verify(eventPublisher, org.mockito.Mockito.never()).publishEvent(any());
+        // Silence stops the note on the work, not the developer's own pages: the lanes are woken now, not
+        // when the hourly sweeper next passes.
+        verify(eventPublisher)
+                .publishEvent(any(
+                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
+    }
+
+    @Test
+    void recordSuppressedUnit_wakesTheLanesOnlyForSilentMode() {
+        Observation bad = problem();
+        when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(List.of(bad));
+        FeedbackLedgerRecorder rec = recorder();
+
+        rec.recordSuppressedUnit(
+                job(), new DeliveryContent("body", List.of(), List.of()), FeedbackSuppressionReason.INSTANCE_SILENCED);
+        verify(eventPublisher)
+                .publishEvent(any(
+                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
+
+        // A gate decision on the work applies to every channel, so nothing is woken for it.
+        org.mockito.Mockito.clearInvocations(eventPublisher);
+        when(feedbackRepository.existsByAgentJobIdAndPosition(any(), anyInt())).thenReturn(false);
+        rec.recordSuppressedUnit(
+                job(), new DeliveryContent("body", List.of(), List.of()), FeedbackSuppressionReason.ARTIFACT_CLOSED);
+        verify(eventPublisher, org.mockito.Mockito.never())
+                .publishEvent(any(
+                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
     }
 
     @Test
@@ -676,8 +703,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         var saved = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository).save(saved.capture());
         assertThat(saved.getValue().getReplacesId()).isEqualTo(liveFeedbackId);
-        verify(feedbackRepository, org.mockito.Mockito.never())
-                .updateState(liveFeedbackId, FeedbackDeliveryState.SUPERSEDED.name());
+        verify(feedbackRepository, org.mockito.Mockito.never()).supersedeDelivered(1L, liveFeedbackId);
     }
 
     @Test

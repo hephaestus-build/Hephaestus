@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.practices.observation.dto;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.DeliveredFeedbackBinding;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackUsefulness;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
@@ -14,8 +17,10 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Detail-view DTO for a single practice observation. Includes delivered feedback, evidence rationale,
- * and structured evidence that are omitted from the list view.
+ * The one observation shape a developer reads: what was observed, why it was noted, what to try next, the
+ * evidence behind it and the developer's own response to the feedback that carried it. Served on its own by
+ * the observation detail endpoint and per observation by the review-run feed, so a feed row never needs a
+ * second request to open.
  *
  * <p>Intentionally omits internal fields: {@code agentJobId}, {@code occurrenceKey},
  * and raw {@code aboutUserId}.
@@ -57,6 +62,30 @@ public record ObservationDetailDTO(
                         "What to do — the delivered feedback for this observation (null if nothing was delivered)")
         String deliveredFeedback,
 
+        @Nullable
+        @Schema(
+                description = "The next step the review wrote about this observation, whether or not the "
+                        + "feedback carrying it was delivered (null when it wrote none)")
+        String nextStep,
+
+        @Nullable
+        @Schema(
+                description = "The newest delivered feedback that carried this observation to the developer; "
+                        + "the handle for responding to it (null when none was delivered)")
+        UUID feedbackId,
+
+        @Nullable @Schema(description = "The developer's usefulness response to that feedback")
+        FeedbackUsefulness feedbackUsefulness,
+
+        @Nullable @Schema(description = "The developer's resolution response to that feedback")
+        FeedbackResolution feedbackResolution,
+
+        @Nullable @Schema(description = "The developer's comment on that feedback")
+        String feedbackResponseComment,
+
+        @Nullable @Schema(description = "Cross-run locus key; null when continuity is unavailable")
+        String recurrenceKey,
+
         @NonNull ReviewClaimCurrentness claimCurrentness,
 
         @NonNull @Schema(description = "What occasioned the measurement; never mix origins in one trend line")
@@ -71,6 +100,8 @@ public record ObservationDetailDTO(
     public static ObservationDetailDTO from(
             Observation observation,
             @Nullable String deliveredFeedback,
+            @Nullable String nextStep,
+            @Nullable DeliveredFeedbackBinding feedback,
             @Nullable String artifactUrl,
             boolean includeEvidence) {
         var practice = observation.getPractice();
@@ -87,6 +118,16 @@ public record ObservationDetailDTO(
                 includeEvidence ? ObservationEvidenceDTO.from(observation.getEvidence()) : null,
                 observation.getEvidenceRationale(),
                 deliveredFeedback,
+                nextStep,
+                feedback == null ? null : feedback.getFeedbackId(),
+                feedback == null || feedback.getResponseUsefulness() == null
+                        ? null
+                        : FeedbackUsefulness.valueOf(feedback.getResponseUsefulness()),
+                feedback == null || feedback.getResponseResolution() == null
+                        ? null
+                        : FeedbackResolution.valueOf(feedback.getResponseResolution()),
+                feedback == null ? null : feedback.getResponseComment(),
+                observation.getRecurrenceKey(),
                 ReviewClaimCurrentness.of(observation.getPracticeRevision(), practice),
                 observation.getOrigin(),
                 artifactUrl,

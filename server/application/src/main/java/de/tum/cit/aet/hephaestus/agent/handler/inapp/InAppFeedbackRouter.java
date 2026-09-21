@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomyPolicy;
+import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
@@ -91,17 +92,21 @@ public final class InAppFeedbackRouter {
 
     /**
      * The subset of a practice's measurements that a message about a recurring problem may stand on:
-     * the ones that actually recorded a problem.
+     * one row per piece of work whose newest review recorded a problem, in the window's order.
      *
      * <p>Public because it is the single definition of "the evidence" for this lane, and both the
      * decision here and the rows bound to the written unit must use it. Binding the unfiltered window
      * instead would list, under "the pieces of work this habit was observed on", work where the practice
-     * was done well — which reads as a false accusation to the one person who knows it is false.
+     * was done well — which reads as a false accusation to the one person who knows it is false. The same
+     * goes for a pull request whose re-review came back clean: a piece of work counts once, at its newest
+     * review ({@link LatestRun}), so a problem a later run no longer found is neither counted nor cited.
      */
     public static List<Observation> problemsIn(List<Observation> evidence) {
-        return evidence.stream()
+        Set<String> cited = new HashSet<>();
+        return LatestRun.perWork(evidence).stream()
                 .filter(o -> o.getPresence() != null && o.getPresence().carriesValence())
                 .filter(o -> o.getAssessment() == Assessment.BAD)
+                .filter(o -> cited.add(workKey(o)))
                 .toList();
     }
 
@@ -112,8 +117,12 @@ public final class InAppFeedbackRouter {
             if (problem.getArtifactKind() == null || problem.getArtifactId() == null) {
                 continue;
             }
-            artifacts.add(problem.getArtifactKind().value() + ":" + problem.getArtifactId());
+            artifacts.add(workKey(problem));
         }
         return artifacts.size();
+    }
+
+    private static String workKey(Observation observation) {
+        return observation.getArtifactKind().value() + ":" + observation.getArtifactId();
     }
 }

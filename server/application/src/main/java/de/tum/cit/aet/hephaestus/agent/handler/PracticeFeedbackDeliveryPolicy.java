@@ -123,26 +123,9 @@ public class PracticeFeedbackDeliveryPolicy {
             @Nullable Long recipientUserId) {
         long workspaceId = requireWorkspaceId(job);
         Workspace workspace = activePracticeWorkspace(workspaceId);
+        // Silent mode is the resolver's first check: it refuses every surface that leaves the instance and is
+        // not applicable to the developer's own page, so no surface decides it before the resolver does.
         boolean instanceMayDeliver = !silentModeQuery.isSilentModeEngaged();
-        if (!instanceMayDeliver) {
-            Resolution resolution = resolve(
-                    job,
-                    surface,
-                    instanceMayDeliver,
-                    workspace,
-                    null,
-                    FactAnswer.NOT_APPLICABLE,
-                    FactAnswer.NOT_APPLICABLE,
-                    null,
-                    stage,
-                    feedbackId,
-                    contributingPracticeSlugs,
-                    null,
-                    null,
-                    "scm.issue");
-            record(job, workspaceId, feedbackId, surface, stage, resolution);
-            return Decision.suppressed(resolution.result().refusal());
-        }
         if (workspace == null) {
             Resolution resolution = resolve(
                     job,
@@ -240,26 +223,9 @@ public class PracticeFeedbackDeliveryPolicy {
             @Nullable Long recipientUserId) {
         long workspaceId = requireWorkspaceId(job);
         Workspace workspace = activePracticeWorkspace(workspaceId);
+        // Silent mode is the resolver's first check: it refuses every surface that leaves the instance and is
+        // not applicable to the developer's own page, so no surface decides it before the resolver does.
         boolean instanceMayDeliver = !silentModeQuery.isSilentModeEngaged();
-        if (!instanceMayDeliver) {
-            Resolution resolution = resolve(
-                    job,
-                    surface,
-                    instanceMayDeliver,
-                    workspace,
-                    null,
-                    FactAnswer.NOT_APPLICABLE,
-                    FactAnswer.NOT_APPLICABLE,
-                    null,
-                    stage,
-                    feedbackId,
-                    contributingPracticeSlugs,
-                    null,
-                    null,
-                    "scm.pull_request");
-            record(job, workspaceId, feedbackId, surface, stage, resolution);
-            return Decision.suppressed(resolution.result().refusal());
-        }
         if (workspace == null) {
             Resolution resolution = resolve(
                     job,

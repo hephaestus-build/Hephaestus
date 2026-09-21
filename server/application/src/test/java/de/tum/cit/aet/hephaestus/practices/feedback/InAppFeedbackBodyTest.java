@@ -22,10 +22,19 @@ class InAppFeedbackBodyTest extends BaseUnitTest {
     }
 
     @Test
-    void keepsTheMessageAndTheNextStepBelowTheHeadline() {
-        String body = InAppFeedbackBody.render("Headline", "The message.", "Try this next.");
+    void handsOutTheMessageWithoutTheHeadlineOrTheNextStep() {
+        String body = InAppFeedbackBody.render("Headline", "The message.\n\nWith two paragraphs.", "Try this next.");
 
-        assertThat(InAppFeedbackBody.messageOf(body)).isEqualTo("The message.\n\n**Try next:** Try this next.");
+        assertThat(InAppFeedbackBody.messageOf(body)).isEqualTo("The message.\n\nWith two paragraphs.");
+        assertThat(InAppFeedbackBody.nextStepOf(body)).isEqualTo("Try this next.");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Try this next.", "Split\nit", "Write the assertion **before** the branch"})
+    void roundTripsAnyNextStepItWrote(String nextStep) {
+        String body = InAppFeedbackBody.render("Headline", "The message.\n\nWith two paragraphs.", nextStep);
+
+        assertThat(InAppFeedbackBody.nextStepOf(body)).isEqualTo(nextStep.replace('\n', ' '));
     }
 
     /** A newline in a heading would swallow the rest of the message into the title. */
@@ -47,11 +56,14 @@ class InAppFeedbackBodyTest extends BaseUnitTest {
                 .isNull();
         assertThat(InAppFeedbackBody.messageOf("A plain in-context comment body."))
                 .isEqualTo("A plain in-context comment body.");
+        assertThat(InAppFeedbackBody.nextStepOf("A plain in-context comment body."))
+                .isNull();
     }
 
     @Test
     void toleratesAnAbsentBody() {
         assertThat(InAppFeedbackBody.headlineOf(null)).isNull();
         assertThat(InAppFeedbackBody.messageOf(null)).isEmpty();
+        assertThat(InAppFeedbackBody.nextStepOf(null)).isNull();
     }
 }

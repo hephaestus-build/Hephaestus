@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.OperatorFeedbackRow;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.Map;
@@ -16,7 +17,7 @@ public record ReviewFeedbackDTO(
         @NonNull UUID agentJobId,
 
         @Schema(description = "Work item the feedback targets; null when it is unanchored") @Nullable
-        ReviewArtifactDTO artifact,
+        ReviewedWorkRefDTO artifact,
 
         @Schema(description = "Who the feedback is addressed to; null when the identity is no longer resolvable")
         @Nullable
@@ -48,7 +49,7 @@ public record ReviewFeedbackDTO(
         @NonNull @Schema(description = "Number of observations used to compose the feedback")
         Long observationCount) {
     public static ReviewFeedbackDTO from(
-            OperatorFeedbackRow row, @Nullable ReviewArtifactDTO artifact, Map<Long, ReviewSubjectDTO> subjects) {
+            OperatorFeedbackRow row, @Nullable ReviewedWorkRefDTO artifact, Map<Long, ReviewSubjectDTO> subjects) {
         return new ReviewFeedbackDTO(
                 row.getId(),
                 row.getAgentJobId(),

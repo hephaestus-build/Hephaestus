@@ -13,12 +13,18 @@ import org.springframework.stereotype.Component;
  * Retires the message a newer one replaces, on the two lanes where "queued" and "read" are different
  * states.
  *
- * <p><b>The rule this exists to hold: nothing that has been received may be un-said.</b> A in-app card
- * or a mentor unit becomes DELIVERED at the moment the developer actually reads it, so replacing one that
- * has already flipped would rewrite something a person has in their head. The in-context lane is not this
- * act and does not come through here — there the comment is edited in place on the merge request, so
- * retiring the delivered row is what makes the ledger agree with what is now visible, and
- * {@link FeedbackLedgerRecorder} keeps doing it.
+ * <p><b>The rule this exists to hold: nothing that has been received may be un-said.</b> A mentor unit
+ * becomes DELIVERED at the moment the developer actually reads it, so replacing one that has already
+ * flipped would rewrite something a person has in their head; {@link #supersede} claims only what is
+ * still queued. The in-app lane keeps the ledger and not the page: an open card about a habit is replaced
+ * by the newer card about it, read or not, because the practice page is a list of habits to work on and
+ * two open cards about one habit are one habit said twice — {@link #replaceOpen}, which retires exactly
+ * the card the caller found open. What is never replaced is a card that is closed: resolved by the work
+ * or by the developer, or closed because the practice changed, it stays as the record of what was said,
+ * and only the caller can tell, so only the caller decides. The in-context lane is not this act and does
+ * not come through here — there the comment is edited in place on the merge request, so retiring the
+ * delivered row is what makes the ledger agree with what is now visible, and {@link FeedbackLedgerRecorder}
+ * keeps doing it.
  *
  * <p><b>The caller must write the replacement in the same transaction as the claim.</b> This is one half
  * of a swap: on its own it takes a message out of somebody's queue and puts nothing back. The two must
@@ -72,7 +78,8 @@ public class FeedbackSupersession {
         /**
          * The recipient read the queued message before this run got to it. It keeps its DELIVERED state
          * and the new unit is written anyway, pointing back at it: the thread continues rather than being
-         * rewritten.
+         * rewritten. Only {@link #supersede} answers this; the in-app lane's {@link #replaceOpen} retires a
+         * read card too.
          */
         CONTINUED,
         /** There was nothing live to follow — no thread, or another run already moved it on. */
@@ -126,6 +133,27 @@ public class FeedbackSupersession {
         // rows on one link and fork a chain that is meant to be a line, so this unit follows nothing; the
         // shared thread key is what still ties it to the thread.
         log.info("Supersession found nothing live to claim: channel={}, threadKey={}", channel, threadKey);
+        return Outcome.standalone();
+    }
+
+    /**
+     * Retire the card still open on one in-app thread so a newer card about the same habit can take its
+     * place — queued or already read, but never closed, which the caller has established by reading the
+     * card the way the page reads it ({@code PreviousInAppFeedback}).
+     *
+     * <p>Two compare-and-sets, one per state a live card can be in, so a run racing this one claims it at
+     * most once; a card another run already retired, or that has since been withheld, matches neither, and
+     * the new card is written on its own. Never throws for the same reason {@link #supersede} does not:
+     * losing the claim is ordinary, and the composed words are still owed.
+     *
+     * @param openId the open card, found by the caller on the thread this card is about to be written on
+     */
+    public Outcome replaceOpen(long workspaceId, UUID openId) {
+        if (feedbackRepository.markSuperseded(workspaceId, openId) == 1
+                || feedbackRepository.supersedeDelivered(workspaceId, openId) == 1) {
+            return new Outcome(Disposition.SUPERSEDED, openId);
+        }
+        log.info("Open in-app card was already claimed by another run; written as new: target={}", openId);
         return Outcome.standalone();
     }
 }

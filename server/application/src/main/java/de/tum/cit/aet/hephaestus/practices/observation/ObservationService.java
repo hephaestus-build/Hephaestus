@@ -1,23 +1,31 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.DeliveredFeedbackBinding;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.DeveloperPracticeSummaryProjection;
+import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunNarrativeLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunNarrativeLookup.ReviewRunNarrative;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -44,6 +52,8 @@ public class ObservationService {
     private final FeedbackObservationRepository feedbackObservationRepository;
     private final UserRepository userRepository;
     private final ReviewRunTargetLookup reviewRunTargetLookup;
+    private final ReviewRunNarrativeLookup reviewRunNarrativeLookup;
+    private final EvidenceAuthorization evidenceAuthorization;
 
     /** Feed ordering: by observation time or by severity (direction applies to both). */
     public enum ObservationSort {
@@ -100,18 +110,6 @@ public class ObservationService {
                 pageable);
     }
 
-    /**
-     * Link to the reviewed artifact behind an observation. Empty when the run target is unknown, for example
-     * after the artifact was deleted.
-     */
-    @Transactional(readOnly = true)
-    public Optional<String> getArtifactUrl(Long workspaceId, Observation observation) {
-        return Optional.ofNullable(reviewRunTargetLookup
-                        .findByJobIds(workspaceId, List.of(observation.getAgentJobId()))
-                        .get(observation.getAgentJobId()))
-                .map(ReviewRunTargetLookup.Target::url);
-    }
-
     /** Per-practice observation counts for the current user in a workspace. */
     @Transactional(readOnly = true)
     public List<DeveloperPracticeSummaryProjection> getSummary(Long workspaceId) {
@@ -141,39 +139,96 @@ public class ObservationService {
      * @throws EntityNotFoundException if no user, or observation not found/not owned
      */
     @Transactional(readOnly = true)
-    public Observation getObservation(Long workspaceId, UUID observationId) {
+    public ObservationDetailDTO getObservationDetail(Long workspaceId, UUID observationId) {
         Optional<User> currentUser = userRepository.getCurrentUser();
         if (currentUser.isEmpty()) {
             throw new EntityNotFoundException("Observation", observationId.toString());
         }
-        return observationRepository
+        Observation observation = observationRepository
                 .findByIdAndDeveloperAndWorkspace(
                         observationId, currentUser.get().getId(), workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Observation", observationId.toString()));
+        Set<UUID> evidencePermitted = evidenceAuthorization.permitsAll(
+                workspaceId, List.of(observation), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        List<UUID> jobIds = List.of(observation.getAgentJobId());
+        Map<UUID, ReviewRunTargetLookup.Target> targets = reviewRunTargetLookup.findByJobIds(workspaceId, jobIds);
+        Map<UUID, ReviewRunNarrative> narratives = reviewRunNarrativeLookup.findByJobIds(workspaceId, jobIds);
+        return details(
+                        workspaceId,
+                        currentUser.get().getId(),
+                        List.of(observation),
+                        evidencePermitted,
+                        targets,
+                        narratives)
+                .getFirst();
     }
 
     /**
-     * The delivered feedback body for a single observation — the developer's advice source for the detail view
-     * (ADR 0021: advice lives on the delivered {@code Feedback}, not the immutable observation). Null when the
-     * observation was never delivered. Callers pass this into {@code ObservationDetailDTO.from}.
+     * The detail read model of each observation, in the given order, from one batched query per collaborator:
+     * the guidance said about each observation (ADR 0021: advice lives on the delivered {@code Feedback}, not
+     * the immutable observation) and the newest delivered feedback that carried it to this developer, whose
+     * response the developer may edit. A caller hands in observations it has already loaded and gated: evidence
+     * is included only for the ids in {@code evidencePermitted}, which is {@link EvidenceAuthorization}'s answer
+     * for the delivery purpose, and the artifact link comes from the run target of the observation's job, absent
+     * when the target is no longer resolvable.
      *
-     * <p>Takes the workspace even though the observation id alone identifies a row: the body it returns
-     * belongs to a feedback unit, and feedback is tenant-scoped whatever the observation is.
+     * <p>Takes the workspace even though observation ids alone identify the rows: the bodies and bindings it
+     * loads belong to feedback units, and feedback is tenant-scoped whatever the observation is.
      */
     @Transactional(readOnly = true)
-    public Optional<String> getDeliveredGuidance(Long workspaceId, UUID observationId) {
-        return Optional.ofNullable(deliveredFeedbackByObservation(workspaceId, Set.of(observationId))
-                .get(observationId));
+    public List<ObservationDetailDTO> toDetails(
+            Long workspaceId,
+            Long developerId,
+            List<Observation> observations,
+            Set<UUID> evidencePermitted,
+            Map<UUID, ReviewRunTargetLookup.Target> targets,
+            Map<UUID, ReviewRunNarrative> narratives) {
+        return details(workspaceId, developerId, observations, evidencePermitted, targets, narratives);
     }
 
-    private Map<UUID, String> deliveredFeedbackByObservation(Long workspaceId, Set<UUID> observationIds) {
-        if (observationIds.isEmpty()) {
-            return Map.of();
+    private List<ObservationDetailDTO> details(
+            Long workspaceId,
+            Long developerId,
+            List<Observation> observations,
+            Set<UUID> evidencePermitted,
+            Map<UUID, ReviewRunTargetLookup.Target> targets,
+            Map<UUID, ReviewRunNarrative> narratives) {
+        if (observations.isEmpty()) {
+            return List.of();
         }
+        List<UUID> observationIds =
+                observations.stream().map(Observation::getId).toList();
+        Map<UUID, String> guidance = deliveredGuidanceByObservation(workspaceId, observationIds);
+        Map<UUID, DeliveredFeedbackBinding> bindings =
+                deliveredFeedbackByObservation(workspaceId, developerId, observationIds);
+        return observations.stream()
+                .map(observation -> {
+                    ReviewRunTargetLookup.Target target = targets.get(observation.getAgentJobId());
+                    ReviewRunNarrative narrative = narratives.get(observation.getAgentJobId());
+                    return ObservationDetailDTO.from(
+                            observation,
+                            guidance.get(observation.getId()),
+                            narrative == null ? null : narrative.nextStepFor(observation.getId()),
+                            bindings.get(observation.getId()),
+                            target == null ? null : target.url(),
+                            evidencePermitted.contains(observation.getId()));
+                })
+                .toList();
+    }
+
+    private Map<UUID, String> deliveredGuidanceByObservation(Long workspaceId, Collection<UUID> observationIds) {
         return feedbackObservationRepository
                 .findLatestFeedbackBodiesByObservationIds(workspaceId, observationIds, FEEDBACK_CHANNELS)
                 .stream()
                 .collect(Collectors.toMap(ObservationFeedbackBody::getObservationId, ObservationFeedbackBody::getBody));
+    }
+
+    private Map<UUID, DeliveredFeedbackBinding> deliveredFeedbackByObservation(
+            Long workspaceId, Long recipientUserId, Collection<UUID> observationIds) {
+        return feedbackObservationRepository
+                .findDeliveredFeedbackBindings(workspaceId, recipientUserId, observationIds)
+                .stream()
+                .collect(Collectors.toMap(DeliveredFeedbackBinding::getObservationId, Function.identity()));
     }
 
     /**

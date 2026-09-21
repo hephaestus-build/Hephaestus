@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.practices.observation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -37,7 +36,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class PracticeStandingServiceTest extends BaseUnitTest {
@@ -158,8 +156,8 @@ class PracticeStandingServiceTest extends BaseUnitTest {
     @DisplayName("two clean newer pieces of reviewed work restore STRENGTH even though an older review found a problem")
     void recentCleanEvidenceOutweighsTheOlderRecord() {
         Practice practice = practice("robust-error-handling");
-        when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), anyBoolean(), any(Pageable.class)))
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(bad(practice, Severity.MAJOR, 41L), good(practice, 42L), good(practice, 43L)));
         when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
                 .thenReturn(List.of());
@@ -175,8 +173,8 @@ class PracticeStandingServiceTest extends BaseUnitTest {
     @DisplayName("one clean piece of reviewed work after a problem does not outweigh it — the standing stays MIXED")
     void singleCleanOpportunityDoesNotRestoreStrength() {
         Practice practice = practice("robust-error-handling");
-        when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), anyBoolean(), any(Pageable.class)))
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(bad(practice, Severity.MAJOR, 41L), good(practice, 42L)));
         when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
                 .thenReturn(List.of());
@@ -191,8 +189,8 @@ class PracticeStandingServiceTest extends BaseUnitTest {
     @DisplayName("one problem on the newest piece of reviewed work moves the standing to MIXED, but does not condemn")
     void aSingleFreshProblemDoesNotCondemn() {
         Practice practice = practice("robust-error-handling");
-        when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), anyBoolean(), any(Pageable.class)))
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(
                         good(practice, 41L),
                         good(practice, 42L),
@@ -211,8 +209,8 @@ class PracticeStandingServiceTest extends BaseUnitTest {
     @DisplayName("two problems in a row do condemn — the mirror of two clean ones restoring a strength")
     void twoFreshProblemsInARowDropToDeveloping() {
         Practice practice = practice("robust-error-handling");
-        when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), anyBoolean(), any(Pageable.class)))
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(
                         good(practice, 41L),
                         good(practice, 42L),
@@ -231,8 +229,8 @@ class PracticeStandingServiceTest extends BaseUnitTest {
     @DisplayName("only the newest four pieces of reviewed work decide the standing, however long the older record is")
     void olderWorkItemsFallOutOfTheStandingWindow() {
         Practice practice = practice("robust-error-handling");
-        when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), anyBoolean(), any(Pageable.class)))
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(
                         bad(practice, Severity.MAJOR, 31L),
                         bad(practice, Severity.MAJOR, 32L),
@@ -261,8 +259,8 @@ class PracticeStandingServiceTest extends BaseUnitTest {
         practice.setName("Handling failure robustly");
         practice.setCriteria("ordinary criteria"); // not a defect-detector
 
-        when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), anyBoolean(), any(Pageable.class)))
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(bad(practice, null), bad(practice, Severity.CRITICAL)));
         when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
                 .thenReturn(List.of());
@@ -282,8 +280,8 @@ class PracticeStandingServiceTest extends BaseUnitTest {
         Observation critical = bad(practice, Severity.CRITICAL, 42L);
         Observation minor = bad(practice, Severity.MINOR, 42L);
 
-        when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), anyBoolean(), any(Pageable.class)))
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(minor, critical));
         when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
                 .thenReturn(List.of());
@@ -304,8 +302,8 @@ class PracticeStandingServiceTest extends BaseUnitTest {
         Observation locusA = bad(practice, Severity.CRITICAL, 42L, "locus-A");
         Observation locusB = bad(practice, Severity.MINOR, 43L, "locus-B");
 
-        when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), anyBoolean(), any(Pageable.class)))
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(locusA, locusB));
         when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
                 .thenReturn(List.of());

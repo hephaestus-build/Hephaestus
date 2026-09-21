@@ -241,7 +241,7 @@ public class FeedbackLedgerRecorder {
                 .build());
 
         if (supersedesId != null) {
-            feedbackRepository.updateState(supersedesId, FeedbackDeliveryState.SUPERSEDED.name());
+            feedbackRepository.supersedeDelivered(job.getWorkspace().getId(), supersedesId);
         }
 
         // Reaction suppression already wrote its REACTED_* units before this runs and does NOT delete the
@@ -397,13 +397,18 @@ public class FeedbackLedgerRecorder {
      * (ordinal {@link #GATE_SUPPRESSED_UNIT_ORDINAL}) binding its assessed observations, with the composed body
      * kept for audit. Without it, a gate-withheld review reads exactly like one that was delivered and ignored.
      *
-     * <p>Publishes NO conversational trigger: a gate decision (closed PR, opted-out author) applies to every
-     * channel, so the loci must not resurface in a mentor turn. No-ops when a DELIVERED unit already exists for
-     * the job or on retry. REQUIRES_NEW, best-effort: callers wrap in try/catch.
+     * <p>Publishes the lane trigger for exactly one reason, {@link FeedbackSuppressionReason#INSTANCE_SILENCED}:
+     * silence stops what leaves the instance and nothing else, so the developer's own pages must still get
+     * their card now rather than when the hourly sweeper next passes. Every other gate decision (closed PR,
+     * opted-out author) applies to every channel, so those loci must not resurface anywhere. No-ops when a
+     * DELIVERED unit already exists for the job or on retry. REQUIRES_NEW, best-effort: callers wrap in try/catch.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSuppressedUnit(AgentJob job, DeliveryContent delivery, FeedbackSuppressionReason reason) {
         recordSuppressedUnitInCurrentTransaction(job, delivery, reason);
+        if (reason == FeedbackSuppressionReason.INSTANCE_SILENCED) {
+            publishFeedbackLaneTrigger(job);
+        }
     }
 
     private void recordSuppressedUnitInCurrentTransaction(

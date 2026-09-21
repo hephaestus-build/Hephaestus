@@ -1,29 +1,37 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.inapp;
 
-import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.dto.InAppEvidenceDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.dto.InAppFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository.CurrentResponseRow;
+import de.tum.cit.aet.hephaestus.practices.observation.trend.WorkResolution;
+import de.tum.cit.aet.hephaestus.practices.observation.trend.WorkResolution.Work;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,17 +53,27 @@ public class InAppFeedbackService {
      */
     private static final int MAX_CARDS = 20;
 
+    /**
+     * How long a closed card stays on the page after it closed — resolved by the work or by the developer,
+     * or closed because the practice changed. A closed card is a record the developer already saw; the
+     * profile is a list of habits to work on, not a log, and the ledger keeps the record. Applied when the
+     * page is read, never by touching the row, so the ledger and the operator surfaces still have it.
+     */
+    static final Duration CLOSED_CARD_STAYS = Duration.ofDays(30);
+
     private final FeedbackRepository feedbackRepository;
-    private final FeedbackObservationRepository feedbackObservationRepository;
-    private final ObservationVisibilityPolicy visibilityPolicy;
+    private final InAppFeedbackEvidence feedbackEvidence;
     private final UserRepository userRepository;
+    private final ReviewRunTargetLookup reviewRunTargetLookup;
+    private final ReactionRepository reactionRepository;
+    private final Clock clock;
 
     /**
      * The current developer's practice pages.
      *
      * <p>Not {@code readOnly}: opening a card is what delivers it, and the flip is recorded here. This
      * lane is the only one whose delivery we can observe rather than infer, because we own the surface;
-     * marking a unit delivered when it was written would enter text nobody opened into the ledger as
+     * marking feedback delivered when it was written would enter text nobody opened into the ledger as
      * received.
      *
      * @return empty when the caller is not a synced developer, exactly as the sibling read models do —
@@ -68,84 +86,115 @@ public class InAppFeedbackService {
             return List.of();
         }
         Long recipientUserId = currentUser.get().getId();
-        List<Feedback> units = feedbackRepository.findReadableInAppForRecipient(
+        List<Feedback> prepared = feedbackRepository.findReadableInAppForRecipient(
                 workspaceId, recipientUserId, PageRequest.of(0, MAX_CARDS));
-        if (units.isEmpty()) {
+        if (prepared.isEmpty()) {
             return List.of();
         }
-        Map<UUID, List<Observation>> evidenceByUnit = visibleEvidence(workspaceId, units);
-
-        List<InAppFeedbackDTO> cards = new ArrayList<>(units.size());
-        List<UUID> toMarkDelivered = new ArrayList<>(units.size());
-        for (Feedback unit : units) {
-            List<Observation> evidence = evidenceByUnit.getOrDefault(unit.getId(), List.of());
-            // Hidden, not deleted. A unit whose measurements have since gone non-current — the practice's
-            // review rules changed, or an evidence source's authorization was withdrawn — must stop being
-            // shown, but the ledger still records that we said it, which is the whole point of a ledger.
-            if (evidence.isEmpty()) {
-                continue;
-            }
-            cards.add(toCard(unit, evidence));
-            if (unit.getDeliveryState() == FeedbackDeliveryState.PREPARED) {
-                toMarkDelivered.add(unit.getId());
-            }
-        }
-        Instant now = Instant.now();
-        for (UUID id : toMarkDelivered) {
-            feedbackRepository.markInAppDelivered(workspaceId, id, now);
+        Map<UUID, List<Observation>> evidenceByFeedback = feedbackEvidence.visibleEvidence(
+                workspaceId, prepared.stream().map(Feedback::getId).toList());
+        // Hidden, not deleted. Feedback whose evidence source's authorization was withdrawn must stop
+        // being shown, but the ledger still records that we said it, which is the whole point of a
+        // ledger. Feedback whose practice changed its review rules stays, closed, and the card says so.
+        List<Feedback> shown = prepared.stream()
+                .filter(feedback -> evidenceByFeedback.containsKey(feedback.getId()))
+                .toList();
+        Map<UUID, WorkResolution> resolutionByFeedback =
+                feedbackEvidence.workResolutions(workspaceId, recipientUserId, shown, evidenceByFeedback);
+        // One lookup names every piece of work on the page, the evidence and the clean work alike.
+        Map<UUID, Target> targets = reviewRunTargetLookup.findByJobIds(
+                workspaceId,
+                Stream.concat(
+                                evidenceByFeedback.values().stream()
+                                        .flatMap(List::stream)
+                                        .map(Observation::getAgentJobId),
+                                resolutionByFeedback.values().stream()
+                                        .flatMap(resolution -> resolution.cleanWork().stream())
+                                        .map(Work::jobId))
+                        .collect(Collectors.toSet()));
+        // The developer's own answers, one query for the page: the same current response the response
+        // endpoint returns for one card.
+        Map<UUID, FeedbackResponseDTO> responseByFeedback = reactionRepository
+                .findCurrentResponses(
+                        recipientUserId,
+                        workspaceId,
+                        shown.stream().map(Feedback::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(
+                        CurrentResponseRow::getFeedbackId, row -> FeedbackResponseDTO.from(row.getFeedbackId(), row)));
+        Instant now = clock.instant();
+        List<InAppFeedbackDTO> cards = shown.stream()
+                .map(feedback -> toCard(
+                        feedback,
+                        Objects.requireNonNull(evidenceByFeedback.get(feedback.getId())),
+                        resolutionByFeedback.getOrDefault(feedback.getId(), WorkResolution.NONE),
+                        responseByFeedback.get(feedback.getId()),
+                        targets))
+                .filter(card -> stillOnThePage(card, now))
+                .toList();
+        Set<UUID> onThePage = cards.stream().map(InAppFeedbackDTO::id).collect(Collectors.toSet());
+        List<UUID> toMarkDelivered = shown.stream()
+                .filter(feedback -> feedback.getDeliveryState() == FeedbackDeliveryState.PREPARED)
+                .map(Feedback::getId)
+                .filter(onThePage::contains)
+                .toList();
+        if (!toMarkDelivered.isEmpty()) {
+            feedbackRepository.markInAppDelivered(workspaceId, toMarkDelivered, now);
         }
         return List.copyOf(cards);
     }
 
-    /**
-     * The observations behind this page's units, narrowed to what may still be shown.
-     *
-     * <p>The gate runs again here even though composition ran it: the composed body is frozen text and
-     * the gate is not, so a claim can lose currentness or authorization after it was written. One batch
-     * query for the page, one authorization round trip, as {@code ObservationVisibilityPolicy} is built
-     * for.
-     */
-    private Map<UUID, List<Observation>> visibleEvidence(Long workspaceId, List<Feedback> units) {
-        List<UUID> ids = units.stream().map(Feedback::getId).toList();
-        var rows = feedbackObservationRepository.findForVisibility(workspaceId, ids);
-        List<Observation> all = rows.stream()
-                .map(FeedbackObservationRepository.FeedbackObservationVisibility::getObservation)
-                .toList();
-        Set<UUID> visible = visibilityPolicy.permitsAll(workspaceId, all, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        Map<UUID, List<Observation>> byUnit = new LinkedHashMap<>();
-        for (var row : rows) {
-            Observation observation = row.getObservation();
-            if (observation.getId() == null || !visible.contains(observation.getId())) {
-                continue;
-            }
-            byUnit.computeIfAbsent(row.getFeedbackId(), key -> new ArrayList<>())
-                    .add(observation);
-        }
-        // Newest occurrence first: the card's evidence list reads as "this is still happening", which the
-        // oldest-first order would invert.
-        Comparator<Observation> newestFirst = Comparator.comparing(
-                Observation::getObservedAt, Comparator.nullsLast(Comparator.<Instant>reverseOrder()));
-        byUnit.values().forEach(list -> list.sort(newestFirst));
-        return byUnit;
+    /** Open, or closed for less than {@link #CLOSED_CARD_STAYS}. */
+    private static boolean stillOnThePage(InAppFeedbackDTO card, Instant now) {
+        FeedbackResponseDTO response = card.response();
+        Instant closedAt = InAppFeedbackEvidence.closedAt(
+                card.resolvedByWorkAt(),
+                response != null
+                                && response.resolution() != null
+                                && response.resolution().resolves()
+                        ? response.respondedAt()
+                        : null,
+                card.practiceChangedAt());
+        return closedAt == null || !closedAt.plus(CLOSED_CARD_STAYS).isBefore(now);
     }
 
-    private static InAppFeedbackDTO toCard(Feedback unit, List<Observation> evidence) {
+    private static InAppFeedbackDTO toCard(
+            Feedback feedback,
+            List<Observation> evidence,
+            WorkResolution resolution,
+            @Nullable FeedbackResponseDTO response,
+            Map<UUID, Target> targets) {
         Practice practice = evidence.getFirst().getPractice();
-        PracticeGroup group = practice == null ? null : practice.getGroup();
-        String headline = InAppFeedbackBody.headlineOf(unit.getBody());
+        PracticeGroup group = practice.getGroup();
+        String headline = InAppFeedbackBody.headlineOf(feedback.getBody());
         return new InAppFeedbackDTO(
-                unit.getId(),
-                headline != null ? headline : (practice == null ? "" : practice.getName()),
-                InAppFeedbackBody.messageOf(unit.getBody()),
-                practice == null ? "" : practice.getSlug(),
-                practice == null ? "" : practice.getName(),
+                feedback.getId(),
+                headline != null ? headline : practice.getName(),
+                InAppFeedbackBody.messageOf(feedback.getBody()),
+                InAppFeedbackBody.nextStepOf(feedback.getBody()),
+                practice.getSlug(),
+                practice.getName(),
                 group == null ? null : group.getSlug(),
                 group == null ? null : group.getName(),
-                practice == null ? null : practice.getWhyItMatters(),
-                practice == null ? null : practice.getWhatGoodLooksLike(),
-                evidence.stream().map(InAppEvidenceDTO::from).toList(),
-                evidence.size(),
-                unit.getCreatedAt(),
-                unit.getDeliveredAt());
+                practice.getWhyItMatters(),
+                practice.getWhatGoodLooksLike(),
+                evidence.stream()
+                        .map(observation ->
+                                InAppEvidenceDTO.from(observation, targets.get(observation.getAgentJobId())))
+                        .toList(),
+                (int) evidence.stream()
+                        .map(Work::of)
+                        .map(Work.Key::of)
+                        .distinct()
+                        .count(),
+                feedback.getCreatedAt(),
+                feedback.getDeliveredAt(),
+                WorkResolution.CLEAN_NEEDED,
+                resolution.cleanWork().stream()
+                        .map(work -> ReviewedWorkLabels.ref(work.kind(), work.id(), targets.get(work.jobId())))
+                        .toList(),
+                resolution.resolvedAt(),
+                InAppFeedbackEvidence.practiceChangedAt(evidence),
+                response);
     }
 }

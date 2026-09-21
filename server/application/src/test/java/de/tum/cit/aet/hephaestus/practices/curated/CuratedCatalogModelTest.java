@@ -42,7 +42,7 @@ class CuratedCatalogModelTest extends BaseUnitTest {
     }
 
     private static BundledEntry<GroupDefinition> entry(String slug, String name, int position) {
-        return new BundledEntry<>(slug, group(name, "Description"), position);
+        return new BundledEntry<>(slug, group(name, "Description"), position, null);
     }
 
     @SafeVarargs

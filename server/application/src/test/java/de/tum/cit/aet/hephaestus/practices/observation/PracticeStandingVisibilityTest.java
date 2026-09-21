@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.practices.observation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -38,7 +37,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class PracticeStandingVisibilityTest extends BaseUnitTest {
@@ -122,8 +120,8 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
     void withholdsObservationRejectedByFeedbackVisibilityPolicy() {
         Practice practice = practice("robust-error-handling");
         Observation observation = bad(practice, Severity.MAJOR);
-        when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), anyBoolean(), any(Pageable.class)))
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(observation));
         when(visibilityPolicy.permitsAll(
                         WORKSPACE_ID, List.of(observation), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
@@ -141,8 +139,8 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
         practice.setName("Handling failure robustly");
         practice.setCriteria("ordinary criteria"); // not a defect-detector
 
-        when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), anyBoolean(), any(Pageable.class)))
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(bad(practice, null), bad(practice, Severity.CRITICAL)));
         when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
                 .thenReturn(List.of());
@@ -185,8 +183,8 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
     }
 
     private void feeds(Observation... observations) {
-        when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), anyBoolean(), any(Pageable.class)))
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(observations));
         when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
                 .thenReturn(List.of());

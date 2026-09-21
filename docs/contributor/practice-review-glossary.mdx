@@ -302,7 +302,7 @@ how it runs is in the [practice review pipeline](./practice-review-pipeline.mdx#
 | **Notes**                  | What is composed for the mentor conversation: `situation`, `capability`, `evidenceSummary`, and `inConversationSignal`. Notes *to* the mentor, never a sentence for it to say — it writes the turn from the live conversation and admitted evidence. | move, opener, conversation message, prepared reply, script |
 | **Placement**              | Where in-context feedback belongs: `DIFF` names an admitted observation and citation for server-resolved coordinates; `ARTIFACT` stays at summary level.                                                                                             | model-authored path, model-authored line number            |
 | **Thread key**             | The identity of one continuing conversation about one thing with one person on one channel.                                                                                                                                                          | correlation key, idempotency key                           |
-| **Supersession**           | Replacing prepared, still-unread feedback with newer feedback on the same thread.                                                                                                                                                                    | edit, update, delete                                       |
+| **Supersession**           | Replacing feedback with newer feedback on the same thread: prepared, still-unread feedback on the conversation lane, and the still-open card on the Practice profile.                                                                                | edit, update, delete                                       |
 
 **Withhold and suppress are two different refusals and must never be merged.** A withhold reason
 (`NO_MATERIAL_CHANGE`, `ALREADY_SAID`, `BELOW_BAR`) is the composer saying nothing was worth saying. A
@@ -331,12 +331,17 @@ habit claim is about the practice and not about one merge request; the in-contex
 artifact. `thread_key` is deliberately not unique: a thread is a chain of rows over time, and the
 invariant that matters — at most one live `PREPARED` per thread — is held by a compare-and-swap.
 
-Supersession only ever claims `PREPARED` feedback. Say **superseded** for feedback that was prepared but
-replaced before anybody read it, and **continued** for newer feedback written beside feedback that was
-already read: nothing received is ever un-said, and the newer row still records what it follows through
-`replaces_id`. Issue reviews may edit the prior issue comment in place, so their ledger entry is retired
-when that visible text is replaced. Pull request reviews do not: every new review posts a new summary,
-while a retry of the same review reconciles its existing comment by marker.
+On the conversation lane supersession only ever claims `PREPARED` feedback. Say **superseded** for
+feedback that was prepared but replaced before anybody read it, and **continued** for newer feedback
+written beside feedback that was already read: nothing received is ever un-said, and the newer row still
+records what it follows through `replaces_id`. The Practice profile keeps the ledger and not the page: a
+new card about a practice supersedes the card still **open** about it, read or not, because the page is a
+list of habits to work on and one habit gets one open card; a card that is closed — resolved by the work
+or by the developer, or closed because the practice changed — is never superseded and stays as the record
+beside the new one (`FeedbackSupersession#replaceOpen`, decided from `PreviousInAppFeedback`). Issue
+reviews may edit the prior issue comment in place, so their ledger entry is retired when that visible text
+is replaced. Pull request reviews do not: every new review posts a new summary, while a retry of the same
+review reconciles its existing comment by marker.
 
 ### How a locus moved
 
@@ -346,6 +351,46 @@ absent from the newest run of its artifact). Use these words for how one measure
 runs, and never as a claim about a person's work in general: the comparison is per artifact, so "this
 keeps happening across your work" is a claim about a *practice* over the window and not something the
 delta can say. A strength that simply was not re-observed is not `RESOLVED`.
+
+### How feedback resolves
+
+A piece of [feedback](./practice-feedback-language.md) on the Practice profile resolves in one of two
+ways, and the two are held apart everywhere the resolution is shown.
+
+| Term                     | Plain meaning                                                                                                                                                                                                                                                                                                                  | Do not use for this concept                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| **Resolved by the work** | Three pieces of the developer's reviewed work in a row, reviewed after the feedback was prepared, came back clean on the practice. Computed from the observations when the feedback is read and never stored; a problem starts the count over, and a piece of work reviewed several times counts once, at its newest review. | auto-resolved, closed by the system, streak, passed |
+| **Marked as addressed**  | The developer recorded `ADDRESSED` or `NOT_APPLICABLE` as their response to the feedback (`FeedbackResolution#resolves`; a dispute leaves it open). The other way a piece of feedback resolves; the earlier of the two is what the card and the summary report.                                                              | dismissed, acknowledged, done                       |
+
+The count is a piece of reviewed work, bundled as the trend bundles it — one opportunity per piece of
+work, read off its latest run — so a re-review that changes what the latest run said changes the answer
+with it. A run of three that completed once stays a resolution: a later slip is new feedback's business.
+The profile summary reports a `FEEDBACK_RESOLVED` change with who resolved it, `WORK` or `DEVELOPER`,
+and never merges the two into one count.
+
+A card is **closed** when it is resolved either way, and also when its practice changed its review rules
+after the card was prepared: the card stays on the page with `practiceChangedAt` set and says so, is not
+resolved by anything, and its evidence is kept even though it is no longer current, whereas evidence whose
+source may no longer be cited still hides the card. A closed card leaves the Practice profile 30 days after
+it closed, applied when the page is read and never by changing the row
+(`InAppFeedbackService.CLOSED_CARD_STAYS`); the ledger keeps it.
+
+### Practice profile overview
+
+The overview is the Practice profile's account of what held and what changed, read off the standings
+and the feedback ledger and composed into sentences on the page; nothing in it is a second standing or
+resolution rule. Its rules, in one place:
+
+- **The window** every change is measured over opens at the review run before the latest one and
+  closes now. With fewer than two runs it spans the standing's own look-back of 90 days, and a previous
+  run older than that is clamped to it, since no standing reaches further back.
+- **One change per practice and type, the newest.** A practice that got two pieces of feedback in the
+  window is reported once for each type of change, by the newer piece.
+- **Precedence** when the page names one event per practice: resolved feedback, then new feedback, then
+  a standing that slipped, then one that moved up, then a first observation, then a trend that turned,
+  then a practice that held.
+- **A held practice is dropped** from what held when the same practice slipped or got new feedback in
+  the window: holding and moving up are not a contradiction, holding and slipping are.
 
 ## Machine names
 
@@ -402,6 +447,10 @@ delta can say. A strength that simply was not re-observed is not `RESOLVED`.
 | Thread key                   | not on the HTTP API                | `FeedbackThreadKey`                        | `feedback.thread_key` (not unique)                                            |
 | What feedback follows        | not on the HTTP API                | —                                          | `feedback.replaces_id`                                                        |
 | Locus movement               | inside `inputs/history/delta.json` | `ObservationDelta.Status`                  | derived, never stored                                                         |
+| Resolved by the work         | `cleanWork`, `cleanNeeded`, `resolvedByWorkAt` | `WorkResolution`            | derived, never stored                                                         |
+| Marked as addressed          | `resolution: ADDRESSED`            | `Reaction.resolution`                      | `reaction.resolution`                                                         |
+| Who resolved feedback        | `resolvedBy`                       | `ProfileChangeDTO.ResolvedBy`              | derived, never stored                                                         |
+| Holds as                     | `holdsAs`                          | `BundledPracticeCatalog`                   | bundled catalog, never stored — defined in the [feedback language](./practice-feedback-language.md) |
 | Signal refusal reason        | —                                  | `SignalStateReason`                        | `artifact_signal.state_reason`                                                |
 | Group dashboard visibility    | `visibleInPracticeDashboards`      | `PracticeGroup.visibleInPracticeDashboards` | `visible_in_practice_dashboards`                                              |
 | Claim currentness            | `claimCurrentness`                 | `ReviewClaimCurrentness`                   | derived API value                                                             |
@@ -437,6 +486,13 @@ storage and read-projection vocabulary. `NO_REVIEW_OCCASION` is not a fallback f
 `INSUFFICIENT_EVIDENCE` cannot hide collection failure: `missingEvidence` names the open question and
 the existing evidence that would settle it. Both shapes are enforced in the sandbox and again during
 server admission.
+
+A warrant is written under one name and read under another: `report_observation` takes
+`evidence.exhaustiveSearch`, `evidence.exclusion` and `evidence.missingEvidence`, and the observation
+stores and serves them as `evidence.search` (`lookedFor`, `consulted`, `boundary`),
+`evidence.inapplicability` (`subject`, `consulted`, `ruledOutBy`) and `evidence.undecidability`
+(`openQuestion`, `wouldSettleIt`) — one per observation, decided by its outcome, beside the citations
+every observation owes.
 
 ## Lifecycle
 

@@ -29,6 +29,93 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     }
 
     @Test
+    void carriesTheSearchBehindAnAbsence() {
+        var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
+                {"citations":[{"sourceKind":"scm.pull-request.core",\
+                "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
+                "startLine":1,"endLine":1,"quote":"{}"}],\
+                "search":{"lookedFor":"a Testing section","consulted":["scm.pull-request.diff",\
+                "scm.pull-request.core"],"boundary":"the description and the whole diff"}}
+                """));
+
+        assertThat(evidence).isNotNull();
+        assertThat(evidence.search()).isNotNull().satisfies(search -> {
+            assertThat(search.lookedFor()).isEqualTo("a Testing section");
+            assertThat(search.consulted()).containsExactly("scm.pull-request.diff", "scm.pull-request.core");
+            assertThat(search.boundary()).isEqualTo("the description and the whole diff");
+        });
+        assertThat(evidence.inapplicability()).isNull();
+        assertThat(evidence.undecidability()).isNull();
+    }
+
+    @Test
+    void carriesWhyThePracticeDidNotApply() {
+        var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
+                {"citations":[{"sourceKind":"scm.pull-request.core",\
+                "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
+                "startLine":1,"endLine":1,"quote":"{}"}],\
+                "inapplicability":{"subject":"a database migration","consulted":["scm.pull-request.diff"],\
+                "ruledOutBy":"this change touches no migration file"}}
+                """));
+
+        assertThat(evidence).isNotNull();
+        assertThat(evidence.inapplicability()).isNotNull().satisfies(inapplicability -> {
+            assertThat(inapplicability.subject()).isEqualTo("a database migration");
+            assertThat(inapplicability.consulted()).containsExactly("scm.pull-request.diff");
+            assertThat(inapplicability.ruledOutBy()).isEqualTo("this change touches no migration file");
+        });
+        assertThat(evidence.search()).isNull();
+    }
+
+    @Test
+    void carriesWhatTheReviewCouldNotSettle() {
+        var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
+                {"citations":[{"sourceKind":"scm.pull-request.core",\
+                "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
+                "startLine":1,"endLine":1,"quote":"{}"}],\
+                "undecidability":{"openQuestion":"whether the new endpoint is covered",\
+                "wouldSettleIt":"the test file the diff does not include"}}
+                """));
+
+        assertThat(evidence).isNotNull();
+        assertThat(evidence.undecidability()).isNotNull().satisfies(undecidability -> {
+            assertThat(undecidability.openQuestion()).isEqualTo("whether the new endpoint is covered");
+            assertThat(undecidability.wouldSettleIt()).isEqualTo("the test file the diff does not include");
+        });
+    }
+
+    @Test
+    void readsAWarrantMissingAPartAsNoWarrantAtAll() {
+        var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
+                {"citations":[{"sourceKind":"scm.pull-request.core",\
+                "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
+                "startLine":1,"endLine":1,"quote":"{}"}],\
+                "search":{"lookedFor":"a Testing section","consulted":[]},\
+                "inapplicability":{"subject":"a database migration","consulted":["scm.pull-request.diff"]},\
+                "undecidability":{"openQuestion":"  "}}
+                """));
+
+        assertThat(evidence).isNotNull();
+        assertThat(evidence.search()).isNull();
+        assertThat(evidence.inapplicability()).isNull();
+        assertThat(evidence.undecidability()).isNull();
+    }
+
+    @Test
+    void carriesNoWarrantWhenTheEvidenceRecordsNone() {
+        var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
+                {"citations":[{"sourceKind":"scm.pull-request.core",\
+                "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
+                "startLine":1,"endLine":1,"quote":"{}"}]}
+                """));
+
+        assertThat(evidence).isNotNull();
+        assertThat(evidence.search()).isNull();
+        assertThat(evidence.inapplicability()).isNull();
+        assertThat(evidence.undecidability()).isNull();
+    }
+
+    @Test
     void rejectsMalformedCitationMember() {
         assertThatThrownBy(() -> ObservationEvidenceDTO.from(MAPPER.readTree("{\"citations\":[\"invalid\"]}")))
                 .isInstanceOf(IllegalArgumentException.class);

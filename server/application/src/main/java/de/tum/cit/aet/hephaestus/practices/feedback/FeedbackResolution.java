@@ -7,5 +7,14 @@ public enum FeedbackResolution {
     /** The recipient rejects the observation with a reasoned explanation. */
     DISPUTED,
     /** The observation may be sound but does not apply in this context. */
-    NOT_APPLICABLE,
+    NOT_APPLICABLE;
+
+    /**
+     * Whether this answer resolves the feedback — the developer's own way to close a card, beside the work
+     * coming back clean ({@code docs/contributor/practice-review-glossary.mdx} § How feedback resolves).
+     * Acting on it or ruling it out both close it; a dispute asks for a reply and leaves it open.
+     */
+    public boolean resolves() {
+        return this != DISPUTED;
+    }
 }

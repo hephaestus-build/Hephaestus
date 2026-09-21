@@ -439,6 +439,9 @@ public class SecurityConfig {
                 //   blocks every cookie-auth write cross-origin.
                 // X-Impersonation-Allow-Writes: opt-in guardrail header for impersonation write requests
                 //   (see ImpersonationGuard) — must survive preflight for the same cross-origin reason.
+                // If-Match: the settings endpoints take the ETag they handed out as a precondition
+                //   (EntityTagPrecondition); without it here the dev SPA's every save is blocked by the
+                //   browser before the server sees it.
                 List.of(
                         "Authorization",
                         "Content-Type",
@@ -446,7 +449,8 @@ public class SecurityConfig {
                         "X-Requested-With",
                         "Origin",
                         "X-XSRF-TOKEN",
-                        "X-Impersonation-Allow-Writes"));
+                        "X-Impersonation-Allow-Writes",
+                        "If-Match"));
         configuration.setExposedHeaders(
                 List.of(ReplicaIdentityFilter.HEADER_NAME, RequestCorrelationFilter.HEADER_NAME));
         configuration.setAllowCredentials(true);

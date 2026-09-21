@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.ObservationFeedbackDisposition;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.OperatorObservationRow;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.Map;
@@ -24,7 +25,7 @@ public record ReviewObservationDTO(
         @Schema(description = "Practice group; null when the practice is Unassigned") @Nullable
         ReviewPracticeGroupDTO group,
 
-        @NonNull ReviewArtifactDTO artifact,
+        @NonNull ReviewedWorkRefDTO artifact,
 
         @Schema(description = "Whose work the observation is about; null when the identity is no longer resolvable")
         @Nullable
@@ -56,7 +57,7 @@ public record ReviewObservationDTO(
     public static ReviewObservationDTO from(
             OperatorObservationRow row,
             @Nullable ObservationFeedbackDisposition disposition,
-            ReviewArtifactDTO artifact,
+            ReviewedWorkRefDTO artifact,
             Map<Long, ReviewSubjectDTO> subjects) {
         return new ReviewObservationDTO(
                 row.getId(),

@@ -1,11 +1,19 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
+import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.dto.OutcomeVectorDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.dto.PracticeTrendDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.dto.TrendOpportunityDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.dto.TrendSupportDTO;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalDouble;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
 /** Complete internal trend result; developer-facing DTOs intentionally omit its scalar posterior diagnostics. */
@@ -70,7 +78,7 @@ public final class PracticeTrend {
      *
      * <p>Weights fall geometrically with age ({@code decay^0, decay^1, …} from the newest), which is what lets
      * one rule do the job two used to: recent evidence dominates, so a fixed habit is acknowledged within a
-     * couple of reviews without a separate streak override, and a fresh regression is visible just as fast.
+     * couple of reviews without a separate clean-work override, and a fresh regression is visible just as fast.
      * A {@code decay} strictly below 0.5 is what makes the two newest opportunities outweigh everything older
      * — see the caller that chooses it.
      *
@@ -93,6 +101,63 @@ public final class PracticeTrend {
             totalWeight += weight;
         }
         return OptionalDouble.of(weighted / totalWeight);
+    }
+
+    /**
+     * How many of the newest applicable opportunities came back with no problem at all, and what they were.
+     *
+     * <p>Counted from the newest backwards and stopped at the first opportunity that raised a problem, so
+     * the number reads as "held across N pieces of work". An opportunity that produced no verdict is skipped
+     * rather than counted as either side, exactly as the standing skips it. Counted over the opportunities
+     * the trend keeps, so a very long run of clean work reads as that trail's length rather than the whole history.
+     * {@link WorkResolution} counts the same clean opportunities forwards from a piece of feedback.
+     */
+    public CleanWork cleanWork() {
+        List<EvidenceOpportunity> applicable =
+                opportunities.stream().filter(EvidenceOpportunity::applicable).toList();
+        List<EvidenceOpportunity> clean = new ArrayList<>();
+        for (int index = applicable.size() - 1; index >= 0; index--) {
+            EvidenceOpportunity opportunity = applicable.get(index);
+            if (!opportunity.clean()) {
+                break;
+            }
+            clean.add(opportunity);
+        }
+        if (clean.isEmpty()) {
+            return new CleanWork(0, applicable.size(), null, null, List.of());
+        }
+        ArtifactKind kind = CleanWork.mostOf(clean.stream().map(EvidenceOpportunity::artifactKind));
+        return new CleanWork(
+                clean.size(),
+                applicable.size(),
+                kind,
+                clean.getLast().occurredAt(),
+                clean.stream().map(EvidenceOpportunity::jobId).toList());
+    }
+
+    /**
+     * @param count the newest pieces of work in a row that raised no problem
+     * @param applicableWork every piece of work that produced a verdict, the ceiling of {@code count}
+     * @param kind the kind of work most of the clean work is, or null with none
+     * @param since when the oldest piece of the clean work was reviewed, or null with none
+     * @param jobIds the runs that reviewed the clean work, newest first; what resolves where the work lives
+     */
+    public record CleanWork(
+            int count,
+            int applicableWork,
+            @Nullable ArtifactKind kind,
+            @Nullable Instant since,
+            List<UUID> jobIds) {
+        /** The value most of the clean work shares, the newest piece's on a tie; null with no values. */
+        public static <T> @Nullable T mostOf(Stream<T> newestFirst) {
+            return newestFirst
+                    .collect(Collectors.groupingBy(value -> value, LinkedHashMap::new, Collectors.counting()))
+                    .entrySet()
+                    .stream()
+                    .max(Map.Entry.comparingByValue())
+                    .map(Map.Entry::getKey)
+                    .orElse(null);
+        }
     }
 
     TrendScope scope() {

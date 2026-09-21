@@ -38,8 +38,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * chances for one of them to be forgotten — which is exactly what happened to the review-runs queries.
      * Adding a surface now means adding this constant to it, and a surface that omits it omits it visibly.
      *
-     * <p>Binds to the aliases {@code f} (the observation) and {@code p} (its practice), so every query using
-     * it must name those two the same way. Native rather than JPQL: it reaches the integration module's
+     * <p>Binds to the alias {@code f} (the observation), so every query using it must name it that way. Native
+     * rather than JPQL: it reaches the integration module's
      * {@code issue} table and the workspace module's team settings, neither of which the practices module may
      * hold an entity reference to.
      */
@@ -536,40 +536,25 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("workspaceId") Long workspaceId);
 
     /**
-     * Recent observations the mentor can refer to by summary in conversation.
+     * A developer's recent observations, newest first, each piece of work answering with its latest run.
      *
-     * <p>Re-review deduped (same grain as {@link #findSummaryByDeveloperAndWorkspace}): keeps only each
-     * target's LATEST detection run, so a re-pushed PR's observations don't repeat across the list and the
-     * mentor doesn't re-litigate the same observation on every re-push. Native because the latest-run selection
-     * needs {@code ORDER BY ... LIMIT 1} in a correlated subquery; the practice is loaded lazily per observation
-     * rather than JOIN-fetched.
+     * <p>Re-review deduped (same grain as {@link #findSummaryByDeveloperAndWorkspace}): a re-pushed pull
+     * request's observations do not repeat across the list. "Latest run" means the latest run that said
+     * something about THIS claim — the subquery correlates on practice, subject, artifact and origin class
+     * together, the rule {@link LatestRun#perClaim} states for a window already in memory. Native because the
+     * latest-run selection needs {@code ORDER BY ... LIMIT 1} in a correlated subquery; the practice is loaded
+     * lazily per observation rather than JOIN-fetched.
      *
      * <p>{@code verdictsOnly} decides whether a presence that does not {@link Presence#carriesValence() carry
-     * valence} is listed, because the two kinds of caller need opposite answers. The context providers pass
-     * {@code true}: {@code NOT_APPLICABLE} would bury the actionable {@code BAD}/{@code GOOD} rows within their
-     * page budget, and coaching on {@code INCONCLUSIVE} would invite the mentor to invent a direction the
-     * measurement declined to take — both totals still reach it via the presence-count summary. The practice standing
-     * surface passes {@code false}: it does not render those rows either, but it must COUNT them, because "the
-     * practice ran and found nothing to judge" and "the practice was never looked at" are different answers and
-     * only the rows themselves can tell them apart. It filters them out one layer up, where the same pass that
-     * classifies every other row can also count these.
+     * valence} is listed. The context providers pass {@code true}: {@code NOT_APPLICABLE} would bury the
+     * actionable {@code BAD}/{@code GOOD} rows within their page budget, and coaching on {@code INCONCLUSIVE}
+     * would invite the mentor to invent a direction the measurement declined to take — both totals still reach
+     * it via the presence-count summary. The work resolution passes {@code false}: an opportunity that produced
+     * no verdict is skipped rather than counted, and only the row itself can say so.
      *
-     * <p>Either way the list stays recency-ordered, not re-ordered by severity, to preserve its "what happened
-     * lately" purpose.
-     *
-     * <p><strong>"Latest run" means the latest run that actually said something about THIS claim</strong> —
-     * the subquery correlates on practice, subject, artifact and origin class together. Correlating on the
-     * artifact alone would let any later run supersede a verdict it never re-examined. A run does not
-     * necessarily evaluate every eligible practice, and outcomes without a measurement write no observation
-     * row. A partial capture, refusal, or timeout must not read like a fixed habit.
-     *
-     * <p><strong>Backfilled observations are included, partitioned by origin class</strong> — a campaign's
-     * {@code BAD} observation on a developer's own work is exactly what "what should I work on" is asking for,
-     * and excluding it made a campaign produce nothing any developer could see. The latest-run correlation is
-     * evaluated <em>within</em> each origin class ({@code (f2.origin = 'BACKFILL') = (f.origin = 'BACKFILL')})
-     * rather than over the union: origin-blind, a campaign's job could become "the latest run" and erase
-     * already-delivered live feedback from the list. {@code PracticeStandingObservationDTO.origin()} carries the class
-     * through so the surface can label a backfilled item rather than pass it off as live.
+     * <p>Backfilled observations are included: a campaign's {@code BAD} observation on a developer's own work
+     * is exactly what "what should I work on" is asking for. {@code PracticeStandingObservationDTO.origin()}
+     * carries the class through so a surface can label a backfilled item rather than pass it off as live.
      */
     @Query(value = """
                     SELECT f.* FROM observation f
@@ -595,6 +580,91 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("since") Instant since,
             @Param("verdictsOnly") boolean verdictsOnly,
             Pageable pageable);
+
+    /**
+     * Every observation about a developer inside a span, newest first, every run's rows and every presence:
+     * the practice standing's one load, which it narrows in memory to each claim's latest run as of each
+     * moment it is read at ({@link LatestRun#perClaim}), so that two standings of one developer come from one
+     * query. Carries {@link #HIDDEN_REPOSITORY_GUARD} like every developer surface.
+     */
+    @Query(value = """
+                    SELECT f.* FROM observation f
+                    WHERE f.about_user_id = :aboutUserId
+                      AND f.workspace_id = :workspaceId
+            """ + HIDDEN_REPOSITORY_GUARD + """
+              AND f.observed_at >= :since
+              AND f.observed_at <= :until
+            ORDER BY f.observed_at DESC
+            """, nativeQuery = true)
+    List<Observation> findByDeveloperAndWorkspaceBetween(
+            @Param("aboutUserId") Long aboutUserId,
+            @Param("workspaceId") Long workspaceId,
+            @Param("since") Instant since,
+            @Param("until") Instant until);
+
+    /**
+     * The developer's review runs, newest first: one row per agent job that recorded an observation about
+     * them, dated by its newest observation and naming the one piece of work the job reviewed. Either bound
+     * may be null; a run is inside the bounds when its date is after {@code since} and at or before
+     * {@code until}. The lower bound is a row filter, since dropping rows at or before it leaves a later run's
+     * newest observation as it was; the upper bound has to wait for the aggregate.
+     *
+     * <p>Every presence counts, including {@code NOT_APPLICABLE}: the question is when a review last ran on
+     * this person's work, and a run that found nothing to judge still ran. The visibility gate is not applied
+     * either, for the same reason. Carries {@link #HIDDEN_REPOSITORY_GUARD} like every developer surface.
+     * Not folded into {@link #findPracticeGroupReviewRuns}: that one answers "which runs judged something in
+     * this group" and drops {@code NOT_APPLICABLE}, so one query would need a presence switch on top of a
+     * nullable group, which hides the difference instead of stating it.
+     */
+    @Query(value = """
+                    SELECT f.agent_job_id AS "jobId",
+                           MAX(f.observed_at) AS "reviewedAt",
+                           MIN(f.artifact_kind) AS "artifactKind",
+                           MIN(f.artifact_id) AS "artifactId"
+                    FROM observation f
+                    WHERE f.about_user_id = :aboutUserId
+                      AND f.workspace_id = :workspaceId
+            """ + HIDDEN_REPOSITORY_GUARD + """
+              AND (CAST(:since AS timestamptz) IS NULL OR f.observed_at > CAST(:since AS timestamptz))
+            GROUP BY f.agent_job_id
+            HAVING (CAST(:until AS timestamptz) IS NULL OR MAX(f.observed_at) <= CAST(:until AS timestamptz))
+            ORDER BY MAX(f.observed_at) DESC, f.agent_job_id DESC
+            """, nativeQuery = true)
+    List<DeveloperReviewRunRow> findDeveloperReviewRuns(
+            @Param("aboutUserId") Long aboutUserId,
+            @Param("workspaceId") Long workspaceId,
+            @Param("since") @Nullable Instant since,
+            @Param("until") @Nullable Instant until,
+            Pageable pageable);
+
+    interface DeveloperReviewRunRow extends ReviewRunRow {
+        /** The raw column: a native-query projection is mapped from JDBC types, with no converter run. */
+        String getArtifactKind();
+
+        Long getArtifactId();
+    }
+
+    /**
+     * When each practice first recorded an observation about the developer, keyed by practice slug — the
+     * fact behind "first observed", which the look-back-bounded lists above cannot answer.
+     */
+    @Query(value = """
+                    SELECT p.slug AS "practiceSlug", MIN(f.observed_at) AS "firstObservedAt"
+                    FROM observation f
+                    JOIN practice p ON p.id = f.practice_id
+                    WHERE f.about_user_id = :aboutUserId
+                      AND f.workspace_id = :workspaceId
+            """ + HIDDEN_REPOSITORY_GUARD + """
+            GROUP BY p.slug
+            """, nativeQuery = true)
+    List<FirstObservedRow> findFirstObservedAtByPractice(
+            @Param("aboutUserId") Long aboutUserId, @Param("workspaceId") Long workspaceId);
+
+    interface FirstObservedRow {
+        String getPracticeSlug();
+
+        Instant getFirstObservedAt();
+    }
 
     /**
      * Severity histogram for a developer's observations within a workspace.
@@ -997,9 +1067,9 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * carries no workspace column of its own, so the join IS the tenancy predicate and dropping it would
      * make a pattern about one workspace citable in another.
      *
-     * <p>Deliberately NOT deduped to each artifact's latest run: whether a problem recurred across
-     * separate pieces of work is the question, and a re-review of the same pull request is the same
-     * occurrence, which the caller collapses by artifact rather than by run.
+     * <p>Every run's rows, not only each artifact's latest: the window is bounded and the caller narrows it
+     * to each piece of work's newest review through {@link LatestRun}, the one home of that rule, so that a
+     * re-review of the same pull request is one occurrence and a problem it no longer found is none.
      */
     @EntityGraph(attributePaths = {"practice.currentRevision", "practiceRevision"})
     @Query("""

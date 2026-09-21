@@ -46,6 +46,28 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     List<ReviewOutcomeRow> findReviewOutcomes(
             @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
+    /**
+     * What these runs wrote about themselves, for the developer's review feed: the composed opening and
+     * next steps live in {@code output}, and the two timestamps are what a duration is derived from.
+     */
+    @Query("SELECT j.id AS id, j.output AS output, j.startedAt AS startedAt, j.completedAt AS completedAt "
+            + "FROM AgentJob j WHERE j.workspace.id = :workspaceId AND j.id IN :ids")
+    List<ReviewRunNarrativeRow> findReviewRunNarratives(
+            @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    interface ReviewRunNarrativeRow {
+        UUID getId();
+
+        @Nullable
+        JsonNode getOutput();
+
+        @Nullable
+        Instant getStartedAt();
+
+        @Nullable
+        Instant getCompletedAt();
+    }
+
     interface ReviewOutcomeRow {
         UUID getId();
 

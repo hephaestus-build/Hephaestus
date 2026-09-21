@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.FeedbackApprovalDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import de.tum.cit.aet.hephaestus.practices.trace.dto.DeliveryPolicyTraceDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -19,7 +20,7 @@ public record ReviewFeedbackDetailDTO(
         @NonNull UUID agentJobId,
 
         @Schema(description = "Work item the feedback targets; null when it is unanchored") @Nullable
-        ReviewArtifactDTO artifact,
+        ReviewedWorkRefDTO artifact,
 
         @Schema(description = "Who the feedback is addressed to; null when the identity is no longer resolvable")
         @Nullable
@@ -71,7 +72,7 @@ public record ReviewFeedbackDetailDTO(
         List<DeliveryPolicyTraceDTO> deliveryPolicy) {
     public static ReviewFeedbackDetailDTO from(
             Feedback feedback,
-            @Nullable ReviewArtifactDTO artifact,
+            @Nullable ReviewedWorkRefDTO artifact,
             @Nullable ReviewSubjectDTO recipient,
             @Nullable ReviewSubjectDTO subject,
             List<ReviewBoundObservationDTO> observations,

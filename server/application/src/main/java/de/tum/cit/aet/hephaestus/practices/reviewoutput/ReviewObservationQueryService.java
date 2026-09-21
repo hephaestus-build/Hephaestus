@@ -9,16 +9,17 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationQueryFilter;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.ObservationFeedbackDisposition;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.OperatorObservationRow;
-import de.tum.cit.aet.hephaestus.practices.reviewoutput.ReviewArtifactResolver.ArtifactRef;
-import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewArtifactDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewBoundFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewObservationDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewObservationDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewSubjectDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -35,7 +36,7 @@ class ReviewObservationQueryService {
     private final ObservationRepository observationRepository;
     private final FeedbackObservationRepository feedbackObservationRepository;
     private final ReviewSubjectResolver subjectResolver;
-    private final ReviewArtifactResolver artifactResolver;
+    private final ReviewRunTargetLookup reviewRunTargetLookup;
     private final EvidenceAuthorization evidenceAuthorization;
 
     @Transactional(readOnly = true)
@@ -57,18 +58,17 @@ class ReviewObservationQueryService {
                         .stream()
                         .collect(Collectors.toMap(
                                 ObservationFeedbackDisposition::getObservationId, Function.identity()));
-        Map<ArtifactRef, ReviewArtifactDTO> artifacts = artifactResolver.resolve(
+        Map<UUID, Target> targets = reviewRunTargetLookup.findByJobIds(
                 workspaceId,
                 rows.getContent().stream()
-                        .map(row -> new ArtifactRef(
-                                row.getAgentJobId(), ArtifactKind.of(row.getArtifactKind()), row.getArtifactId()))
+                        .map(OperatorObservationRow::getAgentJobId)
                         .toList());
-        return rows.map(row -> {
-            ArtifactRef key =
-                    new ArtifactRef(row.getAgentJobId(), ArtifactKind.of(row.getArtifactKind()), row.getArtifactId());
-            return ReviewObservationDTO.from(
-                    row, dispositions.get(row.getId()), Objects.requireNonNull(artifacts.get(key)), subjects);
-        });
+        return rows.map(row -> ReviewObservationDTO.from(
+                row,
+                dispositions.get(row.getId()),
+                ReviewedWorkLabels.ref(
+                        ArtifactKind.of(row.getArtifactKind()), row.getArtifactId(), targets.get(row.getAgentJobId())),
+                subjects));
     }
 
     @Transactional(readOnly = true)
@@ -82,13 +82,14 @@ class ReviewObservationQueryService {
                         .toList();
         ReviewSubjectDTO subject =
                 subjectResolver.resolve(List.of(observation.getAboutUserId())).get(observation.getAboutUserId());
-        ArtifactRef artifactKey = new ArtifactRef(
-                observation.getAgentJobId(), observation.getArtifactKind(), observation.getArtifactId());
-        var artifact =
-                artifactResolver.resolve(workspaceId, List.of(artifactKey)).get(artifactKey);
+        ReviewedWorkRefDTO artifact = ReviewedWorkLabels.ref(
+                observation.getArtifactKind(),
+                observation.getArtifactId(),
+                reviewRunTargetLookup
+                        .findByJobIds(workspaceId, List.of(observation.getAgentJobId()))
+                        .get(observation.getAgentJobId()));
         boolean includeEvidence =
                 evidenceAuthorization.permits(workspaceId, observation, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
-        return ReviewObservationDetailDTO.from(
-                observation, Objects.requireNonNull(artifact), subject, feedback, includeEvidence);
+        return ReviewObservationDetailDTO.from(observation, artifact, subject, feedback, includeEvidence);
     }
 }

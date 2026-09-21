@@ -184,6 +184,17 @@ class LlmProxyController {
             return ResponseEntity.status(502).body("Upstream provider unavailable");
         }
         boolean served = upstream.status() >= 200 && upstream.status() < 300;
+        if (!served) {
+            // The sandbox only sees "error" from its model client, so this line is the one place an
+            // operator learns that the provider itself refused the call (no credit, a revoked key, a
+            // rate limit) rather than the network. Status and principal only: the body can quote the
+            // request.
+            log.warn(
+                    "LLM upstream refused a call for principal {}: status={}",
+                    routing.principalDescription(),
+                    upstream.status());
+            incrementErrors(routing.apiProtocol());
+        }
         if (upstream.sseBody() != null) {
             ProxyStreamUsageTap tap = served ? new ProxyStreamUsageTap(objectMapper, responsesProtocol) : null;
             ProxyStreamingUtils.streamSseToResponse(

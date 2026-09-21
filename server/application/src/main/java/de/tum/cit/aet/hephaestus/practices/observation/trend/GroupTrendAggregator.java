@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
-import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.observation.trend.WorkResolution.Work.Key;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -122,19 +122,19 @@ final class GroupTrendAggregator {
      * two: an artifact that is current evidence for any practice is current evidence for the group.
      */
     private static List<EvidenceOpportunity> mergedTrail(Collection<PracticeTrend> trends, int bundleSize) {
-        record Key(ArtifactKind type, long id) {}
         Map<Key, EvidenceOpportunity> combined = new LinkedHashMap<>();
         for (PracticeTrend trend : trends) {
             for (EvidenceOpportunity opportunity : trend.opportunities()) {
-                combined.merge(
-                        new Key(opportunity.artifactKind(), opportunity.artifactId()),
-                        opportunity,
-                        (left, right) -> new EvidenceOpportunity(
-                                left.artifactKind(),
-                                left.artifactId(),
-                                left.occurredAt().isAfter(right.occurredAt()) ? left.occurredAt() : right.occurredAt(),
-                                left.outcomes().plus(right.outcomes()),
-                                strongerBundle(left.bundle(), right.bundle())));
+                combined.merge(Key.of(opportunity), opportunity, (left, right) -> {
+                    EvidenceOpportunity newer = left.occurredAt().isAfter(right.occurredAt()) ? left : right;
+                    return new EvidenceOpportunity(
+                            left.artifactKind(),
+                            left.artifactId(),
+                            newer.jobId(),
+                            newer.occurredAt(),
+                            left.outcomes().plus(right.outcomes()),
+                            strongerBundle(left.bundle(), right.bundle()));
+                });
             }
         }
         List<EvidenceOpportunity> sorted = combined.values().stream()
@@ -150,11 +150,10 @@ final class GroupTrendAggregator {
     }
 
     private static int distinctOpportunityCount(Collection<PracticeTrend> trends, TrendBundle bundle) {
-        record Key(ArtifactKind type, long id) {}
         return (int) trends.stream()
                 .flatMap(trend -> trend.opportunities().stream())
                 .filter(opportunity -> opportunity.bundle() == bundle)
-                .map(opportunity -> new Key(opportunity.artifactKind(), opportunity.artifactId()))
+                .map(opportunity -> Key.of(opportunity))
                 .distinct()
                 .count();
     }

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.PreviousInAppFeedback;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
@@ -25,6 +26,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -73,6 +75,7 @@ public class InAppCompositionListener {
     private final FeedbackCompositionResultParser resultParser;
     private final InAppFeedbackPreparer preparer;
     private final PracticeFeedbackDeliveryPolicy deliveryPolicy;
+    private final PreviousInAppFeedback previousInAppFeedback;
 
     public InAppCompositionListener(
             AgentJobRepository agentJobRepository,
@@ -82,7 +85,8 @@ public class InAppCompositionListener {
             WorkspaceReviewDefaultsProvider workspaceDefaults,
             FeedbackCompositionResultParser resultParser,
             InAppFeedbackPreparer preparer,
-            PracticeFeedbackDeliveryPolicy deliveryPolicy) {
+            PracticeFeedbackDeliveryPolicy deliveryPolicy,
+            PreviousInAppFeedback previousInAppFeedback) {
         this.agentJobRepository = agentJobRepository;
         this.observationRepository = observationRepository;
         this.feedbackRepository = feedbackRepository;
@@ -91,6 +95,7 @@ public class InAppCompositionListener {
         this.resultParser = resultParser;
         this.preparer = preparer;
         this.deliveryPolicy = deliveryPolicy;
+        this.previousInAppFeedback = previousInAppFeedback;
     }
 
     @Async(FeedbackLaneExecutor.BEAN_NAME)
@@ -178,14 +183,13 @@ public class InAppCompositionListener {
         return resultParser.parse(jobOutput, FeedbackChannel.IN_APP).stream()
                 .filter(unit -> unit.action() != ComposedFeedbackUnit.Action.WITHHOLD)
                 .filter(ComposedFeedbackUnit::isComplete)
+                // The composer's supersession target is not carried: which card a new one replaces is the
+                // server's rule, read off the page's own view of the previous card in prepareFor.
                 .map(unit -> new ComposedInAppMessage(
                         unit.practiceSlug(),
                         Objects.requireNonNull(unit.title()),
                         Objects.requireNonNull(unit.body()),
-                        Objects.requireNonNull(unit.nextStep()),
-                        // Carried, not acted on here: whether the card it names is still unread is a fact
-                        // about the moment of writing, so the decision belongs where the write happens.
-                        unit.supersedesThreadKey()))
+                        Objects.requireNonNull(unit.nextStep())))
                 .toList();
     }
 
@@ -198,9 +202,17 @@ public class InAppCompositionListener {
         PracticeAutonomy workspaceDefault =
                 workspaceDefaults.forWorkspace(workspaceId).defaultAutonomy();
         Instant now = Instant.now();
-        Instant since = now.minus(Duration.ofDays(InAppFeedbackRouter.PATTERN_WINDOW_DAYS));
+        Instant windowStart = now.minus(Duration.ofDays(InAppFeedbackRouter.PATTERN_WINDOW_DAYS));
         List<InAppFeedbackPreparer.RoutedMessage> routed = new ArrayList<>(messages.size());
         for (ComposedInAppMessage message : messages) {
+            // A new card about a habit starts where the previous card about it left off: work that resolved
+            // the last card, or that the developer answered it over, or that the last card already cited
+            // while it stays open, is never cited again. An open previous card is what the new one replaces.
+            Optional<PreviousInAppFeedback.Previous> previous =
+                    previousInAppFeedback.find(workspaceId, recipientUserId, message.practiceSlug());
+            Instant since = previous.map(PreviousInAppFeedback.Previous::nextEvidenceSince)
+                    .filter(start -> start.isAfter(windowStart))
+                    .orElse(windowStart);
             List<Observation> evidence = visibleEvidence(workspaceId, recipientUserId, message.practiceSlug(), since);
             InAppRoutingDecision decision = InAppFeedbackRouter.route(
                     message,
@@ -222,7 +234,12 @@ public class InAppCompositionListener {
             // rows as "the pieces of work this habit was observed on", so a piece of work where the
             // practice went WELL must never appear among them.
             routed.add(new InAppFeedbackPreparer.RoutedMessage(
-                    message, decision, InAppFeedbackRouter.problemsIn(evidence)));
+                    message,
+                    decision,
+                    InAppFeedbackRouter.problemsIn(evidence),
+                    previous.filter(PreviousInAppFeedback.Previous::isOpen)
+                            .map(PreviousInAppFeedback.Previous::id)
+                            .orElse(null)));
         }
         return preparer.prepare(agentJobId, workspaceId, recipientUserId, List.copyOf(routed), positionBase);
     }

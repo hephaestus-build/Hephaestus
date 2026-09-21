@@ -5,9 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.trend.dto.PracticeGroupTr
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -18,12 +16,10 @@ public class PracticeTrendService {
     private final TrendProperties properties;
     private final Clock clock;
 
-    public Map<String, PracticeTrend> calculatePractices(Map<String, List<Observation>> evidenceByPractice) {
-        Map<String, PracticeTrend> trends = new LinkedHashMap<>();
+    /** One practice's trend over its evidence inside today's horizon; insufficient over none. */
+    public PracticeTrend calculatePractice(String practiceSlug, List<Observation> evidence) {
         var cutoff = clock.instant().minus(properties.getHorizonDays(), ChronoUnit.DAYS);
-        evidenceByPractice.forEach((slug, evidence) ->
-                trends.put(slug, PracticeTrendCalculator.calculatePractice(slug, evidence, cutoff, properties)));
-        return trends;
+        return PracticeTrendCalculator.calculatePractice(practiceSlug, evidence, cutoff, properties);
     }
 
     public PracticeTrend calculateGroup(
@@ -31,17 +27,11 @@ public class PracticeTrendService {
         return GroupTrendAggregator.aggregate(groupSlug, eligiblePracticeSlugs, practiceTrends, properties);
     }
 
+    /** The group's trend and the trends it aggregates: one per eligible practice, in the practices' order. */
     public PracticeGroupTrendDTO detail(
-            String groupSlug,
-            Collection<String> eligiblePracticeSlugs,
-            Map<String, List<Observation>> evidenceByPractice) {
-        Map<String, PracticeTrend> all = calculatePractices(evidenceByPractice);
-        List<PracticeTrend> practices = eligiblePracticeSlugs.stream()
-                .map(slug -> all.getOrDefault(
-                        slug, PracticeTrendCalculator.calculatePractice(slug, List.of(), clock.instant(), properties)))
-                .toList();
-        PracticeTrend group = calculateGroup(groupSlug, eligiblePracticeSlugs, practices);
+            String groupSlug, Collection<String> eligiblePracticeSlugs, List<PracticeTrend> practiceTrends) {
+        PracticeTrend group = calculateGroup(groupSlug, eligiblePracticeSlugs, practiceTrends);
         return new PracticeGroupTrendDTO(
-                group.toDto(), practices.stream().map(PracticeTrend::toDto).toList());
+                group.toDto(), practiceTrends.stream().map(PracticeTrend::toDto).toList());
     }
 }

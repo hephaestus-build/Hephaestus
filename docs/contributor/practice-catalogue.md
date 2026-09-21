@@ -258,7 +258,12 @@ standard as an experiment or a convention as a proven outcome.
    editor completion and CI validation, and Git history is the bundled version history. Declare the one
    occasion as `on` — a bare signal name is shorthand for a binding on that signal reading the
    artifact kind's default evidence. Reference any precompute script explicitly; a script must be named
-   after the practice slug, and an unreferenced one fails validation.
+   after the practice slug, and an unreferenced one fails validation. Give the practice a `holdsAs`
+   sentence: one present-tense line without dashes, within the length the schema
+   (`default-catalog.schema.json`) sets, naming what the developer keeps doing when the practice holds,
+   such as *Every comment got an answer before the next push*. The practice profile prints it beside a practice that stands as a strength. It is read from the
+   bundled catalog by slug and is not part of the definition a workspace copies, customizes or compares,
+   so a better sentence reaches every workspace with the next release.
 6. Add or update focused automated-review tests, including required-source skipping and valid-empty evidence.
 7. Review the admin presentation and a representative piece of delivered feedback.
 

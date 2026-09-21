@@ -4,6 +4,12 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
@@ -18,6 +24,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +51,15 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                     + "\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":42,\"endLine\":42,\"quote\":\"example\","
                     + "\"quoteRedacted\":false}]}";
 
+    /**
+     * A citation of a source the shipped contract does not know. Delivery authorization refuses it, which is
+     * the only way a developer's own observation is withheld from them for its evidence rather than its age.
+     */
+    private static final String UNKNOWN_SOURCE_EVIDENCE_JSON =
+            "{\"citations\":[{\"sourceKind\":\"scm.repository.secrets\",\"artifactPath\":\"inputs/context/secrets.txt\","
+                    + "\"path\":\"secrets.txt\",\"startLine\":1,\"endLine\":1,\"quote\":\"example\","
+                    + "\"quoteRedacted\":false}]}";
+
     @Autowired
     private WebTestClient webTestClient;
 
@@ -61,6 +77,12 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
 
     @Autowired
     private AgentJobRepository agentJobRepository;
+
+    @Autowired
+    private FeedbackRepository feedbackRepository;
+
+    @Autowired
+    private FeedbackObservationRepository feedbackObservationRepository;
 
     private Workspace workspace;
     private PracticeGroup group;
@@ -111,27 +133,53 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
         return agentJobRepository.save(job);
     }
 
-    private void insertObservation(
+    private UUID insertObservation(
             String title,
             String presence,
-            @org.jspecify.annotations.Nullable String assessment,
-            @org.jspecify.annotations.Nullable String severity,
+            @Nullable String assessment,
+            @Nullable String severity,
             String artifactKind,
             Long artifactId) {
-        insertObservation(
+        return insertObservation(
                 practice, agentJob, title, presence, assessment, severity, artifactKind, artifactId, Instant.now());
     }
 
-    private void insertObservation(
+    private UUID insertObservation(
             Practice observedPractice,
             AgentJob reviewJob,
             String title,
             String presence,
-            @org.jspecify.annotations.Nullable String assessment,
-            @org.jspecify.annotations.Nullable String severity,
+            @Nullable String assessment,
+            @Nullable String severity,
             String artifactKind,
             Long artifactId,
             Instant observedAt) {
+        return insertObservation(
+                observedPractice,
+                reviewJob,
+                title,
+                presence,
+                assessment,
+                severity,
+                artifactKind,
+                artifactId,
+                observedAt,
+                DIFF_EVIDENCE_JSON,
+                null);
+    }
+
+    private UUID insertObservation(
+            Practice observedPractice,
+            AgentJob reviewJob,
+            String title,
+            String presence,
+            @Nullable String assessment,
+            @Nullable String severity,
+            String artifactKind,
+            Long artifactId,
+            Instant observedAt,
+            String evidenceJson,
+            @Nullable String recurrenceKey) {
         UUID id = UUID.randomUUID();
         observationRepository.insertIfAbsent(
                 id,
@@ -147,11 +195,32 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                 presence,
                 assessment,
                 severity,
-                DIFF_EVIDENCE_JSON,
+                evidenceJson,
                 "Test reasoning for " + title,
-                null,
+                recurrenceKey,
                 observedAt,
                 "LIVE");
+        return id;
+    }
+
+    /** Advice lives on the delivered {@link Feedback}, not the observation (ADR 0021); the feed reads it from here. */
+    private Feedback deliverFeedbackFor(UUID observationId, String body) {
+        Feedback feedback = feedbackRepository.save(Feedback.builder()
+                .agentJobId(agentJob.getId())
+                .workspaceId(workspace.getId())
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(1L)
+                .recipientUserId(developer.getId())
+                .aboutUserId(developer.getId())
+                .channel(FeedbackChannel.IN_CONTEXT)
+                .position(0)
+                .deliveryState(FeedbackDeliveryState.DELIVERED)
+                .body(body)
+                .source(FeedbackSource.AGENT)
+                .createdAt(Instant.now())
+                .build());
+        feedbackObservationRepository.insertIfAbsent(feedback.getId(), observationId, "PRIMARY", 0);
+        return feedback;
     }
 
     private WebTestClient.BodyContentSpec getHistory() {
@@ -209,7 +278,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo(1)
                 .jsonPath("$.content[0].observations.length()")
                 .isEqualTo(1)
-                .jsonPath("$.content[0].observations[0].title")
+                .jsonPath("$.content[0].observations[0].summary")
                 .isEqualTo("Issue lacks acceptance criteria");
     }
 
@@ -286,7 +355,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.content[0].observations[0].title")
+                .jsonPath("$.content[0].observations[0].summary")
                 .isEqualTo("Visible observation")
                 .jsonPath("$.hasNext")
                 .isEqualTo(false);
@@ -303,5 +372,138 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
         practiceRepository.saveAndFlush(practice);
 
         getHistory().jsonPath("$.content.length()").isEqualTo(0);
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("carries each observation complete enough to open in place, so a row needs no detail request")
+    void shouldCarryEachObservationCompleteEnoughToOpen() {
+        UUID observationId = insertObservation(
+                practice,
+                agentJob,
+                "No testing notes",
+                "ABSENT",
+                "BAD",
+                "MAJOR",
+                ArtifactKinds.PULL_REQUEST.value(),
+                1L,
+                Instant.parse("2025-03-04T05:06:07Z"),
+                DIFF_EVIDENCE_JSON,
+                "locus-testing-notes");
+        Feedback feedback = deliverFeedbackFor(observationId, "Add a Testing section that names what you ran.");
+
+        getHistory()
+                .jsonPath("$.content[0].observations[0].id")
+                .isEqualTo(observationId.toString())
+                .jsonPath("$.content[0].observations[0].summary")
+                .isEqualTo("No testing notes")
+                .jsonPath("$.content[0].observations[0].evidenceRationale")
+                .isEqualTo("Test reasoning for No testing notes")
+                .jsonPath("$.content[0].observations[0].deliveredFeedback")
+                .isEqualTo("Add a Testing section that names what you ran.")
+                .jsonPath("$.content[0].observations[0].feedbackId")
+                .isEqualTo(feedback.getId().toString())
+                .jsonPath("$.content[0].observations[0].evidence.citations.length()")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].observations[0].evidence.citations[0].path")
+                .isEqualTo("src/Main.java")
+                .jsonPath("$.content[0].observations[0].evidence.citations[0].startLine")
+                .isEqualTo(42)
+                .jsonPath("$.content[0].observations[0].evidence.citations[0].quote")
+                .isEqualTo("example")
+                .jsonPath("$.content[0].observations[0].observedAt")
+                .isEqualTo("2025-03-04T05:06:07Z")
+                .jsonPath("$.content[0].observations[0].origin")
+                .isEqualTo("LIVE")
+                .jsonPath("$.content[0].observations[0].claimCurrentness")
+                .isEqualTo("CURRENT")
+                .jsonPath("$.content[0].observations[0].recurrenceKey")
+                .isEqualTo("locus-testing-notes");
+    }
+
+    /**
+     * What a run wrote about itself. The next step of a unit the delivery gate never let out is here too:
+     * the developer's own page is the one surface silent mode does not gate, so the sentence the review
+     * wrote about their work reaches them even when nothing was posted on the work itself.
+     */
+    @Test
+    @WithUser
+    @DisplayName("a run carries its opening sentence, its coverage, its duration and the next step it wrote")
+    void shouldCarryWhatTheRunWroteAboutItself() {
+        UUID observationId =
+                insertObservation("No testing notes", "ABSENT", "BAD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
+        agentJob.setStartedAt(Instant.parse("2025-03-04T05:06:07Z"));
+        agentJob.setCompletedAt(Instant.parse("2025-03-04T05:08:29Z"));
+        agentJob.setOutput(OBJECT_MAPPER.readTree("""
+                {"practiceCoverage":{"eligible":4,"evaluated":3,"outcomes":[]},
+                 "feedback":{"lead":"This change lands the retry, and says nothing about how it was tested.",
+                  "observations":[{"id":"%s","practiceSlug":"pr-description-quality","anchorable":false,
+                   "citations":[]}],
+                  "units":[{"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"pr-description-quality",
+                   "basedOn":["%s"],"title":"No testing notes",
+                   "nextStep":"Add a Testing section that names what you ran.",
+                   "placement":{"kind":"ARTIFACT"}}]}}
+                """.formatted(observationId, observationId)));
+        agentJobRepository.saveAndFlush(agentJob);
+
+        getHistory()
+                .jsonPath("$.content[0].lead")
+                .isEqualTo("This change lands the retry, and says nothing about how it was tested.")
+                .jsonPath("$.content[0].practicesEvaluated")
+                .isEqualTo(3)
+                .jsonPath("$.content[0].practicesEligible")
+                .isEqualTo(4)
+                .jsonPath("$.content[0].durationSeconds")
+                .isEqualTo(142)
+                .jsonPath("$.content[0].observations[0].nextStep")
+                .isEqualTo("Add a Testing section that names what you ran.")
+                .jsonPath("$.content[0].observations[0].deliveredFeedback")
+                .doesNotExist();
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("a run that wrote no opening sentence says so rather than inventing one")
+    void shouldLeaveTheRunNarrativeEmptyWhenTheRunComposedNothing() {
+        insertObservation("No testing notes", "ABSENT", "BAD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
+
+        getHistory()
+                .jsonPath("$.content[0].lead")
+                .doesNotExist()
+                .jsonPath("$.content[0].practicesEvaluated")
+                .doesNotExist()
+                .jsonPath("$.content[0].durationSeconds")
+                .doesNotExist()
+                .jsonPath("$.content[0].observations[0].nextStep")
+                .doesNotExist();
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("an observation whose evidence is not authorised for delivery is withheld, never shown bare")
+    void shouldWithholdAnObservationWhoseEvidenceIsNotAuthorisedForDelivery() {
+        insertObservation("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        insertObservation(
+                practice,
+                agentJob,
+                "Cites a source nobody may show",
+                "ABSENT",
+                "BAD",
+                "MAJOR",
+                ArtifactKinds.PULL_REQUEST.value(),
+                1L,
+                Instant.now(),
+                UNKNOWN_SOURCE_EVIDENCE_JSON,
+                null);
+
+        getHistory()
+                .jsonPath("$.content.length()")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].observations.length()")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].observations[0].summary")
+                .isEqualTo("Motivation is clear")
+                .jsonPath("$.content[0].observations[0].evidence.citations[0].quote")
+                .isEqualTo("example");
     }
 }

@@ -32,11 +32,13 @@ area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not 
 | **Delivery**                        | Whether one piece of feedback was prepared, delivered, withheld, failed, or replaced                                                                       | placement, surface                                                   |
 | **Channel**                         | Where one piece of feedback is intended to appear — a fact about that piece, not a workspace setting; the destinations are the `FeedbackChannel` constants | destination, surface, reach                                          |
 | **Practice feedback about a habit** | Practice feedback prepared for one developer about what recurs across their work, readable by nobody else — the `IN_APP` channel                           | my feedback, private view, profile, reflection, reflection dashboard |
-| **Reviewed work**                   | A pull request, merge request, issue, or conversation being reviewed                                                                                       | artifact, target                                                     |
+| **Reviewed work**                   | A pull request, merge request, issue, conversation, or document being reviewed                                                                             | artifact, target                                                     |
 | **Developer**                       | The person an observation is about                                                                                                                         | learner                                                              |
 | **Contributor**                     | A repository role relevant to review eligibility                                                                                                           | user, when the role matters                                          |
 | **Heph**                            | The conversational assistant                                                                                                                               | agent, bot                                                           |
 | **Mentor**                          | The product area for conversations with Heph                                                                                                               |                                                                      |
+| **Practice profile**                | The developer's own page: how their reviewed work stands across practice groups, how it developed, and one next step from Heph. A surface, not a channel   | practice dashboard, reflection dashboard, standings page, my feedback |
+| **Holds as**                        | The one present-tense sentence a bundled practice reads as when it holds — what the developer keeps doing — printed on the Practice profile beside a practice that stands as a strength; `holdsAs` on the wire, written by [the catalogue rules](./practice-catalogue.md#changing-bundled-defaults) | strength summary, praise, positive feedback |
 | **Hephaestus**                      | The application, named only where the application itself is the subject — installing it, an account linked to it, a release of it                          | agent                                                                |
 | **Hephaestus default**              | A practice or group bundled with the running Hephaestus release                                                                                             | shipped entry                                                        |
 | **Instance catalog**                | The set of practices a workspace may adopt from                                                                                                                              | curated catalog                                                      |
@@ -63,6 +65,11 @@ count so the noun is not needed rather than to invent a second word for the same
 | Message details              | Feedback details                                           |
 | Findings behind this message | Observations behind this feedback                          |
 | Queued for conversation      | Prepared for conversation                                  |
+
+How a piece of feedback on the Practice profile stops being open — **resolved by the work** or
+**marked as addressed** — is the glossary's
+([How feedback resolves](./practice-review-glossary.mdx#how-feedback-resolves)); the card, the
+summary and the release notes use those two phrases and no other.
 
 A column that counts per row is headed **Feedback** and the cell holds the number alone. Where a sentence
 needs a singular subject, name what the feedback is *about* — "the feedback for this observation", not

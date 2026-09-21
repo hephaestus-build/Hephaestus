@@ -265,14 +265,12 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
 
     private void expectResolvedPullRequestArtifact(String uri, String path, Object... uriVariables) {
         getOk(uri, uriVariables)
-                .jsonPath(path + ".type")
+                .jsonPath(path + ".kind")
                 .isEqualTo("scm.pull_request")
-                .jsonPath(path + ".provider")
-                .isEqualTo("GITHUB")
-                .jsonPath(path + ".number")
-                .isEqualTo(42)
-                .jsonPath(path + ".title")
-                .isEqualTo("Make review output visible")
+                .jsonPath(path + ".id")
+                .isEqualTo("7")
+                .jsonPath(path + ".label")
+                .isEqualTo("#42")
                 .jsonPath(path + ".repositoryName")
                 .isEqualTo("detection-org/review-ui")
                 .jsonPath(path + ".url")
@@ -714,14 +712,12 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     Instant.now());
 
             getOk(OBSERVATIONS + "/{id}", workspace.getWorkspaceSlug(), observationId)
-                    .jsonPath("$.artifact.type")
+                    .jsonPath("$.artifact.kind")
                     .isEqualTo("scm.pull_request")
                     .jsonPath("$.artifact.id")
-                    .isEqualTo(812)
-                    .jsonPath("$.artifact.title")
+                    .isEqualTo("812")
+                    .jsonPath("$.artifact.label")
                     .isEqualTo("Pull request")
-                    .jsonPath("$.artifact.provider")
-                    .doesNotExist()
                     .jsonPath("$.artifact.url")
                     .doesNotExist()
                     // The observation resolves, but nothing about the other workspace's evidence may come
@@ -749,16 +745,12 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     812L);
 
             getOk(FEEDBACK + "/{id}", workspace.getWorkspaceSlug(), feedback.getId())
-                    .jsonPath("$.artifact.type")
+                    .jsonPath("$.artifact.kind")
                     .isEqualTo("chat.conversation_thread")
                     .jsonPath("$.artifact.id")
-                    .isEqualTo(812)
-                    .jsonPath("$.artifact.title")
+                    .isEqualTo("812")
+                    .jsonPath("$.artifact.label")
                     .isEqualTo("Conversation")
-                    .jsonPath("$.artifact.provider")
-                    .doesNotExist()
-                    .jsonPath("$.artifact.channelName")
-                    .doesNotExist()
                     .jsonPath("$.artifact.url")
                     .doesNotExist();
         }

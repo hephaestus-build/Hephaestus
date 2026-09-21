@@ -153,7 +153,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
     }
 
     /** Binds delivered guidance because observations do not own advice. */
-    private void deliverFeedbackFor(UUID findingId, String body, Instant createdAt) {
+    private Feedback deliverFeedbackFor(UUID findingId, String body, Instant createdAt) {
         Feedback feedback = feedbackRepository.save(Feedback.builder()
                 .agentJobId(agentJob.getId())
                 .workspaceId(workspace.getId())
@@ -169,6 +169,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 .createdAt(createdAt)
                 .build());
         feedbackObservationRepository.insertIfAbsent(feedback.getId(), findingId, "PRIMARY", 0);
+        return feedback;
     }
 
     // GET /practices/observations
@@ -844,7 +845,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     practiceA, developer, "Detailed finding", "ABSENT", "MAJOR", 0.85f, "scm.pull_request", 42L, now);
             // Advice lives on the delivered Feedback, not the finding (ADR 0021): the detail view sources
             // guidance from here.
-            deliverFeedbackFor(findingId, "Split this PR so each change reviews on its own.", now);
+            Feedback feedback = deliverFeedbackFor(findingId, "Split this PR so each change reviews on its own.", now);
 
             webTestClient
                     .get()
@@ -874,6 +875,10 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("Test reasoning for Detailed finding")
                     .jsonPath("$.deliveredFeedback")
                     .isEqualTo("Split this PR so each change reviews on its own.")
+                    .jsonPath("$.feedbackId")
+                    .isEqualTo(feedback.getId().toString())
+                    .jsonPath("$.feedbackUsefulness")
+                    .doesNotExist()
                     .jsonPath("$.observedAt")
                     .isNotEmpty()
                     // Internal fields must not leak
