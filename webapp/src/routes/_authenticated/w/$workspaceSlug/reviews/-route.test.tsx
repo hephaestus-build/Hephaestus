@@ -7,7 +7,7 @@ import {
 	artifactTrace,
 	tracedArtifactPage,
 	tracedArtifacts,
-} from "@/components/practice-trace/story-mock-data";
+} from "@/components/practice-trace/fixtures";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
@@ -53,7 +53,7 @@ describe("review activity routes", () => {
 		renderRouteAt("/w/acme/reviews");
 
 		await screen.findByRole("heading", { name: "Review activity" }, ROUTE_RENDER_WAIT);
-		await screen.findByRole("link", { name: /Member-facing review activity/ }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("link", { name: /Member-facing review activity/u }, ROUTE_RENDER_WAIT);
 	});
 
 	/** Page 2 of "issues only" stays issues only: the filter lives in the router's search state. */

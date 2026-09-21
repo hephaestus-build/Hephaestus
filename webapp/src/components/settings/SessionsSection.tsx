@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MonitorIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 
 import {
@@ -24,14 +25,38 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { asDate } from "@/lib/dates";
+import { hasText } from "@/lib/text";
 
 function formatTimestamp(value?: Date): string | undefined {
 	const date = asDate(value);
-	if (!date) return undefined;
+	if (!date) {
+		return undefined;
+	}
 	return date.toLocaleString(undefined, {
 		dateStyle: "medium",
 		timeStyle: "short",
 	});
+}
+
+const OS_TOKENS: readonly (readonly [RegExp, string])[] = [
+	[/Windows/u, "Windows"],
+	[/iPhone|iPad|iPod/u, "iOS"],
+	[/Mac OS X|Macintosh/u, "macOS"],
+	[/Android/u, "Android"],
+	[/CrOS/u, "ChromeOS"],
+	[/Linux/u, "Linux"],
+];
+
+const BROWSER_TOKENS: readonly (readonly [RegExp, string])[] = [
+	[/Edg\//u, "Edge"],
+	[/OPR\/|Opera/u, "Opera"],
+	[/Firefox\//u, "Firefox"],
+	[/Chrome\//u, "Chrome"],
+	[/Safari\//u, "Safari"],
+];
+
+function firstMatch(tokens: readonly (readonly [RegExp, string])[], ua: string) {
+	return tokens.find(([pattern]) => pattern.test(ua))?.[1];
 }
 
 /**
@@ -41,34 +66,20 @@ function formatTimestamp(value?: Date): string | undefined {
  * before Chrome; Chrome before Safari) because UAs nest these tokens.
  */
 function describeUserAgent(ua?: string): string {
-	if (!ua) return "Unknown device";
-	const os = /Windows/.test(ua)
-		? "Windows"
-		: /iPhone|iPad|iPod/.test(ua)
-			? "iOS"
-			: /Mac OS X|Macintosh/.test(ua)
-				? "macOS"
-				: /Android/.test(ua)
-					? "Android"
-					: /CrOS/.test(ua)
-						? "ChromeOS"
-						: /Linux/.test(ua)
-							? "Linux"
-							: undefined;
-	const browser = /Edg\//.test(ua)
-		? "Edge"
-		: /OPR\/|Opera/.test(ua)
-			? "Opera"
-			: /Firefox\//.test(ua)
-				? "Firefox"
-				: /Chrome\//.test(ua)
-					? "Chrome"
-					: /Safari\//.test(ua)
-						? "Safari"
-						: undefined;
-	if (browser && os) return `${browser} on ${os}`;
-	if (browser) return browser;
-	if (os) return os;
+	if (!hasText(ua)) {
+		return "Unknown device";
+	}
+	const os = firstMatch(OS_TOKENS, ua);
+	const browser = firstMatch(BROWSER_TOKENS, ua);
+	if (browser !== undefined && os !== undefined) {
+		return `${browser} on ${os}`;
+	}
+	if (browser !== undefined) {
+		return browser;
+	}
+	if (os !== undefined) {
+		return os;
+	}
 	return ua;
 }
 
@@ -83,7 +94,7 @@ export function SessionsSection() {
 
 	const sessionsQuery = useQuery({ ...listSessionsOptions({}) });
 
-	const invalidateSessions = () =>
+	const invalidateSessions = async () =>
 		queryClient.invalidateQueries({ queryKey: listSessionsQueryKey() });
 
 	const revokeOne = useMutation({
@@ -109,7 +120,91 @@ export function SessionsSection() {
 	});
 
 	const sessions: SessionView[] = sessionsQuery.data ?? [];
-	const otherSessionCount = sessions.filter((s) => !s.current).length;
+	const otherSessionCount = sessions.filter((s) => s.current !== true).length;
+
+	let body: ReactNode;
+	if (sessionsQuery.isLoading) {
+		body = (
+			<div className="flex justify-center py-6">
+				<Spinner aria-label="Loading sessions" />
+			</div>
+		);
+	} else if (sessionsQuery.isError) {
+		body = (
+			<p className="text-sm text-destructive" role="alert">
+				Failed to load sessions. Please try refreshing the page.
+			</p>
+		);
+	} else if (sessions.length === 0) {
+		body = <p className="text-sm text-muted-foreground">No active sessions found.</p>;
+	} else {
+		body = (
+			<div className="space-y-3" role="list">
+				{sessions.map((session) => {
+					const signedInAt = formatTimestamp(session.issuedAt);
+					const expiresAt = formatTimestamp(session.expiresAt);
+					const deviceLabel = describeUserAgent(session.userAgent);
+					// Scope the pending state to the row actually being revoked so a single revoke
+					// doesn't disable/spin every other session's button.
+					const isRevokingThis =
+						revokeOne.isPending && revokeOne.variables.path.jti === session.jti;
+					return (
+						<div
+							key={session.jti ?? `${session.userAgent}:${session.ip}`}
+							role="listitem"
+							aria-label={deviceLabel}
+							className="flex items-center justify-between gap-4 rounded-lg border p-4"
+						>
+							<div className="flex min-w-0 items-center gap-3">
+								<MonitorIcon className="size-5 shrink-0" aria-hidden="true" />
+								<div className="min-w-0">
+									<div className="flex items-center gap-2">
+										<span
+											className="truncate text-sm font-medium"
+											title={session.userAgent ?? undefined}
+										>
+											{deviceLabel}
+										</span>
+										{session.current === true && <Badge variant="secondary">This device</Badge>}
+									</div>
+									<p className="truncate text-xs text-muted-foreground">
+										{[
+											session.ip,
+											hasText(signedInAt) && `signed in ${signedInAt}`,
+											hasText(expiresAt) && `expires ${expiresAt}`,
+										]
+											.filter(Boolean)
+											.join(" · ") || "No session details available"}
+									</p>
+								</div>
+							</div>
+
+							{session.current === true ? (
+								<Button variant="outline" size="sm" disabled aria-label="Current session">
+									Current
+								</Button>
+							) : (
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={isRevokingThis || !hasText(session.jti)}
+									onClick={() => {
+										if (hasText(session.jti)) {
+											revokeOne.mutate({ path: { jti: session.jti } });
+										}
+									}}
+									aria-label="Revoke this session"
+								>
+									{isRevokingThis ? <Spinner className="mr-1.5" /> : null}
+									Revoke
+								</Button>
+							)}
+						</div>
+					);
+				})}
+			</div>
+		);
+	}
 
 	return (
 		<section className="space-y-4" aria-labelledby="sessions-heading">
@@ -164,82 +259,7 @@ export function SessionsSection() {
 				)}
 			</div>
 
-			{sessionsQuery.isLoading ? (
-				<div className="flex justify-center py-6">
-					<Spinner aria-label="Loading sessions" />
-				</div>
-			) : sessionsQuery.isError ? (
-				<p className="text-sm text-destructive" role="alert">
-					Failed to load sessions. Please try refreshing the page.
-				</p>
-			) : sessions.length === 0 ? (
-				<p className="text-sm text-muted-foreground">No active sessions found.</p>
-			) : (
-				<div className="space-y-3" role="list">
-					{sessions.map((session) => {
-						const signedInAt = formatTimestamp(session.issuedAt);
-						const expiresAt = formatTimestamp(session.expiresAt);
-						const deviceLabel = describeUserAgent(session.userAgent);
-						// Scope the pending state to the row actually being revoked so a single revoke
-						// doesn't disable/spin every other session's button.
-						const isRevokingThis =
-							revokeOne.isPending && revokeOne.variables.path.jti === session.jti;
-						return (
-							<div
-								key={session.jti ?? `${session.userAgent}:${session.ip}`}
-								role="listitem"
-								aria-label={deviceLabel}
-								className="flex items-center justify-between gap-4 rounded-lg border p-4"
-							>
-								<div className="flex items-center gap-3 min-w-0">
-									<MonitorIcon className="size-5 shrink-0" aria-hidden="true" />
-									<div className="min-w-0">
-										<div className="flex items-center gap-2">
-											<span
-												className="text-sm font-medium truncate"
-												title={session.userAgent ?? undefined}
-											>
-												{deviceLabel}
-											</span>
-											{session.current && (
-												<Badge variant="secondary" className="text-xs">
-													This device
-												</Badge>
-											)}
-										</div>
-										<p className="text-xs text-muted-foreground truncate">
-											{[
-												session.ip,
-												signedInAt && `signed in ${signedInAt}`,
-												expiresAt && `expires ${expiresAt}`,
-											]
-												.filter(Boolean)
-												.join(" · ") || "No session details available"}
-										</p>
-									</div>
-								</div>
-
-								{session.current ? (
-									<Button variant="outline" size="sm" disabled aria-label="Current session">
-										Current
-									</Button>
-								) : (
-									<Button
-										variant="outline"
-										size="sm"
-										disabled={isRevokingThis || !session.jti}
-										onClick={() => session.jti && revokeOne.mutate({ path: { jti: session.jti } })}
-										aria-label="Revoke this session"
-									>
-										{isRevokingThis ? <Spinner className="mr-1.5" /> : null}
-										Revoke
-									</Button>
-								)}
-							</div>
-						);
-					})}
-				</div>
-			)}
+			{body}
 		</section>
 	);
 }

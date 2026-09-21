@@ -25,8 +25,12 @@ export function WorkspaceScmTokenSettings({
 	const id = useId();
 	const [token, setToken] = useState("");
 	const handleSave = async () => {
-		if (!token.trim() || isSaving) return;
-		if (await onSave(token.trim())) setToken("");
+		if (!token.trim() || isSaving) {
+			return;
+		}
+		if (await onSave(token.trim())) {
+			setToken("");
+		}
 	};
 
 	return (
@@ -34,7 +38,7 @@ export function WorkspaceScmTokenSettings({
 			<CardHeader>
 				<IntegrationCardHeading>Personal access token</IntegrationCardHeading>
 				<CardDescription>
-					Replace the token used for this workspace's {providerLabel} connection. Existing
+					Replace the token used for this workspace’s {providerLabel} connection. Existing
 					repositories and synced work are kept.
 				</CardDescription>
 			</CardHeader>
@@ -56,7 +60,7 @@ export function WorkspaceScmTokenSettings({
 							onChange={(event) => setToken(event.target.value)}
 							disabled={isSaving}
 							required
-							aria-describedby={`${id}-description${error ? ` ${id}-error` : ""}`}
+							aria-describedby={`${id}-description${error == null ? "" : ` ${id}-error`}`}
 						/>
 						<FieldDescription id={`${id}-description`}>
 							Use a token with access to the same repositories and the permissions required by your

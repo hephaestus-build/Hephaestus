@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -32,10 +32,10 @@ await test("automatic promotion advances but never replays or rewinds a complete
 		["behind", false],
 	] as const) {
 		assert.equal(
-			await automaticPromotion(channel, next, (base, head) => {
+			await automaticPromotion(channel, next, async (base, head) => {
 				assert.equal(base, current);
 				assert.equal(head, next);
-				return Promise.resolve(status);
+				return status;
 			}),
 			expected,
 		);
@@ -43,18 +43,21 @@ await test("automatic promotion advances but never replays or rewinds a complete
 });
 
 await test("unknown history and API failures cannot authorize promotion", async () => {
-	for (const status of ["diverged", "unexpected"])
+	for (const status of ["diverged", "unexpected"]) {
 		await assert.rejects(
-			automaticPromotion(channel, next, () => Promise.resolve(status)),
-			/history/,
+			automaticPromotion(channel, next, async () => status),
+			/history/u,
 		);
+	}
 	await assert.rejects(
-		automaticPromotion(channel, next, () => Promise.reject(new Error("unavailable"))),
-		/unavailable/,
+		automaticPromotion(channel, next, async () => {
+			throw new Error("unavailable");
+		}),
+		/unavailable/u,
 	);
 	await assert.rejects(
-		automaticPromotion(channel, "main", () => Promise.resolve("ahead")),
-		/full commit SHA/,
+		automaticPromotion(channel, "main", async () => "ahead"),
+		/full commit SHA/u,
 	);
 });
 
@@ -66,31 +69,34 @@ await test("switching from a release to main cannot replay or rewind the release
 		["behind", false],
 	] as const) {
 		assert.equal(
-			await automaticPromotion(release, next, (base, head) => {
+			await automaticPromotion(release, next, async (base, head) => {
 				assert.equal(base, "v1.2.3");
 				assert.equal(head, next);
-				return Promise.resolve(status);
+				return status;
 			}),
 			expected,
 		);
 	}
 	await assert.rejects(
-		automaticPromotion(release, next, () => Promise.reject(new Error("unknown release"))),
-		/unknown release/,
+		automaticPromotion(release, next, async () => {
+			throw new Error("unknown release");
+		}),
+		/unknown release/u,
 	);
 });
 
 await test("the CLI fails closed for invalid channels but honors a valid hold without network access", (t) => {
-	const directory = mkdtempSync(join(tmpdir(), "automatic-promotion-"));
+	const directory = mkdtempSync(path.join(tmpdir(), "automatic-promotion-"));
 	t.after(() => rmSync(directory, { recursive: true, force: true }));
-	mkdirSync(join(directory, "deploy-state/channels"), { recursive: true });
-	const outputFile = join(directory, "output");
+	mkdirSync(path.join(directory, "deploy-state/channels"), { recursive: true });
+	const outputFile = path.join(directory, "output");
 	for (const contents of [undefined, "{", JSON.stringify({ release: "v1.2.3", freeze: "true" })]) {
-		if (contents !== undefined)
-			writeFileSync(join(directory, "deploy-state/channels/staging.json"), contents);
+		if (contents !== undefined) {
+			writeFileSync(path.join(directory, "deploy-state/channels/staging.json"), contents);
+		}
 		const result = spawnSync(
 			process.execPath,
-			[fileURLToPath(new URL("./automatic-promotion.ts", import.meta.url))],
+			[fileURLToPath(new URL("automatic-promotion.ts", import.meta.url))],
 			{
 				cwd: directory,
 				encoding: "utf8",
@@ -107,12 +113,12 @@ await test("the CLI fails closed for invalid channels but honors a valid hold wi
 		assert.equal(existsSync(outputFile), false);
 	}
 	writeFileSync(
-		join(directory, "deploy-state/channels/staging.json"),
+		path.join(directory, "deploy-state/channels/staging.json"),
 		JSON.stringify({ release: "v1.2.3", freeze: true }),
 	);
 	const held = spawnSync(
 		process.execPath,
-		[fileURLToPath(new URL("./automatic-promotion.ts", import.meta.url))],
+		[fileURLToPath(new URL("automatic-promotion.ts", import.meta.url))],
 		{
 			cwd: directory,
 			encoding: "utf8",

@@ -89,7 +89,7 @@ function describe(detail: string, guidance: string): string {
 	if (lead.length === 0 || lead === guidance) {
 		return guidance;
 	}
-	return /[.!?]$/.test(lead) ? `${lead} ${guidance}` : `${lead}. ${guidance}`;
+	return /[.!?]$/u.test(lead) ? `${lead} ${guidance}` : `${lead}. ${guidance}`;
 }
 
 export function QueryErrorAlert({ error, title, onRetry, className }: QueryErrorAlertProps) {

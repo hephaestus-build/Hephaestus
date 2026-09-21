@@ -3,12 +3,12 @@ import { useId } from "react";
 import { DateRangeFacet } from "@/components/common/DateRangeFacet";
 import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { ResultCount } from "@/components/common/ResultCount";
+import { statusValues } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	REVIEW_STATUS_DEFS,
 	type ReviewStatus,
 } from "@/components/practice-vocabulary/review-status-defs";
-import { statusValues } from "@/components/practice-vocabulary/status-def";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
 	Select,
@@ -54,7 +54,9 @@ export function clearedRunFilters(): Partial<RunsSearch> {
  * matching a word to a tag from memory.
  */
 function StatusItemLabel({ value }: { value: string }) {
-	if (!isReviewStatus(value)) return <span className="text-muted-foreground">All statuses</span>;
+	if (!isReviewStatus(value)) {
+		return <span className="text-muted-foreground">All statuses</span>;
+	}
 	return <StatusBadge def={REVIEW_STATUS_DEFS[value]} />;
 }
 

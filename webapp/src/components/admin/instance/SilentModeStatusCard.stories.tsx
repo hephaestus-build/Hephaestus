@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
-import { hoursBefore } from "@/components/common/story-clock";
+import { hoursBefore } from "@/stories/story-clock";
 
 import { SilentModeStatusCard } from "./SilentModeStatusCard";
 

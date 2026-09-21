@@ -114,7 +114,7 @@ as triggers, partitioning and partial-index predicates; verify those through dat
 ## Observation outcome transition before 1.0
 
 The observation-axis migration introduces `assessment_status` and permits null presence for unassessed
-observations. Assessment now describes the fixed target, while outcome is derived from the
+observations. Assessment describes the specified behavior in context, while outcome is derived from the
 [presence × assessment matrix](./practice-feedback-language.md#observation-assessment-axes).
 The migration swaps GOOD/BAD on historical ABSENT rows to preserve their previous positive/negative
 outcome, retains severity for historical negative outcomes and clears it otherwise. It does not relabel

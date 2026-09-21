@@ -33,7 +33,7 @@ it("reports actual live outcomes and unexpected ordinary skips without hiding fa
 	]);
 	expect(summary).toContain("Run outcome: **failed**");
 	expect(summary).toContain("unexpected: **1**; flaky: **1**; skipped: **1**");
-	expect(summary).toContain("| Unexpected \\| skip | skipped | First line second line |");
+	expect(summary).toContain(String.raw`| Unexpected \| skip | skipped | First line second line |`);
 });
 
 it("does not imply live coverage when a filtered run selected none", () => {

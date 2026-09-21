@@ -4,20 +4,21 @@ import { expect, fn, screen, within } from "storybook/test";
 import type { ListPracticeReviewObservationsResponse, ReviewObservation } from "@/api/types.gen";
 import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
-import { expectNoPageOverflow } from "@/test/reflow";
 
-import { groupFacetOptions, practiceFacetOptions } from "./ObservationFilters";
-import { ObservationsListPage } from "./ObservationsListPage";
-import { type ObservationsSearch, observationsQuery, REVIEW_PAGE_SIZE } from "./review-search";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 import {
 	manyObservations,
 	practiceGroups,
 	reviewObservations,
+	selects,
 	workspaceMembers,
 	workspacePractices,
-} from "./story-mock-data";
+} from "./fixtures";
+import { groupFacetOptions, practiceFacetOptions } from "./ObservationFilters";
+import { ObservationsListPage } from "./ObservationsListPage";
+import { type ObservationsSearch, observationsQuery, REVIEW_PAGE_SIZE } from "./review-search";
+import type { ReviewPeople } from "./ReviewPersonFacet";
 
 const PEOPLE: ReviewPeople = {
 	options: workspaceMembers
@@ -70,8 +71,6 @@ function observationPage(
 	search: ObservationsSearch,
 ): ListPracticeReviewObservationsResponse {
 	const query = observationsQuery(search, REVIEW_PAGE_SIZE);
-	const selects = (selected: string[] | undefined, actual: string | undefined) =>
-		!selected?.length || (actual !== undefined && selected.includes(actual));
 	const rows = candidates.filter(
 		(row) =>
 			(!query.from || row.observedAt >= new Date(query.from)) &&
@@ -99,16 +98,18 @@ function observationPage(
 /** Shortfalls worst-first, then strengths, then the observations that judged nothing. */
 const ACTIONABILITY_RANK: Record<string, number> = { CRITICAL: 0, MAJOR: 1, MINOR: 2, INFO: 3 };
 function actionability(row: ReviewObservation): number {
-	if (row.assessmentStatus !== "ASSESSED" || !row.presence || !row.assessment) return 6;
-	if ((row.presence === "PRESENT") !== (row.assessment === "GOOD"))
+	if (row.assessmentStatus !== "ASSESSED" || !row.presence || !row.assessment) {
+		return 6;
+	}
+	if ((row.presence === "PRESENT") !== (row.assessment === "GOOD")) {
 		return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
+	}
 	return 5;
 }
 const byActionability = (a: ReviewObservation, b: ReviewObservation) =>
 	actionability(a) - actionability(b) || b.observedAt.getTime() - a.observedAt.getTime();
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Observations",
 	component: ObservationsListPage,
 	parameters: {
 		layout: "fullscreen",
@@ -197,9 +198,9 @@ export const FilterToOneSeverity: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
 		await canvas.findByText("12 observations.");
-		await pickFacet(canvas, userEvent, "Severity", /Major/);
+		await pickFacet(canvas, userEvent, "Severity", /Major/u);
 		await canvas.findByText("2 observations match your filters.");
-		await expect(canvas.queryByText(/leaks the ledger's table name/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/leaks the ledger's table name/u)).not.toBeInTheDocument();
 	},
 };
 
@@ -209,7 +210,7 @@ export const FilterToOnePerson: Story = {
 		await canvas.findByText("12 observations.");
 		await userEvent.click(canvas.getByRole("combobox", { name: "Developer" }));
 		const listbox = await screen.findByRole("listbox");
-		await userEvent.click(await within(listbox).findByRole("option", { name: /Grace Hopper/ }));
+		await userEvent.click(await within(listbox).findByRole("option", { name: /Grace Hopper/u }));
 		await canvas.findByRole("combobox", { name: "Developer: Grace Hopper" });
 		await canvas.findByText("2 observations match your filters.");
 	},
@@ -219,8 +220,8 @@ export const FilteredToNothing: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
 		await canvas.findByText("12 observations.");
-		await pickFacet(canvas, userEvent, "Severity", /Critical/);
-		await pickFacet(canvas, userEvent, "Group", /Testing/);
+		await pickFacet(canvas, userEvent, "Severity", /Critical/u);
+		await pickFacet(canvas, userEvent, "Group", /Testing/u);
 		await canvas.findByText("No observations match these filters");
 		canvas.getByRole("button", { name: "Reset" });
 		await userEvent.click(canvas.getByRole("button", { name: "Clear all filters" }));
@@ -243,7 +244,7 @@ export const SortByActionability: Story = {
 		).getAllByRole("listitem")[0];
 		await expect(firstRowBefore).toHaveTextContent("A dropped delivery is logged at debug");
 
-		await userEvent.click(canvas.getByRole("combobox", { name: /Sort/ }));
+		await userEvent.click(canvas.getByRole("combobox", { name: /Sort/u }));
 		await userEvent.click(await screen.findByRole("option", { name: "Most actionable first" }));
 
 		const rows = await within(
@@ -275,7 +276,7 @@ export const MobileAppliedFilters: Story = {
 	},
 	play: async ({ canvas, userEvent }) => {
 		await canvas.findByText("12 observations.");
-		await pickFacet(canvas, userEvent, "Severity", /Major/);
+		await pickFacet(canvas, userEvent, "Severity", /Major/u);
 		await canvas.findByText("2 observations match your filters.");
 		// Queried by label rather than by role because whether the `sm:` breakpoint is live depends on
 		// how the runner applies the viewport, while what the pill says and does must hold either way.
@@ -298,10 +299,12 @@ export const PickADateRange: Story = {
 		const grid = await within(dialog).findByRole("grid");
 		const days = within(grid).getAllByRole("button");
 		const [rangeStart, rangeEnd] = [days[4], days[10]];
-		if (!rangeStart || !rangeEnd) throw new Error("The month grid rendered too few days");
+		if (!rangeStart || !rangeEnd) {
+			throw new Error("The month grid rendered too few days");
+		}
 		await userEvent.click(rangeStart);
 		await userEvent.click(rangeEnd);
-		await canvas.findByText(/–/);
+		await canvas.findByText(/–/u);
 	},
 };
 
@@ -310,8 +313,8 @@ export const SeverityFacetOpen: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Severity" }));
 		const listbox = await screen.findByRole("listbox");
-		await within(listbox).findByRole("option", { name: /Critical/ });
-		within(listbox).getByRole("option", { name: /Informational/ });
+		await within(listbox).findByRole("option", { name: /Critical/u });
+		within(listbox).getByRole("option", { name: /Informational/u });
 	},
 };
 

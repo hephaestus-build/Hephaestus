@@ -2,15 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { listGlobalContributorsOptions } from "@/api/@tanstack/react-query.gen";
-import { AboutPage } from "@/components/info/about/AboutPage";
-import type { ProjectManager } from "@/components/info/about/ProjectManagerCard";
+import { AboutPage } from "@/components/site/about/AboutPage";
+import type { ProjectManager } from "@/components/site/about/ProjectManagerCard";
 
 export const Route = createFileRoute("/about")({
 	component: AboutContainer,
 });
 
 const PROJECT_MANAGER_DATA: ProjectManager = {
-	id: 5898705,
+	id: 5_898_705,
 	login: "felixtjdietrich",
 	name: "Felix T.J. Dietrich",
 	title: "Project lead",

@@ -9,7 +9,7 @@ interface CoverageEntry {
 	reason?: string;
 }
 
-const cell = (value: string) => value.replaceAll("|", "\\|").replaceAll("\n", " ");
+const cell = (value: string) => value.replaceAll("|", String.raw`\|`).replaceAll("\n", " ");
 
 export function coverageSummary(status: FullResult["status"], tests: CoverageEntry[]) {
 	const count = (outcome: CoverageEntry["outcome"]) =>
@@ -29,7 +29,7 @@ export function coverageSummary(status: FullResult["status"], tests: CoverageEnt
 		"Live provider checks require configured workspaces and explicit enablement; provider mutations additionally require `E2E_MUTATE_LIVE_INTEGRATIONS=true`.",
 		"",
 		"### Live-provider checks and skipped tests",
-		...(rows.length
+		...(rows.length > 0
 			? ["| Check | Outcome | Skip reason |", "| --- | --- | --- |", ...rows]
 			: ["No live-provider checks or skipped tests were selected in this run."]),
 		"",
@@ -62,6 +62,8 @@ export default class CoverageReporter implements Reporter {
 			})),
 		);
 		process.stdout.write(`\n${summary}`);
-		if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+		if (process.env.GITHUB_STEP_SUMMARY !== undefined) {
+			appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+		}
 	}
 }

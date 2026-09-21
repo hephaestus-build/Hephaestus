@@ -70,11 +70,7 @@ export function RelativeTime({
 
 	return (
 		<Tooltip>
-			<TooltipTrigger
-				className={cn(
-					"cursor-help underline decoration-dotted decoration-muted-foreground/40 underline-offset-4",
-				)}
-			>
+			<TooltipTrigger className={cn("cursor-help underline decoration-dotted underline-offset-4")}>
 				{reading}
 			</TooltipTrigger>
 			<TooltipContent>

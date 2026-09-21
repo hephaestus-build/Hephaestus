@@ -22,9 +22,8 @@ public enum RequiredCaptureQuality {
     COMPLETE,
 
     /**
-     * Complete, and containing something. An empty capture is a legitimate outcome that nonetheless
-     * cannot ground a judgement — a diff with no changes in it makes the model fall back to the title
-     * and description and grade those instead.
+     * Complete, and containing something. Use this only when the source contract requires content
+     * to support review. A complete empty capture remains distinct from a failed or missing capture.
      */
     COMPLETE_AND_NON_EMPTY;
 

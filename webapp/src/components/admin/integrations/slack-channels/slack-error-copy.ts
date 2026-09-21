@@ -1,3 +1,5 @@
+import { hasText } from "@/lib/text";
+
 /**
  * Slack's API answers with machine codes (`channel_not_found`, `not_in_channel`, …). Those are
  * for us, not for the admin reading the toast — so every code we can actually act on gets a
@@ -33,7 +35,7 @@ const GENERIC =
 
 /** Turn a Slack error code into a sentence an admin can act on. */
 export function slackErrorMessage(code?: string): string {
-	if (!code) {
+	if (!hasText(code)) {
 		return GENERIC;
 	}
 	return SLACK_ERROR_COPY[code] ?? GENERIC;

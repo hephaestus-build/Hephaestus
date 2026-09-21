@@ -10,16 +10,18 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { mock, test } from "node:test";
 import { fileURLToPath } from "node:url";
+
+import { hasText } from "../../../main/resources/agent/pi-text.ts";
 
 const imageRoot = fileURLToPath(
 	new URL("../../../../../../docker/agents/precompute", import.meta.url),
 );
 
 const scenarioRoot = process.env.PRECOMPUTE_SCENARIO_ROOT;
-if (scenarioRoot) {
+if (hasText(scenarioRoot)) {
 	mock.module("node:child_process", {
 		namedExports: {
 			spawnSync(command: string, args: string[]) {
@@ -42,18 +44,18 @@ if (scenarioRoot) {
 		// read, which an unresolved grant satisfies. macOS reaches the temporary directory through a
 		// symlink, so an unresolved root fails every script's import while the rest of the scenario
 		// looks like it ran.
-		const root = realpathSync(mkdtempSync(join(tmpdir(), "task-precompute-#")));
+		const root = realpathSync(mkdtempSync(path.join(tmpdir(), "task-precompute-#")));
 		try {
 			const context = "areas/changed work";
 			const scripts = "catalog/scripts";
-			mkdirSync(join(root, context), { recursive: true });
-			mkdirSync(join(root, scripts), { recursive: true });
+			mkdirSync(path.join(root, context), { recursive: true });
+			mkdirSync(path.join(root, scripts), { recursive: true });
 			writeFileSync(
-				join(root, context, "diff.patch"),
+				path.join(root, context, "diff.patch"),
 				"diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -0,0 +1 @@\n[L1] +line\n",
 			);
 			writeFileSync(
-				join(root, scripts, "example.ts"),
+				path.join(root, scripts, "example.ts"),
 				`import { readFileSync } from "node:fs";
 import { parseDiff } from "../lib/diff-parser.ts";
 export default (repo, diff, metadata, context) => ({
@@ -74,15 +76,15 @@ export default (repo, diff, metadata, context) => ({
 					"export default () => ({ hints: [], directions: [], metrics: { count: Infinity } });",
 				throws: "export default () => { throw new Error('broken practice'); };",
 			})) {
-				writeFileSync(join(root, scripts, `${name}.ts`), source);
+				writeFileSync(path.join(root, scripts, `${name}.ts`), source);
 			}
-			mkdirSync(join(root, "repos/project with spaces"), { recursive: true });
-			writeFileSync(join(root, "repos/project with spaces/marker"), "7");
-			writeFileSync(join(root, context, "marker"), "11");
-			writeFileSync(join(root, context, "metadata.json"), JSON.stringify({ marker: 13 }));
-			symlinkSync("example.ts", join(root, scripts, "linked.ts"));
+			mkdirSync(path.join(root, "repos/project with spaces"), { recursive: true });
+			writeFileSync(path.join(root, "repos/project with spaces/marker"), "7");
+			writeFileSync(path.join(root, context, "marker"), "11");
+			writeFileSync(path.join(root, context, "metadata.json"), JSON.stringify({ marker: 13 }));
+			symlinkSync("example.ts", path.join(root, scripts, "linked.ts"));
 			writeFileSync(
-				join(root, "task.json"),
+				path.join(root, "task.json"),
 				JSON.stringify({
 					schemaVersion: 2,
 					paths: {
@@ -96,9 +98,9 @@ export default (repo, diff, metadata, context) => ({
 					},
 				}),
 			);
-			mkdirSync(join(root, "work/precompute-stage"), { recursive: true });
-			mkdirSync(join(root, "work/precompute-out"), { recursive: true });
-			symlinkSync(join(imageRoot, "lib"), join(root, "work/precompute-stage/lib"));
+			mkdirSync(path.join(root, "work/precompute-stage"), { recursive: true });
+			mkdirSync(path.join(root, "work/precompute-out"), { recursive: true });
+			symlinkSync(path.join(imageRoot, "lib"), path.join(root, "work/precompute-stage/lib"));
 			const child = spawnSync(
 				process.execPath,
 				[
@@ -121,7 +123,7 @@ export default (repo, diff, metadata, context) => ({
 			);
 			assert.equal(child.status, 0, child.stderr);
 			const result: unknown = JSON.parse(
-				readFileSync(join(root, "work/precompute-out/example.json"), "utf8"),
+				readFileSync(path.join(root, "work/precompute-out/example.json"), "utf8"),
 			);
 			assert.ok(typeof result === "object" && result !== null);
 			assert.equal(Reflect.get(result, "status"), "ok");
@@ -133,23 +135,23 @@ export default (repo, diff, metadata, context) => ({
 				context: 11,
 				repo: 7,
 			});
-			assert.ok(readFileSync(join(root, "work/precompute-out/.complete"), "utf8"));
+			assert.ok(readFileSync(path.join(root, "work/precompute-out/.complete"), "utf8"));
 			for (const slug of ["missing-export", "invalid-result", "throws"]) {
 				const failure: unknown = JSON.parse(
-					readFileSync(join(root, `work/precompute-out/${slug}.json`), "utf8"),
+					readFileSync(path.join(root, `work/precompute-out/${slug}.json`), "utf8"),
 				);
 				assert.ok(typeof failure === "object" && failure !== null);
 				assert.equal(Reflect.get(failure, "status"), "error");
 				assert.deepEqual(Reflect.get(failure, "hints"), []);
 			}
 			assert.match(
-				readFileSync(join(root, "work/precompute-out/summary.md"), "utf8"),
-				/3 script\(s\) failed/,
+				readFileSync(path.join(root, "work/precompute-out/summary.md"), "utf8"),
+				/3 script\(s\) failed/u,
 			);
 
 			assert.throws(
-				() => readFileSync(join(root, "work/precompute-stage/practices/linked.ts")),
-				/ENOENT/,
+				() => readFileSync(path.join(root, "work/precompute-stage/practices/linked.ts")),
+				/ENOENT/u,
 			);
 		} finally {
 			rmSync(root, { recursive: true, force: true });

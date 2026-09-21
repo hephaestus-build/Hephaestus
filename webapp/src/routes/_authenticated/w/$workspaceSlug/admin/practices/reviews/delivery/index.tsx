@@ -24,7 +24,7 @@ function FeedbackListRoute() {
 	const { workspaceSlug } = Route.useParams();
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
-	const updateSearch = (patch: Partial<FeedbackSearch>) =>
+	const updateSearch = (patch: Partial<FeedbackSearch>) => {
 		void navigate({
 			search: (previous) => {
 				const next = { ...previous, ...patch };
@@ -32,6 +32,7 @@ function FeedbackListRoute() {
 			},
 			replace: true,
 		});
+	};
 
 	const feedbackQueryResult = useQuery({
 		...listPracticeReviewFeedbackOptions({
@@ -55,7 +56,9 @@ function FeedbackListRoute() {
 			feedback={feedbackQueryResult.data}
 			isLoading={feedbackQueryResult.isLoading}
 			error={feedbackQueryResult.isError ? feedbackQueryResult.error : undefined}
-			onRetry={() => void feedbackQueryResult.refetch()}
+			onRetry={() => {
+				void feedbackQueryResult.refetch();
+			}}
 			people={people}
 		/>
 	);

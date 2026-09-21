@@ -16,10 +16,11 @@ import type {
 	UpdateRepositoryVisibilityData,
 	UpdateTeamVisibilityData,
 } from "@/api/types.gen";
-import { AdminTeamsTable } from "@/components/admin/AdminTeamsTable";
-import { NoWorkspace } from "@/components/workspace/NoWorkspace";
+import { WorkspaceTeamsTable } from "@/components/admin/teams/WorkspaceTeamsTable";
+import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { workspaceAdminHead } from "@/lib/page-title";
+import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/teams")({
 	head: workspaceAdminHead("Teams"),
@@ -87,8 +88,8 @@ function AdminTeamsContainer() {
 		onMutate: async (vars: Options<UpdateRepositoryVisibilityData>) => {
 			await queryClient.cancelQueries({ queryKey: teamsQueryKey });
 			const prev = queryClient.getQueryData<TeamInfo[]>(teamsQueryKey);
-			const teamId = vars.path.teamId;
-			const repositoryId = vars.path.repositoryId;
+			const { teamId } = vars.path;
+			const { repositoryId } = vars.path;
 			const hidden =
 				typeof vars.body === "boolean" ? vars.body : vars.query?.hiddenFromContributions;
 			if (
@@ -98,7 +99,9 @@ function AdminTeamsContainer() {
 				typeof hidden === "boolean"
 			) {
 				const next = prev.map((team) => {
-					if (team.id !== teamId) return team;
+					if (team.id !== teamId) {
+						return team;
+					}
 					return {
 						...team,
 						repositories: team.repositories.map((repo) =>
@@ -169,9 +172,9 @@ function AdminTeamsContainer() {
 	}
 
 	return (
-		<AdminTeamsTable
+		<WorkspaceTeamsTable
 			teams={teamsQuery.data ?? []}
-			isLoading={isWorkspaceLoading || teamsQuery.isLoading || !workspaceSlug}
+			isLoading={isWorkspaceLoading || teamsQuery.isLoading || !hasText(workspaceSlug)}
 			error={teamsQuery.error}
 			search={search.q ?? ""}
 			onSearchChange={(q) => {

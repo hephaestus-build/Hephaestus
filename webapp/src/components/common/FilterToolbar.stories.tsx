@@ -4,7 +4,6 @@ import { expect, fn, userEvent } from "storybook/test";
 import { FilterToolbar } from "./FilterToolbar";
 
 const meta = {
-	title: "Common/Filter toolbar",
 	component: FilterToolbar,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

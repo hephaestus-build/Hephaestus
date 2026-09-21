@@ -34,7 +34,7 @@ function evaluate(template: unknown, value: ReturnType<typeof context>, cancelle
 	assert.ok(typeof template === "string");
 	const dictionary: unknown = JSON.parse(JSON.stringify(value), data.reviver);
 	assert.ok(dictionary instanceof data.Dictionary);
-	return template.replaceAll(/\$\{\{([\s\S]*?)}}/g, (_, expression: string) => {
+	return template.replaceAll(/\$\{\{(?<expression>[\s\S]*?)\}\}/gu, (_, expression: string) => {
 		const functions = new Map([
 			[
 				"cancelled",

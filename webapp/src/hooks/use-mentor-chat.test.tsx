@@ -1,8 +1,18 @@
+import { type UseChatHelpers, useChat } from "@ai-sdk/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import type { ChatInit } from "ai";
 import { http, HttpResponse } from "msw";
 import { type ReactNode, useState } from "react";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { getThreadQueryKey, listThreadsQueryKey } from "@/api/@tanstack/react-query.gen";
+import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import type { ChatMessage } from "@/lib/types";
+import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
+
+import { useMentorChat } from "./use-mentor-chat";
 
 vi.mock("@ai-sdk/react", () => ({
 	useChat: vi.fn(),
@@ -12,7 +22,7 @@ vi.mock("@/hooks/use-active-workspace", () => ({
 	useActiveWorkspaceSlug: vi.fn(),
 }));
 
-vi.mock("@/integrations/auth", () => ({
+vi.mock("@/runtime/auth/auth-client", () => ({
 	csrfHeaders: vi.fn(() => ({ "X-XSRF-TOKEN": "mock-csrf" })),
 }));
 
@@ -25,16 +35,6 @@ vi.mock("@/environment", () => ({
 vi.mock("uuid", () => ({
 	v4: vi.fn(() => "mock-uuid-123"),
 }));
-
-import { type UseChatHelpers, useChat } from "@ai-sdk/react";
-import type { ChatInit } from "ai";
-
-import { getThreadQueryKey, listThreadsQueryKey } from "@/api/@tanstack/react-query.gen";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import type { ChatMessage } from "@/lib/types";
-import { server } from "@/mocks/server";
-
-import { useMentorChat } from "./use-mentor-chat";
 
 // The instantiation expression pins the message type the hook uses, so the fake below is
 // checked against the real `useChat` contract rather than a loosened one.
@@ -83,16 +83,19 @@ interface FakeChat {
 	finishTurn: () => void;
 }
 
+function notRenderedYet(): never {
+	throw new Error("useChat has not rendered yet");
+}
+
 /** Stateful, because the hook does not own its transcript: a frozen `messages: []` proves nothing. */
 function installFakeChat(initialStatus: ChatStatus = "ready"): FakeChat {
 	let lastOptions: ChatInit<ChatMessage> | undefined;
 	const fake: FakeChat = {
 		get lastOptions() {
-			if (!lastOptions) throw new Error("useChat has not rendered yet");
-			return lastOptions;
+			return lastOptions ?? notRenderedYet();
 		},
-		raiseError: () => {},
-		finishTurn: () => {},
+		raiseError: notRenderedYet,
+		finishTurn: notRenderedYet,
 	};
 
 	mockUseChat.mockImplementation((options) => {
@@ -127,7 +130,9 @@ function installFakeChat(initialStatus: ChatStatus = "ready"): FakeChat {
 			error,
 			sendMessage: async (message) => {
 				const text = message && "text" in message ? message.text : undefined;
-				if (typeof text !== "string") return;
+				if (typeof text !== "string") {
+					return;
+				}
 				setMessages((current) => [
 					...current,
 					createMockMessage("user", text, options.generateId?.()),
@@ -374,14 +379,11 @@ describe("useMentorChat", () => {
 		});
 
 		it("rolls back an optimistic vote when the server rejects it", async () => {
-			let respond = (_response: Response) => {};
-			const response = new Promise<Response>((resolve) => {
-				respond = resolve;
-			});
+			const response = deferred<Response>();
 			server.use(
 				http.post(
 					"*/workspaces/:workspaceSlug/mentor/threads/:threadId/messages/:messageId/vote",
-					() => response,
+					async () => response.promise,
 				),
 			);
 			const { result } = renderHook(() => useMentorChat({}), {
@@ -391,7 +393,9 @@ describe("useMentorChat", () => {
 			expect(result.current.votes).toContainEqual(
 				expect.objectContaining({ messageId: "msg-rejected", isUpvoted: true }),
 			);
-			await act(async () => respond(new HttpResponse(null, { status: 500 })));
+			await act(async () => {
+				response.resolve(new HttpResponse(null, { status: 500 }));
+			});
 			await waitFor(() => expect(result.current.votes).toHaveLength(0));
 		});
 
@@ -514,7 +518,9 @@ describe("useMentorChat", () => {
 			assert(posted, "The hook sent no message");
 			expect(posted.url).toBe("http://localhost:8080/workspaces/test-workspace/mentor/chat");
 			// Only the newest message travels; the server rebuilds context from the thread id.
-			expect(await posted.text()).toBe(JSON.stringify({ id: "thread-1", message: latest }));
+			await expect(posted.text()).resolves.toBe(
+				JSON.stringify({ id: "thread-1", message: latest }),
+			);
 			expect(posted.credentials).toBe("include");
 			expect(posted.headers.get("X-XSRF-TOKEN")).toBe("mock-csrf");
 		});

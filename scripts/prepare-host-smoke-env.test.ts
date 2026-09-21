@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
 
 import { answerBlankSettings } from "./prepare-host-smoke-env.ts";
@@ -8,7 +8,7 @@ import { answerBlankSettings } from "./prepare-host-smoke-env.ts";
 // `setup.sh` copies `.env.example` and fills in the secrets it generates; every setting the smoke
 // has to answer is still blank in it, so the shipped example is the honest input for this.
 const example = await readFile(
-	join(import.meta.dirname, "..", "docker", "self-host", ".env.example"),
+	path.join(import.meta.dirname, "..", "docker", "self-host", ".env.example"),
 	"utf8",
 );
 
@@ -20,10 +20,15 @@ await test("answers the settings a boot refuses to start without, and touches no
 
 	const changed = new Map<string, string>();
 	for (const [index, line] of before.entries()) {
-		if (after[index] === line) continue;
-		const key = /^(\w+)=$/.exec(line)?.[1];
-		assert.ok(key, `only a blank setting may be answered, but line ${index + 1} was "${line}"`);
-		assert.match(String(after[index]), new RegExp(`^${key}=.+$`));
+		if (after[index] === line) {
+			continue;
+		}
+		const key = /^(?<key>\w+)=$/u.exec(line)?.groups?.key;
+		assert.ok(
+			key !== undefined,
+			`only a blank setting may be answered, but line ${index + 1} was "${line}"`,
+		);
+		assert.match(String(after[index]), new RegExp(`^${key}=.+$`, "u"));
 		changed.set(key, String(after[index]).slice(key.length + 1));
 	}
 
@@ -38,12 +43,12 @@ await test("answers the settings a boot refuses to start without, and touches no
 	]);
 	// Placeholders, not credentials: a smoke boot authenticates against no provider, and every
 	// hostname it names has to stay unresolvable.
-	assert.match(String(changed.get("APP_HOSTNAME")), /\.invalid$/);
-	assert.match(String(changed.get("ACME_EMAIL")), /@[\w.-]+\.invalid$/);
-	assert.match(String(changed.get("HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS")), /^github:\d+$/);
+	assert.match(String(changed.get("APP_HOSTNAME")), /\.invalid$/u);
+	assert.match(String(changed.get("ACME_EMAIL")), /@[\w.-]+\.invalid$/u);
+	assert.match(String(changed.get("HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS")), /^github:\d+$/u);
 });
 
 await test("refuses a setting the installer did not leave blank", () => {
-	const supplied = example.replace(/^APP_HOSTNAME=$/m, "APP_HOSTNAME=hephaestus.example");
-	assert.throws(() => answerBlankSettings(supplied), /APP_HOSTNAME/);
+	const supplied = example.replace(/^APP_HOSTNAME=$/mu, "APP_HOSTNAME=hephaestus.example");
+	assert.throws(() => answerBlankSettings(supplied), /APP_HOSTNAME/u);
 });

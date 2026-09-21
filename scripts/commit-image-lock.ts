@@ -13,7 +13,7 @@ export interface ImageInventory {
 	}[];
 }
 
-export const DIGEST = /^sha256:[0-9a-f]{64}$/;
+export const DIGEST = /^sha256:[0-9a-f]{64}$/u;
 
 export function environmentKey(image: string): string {
 	return `HEPHAESTUS_IMAGE_${image.toUpperCase().replaceAll("-", "_")}`;
@@ -28,7 +28,9 @@ export function parseInventory(value: unknown): ImageInventory {
 			const entry = asRecord(candidate, label);
 			const name = asString(entry.name, `${label}.name`);
 			const digest = asString(entry.digest, `${label}.digest`);
-			if (!DIGEST.test(digest)) throw new Error(`upstream ${name} is not pinned by digest`);
+			if (!DIGEST.test(digest)) {
+				throw new Error(`upstream ${name} is not pinned by digest`);
+			}
 			return { name, repository: asString(entry.repository, `${label}.repository`), digest };
 		}),
 	};
@@ -40,14 +42,19 @@ export async function resolveImages(
 	owner: string,
 	resolve: (repository: string, commit: string) => Promise<string>,
 ): Promise<Record<string, string>> {
-	if (!isCommit(commit)) throw new Error(`expected a full commit, got ${commit}`);
+	if (!isCommit(commit)) {
+		throw new Error(`expected a full commit, got ${commit}`);
+	}
 	const images: Record<string, string> = {};
-	for (const entry of inventory.upstream)
+	for (const entry of inventory.upstream) {
 		images[environmentKey(entry.name)] = `${entry.repository}@${entry.digest}`;
+	}
 	for (const image of inventory.images) {
 		const repository = `ghcr.io/${owner}/${image}`;
 		const digest = await resolve(repository, commit);
-		if (!DIGEST.test(digest)) throw new Error(`${image} did not resolve to a digest at ${commit}`);
+		if (!DIGEST.test(digest)) {
+			throw new Error(`${image} did not resolve to a digest at ${commit}`);
+		}
 		images[environmentKey(image)] = `${repository}@${digest}`;
 	}
 	return images;
@@ -60,16 +67,15 @@ export async function readInventory(path: string): Promise<ImageInventory> {
 export async function resolveAndVerify(repository: string, commit: string): Promise<string> {
 	const ghRepository = requiredEnv(process.env, "GITHUB_REPOSITORY");
 
-	const digest = (
-		await output("docker", [
-			"buildx",
-			"imagetools",
-			"inspect",
-			`${repository}:${commit}`,
-			"--format",
-			"{{.Manifest.Digest}}",
-		])
-	).trim();
+	const inspected = await output("docker", [
+		"buildx",
+		"imagetools",
+		"inspect",
+		`${repository}:${commit}`,
+		"--format",
+		"{{.Manifest.Digest}}",
+	]);
+	const digest = inspected.trim();
 
 	await run(
 		"gh",

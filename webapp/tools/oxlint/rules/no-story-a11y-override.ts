@@ -38,10 +38,14 @@ export const noStoryA11yOverride = defineRule({
 			Property(node) {
 				// A `Property` is also each half of `const { parameters } = context`, which reads a story
 				// rather than writing one.
-				if (node.parent.type !== "ObjectExpression") return;
+				if (node.parent.type !== "ObjectExpression") {
+					return;
+				}
 				const host = propertyName(node);
 				const switches = host === undefined ? undefined : A11Y_SWITCHES.get(host);
-				if (!switches) return;
+				if (!switches) {
+					return;
+				}
 				if (node.value.type !== "ObjectExpression") {
 					context.report({ node: node.value, messageId: "indirect" });
 					return;

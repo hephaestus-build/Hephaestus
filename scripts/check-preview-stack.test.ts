@@ -94,7 +94,7 @@ void describe("the API path and the OAuth prefix", () => {
 	void test("rejects a prefix the API is not served under, which breaks only sign-in", () => {
 		const violations = findViolations(addressed("/api", ""));
 		assert.equal(violations.length, 1);
-		assert.match(violations[0] ?? "", /sign-in would leave the API/);
+		assert.match(violations[0] ?? "", /sign-in would leave the API/u);
 	});
 });
 
@@ -110,49 +110,49 @@ void describe("preview stack sandbox", () => {
 				(s) => {
 					s.services.postgres.volumes = [{ source: "/var/run/docker.sock", read_only: true }];
 				},
-				/Docker socket/,
+				/Docker socket/u,
 			],
 			[
 				"build stage",
 				(s) => {
 					s.services.postgres.build = { context: "/repo" };
 				},
-				/builds from pull-request source/,
+				/builds from pull-request source/u,
 			],
 			[
 				"privileged",
 				(s) => {
 					s.services.postgres.privileged = true;
 				},
-				/runs privileged/,
+				/runs privileged/u,
 			],
 			[
 				"host networking",
 				(s) => {
 					s.services.postgres.network_mode = "host";
 				},
-				/network_mode/,
+				/network_mode/u,
 			],
 			[
 				"published port",
 				(s) => {
 					s.services.postgres.ports = [{ published: "5432" }];
 				},
-				/publishes a port/,
+				/publishes a port/u,
 			],
 			[
 				"unbounded memory",
 				(s) => {
 					delete s.services.postgres.deploy;
 				},
-				/no memory limit/,
+				/no memory limit/u,
 			],
 			[
 				"a project-scoped network every preview would share",
 				(s) => {
 					s.networks.backend = { internal: true };
 				},
-				/every preview would share/,
+				/every preview would share/u,
 			],
 		];
 
@@ -170,7 +170,7 @@ void describe("preview stack sandbox", () => {
 				(stack: Stack) => {
 					stack.services.postgres.security_opt = [];
 				},
-				/does not set no-new-privileges/,
+				/does not set no-new-privileges/u,
 			],
 			[
 				"capabilities",
@@ -180,14 +180,14 @@ void describe("preview stack sandbox", () => {
 						deploy: { resources: { limits: { memory: "1" } } },
 					};
 				},
-				/does not drop all capabilities/,
+				/does not drop all capabilities/u,
 			],
 			[
 				"an unrecorded capability",
 				(stack: Stack) => {
 					stack.services.postgres.cap_add = ["SYS_ADMIN"];
 				},
-				/not recorded here/,
+				/not recorded here/u,
 			],
 		] as [string, (stack: Stack) => void, RegExp][]) {
 			const violations = findViolations(mutated(escape));
@@ -237,7 +237,7 @@ void describe("preview stack sandbox", () => {
 			}),
 		);
 
-		assert.match(violations[0] ?? "", /empty HEPHAESTUS_TRUSTED_PROXIES/);
+		assert.match(violations[0] ?? "", /empty HEPHAESTUS_TRUSTED_PROXIES/u);
 	});
 
 	void test("refuses output that is not a rendered stack", () => {
@@ -249,15 +249,17 @@ void describe("preview stack sandbox", () => {
 	});
 });
 
+function reference(extra: string): string {
+	return [
+		"services:",
+		"  application-server:",
+		"    environment:",
+		"      DATABASE_URL: postgres",
+		extra,
+	].join("\n");
+}
+
 void describe("preview drift from the reference stack", () => {
-	const reference = (extra: string) =>
-		[
-			"services:",
-			"  application-server:",
-			"    environment:",
-			"      DATABASE_URL: postgres",
-			extra,
-		].join("\n");
 	const preview = [
 		"services:",
 		"  appserver:",
@@ -273,7 +275,7 @@ void describe("preview drift from the reference stack", () => {
 		const drift = findEnvDrift(reference("      BRAND_NEW_SWITCH: true"), preview);
 
 		assert.equal(drift.length, 1);
-		assert.match(drift[0] ?? "", /BRAND_NEW_SWITCH/);
+		assert.match(drift[0] ?? "", /BRAND_NEW_SWITCH/u);
 	});
 
 	void test("stays quiet for a variable recorded as deliberately omitted", () => {
@@ -281,18 +283,19 @@ void describe("preview drift from the reference stack", () => {
 	});
 });
 
-void describe("preview seed policy", () => {
-	const seedLoader = (policy: string, counted: string[]) =>
-		[
-			"        psql -h target -v ON_ERROR_STOP=1 <<'SQL'",
-			policy,
-			"        SQL",
-			"",
-			'        LIVE=$$(psql -h target -tAX -v ON_ERROR_STOP=1 -c "',
-			`          SELECT ${counted.map((table) => `(SELECT count(*) FROM ${table})`).join(" + ")}")`,
-			'        if [ "$$LIVE" != "0" ]; then exit 1; fi',
-		].join("\n");
+function seedLoader(policy: string, counted: string[]): string {
+	return [
+		"        psql -h target -v ON_ERROR_STOP=1 <<'SQL'",
+		policy,
+		"        SQL",
+		"",
+		'        LIVE=$$(psql -h target -tAX -v ON_ERROR_STOP=1 -c "',
+		`          SELECT ${counted.map((table) => `(SELECT count(*) FROM ${table})`).join(" + ")}")`,
+		'        if [ "$$LIVE" != "0" ]; then exit 1; fi',
+	].join("\n");
+}
 
+void describe("preview seed policy", () => {
 	void test("passes when the policy clears exactly what the verification counts", () => {
 		const stack = seedLoader(
 			"        UPDATE llm_connection SET api_key = NULL;\n        DELETE FROM issued_jwt;",
@@ -341,5 +344,5 @@ void test("flags an omission entry whose reference variable no longer exists", (
 	);
 
 	assert.ok(stale.length > 0);
-	assert.match(stale[0] ?? "", /no longer sets it/);
+	assert.match(stale[0] ?? "", /no longer sets it/u);
 });

@@ -28,8 +28,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationTrendService;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
@@ -56,9 +54,6 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
     private FeedbackLedgerRecorder ledgerRecorder;
 
     @Mock
-    private ObservationTrendService trendService;
-
-    @Mock
     private PracticeFeedbackCommentFormatter commentFormatter;
 
     @Mock
@@ -72,14 +67,7 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         service = new FeedbackDeliveryService(
-                commentPoster,
-                deliveryPolicy,
-                new PracticeReviewProperties(false, 15, 5, false, false),
-                ledgerRecorder,
-                trendService,
-                commentFormatter,
-                dispatchService,
-                jobRepository);
+                commentPoster, deliveryPolicy, ledgerRecorder, commentFormatter, dispatchService, jobRepository);
     }
 
     @Test

@@ -1,21 +1,13 @@
-import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn, screen } from "storybook/test";
 
 import type { ChatMessageVote } from "@/api/types.gen";
-import { STORY_NOW } from "@/components/common/story-clock";
 import type { ChatMessage } from "@/lib/types";
+import { expectDismissed, expectSettledVisible } from "@/stories/overlay";
+import { STORY_NOW } from "@/stories/story-clock";
 
 import { Chat } from "./Chat";
 import { Copilot } from "./Copilot";
-
-const meta: Meta<typeof Copilot> = {
-	component: Copilot,
-	parameters: { layout: "fullscreen" },
-	tags: ["autodocs"],
-} satisfies Meta<typeof Copilot>;
-
-export default meta;
-type Story = StoryObj<typeof meta>;
 
 const CONVERSATION_MESSAGES: ChatMessage[] = [
 	{
@@ -103,53 +95,75 @@ const CONVERSATION_VOTES = [
 	{ messageId: "msg-4", isUpvoted: true, updatedAt: new Date(STORY_NOW) },
 ] satisfies ChatMessageVote[];
 
-function CopilotPreview({
-	messages,
-	votes,
-	inputPlaceholder,
-}: {
-	messages: ChatMessage[];
-	votes: ChatMessageVote[];
-	inputPlaceholder: string;
-}) {
+function chat(messages: ChatMessage[], votes: ChatMessageVote[], inputPlaceholder: string) {
 	return (
+		<Chat
+			messages={messages}
+			votes={votes}
+			status="ready"
+			attachments={[]}
+			onMessageSubmit={fn()}
+			onStop={fn()}
+			onMessageEdit={fn()}
+			onCopy={fn()}
+			onVote={fn()}
+			scrollToBottom={fn()}
+			inputPlaceholder={inputPlaceholder}
+			className="h-full max-h-none"
+		/>
+	);
+}
+
+const meta = {
+	component: Copilot,
+	parameters: { layout: "fullscreen" },
+	tags: ["autodocs"],
+	args: {
+		onNewChat: fn(),
+		onOpenFullChat: fn(),
+		children: chat([], [], "Ask me anything…"),
+	},
+	render: (args) => (
 		<div className="relative h-screen w-full bg-background">
 			<main className="p-8">
 				<h1 className="text-2xl font-bold">Workspace overview</h1>
 				<p className="mt-2 text-muted-foreground">Review recent activity and team progress.</p>
 			</main>
-			<Copilot onNewChat={fn()} onOpenFullChat={fn()}>
-				<Chat
-					messages={messages}
-					votes={votes}
-					status="ready"
-					attachments={[]}
-					onMessageSubmit={fn()}
-					onStop={fn()}
-					onFileUpload={fn()}
-					onAttachmentsChange={fn()}
-					onMessageEdit={fn()}
-					onCopy={fn()}
-					onVote={fn()}
-					scrollToBottom={fn()}
-					inputPlaceholder={inputPlaceholder}
-					className="h-full max-h-none"
-				/>
-			</Copilot>
+			<Copilot {...args} />
 		</div>
-	);
-}
+	),
+} satisfies Meta<typeof Copilot>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-	render: () => <CopilotPreview messages={[]} votes={[]} inputPlaceholder="Ask me anything…" />,
+	play: async ({ canvas }) => {
+		const launcher = canvas.getByRole("button", { name: "Open Heph, AI mentor" });
+		const mark = launcher.querySelector("svg");
+		await expect(mark).not.toBeNull();
+		await expect(mark?.getBoundingClientRect().width).toBe(56);
+	},
 };
 
 export const WithConversation: Story = {
-	render: () => (
-		<CopilotPreview
-			messages={CONVERSATION_MESSAGES}
-			votes={CONVERSATION_VOTES}
-			inputPlaceholder="Continue the conversation…"
-		/>
-	),
+	args: {
+		children: chat(CONVERSATION_MESSAGES, CONVERSATION_VOTES, "Continue the conversation…"),
+	},
+};
+
+export const Opened: Story = {
+	args: WithConversation.args,
+	play: async ({ canvas, userEvent }) => {
+		const launcher = canvas.getByRole("button", { name: "Open Heph, AI mentor" });
+		await userEvent.click(launcher);
+		const panel = await screen.findByRole("dialog", { name: /Heph/u });
+		await expectSettledVisible(panel);
+		await expect(panel.contains(document.activeElement)).toBe(true);
+		await expect(getComputedStyle(document.body).overflow).toBe("hidden");
+		await userEvent.keyboard("{Escape}");
+		await expectDismissed();
+		await expect(getComputedStyle(document.body).overflow).not.toBe("hidden");
+		await expect(launcher).toHaveFocus();
+	},
 };

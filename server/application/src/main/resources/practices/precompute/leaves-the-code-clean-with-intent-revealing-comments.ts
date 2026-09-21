@@ -6,41 +6,41 @@
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 // language key -> [human label, regex] of debug-output / residue constructs that, when ADDED, are worth a look.
-const LANG_PATTERNS: Record<string, Array<[string, RegExp]>> = {
+const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 	swift: [
-		["print(", /(^|[^.\w])print\s*\(/],
-		["debugPrint(", /\bdebugPrint\s*\(/],
-		["NSLog(", /\bNSLog\s*\(/],
-		["dump(", /(^|[^.\w])dump\s*\(/],
+		["print(", /(?:^|[^.\w])print\s*\(/u],
+		["debugPrint(", /\bdebugPrint\s*\(/u],
+		["NSLog(", /\bNSLog\s*\(/u],
+		["dump(", /(?:^|[^.\w])dump\s*\(/u],
 	],
 	ts: [
-		["console.*", /\bconsole\.(log|debug|info|warn|error|trace)\s*\(/],
-		["debugger", /\bdebugger\b/],
+		["console.*", /\bconsole\.(?:log|debug|info|warn|error|trace)\s*\(/u],
+		["debugger", /\bdebugger\b/u],
 	],
 	js: [
-		["console.*", /\bconsole\.(log|debug|info|warn|error|trace)\s*\(/],
-		["debugger", /\bdebugger\b/],
+		["console.*", /\bconsole\.(?:log|debug|info|warn|error|trace)\s*\(/u],
+		["debugger", /\bdebugger\b/u],
 	],
 	python: [
-		["print(", /(^|[^.\w])print\s*\(/],
-		["breakpoint(", /\bbreakpoint\s*\(/],
-		["pprint(", /\bpprint\s*\(/],
+		["print(", /(?:^|[^.\w])print\s*\(/u],
+		["breakpoint(", /\bbreakpoint\s*\(/u],
+		["pprint(", /\bpprint\s*\(/u],
 	],
 	java: [
-		["System.out/err.print", /\bSystem\.(out|err)\.print/],
-		["printStackTrace(", /\.printStackTrace\s*\(/],
+		["System.out/err.print", /\bSystem\.(?:out|err)\.print/u],
+		["printStackTrace(", /\.printStackTrace\s*\(/u],
 	],
-	kotlin: [["println(", /\bprintln\s*\(/]],
+	kotlin: [["println(", /\bprintln\s*\(/u]],
 	go: [
-		["fmt.Print*", /\bfmt\.Print[a-z]*\s*\(/],
-		["println(", /(^|[^.\w])println\s*\(/],
+		["fmt.Print*", /\bfmt\.Print[a-z]*\s*\(/u],
+		["println(", /(?:^|[^.\w])println\s*\(/u],
 	],
-	ruby: [["puts/p/pp", /(^|[^.\w])(puts|pp?)\s+["'\d:@]/]],
-	rust: [["println!/dbg!/eprintln!", /\b(println|eprintln|dbg|print|eprint)\s*!/]],
+	ruby: [["puts/p/pp", /(?:^|[^.\w])(?:puts|pp?)\s+["'\d:@]/u]],
+	rust: [["println!/dbg!/eprintln!", /\b(?:println|eprintln|dbg|print|eprint)\s*!/u]],
 };
 
 // A TODO/FIXME/XXX/HACK marker added in the diff — a residue signal across all languages.
-const TODO_MARKER = /\b(TODO|FIXME|XXX|HACK)\b/;
+const TODO_MARKER = /\b(?:TODO|FIXME|XXX|HACK)\b/u;
 
 const EXT_TO_LANG: Record<string, string> = {
 	swift: "swift",
@@ -74,24 +74,25 @@ export default function leavesTheCodeCleanWithIntentRevealingComments(
 
 	for (const [path, df] of diffFiles) {
 		const lang = langFor(path);
-		const patterns = lang ? (LANG_PATTERNS[lang] ?? []) : [];
+		const patterns = lang === null ? [] : (LANG_PATTERNS[lang] ?? []);
 		for (const [lineNum, text] of df.addedLines) {
 			// Skip lines that are themselves comments — a debug call inside a comment is not live residue.
 			const trimmed = text.trim();
-			const isComment = /^(\/\/|#|\*|\/\*)/.test(trimmed);
-			for (const [label, re] of patterns) {
-				if (!isComment && re.test(text)) {
-					hints.push({
-						file: path,
-						line: lineNum,
-						pattern: label,
-						context: trimmed.slice(0, 160),
-						inDiff: true,
-						flags: { kind: "debug-output" },
-					});
-					debugCandidates++;
-					if (lang) byLang[lang] = (byLang[lang] ?? 0) + 1;
-					break; // one debug-output hint per added line — match the sibling validates-inputs script
+			const isComment = /^(?:\/\/|#|\*|\/\*)/u.test(trimmed);
+			// One debug-output hint per added line — match the sibling validates-inputs script.
+			const debugOutput = isComment ? undefined : patterns.find(([, re]) => re.test(text));
+			if (debugOutput !== undefined) {
+				hints.push({
+					file: path,
+					line: lineNum,
+					pattern: debugOutput[0],
+					context: trimmed.slice(0, 160),
+					inDiff: true,
+					flags: { kind: "debug-output" },
+				});
+				debugCandidates += 1;
+				if (lang !== null) {
+					byLang[lang] = (byLang[lang] ?? 0) + 1;
 				}
 			}
 			if (TODO_MARKER.test(text)) {
@@ -103,7 +104,7 @@ export default function leavesTheCodeCleanWithIntentRevealingComments(
 					inDiff: true,
 					flags: { kind: "marker" },
 				});
-				todoCandidates++;
+				todoCandidates += 1;
 			}
 		}
 	}

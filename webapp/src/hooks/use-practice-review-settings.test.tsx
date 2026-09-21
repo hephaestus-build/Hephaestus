@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { HttpResponse, http } from "msw";
+import { HttpResponse, delay, http } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { getPracticeReviewSettingsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { PracticeReviewSettings } from "@/api/types.gen";
-import { mockReviewSettings } from "@/components/admin/practices/story-mock-data";
+import { mockReviewSettings } from "@/components/admin/practices/fixtures";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { usePracticeReviewSettingsMutation } from "./use-practice-review-settings";
 
 const workspaceSlug = "acme";
@@ -53,7 +54,7 @@ describe("usePracticeReviewSettingsMutation", () => {
 		server.use(
 			http.patch("*/workspaces/:workspaceSlug/practices/review-settings", async ({ request }) => {
 				ifMatch = request.headers.get("If-Match");
-				return new Promise<never>(() => {});
+				await delay("infinite");
 			}),
 		);
 		const { result } = renderMutation(client);
@@ -102,15 +103,13 @@ describe("usePracticeReviewSettingsMutation", () => {
 		const client = createClient();
 		client.setQueryData(queryKey, settings);
 		let requests = 0;
-		let resolveFirst: () => void = () => {};
+		const first = deferred();
 		server.use(
 			http.patch(
 				"*/workspaces/:workspaceSlug/practices/review-settings",
 				async () => {
 					requests += 1;
-					await new Promise<void>((resolve) => {
-						resolveFirst = resolve;
-					});
+					await first.promise;
 					return HttpResponse.json({ ...settings, etag: '"v2"', deliveryStatus: "PAUSED" });
 				},
 				{ once: true },
@@ -130,7 +129,7 @@ describe("usePracticeReviewSettingsMutation", () => {
 			});
 		});
 		await waitFor(() => expect(requests).toBe(1));
-		resolveFirst();
+		first.resolve();
 		await waitFor(() => expect(requests).toBe(2));
 	});
 });

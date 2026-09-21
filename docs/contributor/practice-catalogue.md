@@ -9,6 +9,11 @@ The practice catalog turns defined engineering practices into review criteria. P
 lives in the [practice feedback language guide](practice-feedback-language.md); this page covers how
 to maintain the catalog.
 
+[Writing effective practices](/admin/writing-practices) owns the authoring method, a worked example
+and the case-based review checklist for both custom and bundled practices. Apply it to the effective
+definition, including its shared preamble and any precompute output, rather than reading the criteria
+in isolation.
+
 ## Sources and ownership
 
 The effective catalog combines three scopes, and definitions only ever flow one way:
@@ -209,14 +214,9 @@ operational choice changes the curated definition.
 
 ## Selecting a practice
 
-A practice must:
-
-1. identify who is expected to review the habit and from which context;
-2. distinguish evidence from inference and avoid claims that the code is correct;
-3. define applicability and the evidence required to report it;
-4. define false-positive exclusions and proportionate severity;
-5. use language useful to the developer doing the work; and
-6. cite research, a standard, or an explicitly identified practitioner norm.
+Use the [authoring checklist](/admin/writing-practices#challenge-the-draft-before-adopting-it) to review
+the occasion, named behavior, evidence, consequences and expected feedback. For bundled entries,
+also cite research, a standard or an explicitly identified practitioner norm.
 
 Evidence is declared per binding against the versioned
 [artifact-source contract](./artifact-source-contract) and the canonical
@@ -261,6 +261,30 @@ standard as an experiment or a convention as a proven outcome.
    after the practice slug, and an unreferenced one fails validation.
 6. Add or update focused automated-review tests, including required-source skipping and valid-empty evidence.
 7. Review the admin presentation and a representative piece of delivered feedback.
+
+### Review the effective definition
+
+For every changed practice, compare its criteria with the work-type preamble, binding, precompute
+script, shared review instructions and developer guidance. Check these seams explicitly:
+
+- A preamble cannot declare a source unavailable when the binding captures it, or infer absence from
+  an unavailable quotation. The actual capture manifest establishes availability; practice criteria
+  establish permitted use.
+- A precompute candidate is a lead, not a judgment. A count or path match alone cannot establish a
+  developer's intent, a runtime outcome or the adequacy of a rationale.
+- An applicability exclusion and an assessed outcome cannot both describe the same case. Read all
+  exceptions together with the final decision instructions, not just the opening behavior statement.
+- Exceptions for deliberately generated files, version ranges or repository conventions must survive
+  the final outcome rules. Severity follows the evidenced consequence, not the number of matches.
+- Guidance and examples cannot silently add requirements absent from the criteria. Shared instructions
+  define the observation protocol; individual practices define the occasion and evidence needed for
+  their expectation.
+
+Keep the cases and evaluation evidence with the relevant test or benchmark, and explain the change
+in the pull request. Do not add keyword-count or heading-presence tests as a proxy for semantic
+quality. Schema and fixture tests prove loading and faithful presentation; evidence-based case review
+and model evaluation are separate checks. Changing shared preambles affects every entry that uses
+them, so inspect all affected work types and preserve the existing workspace-adoption boundary.
 
 Create workspace-specific practices through the admin UI or API so validation, ordering, revisions,
 and audit behavior remain intact.

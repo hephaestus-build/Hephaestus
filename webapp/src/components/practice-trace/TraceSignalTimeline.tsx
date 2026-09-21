@@ -35,7 +35,7 @@ export function TraceSignalTimeline({
 				</p>
 			</div>
 			{signals.length === 0 ? (
-				<Empty className="border">
+				<Empty variant="outlined">
 					<EmptyHeader>
 						<EmptyTitle>Nothing was recorded about this work</EmptyTitle>
 						<EmptyDescription>
@@ -55,10 +55,10 @@ export function TraceSignalTimeline({
 							className="relative min-w-0 scroll-mt-24 rounded-md py-2.5 outline-none target:bg-muted focus:bg-muted"
 						>
 							<span
-								className="absolute -left-[1.3125rem] top-4 size-2 rounded-full bg-border ring-4 ring-background"
+								className="absolute top-4 -left-[1.3125rem] size-2 rounded-full bg-border ring-4 ring-background"
 								aria-hidden
 							/>
-							<p className="break-words text-sm font-medium">{signal.displayName}</p>
+							<p className="text-sm font-medium break-words">{signal.displayName}</p>
 							<p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
 								<RelativeTime value={signal.occurredAt} className="text-xs" />
 								<span aria-hidden>·</span>
@@ -74,7 +74,7 @@ export function TraceSignalTimeline({
 								<span>{SIGNAL_STATE_LABELS[signal.state]}</span>
 							</p>
 							{signal.stateReason && (
-								<p className="mt-1 flex flex-wrap items-baseline gap-x-1.5 break-words text-xs text-muted-foreground">
+								<p className="mt-1 flex flex-wrap items-baseline gap-x-1.5 text-xs break-words text-muted-foreground">
 									<span>{SIGNAL_STATE_REASON_LABELS[signal.stateReason]}.</span>
 									<RefusalFixLink
 										workspaceSlug={workspaceSlug}

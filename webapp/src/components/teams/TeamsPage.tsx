@@ -1,10 +1,10 @@
 import { Users } from "lucide-react";
-import { useLayoutEffect } from "react";
+import { type ReactNode, useLayoutEffect } from "react";
 
 import type { TeamInfo } from "@/api/types.gen";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
-import { type Contributor, ContributorGrid } from "@/components/shared/ContributorGrid";
+import { type Contributor, ContributorGrid } from "@/components/common/ContributorGrid";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -24,11 +24,17 @@ function buildVisibleTree(visibleTeams: TeamInfo[], allTeamsById: Map<number, Te
 		let pid = team.parentId;
 		const guard = new Set<number>();
 		while (pid !== undefined) {
-			if (guard.has(pid)) return undefined;
+			if (guard.has(pid)) {
+				return undefined;
+			}
 			guard.add(pid);
 			const parent = allTeamsById.get(pid);
-			if (!parent) return undefined;
-			if (!parent.hidden) return parent.id;
+			if (!parent) {
+				return undefined;
+			}
+			if (!parent.hidden) {
+				return parent.id;
+			}
 			pid = parent.parentId;
 		}
 		return undefined;
@@ -67,27 +73,35 @@ function collectDescendantMemberIds(
 
 	const collect = (teamId: number): Set<number> => {
 		const cached = memo.get(teamId);
-		if (cached !== undefined) return cached;
+		if (cached !== undefined) {
+			return cached;
+		}
 		const children = childrenMap.get(teamId) ?? [];
 		const res = new Set<number>();
 		for (const child of children) {
-			for (const id of membersByTeamId.get(child.id) ?? []) res.add(id);
-			for (const id of collect(child.id)) res.add(id);
+			for (const id of membersByTeamId.get(child.id) ?? []) {
+				res.add(id);
+			}
+			for (const id of collect(child.id)) {
+				res.add(id);
+			}
 		}
 		memo.set(teamId, res);
 		return res;
 	};
 
-	for (const team of visibleTeams) collect(team.id);
+	for (const team of visibleTeams) {
+		collect(team.id);
+	}
 	return memo;
+}
+
+function sortMembers(team: TeamInfo) {
+	return [...team.members].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function TeamsPage({ teams, isLoading }: TeamsPageProps) {
 	const visibleTeams = teams.filter((t) => !t.hidden);
-
-	const sortMembers = (team: TeamInfo) => {
-		return [...team.members].sort((a, b) => a.name.localeCompare(b.name));
-	};
 
 	const allTeamsById = new Map(teams.map((t) => [t.id, t]));
 	const { roots, childrenMap } = buildVisibleTree(visibleTeams, allTeamsById);
@@ -172,8 +186,10 @@ export function TeamsPage({ teams, isLoading }: TeamsPageProps) {
 		};
 
 		const scrollToHash = (): boolean => {
-			const hash = window.location.hash;
-			if (!hash) return false;
+			const { hash } = window.location;
+			if (!hash) {
+				return false;
+			}
 			const id = hash.slice(1);
 			const el = document.getElementById(id);
 			if (el) {
@@ -218,6 +234,34 @@ export function TeamsPage({ teams, isLoading }: TeamsPageProps) {
 		};
 	}, []);
 
+	let body: ReactNode;
+	if (isLoading) {
+		body = (
+			<div className="space-y-4">
+				{["a", "b", "c"].map((id) => (
+					<Card key={id}>
+						<CardHeader>
+							<Skeleton className="h-6 w-1/4" />
+						</CardHeader>
+						<CardContent>
+							<ContributorGrid
+								contributors={[]}
+								isLoading
+								size="sm"
+								layout="compact"
+								loadingSkeletonCount={4}
+							/>
+						</CardContent>
+					</Card>
+				))}
+			</div>
+		);
+	} else if (roots.length > 0) {
+		body = <div className="space-y-4">{roots.map((team) => renderTeamNode(team))}</div>;
+	} else {
+		body = <p className="py-8 text-center text-muted-foreground">No teams found</p>;
+	}
+
 	return (
 		<PageLayout>
 			<PageHeader
@@ -226,30 +270,7 @@ export function TeamsPage({ teams, isLoading }: TeamsPageProps) {
 				description="See contributors grouped by team and explore their activity."
 			/>
 
-			{isLoading ? (
-				<div className="space-y-4">
-					{["a", "b", "c"].map((id) => (
-						<Card key={id}>
-							<CardHeader>
-								<Skeleton className="h-6 w-1/4" />
-							</CardHeader>
-							<CardContent>
-								<ContributorGrid
-									contributors={[]}
-									isLoading
-									size="sm"
-									layout="compact"
-									loadingSkeletonCount={4}
-								/>
-							</CardContent>
-						</Card>
-					))}
-				</div>
-			) : roots.length > 0 ? (
-				<div className="space-y-4">{roots.map((team) => renderTeamNode(team))}</div>
-			) : (
-				<p className="py-8 text-center text-muted-foreground">No teams found</p>
-			)}
+			{body}
 		</PageLayout>
 	);
 }

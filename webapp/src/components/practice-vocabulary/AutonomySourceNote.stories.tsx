@@ -4,7 +4,6 @@ import { expect } from "storybook/test";
 import { AutonomySourceNote } from "./AutonomySourceNote";
 
 const meta = {
-	title: "Shared/Practice vocabulary/Autonomy source",
 	component: AutonomySourceNote,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

@@ -12,7 +12,7 @@ public enum ConversationRoutingDecision {
     NOT_DELIVERABLE,
     /** Has a natural inline anchor (a diff location on a PR) - it belongs in-context, not in the conversation. */
     HAS_INLINE_ANCHOR,
-    /** The same locus (recurrence_key) was already DELIVERED in-context to this recipient - do not re-raise it. */
+    /** This exact observation was already delivered in-context to this recipient. */
     ALREADY_DELIVERED_IN_CONTEXT,
     /** Reviewer-targeted - deferred (ADR 0021). */
     REVIEWER_DEFERRED,

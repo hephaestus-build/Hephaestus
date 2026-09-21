@@ -9,33 +9,33 @@ import type {
 	PracticeDefinitionOptions,
 	PracticeGroup,
 } from "@/api/types.gen";
-import { AvailablePracticeList } from "@/components/admin/practice-adoption/AvailablePracticeList";
-import { WORK_TYPE_FILTER_OPTIONS } from "@/components/admin/practice-catalog/constants";
-import { automatedReviewUnavailableLabel } from "@/components/admin/practice-catalog/evidence-presentation";
+import { WORK_TYPE_FILTER_OPTIONS } from "@/components/admin/practice-editor/constants";
+import { automatedReviewUnavailableLabel } from "@/components/admin/practice-editor/evidence-presentation";
 import {
 	type GroupDetails,
 	GroupDetailsDialog,
-} from "@/components/admin/practice-catalog/GroupDetailsDialog";
-import { GroupVisualPicker } from "@/components/admin/practice-catalog/GroupVisualPicker";
+} from "@/components/admin/practice-editor/GroupDetailsDialog";
+import { GroupVisualPicker } from "@/components/admin/practice-editor/GroupVisualPicker";
 import {
 	type ActionTriggerRef,
 	type CatalogEntryMoveActions,
 	type CatalogMoveActions,
 	SortableCatalogTree,
 	UNASSIGNED_CATALOG_BUCKET,
-} from "@/components/admin/practice-catalog/SortableCatalogTree";
+} from "@/components/admin/practice-editor/SortableCatalogTree";
+import { AvailablePracticeList } from "@/components/admin/practices/AvailablePracticeList";
 import { practiceFormLevel } from "@/components/admin/practices/practice-search";
 import { PracticeListSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { FilterToggle } from "@/components/common/FilterToggle";
 import { MetaRow } from "@/components/common/MetaRow";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { DetailStackLink } from "@/components/core/detail-drawer/DetailStackLink";
-import { Section } from "@/components/core/Section";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { Section } from "@/components/layout/Section";
 import { AutonomyBadge } from "@/components/practice-vocabulary/AutonomyBadge";
 import { AutonomySourceNote } from "@/components/practice-vocabulary/AutonomySourceNote";
 import { DASHBOARD_VISIBILITY_DEFS } from "@/components/practice-vocabulary/dashboard-visibility-defs";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -63,6 +63,7 @@ import { Switch } from "@/components/ui/switch";
 import { Toggle } from "@/components/ui/toggle";
 import { artifactKindPluralLabel, type KnownArtifactKind } from "@/lib/artifact-kinds";
 import { autonomySourceOf } from "@/lib/practice-autonomy";
+import { hasText } from "@/lib/text";
 
 import { CatalogOriginBadge } from "./CatalogOriginBadge";
 
@@ -148,7 +149,27 @@ export function PracticeCatalog({
 			?.supportedAutomatedReviewModes ?? [];
 	const groupNames = new Map(groups.map((group) => [group.slug, group.name]));
 	const inheritedFromFor = (practice: Practice) =>
-		(practice.groupSlug ? groupNames.get(practice.groupSlug) : null) ?? null;
+		(hasText(practice.groupSlug) ? groupNames.get(practice.groupSlug) : null) ?? null;
+
+	let catalogContent: ReactNode;
+	if (library?.state.status === "error") {
+		catalogContent = (
+			<QueryErrorAlert
+				error={library.state.error}
+				title="Couldn't load the catalog"
+				onRetry={library.state.onRetry}
+			/>
+		);
+	} else if (visibleCatalogPractices) {
+		catalogContent = (
+			<AvailablePracticeList
+				practices={visibleCatalogPractices}
+				existingGroupSlugs={new Set(groups.map((group) => group.slug))}
+			/>
+		);
+	} else {
+		catalogContent = <PracticeListSkeleton rows={4} />;
+	}
 
 	return (
 		<div className="space-y-4">
@@ -160,7 +181,7 @@ export function PracticeCatalog({
 				groupStructurePending={pending.groupStructure}
 				library={library}
 			/>
-			{library?.open && (
+			{library?.open === true && (
 				<Section
 					size="sm"
 					title="Instance catalog"
@@ -168,26 +189,13 @@ export function PracticeCatalog({
 					// Arrives rather than appears: the toggle is above it, so a section that simply exists
 					// on the next frame gives no clue where it came from. Short, and off under
 					// `prefers-reduced-motion`, where the arrival is the information and the travel is not.
-					className="rounded-lg border bg-muted/20 p-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-200"
+					className="rounded-lg border bg-muted/20 p-4 motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in motion-safe:slide-in-from-top-2"
 				>
-					{library.state.status === "error" ? (
-						<QueryErrorAlert
-							error={library.state.error}
-							title="Couldn't load the catalog"
-							onRetry={library.state.onRetry}
-						/>
-					) : visibleCatalogPractices ? (
-						<AvailablePracticeList
-							practices={visibleCatalogPractices}
-							existingGroupSlugs={new Set(groups.map((group) => group.slug))}
-						/>
-					) : (
-						<PracticeListSkeleton rows={4} />
-					)}
+					{catalogContent}
 				</Section>
 			)}
 			{focusFilter !== "ALL" && (
-				<p className="text-muted-foreground text-sm">Clear the filter to reorder practices.</p>
+				<p className="text-sm text-muted-foreground">Clear the filter to reorder practices.</p>
 			)}
 
 			<SortableCatalogTree
@@ -240,7 +248,7 @@ export function PracticeCatalog({
 						title={
 							<DetailStackLink
 								entry={{ kind: "practice", id: practice.slug }}
-								className="break-words rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 							>
 								{practice.name}
 							</DetailStackLink>
@@ -266,13 +274,15 @@ export function PracticeCatalog({
 					/>
 				)}
 				getEmptyLabel={(groupSlug, total) => {
-					if (total > 0) return "No matching practices.";
+					if (total > 0) {
+						return "No matching practices.";
+					}
 					return groupSlug === null ? "Nothing unassigned." : "No practices here.";
 				}}
 			/>
 
 			{groups.length === 0 && practices.length === 0 ? (
-				<Empty className="min-h-56 border">
+				<Empty variant="outlined" className="min-h-56">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
 							<ListChecks aria-hidden />
@@ -294,7 +304,7 @@ export function PracticeCatalog({
 				visiblePracticeSlugs.size === 0 && (
 					// Without a way out, the reader is left with per-group "No matching practices." strings
 					// and a banner telling them to clear a filter, and no control that clears it.
-					<Empty className="min-h-56 border">
+					<Empty variant="outlined" className="min-h-56">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">
 								<ListChecks aria-hidden />
@@ -319,9 +329,11 @@ export function PracticeCatalog({
 				open={namingGroup !== undefined}
 				pending={namingGroup ? pending.groupSlugs.has(namingGroup.slug) : pending.creatingGroup}
 				onOpenChange={(open) => {
-					if (!open) setNamingGroup(undefined);
+					if (!open) {
+						setNamingGroup(undefined);
+					}
 				}}
-				onSubmit={(details) =>
+				onSubmit={async (details) =>
 					namingGroup ? onUpdateGroup(namingGroup.slug, details) : onCreateGroup(details)
 				}
 			/>
@@ -577,7 +589,7 @@ function PracticeRowDetails({
 	const autonomySource = autonomySourceOf(practice.autonomy, inheritedFrom);
 	return (
 		<ItemContent className="min-w-0">
-			<ItemTitle className="w-full min-w-0 line-clamp-none">{title}</ItemTitle>
+			<ItemTitle className="line-clamp-none w-full min-w-0">{title}</ItemTitle>
 			<ItemDescription>
 				<MetaRow
 					captions={[
@@ -607,12 +619,7 @@ function PracticeDragPreview({
 	inheritedFrom: string | null;
 }) {
 	return (
-		<Item
-			aria-hidden="true"
-			variant="outline"
-			size="xs"
-			className="flex-nowrap bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/10"
-		>
+		<Item aria-hidden="true" variant="overlay" size="xs" className="flex-nowrap">
 			<div className="flex size-8 shrink-0 items-center justify-center text-muted-foreground">
 				<GripVertical className="size-4" />
 			</div>

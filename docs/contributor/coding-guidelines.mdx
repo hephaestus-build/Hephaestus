@@ -23,7 +23,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - React 19 on Vite. Read the pinned versions from `webapp/package.json`; they move faster than this page.
 - React Compiler is enabled in `webapp/vite.shared.ts`, which every build of app source pulls in. Leave it on.
 - Routing uses TanStack Router file routes in `src/routes/**` with the generated `routeTree.gen.ts`.
-- TanStack Query v5 is initialised in `src/integrations/tanstack-query/root-provider.tsx`. OpenAPI helpers live in `src/api/@tanstack/react-query.gen.ts`.
+- TanStack Query v5 is initialised in `src/runtime/tanstack-query/root-provider.tsx`. OpenAPI helpers live in `src/api/@tanstack/react-query.gen.ts`.
 - Global state lives in Zustand stores under `src/stores/**`.
 - Tailwind CSS 4 powers styling. Tokens sit in `src/styles.css`. shadcn/ui primitives live in `src/components/ui/**`, which is a registry install over Base UI — check a change there against upstream and record a deliberate divergence in the file, because re-vendoring overwrites it.
 - Storybook, Chromatic, Vitest, oxlint, and oxfmt cover tooling.

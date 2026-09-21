@@ -2,9 +2,9 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { SlackMonitoredChannel } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { expectSettledVisible } from "@/test/overlay";
+import { expectSettledVisible } from "@/stories/overlay";
+import { daysBefore } from "@/stories/story-clock";
 
 import { SlackChannelRow } from "./SlackChannelRow";
 
@@ -79,11 +79,11 @@ export const NotStarted: Story = {
 		// aria-hidden em-dash that vanishes for assistive tech.
 		canvas.getByText("Never");
 
-		await userEvent.click(canvas.getByRole("button", { name: /actions for team-intro/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /actions for team-intro/iu }));
 		await expectSettledVisible(
-			await screen.findByRole("menuitem", { name: /activate monitoring/i }),
+			await screen.findByRole("menuitem", { name: /activate monitoring/iu }),
 		);
-		await expect(screen.queryByRole("menuitem", { name: /^pause$/i })).not.toBeInTheDocument();
+		await expect(screen.queryByRole("menuitem", { name: /^pause$/iu })).not.toBeInTheDocument();
 	},
 };
 
@@ -93,13 +93,13 @@ export const Monitoring: Story = {
 		canvas.getByText("Monitoring");
 		// The announced time is the shared ticking RelativeTime, exposed as a real tooltip button so
 		// its absolute time is one hover away and reachable by keyboard.
-		const announced = canvas.getByRole("button", { name: /ago$/i });
+		const announced = canvas.getByRole("button", { name: /ago$/iu });
 		await expect(announced.tagName).toBe("BUTTON");
 
-		await userEvent.click(canvas.getByRole("button", { name: /actions for team-standup/i }));
-		await expectSettledVisible(await screen.findByRole("menuitem", { name: /^pause$/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /actions for team-standup/iu }));
+		await expectSettledVisible(await screen.findByRole("menuitem", { name: /^pause$/iu }));
 		await expect(
-			screen.queryByRole("menuitem", { name: /activate monitoring/i }),
+			screen.queryByRole("menuitem", { name: /activate monitoring/iu }),
 		).not.toBeInTheDocument();
 	},
 };
@@ -110,8 +110,8 @@ export const Paused: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("Paused");
 
-		await userEvent.click(canvas.getByRole("button", { name: /actions for team-standup/i }));
-		await expectSettledVisible(await screen.findByRole("menuitem", { name: /^resume$/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /actions for team-standup/iu }));
+		await expectSettledVisible(await screen.findByRole("menuitem", { name: /^resume$/iu }));
 	},
 };
 
@@ -121,17 +121,17 @@ export const Revoked: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("Revoked");
 
-		await userEvent.click(canvas.getByRole("button", { name: /actions for team-standup/i }));
-		await expectSettledVisible(await screen.findByRole("menuitem", { name: /set up again/i }));
-		await expectSettledVisible(await screen.findByRole("menuitem", { name: /view history/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /actions for team-standup/iu }));
+		await expectSettledVisible(await screen.findByRole("menuitem", { name: /set up again/iu }));
+		await expectSettledVisible(await screen.findByRole("menuitem", { name: /view history/iu }));
 
 		await expect(
-			screen.queryByRole("menuitem", { name: /activate monitoring/i }),
+			screen.queryByRole("menuitem", { name: /activate monitoring/iu }),
 		).not.toBeInTheDocument();
-		await expect(screen.queryByRole("menuitem", { name: /^pause$/i })).not.toBeInTheDocument();
-		await expect(screen.queryByRole("menuitem", { name: /^resume$/i })).not.toBeInTheDocument();
+		await expect(screen.queryByRole("menuitem", { name: /^pause$/iu })).not.toBeInTheDocument();
+		await expect(screen.queryByRole("menuitem", { name: /^resume$/iu })).not.toBeInTheDocument();
 		await expect(
-			screen.queryByRole("menuitem", { name: /remove & erase/i }),
+			screen.queryByRole("menuitem", { name: /remove & erase/iu }),
 		).not.toBeInTheDocument();
 	},
 };
@@ -152,6 +152,6 @@ export const WithOptOuts: Story = {
 export const NoChannelName: Story = {
 	args: { channel: { ...channel, channelName: undefined } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByText(/C01ACTIVE001/).length).toBeGreaterThan(0);
+		await expect(canvas.getAllByText(/C01ACTIVE001/u).length).toBeGreaterThan(0);
 	},
 };

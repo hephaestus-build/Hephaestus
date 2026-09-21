@@ -4,7 +4,7 @@ import { ShieldCheck, ShieldOff, UserCog, Users } from "lucide-react";
 import { useDeferredValue, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { withSessionMutationLock } from "@/integrations/auth/session-mutation";
+import { withSessionMutationLock } from "@/runtime/auth/session-mutation";
 
 import {
 	adminListUsersInfiniteOptions,
@@ -18,8 +18,8 @@ import { AdminUsersTable } from "@/components/admin/users/AdminUsersTable";
 import { ChangeRoleDialog } from "@/components/admin/users/ChangeRoleDialog";
 import { ImpersonateDialog } from "@/components/admin/users/ImpersonateDialog";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -30,13 +30,13 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { loadedPages } from "@/integrations/tanstack-query/spring-page";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 
 const PAGE_SIZE = 25;
 
@@ -54,7 +54,7 @@ function AdminUsersPage() {
 	const navigate = useNavigate({ from: Route.fullPath });
 	const search = Route.useSearch().q ?? "";
 	const userId = getUserId();
-	const currentUserId = userId != null ? Number(userId) : undefined;
+	const currentUserId = userId == null ? undefined : Number(userId);
 
 	const deferredSearch = useDeferredValue(search);
 
@@ -83,11 +83,11 @@ function AdminUsersPage() {
 		? allUsers.filter((u) =>
 				[u.displayName, u.primaryEmail, u.appRole, u.status, String(u.id ?? "")]
 					.filter(Boolean)
-					.some((field) => field?.toLowerCase().includes(term)),
+					.some((field) => field?.toLowerCase().includes(term) === true),
 			)
 		: allUsers;
 
-	const invalidateList = () =>
+	const invalidateList = async () =>
 		queryClient.invalidateQueries({
 			queryKey: adminListUsersQueryKey({ query: { size: PAGE_SIZE } }),
 		});
@@ -98,7 +98,9 @@ function AdminUsersPage() {
 	// Close the initiating dialog before step-up to avoid stacking modal focus traps.
 	const openConfirmAccess = (error: unknown): boolean => {
 		const stepUp = stepUpChallengeOf(error);
-		if (!stepUp) return false;
+		if (!stepUp) {
+			return false;
+		}
 		setRoleTarget(null);
 		setImpersonateTarget(null);
 		setSignOutTarget(null);
@@ -133,7 +135,9 @@ function AdminUsersPage() {
 			setSignOutTarget(null);
 		},
 		onError: (error) => {
-			if (openConfirmAccess(error)) return;
+			if (openConfirmAccess(error)) {
+				return;
+			}
 			toast.error(problemDetailOf(error, "Couldn't sign the user out."));
 			setSignOutTarget(null);
 		},
@@ -141,17 +145,23 @@ function AdminUsersPage() {
 
 	const handleConfirmSignOut = () => {
 		const id = signOutTarget?.user.id;
-		if (id == null) return;
+		if (id == null) {
+			return;
+		}
 		forceSignOut.mutate({ path: { id } });
 	};
 
 	const handleConfirmRole = (user: AdminAccountView, nextRole: string) => {
-		if (user.id == null) return;
+		if (user.id == null) {
+			return;
+		}
 		updateRole.mutate({ path: { id: user.id }, body: { appRole: nextRole } });
 	};
 
 	const handleConfirmImpersonate = (user: AdminAccountView, reason: string) => {
-		if (user.id == null) return;
+		if (user.id == null) {
+			return;
+		}
 		impersonate.mutate(
 			{ body: { targetAccountId: user.id, reason } },
 			{
@@ -171,25 +181,26 @@ function AdminUsersPage() {
 				description="Manage application accounts, roles, sessions, and support access."
 			/>
 
-			<div className="relative w-full sm:max-w-sm">
+			<InputGroup className="w-full sm:max-w-sm">
 				<Label htmlFor="admin-users-search" className="sr-only">
 					Search users
 				</Label>
-				<Users className="absolute left-3 top-2.5 size-4 text-muted-foreground" aria-hidden />
-				<Input
+				<InputGroupAddon>
+					<Users aria-hidden />
+				</InputGroupAddon>
+				<InputGroupInput
 					id="admin-users-search"
 					type="search"
 					placeholder="Search by name, email, role, or status…"
 					value={search}
-					onChange={(event) =>
+					onChange={(event) => {
 						void navigate({
 							search: { q: event.target.value || undefined },
 							replace: true,
-						})
-					}
-					className="pl-9"
+						});
+					}}
 				/>
-			</div>
+			</InputGroup>
 
 			<AdminUsersTable
 				users={filteredUsers}
@@ -200,7 +211,9 @@ function AdminUsersPage() {
 				currentUserId={currentUserId}
 				hasNextPage={listQuery.hasNextPage}
 				isFetchingNextPage={listQuery.isFetchingNextPage}
-				onLoadMore={() => void listQuery.fetchNextPage()}
+				onLoadMore={() => {
+					void listQuery.fetchNextPage();
+				}}
 				onChangeRole={(user) => {
 					updateRole.reset();
 					setRoleTarget({ user });
@@ -250,7 +263,9 @@ function AdminUsersPage() {
 			<ConfirmAccessDialog
 				open={challenge !== undefined}
 				onOpenChange={(open) => {
-					if (!open) setChallenge(undefined);
+					if (!open) {
+						setChallenge(undefined);
+					}
 				}}
 				maxAgeSeconds={challenge?.maxAgeSeconds}
 				providers={confirmAccess.providers}
@@ -275,8 +290,8 @@ function AdminUsersPage() {
 							Force sign-out {signOutTarget?.user.displayName ?? "this user"}?
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							This revokes all of the account's active sessions immediately — they'll have to sign
-							in again, and any in-progress impersonation of this account ends. This can't be
+							This revokes all of the account’s active sessions immediately — they’ll have to sign
+							in again, and any in-progress impersonation of this account ends. This can’t be
 							undone.
 						</AlertDialogDescription>
 					</AlertDialogHeader>

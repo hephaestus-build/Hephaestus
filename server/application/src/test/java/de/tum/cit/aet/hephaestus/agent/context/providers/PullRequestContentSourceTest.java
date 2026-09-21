@@ -172,6 +172,82 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                 .thenReturn(new GitDiffOperations.CommitLog(List.of(AUTHORED, MERGE), false));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"abc123def456", "recorded-base"})
+    void gitlabUsesRecordedRevisionIncludingEmptyChanges(String base) throws Exception {
+        stubGit();
+        var mr = new PullRequest();
+        var identity = new de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider();
+        identity.setType(de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.GITLAB);
+        when(connectionService.findActiveProviderKind(WORKSPACE_ID)).thenReturn(Optional.of(IntegrationKind.GITLAB));
+        when(scmTokenSource.recordsReviewDiffBase()).thenReturn(true);
+        mr.setProvider(identity);
+        mr.setHeadRefOid("abc123def456");
+        mr.setBaseRefOid(base);
+        when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.of(mr));
+        when(gitRepositoryManager.commitExists(123L, base)).thenReturn(true);
+        var path = Path.of("/tmp/hephaestus-git-repos/123");
+        when(gitDiffOperations.commitLog(eq(path), eq(base), eq("abc123def456"), any(Integer.class)))
+                .thenReturn(new GitDiffOperations.CommitLog(List.of(), false));
+        String patch = base.equals("abc123def456")
+                ? ""
+                : "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -0,0 +1 @@\n+reviewed change\n";
+        when(gitDiffOperations.diff(path, base, "abc123def456")).thenReturn(patch);
+        when(gitDiffOperations.diffStat(path, base, "abc123def456")).thenReturn("");
+        var capture = provider.capture(request(sampleMetadata()), java.util.Set.of(CORE, DIFF));
+        assertThat(capture.completeness())
+                .containsEntry(CORE, SourceCompleteness.COMPLETE)
+                .containsEntry(DIFF, SourceCompleteness.COMPLETE);
+        assertThat(capture.contentStates())
+                .containsEntry(
+                        DIFF, base.equals("abc123def456") ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
+        if (!patch.isEmpty()) {
+            assertThat(new String(capture.files().get("inputs/context/diff.patch"), StandardCharsets.UTF_8))
+                    .contains("reviewed change");
+        }
+        assertThat(objectMapper
+                        .readTree(capture.files().get("inputs/context/commits.json"))
+                        .get("commits"))
+                .isEmpty();
+        verify(gitDiffOperations, org.mockito.Mockito.never()).resolveDiffRange(any(), any(), any(), any());
+    }
+
+    @Test
+    void githubTargetTipIsNotTreatedAsGitlabDiffBase() {
+        stubGit();
+        var pr = new PullRequest();
+        var identity = new de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider();
+        identity.setType(de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.GITHUB);
+        when(connectionService.findActiveProviderKind(WORKSPACE_ID)).thenReturn(Optional.of(IntegrationKind.GITLAB));
+        when(scmTokenSource.recordsReviewDiffBase()).thenReturn(false);
+        pr.setProvider(identity);
+        pr.setHeadRefOid("abc123def456");
+        pr.setBaseRefOid("advanced-target-tip");
+        when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.of(pr));
+        provider.capture(request(sampleMetadata()), java.util.Set.of(CORE));
+        verify(gitDiffOperations)
+                .resolveDiffRange(Path.of("/tmp/hephaestus-git-repos/123"), "main", "feature/auth-fix", "abc123def456");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void gitlabDoesNotInventRangeForStaleRevisionOrMissingEndpoint(boolean stale) {
+        stubGit();
+        var mr = new PullRequest();
+        var identity = new de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider();
+        identity.setType(de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.GITLAB);
+        when(connectionService.findActiveProviderKind(WORKSPACE_ID)).thenReturn(Optional.of(IntegrationKind.GITLAB));
+        when(scmTokenSource.recordsReviewDiffBase()).thenReturn(true);
+        mr.setProvider(identity);
+        mr.setHeadRefOid(stale ? "new-head" : "abc123def456");
+        mr.setBaseRefOid("unavailable-base");
+        when(pullRequestRepository.findByIdWithAuthorAndRepository(456L)).thenReturn(Optional.of(mr));
+        assertThatThrownBy(() -> provider.capture(request(sampleMetadata()), java.util.Set.of(CORE)))
+                .isInstanceOf(JobPreparationException.class)
+                .hasMessageContaining(stale ? "does not match" : "endpoint is unavailable");
+        verify(gitDiffOperations, org.mockito.Mockito.never()).resolveDiffRange(any(), any(), any(), any());
+    }
+
     @Nested
     class Supports {
 

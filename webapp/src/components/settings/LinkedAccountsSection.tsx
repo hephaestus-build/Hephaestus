@@ -1,5 +1,5 @@
 import { LinkIcon, type LucideIcon, Unlink } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef } from "react";
 
 import type { IdentityProviderView, IdentityView } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -41,8 +41,8 @@ import {
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
 import { asDate } from "@/lib/dates";
-import { getProviderLabel } from "@/lib/provider";
-import { firstNonBlank } from "@/lib/text";
+import { getProviderLabel } from "@/lib/provider/provider-labels";
+import { firstNonBlank, hasText } from "@/lib/text";
 
 /** Both types are named because `BrandIcon` is a plain component and `LucideIcon` is not. */
 const PROVIDER_ICONS: Record<string, LucideIcon | BrandIcon> = {
@@ -71,13 +71,17 @@ const LINK_ONLY_RATIONALE: Record<string, string> = {
  * to a generic link icon for unknown providers so new IdPs render gracefully.
  */
 function getProviderIcon(providerType?: string): LucideIcon | BrandIcon {
-	if (!providerType) return LinkIcon;
+	if (!hasText(providerType)) {
+		return LinkIcon;
+	}
 	return PROVIDER_ICONS[providerType.toUpperCase()] ?? LinkIcon;
 }
 
 function formatLastLogin(lastLoginAt?: Date): string | undefined {
 	const date = asDate(lastLoginAt);
-	if (!date) return undefined;
+	if (!date) {
+		return undefined;
+	}
 	return date.toLocaleDateString(undefined, {
 		year: "numeric",
 		month: "short",
@@ -129,6 +133,37 @@ export function LinkedAccountsSection({
 	error,
 	onRetry,
 }: LinkedAccountsSectionProps) {
+	// A disconnect unmounts the row and its trigger, and focus would otherwise drop to <body>.
+	const headingRef = useRef<HTMLHeadingElement>(null);
+	const prevIdentityCount = useRef(identities.length);
+	useEffect(() => {
+		if (identities.length < prevIdentityCount.current) {
+			headingRef.current?.focus();
+		}
+		prevIdentityCount.current = identities.length;
+	}, [identities.length]);
+
+	if (isLoading) {
+		return (
+			<LinkedAccountsFrame headingRef={headingRef}>
+				<div className="flex justify-center py-6">
+					<Spinner aria-label="Loading connected accounts" />
+				</div>
+			</LinkedAccountsFrame>
+		);
+	}
+	if (isError) {
+		return (
+			<LinkedAccountsFrame headingRef={headingRef}>
+				<QueryErrorAlert
+					error={error}
+					title="Could not load connected accounts"
+					onRetry={onRetry}
+				/>
+			</LinkedAccountsFrame>
+		);
+	}
+
 	const linkedProviderTypes = new Set(
 		identities
 			.map((identity) => identity.providerType?.toUpperCase())
@@ -140,8 +175,10 @@ export function LinkedAccountsSection({
 	// offered as something to "connect".
 	const linkableProviders = providers.filter((provider) => {
 		const type = provider.providerType?.toUpperCase();
-		if (type === "DEV") return false;
-		return !type || !linkedProviderTypes.has(type);
+		if (type === "DEV") {
+			return false;
+		}
+		return !hasText(type) || !linkedProviderTypes.has(type);
 	});
 
 	// Slack and Outline link an identity but are never a way in, so they cannot be offered among the
@@ -160,18 +197,151 @@ export function LinkedAccountsSection({
 	// Lockout guard: the account's only remaining sign-in method cannot be removed.
 	const isOnlyIdentity = identities.length <= 1;
 
-	// Focus restoration: when a disconnect succeeds, the row and its trigger unmount and focus
-	// would otherwise drop to <body>. Move focus to the section heading so keyboard/SR users
-	// land back at "Connected Accounts". We detect a removal by the identities list shrinking.
-	const headingRef = useRef<HTMLHeadingElement>(null);
-	const prevIdentityCount = useRef(identities.length);
-	useEffect(() => {
-		if (identities.length < prevIdentityCount.current) {
-			headingRef.current?.focus();
-		}
-		prevIdentityCount.current = identities.length;
-	}, [identities.length]);
+	return (
+		<LinkedAccountsFrame headingRef={headingRef}>
+			{identities.length === 0 ? (
+				<Empty variant="outlined">
+					<EmptyHeader>
+						<EmptyMedia variant="icon">
+							<LinkIcon aria-hidden="true" />
+						</EmptyMedia>
+						<EmptyTitle>No connected accounts yet</EmptyTitle>
+						<EmptyDescription>
+							Connect a provider below to sign in with it or attribute your work to this account.
+						</EmptyDescription>
+					</EmptyHeader>
+				</Empty>
+			) : (
+				<ItemGroup>
+					{identities.map((identity) => {
+						const identityId = identity.id;
+						const Icon = getProviderIcon(identity.providerType);
+						const name =
+							firstNonBlank(identity.displayName, identity.username, identity.subject) ?? "Account";
+						const lastLogin = formatLastLogin(identity.lastLoginAt);
 
+						return (
+							<Item
+								key={identityId ?? `${identity.providerType}:${identity.subject}`}
+								variant="outline"
+								role="listitem"
+							>
+								<ItemMedia variant="icon">
+									<Icon aria-hidden="true" />
+								</ItemMedia>
+								<ItemContent>
+									<ItemTitle>
+										<span className="truncate">{name}</span>
+										{hasText(identity.providerType) && (
+											<Badge variant="secondary">{getProviderLabel(identity.providerType)}</Badge>
+										)}
+									</ItemTitle>
+									{hasText(lastLogin) && (
+										<ItemDescription>Last sign-in {lastLogin}</ItemDescription>
+									)}
+								</ItemContent>
+								{identityId != null && (
+									<ItemActions>
+										<UnlinkControl
+											identityId={identityId}
+											name={name}
+											providerType={identity.providerType}
+											isOnlyIdentity={isOnlyIdentity}
+											isUnlinking={unlinkingId === identityId}
+											onConfirm={() => onUnlink(identityId)}
+										/>
+									</ItemActions>
+								)}
+							</Item>
+						);
+					})}
+				</ItemGroup>
+			)}
+
+			{linkOnlyProviders.length > 0 && (
+				<ItemGroup>
+					{linkOnlyProviders.map((provider) => {
+						const type = provider.providerType?.toUpperCase() ?? "";
+						const Icon = getProviderIcon(type);
+						const label =
+							firstNonBlank(provider.displayName) ?? getProviderLabel(type, "this account");
+						const { registrationId } = provider;
+						return (
+							<Item key={registrationId} variant="outline" role="listitem">
+								<ItemMedia variant="icon">
+									<Icon aria-hidden="true" />
+								</ItemMedia>
+								<ItemContent>
+									<ItemTitle>{label} is not connected</ItemTitle>
+									<ItemDescription>{LINK_ONLY_RATIONALE[type]}</ItemDescription>
+								</ItemContent>
+								<ItemActions>
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => onLink(registrationId)}
+										aria-label={`Connect ${label}`}
+									>
+										<Icon className="mr-1.5 size-3.5" aria-hidden="true" />
+										Connect
+									</Button>
+								</ItemActions>
+							</Item>
+						);
+					})}
+				</ItemGroup>
+			)}
+
+			{signInProviders.length > 0 && (
+				<div className="space-y-2 pt-2">
+					<h3 className="text-sm font-medium">Connect another account</h3>
+					<p className="text-xs text-muted-foreground">
+						Connecting a provider sends you to its sign-in page; the identity you sign in with is
+						then linked to this account.
+					</p>
+					<div className="flex flex-wrap gap-2 pt-1">
+						{signInProviders.map((provider) => {
+							const Icon = getProviderIcon(provider.providerType);
+							const label =
+								firstNonBlank(provider.displayName, provider.registrationId) ?? "provider";
+							return (
+								<Button
+									key={provider.registrationId ?? label}
+									variant="outline"
+									size="sm"
+									onClick={() => {
+										if (hasText(provider.registrationId)) {
+											onLink(provider.registrationId);
+										}
+									}}
+									disabled={!hasText(provider.registrationId)}
+									aria-label={`Connect ${label}`}
+								>
+									<Icon className="mr-1.5 size-3.5" aria-hidden="true" />
+									Connect {label}
+								</Button>
+							);
+						})}
+					</div>
+				</div>
+			)}
+
+			{linkableProviders.length === 0 && identities.length > 0 && (
+				<p className="pt-2 text-xs text-muted-foreground">
+					You’ve connected all available providers.
+				</p>
+			)}
+		</LinkedAccountsFrame>
+	);
+}
+
+function LinkedAccountsFrame({
+	headingRef,
+	children,
+}: {
+	headingRef: RefObject<HTMLHeadingElement | null>;
+	children: ReactNode;
+}) {
 	return (
 		<section className="space-y-4" aria-labelledby="linked-accounts-heading">
 			<div className="space-y-1">
@@ -182,7 +352,7 @@ export function LinkedAccountsSection({
 					ref={headingRef}
 					tabIndex={-1}
 					id="linked-accounts-heading"
-					className="text-xl font-semibold rounded-sm outline-none focus:ring-2 focus:ring-ring"
+					className="rounded-sm text-xl font-semibold outline-none focus:ring-2 focus:ring-ring"
 				>
 					Connected Accounts
 				</h2>
@@ -193,150 +363,7 @@ export function LinkedAccountsSection({
 				</p>
 			</div>
 
-			{isLoading ? (
-				<div className="flex justify-center py-6">
-					<Spinner aria-label="Loading connected accounts" />
-				</div>
-			) : isError ? (
-				<QueryErrorAlert
-					error={error}
-					title="Could not load connected accounts"
-					onRetry={onRetry}
-				/>
-			) : (
-				<>
-					{identities.length === 0 ? (
-						<Empty className="border">
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<LinkIcon aria-hidden="true" />
-								</EmptyMedia>
-								<EmptyTitle>No connected accounts yet</EmptyTitle>
-								<EmptyDescription>
-									Connect a provider below to sign in with it or attribute your work to this
-									account.
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
-					) : (
-						<ItemGroup>
-							{identities.map((identity) => {
-								const identityId = identity.id;
-								const Icon = getProviderIcon(identity.providerType);
-								const name =
-									firstNonBlank(identity.displayName, identity.username, identity.subject) ??
-									"Account";
-								const lastLogin = formatLastLogin(identity.lastLoginAt);
-
-								return (
-									<Item
-										key={identityId ?? `${identity.providerType}:${identity.subject}`}
-										variant="outline"
-										role="listitem"
-									>
-										<ItemMedia variant="icon">
-											<Icon aria-hidden="true" />
-										</ItemMedia>
-										<ItemContent>
-											<ItemTitle>
-												<span className="truncate">{name}</span>
-												{identity.providerType && (
-													<Badge variant="secondary" className="text-xs">
-														{getProviderLabel(identity.providerType)}
-													</Badge>
-												)}
-											</ItemTitle>
-											{lastLogin && <ItemDescription>Last sign-in {lastLogin}</ItemDescription>}
-										</ItemContent>
-										{identityId != null && (
-											<ItemActions>
-												<UnlinkControl
-													identityId={identityId}
-													name={name}
-													providerType={identity.providerType}
-													isOnlyIdentity={isOnlyIdentity}
-													isUnlinking={unlinkingId === identityId}
-													onConfirm={() => onUnlink(identityId)}
-												/>
-											</ItemActions>
-										)}
-									</Item>
-								);
-							})}
-						</ItemGroup>
-					)}
-
-					{linkOnlyProviders.length > 0 && (
-						<ItemGroup>
-							{linkOnlyProviders.map((provider) => {
-								const type = provider.providerType?.toUpperCase() ?? "";
-								const Icon = getProviderIcon(type);
-								const label =
-									firstNonBlank(provider.displayName) ?? getProviderLabel(type, "this account");
-								const registrationId = provider.registrationId;
-								return (
-									<Item key={registrationId} variant="outline" role="listitem">
-										<ItemMedia variant="icon">
-											<Icon aria-hidden="true" />
-										</ItemMedia>
-										<ItemContent>
-											<ItemTitle>{label} is not connected</ItemTitle>
-											<ItemDescription>{LINK_ONLY_RATIONALE[type]}</ItemDescription>
-										</ItemContent>
-										<ItemActions>
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() => onLink(registrationId)}
-												aria-label={`Connect ${label}`}
-											>
-												<Icon className="size-3.5 mr-1.5" aria-hidden="true" />
-												Connect
-											</Button>
-										</ItemActions>
-									</Item>
-								);
-							})}
-						</ItemGroup>
-					)}
-
-					{signInProviders.length > 0 && (
-						<div className="space-y-2 pt-2">
-							<h3 className="text-sm font-medium">Connect another account</h3>
-							<p className="text-xs text-muted-foreground">
-								Connecting a provider sends you to its sign-in page; the identity you sign in with
-								is then linked to this account.
-							</p>
-							<div className="flex flex-wrap gap-2 pt-1">
-								{signInProviders.map((provider) => {
-									const Icon = getProviderIcon(provider.providerType);
-									const label =
-										firstNonBlank(provider.displayName, provider.registrationId) ?? "provider";
-									return (
-										<Button
-											key={provider.registrationId ?? label}
-											variant="outline"
-											size="sm"
-											onClick={() => provider.registrationId && onLink(provider.registrationId)}
-											disabled={!provider.registrationId}
-											aria-label={`Connect ${label}`}
-										>
-											<Icon className="size-3.5 mr-1.5" aria-hidden="true" />
-											Connect {label}
-										</Button>
-									);
-								})}
-							</div>
-						</div>
-					)}
-
-					{linkableProviders.length === 0 && identities.length > 0 && (
-						<p className="pt-2 text-xs text-muted-foreground">
-							You've connected all available providers.
-						</p>
-					)}
-				</>
-			)}
+			{children}
 		</section>
 	);
 }
@@ -371,7 +398,7 @@ function UnlinkControl({
 		return (
 			<p
 				id={`lockout-hint-${identityId}`}
-				className="shrink-0 max-w-3xs text-xs text-muted-foreground"
+				className="max-w-3xs shrink-0 text-xs text-muted-foreground"
 			>
 				Your only sign-in method — delete your account in the Danger Zone to remove it.
 			</p>
@@ -387,17 +414,17 @@ function UnlinkControl({
 			<AlertDialogTrigger
 				render={
 					<Button
-						variant="ghost"
+						variant="quiet"
 						size="sm"
 						aria-busy={isUnlinking}
 						aria-disabled={isUnlinking}
 						aria-label={isUnlinking ? `Disconnecting ${name}` : `Disconnect ${name}`}
-						className="shrink-0 text-muted-foreground hover:text-destructive"
+						className="shrink-0 hover:text-destructive"
 					>
 						{isUnlinking ? (
-							<Spinner className="size-3.5 mr-1.5" aria-hidden="true" />
+							<Spinner className="mr-1.5 size-3.5" aria-hidden="true" />
 						) : (
-							<Unlink className="size-3.5 mr-1.5" aria-hidden="true" />
+							<Unlink className="mr-1.5 size-3.5" aria-hidden="true" />
 						)}
 						Disconnect
 					</Button>

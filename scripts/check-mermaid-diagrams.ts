@@ -16,15 +16,15 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { join, resolve, sep } from "node:path";
+import path from "node:path";
 
 import { JSDOM } from "jsdom";
 
 import { asRecord, asString, readJsonFile } from "./lib/json.ts";
 
 /** Resolved from this file, so the gate answers the same whatever the working directory is. */
-const REPO_ROOT = resolve(import.meta.dirname, "..");
-const ROOTS = [join(REPO_ROOT, "docs")];
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+const ROOTS = [path.join(REPO_ROOT, "docs")];
 
 const dom = new JSDOM("<!DOCTYPE html><body></body>", {
 	pretendToBeVisual: true,
@@ -40,7 +40,7 @@ const version = asString(
 const { default: mermaid } = await import("mermaid");
 
 /** ```mermaid … ``` inside a Markdown or MDX page. Non-greedy, so two blocks on one page stay two. */
-const FENCED = /```mermaid[^\n]*\n([\s\S]*?)```/g;
+const FENCED = /```mermaid[^\n]*\n(?<source>[\s\S]*?)```/gu;
 
 interface Diagram {
 	/** Names the page and, for a fenced block, which block on it. */
@@ -52,24 +52,31 @@ interface Diagram {
 const diagrams: Diagram[] = [];
 for (const root of ROOTS) {
 	for (const entry of await readdir(root, { recursive: true })) {
-		if (entry.split(sep).includes("node_modules")) continue;
-		const path = join(root, entry);
+		if (entry.split(path.sep).includes("node_modules")) {
+			continue;
+		}
+		const file = path.join(root, entry);
 		if (entry.endsWith(".mmd")) {
 			diagrams.push({
-				label: path,
-				source: await readFile(path, "utf8"),
+				label: file,
+				source: await readFile(file, "utf8"),
 				requiresAccessibleName: false,
 			});
 			continue;
 		}
-		if (!entry.endsWith(".md") && !entry.endsWith(".mdx")) continue;
-		const text = await readFile(path, "utf8");
+		if (!entry.endsWith(".md") && !entry.endsWith(".mdx")) {
+			continue;
+		}
+		const text = await readFile(file, "utf8");
 		let block = 0;
-		for (const [, source] of text.matchAll(FENCED)) {
+		for (const match of text.matchAll(FENCED)) {
 			block += 1;
-			if (source === undefined) continue;
+			const source = match.groups?.source;
+			if (source === undefined) {
+				continue;
+			}
 			diagrams.push({
-				label: `${path} (mermaid block ${block})`,
+				label: `${file} (mermaid block ${block})`,
 				source,
 				requiresAccessibleName: true,
 			});
@@ -86,7 +93,7 @@ let failed = false;
 for (const { label, source, requiresAccessibleName } of diagrams) {
 	if (
 		requiresAccessibleName &&
-		(!/^\s*accTitle:\s*\S.+$/m.test(source) || !/^\s*accDescr:\s*\S.+$/m.test(source))
+		(!/^\s*accTitle:\s*\S.+$/mu.test(source) || !/^\s*accDescr:\s*\S.+$/mu.test(source))
 	) {
 		failed = true;
 		console.error(

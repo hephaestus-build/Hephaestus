@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
 import { Spinner } from "@/components/ui/spinner";
-import { consentIsPending, resolveCurrentUser } from "@/integrations/auth/guard";
+import { consentIsPending, resolveCurrentUser } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/_authenticated")({
 	beforeLoad: async ({ context, location }) => {
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated")({
 		}
 	},
 	pendingComponent: () => (
-		<div className="flex items-center justify-center h-96">
+		<div className="flex h-96 items-center justify-center">
 			<Spinner className="size-8" />
 		</div>
 	),

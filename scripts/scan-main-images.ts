@@ -34,10 +34,14 @@ import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
  */
 export function planSubjects(inventory: unknown, registry: string, tag: string): Subject[] {
 	const images = asArray(asRecord(inventory, "release image inventory").images, "images");
-	if (images.length === 0) throw new Error("release image inventory lists no images");
+	if (images.length === 0) {
+		throw new Error("release image inventory lists no images");
+	}
 	return images.map((value, index) => {
 		const image = asString(value, `images[${index}]`);
-		if (!/^[a-z0-9-]+$/.test(image)) throw new Error(`malformed release image name: ${image}`);
+		if (!/^[a-z0-9-]+$/u.test(image)) {
+			throw new Error(`malformed release image name: ${image}`);
+		}
 		const repository = `${registry}/${image}`;
 		return { image, reference: `${repository}:${tag}`, repository };
 	});
@@ -53,6 +57,7 @@ if (import.meta.main) {
 		path.join(directory, "scan.json"),
 		`${JSON.stringify({ platform: PLATFORM, registry, scannedAt: new Date().toISOString(), subjects, tag }, null, 2)}\n`,
 	);
-	for (const outcome of outcomes)
+	for (const outcome of outcomes) {
 		process.stdout.write(`${outcome.image}: ${outcome.passed ? "pass" : "fail"}\n`);
+	}
 }

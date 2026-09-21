@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/combobox";
 import { Separator } from "@/components/ui/separator";
 import { getInitials } from "@/lib/avatar";
+import { hasText } from "@/lib/text";
 
 export const MEMBER_PAGE_SIZE = 100;
 
@@ -50,7 +51,13 @@ export function ReviewPersonFacet({
 	const { options, capped } = people;
 	const selectedOption =
 		options.find((option) => option.userId === selected) ??
-		(selected != null ? { userId: selected, label: fallbackName ?? `#${selected}` } : null);
+		(selected == null ? null : { userId: selected, label: fallbackName ?? `#${selected}` });
+	let emptyText = "No matches";
+	if (people.isError) {
+		emptyText = "Could not load people";
+	} else if (options.length === 0) {
+		emptyText = "No people in this workspace";
+	}
 
 	return (
 		<Combobox
@@ -61,7 +68,9 @@ export function ReviewPersonFacet({
 			}
 			onValueChange={(next: PersonOption | null) => onChange(next?.userId)}
 			filter={(option: PersonOption, query) =>
-				contains(option, query, (o) => (o.secondary ? `${o.label} ${o.secondary}` : o.label))
+				contains(option, query, (o) =>
+					hasText(o.secondary) ? `${o.label} ${o.secondary}` : o.label,
+				)
 			}
 			itemToStringLabel={(option: PersonOption) => option.label}
 			disabled={people.isLoading}
@@ -77,7 +86,7 @@ export function ReviewPersonFacet({
 				{selectedOption && (
 					<>
 						<Separator orientation="vertical" className="mx-0.5 data-[orientation=vertical]:h-4" />
-						<Badge variant="secondary" className="max-w-36 rounded-sm px-1 font-normal">
+						<Badge variant="secondary" size="xs" className="max-w-36">
 							<span className="truncate">{selectedOption.label}</span>
 						</Badge>
 					</>
@@ -89,25 +98,17 @@ export function ReviewPersonFacet({
 					placeholder="Search people…"
 					aria-label={`Search ${title.toLowerCase()} options`}
 				/>
-				<ComboboxEmpty>
-					{people.isError
-						? "Could not load people"
-						: options.length === 0
-							? "No people in this workspace"
-							: "No matches"}
-				</ComboboxEmpty>
+				<ComboboxEmpty>{emptyText}</ComboboxEmpty>
 				<ComboboxList aria-label={`${title} options`}>
 					{(option: PersonOption) => (
 						<ComboboxItem key={option.userId} value={option}>
 							<ComboboxItemIndicator />
 							<Avatar className="size-5 shrink-0">
-								<AvatarFallback className="text-[0.625rem]">
-									{getInitials(option.label)}
-								</AvatarFallback>
+								<AvatarFallback className="text-2xs">{getInitials(option.label)}</AvatarFallback>
 							</Avatar>
 							<span className="min-w-0 truncate">
 								{option.label}
-								{option.secondary && (
+								{hasText(option.secondary) && (
 									<span className="ml-1.5 text-xs text-muted-foreground">{option.secondary}</span>
 								)}
 							</span>

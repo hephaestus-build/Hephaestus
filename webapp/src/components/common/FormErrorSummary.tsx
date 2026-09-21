@@ -27,7 +27,9 @@ export interface FormErrorSummaryProps {
  * focus target and it is the one that fixes the error.
  */
 export function FormErrorSummary({ errors, className }: FormErrorSummaryProps) {
-	if (errors.length === 0) return null;
+	if (errors.length === 0) {
+		return null;
+	}
 
 	return (
 		<Alert variant="destructive" className={className}>

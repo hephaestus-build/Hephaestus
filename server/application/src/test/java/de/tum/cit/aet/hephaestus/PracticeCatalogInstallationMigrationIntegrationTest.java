@@ -87,7 +87,7 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
         }
 
         assertLegacyCuratedDigestsVersioned();
-        assertMigratedCuratedPoliciesAreValid();
+        assertHistoricalPoliciesCanBeExplicitlyRepinned();
         assertMarkerRepair();
         assertHistoricalFingerprintsClearedForRecomputation();
         assertAuditHistoryPreserved();
@@ -150,7 +150,7 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
             """);
     }
 
-    private static void assertMigratedCuratedPoliciesAreValid() throws Exception {
+    private static void assertHistoricalPoliciesCanBeExplicitlyRepinned() throws Exception {
         JsonMapper mapper = JsonMapper.builder().build();
         var sources = new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC());
         var validator = new PracticeDefinitionValidator(sources, PracticeSignalOptionsFixture.real());
@@ -165,12 +165,33 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
                         mapper.readValue(rows.getString("bindings"), new TypeReference<List<PracticeBinding>>() {});
                 PracticeAutomatedReviewPolicy policy = mapper.readValue(
                         rows.getString("automated_review_policy"), PracticeAutomatedReviewPolicy.class);
-                validator.validate(new PracticeDefinition(
+                // Released migrations preserve their historical contract. An operator explicitly reviews
+                // and repins the definition before this runtime can use it for a new review.
+                assertThat(policy.sourceContractVersion().value()).isEqualTo("1.0.0");
+                PracticeDefinition historical = new PracticeDefinition(
                         rows.getString("name"),
                         bindings,
                         rows.getString("criteria"),
                         null,
                         policy,
+                        null,
+                        null,
+                        rows.getString("area_slug"));
+                assertThatThrownBy(() -> validator.validate(historical))
+                        .isInstanceOf(IllegalArgumentException.class)
+                        .hasMessageContaining("Unsupported source contract version");
+                var repinnedPolicy = new PracticeAutomatedReviewPolicy(
+                        sources.current().version(),
+                        policy.automatedReview(),
+                        policy.whenEvidenceIsInsufficient(),
+                        policy.knownLimitations(),
+                        policy.insufficiencyReason());
+                validator.validate(new PracticeDefinition(
+                        rows.getString("name"),
+                        bindings,
+                        rows.getString("criteria"),
+                        null,
+                        repinnedPolicy,
                         null,
                         null,
                         rows.getString("area_slug")));
@@ -186,11 +207,9 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
         assertThat(validated).isEqualTo(3);
         assertThat(scalar("SELECT criteria FROM curated_practice_override WHERE slug = 'real-practice'"))
                 .isEqualTo("Keep the effective override");
-        assertThat(sources.requireSource(
-                                new de.tum.cit.aet.hephaestus.evidence.SourceContractVersion("1.0.0"),
-                                new SourceKind("scm.pull-request.diff"))
+        assertThat(sources.requireSource(sources.current().version(), new SourceKind("scm.pull-request.diff"))
                         .requiredQuality())
-                .isEqualTo(RequiredCaptureQuality.COMPLETE_AND_NON_EMPTY);
+                .isEqualTo(RequiredCaptureQuality.COMPLETE);
     }
 
     private static void assertLegacyCuratedDigestsVersioned() throws SQLException {

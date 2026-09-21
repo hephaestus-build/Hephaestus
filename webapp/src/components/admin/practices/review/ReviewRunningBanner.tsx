@@ -1,4 +1,4 @@
-import type { BadgeVariant } from "@/components/practice-vocabulary/status-def";
+import type { BadgeVariant } from "@/components/common/status-def";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import {

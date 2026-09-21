@@ -207,18 +207,26 @@ only `format` and `lint`, and the Java leg of `check` is `gate:server`.
 
 ### Lint and format
 
-Oxlint lints; oxfmt formats and sorts imports. Each tree states its rule set in full —
-`webapp/.oxlintrc.json`, `docs/.oxlintrc.json`, and the root `.oxlintrc.json` for the agent trees,
-`scripts/**` and tooling config — and each config carries the reasoning for its own deltas.
+Oxlint lints; oxfmt formats, sorts imports and sorts Tailwind classes. One rule set, layered:
+the root `.oxlintrc.json` is the base for every TypeScript file and the config for the Node trees
+(agent runner, precompute, `scripts/**`, `load-tests/**`, the task graph); `oxlint.react.jsonc` is
+the React layer; `webapp/.oxlintrc.json` and `docs/.oxlintrc.json` `extends` those two and hold
+only what their tree adds or decides differently, each with its reason. A rule is written once.
 `gate:docs-lint` type-checks the docs tree and runs `markdownlint-cli2` (`docs/.markdownlint-cli2.jsonc`);
 `docs:lint` is its alias.
 
-- **Start every oxlint run from the repo root.** A nested config *replaces* the root's rules rather
-  than merging, and `options` — `typeAware`, `reportUnusedDisableDirectives` — is honoured only from
-  the config oxlint discovers as the root. Started inside `webapp/`, every type-aware rule reads as
-  enabled and checks nothing.
+- **Run oxlint through `vp` from the repo root** — `vp -C webapp lint .`, `vp -C docs lint .`,
+  `vp run gate:agents-lint` — which is what CI runs; the `options` block (`typeAware`, `typeCheck`,
+  `reportUnusedDisableDirectives`) travels through `extends`, so a bare `oxlint` started inside a
+  tree sees the same rules, but resolves `tsconfig.json` from where it started.
+- **`extends` carries `categories`, `rules`, `plugins`, `overrides` and `options`.** `env`,
+  `settings` and `ignorePatterns` are each tree's own. Vite+ takes the config as an object and
+  accepts only objects in `extends`, so `webapp/tools/oxlint/load-config.ts` inlines the files for
+  both Vite configs and drops their `jsPlugins`, which that path rejects when relative; the file on
+  disk keeps the paths for the CLI and editors.
 - **Type-aware rules need a file named exactly `tsconfig.json`.** The root stub exists so the Node
-  trees, configured by `tsconfig.agents.json`, have one.
+  trees, configured by `tsconfig.agents.json`, have one; `load-tests/tsconfig.json` types the k6
+  scripts the same way.
 - **The house rules are one oxlint plugin under `webapp/tools/oxlint/`.** All three configs load it
   and each chooses which rules to turn on, so adding a rule there enables it nowhere.
   `webapp/AGENTS.md` § Linting has the rest.

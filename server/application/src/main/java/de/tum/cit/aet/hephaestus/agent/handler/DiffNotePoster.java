@@ -99,7 +99,7 @@ class DiffNotePoster {
                     result.failed(),
                     result.signals(),
                     result.suppressed(),
-                    result.suppressedRecurrenceKeys());
+                    result.suppressedDeliveryKeys());
         } catch (OutboundEgressSuppressedException e) {
             throw new JobDeliverySuppressedException(e.toString(), e);
         } catch (FeedbackDeliveryException e) {
@@ -126,7 +126,7 @@ class DiffNotePoster {
                     anchor,
                     packageId == null ? commentFormatter.appendInlineFeedbackPrompt(sanitized) : sanitized,
                     packageId == null ? HEPHAESTUS_MARKER : "<!-- hephaestus-approved-package:" + packageId + " -->",
-                    packageId == null ? note.recurrenceKey() : "approved:" + packageId + ":" + index));
+                    packageId == null ? note.deliveryKey() : "approved:" + packageId + ":" + index));
         }
         return observations;
     }
@@ -136,7 +136,7 @@ class DiffNotePoster {
             int failed,
             List<InlineFeedbackChannel.DeliveredSignal> signals,
             boolean suppressed,
-            List<String> suppressedRecurrenceKeys) {
+            List<String> suppressedDeliveryKeys) {
         DiffNoteResult(int posted, int failed, List<InlineFeedbackChannel.DeliveredSignal> signals) {
             this(posted, failed, signals, false, List.of());
         }

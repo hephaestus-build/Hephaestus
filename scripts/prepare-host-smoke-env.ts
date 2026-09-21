@@ -7,11 +7,11 @@
  * checking the installation refuses to start on.
  */
 import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import { run } from "./lib/process.ts";
 
-export const SELF_HOST = join(import.meta.dirname, "..", "docker", "self-host");
+export const SELF_HOST = path.join(import.meta.dirname, "..", "docker", "self-host");
 
 /**
  * Traefik routes a boot by `Host(APP_HOSTNAME)`, so the release smoke's ingress check reaches the
@@ -33,16 +33,19 @@ const ANSWERS: Readonly<Record<string, string>> = {
  * the operator is required to supply.
  */
 export function answerBlankSettings(environment: string): string {
-	return Object.entries(ANSWERS).reduce((text, [key, value]) => {
-		const blank = new RegExp(`^${key}=$`, "m");
-		if (!blank.test(text))
+	let text = environment;
+	for (const [key, value] of Object.entries(ANSWERS)) {
+		const blank = new RegExp(`^${key}=$`, "mu");
+		if (!blank.test(text)) {
 			throw new Error(`${key} is not a blank setting of docker/self-host/.env`);
-		return text.replace(blank, () => `${key}=${value}`);
-	}, environment);
+		}
+		text = text.replace(blank, () => `${key}=${value}`);
+	}
+	return text;
 }
 
 if (import.meta.main) {
 	await run("./setup.sh", [], { cwd: SELF_HOST });
-	const file = join(SELF_HOST, ".env");
+	const file = path.join(SELF_HOST, ".env");
 	await writeFile(file, answerBlankSettings(await readFile(file, "utf8")));
 }

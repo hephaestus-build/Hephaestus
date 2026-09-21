@@ -3,11 +3,11 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ScrollTextIcon } from "lucide-react";
 
 import { adminListWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
-import { type AuditSearch, auditSearchSchema } from "@/components/admin/audit-shared/audit-search";
+import { type AuditSearch, auditSearchSchema } from "@/components/admin/audit/audit-search";
 import { AuthAuditPanel } from "@/components/admin/audit/AuthAuditPanel";
-import { AdminConfigAuditPanel } from "@/components/admin/config-audit/ConfigAuditPanel";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { AdminConfigAuditPanel } from "@/components/admin/audit/ConfigAuditPanel";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { instanceAdminHead } from "@/lib/page-title";
 
@@ -21,8 +21,9 @@ function AdminAuditPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
 
-	const patchSearch = (patch: Partial<AuditSearch>) =>
+	const patchSearch = (patch: Partial<AuditSearch>) => {
 		void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true });
+	};
 
 	const workspacesQuery = useQuery(adminListWorkspacesOptions());
 	const workspaceNames = new Map(
@@ -41,7 +42,7 @@ function AdminAuditPage() {
 			<Tabs
 				className="gap-4"
 				value={search.tab}
-				onValueChange={(value) =>
+				onValueChange={(value) => {
 					void navigate({
 						search: (prev) => ({
 							// The tab component hands back an untyped value; the schema's `.catch` decides what
@@ -51,8 +52,8 @@ function AdminAuditPage() {
 							from: prev.from,
 							to: prev.to,
 						}),
-					})
-				}
+					});
+				}}
 			>
 				<TabsList className="h-10 w-full p-1 sm:w-fit">
 					<TabsTrigger value="signins">Access</TabsTrigger>

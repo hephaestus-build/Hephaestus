@@ -8,11 +8,17 @@ const NAMING_ATTRIBUTES = new Set(["aria-label", "aria-labelledby"]);
  * JSX shorthand for `{true}` and has no string; an expression is decided at runtime.
  */
 function writtenValue(value: ESTree.JSXAttribute["value"]): string | boolean | undefined {
-	if (value === null) return true;
-	if (value.type === "Literal") return typeof value.value === "string" ? value.value : undefined;
+	if (value === null) {
+		return true;
+	}
+	if (value.type === "Literal") {
+		return typeof value.value === "string" ? value.value : undefined;
+	}
 	if (value.type === "JSXExpressionContainer" && value.expression.type === "Literal") {
 		const { value: literal } = value.expression;
-		if (typeof literal === "string" || typeof literal === "boolean") return literal;
+		if (typeof literal === "string" || typeof literal === "boolean") {
+			return literal;
+		}
 	}
 	return undefined;
 }
@@ -28,7 +34,9 @@ function writtenValue(value: ESTree.JSXAttribute["value"]): string | boolean | u
  */
 function answers(attribute: ESTree.JSXAttribute, name: string): boolean {
 	const value = writtenValue(attribute.value);
-	if (name === "aria-hidden") return value !== "false" && value !== false;
+	if (name === "aria-hidden") {
+		return value !== "false" && value !== false;
+	}
 	return typeof value === "string" ? value.trim() !== "" : true;
 }
 
@@ -60,22 +68,30 @@ export const svgNeedsAccessibleName = defineRule({
 				const opening = node.openingElement;
 				// A capitalised or dotted name is a component, which answers this question in its own
 				// body; only the intrinsic element renders an actual `<svg>` here.
-				if (opening.name.type !== "JSXIdentifier" || opening.name.name !== "svg") return;
+				if (opening.name.type !== "JSXIdentifier" || opening.name.name !== "svg") {
+					return;
+				}
 
 				for (const attribute of opening.attributes) {
 					// A spread can carry any of the four and nothing here can see through it. Every icon
 					// in this kit forwards its props, so reporting through a spread would be a false
 					// positive on all of them — and the one it would catch, a caller who forgot, is
 					// caught at the caller instead. Passing is the honest answer, not the lenient one.
-					if (attribute.type === "JSXSpreadAttribute") return;
-					if (attribute.name.type !== "JSXIdentifier") continue;
+					if (attribute.type === "JSXSpreadAttribute") {
+						return;
+					}
+					if (attribute.name.type !== "JSXIdentifier") {
+						continue;
+					}
 					const { name } = attribute.name;
 					if ((name === "aria-hidden" || NAMING_ATTRIBUTES.has(name)) && answers(attribute, name)) {
 						return;
 					}
 				}
 
-				if (hasOwnTitle(node.children)) return;
+				if (hasOwnTitle(node.children)) {
+					return;
+				}
 				// The opening tag, not the whole element: the fix is an attribute, and an icon's path
 				// data would otherwise fill the terminal.
 				context.report({ node: opening, messageId: "unnamed" });

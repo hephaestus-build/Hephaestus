@@ -74,9 +74,9 @@ export interface PullRequestMetadata {
 	deletions?: number;
 	changed_files?: number;
 	author?: string;
-	commits?: Array<{
+	commits?: {
 		sha?: string;
 		title?: string;
 		message?: string;
-	}>;
+	}[];
 }

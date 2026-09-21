@@ -4,11 +4,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { isCommonAssetRequest } from "msw";
 import { initialize, mswLoader } from "msw-storybook-addon";
-import React from "react";
+import type { ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
-import { ThemeProvider } from "@/integrations/theme";
 import { handlers } from "@/mocks/handlers";
+import { ThemeProvider } from "@/runtime/theme/ThemeContext";
 
 import "@/styles.css";
 
@@ -28,7 +28,7 @@ initialize(
 	handlers,
 );
 
-const QueryDecorator: Decorator = (Story) => {
+const withQueryClient: Decorator = (Story) => {
 	const queryClient = new QueryClient({
 		defaultOptions: {
 			queries: {
@@ -47,7 +47,7 @@ const QueryDecorator: Decorator = (Story) => {
 	);
 };
 
-const RouterDecorator: Decorator = (Story) => {
+const withRouter: Decorator = (Story) => {
 	const rootRoute = createRootRoute({
 		component: () => <Story />,
 	});
@@ -62,48 +62,14 @@ const RouterDecorator: Decorator = (Story) => {
  * nothing to find. Mounted here rather than per story, because the surfaces that raise a toast are
  * spread across the app and the ones that forget to mount it are exactly the ones that need it.
  */
-const ToastDecorator: Decorator = (Story) => (
+const withToaster: Decorator = (Story) => (
 	<>
 		<Story />
 		<Toaster />
 	</>
 );
 
-const injectDocsThemeCSS = () => {
-	if (typeof document === "undefined") return;
-
-	const styleId = "storybook-docs-theme";
-	let style = document.getElementById(styleId);
-
-	if (!style) {
-		style = document.createElement("style");
-		style.id = styleId;
-		document.head.appendChild(style);
-	}
-
-	style.textContent = `
-		.docs-story {
-			background-color: var(--background) !important;
-			color: var(--foreground) !important;
-		}
-	`;
-};
-
-const ThemeDecorator: Decorator = (Story) => {
-	React.useEffect(() => {
-		injectDocsThemeCSS();
-	}, []);
-
-	return <Story />;
-};
-
-const StorybookThemeProvider = ({
-	theme,
-	children,
-}: {
-	theme: string;
-	children: React.ReactNode;
-}) => {
+function StorybookThemeProvider({ theme, children }: { theme: string; children: ReactNode }) {
 	return (
 		<ThemeProvider
 			key={theme}
@@ -113,7 +79,7 @@ const StorybookThemeProvider = ({
 			{children}
 		</ThemeProvider>
 	);
-};
+}
 
 const preview: Preview = {
 	parameters: {
@@ -125,32 +91,8 @@ const preview: Preview = {
 		},
 		controls: {
 			matchers: {
-				color: /(background|color)$/i,
-				date: /Date$/,
-			},
-		},
-		options: {
-			storySort: {
-				// Product surfaces first, roughly outside-in by who opens them, then the shared kit, then
-				// the auto-titled path trees, then cross-cutting regression suites. Every top-level
-				// segment any story declares has to appear here — one that does not sorts alphabetically
-				// below every segment that does, silently. That includes segments nobody wrote: a story
-				// with no explicit title gets one derived from its path.
-				order: [
-					"Workspace admin",
-					"Instance admin",
-					"Practice trace",
-					"Workspace",
-					"Profile",
-					"Product feedback",
-					"Common",
-					"Shared",
-					"Provider",
-					"Icons",
-					"components",
-					"integrations",
-					"Tests",
-				],
+				color: /(?:background|color)$/iu,
+				date: /Date$/u,
 			},
 		},
 		docs: {
@@ -189,10 +131,9 @@ const preview: Preview = {
 	},
 	loaders: [mswLoader],
 	decorators: [
-		QueryDecorator,
-		RouterDecorator,
-		ToastDecorator,
-		ThemeDecorator,
+		withQueryClient,
+		withRouter,
+		withToaster,
 		withThemeByClassName({
 			themes: {
 				light: "light",
@@ -209,7 +150,7 @@ const preview: Preview = {
 			defaultTheme: "light",
 			// The addon types `Provider` as `any`, so the shape it is called with — one entry of
 			// `themes` above — is declared here.
-			Provider: ({ theme, children }: { theme: { name: string }; children: React.ReactNode }) => (
+			Provider: ({ theme, children }: { theme: { name: string }; children: ReactNode }) => (
 				<StorybookThemeProvider theme={theme.name}>{children}</StorybookThemeProvider>
 			),
 		}),

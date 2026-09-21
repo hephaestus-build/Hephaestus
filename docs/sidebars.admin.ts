@@ -12,6 +12,7 @@ const sidebars: SidebarsConfig = {
 			collapsed: false,
 			items: [
 				{ type: "doc", id: "practice-catalog", label: "Practice Catalog" },
+				{ type: "doc", id: "writing-practices", label: "Writing practices" },
 				{ type: "doc", id: "practice-review", label: "Practice Review" },
 				{ type: "doc", id: "practice-review-operations", label: "Practice Review Operations" },
 			],

@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { AlertCircle, CalendarClock } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type {
 	CreateReviewSweepScheduleRequest,
@@ -35,6 +35,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { ARTIFACT_KIND, artifactKindPluralLabel } from "@/lib/artifact-kinds";
 import { asDate } from "@/lib/dates";
+import { hasText } from "@/lib/text";
 
 export interface PracticeReviewSweepScheduleProps {
 	schedules: ReviewSweepSchedule[];
@@ -111,13 +112,51 @@ export function PracticeReviewSweepSchedule({
 	const scheduledKinds = new Set(schedules.map((schedule) => schedule.artifactKind));
 	const availableKinds = WORK_KIND_ITEMS.filter((kind) => !scheduledKinds.has(kind.value));
 
+	let scheduleList: ReactNode;
+	if (isLoading) {
+		scheduleList = (
+			<div className="flex justify-center py-6">
+				<Spinner />
+			</div>
+		);
+	} else if (schedules.length === 0) {
+		scheduleList = (
+			<Empty>
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<CalendarClock />
+					</EmptyMedia>
+					<EmptyTitle>Nothing is checked on a schedule</EmptyTitle>
+					<EmptyDescription>
+						Work that never raised a notification is never reviewed, and nothing says so. Add a
+						check below to review the last few days again.
+					</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		);
+	} else {
+		scheduleList = (
+			<div className="space-y-2">
+				{schedules.map((schedule) => (
+					<ScheduleRow
+						key={schedule.id}
+						schedule={schedule}
+						isSaving={isSaving}
+						onReplace={onReplace}
+						onDelete={onDelete}
+					/>
+				))}
+			</div>
+		);
+	}
+
 	return (
 		<section className="space-y-4" aria-labelledby="sweep-heading">
 			<div className="space-y-1">
-				<h2 id="sweep-heading" className="font-semibold text-lg">
+				<h2 id="sweep-heading" className="text-lg font-semibold">
 					Keep checking new work
 				</h2>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					Reviews normally start the moment work happens. When a notification is lost, nothing ever
 					arrives — and there is no record of the review that did not happen. A recurring check
 					looks again over the last few days, so anything missed still gets reviewed.
@@ -126,7 +165,7 @@ export function PracticeReviewSweepSchedule({
 			{isError ? (
 				<Alert variant="destructive">
 					<AlertCircle />
-					<AlertTitle>Recurring checks couldn't be loaded</AlertTitle>
+					<AlertTitle>Recurring checks couldn’t be loaded</AlertTitle>
 					<AlertDescription>
 						<p>Whatever is scheduled is still running — this is only about showing it here.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
@@ -136,36 +175,7 @@ export function PracticeReviewSweepSchedule({
 				</Alert>
 			) : null}
 
-			{isLoading ? (
-				<div className="flex justify-center py-6">
-					<Spinner />
-				</div>
-			) : schedules.length === 0 ? (
-				<Empty>
-					<EmptyHeader>
-						<EmptyMedia variant="icon">
-							<CalendarClock />
-						</EmptyMedia>
-						<EmptyTitle>Nothing is checked on a schedule</EmptyTitle>
-						<EmptyDescription>
-							Work that never raised a notification is never reviewed, and nothing says so. Add a
-							check below to review the last few days again.
-						</EmptyDescription>
-					</EmptyHeader>
-				</Empty>
-			) : (
-				<div className="space-y-2">
-					{schedules.map((schedule) => (
-						<ScheduleRow
-							key={schedule.id}
-							schedule={schedule}
-							isSaving={isSaving}
-							onReplace={onReplace}
-							onDelete={onDelete}
-						/>
-					))}
-				</div>
-			)}
+			{scheduleList}
 
 			{availableKinds.length > 0 ? (
 				<AddScheduleForm
@@ -195,14 +205,16 @@ function ScheduleRow({
 	const lastRun = formatMoment(schedule.lastRunAt);
 
 	// A paused schedule must not promise a first check "within the hour".
+	let nextCheck = "Paused, so nothing is being checked.";
+	if (schedule.enabled) {
+		nextCheck = hasText(nextRun)
+			? `Next check ${nextRun}.`
+			: "The first check happens within the hour.";
+	}
 	const description = [
 		`${describeCadence(schedule)}.`,
-		schedule.enabled
-			? nextRun
-				? `Next check ${nextRun}.`
-				: "The first check happens within the hour."
-			: "Paused, so nothing is being checked.",
-		lastRun ? `Last checked ${lastRun}.` : "It has not checked anything yet.",
+		nextCheck,
+		hasText(lastRun) ? `Last checked ${lastRun}.` : "It has not checked anything yet.",
 	].join(" ");
 
 	return (
@@ -275,7 +287,7 @@ function AddScheduleForm({
 		// A named group rather than three loose controls after a list: without it a screen-reader user
 		// arrives at a second "Kind of work" with nothing saying they have left the schedules behind.
 		<section className="space-y-4 border-t pt-4" aria-labelledby="sweep-add-heading">
-			<h3 id="sweep-add-heading" className="font-medium text-sm">
+			<h3 id="sweep-add-heading" className="text-sm font-medium">
 				Add a recurring check
 			</h3>
 			{/* `FieldGroup` is what `responsive` measures: it opens the `@container/field-group` the
@@ -375,7 +387,7 @@ function AddScheduleForm({
 					{isSaving ? <Spinner /> : null}
 					Start checking {chosenKind}
 				</Button>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					Every check can start reviews, so this authorises the AI spend for all of them — not just
 					the first.
 				</p>

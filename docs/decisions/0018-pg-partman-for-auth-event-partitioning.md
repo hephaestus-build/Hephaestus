@@ -1,6 +1,6 @@
 # ADR 0018: pg_partman for `auth_event` partitioning (supersedes ADR 0017's self-managed partitions)
 
-**Status:** Accepted
+**Status:** Accepted (PostgreSQL version superseded by [ADR 0038](0038-postgresql-18-release-baseline.md); amended 2026-09-17 — image name and changeset location)
 **Date:** 2026-06-09
 **Authors:** Felix T.J. Dietrich
 **Supersedes (partition sub-decision only):** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md)
@@ -54,3 +54,18 @@ Adopt **pg_partman 5.x** for `auth_event`, and delete `AuthEventPartitionManager
 Built the image locally; applied the full changelog via `liquibase:update`; confirmed the extension
 loads, `create_parent` builds current+2 ahead with a default, an insert lands in a real monthly child
 (not the default), and `run_maintenance_proc()` runs — all with no `shared_preload_libraries`.
+
+## Update — 2026-09-17
+
+Corrects § Decision "Image" and "Definition"; scheduling is as decided
+(`core.auth.audit.AuthEventPartitionMaintenance` calls `partman.run_maintenance_proc()` from the
+server role, and `docker/postgres/Dockerfile` sets no `shared_preload_libraries`).
+
+- The image is `ghcr.io/hephaestus-build/postgres`, built from `postgres:18-bookworm` with
+  `postgresql-18-partman` (`docker/postgres/Dockerfile`;
+  [ADR 0038](0038-postgresql-18-release-baseline.md)).
+- Changeset `1780825201546-18-auth-event-partman` (`1780825201546_changelog.xml`) is archived at
+  `docs/db/archive/v0.77.4/changelog/`; a fresh
+  database registers `auth_event` with `partman.create_parent` (monthly, `p_premake := 2`,
+  retention 12 months) in changeset `baseline_v0_77_4-seed` of
+  `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.xml`.

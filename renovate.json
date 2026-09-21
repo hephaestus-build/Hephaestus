@@ -123,6 +123,7 @@
 		{
 			"description": "Bundled by vite-plus at exact versions: the catalog restates them and moves only with the vite-plus pin, which gate:toolchain enforces",
 			"matchDepNames": [
+				"vite",
 				"oxfmt",
 				"oxlint",
 				"oxlint-tsgolint",

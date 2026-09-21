@@ -67,7 +67,7 @@ const report: WorkspaceLlmUsageReport = {
 
 function totalsRowOf(tableName: string): HTMLElement {
 	const table = screen.getByRole("table", { name: tableName });
-	return within(table).getByRole("row", { name: /^Total/ });
+	return within(table).getByRole("row", { name: /^Total/u });
 }
 
 describe("usage breakdown totals", () => {
@@ -110,7 +110,7 @@ describe("usage breakdown totals", () => {
 		const table = screen.getByRole("table", { name: "AI spend by run type" });
 		within(table).getByRole("columnheader", { name: "Cache reads" });
 		within(table).getByRole("columnheader", { name: "Cache writes" });
-		const cells = within(within(table).getByRole("row", { name: /PR review/ })).getAllByRole(
+		const cells = within(within(table).getByRole("row", { name: /PR review/u })).getAllByRole(
 			"cell",
 		);
 		expect(cells[6]?.textContent).toBe("600");
@@ -121,6 +121,6 @@ describe("usage breakdown totals", () => {
 		render(<LlmUsageByDayTable report={{ ...report, byDay: [julyFifth] }} />);
 
 		const table = screen.getByRole("table", { name: "AI spend by day" });
-		expect(within(table).queryByRole("row", { name: /^Total/ })).toBeNull();
+		expect(within(table).queryByRole("row", { name: /^Total/u })).toBeNull();
 	});
 });

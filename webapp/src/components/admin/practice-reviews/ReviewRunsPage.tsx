@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { WorkflowIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type { ListPracticeReviewsResponse } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -14,6 +15,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
+import { hasText } from "@/lib/text";
 
 import { REVIEW_PAGE_SIZE, type RunsSearch } from "./review-search";
 import { ReviewResultsSkeleton } from "./ReviewResultsSkeleton";
@@ -54,6 +56,54 @@ export function ReviewRunsPage({
 	// past the end of the new one. The screen owns the URL, so the screen owns this — the toolbar
 	// reports the facet the reader changed and nothing else.
 	const patchFilter = (patch: Partial<RunsSearch>) => onSearchChange({ ...patch, page: 0 });
+	// A range can empty this list too, so "never triggered" is not the only reason and must not be
+	// said to a reader who has just picked a window.
+	let emptyDescription =
+		"Reviews appear when an enabled practice is triggered or a contributor requests one.";
+	if (hasFilter) {
+		emptyDescription =
+			search.status && !hasText(search.from) && !hasText(search.to)
+				? `No review is ${REVIEW_STATUS_DEFS[search.status].label.toLowerCase()}. Other reviews may exist under another status.`
+				: "No review matches these filters. Other reviews may exist outside them.";
+	}
+	let results: ReactNode;
+	if (error != null) {
+		results = <QueryErrorAlert error={error} title="Couldn't load reviews" onRetry={onRetry} />;
+	} else if (isLoading) {
+		results = <ReviewResultsSkeleton label="Loading reviews" rows={REVIEW_PAGE_SIZE} />;
+	} else if (rows.length === 0) {
+		results = (
+			<Empty variant="outlined">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<WorkflowIcon />
+					</EmptyMedia>
+					<EmptyTitle>No reviews found</EmptyTitle>
+					<EmptyDescription>{emptyDescription}</EmptyDescription>
+				</EmptyHeader>
+				{hasFilter && (
+					<EmptyContent>
+						<Button variant="outline" size="sm" onClick={reset}>
+							Clear all filters
+						</Button>
+					</EmptyContent>
+				)}
+			</Empty>
+		);
+	} else {
+		results = (
+			<ReviewRowList label="Practice reviews, newest first">
+				{rows.map((review) => (
+					<ReviewRunRow
+						key={review.id}
+						workspaceSlug={workspaceSlug}
+						review={review}
+						search={search}
+					/>
+				))}
+			</ReviewRowList>
+		);
+	}
 
 	return (
 		<section aria-label="Practice reviews" className="space-y-4">
@@ -63,47 +113,7 @@ export function ReviewRunsPage({
 				onReset={reset}
 				total={reviews?.page?.totalElements}
 			/>
-			{error != null ? (
-				<QueryErrorAlert error={error} title="Couldn't load reviews" onRetry={onRetry} />
-			) : isLoading ? (
-				<ReviewResultsSkeleton label="Loading reviews" rows={REVIEW_PAGE_SIZE} />
-			) : rows.length === 0 ? (
-				<Empty className="border">
-					<EmptyHeader>
-						<EmptyMedia variant="icon">
-							<WorkflowIcon />
-						</EmptyMedia>
-						<EmptyTitle>No reviews found</EmptyTitle>
-						<EmptyDescription>
-							{/* A range can empty this list too, so "never triggered" is not the only reason and
-							    must not be said to a reader who has just picked a window. */}
-							{!hasFilter
-								? "Reviews appear when an enabled practice is triggered or a contributor requests one."
-								: search.status && !search.from && !search.to
-									? `No review is ${REVIEW_STATUS_DEFS[search.status].label.toLowerCase()}. Other reviews may exist under another status.`
-									: "No review matches these filters. Other reviews may exist outside them."}
-						</EmptyDescription>
-					</EmptyHeader>
-					{hasFilter && (
-						<EmptyContent>
-							<Button variant="outline" size="sm" onClick={reset}>
-								Clear all filters
-							</Button>
-						</EmptyContent>
-					)}
-				</Empty>
-			) : (
-				<ReviewRowList label="Practice reviews, newest first">
-					{rows.map((review) => (
-						<ReviewRunRow
-							key={review.id}
-							workspaceSlug={workspaceSlug}
-							review={review}
-							search={search}
-						/>
-					))}
-				</ReviewRowList>
-			)}
+			{results}
 			<TablePagination
 				page={reviews?.page?.number ?? search.page ?? 0}
 				totalPages={reviews?.page?.totalPages ?? 0}

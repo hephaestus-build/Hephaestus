@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
 
 import { stageChanges, commitInput } from "./commit-via-api.ts";
@@ -11,7 +11,7 @@ import { environmentForGitFixture } from "./lib/git-environment.ts";
 type Git = (...args: string[]) => string;
 
 function repoWithCommittedFiles() {
-	const repo = mkdtempSync(join(tmpdir(), "commit-via-api-"));
+	const repo = mkdtempSync(path.join(tmpdir(), "commit-via-api-"));
 	const env = environmentForGitFixture();
 	const git: Git = (...args) =>
 		execFileSync("git", args, {
@@ -22,27 +22,28 @@ function repoWithCommittedFiles() {
 		});
 	git("init", "--quiet", "--initial-branch=main");
 	git("config", "commit.gpgsign", "false");
-	git("config", "core.hooksPath", join(repo, ".git", "disabled-hooks"));
+	git("config", "core.hooksPath", path.join(repo, ".git", "disabled-hooks"));
 	git("config", "user.email", "test@example.invalid");
 	git("config", "user.name", "Test");
-	for (const path of ["kept.txt", "edited.txt", "removed.txt", "moved.txt"])
-		writeFileSync(join(repo, path), `${path}\n`);
+	for (const file of ["kept.txt", "edited.txt", "removed.txt", "moved.txt"]) {
+		writeFileSync(path.join(repo, file), `${file}\n`);
+	}
 	git("add", "-A");
 	git("commit", "--quiet", "-m", "initial");
 	return {
 		repo,
 		git,
-		changes: (...paths: string[]) => stageChanges(paths, { cwd: repo, env }),
+		changes: async (...paths: string[]) => stageChanges(paths, { cwd: repo, env }),
 	};
 }
 
 await test("enumerates every added, modified and deleted path in the work tree", async (t) => {
 	const { repo, changes } = repoWithCommittedFiles();
 	t.after(() => rmSync(repo, { recursive: true, force: true }));
-	writeFileSync(join(repo, "edited.txt"), "edited\n");
-	rmSync(join(repo, "removed.txt"));
-	mkdirSync(join(repo, "generated"));
-	writeFileSync(join(repo, "generated/added.txt"), "added\n");
+	writeFileSync(path.join(repo, "edited.txt"), "edited\n");
+	rmSync(path.join(repo, "removed.txt"));
+	mkdirSync(path.join(repo, "generated"));
+	writeFileSync(path.join(repo, "generated/added.txt"), "added\n");
 
 	assert.deepEqual(await changes(), {
 		additions: ["edited.txt", "generated/added.txt"],
@@ -72,16 +73,16 @@ await test("refuses scoped conflicts without staging them", async (t) => {
 	const { repo, git, changes } = repoWithCommittedFiles();
 	t.after(() => rmSync(repo, { recursive: true, force: true }));
 	git("checkout", "-qb", "other");
-	writeFileSync(join(repo, "edited.txt"), "other\n");
+	writeFileSync(path.join(repo, "edited.txt"), "other\n");
 	git("commit", "-qam", "other");
 	git("checkout", "-q", "main");
-	writeFileSync(join(repo, "edited.txt"), "main\n");
+	writeFileSync(path.join(repo, "edited.txt"), "main\n");
 	git("commit", "-qam", "main");
 	assert.throws(() => git("merge", "other"));
-	await assert.rejects(changes("edited.txt"), /unmerged/);
+	await assert.rejects(changes("edited.txt"), /unmerged/u);
 	assert.equal(git("diff", "--name-only", "--diff-filter=U"), "edited.txt\n");
-	mkdirSync(join(repo, "generated"));
-	writeFileSync(join(repo, "generated/added.txt"), "added\n");
+	mkdirSync(path.join(repo, "generated"));
+	writeFileSync(path.join(repo, "generated/added.txt"), "added\n");
 	assert.deepEqual(await changes("generated"), {
 		additions: ["generated/added.txt"],
 		deletions: [],
@@ -121,9 +122,9 @@ await test("builds the mutation input, with file contents base64-encoded", () =>
 await test("a staged new file removed before committing is not a deletion on the branch", async (t) => {
 	const { repo, git, changes } = repoWithCommittedFiles();
 	t.after(() => rmSync(repo, { recursive: true, force: true }));
-	writeFileSync(join(repo, "temporary.txt"), "temporary\n");
+	writeFileSync(path.join(repo, "temporary.txt"), "temporary\n");
 	git("add", "temporary.txt");
-	rmSync(join(repo, "temporary.txt"));
+	rmSync(path.join(repo, "temporary.txt"));
 	assert.deepEqual(await changes(), { additions: [], deletions: [] });
 });
 
@@ -131,7 +132,7 @@ await test("a renamed file removed before committing deletes only its original p
 	const { repo, git, changes } = repoWithCommittedFiles();
 	t.after(() => rmSync(repo, { recursive: true, force: true }));
 	git("mv", "moved.txt", "arrived.txt");
-	rmSync(join(repo, "arrived.txt"));
+	rmSync(path.join(repo, "arrived.txt"));
 	assert.deepEqual(await changes(), { additions: [], deletions: ["moved.txt"] });
 });
 
@@ -140,8 +141,8 @@ await test("recreating a staged deletion or rename replaces the original content
 	t.after(() => rmSync(repo, { recursive: true, force: true }));
 	git("rm", "removed.txt");
 	git("mv", "moved.txt", "arrived.txt");
-	writeFileSync(join(repo, "removed.txt"), "replacement\n");
-	writeFileSync(join(repo, "moved.txt"), "replacement\n");
+	writeFileSync(path.join(repo, "removed.txt"), "replacement\n");
+	writeFileSync(path.join(repo, "moved.txt"), "replacement\n");
 	assert.deepEqual(await changes(), {
 		additions: ["arrived.txt", "moved.txt", "removed.txt"],
 		deletions: [],
@@ -151,20 +152,20 @@ await test("recreating a staged deletion or rename replaces the original content
 await test("staged edits reverted in the work tree produce no commit", async (t) => {
 	const { repo, git, changes } = repoWithCommittedFiles();
 	t.after(() => rmSync(repo, { recursive: true, force: true }));
-	writeFileSync(join(repo, "edited.txt"), "staged\n");
+	writeFileSync(path.join(repo, "edited.txt"), "staged\n");
 	git("add", "edited.txt");
-	writeFileSync(join(repo, "edited.txt"), "edited.txt\n");
+	writeFileSync(path.join(repo, "edited.txt"), "edited.txt\n");
 	assert.deepEqual(await changes(), { additions: [], deletions: [] });
 });
 
 await test("commits only selected generated paths, excluding staged and unstaged unrelated edits", async (t) => {
 	const { repo, git, changes } = repoWithCommittedFiles();
 	t.after(() => rmSync(repo, { recursive: true, force: true }));
-	writeFileSync(join(repo, "edited.txt"), "staged\n");
+	writeFileSync(path.join(repo, "edited.txt"), "staged\n");
 	git("add", "edited.txt");
-	writeFileSync(join(repo, "kept.txt"), "unstaged\n");
-	mkdirSync(join(repo, "generated"));
-	writeFileSync(join(repo, "generated/added.txt"), "added\n");
+	writeFileSync(path.join(repo, "kept.txt"), "unstaged\n");
+	mkdirSync(path.join(repo, "generated"));
+	writeFileSync(path.join(repo, "generated/added.txt"), "added\n");
 	assert.deepEqual(await changes("generated"), {
 		additions: ["generated/added.txt"],
 		deletions: [],
@@ -176,6 +177,8 @@ await test("preserves filenames that require Git's NUL-delimited output", async 
 	const { repo, changes } = repoWithCommittedFiles();
 	t.after(() => rmSync(repo, { recursive: true, force: true }));
 	const paths = ["space name.txt", ...(process.platform === "win32" ? [] : ["line\nbreak.txt"])];
-	for (const path of paths) writeFileSync(join(repo, path), "added\n");
+	for (const file of paths) {
+		writeFileSync(path.join(repo, file), "added\n");
+	}
 	assert.deepEqual(await changes(), { additions: paths.toSorted(), deletions: [] });
 });

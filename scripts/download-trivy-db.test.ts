@@ -17,9 +17,11 @@ void test(
 			await readFile(".github/actions/download-trivy-db/action.yml", "utf8"),
 		);
 		const script: unknown = action.getIn(["runs", "steps", 2, "run"]);
-		if (typeof script !== "string") throw new Error("Database action has no executable step");
+		if (typeof script !== "string") {
+			throw new TypeError("Database action has no executable step");
+		}
 		const directory = await mkdtemp(path.join(tmpdir(), "trivy-download-"));
-		context.after(() => rm(directory, { recursive: true, force: true }));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
 		await writeFile(
 			path.join(directory, "trivy"),
 			`#!/bin/sh
@@ -53,10 +55,15 @@ case "$*" in *--download-java-db-only*) exit "$JAVA_EXIT" ;; esac
 				env,
 			});
 			assert.equal(status === 0, expectedSuccess, stderr);
-			const calls = (await readFile(log, "utf8")).trim().split("\n").filter(Boolean);
+			const logged = await readFile(log, "utf8");
+			const calls = logged.trim().split("\n").filter(Boolean);
 			assert.equal(calls.length, expectedCalls);
-			if (expectedCalls > 0) assert.match(calls[0] ?? "", /--download-db-only$/);
-			for (const call of calls.slice(1)) assert.match(call, /--download-java-db-only$/);
+			if (expectedCalls > 0) {
+				assert.match(calls[0] ?? "", /--download-db-only$/u);
+			}
+			for (const call of calls.slice(1)) {
+				assert.match(call, /--download-java-db-only$/u);
+			}
 		}
 	},
 );
@@ -73,7 +80,7 @@ void test(
 		assert.ok(typeof validate === "string");
 		assert.ok(typeof prepare === "string");
 		const directory = await mkdtemp(path.join(tmpdir(), "trivy-snapshot-"));
-		context.after(() => rm(directory, { recursive: true, force: true }));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
 		const db = path.join(directory, "db");
 		await mkdir(db);
 		const log = path.join(directory, "calls");
@@ -101,8 +108,9 @@ void test(
 					UpdatedAt: new Date(Date.now() - scenario.age * 3_600_000).toISOString(),
 				}),
 			);
-			if (scenario.file) await writeFile(path.join(db, "trivy.db"), "the immutable database");
-			else await rm(path.join(db, "trivy.db"), { force: true });
+			await (scenario.file
+				? writeFile(path.join(db, "trivy.db"), "the immutable database")
+				: rm(path.join(db, "trivy.db"), { force: true }));
 			const result: SpawnSyncReturns<string> = spawnSync(
 				"bash",
 				["-e", "-c", `${validate}\n${prepare}`],
@@ -131,10 +139,11 @@ void test(
 				scenario.id === "123" ? `directory=${db}\n` : "",
 			);
 			const calls = await readFile(log, "utf8");
-			assert.doesNotMatch(calls, /--download-db-only/);
+			assert.doesNotMatch(calls, /--download-db-only/u);
 			assert.equal(calls.includes("--download-java-db-only"), scenario.java === "true");
-			if (scenario.file)
+			if (scenario.file) {
 				assert.equal(await readFile(path.join(db, "trivy.db"), "utf8"), "the immutable database");
+			}
 		}
 		assert.equal(
 			action.getIn(["runs", "steps", 1, "with", "artifact-ids"]),

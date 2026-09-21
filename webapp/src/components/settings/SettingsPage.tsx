@@ -1,10 +1,10 @@
 import { UserRoundCog } from "lucide-react";
 
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { optionalIntegrationsAvailable } from "@/integrations/consent";
+import { optionalIntegrationsAvailable } from "@/runtime/consent";
 
 import { CookiePreferencesSection } from "./CookiePreferencesSection";
 import { DangerZoneSection } from "./DangerZoneSection";
@@ -74,7 +74,7 @@ export function SettingsPage({
 								Preferences
 							</h2>
 							<p className="text-sm text-destructive" role="alert">
-								We couldn't load your preferences, so your feedback and research settings aren't
+								We couldn’t load your preferences, so your feedback and research settings aren’t
 								shown.
 							</p>
 							{onRetrySettings && (

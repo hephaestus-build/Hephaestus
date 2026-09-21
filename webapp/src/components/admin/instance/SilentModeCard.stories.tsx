@@ -37,12 +37,12 @@ type Story = StoryObj<typeof meta>;
 
 export const Released: Story = {
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /engage silent mode/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /engage silent mode/iu }));
 		await userEvent.type(
-			await screen.findByLabelText(/why are you silencing/i),
+			await screen.findByLabelText(/why are you silencing/iu),
 			"Investigating incident #42",
 		);
-		await userEvent.click(screen.getByRole("button", { name: /^engage silent mode$/i }));
+		await userEvent.click(screen.getByRole("button", { name: /^engage silent mode$/iu }));
 		await expect(args.onEngage).toHaveBeenCalledWith("Investigating incident #42");
 	},
 };
@@ -50,15 +50,15 @@ export const Released: Story = {
 export const Engaged: Story = {
 	args: { settings: engaged },
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /release silent mode/i }));
-		const confirm = await screen.findByRole("button", { name: /^release silent mode$/i });
-		await userEvent.type(screen.getByLabelText(/type/i), "nope");
+		await userEvent.click(canvas.getByRole("button", { name: /release silent mode/iu }));
+		const confirm = await screen.findByRole("button", { name: /^release silent mode$/iu });
+		await userEvent.type(screen.getByLabelText(/type/iu), "nope");
 		await userEvent.click(confirm);
 		await expect(args.onRelease).not.toHaveBeenCalled();
-		await expect(await screen.findByText(/does not match/i)).toBeVisible();
+		await expect(await screen.findByText(/does not match/iu)).toBeVisible();
 
-		await userEvent.clear(screen.getByLabelText(/type/i));
-		await userEvent.type(screen.getByLabelText(/type/i), "release");
+		await userEvent.clear(screen.getByLabelText(/type/iu));
+		await userEvent.type(screen.getByLabelText(/type/iu), "release");
 		await userEvent.click(confirm);
 		await expect(args.onRelease).toHaveBeenCalled();
 	},
@@ -71,6 +71,6 @@ export const Pending: Story = {
 export const ReleaseUnavailable: Story = {
 	args: { settings: engaged, releaseDisabled: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /release silent mode/i })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /release silent mode/iu })).toBeDisabled();
 	},
 };

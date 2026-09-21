@@ -84,15 +84,15 @@ await test("rejects wrong subjects and packages lost during conversion", () => {
 				...subject,
 				digest: `sha256:${"b".repeat(64)}`,
 			}),
-		/wrong manifest/,
+		/wrong manifest/u,
 	);
 	assert.throws(
 		() => validateReleaseSbom(syft, { ...spdx, packages: [] }, cycloneDx, subject),
-		/SPDX document must describe exactly one container/,
+		/SPDX document must describe exactly one container/u,
 	);
 	assert.throws(
 		() => validateReleaseSbom(syft, spdx, { ...cycloneDx, components: [] }, subject),
-		/CycloneDX output omitted/,
+		/CycloneDX output omitted/u,
 	);
 	assert.throws(
 		() =>
@@ -102,7 +102,7 @@ await test("rejects wrong subjects and packages lost during conversion", () => {
 				cycloneDx,
 				subject,
 			),
-		/SPDX output omitted/,
+		/SPDX output omitted/u,
 	);
 });
 
@@ -118,7 +118,7 @@ await test("rejects an SBOM taken from a Docker daemon copy of the artifact", ()
 				cycloneDx,
 				subject,
 			),
-		/Syft SBOM is bound to the wrong manifest/,
+		/Syft SBOM is bound to the wrong manifest/u,
 	);
 });
 
@@ -134,7 +134,7 @@ await test("rejects an SBOM taken from the index instead of the platform manifes
 				cycloneDx,
 				subject,
 			),
-		new RegExp(`Syft SBOM was not resolved from ${repository}@${digest}`),
+		new RegExp(`Syft SBOM was not resolved from ${repository}@${digest}`, "u"),
 	);
 	assert.throws(
 		() =>
@@ -146,11 +146,11 @@ await test("rejects an SBOM taken from the index instead of the platform manifes
 				cycloneDx,
 				subject,
 			),
-		/also resolves a digest the subject does not name/,
+		/also resolves a digest the subject does not name/u,
 	);
 	assert.throws(
 		() => validateReleaseSbom(withSourceMetadata({ repoDigests: [] }), spdx, cycloneDx, subject),
-		/Syft SBOM was not resolved from/,
+		/Syft SBOM was not resolved from/u,
 	);
 });
 
@@ -163,7 +163,7 @@ await test("rejects an index, which describes more than one artifact", () => {
 				cycloneDx,
 				subject,
 			),
-		/does not describe a single-platform image manifest/,
+		/does not describe a single-platform image manifest/u,
 	);
 });
 
@@ -177,11 +177,11 @@ await test("rejects an SBOM for the same image in another namespace", () => {
 				cycloneDx,
 				subject,
 			),
-		/Syft SBOM is bound to the wrong repository/,
+		/Syft SBOM is bound to the wrong repository/u,
 	);
 	assert.throws(
 		() => validateReleaseSbom(syft, spdx, cycloneDx, { ...subject, repository: previous }),
-		/Syft SBOM is bound to the wrong repository/,
+		/Syft SBOM is bound to the wrong repository/u,
 	);
 });
 
@@ -189,11 +189,11 @@ await test("rejects an SBOM for another platform of the same image", () => {
 	assert.throws(
 		() =>
 			validateReleaseSbom(withSourceMetadata({ architecture: "arm64" }), spdx, cycloneDx, subject),
-		/Syft SBOM is bound to the wrong platform/,
+		/Syft SBOM is bound to the wrong platform/u,
 	);
 	assert.throws(
 		() => validateReleaseSbom(syft, spdx, cycloneDx, { ...subject, platform: "windows/amd64" }),
-		/platform must be linux/,
+		/platform must be linux/u,
 	);
 });
 
@@ -207,7 +207,7 @@ await test("rejects SPDX and CycloneDX renderings of a different artifact", () =
 				cycloneDx,
 				subject,
 			),
-		new RegExp(`SPDX document is not bound to ${repository}@${digest}`),
+		new RegExp(`SPDX document is not bound to ${repository}@${digest}`, "u"),
 	);
 	assert.throws(
 		() =>
@@ -220,11 +220,11 @@ await test("rejects SPDX and CycloneDX renderings of a different artifact", () =
 				},
 				subject,
 			),
-		new RegExp(`CycloneDX document is not bound to ${repository}@${digest}`),
+		new RegExp(`CycloneDX document is not bound to ${repository}@${digest}`, "u"),
 	);
 	assert.throws(
 		() => validateReleaseSbom(syft, spdx, { ...cycloneDx, metadata: {} }, subject),
-		/CycloneDX metadata component must be an object/,
+		/CycloneDX metadata component must be an object/u,
 	);
 });
 

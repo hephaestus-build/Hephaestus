@@ -15,12 +15,12 @@ const devDependencies = isRecord(packageJson.devDependencies) ? packageJson.devD
 const problems: string[] = [];
 
 function dockerArg(name: string): string {
-	const match = new RegExp(`^ARG ${name}=(\\S+)$`, "m").exec(dockerfile);
-	if (!match?.[1]) {
+	const value = new RegExp(`^ARG ${name}=(?<value>\\S+)$`, "mu").exec(dockerfile)?.groups?.value;
+	if (value === undefined) {
 		problems.push(`docker/agents/pi/Dockerfile: missing ARG ${name}.`);
 		return "";
 	}
-	return match[1];
+	return value;
 }
 
 const nodeVersion = dockerArg("NODE_VERSION");
@@ -33,7 +33,8 @@ if (repoNodeVersion !== nodeVersion) {
 		`package.json#devEngines.runtime pins Node ${String(repoNodeVersion)} but the agent image pins ${nodeVersion}.`,
 	);
 }
-const webappNodeVersion = /^ARG NODE_VERSION=(\S+)$/m.exec(webappDockerfile)?.[1];
+const webappNodeVersion = /^ARG NODE_VERSION=(?<version>\S+)$/mu.exec(webappDockerfile)?.groups
+	?.version;
 if (webappNodeVersion !== nodeVersion) {
 	problems.push(
 		`webapp/Dockerfile pins Node ${String(webappNodeVersion)} but the agent image pins ${nodeVersion}.`,
@@ -74,19 +75,19 @@ if (
 	);
 }
 
-const javaPin = /private static final String PI_SDK_VERSION = "([^"]+)";/;
+const javaPin = /private static final String PI_SDK_VERSION = "(?<version>[^"]+)";/u;
 for (const path of [
 	"server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/mentor/live/MentorLiveLlmTest.java",
 	"server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/mentor/live/MentorSandboxStressTest.java",
 	"server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/practice/live/PracticeRunnerLiveLlmTest.java",
 ]) {
-	const testVersion = javaPin.exec(readFileSync(path, "utf8"))?.[1];
+	const testVersion = javaPin.exec(readFileSync(path, "utf8"))?.groups?.version;
 	if (testVersion !== piVersion) {
 		problems.push(`${path} pins Pi ${String(testVersion)} but the agent image pins ${piVersion}.`);
 	}
 }
 
-const nodeBase = /^FROM node:\$\{NODE_VERSION\}-slim@sha256:([a-f0-9]{64})$/m.exec(dockerfile);
+const nodeBase = /^FROM node:\$\{NODE_VERSION\}-slim@sha256:[a-f0-9]{64}$/mu.exec(dockerfile);
 if (!nodeBase) {
 	problems.push("docker/agents/pi/Dockerfile: Node base must be pinned by a 64-character digest.");
 }
@@ -101,7 +102,9 @@ for (const marker of [
 }
 
 if (problems.length > 0) {
-	for (const problem of problems) console.error(`error: ${problem}`);
+	for (const problem of problems) {
+		console.error(`error: ${problem}`);
+	}
 	process.exit(1);
 }
 

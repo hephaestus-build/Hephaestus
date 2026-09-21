@@ -23,19 +23,11 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
             new PracticeEvidenceDefaults(catalogs, PracticeSignalOptionsFixture.catalog()));
 
     @Test
-    void everyPracticeDeclaresOneFixedTarget() {
+    void shouldDescribeBehaviorsWithoutFixingAssessmentPerPractice() {
         assertThat(loader.catalog().practices()).allSatisfy(practice -> {
-            var criteria = practice.definition().criteria();
-            assertThat(criteria).contains("TARGET BEHAVIOUR:");
-            assertThat(de.tum.cit.aet.hephaestus.practices.model.Practice.declaredTargetAssessment(criteria))
-                    .isNotNull();
-            if (criteria.contains("TARGET ASSESSMENT: BAD")) {
-                assertThat(practice.definition().bindings())
-                        .allSatisfy(binding -> assertThat(binding.needs())
-                                .anyMatch(need -> need.stance()
-                                        == de.tum.cit.aet.hephaestus.practices.EvidenceStance.EXHAUSTIVE));
-            }
-            assertThat(criteria).doesNotContain("PRESENT with NEGATIVE", "PRESENT + NEGATIVE");
+            assertThat(practice.definition().criteria())
+                    .contains("BEHAVIOR FOCUS:")
+                    .doesNotContain("TARGET ASSESSMENT:", "fixed target", "DEFECT-DETECTOR DISCIPLINE");
         });
     }
 

@@ -47,11 +47,12 @@ describe("workspace provider availability", () => {
 		});
 		renderRouteAt("/workspaces/new");
 
-		expect(
-			(
-				await screen.findByRole("link", { name: "Set up workspace with GitLab" }, ROUTE_RENDER_WAIT)
-			).getAttribute("href"),
-		).toBe("/workspaces/new/gitlab");
+		const gitlab = await screen.findByRole(
+			"link",
+			{ name: "Set up workspace with GitLab" },
+			ROUTE_RENDER_WAIT,
+		);
+		expect(gitlab.getAttribute("href")).toBe("/workspaces/new/gitlab");
 		expect(screen.queryByRole("link", { name: "Set up workspace with GitHub" })).toBeNull();
 	});
 
@@ -60,7 +61,7 @@ describe("workspace provider availability", () => {
 		renderRouteAt("/workspaces/new/github");
 
 		await screen.findByText("GitHub App not configured", {}, ROUTE_RENDER_WAIT);
-		expect(screen.queryByRole("link", { name: /Install GitHub App/ })).toBeNull();
+		expect(screen.queryByRole("link", { name: /Install GitHub App/u })).toBeNull();
 	});
 
 	it("opens setup with the configured GitHub App installation link", async () => {
@@ -75,10 +76,11 @@ describe("workspace provider availability", () => {
 		await user.click(
 			await screen.findByRole("link", { name: "Set up workspace with GitHub" }, ROUTE_RENDER_WAIT),
 		);
-		expect(
-			(
-				await screen.findByRole("link", { name: /Install GitHub App/ }, ROUTE_RENDER_WAIT)
-			).getAttribute("href"),
-		).toBe(installationUrl);
+		const install = await screen.findByRole(
+			"link",
+			{ name: /Install GitHub App/u },
+			ROUTE_RENDER_WAIT,
+		);
+		expect(install.getAttribute("href")).toBe(installationUrl);
 	});
 });

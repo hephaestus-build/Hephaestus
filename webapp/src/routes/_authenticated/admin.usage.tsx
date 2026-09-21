@@ -22,8 +22,8 @@ import {
 } from "@/components/admin/usage/usage-search";
 import { canStepForwardFrom, isCurrentMonthUtc } from "@/components/admin/usage/usage-utils";
 import { useNow } from "@/components/common/use-now";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 
@@ -128,12 +128,16 @@ function AdminInstanceUsagePage() {
 				isCurrentMonth={isCurrentMonth}
 				isLoading={listQuery.isLoading}
 				error={listQuery.error}
-				onRetry={() => void listQuery.refetch()}
+				onRetry={() => {
+					void listQuery.refetch();
+				}}
 				expandedWorkspaceSlug={expanded?.workspaceSlug ?? null}
 				detailReport={detailQuery.data}
 				isDetailLoading={detailQuery.isLoading}
 				detailError={detailQuery.error}
-				onRetryDetail={() => void detailQuery.refetch()}
+				onRetryDetail={() => {
+					void detailQuery.refetch();
+				}}
 				onToggleDetails={(workspace) =>
 					setExpanded((current) =>
 						current?.workspaceSlug === workspace.workspaceSlug ? null : workspace,
@@ -148,9 +152,9 @@ function AdminInstanceUsagePage() {
 				isCurrentMonth={isCurrentMonth}
 				isPending={updateBudget.isPending}
 				serverError={
-					updateBudget.error != null
-						? problemDetailOf(updateBudget.error, "Couldn't save the budget")
-						: null
+					updateBudget.error == null
+						? null
+						: problemDetailOf(updateBudget.error, "Couldn't save the budget")
 				}
 				onOpenChange={(open) => {
 					if (!open) {

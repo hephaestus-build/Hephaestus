@@ -33,7 +33,7 @@ nullaway = "0.14.1"
 shedlock = "7.10.0"
 bucket4j = "8.19.0"
 bcprov = "1.85.2"
-bouncycastle-lts = "2.73.11"
+bouncycastle-lts = "2.73.12"
 bcutil = "1.85"
 bcpkix = "1.85"
 

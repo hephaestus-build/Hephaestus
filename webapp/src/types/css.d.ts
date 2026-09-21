@@ -7,6 +7,7 @@ import "react";
 
 declare module "react" {
 	interface CSSProperties {
+		// oxlint-disable-next-line typescript/consistent-indexed-object-style -- an augmentation merges into csstype's interface; a `Record` alias would replace it.
 		[custom: `--${string}`]: string | number | undefined;
 	}
 }

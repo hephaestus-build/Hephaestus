@@ -39,6 +39,6 @@ export const Empty: Story = {
 export const ErrorState: Story = {
 	parameters: { msw: { handlers: [sessionsError] } },
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText(/Failed to load sessions/i)).toBeVisible();
+		await expect(await canvas.findByText(/Failed to load sessions/iu)).toBeVisible();
 	},
 };

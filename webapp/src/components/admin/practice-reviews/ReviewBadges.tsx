@@ -7,6 +7,8 @@ import type {
 	ReviewObservation,
 	ReviewObservationCounts,
 } from "@/api/types.gen";
+import type { StatusDef } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import {
@@ -15,10 +17,9 @@ import {
 } from "@/components/practice-vocabulary/observation-result";
 import { derivedOutcome } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import type { StatusDef } from "@/components/practice-vocabulary/status-def";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { hasText } from "@/lib/text";
 
 type NonCurrentClaimCurrentness = Exclude<ReviewObservation["claimCurrentness"], "CURRENT">;
 
@@ -86,7 +87,9 @@ export function observationSeverity(
  * LIVE renders nothing: badging the ordinary case buries the exceptions.
  */
 export function ObservationOriginBadge({ origin }: { origin: ReviewObservation["origin"] }) {
-	if (origin === "LIVE") return null;
+	if (origin === "LIVE") {
+		return null;
+	}
 	return (
 		<Badge variant="outline">
 			{origin === "BACKFILL" ? "From a review of past work" : "Requested by hand"}
@@ -99,7 +102,9 @@ export function ClaimCurrentnessBadge({
 }: {
 	currentness: ReviewObservation["claimCurrentness"];
 }) {
-	if (currentness === "CURRENT") return null;
+	if (currentness === "CURRENT") {
+		return null;
+	}
 	const config = CLAIM_CURRENTNESS_CONFIG[currentness];
 	return <Badge variant={config.badgeVariant}>{config.badge}</Badge>;
 }
@@ -109,7 +114,9 @@ export function ClaimCurrentnessAlert({
 }: {
 	currentness: ReviewObservation["claimCurrentness"];
 }) {
-	if (currentness === "CURRENT") return null;
+	if (currentness === "CURRENT") {
+		return null;
+	}
 	const { Icon, title, description } = CLAIM_CURRENTNESS_CONFIG[currentness];
 	return (
 		<Alert variant="warning">
@@ -203,9 +210,12 @@ export function ReviewCountStrip({ slots, label }: { slots: ReviewCountSlot[]; l
 					>
 						{slot.count}
 					</span>
-					{/* A real space, so the pair reads "0 improvements" to a screen reader and in a test.
-					    Flex drops whitespace-only children, so the visible gap is still the one `gap-1`
-					    sets and this adds nothing to the layout. */}{" "}
+					{
+						// A real space, so the pair reads "0 improvements" to a screen reader and in a test.
+						// Flex drops whitespace-only children, so the visible gap is still the one `gap-1`
+						// sets and this adds nothing to the layout.
+						" "
+					}
 					<span className="min-w-0 break-words">{slot.label}</span>
 				</li>
 			))}
@@ -225,10 +235,12 @@ export function FeedbackCountsSummary({
 	const parts = feedbackCountSlots(counts)
 		.filter((slot) => slot.count > 0)
 		.map((slot) => `${slot.count} ${slot.label}`);
-	if (parts.length === 0) return <span>No feedback composed</span>;
+	if (parts.length === 0) {
+		return <span>No feedback composed</span>;
+	}
 	return (
 		<span>
-			{prefix && `${prefix} `}
+			{hasText(prefix) && `${prefix} `}
 			{parts.join(" · ")}
 		</span>
 	);

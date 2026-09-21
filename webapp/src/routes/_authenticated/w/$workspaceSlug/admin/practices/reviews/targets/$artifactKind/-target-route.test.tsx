@@ -7,7 +7,7 @@ import {
 	reviewFeedback,
 	reviewObservations,
 	workspacePractices,
-} from "@/components/admin/practice-reviews/story-mock-data";
+} from "@/components/admin/practice-reviews/fixtures";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 

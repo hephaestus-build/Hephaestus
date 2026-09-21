@@ -13,28 +13,30 @@
  * recorded slug is the fallback for operators running outside CI.
  */
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
+import { isSet } from "./env.ts";
 import { asArray, asRecord, asString } from "./json.ts";
 import { releaseSignerRepository } from "./release-signer.ts";
 
-export type ReleaseIdentity = {
+export interface ReleaseIdentity {
 	firstVersion: string;
 	namespace: string;
 	certificateIdentityRepository: string;
-};
+}
 
-const versionPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
-const namespacePattern = /^ghcr\.io\/[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/;
-const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const versionPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u;
+const namespacePattern = /^ghcr\.io\/[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;
+const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 
-const identitiesFile = join(import.meta.dirname, "../../security/release-identities.json");
+const identitiesFile = path.join(import.meta.dirname, "../../security/release-identities.json");
 
 function versionCore(release: string): [number, number, number] {
 	const bare = release.startsWith("v") ? release.slice(1) : release;
 	const core = bare.split("-", 1)[0] ?? bare;
-	if (!versionPattern.test(core))
+	if (!versionPattern.test(core)) {
 		throw new Error(`'${release}' is not a release version (expected [v]X.Y.Z)`);
+	}
 	const [major = 0, minor = 0, patch = 0] = core.split(".").map(Number);
 	return [major, minor, patch];
 }
@@ -42,14 +44,18 @@ function versionCore(release: string): [number, number, number] {
 function compare(left: [number, number, number], right: [number, number, number]): number {
 	for (const [index, part] of left.entries()) {
 		const difference = part - (right[index] ?? 0);
-		if (difference !== 0) return difference;
+		if (difference !== 0) {
+			return difference;
+		}
 	}
 	return 0;
 }
 
 export function parseReleaseIdentities(value: unknown): ReleaseIdentity[] {
 	const document = asRecord(value, "release identities");
-	if (document.schemaVersion !== 1) throw new Error("release identities must use schema version 1");
+	if (document.schemaVersion !== 1) {
+		throw new Error("release identities must use schema version 1");
+	}
 	const entries = asArray(document.identities, "release identities entries").map(
 		(entry, index): ReleaseIdentity => {
 			const record = asRecord(entry, `identity ${index}`);
@@ -61,20 +67,26 @@ export function parseReleaseIdentities(value: unknown): ReleaseIdentity[] {
 					`identity ${index} certificateIdentityRepository`,
 				),
 			};
-			if (!versionPattern.test(identity.firstVersion))
+			if (!versionPattern.test(identity.firstVersion)) {
 				throw new Error(`identity ${index} firstVersion must be X.Y.Z`);
-			if (!namespacePattern.test(identity.namespace))
+			}
+			if (!namespacePattern.test(identity.namespace)) {
 				throw new Error(
 					`identity ${index} namespace must be a ghcr.io path without a trailing slash`,
 				);
-			if (!repositoryPattern.test(identity.certificateIdentityRepository))
+			}
+			if (!repositoryPattern.test(identity.certificateIdentityRepository)) {
 				throw new Error(`identity ${index} certificateIdentityRepository must be owner/name`);
+			}
 			return identity;
 		},
 	);
-	if (entries.length === 0) throw new Error("release identities must contain at least one entry");
-	if (entries[0]?.firstVersion !== "0.0.0")
+	if (entries.length === 0) {
+		throw new Error("release identities must contain at least one entry");
+	}
+	if (entries[0]?.firstVersion !== "0.0.0") {
 		throw new Error("the first release identity must start at 0.0.0 so every version resolves");
+	}
 	for (let index = 1; index < entries.length; index += 1) {
 		const previous = entries[index - 1];
 		const current = entries[index];
@@ -82,8 +94,9 @@ export function parseReleaseIdentities(value: unknown): ReleaseIdentity[] {
 			previous === undefined ||
 			current === undefined ||
 			compare(versionCore(previous.firstVersion), versionCore(current.firstVersion)) >= 0
-		)
+		) {
 			throw new Error("release identities must be ordered by strictly ascending firstVersion");
+		}
 	}
 	return entries;
 }
@@ -101,7 +114,9 @@ export function releaseIdentityFor(
 	const match = identities.findLast(
 		(entry) => compare(versionCore(entry.firstVersion), version) <= 0,
 	);
-	if (!match) throw new Error(`no release identity covers ${release}`);
+	if (!match) {
+		throw new Error(`no release identity covers ${release}`);
+	}
 	return match;
 }
 
@@ -110,7 +125,9 @@ export function currentReleaseIdentity(
 	identities: ReleaseIdentity[] = loadReleaseIdentities(),
 ): ReleaseIdentity {
 	const current = identities.at(-1);
-	if (!current) throw new Error("release identities must contain at least one entry");
+	if (!current) {
+		throw new Error("release identities must contain at least one entry");
+	}
 	return current;
 }
 
@@ -127,8 +144,11 @@ export function releaseRepository(
 	identities: ReleaseIdentity[] = loadReleaseIdentities(),
 ): string {
 	const identity = releaseIdentityFor(release, identities);
-	if (identity === identities.at(-1) && (environment.GITHUB_REPOSITORY || environment.CI))
+	const { GITHUB_REPOSITORY, CI } = environment;
+	const inCi = isSet(GITHUB_REPOSITORY) || isSet(CI);
+	if (identity === identities.at(-1) && inCi) {
 		return releaseSignerRepository(environment);
+	}
 	return identity.certificateIdentityRepository;
 }
 
@@ -139,7 +159,9 @@ export function releaseOwner(
 	identities: ReleaseIdentity[] = loadReleaseIdentities(),
 ): string {
 	const [owner] = releaseRepository(release, environment, identities).split("/");
-	if (!owner) throw new Error(`could not derive an owner for ${release}`);
+	if (!isSet(owner)) {
+		throw new Error(`could not derive an owner for ${release}`);
+	}
 	return owner;
 }
 

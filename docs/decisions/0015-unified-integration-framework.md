@@ -1,6 +1,6 @@
 # ADR 0015: Unified integration framework — package layout and SPI surface
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-05-27 for Phase 1-4 restructure; 2026-09-17 — names and paths corrected)
 **Date:** 2026-05-26
 **Authors:** Felix T.J. Dietrich
 
@@ -196,3 +196,26 @@ Negative:
   scale — the current shape is per-vendor rows in `connection` plus
   per-subject rows in `feedback_post`. A scale-out would need a dedicated
   link table, not a generic graph.
+
+## Update — 2026-09-17
+
+Corrects names and paths in § Decision and § Consequences; the layout and the SPI axes stand.
+
+- `integration/scm/` holds `common`, `domain`, `github`, `gitlab` and `sync`
+  (`server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/`); the entity
+  packages the § Decision list names live under `scm/domain/`, which also holds `signal` and
+  `workdir`, and `project` is a GitHub adapter package under `scm/github/`.
+- `integration/core/` also holds `egress`, `fabric`, `graphql`, `metrics`, `signal` and `sync`;
+  `integration/outline/` is the fourth adapter ([ADR 0023](0023-outline-documentation-integration.md));
+  `integration/identity/connect/` holds `RegistrationToGitProviderResolver`.
+- `integration/core/feedback/` and `FeedbackPost` do not exist; cross-vendor feedback identity is
+  `practices/feedback/Feedback` and `FeedbackPlacement.posted_comment_ref`
+  ([ADR 0021](0021-observations-feedback-synthesis-seam.md),
+  [ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md)), so the `feedback_post`
+  table in the third Revisit-trigger bullet does not exist.
+- `GitProvider` / `GitProviderType` are `IdentityProvider` / `IdentityProviderType`
+  (`integration/core/connection/`, table `identity_provider`).
+- `WorkspaceCapabilityResolver` does not exist; capability resolution is
+  `IntegrationManifestRegistry.capabilitiesFor(IntegrationKind)` in `integration/core/framework/`.
+- `1780313973588_changelog.xml` is archived; [ADR 0014](0014-per-row-aes-gcm-aad-binding.md)
+  § Update 2026-09-17 has the path and where the shipped chain starts.

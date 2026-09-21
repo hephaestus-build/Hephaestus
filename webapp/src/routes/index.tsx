@@ -1,18 +1,21 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
-import { StandardPageSurface } from "@/components/core/StandardPageSurface";
-import { LandingPage } from "@/components/info/landing/LandingPage";
-import { NoWorkspace } from "@/components/workspace/NoWorkspace";
+import { NoWorkspace } from "@/components/common/NoWorkspace";
+import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
+import { LandingPage } from "@/components/site/landing/LandingPage";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { consentIsPending, resolveCurrentUser } from "@/integrations/auth/guard";
+import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { consentIsPending, resolveCurrentUser } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/")({
 	staticData: { surface: "bleed" },
 	beforeLoad: async ({ context }) => {
 		const user = await resolveCurrentUser(context.queryClient);
-		if (!user) return;
+		if (!user) {
+			return;
+		}
 		if (await consentIsPending(context.queryClient)) {
 			throw redirect({
 				to: "/consent",
@@ -23,7 +26,7 @@ export const Route = createFileRoute("/")({
 		// A failed workspace query must not render the no-workspace state.
 		const workspaces = await context.queryClient.query(listWorkspacesOptions());
 		const workspaceSlug = workspaces[0]?.workspaceSlug;
-		if (workspaceSlug) {
+		if (hasText(workspaceSlug)) {
 			throw redirect({ to: "/w/$workspaceSlug", params: { workspaceSlug }, replace: true });
 		}
 	},

@@ -44,7 +44,9 @@ export function TeamTree({
 			team={team}
 			memberCount={team.members.length}
 			headingLevel={headingLevel}
-			onToggleVisibility={(hidden) => void onToggleVisibility(team.id, hidden)}
+			onToggleVisibility={(hidden) => {
+				void onToggleVisibility(team.id, hidden);
+			}}
 			getCatalogLabels={getCatalogLabels}
 		>
 			{team.repositories.length > 0 ? (
@@ -59,20 +61,20 @@ export function TeamTree({
 								catalogLabels={getCatalogLabels(repo.id)}
 								onAddLabel={onAddLabel}
 								onRemoveLabel={onRemoveLabel}
-								onToggleVisibility={(hidden: boolean) =>
+								onToggleVisibility={async (hidden: boolean) =>
 									onToggleRepositoryVisibility(team.id, repo.id, hidden)
 								}
 							/>
 						))}
 				</div>
 			) : (
-				<div className="text-center py-6 text-sm text-muted-foreground">
+				<div className="py-6 text-center text-sm text-muted-foreground">
 					No repositories assigned to this team
 				</div>
 			)}
 
 			{children.length > 0 && (
-				<div className="space-y-4 mt-4">
+				<div className="mt-4 space-y-4">
 					{children.map((child) => (
 						<TeamTree
 							key={child.id}

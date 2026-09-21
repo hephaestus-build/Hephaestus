@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
-import { STORY_NOW } from "@/components/common/story-clock";
 import { withProvider } from "@/stories/decorators";
+import { STORY_NOW } from "@/stories/story-clock";
 
 import { ActivityBadges } from "./ActivityBadges";
 import type { ReviewedPullRequest } from "./ReviewsPopover";
@@ -58,6 +58,7 @@ const meta = {
 	component: ActivityBadges,
 	tags: ["autodocs"],
 	args: {
+		providerType: "GITHUB",
 		reviewedPullRequests: basePullRequests,
 		approvals: 3,
 		changeRequests: 1,

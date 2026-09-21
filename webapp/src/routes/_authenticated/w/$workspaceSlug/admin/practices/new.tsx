@@ -4,7 +4,7 @@ import {
 	practiceFormLevel,
 	practiceSetupSearchSchema,
 } from "@/components/admin/practices/practice-search";
-import { detailStackKey } from "@/components/core/detail-drawer/detail-stack";
+import { detailStackKey } from "@/components/layout/detail-drawer/detail-stack";
 
 /** Kept so a bookmarked link lands on practice setup with the new-practice level open. */
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/practices/new")({

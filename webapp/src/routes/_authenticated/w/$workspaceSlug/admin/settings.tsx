@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Settings2 } from "lucide-react";
+import type { ReactNode } from "react";
 
 import {
 	computeUserLeagueStatsQueryKey,
@@ -8,18 +9,19 @@ import {
 	getWorkspaceOptions,
 	resetAndRecalculateLeaguesMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { FeatureKey } from "@/components/admin/AdminFeaturesSettings";
-import { AdminSettingsPage } from "@/components/admin/AdminSettingsPage";
+import type { FeatureKey } from "@/components/admin/settings/WorkspaceFeaturesSettings";
+import { WorkspaceSettingsPage } from "@/components/admin/settings/WorkspaceSettingsPage";
+import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Spinner } from "@/components/ui/spinner";
-import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useUpdateWorkspaceFeatures } from "@/hooks/use-update-workspace-features";
 import { isRecord } from "@/lib/is-record";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { queryOperationId } from "@/lib/query-operation-id";
+import { hasText } from "@/lib/text";
 
 /**
  * The reads a league reset moves: the board itself, and the standing computed per user beside it.
@@ -71,7 +73,9 @@ function AdminSettings() {
 			void queryClient.invalidateQueries({
 				predicate: ({ queryKey }) => {
 					const id = queryOperationId(queryKey);
-					if (id === undefined || !RESET_QUERY_FAMILY_IDS.has(id)) return false;
+					if (id === undefined || !RESET_QUERY_FAMILY_IDS.has(id)) {
+						return false;
+					}
 					const [key] = queryKey;
 					return isRecord(key) && isRecord(key.path) && key.path.workspaceSlug === resetSlug;
 				},
@@ -84,19 +88,60 @@ function AdminSettings() {
 		error: "Failed to update feature settings",
 	});
 
-	if (!workspaceSlug && !isWorkspaceLoading) {
+	if (!hasText(workspaceSlug) && !isWorkspaceLoading) {
 		return <NoWorkspace />;
 	}
 
 	const workspaceData = workspaceQuery.data;
 
 	const handleToggleFeature = (feature: FeatureKey, enabled: boolean) => {
-		if (!workspaceSlug) return;
+		if (!hasText(workspaceSlug)) {
+			return;
+		}
 		updateFeatures.mutate({
 			path: { workspaceSlug },
 			body: { [feature]: enabled },
 		});
 	};
+
+	let settings: ReactNode;
+	if (!hasText(workspaceSlug) || workspaceQuery.isLoading) {
+		settings = (
+			<div className="flex h-40 max-w-4xl items-center justify-center">
+				<Spinner className="size-6" />
+			</div>
+		);
+	} else if (workspaceQuery.isError || !workspaceData) {
+		settings = (
+			<div className="max-w-4xl">
+				<QueryErrorAlert
+					error={workspaceQuery.error}
+					title="Couldn't load workspace settings"
+					onRetry={() => {
+						void workspaceQuery.refetch();
+					}}
+				/>
+			</div>
+		);
+	} else {
+		settings = (
+			<WorkspaceSettingsPage
+				isResettingLeagues={resetLeagues.isPending}
+				onResetLeagues={() => {
+					resetLeagues.mutate({ path: { workspaceSlug } });
+				}}
+				features={{
+					mentorEnabled: workspaceData.mentorEnabled,
+					leaderboardEnabled: workspaceData.leaderboardEnabled,
+					progressionEnabled: workspaceData.progressionEnabled,
+					leaguesEnabled: workspaceData.leaguesEnabled,
+				}}
+				isSavingFeatures={updateFeatures.isPending}
+				onToggleFeature={handleToggleFeature}
+				workspaceSlug={workspaceSlug}
+			/>
+		);
+	}
 
 	return (
 		<PageLayout>
@@ -105,35 +150,7 @@ function AdminSettings() {
 				title="Workspace settings"
 				description="Configure workspace features, leagues, and lifecycle."
 			/>
-			{!workspaceSlug || workspaceQuery.isLoading ? (
-				<div className="flex h-40 max-w-4xl items-center justify-center">
-					<Spinner className="size-6" />
-				</div>
-			) : workspaceQuery.isError || !workspaceData ? (
-				<div className="max-w-4xl">
-					<QueryErrorAlert
-						error={workspaceQuery.error}
-						title="Couldn't load workspace settings"
-						onRetry={() => void workspaceQuery.refetch()}
-					/>
-				</div>
-			) : (
-				<AdminSettingsPage
-					isResettingLeagues={resetLeagues.isPending}
-					onResetLeagues={() => {
-						resetLeagues.mutate({ path: { workspaceSlug } });
-					}}
-					features={{
-						mentorEnabled: workspaceData.mentorEnabled,
-						leaderboardEnabled: workspaceData.leaderboardEnabled,
-						progressionEnabled: workspaceData.progressionEnabled,
-						leaguesEnabled: workspaceData.leaguesEnabled,
-					}}
-					isSavingFeatures={updateFeatures.isPending}
-					onToggleFeature={handleToggleFeature}
-					workspaceSlug={workspaceSlug}
-				/>
-			)}
+			{settings}
 		</PageLayout>
 	);
 }

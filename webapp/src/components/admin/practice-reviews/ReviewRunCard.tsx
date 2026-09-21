@@ -1,11 +1,12 @@
 import { CopyIcon } from "lucide-react";
-import { toast } from "sonner";
 
 import type { AgentJob } from "@/api/types.gen";
-import { formatTokens, modelLabel } from "@/components/admin/ai/job-utils";
-import { JOB_TYPE_LABELS } from "@/components/admin/usage/usage-utils";
+import { formatTokens, JOB_TYPE_LABELS } from "@/components/admin/usage/usage-utils";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { Button } from "@/components/ui/button";
+import { copyToClipboard } from "@/lib/clipboard";
+import { hasText } from "@/lib/text";
+import { modelLabel } from "./job-utils";
 
 import { ReviewFact, ReviewFactGrid } from "./ReviewDetailHeader";
 
@@ -18,22 +19,19 @@ export interface ReviewRunCardProps {
  * checks when a review costs more than it should or answers worse than it used to.
  */
 export function ReviewRunCard({ job }: ReviewRunCardProps) {
-	const copyConfiguration = async () => {
-		try {
-			await navigator.clipboard.writeText(JSON.stringify(job.configSnapshot, null, 2));
-			toast.success("Configuration copied");
-		} catch {
-			toast.error("Could not copy to clipboard");
-		}
-	};
-
 	return (
 		<section aria-labelledby="run-card-heading" className="space-y-3">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<h3 id="run-card-heading" className="text-lg font-semibold">
 					How this review ran
 				</h3>
-				<Button variant="outline" size="sm" onClick={() => void copyConfiguration()}>
+				<Button
+					variant="outline"
+					size="sm"
+					onClick={() =>
+						copyToClipboard(JSON.stringify(job.configSnapshot, null, 2), "Configuration copied")
+					}
+				>
 					<CopyIcon aria-hidden />
 					Copy configuration
 				</Button>
@@ -58,10 +56,10 @@ export function ReviewRunCard({ job }: ReviewRunCardProps) {
 					)}
 				</ReviewFact>
 			</ReviewFactGrid>
-			{job.errorMessage && (
+			{hasText(job.errorMessage) && (
 				<div className="space-y-1 rounded-lg border border-destructive/40 p-3">
 					<p className="text-sm font-medium">What went wrong</p>
-					<pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs text-muted-foreground">
+					<pre className="max-h-48 overflow-auto text-xs break-words whitespace-pre-wrap text-muted-foreground">
 						{job.errorMessage}
 					</pre>
 				</div>

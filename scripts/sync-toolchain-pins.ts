@@ -12,11 +12,15 @@ import { bundledVersions, CATALOG_FILE } from "./lib/toolchain-pins.ts";
 const workspace = parseDocument(readFileSync(CATALOG_FILE, "utf8"));
 let changed = 0;
 for (const [name, version] of Object.entries(bundledVersions())) {
-	if (workspace.getIn(["catalog", name]) === version) continue;
+	if (workspace.getIn(["catalog", name]) === version) {
+		continue;
+	}
 	workspace.setIn(["catalog", name], version);
 	changed += 1;
 }
-if (changed > 0) writeFileSync(CATALOG_FILE, workspace.toString());
+if (changed > 0) {
+	writeFileSync(CATALOG_FILE, workspace.toString());
+}
 console.log(
 	changed === 0
 		? "sync-toolchain-pins: the catalog already states the bundled versions."

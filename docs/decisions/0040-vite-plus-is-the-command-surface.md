@@ -1,6 +1,6 @@
 # ADR 0040: Vite+ is the command surface; pnpm stays the package manager
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-09-17 — how `prepare` enables the hooks)
 **Date:** 2026-09-03
 **Authors:** Felix T.J. Dietrich
 **Amends:** [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md)
@@ -83,3 +83,11 @@ the gates cannot express.
 - [GitHub Actions: cache access restrictions](https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/caching-dependencies-to-speed-up-workflows#restrictions-for-accessing-a-cache)
 - [actions/setup-java: `java-version-file`](https://github.com/actions/setup-java#supported-version-syntax)
 - [Renovate npm manager: `pnpm-workspace.overrides`](https://docs.renovatebot.com/modules/manager/npm/)
+
+## Update — 2026-09-17: how `prepare` enables the hooks
+
+Supersedes the mechanism in the **Git hooks run through the Vite+ dispatcher** bullet of
+§ Decision; the dispatcher, `.vite-hooks/` and the rejection of `vp staged` are unchanged.
+`prepare` runs `scripts/enable-hooks.ts`, which calls `vp config --no-agent --hooks-dir .vite-hooks`
+through the `vite-plus` binary the lockfile resolves and neither reads nor unsets `core.hooksPath`;
+outside CI it also prints the commit-signing hint when the checkout is not configured to sign.

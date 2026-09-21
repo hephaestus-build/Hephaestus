@@ -31,7 +31,9 @@ function ObservationDetailRoute() {
 			observation={observationQueryResult.data}
 			isLoading={observationQueryResult.isLoading}
 			error={observationQueryResult.isError ? observationQueryResult.error : undefined}
-			onRetry={() => void observationQueryResult.refetch()}
+			onRetry={() => {
+				void observationQueryResult.refetch();
+			}}
 			practices={practicesQuery.data}
 		/>
 	);

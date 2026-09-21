@@ -206,7 +206,9 @@ export const enforce = async ({ github, context, core }: EnforceInput): Promise<
 			reviews,
 		});
 		core.info(decision.reason);
-		if (decision.kind === "skip") return;
+		if (decision.kind === "skip") {
+			return;
+		}
 		if (decision.kind === "standing") {
 			await minimizeSupersededApprovals(github, ourReviews(reviews).slice(0, -1), core);
 			return;

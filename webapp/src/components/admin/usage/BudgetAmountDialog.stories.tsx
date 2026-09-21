@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
-import { expectAmountRejected } from "@/test/budget-amount-field";
-import { expectSettledVisible } from "@/test/overlay";
+import { expectAmountRejected } from "@/stories/budget-amount-field";
+import { expectSettledVisible } from "@/stories/overlay";
 
 import { BudgetAmountDialog } from "./BudgetAmountDialog";
 import type { Fx } from "./fx";
@@ -53,37 +53,37 @@ export const ServerRejection: Story = {
 const rejects =
 	(typed: string, reason: RegExp): Story["play"] =>
 	async ({ args }) =>
-		await expectAmountRejected({
-			fieldLabel: /monthly cap/i,
-			submitLabel: /save cap/i,
+		expectAmountRejected({
+			fieldLabel: /monthly cap/iu,
+			submitLabel: /save cap/iu,
 			typed,
 			reason,
 			onSubmit: args.onSubmit,
 		});
 
-export const InvalidEmptyValue: Story = { play: rejects("", /enter an amount/i) };
+export const InvalidEmptyValue: Story = { play: rejects("", /enter an amount/iu) };
 
 /** Rejected in the field, not by a native browser bubble. */
-export const InvalidSubCentValue: Story = { play: rejects("25.005", /two decimal places/i) };
+export const InvalidSubCentValue: Story = { play: rejects("25.005", /two decimal places/iu) };
 
-export const InvalidNegativeValue: Story = { play: rejects("-5", /\$0 or more/i) };
+export const InvalidNegativeValue: Story = { play: rejects("-5", /\$0 or more/iu) };
 
 /** The estimate rounds to whole units: to the cent beside a round `$50` it would overclaim. */
 export const WithLiveCurrencyHint: Story = {
 	args: { currentValueUsd: 50, fx: EUR, isCurrentMonth: true },
 	play: async ({ args }) => {
 		const dialog = await capDialog();
-		await expectSettledVisible(await dialog.findByText(/at today's rate\./));
+		await expectSettledVisible(await dialog.findByText(/at today's rate\./u));
 		dialog.getByLabelText("approximately 44 euros");
 
-		const input = dialog.getByLabelText(/monthly cap/i);
+		const input = dialog.getByLabelText(/monthly cap/iu);
 		await userEvent.clear(input);
 		await userEvent.type(input, "120");
 		await expectSettledVisible(await dialog.findByLabelText("approximately 105 euros"));
 
 		// An empty field has nothing to estimate, so the hint leaves rather than reading "≈ €0".
 		await userEvent.clear(input);
-		await expect(dialog.queryByText(/at today's rate/)).toBeNull();
+		await expect(dialog.queryByText(/at today's rate/u)).toBeNull();
 		await expect(args.onSubmit).not.toHaveBeenCalled();
 	},
 };
@@ -95,7 +95,7 @@ export const OnAClosedMonthTheHintIsWithdrawn: Story = {
 export const WithoutCurrencyHint: Story = {
 	play: async () => {
 		const dialog = await capDialog();
-		await expect(dialog.queryByText(/at today's rate/)).toBeNull();
+		await expect(dialog.queryByText(/at today's rate/u)).toBeNull();
 	},
 };
 
@@ -103,14 +103,14 @@ export const WithoutCurrencyHint: Story = {
 export const ZeroPausesImmediately: Story = {
 	play: async ({ args }) => {
 		const dialog = await capDialog();
-		const input = dialog.getByLabelText(/monthly cap/i);
+		const input = dialog.getByLabelText(/monthly cap/iu);
 		await userEvent.clear(input);
 		await userEvent.type(input, "0");
-		await userEvent.click(dialog.getByRole("button", { name: /save cap/i }));
+		await userEvent.click(dialog.getByRole("button", { name: /save cap/iu }));
 
 		await expect(input).toHaveAttribute("aria-invalid", "false");
 		await expect(dialog.queryByRole("alert")).toBeNull();
-		dialog.getByRole("button", { name: /remove cap/i });
+		dialog.getByRole("button", { name: /remove cap/iu });
 		await expect(args.onSubmit).toHaveBeenCalledWith(0);
 	},
 };

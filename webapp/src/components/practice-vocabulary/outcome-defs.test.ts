@@ -17,7 +17,7 @@ describe("derived observation outcomes", () => {
 	it.each(["NOT_APPLICABLE", "UNDETERMINED"] as const)(
 		"%s is not a positive or negative outcome",
 		(assessmentStatus) => {
-			expect(observationResult({ assessmentStatus }).label).not.toMatch(/Positive|Negative/);
+			expect(observationResult({ assessmentStatus }).label).not.toMatch(/Positive|Negative/u);
 		},
 	);
 });

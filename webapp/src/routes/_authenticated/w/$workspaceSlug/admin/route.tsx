@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
-import { resolveWorkspaceMembership } from "@/integrations/auth/guard";
 import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
+import { resolveWorkspaceMembership } from "@/runtime/auth/guard";
 
 /** Workspace-admin gate: a directory layout, so every route under `admin/` inherits it. */
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin")({

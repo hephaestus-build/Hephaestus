@@ -33,6 +33,7 @@ void test("rejects malformed, missing and incomplete report structures", () => {
 		"<pmd>",
 		'<testsuite name="not PMD"/>',
 		'<pmd version="7.27.0"><file name="One.java"><violation/></file></pmd>',
-	])
+	]) {
 		assert.throws(() => pmdResult(xml));
+	}
 });

@@ -168,9 +168,9 @@ export const HighLevelUser: Story = {
 		},
 		userXpRecord: {
 			currentLevel: 50,
-			currentLevelXP: 25000,
-			xpNeeded: 50000,
-			totalXP: 1250000,
+			currentLevelXP: 25_000,
+			xpNeeded: 50_000,
+			totalXP: 1_250_000,
 		},
 		leaguePoints: 3000,
 		firstContribution: new Date("2019-01-01T00:00:00Z"),
@@ -207,7 +207,7 @@ export const Mobile: Story = {
 		viewport: { defaultViewport: "reflow" },
 	},
 	play: async ({ canvas }) => {
-		const league = await canvas.findByLabelText(/tier$/);
+		const league = await canvas.findByLabelText(/tier$/u);
 		const name = canvas.getByRole("heading", { level: 1 });
 		const leagueBox = league.getBoundingClientRect();
 		const nameBox = name.getBoundingClientRect();

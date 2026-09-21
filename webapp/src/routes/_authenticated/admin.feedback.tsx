@@ -13,11 +13,11 @@ import {
 	AdminFeedbackList,
 	type AdminFeedbackListState,
 	type FeedbackStatusFilter,
-} from "@/components/admin/feedback/AdminFeedbackList";
+} from "@/components/admin/product-feedback/AdminFeedbackList";
 import { FilterToggle } from "@/components/common/FilterToggle";
 import { ResultCount } from "@/components/common/ResultCount";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { useClampedPage } from "@/hooks/use-clamped-page";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { instanceAdminHead } from "@/lib/page-title";
@@ -53,34 +53,41 @@ function AdminFeedbackInboxPage() {
 	const triage = useMutation({
 		...filedUnder(TRIAGE_KEY, adminTriageProductFeedbackMutation()),
 		// Every status, not just the one showing: an item resolved here leaves "Open" and joins "Resolved".
-		onSuccess: () =>
-			void queryClient.invalidateQueries({ queryKey: adminListProductFeedbackQueryKey() }),
+		onSuccess: () => {
+			void queryClient.invalidateQueries({ queryKey: adminListProductFeedbackQueryKey() });
+		},
 		onError: (error) =>
 			toast.error("Couldn't update the feedback", { description: problemDetailOf(error) }),
 	});
 	const pendingIds = usePendingMutationIds(TRIAGE_KEY, (variables) =>
 		pathString(variables, "feedbackId"),
 	);
-	const onPageChange = (next: number) =>
+	const onPageChange = (next: number) => {
 		void setSearch((previous) => ({ ...previous, page: pageParam(next) }));
+	};
 	useClampedPage(page, feedbackQuery.data?.page?.totalPages, onPageChange);
 
-	const state: AdminFeedbackListState = feedbackQuery.isPending
-		? { status: "loading" }
-		: feedbackQuery.isError
-			? {
-					status: "error",
-					error: feedbackQuery.error,
-					onRetry: () => void feedbackQuery.refetch(),
-				}
-			: {
-					status: "ready",
-					items: feedbackQuery.data.content ?? [],
-					filter: status,
-					page,
-					totalPages: feedbackQuery.data.page?.totalPages ?? 0,
-					onPageChange,
-				};
+	let state: AdminFeedbackListState;
+	if (feedbackQuery.isPending) {
+		state = { status: "loading" };
+	} else if (feedbackQuery.isError) {
+		state = {
+			status: "error",
+			error: feedbackQuery.error,
+			onRetry: () => {
+				void feedbackQuery.refetch();
+			},
+		};
+	} else {
+		state = {
+			status: "ready",
+			items: feedbackQuery.data.content ?? [],
+			filter: status,
+			page,
+			totalPages: feedbackQuery.data.page?.totalPages ?? 0,
+			onPageChange,
+		};
+	}
 
 	return (
 		<PageLayout>
@@ -95,13 +102,13 @@ function AdminFeedbackInboxPage() {
 					label="Show"
 					options={STATUS_OPTIONS}
 					value={status}
-					onChange={(next) =>
+					onChange={(next) => {
 						void setSearch((previous) => ({
 							...previous,
 							status: next === "OPEN" ? undefined : next,
 							page: undefined,
-						}))
-					}
+						}));
+					}}
 				/>
 				<ResultCount
 					total={feedbackQuery.data?.page?.totalElements}

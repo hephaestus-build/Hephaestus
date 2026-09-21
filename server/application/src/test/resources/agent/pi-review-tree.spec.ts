@@ -26,11 +26,11 @@ const practices: ReviewPractice[] = [
 ];
 
 void describe("buildReviewTree", () => {
-	const laneCases: Array<{
+	const laneCases: {
 		name: string;
 		practices: ReviewPractice[];
-		expected: Array<[string, string[]]>;
-	}> = [
+		expected: [string, string[]][];
+	}[] = [
 		{
 			name: "routes pull request comments to the review lane",
 			practices: [
@@ -169,11 +169,11 @@ void describe("buildReviewTree", () => {
 	});
 
 	void test("rejects invalid capacity, blank slugs, and duplicate slugs", () => {
-		assert.throws(() => buildReviewTree(practices, 0), /positive integer/);
-		assert.throws(() => buildReviewTree([{ slug: " " }], 1), /non-empty slug/);
+		assert.throws(() => buildReviewTree(practices, 0), /positive integer/u);
+		assert.throws(() => buildReviewTree([{ slug: " " }], 1), /non-empty slug/u);
 		assert.throws(
 			() => buildReviewTree([{ slug: "same" }, { slug: "same" }], 1),
-			/duplicate practice slug: same/,
+			/duplicate practice slug: same/u,
 		);
 	});
 });
@@ -191,9 +191,9 @@ void test("derives bounded review concurrency", () => {
 	assert.equal(resolveReviewConcurrency("1", 27), 1);
 	assert.equal(resolveReviewConcurrency("8", 1), 8);
 	for (const invalid of ["0", "9", "2.5", "nope"]) {
-		assert.throws(() => resolveReviewConcurrency(invalid, 27), /integer from 1 to 8/);
+		assert.throws(() => resolveReviewConcurrency(invalid, 27), /integer from 1 to 8/u);
 	}
-	assert.throws(() => resolveReviewConcurrency(undefined, -1), /non-negative integer/);
+	assert.throws(() => resolveReviewConcurrency(undefined, -1), /non-negative integer/u);
 });
 
 void test("mapConcurrent bounds active work and preserves input order", async () => {
@@ -203,8 +203,12 @@ void test("mapConcurrent bounds active work and preserves input order", async ()
 	const thirdStarted = Promise.withResolvers<undefined>();
 	const resultPromise = mapConcurrent([0, 1, 2, 3], 2, async (_, index) => {
 		started.push(index);
-		if (started.length === 2) firstPairStarted.resolve(undefined);
-		if (started.length === 3) thirdStarted.resolve(undefined);
+		if (started.length === 2) {
+			firstPairStarted.resolve(undefined);
+		}
+		if (started.length === 3) {
+			thirdStarted.resolve(undefined);
+		}
 		await releases[index]?.promise;
 		return index;
 	});
@@ -214,7 +218,9 @@ void test("mapConcurrent bounds active work and preserves input order", async ()
 	releases[1]?.resolve(undefined);
 	await thirdStarted.promise;
 	assert.deepEqual(started, [0, 1, 2]);
-	for (const release of releases) release.resolve(undefined);
+	for (const release of releases) {
+		release.resolve(undefined);
+	}
 	const results = await resultPromise;
 	assert.deepEqual(results, [0, 1, 2, 3]);
 });

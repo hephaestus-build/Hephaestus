@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 import {
@@ -6,7 +7,9 @@ import {
 	getAgentJobOptions,
 	getAgentJobQueryKey,
 	listPracticeReviewFeedbackOptions,
+	listPracticeReviewFeedbackQueryKey,
 	listPracticeReviewObservationsOptions,
+	listPracticeReviewObservationsQueryKey,
 	listPracticeReviewsQueryKey,
 	retryAgentJobDeliveryMutation,
 } from "@/api/@tanstack/react-query.gen";
@@ -35,8 +38,8 @@ export interface ReviewRunController {
 	feedback: ReviewSectionState<ReviewFeedback>;
 	onCancel: () => void;
 	cancelPending: boolean;
-	onRetryDelivery: () => void;
-	retryDeliveryPending: boolean;
+	onRetryResultProcessing: () => void;
+	retryResultProcessingPending: boolean;
 }
 
 /** The shape of a paged query this module reads, spelled out rather than taken as a
@@ -55,12 +58,22 @@ interface PagedQuery<T> {
  * caller knows which, so it passes `stillRunning` in.
  */
 function toSectionState<T>(query: PagedQuery<T>, stillRunning: boolean): ReviewSectionState<T> {
-	if (query.isLoading) return { status: "loading" };
+	if (query.isLoading) {
+		return { status: "loading" };
+	}
 	if (query.isError) {
-		return { status: "error", error: query.error, onRetry: () => void query.refetch() };
+		return {
+			status: "error",
+			error: query.error,
+			onRetry: () => {
+				void query.refetch();
+			},
+		};
 	}
 	const items = query.data?.content ?? [];
-	if (stillRunning && items.length === 0) return { status: "pending" };
+	if (stillRunning && items.length === 0) {
+		return { status: "pending" };
+	}
 	return { status: "ready", items, total: query.data?.page?.totalElements ?? 0 };
 }
 
@@ -69,7 +82,9 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 	const jobQuery = useQuery({
 		...getAgentJobOptions({ path: { workspaceSlug, jobId } }),
 		refetchInterval: (result) =>
-			result.state.data?.status === "QUEUED" || result.state.data?.status === "RUNNING"
+			result.state.data?.status === "QUEUED" ||
+			result.state.data?.status === "RUNNING" ||
+			result.state.data?.deliveryStatus === "PENDING"
 				? ACTIVE_REVIEW_POLL_MS
 				: false,
 	});
@@ -91,6 +106,26 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 		}),
 		refetchInterval: runIsActive ? ACTIVE_REVIEW_POLL_MS : false,
 	});
+
+	// Processing finishes after execution. Reload the outputs when either stage settles, including
+	// retries of a completed review; its previously cached feedback can otherwise stay stale.
+	useEffect(() => {
+		if (!jobQuery.data || runIsActive || jobQuery.data.deliveryStatus === "PENDING") {
+			return;
+		}
+		void queryClient.invalidateQueries({
+			queryKey: listPracticeReviewObservationsQueryKey({
+				path: { workspaceSlug },
+				query: { agentJobId: jobId, sort: "ACTIONABILITY", size: REVIEW_PREVIEW_SIZE },
+			}),
+		});
+		void queryClient.invalidateQueries({
+			queryKey: listPracticeReviewFeedbackQueryKey({
+				path: { workspaceSlug },
+				query: { agentJobId: jobId, size: REVIEW_PREVIEW_SIZE },
+			}),
+		});
+	}, [jobQuery.data, runIsActive, queryClient, workspaceSlug, jobId]);
 
 	/**
 	 * Both actions answer with the job as it now stands, so it is written straight into the cache
@@ -114,14 +149,14 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 				description: problemDetailOf(error, "Try again in a moment."),
 			}),
 	});
-	const retryDelivery = useMutation({
+	const retryResultProcessing = useMutation({
 		...retryAgentJobDeliveryMutation(),
 		onSuccess: (job) => {
 			updateJob(job);
-			toast.success("Summary comment queued for retry");
+			toast.success("Result processing queued for retry");
 		},
 		onError: (error) =>
-			toast.error("Couldn't retry the summary comment", {
+			toast.error("Couldn't retry result processing", {
 				description: problemDetailOf(error, "Try again in a moment."),
 			}),
 	});
@@ -130,12 +165,17 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 		job: jobQuery.data,
 		isLoading: jobQuery.isLoading,
 		error: jobQuery.error,
-		onRetry: () => void jobQuery.refetch(),
+		onRetry: () => {
+			void jobQuery.refetch();
+		},
 		observations: toSectionState<ReviewObservation>(observationsQuery, runIsActive),
-		feedback: toSectionState<ReviewFeedback>(feedbackQuery, runIsActive),
+		feedback: toSectionState<ReviewFeedback>(
+			feedbackQuery,
+			runIsActive || jobQuery.data?.deliveryStatus === "PENDING",
+		),
 		onCancel: () => cancelJob.mutate({ path: { workspaceSlug, jobId } }),
 		cancelPending: cancelJob.isPending,
-		onRetryDelivery: () => retryDelivery.mutate({ path: { workspaceSlug, jobId } }),
-		retryDeliveryPending: retryDelivery.isPending,
+		onRetryResultProcessing: () => retryResultProcessing.mutate({ path: { workspaceSlug, jobId } }),
+		retryResultProcessingPending: retryResultProcessing.isPending,
 	};
 }

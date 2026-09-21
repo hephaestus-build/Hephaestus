@@ -15,27 +15,26 @@ import { toast } from "sonner";
 
 import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstack/react-query.gen";
 import type { SurveyInvitation } from "@/api/types.gen";
-import { ImpersonationBanner } from "@/components/auth/ImpersonationBanner";
 import { LoginDialog } from "@/components/auth/LoginDialog";
-import { CookieConsentBanner } from "@/components/consent/CookieConsentBanner";
-import Footer from "@/components/core/Footer";
-import Header from "@/components/core/Header";
-import { AppSidebar, type SidebarContext } from "@/components/core/sidebar/AppSidebar";
-import { SkipToContent } from "@/components/core/SkipToContent";
-import { StandardPageSurface } from "@/components/core/StandardPageSurface";
-import type { FeedbackKind } from "@/components/feedback/feedback-copy";
+import { CookieConsentBanner } from "@/components/layout/CookieConsentBanner";
+import Footer from "@/components/layout/Footer";
+import Header from "@/components/layout/Header";
+import { AppSidebar, type SidebarContext } from "@/components/layout/sidebar/AppSidebar";
+import { SkipToContent } from "@/components/layout/SkipToContent";
+import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
+import type { FeedbackKind } from "@/components/product-feedback/feedback-copy";
 import {
 	PAGE_PATH_MAX_LENGTH,
 	ProductFeedbackDialog,
 	USER_AGENT_MAX_LENGTH,
-} from "@/components/feedback/ProductFeedbackDialog";
-import { ProductFeedbackMenu } from "@/components/feedback/ProductFeedbackMenu";
-import { ProductSurveyDialog } from "@/components/feedback/ProductSurveyDialog";
+} from "@/components/product-feedback/ProductFeedbackDialog";
+import { ProductFeedbackMenu } from "@/components/product-feedback/ProductFeedbackMenu";
+import { ProductSurveyDialog } from "@/components/product-feedback/ProductSurveyDialog";
 import {
 	EMPTY_SURVEY_RESPONSE_DRAFT,
 	type SurveyResponseDraft,
 	surveyEstimate,
-} from "@/components/feedback/survey-questions";
+} from "@/components/product-feedback/survey-questions";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
@@ -45,13 +44,15 @@ import { useProductSurveys, useSubmitProductFeedback } from "@/hooks/use-product
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
-import { type AuthContextType, useAuth } from "@/integrations/auth/AuthContext";
-import { safeReturnTo } from "@/integrations/auth/guard";
-import { FeatureFlagDevTools, useFeatureFlag } from "@/integrations/feature-flags";
-import { isCopilotExcludedRoute } from "@/lib/copilot-route";
-import { getProviderSlug } from "@/lib/provider";
+import { getProviderSlug } from "@/lib/provider/provider-terms";
+import { type AuthContextType, useAuth } from "@/runtime/auth/AuthContext";
+import { safeReturnTo } from "@/runtime/auth/guard";
+import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools";
+import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
+import { isCopilotExcludedRoute } from "./-copilot-route";
+import { ImpersonationBannerHost } from "./-ImpersonationBannerHost";
 
-const GlobalCopilot = lazy(() => import("./-GlobalCopilot"));
+const GlobalCopilot = lazy(async () => import("./-GlobalCopilot"));
 
 interface MyRouterContext {
 	queryClient: QueryClient;
@@ -71,7 +72,9 @@ function RootLayout() {
 		select: (matches) => {
 			for (let index = matches.length - 1; index >= 0; index -= 1) {
 				const matchSurface = matches[index]?.staticData.surface;
-				if (matchSurface) return matchSurface;
+				if (matchSurface) {
+					return matchSurface;
+				}
 			}
 			return "standard";
 		},
@@ -98,15 +101,12 @@ function RootLayout() {
 		<>
 			<HeadContent />
 			<SkipToContent />
-			{!loginOpen && <CookieConsentBanner />}
-			<ImpersonationBanner />
+			{loginOpen !== true && <CookieConsentBanner />}
+			<ImpersonationBannerHost />
 			<ProviderColorScope>
 				<SidebarProvider>
 					<AppSidebarContainer />
-					<SidebarInset
-						className="min-w-0"
-						style={{ marginRight: "var(--right-sidebar-width, 0)" }}
-					>
+					<SidebarInset className="mr-[var(--right-sidebar-width,0)] min-w-0">
 						<HeaderContainer />
 						<main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
 							{surface === "standard" ? (
@@ -135,7 +135,7 @@ function RootLayout() {
 			<Toaster />
 			<PublicLoginOverlay />
 			{showCopilot && (
-				<ErrorBoundary fallback={<></>} handled>
+				<ErrorBoundary handled>
 					<Suspense fallback={null}>
 						<GlobalCopilot />
 					</Suspense>
@@ -154,12 +154,14 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 	const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>("FEEDBACK");
 	const [survey, setSurvey] = useState<SurveyInvitation>();
 	const [surveyOpen, setSurveyOpen] = useState(false);
-	const [drafts, setDrafts] = useState<Record<string, SurveyResponseDraft>>({});
+	const [drafts, setDrafts] = useState(() => new Map<string, SurveyResponseDraft>());
 	const nudged = useRef(false);
 	const invitations = surveys.query.data ?? [];
 	const openSurvey = (surveyId: string) => {
 		const next = invitations.find((candidate) => candidate.id === surveyId);
-		if (!next) return;
+		if (!next) {
+			return;
+		}
 		setSurvey(next);
 		setSurveyOpen(true);
 	};
@@ -178,13 +180,15 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 				: `New survey: ${invitation.title}`,
 			{
 				description: `${surveyEstimate(invitation.questions)}. It waits in the feedback menu.`,
-				duration: 12000,
+				duration: 12_000,
 				action: { label: "Take survey", onClick: () => openSurvey(invitation.id) },
 			},
 		);
 	});
 	useEffect(() => {
-		if (!unseen || nudged.current) return;
+		if (!unseen || nudged.current) {
+			return;
+		}
 		nudged.current = true;
 		nudge(unseen);
 	}, [unseen]);
@@ -201,7 +205,9 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 			<ProductFeedbackDialog
 				open={feedbackOpen}
 				onOpenChange={(open) => {
-					if (!open) feedback.reset();
+					if (!open) {
+						feedback.reset();
+					}
 					setFeedbackOpen(open);
 				}}
 				kind={feedbackKind}
@@ -219,20 +225,28 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 					survey={survey}
 					open={surveyOpen}
 					onOpenChange={(open) => {
-						if (!open) closeSurvey();
+						if (!open) {
+							closeSurvey();
+						}
 					}}
-					draft={drafts[survey.id] ?? EMPTY_SURVEY_RESPONSE_DRAFT}
-					onDraftChange={(draft) => setDrafts((current) => ({ ...current, [survey.id]: draft }))}
+					draft={drafts.get(survey.id) ?? EMPTY_SURVEY_RESPONSE_DRAFT}
+					onDraftChange={(draft) => setDrafts((current) => new Map(current).set(survey.id, draft))}
 					isSubmitting={surveys.isPending}
 					error={surveys.error}
 					onSubmit={async (answers) => {
 						if (await surveys.submit(survey, answers)) {
-							setDrafts(({ [survey.id]: _sent, ...rest }) => rest);
+							setDrafts((current) => {
+								const next = new Map(current);
+								next.delete(survey.id);
+								return next;
+							});
 							closeSurvey();
 						}
 					}}
 					onDecline={async () => {
-						if (await surveys.decline(survey.id)) closeSurvey();
+						if (await surveys.decline(survey.id)) {
+							closeSurvey();
+						}
 					}}
 				/>
 			)}
@@ -249,11 +263,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 	component: RootLayout,
 	notFoundComponent: () => (
 		<div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-center py-16 text-center">
-			<h1 className="text-3xl font-bold mb-4">Page Not Found</h1>
-			<p className="text-muted-foreground mb-8">
-				The page you're looking for doesn't exist or you don't have permission to view it.
+			<h1 className="mb-4 text-3xl font-bold">Page Not Found</h1>
+			<p className="mb-8 text-muted-foreground">
+				The page you’re looking for doesn’t exist or you don’t have permission to view it.
 			</p>
-			<Link to="/" className="text-primary hover:underline font-medium">
+			<Link to="/" className="font-medium text-primary hover:underline">
 				Return to Home
 			</Link>
 		</div>
@@ -304,7 +318,9 @@ function HeaderContainer() {
 				) : null
 			}
 			onLogin={openLogin}
-			onLogout={() => void logout()}
+			onLogout={() => {
+				void logout();
+			}}
 		/>
 	);
 }
@@ -312,6 +328,24 @@ function HeaderContainer() {
 function ProviderColorScope({ children }: { children: ReactNode }) {
 	const { providerType } = useActiveWorkspaceSlug();
 	return <div data-provider={getProviderSlug(providerType)}>{children}</div>;
+}
+
+/** The workspace's own source-control provider, as the integration kind the sidebar lists it under. */
+function scmKindOf(providerType: string | undefined): ("GITHUB" | "GITLAB")[] {
+	if (providerType === "GITLAB" || providerType === "GITHUB") {
+		return [providerType];
+	}
+	return [];
+}
+
+function sidebarContextOf(pathname: string): SidebarContext {
+	if (pathname.startsWith("/admin")) {
+		return "admin";
+	}
+	if (pathname === "/mentor" || /^\/w\/[^/]+\/mentor/u.test(pathname)) {
+		return "mentor";
+	}
+	return "main";
 }
 
 function AppSidebarContainer() {
@@ -334,19 +368,11 @@ function AppSidebarContainer() {
 	const integrationKinds = [
 		...new Set([
 			...integrationCatalog.map((entry) => entry.kind),
-			...(chromeWorkspace?.providerType === "GITLAB"
-				? (["GITLAB"] as const)
-				: chromeWorkspace?.providerType === "GITHUB"
-					? (["GITHUB"] as const)
-					: []),
+			...scmKindOf(chromeWorkspace?.providerType),
 		]),
 	];
 
-	const sidebarContext: SidebarContext = pathname.startsWith("/admin")
-		? "admin"
-		: pathname === "/mentor" || /^\/w\/[^/]+\/mentor/.test(pathname)
-			? "mentor"
-			: "main";
+	const sidebarContext = sidebarContextOf(pathname);
 
 	const {
 		data: mentorThreads,
@@ -364,7 +390,9 @@ function AppSidebarContainer() {
 	}
 
 	const handleWorkspaceChange = (ws: typeof chromeWorkspace) => {
-		if (!ws) return;
+		if (!ws) {
+			return;
+		}
 		void switchWorkspace(ws);
 	};
 
@@ -415,8 +443,9 @@ function PublicLoginOverlay() {
 			onSignIn={(registrationId) => login(registrationId, returnTo)}
 			devReturnTo={returnTo}
 			onClose={() => {
-				if (location.maskedLocation) router.history.back();
-				else
+				if (location.maskedLocation) {
+					router.history.back();
+				} else {
 					void router.navigate({
 						to: ".",
 						search: (previous) => ({ ...previous, login: undefined }),
@@ -424,6 +453,7 @@ function PublicLoginOverlay() {
 						replace: true,
 						resetScroll: false,
 					});
+				}
 			}}
 		/>
 	);
