@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -134,6 +135,18 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         return objectMapper.readTree(captured.files().get(LinkedWorkItemContentSource.OUTPUT_FILE));
     }
 
+    private record Rollup(long total, long completed) implements IssueRepository.ChildRollup {
+        @Override
+        public long getTotal() {
+            return total;
+        }
+
+        @Override
+        public long getCompleted() {
+            return completed;
+        }
+    }
+
     private static List<Integer> numbers(JsonNode array) {
         return array.valueStream().map(JsonNode::asInt).toList();
     }
@@ -185,7 +198,8 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
                             "body",
                             "labels",
                             "subIssuesTotal",
-                            "subIssuesCompleted");
+                            "subIssuesCompleted",
+                            "subIssuesSource");
             assertThat(item.get("number").asInt()).isEqualTo(42);
             assertThat(item.get("title").asString()).isEqualTo("Add token refresh");
             assertThat(item.get("state").asString()).isEqualTo("OPEN");
@@ -195,8 +209,43 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             assertThat(item.get("labels").get(0).asString()).isEqualTo("backend");
             assertThat(item.get("subIssuesTotal").asInt()).isEqualTo(3);
             assertThat(item.get("subIssuesCompleted").asInt()).isEqualTo(1);
+            assertThat(item.get("subIssuesSource").asString()).isEqualTo("provider");
             assertThat(root.get("unresolvedReferences")).isEmpty();
             assertThat(root.get("truncated").asBoolean()).isFalse();
+            verify(issueRepository, never()).countChildrenByParentIssueId(anyLong(), any());
+        }
+
+        @Test
+        void shouldCountTheChildrenWhenTheProviderSyncedNoRollup() throws Exception {
+            // GitLab links a child to its parent and never totals them; the record counts them itself.
+            pullRequestWithBody("Closes #42");
+            Issue epic = issue(42, "Auth epic", "");
+            epic.setId(4200L);
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.of(epic));
+            when(issueRepository.countChildrenByParentIssueId(4200L, Issue.State.CLOSED))
+                    .thenReturn(new Rollup(3, 1));
+
+            JsonNode item = payload(sampleMetadata()).get("workItems").get(0);
+
+            assertThat(item.get("subIssuesTotal").asInt()).isEqualTo(3);
+            assertThat(item.get("subIssuesCompleted").asInt()).isEqualTo(1);
+            assertThat(item.get("subIssuesSource").asString()).isEqualTo("children");
+        }
+
+        @Test
+        void shouldWriteNoRollupWhenThereIsNeitherAProviderCountNorAChild() throws Exception {
+            pullRequestWithBody("Closes #42");
+            Issue plain = issue(42, "Standalone", "");
+            plain.setId(4201L);
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.of(plain));
+            when(issueRepository.countChildrenByParentIssueId(4201L, Issue.State.CLOSED))
+                    .thenReturn(new Rollup(0, 0));
+
+            JsonNode item = payload(sampleMetadata()).get("workItems").get(0);
+
+            assertThat(item.has("subIssuesTotal")).isFalse();
+            assertThat(item.has("subIssuesCompleted")).isFalse();
+            assertThat(item.has("subIssuesSource")).isFalse();
         }
 
         @Test

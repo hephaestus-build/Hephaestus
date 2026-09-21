@@ -239,8 +239,22 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
                 if (label != null && label.getName() != null) labels.add(label.getName());
             }
         }
-        if (issue.getSubIssuesTotal() != null) node.put("subIssuesTotal", issue.getSubIssuesTotal());
-        if (issue.getSubIssuesCompleted() != null) node.put("subIssuesCompleted", issue.getSubIssuesCompleted());
+        // The provider's own rollup when it syncs one (GitHub); otherwise counted from the children this
+        // repository stores, since GitLab's sync links a child to its parent and never totals them.
+        // `subIssuesSource` says which, so a reader knows whether the count is the provider's word.
+        if (issue.getSubIssuesTotal() != null && issue.getSubIssuesCompleted() != null) {
+            node.put("subIssuesTotal", issue.getSubIssuesTotal());
+            node.put("subIssuesCompleted", issue.getSubIssuesCompleted());
+            node.put("subIssuesSource", "provider");
+        } else if (issue.getId() != null) {
+            IssueRepository.ChildRollup children =
+                    issueRepository.countChildrenByParentIssueId(issue.getId(), Issue.State.CLOSED);
+            if (children.getTotal() > 0) {
+                node.put("subIssuesTotal", children.getTotal());
+                node.put("subIssuesCompleted", children.getCompleted());
+                node.put("subIssuesSource", "children");
+            }
+        }
         return node;
     }
 

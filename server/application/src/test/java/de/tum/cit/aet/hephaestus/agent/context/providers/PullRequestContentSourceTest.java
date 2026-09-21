@@ -255,6 +255,23 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldMarkTheAuthorBotWhenTheAdapterStoredItAsOne() throws Exception {
+            PullRequest pr = new PullRequest();
+            User token = user("group_12_bot_9f3a");
+            token.setType(User.Type.BOT);
+            pr.setAuthor(token);
+            stubGit();
+            when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(pr));
+
+            JsonNode metadataJson = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+                    .files()
+                    .get("inputs/context/metadata.json"));
+
+            assertThat(metadataJson.get("author").asString()).isEqualTo("group_12_bot_9f3a");
+            assertThat(metadataJson.get("author_bot").asBoolean()).isTrue();
+        }
+
+        @Test
         void shouldWriteEmptyListsAndNoKeysWhenThePullRequestCarriesNoneOfThem() throws Exception {
             stubGit();
 
@@ -263,6 +280,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     .get("inputs/context/metadata.json"));
 
             assertThat(metadataJson.get("is_merged").asBoolean()).isFalse();
+            assertThat(metadataJson.has("author_bot")).isFalse();
             assertThat(metadataJson.get("labels")).isEmpty();
             assertThat(metadataJson.get("assignees")).isEmpty();
             // Absent rather than null: a webhook-only record never learned these.
@@ -286,18 +304,30 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             minimal.setPath("src/Other.java");
             minimal.setLine(5);
             minimal.setBody("Old comment");
+            PullRequestReviewComment automated = new PullRequestReviewComment();
+            automated.setPath("src/Other.java");
+            automated.setLine(6);
+            automated.setBody("Coverage dropped.");
+            automated.setCreatedAt(Instant.parse("2025-06-02T12:00:00Z"));
+            User token = user("project_7_bot_a1b2");
+            token.setType(User.Type.BOT);
+            automated.setAuthor(token);
 
             stubGit();
             when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
-                    .thenReturn(List.of(full, minimal));
+                    .thenReturn(List.of(full, minimal, automated));
 
             Map<String, byte[]> files = captureFiles(request(sampleMetadata()));
 
             JsonNode comments = objectMapper.readTree(files.get("inputs/context/comments.json"));
-            assertThat(comments).hasSize(2);
+            assertThat(comments).hasSize(3);
             assertThat(comments.get(0).get("created_at").asString()).isEqualTo("2025-06-01T12:00:00Z");
             assertThat(comments.get(0).get("author").asString()).isEqualTo("reviewer");
-            assertThat(comments.get(1).has("author")).isFalse();
+            // A person's comment carries no `bot`; the adapter's BOT classification is projected as one.
+            assertThat(comments.get(0).has("bot")).isFalse();
+            assertThat(comments.get(1).get("author").asString()).isEqualTo("project_7_bot_a1b2");
+            assertThat(comments.get(1).get("bot").asBoolean()).isTrue();
+            assertThat(comments.get(2).has("author")).isFalse();
         }
 
         @Test

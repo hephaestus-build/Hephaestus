@@ -253,6 +253,10 @@ public class ReviewThreadContentSource implements EvidenceSource {
         String author = login(review.getAuthor());
         if (author != null) {
             node.put("author", author);
+            // The provider's own classification, as the adapter stored it; absent means a person.
+            if (review.getAuthor() != null && review.getAuthor().getType() == User.Type.BOT) {
+                node.put("bot", true);
+            }
         }
         // Raw timestamp so the agent can compute supersession (a later APPROVE by the same reviewer
         // overriding an earlier CHANGES_REQUESTED) downstream — this connector loads facts, it does not judge.

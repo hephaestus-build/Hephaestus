@@ -115,6 +115,24 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldMarkACommentBotWhenTheAdapterStoredItsAuthorAsOne() throws Exception {
+        IssueComment automated =
+                comment("group_12_bot_9f3a", "Pipeline passed.", Instant.parse("2025-06-01T10:00:00Z"));
+        automated.getAuthor().setType(User.Type.BOT);
+        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+                .thenReturn(List.of(
+                        automated, comment("reviewer-a", "Looks right.", Instant.parse("2025-06-01T11:00:00Z"))));
+
+        Map<String, byte[]> files = new HashMap<>();
+        provider.contribute(request(metadataWithPr()), files);
+
+        JsonNode comments = objectMapper.readTree(files.get(FILE_KEY)).get("comments");
+        // The adapter's classification, not a guess from the login; absent means a person.
+        assertThat(comments.get(0).get("bot").asBoolean()).isTrue();
+        assertThat(comments.get(1).has("bot")).isFalse();
+    }
+
+    @Test
     void contribute_generalDiscussion_emittedWithAuthorAndBody() throws Exception {
         when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
                 .thenReturn(List.of(

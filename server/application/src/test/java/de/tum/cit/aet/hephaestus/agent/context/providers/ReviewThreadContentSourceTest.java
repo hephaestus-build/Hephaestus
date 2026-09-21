@@ -248,6 +248,27 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldMarkADecisionBotWhenTheAdapterStoredItsAuthorAsOne() throws Exception {
+        User token = user("project_7_bot_a1b2");
+        token.setType(User.Type.BOT);
+        PullRequestReview automated = new PullRequestReview();
+        automated.setState(PullRequestReview.State.APPROVED);
+        automated.setAuthor(token);
+        automated.setSubmittedAt(Instant.parse("2025-06-01T10:00:00Z"));
+        when(reviewRepository.findRecentByPullRequestIdWithAuthor(any(), any(), any()))
+                .thenReturn(List.of(
+                        review(PullRequestReview.State.APPROVED, "reviewer-a", Instant.parse("2025-06-01T11:00:00Z")),
+                        automated));
+
+        Map<String, byte[]> files = new HashMap<>();
+        provider.contribute(request(metadataWithPr()), files);
+
+        JsonNode decisions = objectMapper.readTree(files.get(FILE_KEY)).get("reviewDecisions");
+        assertThat(decisions.get(0).get("bot").asBoolean()).isTrue();
+        assertThat(decisions.get(1).has("bot")).isFalse();
+    }
+
+    @Test
     void shouldBoundDecisionsByTheMemoryLimitSoBusyMergeRequestsKeepTheirApprovals() {
         // GitLab's sync makes one COMMENTED review per discussion and author; the old window of thirty
         // let those push an approval out of the file.

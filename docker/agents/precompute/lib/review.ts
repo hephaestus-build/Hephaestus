@@ -36,6 +36,8 @@ export interface ReviewComment {
 	outdated: boolean;
 	body: string;
 	author?: string;
+	/** The provider classified the author as automation (an access token, an app, a service user). */
+	bot: boolean;
 	createdAt?: string;
 }
 
@@ -43,6 +45,7 @@ export interface ReviewComment {
 export interface GeneralComment {
 	body: string;
 	author?: string;
+	bot: boolean;
 	createdAt?: string;
 }
 
@@ -59,6 +62,7 @@ export interface ReviewThread {
 export interface ReviewDecision {
 	state: string;
 	author?: string;
+	bot: boolean;
 	submittedAt?: string;
 	body?: string;
 	dismissed?: boolean;
@@ -124,6 +128,7 @@ export async function readReviewComments(
 		outdated: comment.outdated === true,
 		body: text(comment.body),
 		author: optionalString(comment.author),
+		bot: comment.bot === true,
 		createdAt: optionalString(comment.created_at ?? comment.createdAt),
 	}));
 }
@@ -140,6 +145,7 @@ export async function readGeneralComments(
 	return list.map((comment) => ({
 		body: text(comment.body),
 		author: optionalString(comment.author),
+		bot: comment.bot === true,
 		createdAt: optionalString(comment.createdAt ?? comment.created_at),
 	}));
 }
@@ -168,6 +174,7 @@ export async function readReviewThreads(
 		decisions: objects(parsed.reviewDecisions).map((decision) => ({
 			state: text(decision.state),
 			author: optionalString(decision.author),
+			bot: decision.bot === true,
 			submittedAt: optionalString(decision.submittedAt),
 			body: optionalString(decision.body),
 			dismissed: typeof decision.dismissed === "boolean" ? decision.dismissed : undefined,
@@ -216,11 +223,6 @@ export function later(a: string | undefined, b: string | undefined): boolean {
 /** A body on one line, cut to `length` characters, for a row's context or a flag. */
 export function excerpt(body: string, length = 160): string {
 	return body.replaceAll(/\s+/gu, " ").trim().slice(0, length);
-}
-
-/** A login the providers give their automation: `dependabot[bot]`, `project_42_bot`, GitHub's `ghost`. */
-export function isBotLogin(login: string | undefined): boolean {
-	return login !== undefined && (/(?:\[bot\]|_bot)$/iu.test(login) || login === "ghost");
 }
 
 /** Whether the change adds or removes a line within `radius` lines of the anchor. */
@@ -365,7 +367,7 @@ export function decisionRows(decisions: readonly ReviewDecision[], merge: MergeF
 			beforeMerge: merge.mergedAt !== undefined && later(merge.mergedAt, d.submittedAt),
 			isAuthor: d.author !== undefined && d.author === merge.author,
 			dismissed: d.dismissed === true,
-			bot: isBotLogin(d.author),
+			bot: d.bot,
 		},
 	}));
 }

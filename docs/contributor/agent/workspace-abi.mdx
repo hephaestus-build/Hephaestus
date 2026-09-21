@@ -137,7 +137,10 @@ entries are the ones kept when it is reached, and the capture is then reported `
 `assignees` (logins, sorted) are always written. `is_merged` is stated apart from `state` because a
 webhook-synced pull request closed by its merge is stored `CLOSED` with `merged_at` set. When present:
 `created_at`, `closed_at`, `merged_at` (ISO instants), `author`, `merged_by`, `milestone` (its title),
-and `merge_state_status` and `review_decision`, which only the GraphQL sync fills.
+and `merge_state_status` and `review_decision`, which only the GraphQL sync fills. `author_bot: true`
+is written when the adapter classified the author as automation (GitHub's bot type, GitLab's
+`group_<id>_bot_<hash>` / `project_<id>_bot_<hash>` token identities); absent means a person. The
+same rule gives every `author` below its `bot: true`, so a reader never guesses from a login.
 
 **`commits.json`** — `commits`: the commits of `base_sha..head_sha`, oldest first, the newest 500 of
 them when there are more. Written whenever the checkout was prepared, and staged rather than derived
@@ -152,14 +155,15 @@ whole message, subject and body) and `files`, each with `path`, `status` (`A`, `
 `id` (the stored id), `path`, `body`; when present, `thread` (the `id` of an entry in
 `review_threads.json`), `in_reply_to` (the `id` of the comment it answers), `line` (absent for a
 file-level comment), `side` (`LEFT` for a line of the base, `RIGHT` for a line of the head; absent
-when the provider does not say), `outdated` (only when `true`), `created_at` and `author`.
+when the provider does not say), `outdated` (only when `true`), `created_at`, `author` and `bot` (only
+when `true`). `general_comments.json` entries carry `bot` the same way beside their `author`.
 
 **`review_threads.json`** — `threads`, `reviewDecisions` and `truncated`. A thread: `id` (what a
 comment's `thread` names), `state` (`RESOLVED` or `UNRESOLVED`); when present, `path`, `line`,
 `resolvedBy`, `outdated` and `createdAt`. A thread holding a Hephaestus note is left out. A decision is
 a submitted review that decided something: `state` (`APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`,
-`DISMISSED`), and when present `author`, `submittedAt`, `body` (what the reviewer wrote with it) and
-`dismissed` (only when `true`). Unsubmitted and unmapped reviews are never listed, and neither is a
+`DISMISSED`), and when present `author`, `bot` (only when `true`), `submittedAt`, `body` (what the
+reviewer wrote with it) and `dismissed` (only when `true`). Unsubmitted and unmapped reviews are never listed, and neither is a
 `COMMENTED` review with no body — GitHub's container for a batch of inline comments, or the row
 GitLab's sync makes per discussion and author — because its substance is already in `comments.json`.
 The window is the same 10,000 bound as every other list, so an approval on a busy merge request is
@@ -169,7 +173,11 @@ never pushed out by discussion rows.
 every `#N` the title, the description (HTML comments removed), the branch name and the full commit
 messages of the change mention. A `#N` that continues another name — `owner/repo#12`, `v1.2#3`,
 `GH-12` — is not this repository's issue and is not looked up. `unresolvedReferences[]` lists the
-numbers this repository does not hold.
+numbers this repository does not hold. An item's `subIssuesTotal` and `subIssuesCompleted` come with
+`subIssuesSource`: `provider` when the provider synced the rollup (GitHub), `children` when the record
+counted the issues this repository stores as the item's children, closed ones as completed (GitLab,
+whose sync links a child to its parent and never totals them). All three are absent when there is
+neither a provider count nor a child.
 
 ## History records
 

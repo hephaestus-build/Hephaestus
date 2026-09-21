@@ -42,6 +42,22 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
         """)
     Optional<Issue> findByRepositoryIdAndNumber(@Param("repositoryId") long repositoryId, @Param("number") int number);
 
+    /**
+     * How many issues name {@code parentIssueId} as their parent, and how many of those are closed, as one
+     * {@code [total, completed]} row: the rollup a provider that syncs only the parent link never supplies.
+     * {@code TYPE(i) = Issue} keeps a pull request out of the count even if one ever carried a parent.
+     */
+    @Query("SELECT COUNT(i) AS total, COALESCE(SUM(CASE WHEN i.state = :closed THEN 1 ELSE 0 END), 0) AS completed "
+            + "FROM Issue i WHERE TYPE(i) = Issue AND i.parentIssue.id = :parentIssueId")
+    ChildRollup countChildrenByParentIssueId(
+            @Param("parentIssueId") long parentIssueId, @Param("closed") Issue.State closed);
+
+    interface ChildRollup {
+        long getTotal();
+
+        long getCompleted();
+    }
+
     /** Fetches an issue with its repository eagerly — used to build an issue-detection job submission. */
     @Query("SELECT i FROM Issue i LEFT JOIN FETCH i.repository WHERE TYPE(i) = Issue AND i.id = :id")
     Optional<Issue> findByIdWithRepository(@Param("id") long id);

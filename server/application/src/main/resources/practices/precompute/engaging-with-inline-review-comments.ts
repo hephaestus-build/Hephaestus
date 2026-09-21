@@ -8,7 +8,6 @@ import {
 	changeNear,
 	commitsAfter,
 	excerpt,
-	isBotLogin,
 	readReviewComments,
 	readReviewThreads,
 	reviewerCommentRows,
@@ -34,7 +33,7 @@ export default async function engagingWithInlineReviewComments(
 		inDiff: false,
 		flags: {
 			by: comment.author ?? "",
-			bot: isBotLogin(comment.author),
+			bot: comment.bot,
 			at: comment.createdAt ?? "",
 			side: comment.side ?? "",
 			outdated: comment.outdated,

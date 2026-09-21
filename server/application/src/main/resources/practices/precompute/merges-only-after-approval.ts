@@ -4,7 +4,6 @@
 // an approval by someone else stood at the merge; the rows say what was submitted and when.
 import {
 	decisionRows,
-	isBotLogin,
 	lastDecisionPerReviewer,
 	mergeFacts,
 	mergeRow,
@@ -53,7 +52,7 @@ export default async function mergesOnlyAfterApproval(
 			mergedByIsAuthor: merge.mergedByIsAuthor ? 1 : 0,
 			decisions: decisions.length,
 			approvalsBeforeMergeByOthers,
-			decisionsByBots: decisions.filter((d) => isBotLogin(d.author)).length,
+			decisionsByBots: decisions.filter((d) => d.bot).length,
 			threadsFileAbsent: record === null ? 1 : 0,
 		},
 		directions,

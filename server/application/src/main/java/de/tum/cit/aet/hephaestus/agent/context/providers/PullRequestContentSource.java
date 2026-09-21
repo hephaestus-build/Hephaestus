@@ -331,6 +331,10 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         result.put("changed_files", pullRequest.getChangedFiles());
         if (pullRequest.getAuthor() != null) {
             result.put("author", pullRequest.getAuthor().getLogin());
+            // The provider's own classification, as the adapter stored it; absent means a person.
+            if (pullRequest.getAuthor().getType() == User.Type.BOT) {
+                result.put("author_bot", true);
+            }
         }
         // Who landed it: a practice about the act of merging reads this beside merged_at and the
         // approvals in review_threads.json, and says nothing when the two people differ.
@@ -409,6 +413,9 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             }
             if (comment.getAuthor() != null) {
                 commentNode.put("author", comment.getAuthor().getLogin());
+                if (comment.getAuthor().getType() == User.Type.BOT) {
+                    commentNode.put("bot", true);
+                }
             }
             commentsArray.add(commentNode);
         }

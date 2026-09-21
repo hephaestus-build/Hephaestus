@@ -162,12 +162,20 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
         String author = login(c.getAuthor());
         if (author != null) {
             node.put("author", author);
+            if (isBot(c.getAuthor())) {
+                node.put("bot", true);
+            }
         }
         node.put("body", body);
         if (c.getCreatedAt() != null) {
             node.put("createdAt", c.getCreatedAt().toString());
         }
         return node;
+    }
+
+    /** The provider's own classification, as the adapter stored it. */
+    private static boolean isBot(@Nullable User user) {
+        return user != null && user.getType() == User.Type.BOT;
     }
 
     private static @Nullable String login(@Nullable User user) {
