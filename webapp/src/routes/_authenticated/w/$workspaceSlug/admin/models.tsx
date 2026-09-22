@@ -71,7 +71,7 @@ function targetKeyOf(variables: unknown): string | undefined {
 function slotRefusalOf(error: unknown): string {
 	const declaredTier = isRecord(error) ? error.declaredTier : undefined;
 	return isDataHandlingTier(declaredTier)
-		? `This model is declared as ${DATA_HANDLING_DEFS[declaredTier].label}; assign it to that row.`
+		? `This model is declared as ${DATA_HANDLING_DEFS[declaredTier].label}. Assign it to that row.`
 		: problemDetailOf(error);
 }
 

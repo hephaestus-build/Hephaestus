@@ -90,8 +90,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
 
     private CreateWorkspaceLlmModelRequestDTO enabledUnpricedCreateRequest() {
         return new CreateWorkspaceLlmModelRequestDTO(
-                "gpt-5", "GPT-5", "gpt-5", null, null, null, null, null, null, true, null, null, null, null, null,
-                null);
+                "gpt-5", "GPT-5", "gpt-5", null, null, null, null, null, true, null, null, null, null, null, null);
     }
 
     private CreateWorkspaceLlmModelRequestDTO createRequest(
@@ -102,7 +101,6 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                 "gpt-5",
                 "GPT-5",
                 "gpt-5",
-                null,
                 null,
                 null,
                 null,
@@ -234,7 +232,6 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     null,
                     null,
                     null,
-                    null,
                     true,
                     PricingMode.PRICED,
                     new BigDecimal("3.00"),
@@ -265,7 +262,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
             UpdateWorkspaceLlmModelRequestDTO request = new UpdateWorkspaceLlmModelRequestDTO(
-                    "New name", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    "New name", null, null, null, null, null, null, null, null, null, null, null, null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
 
@@ -280,7 +277,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             existing.setId(7L);
             existing.setWorkspace(connection().getWorkspace());
             existing.setConnection(connection());
-            existing.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.NONE, "EU"));
+            existing.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, "EU"));
             when(modelRepository.findByIdAndWorkspaceIdForUpdate(7L, 1L)).thenReturn(Optional.of(existing));
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -288,7 +285,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     workspaceContext,
                     7L,
                     new UpdateWorkspaceLlmModelRequestDTO(
-                            "New name", null, null, null, null, null, null, null, null, null, null, null, null, null));
+                            "New name", null, null, null, null, null, null, null, null, null, null, null, null));
 
             assertThat(result.getDataHandlingTier()).isEqualTo(DataHandlingTier.UNDECLARED);
             assertThat(result.getDataHandling().getNote()).isNull();
@@ -337,7 +334,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
             UpdateWorkspaceLlmModelRequestDTO request = new UpdateWorkspaceLlmModelRequestDTO(
-                    "Renamed", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    "Renamed", null, null, null, null, null, null, null, null, null, null, null, null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
 

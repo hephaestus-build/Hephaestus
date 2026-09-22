@@ -311,12 +311,12 @@ export const UnavailableRequirement: Story = {
 		await expect(required).toBeChecked();
 		await expect(required).toBeEnabled();
 		await expect(required).toHaveAccessibleDescription(
-			"Unavailable — repair it under Integrations or clear this requirement.",
+			"Unavailable. Repair it under Integrations or clear this requirement.",
 		);
 		const unrequired = canvas.getByRole("checkbox", { name: "Outline" });
 		await expectUnavailable(unrequired);
 		await expect(unrequired).toHaveAccessibleDescription(
-			"Unavailable — repair it under Integrations before requiring it.",
+			"Unavailable. Repair it under Integrations before requiring it.",
 		);
 	},
 };

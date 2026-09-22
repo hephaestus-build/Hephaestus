@@ -146,7 +146,7 @@ function AdminLlmModelFormDialogContent({
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit model" : "Add model"}</DialogTitle>
 					<DialogDescription>
-						Name the model and declare how it handles data; workspaces and developers see the
+						Name the model and declare how it handles data. Workspaces and developers see the
 						declaration as a badge.
 					</DialogDescription>
 				</DialogHeader>

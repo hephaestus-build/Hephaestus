@@ -87,10 +87,9 @@ function AiChoiceForm({
 			<QuestionnaireItem name="ai-choice" required>
 				<QuestionnaireTitle>Which AI may handle your work?</QuestionnaireTitle>
 				<QuestionnaireDescription>
-					Each answer also allows everything stricter than it; the bar on a card shows how far your
-					work may travel. Your work is never used for training. Which models run under your answer
-					is each workspace’s own setup: Your AI choice in a workspace’s sidebar shows what runs
-					there.
+					Compare the three and pick one. Cloud also allows in-house AI. Your work is never used for
+					training. Each workspace sets up its own models, and Your AI choice in a workspace’s
+					sidebar shows what runs there.
 				</QuestionnaireDescription>
 				{isLoading ? (
 					<div className="grid gap-3 sm:grid-cols-2" aria-busy="true">
@@ -102,7 +101,7 @@ function AiChoiceForm({
 					</div>
 				) : (
 					<fieldset disabled={busy} className="min-w-0 disabled:opacity-50">
-						<AiChoiceCards choice={selected} onChoice={setDraft} />
+						<AiChoiceCards choice={selected} saved={choice} onChoice={setDraft} />
 					</fieldset>
 				)}
 			</QuestionnaireItem>

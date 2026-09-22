@@ -43,8 +43,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
 
     private LlmModelDTO createModel(Long connectionId, String slug) {
         // Models start inactive until an explicit price declaration is supplied.
-        var request =
-                new CreateLlmModelRequestDTO(slug, "Test Model", "gpt-5", null, null, null, null, null, null, false);
+        var request = new CreateLlmModelRequestDTO(slug, "Test Model", "gpt-5", null, null, null, null, null, false);
         return Objects.requireNonNull(webTestClient
                 .post()
                 .uri("/admin/llm/connections/{connectionId}/models", connectionId)
@@ -90,7 +89,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .jsonPath("$.length()")
                 .isEqualTo(1);
 
-        var updateRequest = new UpdateLlmModelRequestDTO("Renamed Model", null, null, null, null, null, null, null);
+        var updateRequest = new UpdateLlmModelRequestDTO("Renamed Model", null, null, null, null, null, null);
         webTestClient
                 .patch()
                 .uri("/admin/llm/models/{id}", created.id())
@@ -134,7 +133,6 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 null,
                 null,
                 LlmDataOperator.PROVIDER,
-                LlmDataRetention.NONE,
                 "EU region, DPA renews next spring",
                 false);
         LlmModelDTO created = Objects.requireNonNull(webTestClient
@@ -150,16 +148,15 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .returnResult()
                 .getResponseBody());
         assertThat(created.operatedBy()).isEqualTo(LlmDataOperator.PROVIDER);
-        assertThat(created.keptAfterReply()).isEqualTo(LlmDataRetention.NONE);
         assertThat(created.dataHandlingNote()).isEqualTo("EU region, DPA renews next spring");
-        assertThat(created.dataHandlingTier()).isEqualTo(DataHandlingTier.PROVIDER_NOT_KEPT);
+        assertThat(created.dataHandlingTier()).isEqualTo(DataHandlingTier.CLOUD);
 
         DataHandlingFacts stored =
                 llmModelRepository.findById(created.id()).orElseThrow().getDataHandling();
         assertThat(stored.getOperatedBy()).isEqualTo(LlmDataOperator.PROVIDER);
-        assertThat(stored.getKeptAfterReply()).isEqualTo(LlmDataRetention.NONE);
         assertThat(stored.getNote()).isEqualTo("EU region, DPA renews next spring");
 
+        // The declaration is replaced wholesale: an update naming only the operator drops the note.
         webTestClient
                 .patch()
                 .uri("/admin/llm/models/{id}", created.id())
@@ -168,17 +165,19 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .bodyValue(Map.of("operatedBy", "PROVIDER"))
                 .exchange()
                 .expectStatus()
-                .isBadRequest()
+                .isOk()
                 .expectBody()
-                .jsonPath("$.detail")
-                .isEqualTo("Declare both facts or neither");
+                .jsonPath("$.dataHandlingNote")
+                .doesNotExist()
+                .jsonPath("$.dataHandlingTier")
+                .isEqualTo("CLOUD");
 
         webTestClient
                 .patch()
                 .uri("/admin/llm/models/{id}", created.id())
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateLlmModelRequestDTO(null, null, null, null, null, null, null, null))
+                .bodyValue(new UpdateLlmModelRequestDTO(null, null, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -202,7 +201,6 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 null,
                 null,
                 LlmDataOperator.OWN_ORGANISATION,
-                LlmDataRetention.FOR_SAFETY_CHECKS,
                 null,
                 false);
         LlmModelDTO created = Objects.requireNonNull(webTestClient
@@ -236,14 +234,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateLlmModelRequestDTO(
-                        null,
-                        null,
-                        null,
-                        null,
-                        LlmDataOperator.OWN_ORGANISATION,
-                        LlmDataRetention.FOR_SAFETY_CHECKS,
-                        null,
-                        true))
+                        null, null, null, null, LlmDataOperator.OWN_ORGANISATION, null, true))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -423,7 +414,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 // Different slug, SAME upstream model id as "dup-first" — only the upstream-id guard can
                 // reject this, so a pass cannot be the slug-conflict handler answering by accident.
                 .bodyValue(new CreateLlmModelRequestDTO(
-                        "dup-second", "Test Model", "gpt-5", null, null, null, null, null, null, false))
+                        "dup-second", "Test Model", "gpt-5", null, null, null, null, null, false))
                 .exchange()
                 .expectStatus()
                 .isEqualTo(409)

@@ -6,14 +6,14 @@ import { DataHandlingBadge } from "./DataHandlingBadge";
 
 /**
  * The badge every model table, picker and binding row shows for a model's declared data handling.
- * The three declared tiers share one neutral tone on purpose: none of them is a warning, and the
- * icon is what tells them apart. Only *Not declared* escalates, because it is an admin to-do.
+ * The two declared tiers share one neutral tone on purpose: neither is a warning, and the icon is
+ * what tells them apart. Only *Not declared* escalates, because it is an admin to-do.
  */
 const meta = {
 	component: DataHandlingBadge,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
-	args: { tier: "PROVIDER_NOT_KEPT" },
+	args: { tier: "CLOUD" },
 } satisfies Meta<typeof DataHandlingBadge>;
 
 export default meta;
@@ -30,9 +30,8 @@ export const EveryTier: Story = {
 		</div>
 	),
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Stays in-house")).toBeVisible();
-		await expect(canvas.getByText("Provider, nothing kept")).toBeVisible();
-		await expect(canvas.getByText("Provider, kept for safety checks")).toBeVisible();
+		await expect(canvas.getByText("In-house")).toBeVisible();
+		await expect(canvas.getByText("Cloud")).toBeVisible();
 		await expect(canvas.getByText("Not declared")).toBeVisible();
 	},
 };

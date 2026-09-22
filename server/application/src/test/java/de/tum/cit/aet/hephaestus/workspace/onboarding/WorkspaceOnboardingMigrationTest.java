@@ -36,7 +36,7 @@ class WorkspaceOnboardingMigrationTest {
                 int count = (int) pending.stream()
                         .filter(change -> change.getFilePath().endsWith(CHANGELOG))
                         .count();
-                assertThat(count).isEqualTo(18);
+                assertThat(count).isEqualTo(16);
                 liquibase.update(before, contexts, labels);
                 liquibase.tag("before-member-onboarding");
                 execute(connection, """
@@ -53,11 +53,11 @@ class WorkspaceOnboardingMigrationTest {
      """);
                 connection.commit();
                 liquibase.update(count, contexts, labels);
-                // A model that exists on main lands with no facts declared: it serves the undeclared slot only.
+                // A model that exists on main lands with no operator declared: it serves the undeclared slot only.
                 assertThat(
                                 scalar(
                                         connection,
-                                        "SELECT operated_by IS NULL AND kept_after_reply IS NULL AND data_handling_note IS NULL FROM llm_model WHERE id = 990105"))
+                                        "SELECT operated_by IS NULL AND data_handling_note IS NULL FROM llm_model WHERE id = 990105"))
                         .isEqualTo("t");
                 assertThat(scalar(
                                 connection, "SELECT data_handling_tier FROM workspace_agent_binding WHERE id = 990106"))
@@ -70,13 +70,13 @@ class WorkspaceOnboardingMigrationTest {
                         .isEqualTo("990105");
                 liquibase.update(count, contexts, labels);
                 execute(connection, """
-     UPDATE llm_model SET operated_by = 'PROVIDER', kept_after_reply = 'NONE', data_handling_note = 'EU region, DPA renews 2027-03' WHERE id = 990105;
+     UPDATE llm_model SET operated_by = 'PROVIDER', data_handling_note = 'EU region, DPA renews 2027-03' WHERE id = 990105;
      INSERT INTO workspace_llm_connection (id, workspace_id, slug, display_name, base_url, api_protocol, created_at)
      VALUES (990107, 990101, 'own-models', 'Own models', 'https://own.example.invalid', 'openai-completions', now());
-     INSERT INTO workspace_llm_model (id, workspace_id, connection_id, slug, display_name, upstream_model_id, operated_by, kept_after_reply, created_at)
-     VALUES (990108, 990101, 990107, 'own', 'Own', 'own-model', 'OWN_ORGANISATION', 'NONE', now());
+     INSERT INTO workspace_llm_model (id, workspace_id, connection_id, slug, display_name, upstream_model_id, operated_by, created_at)
+     VALUES (990108, 990101, 990107, 'own', 'Own', 'own-model', 'OWN_ORGANISATION', now());
      INSERT INTO workspace_agent_binding (workspace_id, purpose, instance_model_id, data_handling_tier)
-     VALUES (990101, 'PRACTICE_REVIEW', 990105, 'IN_HOUSE'), (990101, 'PRACTICE_REVIEW', 990105, 'PROVIDER_NOT_KEPT'), (990101, 'PRACTICE_REVIEW', 990105, 'PROVIDER_KEPT');
+     VALUES (990101, 'PRACTICE_REVIEW', 990105, 'IN_HOUSE'), (990101, 'PRACTICE_REVIEW', 990105, 'CLOUD');
      INSERT INTO account_ai_choice (account_id, ai_choice, updated_at) VALUES (990103, 'NO_AI', now());
      INSERT INTO workspace_member_onboarding (workspace_id, account_id, seen_revision, updated_at)
      VALUES (990101, 990103, 0, now());
@@ -112,18 +112,9 @@ class WorkspaceOnboardingMigrationTest {
                         .hasMessageContaining("ck_llm_model_operated_by");
                 connection.rollback();
                 assertThatThrownBy(() -> execute(
-                                connection, "UPDATE llm_model SET kept_after_reply = 'FOREVER' WHERE id = 990105"))
-                        .hasMessageContaining("ck_llm_model_kept_after_reply");
-                connection.rollback();
-                assertThatThrownBy(() -> execute(
                                 connection,
                                 "UPDATE workspace_llm_model SET operated_by = 'AUTOMATIC' WHERE id = 990108"))
                         .hasMessageContaining("ck_workspace_llm_model_operated_by");
-                connection.rollback();
-                assertThatThrownBy(() -> execute(
-                                connection,
-                                "UPDATE workspace_llm_model SET kept_after_reply = 'FOREVER' WHERE id = 990108"))
-                        .hasMessageContaining("ck_workspace_llm_model_kept_after_reply");
                 connection.rollback();
                 assertThatThrownBy(
                                 () -> execute(

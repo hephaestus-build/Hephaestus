@@ -13,7 +13,6 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataRetention;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPrice;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPriceRepository;
@@ -151,7 +150,7 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldAllowIndependentTierSlotsButSerializeClaimsWithinEachSlot() throws Exception {
         var inHouse = binding(DataHandlingTier.IN_HOUSE);
-        var kept = binding(DataHandlingTier.PROVIDER_KEPT);
+        var cloud = binding(DataHandlingTier.CLOUD);
         var first = queued(inHouse);
         var second = queued(inHouse);
         var start = new CyclicBarrier(2);
@@ -170,9 +169,9 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .containsExactlyInAnyOrder(AgentJobStatus.RUNNING, AgentJobStatus.QUEUED);
 
         doReturn(true).when(policy).permitsReview(anyLong(), any(), any());
-        var keptJob = queued(kept);
-        assertThat(executor.processJob(keptJob.getId())).isTrue();
-        assertThat(jobs.findById(keptJob.getId()))
+        var cloudJob = queued(cloud);
+        assertThat(executor.processJob(cloudJob.getId())).isTrue();
+        assertThat(jobs.findById(cloudJob.getId()))
                 .get()
                 .extracting(AgentJob::getStatus)
                 .isEqualTo(AgentJobStatus.RUNNING);
@@ -215,7 +214,7 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseAQueuedJobWhoseSnapshotTierDiffersFromTheBindingResolvedNow() {
         var inHouse = binding(DataHandlingTier.IN_HOUSE);
         var job = queued(inHouse);
-        var routedElsewhere = binding(DataHandlingTier.PROVIDER_KEPT);
+        var routedElsewhere = binding(DataHandlingTier.CLOUD);
         doReturn(Optional.of(routedElsewhere)).when(policy).binding(anyLong(), any(), any());
 
         assertThat(executor.processJob(job.getId())).isFalse();
@@ -226,11 +225,11 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldServeAMemberWhoAcceptsAnyDeclaredTierFromAnInHouseBindingWhenItIsTheOnlyOne() {
+    void shouldServeAMemberWhoAcceptsTheCloudFromAnInHouseBindingWhenItIsTheOnlyOne() {
         var inHouse = binding(DataHandlingTier.IN_HOUSE);
         var preferences = mock(MemberAiPreferences.class);
         when(preferences.forDeveloper(workspace.getId(), 20L))
-                .thenReturn(new MemberAiPreferences.Decision(true, MemberAiChoice.ANY_DECLARED));
+                .thenReturn(new MemberAiPreferences.Decision(true, MemberAiChoice.CLOUD));
         var routing = new MemberAiRoutingAdapter(bindings, preferences, resolver, workspaces);
 
         assertThat(routing.binding(workspace.getId(), AgentPurpose.PRACTICE_REVIEW, 20L))
@@ -331,12 +330,8 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
         var model = LlmCatalogTestFixtures.model(connection, slug, slug);
         model.setDataHandling(
                 switch (tier) {
-                    case IN_HOUSE ->
-                        DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, LlmDataRetention.NONE, null);
-                    case PROVIDER_NOT_KEPT ->
-                        DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.NONE, null);
-                    case PROVIDER_KEPT ->
-                        DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.FOR_SAFETY_CHECKS, null);
+                    case IN_HOUSE -> DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null);
+                    case CLOUD -> DataHandlingFacts.of(LlmDataOperator.PROVIDER, null);
                     case UNDECLARED -> new DataHandlingFacts();
                 });
         model = models.save(model);

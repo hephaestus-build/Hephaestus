@@ -6,9 +6,8 @@ import { expectGenuinelyDisabled } from "@/test/controls";
 
 import { AiChoiceSection } from "./AiChoiceSection";
 
-const IN_HOUSE = /^In-house only /u;
-const NOT_KEPT = /^Provider, nothing kept /u;
-const ANY = /^Provider, kept for safety checks /u;
+const IN_HOUSE = /^In-house /u;
+const CLOUD = /^Cloud /u;
 const NO_AI = /^No AI /u;
 
 const meta = {
@@ -36,8 +35,8 @@ function cardOf(radio: HTMLElement) {
 export const Unanswered: Story = {
 	play: async ({ canvas }) => {
 		const radios = canvas.getAllByRole("radio");
-		await expect(radios).toHaveLength(4);
-		for (const name of [IN_HOUSE, NOT_KEPT, ANY, NO_AI]) {
+		await expect(radios).toHaveLength(3);
+		for (const name of [IN_HOUSE, CLOUD, CLOUD, NO_AI]) {
 			await expect(canvas.getByRole("radio", { name })).not.toBeChecked();
 		}
 		const save = canvas.getByRole("button", { name: "Save" });
@@ -49,9 +48,9 @@ export const Unanswered: Story = {
 };
 
 export const Answered: Story = {
-	args: { choice: "NOT_KEPT_ONLY" },
+	args: { choice: "CLOUD" },
 	play: async ({ args, canvas, userEvent }) => {
-		await expect(canvas.getByRole("radio", { name: NOT_KEPT })).toBeChecked();
+		await expect(canvas.getByRole("radio", { name: CLOUD })).toBeChecked();
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save" }));
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toBeChecked();
@@ -62,7 +61,7 @@ export const Answered: Story = {
 };
 
 export const Saving: Story = {
-	args: { choice: "NOT_KEPT_ONLY", isSaving: true },
+	args: { choice: "CLOUD", isSaving: true },
 	play: async ({ canvas }) => {
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Saving…" }));
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toBeDisabled();
@@ -105,7 +104,7 @@ export const Narrow: Story = {
 			const above = cards[index - 1];
 			const card = cards[index];
 			if (!above || !card) {
-				throw new Error("Expected four cards");
+				throw new Error("Expected three cards");
 			}
 			await expect(card.top).toBeGreaterThanOrEqual(above.bottom);
 			await expect(card.left).toBe(above.left);
@@ -115,5 +114,5 @@ export const Narrow: Story = {
 
 export const Dark: Story = {
 	globals: { theme: "dark" },
-	args: { choice: "ANY_DECLARED" },
+	args: { choice: "CLOUD" },
 };

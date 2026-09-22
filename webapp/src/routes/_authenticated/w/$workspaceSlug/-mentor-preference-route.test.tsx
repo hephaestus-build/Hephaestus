@@ -74,8 +74,8 @@ it("names the saved choice when no Heph model is within it", async () => {
 		http.get("*/workspaces/acme/onboarding/me", () =>
 			HttpResponse.json({
 				...workspaceOnboarding(),
-				aiChoice: "NOT_KEPT_ONLY",
-				aiOptions: [{ choice: "NOT_KEPT_ONLY", mentorReady: false, practiceReviewsReady: true }],
+				aiChoice: "CLOUD",
+				aiOptions: [{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true }],
 			}),
 		),
 		http.get("*/workspaces/acme/mentor/threads", () => HttpResponse.json([])),
@@ -86,10 +86,8 @@ it("names the saved choice when no Heph model is within it", async () => {
 		{ name: "Heph isn't set up for your AI choice yet" },
 		ROUTE_RENDER_WAIT,
 	);
-	expect(
-		screen.getByText("Provider, nothing kept", { selector: "em" }).parentElement?.textContent,
-	).toBe(
-		"No Heph model is within Provider, nothing kept yet. Nothing switches you elsewhere — ask a workspace owner, or change your choice.",
+	expect(screen.getByText("Cloud", { selector: "em" }).parentElement?.textContent).toBe(
+		"No Heph model is within Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
 	);
 	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
 		"/w/acme/onboarding?returnTo=%2Fw%2Facme%2Fmentor",

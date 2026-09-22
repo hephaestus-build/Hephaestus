@@ -115,10 +115,10 @@ class LlmModelResolverTest extends BaseUnitTest {
         binding.setInstanceModel(model);
         binding.setDataHandlingTier(DataHandlingTier.IN_HOUSE);
         assertThat(resolver.isAvailable(binding)).isFalse();
-        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.NONE, null));
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
         assertThat(resolver.isAvailable(binding)).isFalse();
         assertThatThrownBy(() -> resolver.resolve(binding)).isInstanceOf(IllegalStateException.class);
-        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, LlmDataRetention.NONE, null));
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
         assertThat(resolver.isAvailable(binding)).isTrue();
     }
 
@@ -126,10 +126,10 @@ class LlmModelResolverTest extends BaseUnitTest {
     void shouldRefuseAStricterModelInALooserSlotBecauseTheSlotRuleIsExact() {
         var binding = binding();
         binding.setInstanceModel(model);
-        binding.setDataHandlingTier(DataHandlingTier.PROVIDER_NOT_KEPT);
-        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, LlmDataRetention.NONE, null));
+        binding.setDataHandlingTier(DataHandlingTier.CLOUD);
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
         assertThat(resolver.isAvailable(binding)).isFalse();
-        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.NONE, null));
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
         assertThat(resolver.isAvailable(binding)).isTrue();
     }
 
@@ -139,7 +139,7 @@ class LlmModelResolverTest extends BaseUnitTest {
         binding.setInstanceModel(model);
         assertThat(binding.getDataHandlingTier()).isEqualTo(DataHandlingTier.UNDECLARED);
         assertThat(resolver.isAvailable(binding)).isTrue();
-        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.FOR_SAFETY_CHECKS, null));
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
         assertThat(resolver.isAvailable(binding)).isTrue();
     }
 
@@ -147,8 +147,8 @@ class LlmModelResolverTest extends BaseUnitTest {
     void shouldReportTheModelsDerivedTierForAConnectionRef() {
         var ref = new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 10L, 20L, 30L);
         assertThat(resolver.dataHandlingTier(ref)).isEqualTo(DataHandlingTier.UNDECLARED);
-        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.NONE, null));
-        assertThat(resolver.dataHandlingTier(ref)).isEqualTo(DataHandlingTier.PROVIDER_NOT_KEPT);
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
+        assertThat(resolver.dataHandlingTier(ref)).isEqualTo(DataHandlingTier.CLOUD);
         assertThat(resolver.dataHandlingTier(LlmModelResolver.ConnectionRef.NONE))
                 .isEqualTo(DataHandlingTier.UNDECLARED);
     }

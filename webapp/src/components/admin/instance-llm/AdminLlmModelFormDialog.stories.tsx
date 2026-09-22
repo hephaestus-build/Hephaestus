@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { LlmModel } from "@/api/types.gen";
+import { DATA_HANDLING_DEFS } from "@/components/practice-vocabulary/data-handling-defs";
 import { expectSettledVisible } from "@/stories/overlay";
 import {
 	expectControlOnScreen,
@@ -16,9 +17,8 @@ import {
 import type { WorkspaceOption } from "./workspace-options";
 
 const mockModel: LlmModel = {
-	dataHandlingTier: "PROVIDER_NOT_KEPT",
+	dataHandlingTier: "CLOUD",
 	operatedBy: "PROVIDER",
-	keptAfterReply: "NONE",
 	dataHandlingNote: "EU region, zero-retention agreement renews 2027-01",
 	id: 1,
 	slug: "gpt-5-eu",
@@ -41,7 +41,7 @@ const mockModel: LlmModel = {
 	createdAt: new Date("2026-05-01T10:00:00Z"),
 };
 
-/** A model from before data handling could be declared: null facts, still saveable. */
+/** A model from before data handling could be declared: no operator, still saveable. */
 const legacyModel: LlmModel = {
 	...mockModel,
 	id: 2,
@@ -49,7 +49,6 @@ const legacyModel: LlmModel = {
 	displayName: "GPT-4 (legacy)",
 	dataHandlingTier: "UNDECLARED",
 	operatedBy: undefined,
-	keptAfterReply: undefined,
 	dataHandlingNote: undefined,
 };
 
@@ -59,12 +58,12 @@ const mockWorkspaces: WorkspaceOption[] = [
 ];
 
 /**
- * The admin declares two facts and the form derives the tier developers will see, previewed live
- * with the same badge and guarantee rows the developer's page renders. Rejected alternatives: a
- * tier picker (an admin would pick the label that sounds best rather than the facts the agreement
- * states) and inferring the tier from the connection's hostname (a gateway can front anything).
- * "Not declared" stays saveable so an instance upgraded from before the declaration keeps serving
- * members who have not chosen; it is a warning, never a block.
+ * The admin declares who operates the model and the form derives the tier developers will see,
+ * previewed live with the same badge and guarantee rows the developer's page renders. Rejected
+ * alternatives: a tier picker (an admin would pick the label that sounds best rather than the fact
+ * the agreement states) and inferring the tier from the connection's hostname (a gateway can front
+ * anything). "Not declared" stays saveable so an instance upgraded from before the declaration
+ * keeps serving members who have not chosen; it is a warning, never a block.
  */
 const meta = {
 	component: AdminLlmModelFormDialog,
@@ -95,18 +94,10 @@ export const AddModel: Story = {
 	play: async ({ args }) => {
 		const dialog = await screen.findByRole("dialog");
 		within(dialog).getByRole("radiogroup", { name: "Operated by" });
-		within(dialog).getByRole("radiogroup", { name: "Kept after the reply" });
 		await expectSettledVisible(within(dialog).getByText("Not declared"));
 
 		await fillIdentity(dialog);
 		await userEvent.click(within(dialog).getByRole("radio", { name: "A provider" }));
-		await userEvent.click(within(dialog).getByRole("button", { name: /^add model$/iu }));
-		await expectSettledVisible(
-			await within(dialog).findByText("Declare both facts or leave data handling undeclared."),
-		);
-		await expect(args.onSave).not.toHaveBeenCalled();
-
-		await userEvent.click(within(dialog).getByRole("radio", { name: "Nothing" }));
 		await userEvent.click(within(dialog).getByRole("button", { name: /^add model$/iu }));
 		await expectSettledVisible(
 			await within(dialog).findByText(
@@ -122,23 +113,19 @@ export const DeclaredPreview: Story = {
 		const dialog = await screen.findByRole("dialog");
 		await fillIdentity(dialog);
 		await userEvent.click(within(dialog).getByRole("radio", { name: "A provider" }));
-		await userEvent.click(within(dialog).getByRole("radio", { name: "Nothing" }));
 		await userEvent.click(within(dialog).getByRole("checkbox", { name: /rule out training/u }));
 
-		await expectSettledVisible(within(dialog).getByText("Provider, nothing kept"));
+		await expectSettledVisible(within(dialog).getByText("Cloud"));
 		// The preview's guarantee rows are the only definition list in the form.
 		const rows = within(dialog).getAllByRole("term");
-		await expect(rows.map((row) => row.textContent)).toStrictEqual([
-			"Operated by",
-			"Kept after the reply",
-			"Training",
-		]);
+		await expect(rows.map((row) => row.textContent)).toStrictEqual(
+			DATA_HANDLING_DEFS.CLOUD.facts.map((fact) => fact.term),
+		);
 
 		await userEvent.click(within(dialog).getByRole("button", { name: /^add model$/iu }));
 		await expect(args.onSave).toHaveBeenCalledOnce();
 		await expect(args.onSave.mock.calls[0]?.[0].metadata).toMatchObject({
 			operatedBy: "PROVIDER",
-			keptAfterReply: "NONE",
 		});
 	},
 };
@@ -148,11 +135,10 @@ export const EditModel: Story = {
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
 		await expect(within(dialog).getByRole("radio", { name: "A provider" })).toBeChecked();
-		await expect(within(dialog).getByRole("radio", { name: "Nothing" })).toBeChecked();
 		await expect(
 			within(dialog).getByRole("checkbox", { name: /rule out training/u }),
 		).toBeChecked();
-		await expectSettledVisible(within(dialog).getByText("Provider, nothing kept"));
+		await expectSettledVisible(within(dialog).getByText("Cloud"));
 	},
 };
 
@@ -168,7 +154,7 @@ export const RedeclareLeavesRows: Story = {
 
 		await userEvent.click(within(dialog).getByRole("radio", { name: "Your organisation" }));
 		await expectSettledVisible(
-			within(dialog).getByText("Rows holding this model as Provider, nothing kept stop serving"),
+			within(dialog).getByText("Rows holding this model as Cloud stop serving"),
 		);
 
 		await userEvent.click(within(dialog).getByRole("radio", { name: "A provider" }));
@@ -180,7 +166,7 @@ export const EditLegacyUndeclared: Story = {
 	args: { editing: legacyModel },
 	play: async ({ args }) => {
 		const dialog = await screen.findByRole("dialog");
-		for (const name of ["Your organisation", "A provider", "Nothing", "For safety checks"]) {
+		for (const name of ["Your organisation", "A provider"]) {
 			await expect(within(dialog).getByRole("radio", { name })).not.toBeChecked();
 		}
 		await expectSettledVisible(within(dialog).getByText("Not declared"));
@@ -214,15 +200,11 @@ export const AdvancedDisclosure: Story = {
 		const dialog = await screen.findByRole("dialog");
 		await expect(within(dialog).queryByLabelText(/^Context window/u)).not.toBeInTheDocument();
 
-		await userEvent.click(
-			within(dialog).getByRole("button", { name: "Advanced: limits and capabilities" }),
-		);
+		await userEvent.click(within(dialog).getByRole("button", { name: "Limits and capabilities" }));
 		const contextWindow = await within(dialog).findByLabelText(/^Context window/u);
 		await fillIdentity(dialog);
 		await userEvent.type(contextWindow, "3000000000");
-		await userEvent.click(
-			within(dialog).getByRole("button", { name: "Advanced: limits and capabilities" }),
-		);
+		await userEvent.click(within(dialog).getByRole("button", { name: "Limits and capabilities" }));
 		await userEvent.click(within(dialog).getByRole("button", { name: /^add model$/iu }));
 
 		// The invalid field cannot hide: the disclosure reopens on the error it holds.

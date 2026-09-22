@@ -26,19 +26,19 @@ export function workspaceCoverage(
 	if (!practiceReviews && !mentor) {
 		return {
 			level: "none",
-			sentence: `Nothing in ${data.workspaceName} is set up within this answer yet, so you get no AI here until a workspace owner adds a model that fits. Your choice still counts.`,
+			sentence: `Nothing in ${data.workspaceName} is set up within this answer yet. You get no AI here until a workspace owner adds a model that fits. Your choice still counts.`,
 		};
 	}
 	if (!mentor) {
 		return {
 			level: "partial",
-			sentence: `Heph isn't set up within this answer in ${data.workspaceName} yet; practice reviews are.`,
+			sentence: `Practice reviews run in ${data.workspaceName} within this answer. Heph isn't set up here yet.`,
 		};
 	}
 	if (!practiceReviews) {
 		return {
 			level: "partial",
-			sentence: `Practice reviews aren't set up within this answer in ${data.workspaceName} yet; Heph is.`,
+			sentence: `Heph runs in ${data.workspaceName} within this answer. Practice reviews aren't set up here yet.`,
 		};
 	}
 	return { level: "covered" };

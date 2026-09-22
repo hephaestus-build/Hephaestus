@@ -1,6 +1,6 @@
 # ADR 0026: Per-purpose agent bindings and governed OpenAI-compatible LLM catalog
 
-**Status:** Accepted (amended 2026-07-26 — named-agent-config model deleted; amended 2026-09-22 — member AI choice is per account)
+**Status:** Accepted, amended 2026-07-26 (named-agent-config model deleted) and 2026-09-22 (member AI choice is per account, and the tiers collapse to in-house and cloud from one declared fact)
 **Date:** 2026-07-24
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0006](0006-llm-proxy-on-coordinator-trust-model.md) (in-app LLM proxy as the sole credential path), [ADR 0025](0025-agent-job-queue-on-postgresql.md) (PostgreSQL agent job queue)
@@ -15,8 +15,8 @@
 > the bindings are assigned by, or No AI — is stored once per account (`account_ai_choice`,
 > registered GLOBAL in the tenancy layer) and holds in every workspace the account is a member of
 > on the instance; `workspace_member_onboarding` keeps only the settings revision at which the
-> member finished or skipped a workspace's setup page. The tiers are facts about who operates a
-> model and whether anything is kept, which do not vary by workspace, and comparable products keep
+> member finished or skipped a workspace's setup page. The tiers follow from who operates a
+> model, which does not vary by workspace, and comparable products keep
 > the person's data-use choice with the signed-in identity while organisations only tighten. The
 > workspace still owns what runs: one binding per purpose and tier, and the routing rule below is
 > unchanged — loosest ready binding within the ceiling, never looser. A person is asked on their
@@ -28,6 +28,19 @@
 > workspace's "choice required" setting keeps AI off their work. A narrow-only per-workspace
 > override (effective ceiling = the stricter of workspace and account) would fit later without
 > changing this model; none was built, since no comparable product has one.
+>
+> **Amendment (2026-09-22, same day):** the tiers collapse to two, `IN_HOUSE` and `CLOUD`, with
+> `UNDECLARED` outside every ceiling, and an admin declares one fact per model, **Operated by**,
+> instead of two. The split between a provider that keeps nothing and one that keeps work for
+> safety checks is gone, together with the `kept_after_reply` columns. The maintainer's reasoning:
+> developers do not need the provider split. It asked them to weigh a retention detail they cannot
+> verify and that changes with the provider's terms, and it made the answers read as a ladder of
+> risk rather than a boundary. One cloud answer with honest caveats on its card (the work leaves the
+> organisation, a provider may keep it briefly for safety checks, its staff may read flagged
+> content) is clearer, and the retention detail lives in the admin-only note where the agreement
+> already is. A developer's choice is now `NO_AI`, `IN_HOUSE_ONLY` or `CLOUD`, still a ceiling, so
+> Cloud also admits in-house models. Both amendments land in the same unreleased changelog, so no
+> saved choice predates the two-tier meaning.
 
 ## Context
 

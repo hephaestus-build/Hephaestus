@@ -3,7 +3,7 @@ import { minutesAfter } from "@/stories/story-clock";
 
 export const mockAvailableModels: AvailableLlmModel[] = [
 	{
-		dataHandlingTier: "PROVIDER_NOT_KEPT",
+		dataHandlingTier: "CLOUD",
 		id: 1,
 		scope: "SHARED",
 		displayName: "GPT-5",

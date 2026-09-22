@@ -106,7 +106,7 @@ describe("AdminLlmModelFormDialog", () => {
 		const onSave = renderDialog();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
 		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
-		fireEvent.click(screen.getByRole("button", { name: /^Advanced/u }));
+		fireEvent.click(screen.getByRole("button", { name: "Limits and capabilities" }));
 		const contextWindow = screen.getByLabelText(/^Context window/u);
 		const maxOutput = screen.getByLabelText(/^Max output tokens/u);
 		fireEvent.change(contextWindow, { target: { value: "3000000000" } });
@@ -190,29 +190,16 @@ describe("AdminLlmModelFormDialog", () => {
 		);
 	});
 
-	it("sends both facts and the note once declared and confirmed, and neither otherwise", () => {
+	it("sends the declaration and the note once declared and confirmed, and neither otherwise", () => {
 		const onSave = renderDialog();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
 		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
 		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
 		expect(onSave.mock.calls[0]?.[0].metadata).toStrictEqual(
-			expect.objectContaining({
-				operatedBy: undefined,
-				keptAfterReply: undefined,
-				dataHandlingNote: undefined,
-			}),
+			expect.objectContaining({ operatedBy: undefined, dataHandlingNote: undefined }),
 		);
 
 		fireEvent.click(screen.getByRole("radio", { name: "A provider" }));
-		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
-		const group = screen.getByRole("radiogroup", { name: "Operated by" });
-		const error = screen.getByRole("alert");
-		expect(error.textContent).toBe("Declare both facts or leave data handling undeclared.");
-		expect(group.getAttribute("aria-invalid")).toBe("true");
-		expect(group.getAttribute("aria-describedby")).toBe(error.id);
-		expect(onSave).toHaveBeenCalledOnce();
-
-		fireEvent.click(screen.getByRole("radio", { name: "Nothing" }));
 		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
 		const trainingError = screen.getByRole("alert");
 		expect(trainingError.textContent).toBe(
@@ -222,25 +209,26 @@ describe("AdminLlmModelFormDialog", () => {
 		const training = screen.getByRole("checkbox", { name: /rule out training/u });
 		expect(training.getAttribute("aria-invalid")).toBe("true");
 		expect(training.getAttribute("aria-describedby")).toBe(trainingError.id);
-		expect(group.getAttribute("aria-invalid")).not.toBe("true");
+		expect(
+			screen.getByRole("radiogroup", { name: "Operated by" }).getAttribute("aria-invalid"),
+		).not.toBe("true");
 		expect(onSave).toHaveBeenCalledOnce();
 
-		fireEvent.click(screen.getByRole("checkbox", { name: /rule out training/u }));
+		fireEvent.click(training);
 		fireEvent.change(screen.getByLabelText(/^Note for admins/u), {
 			target: { value: "EU region, DPA renews 2027-01" },
 		});
-		screen.getByText("Provider, nothing kept");
+		screen.getByText("Cloud");
 		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
 		expect(onSave.mock.calls[1]?.[0].metadata).toStrictEqual(
 			expect.objectContaining({
 				operatedBy: "PROVIDER",
-				keptAfterReply: "NONE",
 				dataHandlingNote: "EU region, DPA renews 2027-01",
 			}),
 		);
 	});
 
-	it("lets a half-declared model go back to undeclared", () => {
+	it("lets a declared model go back to undeclared", () => {
 		const onSave = renderDialog();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
 		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
@@ -253,7 +241,7 @@ describe("AdminLlmModelFormDialog", () => {
 		).toBe("false");
 		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
 		expect(onSave.mock.calls[0]?.[0].metadata).toStrictEqual(
-			expect.objectContaining({ operatedBy: undefined, keptAfterReply: undefined }),
+			expect.objectContaining({ operatedBy: undefined }),
 		);
 	});
 });

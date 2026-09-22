@@ -7,8 +7,6 @@ import {
 	DATA_HANDLING_DEFS,
 	type DataHandlingTier,
 	deriveDataHandlingTier,
-	KEPT_AFTER_REPLY_DEFS,
-	type KeptAfterReply,
 	OPERATED_BY_DEFS,
 	type OperatedBy,
 } from "@/components/practice-vocabulary/data-handling-defs";
@@ -47,9 +45,8 @@ export interface LlmModelFieldsValue {
 	contextWindow: string;
 	maxOutputTokens: string;
 	supportsReasoning: boolean;
-	/** Absent until the admin picks a fact, as the wire carries it; both facts or neither are sent. */
+	/** Absent until the admin declares the model, as the wire carries it. */
 	operatedBy?: OperatedBy;
-	keptAfterReply?: KeptAfterReply;
 	trainingConfirmed: boolean;
 	dataHandlingNote: string;
 	enabled: boolean;
@@ -63,7 +60,6 @@ interface EditedModel {
 	maxOutputTokens?: number;
 	supportsReasoning?: boolean;
 	operatedBy?: OperatedBy;
-	keptAfterReply?: KeptAfterReply;
 	dataHandlingNote?: string;
 	enabled?: boolean;
 }
@@ -72,7 +68,6 @@ export function modelFieldsValueOf(
 	model: EditedModel | null,
 	price: PriceModeValue,
 ): LlmModelFieldsValue {
-	const declared = model?.operatedBy !== undefined && model.keptAfterReply !== undefined;
 	return {
 		displayName: model?.displayName ?? "",
 		upstreamModelId: model?.upstreamModelId ?? "",
@@ -80,9 +75,8 @@ export function modelFieldsValueOf(
 		maxOutputTokens: model?.maxOutputTokens == null ? "" : String(model.maxOutputTokens),
 		supportsReasoning: model?.supportsReasoning ?? false,
 		operatedBy: model?.operatedBy,
-		keptAfterReply: model?.keptAfterReply,
 		// A declared model was confirmed when it was declared; the admin is not asked twice.
-		trainingConfirmed: declared,
+		trainingConfirmed: model?.operatedBy !== undefined,
 		dataHandlingNote: model?.dataHandlingNote ?? "",
 		enabled: model?.enabled ?? false,
 		price,
@@ -100,18 +94,16 @@ export function validateModelFields(
 		contextWindow: value.contextWindow,
 		maxOutputTokens: value.maxOutputTokens,
 		operatedBy: value.operatedBy,
-		keptAfterReply: value.keptAfterReply,
 		trainingConfirmed: value.trainingConfirmed,
 		dataHandlingNote: value.dataHandlingNote,
 		...value.price,
 	});
 }
 
-/** The declaration as the request DTOs carry it: an unset fact is omitted, a blank note too. */
+/** The declaration as the request DTOs carry it: an undeclared model omits it, a blank note too. */
 export function dataHandlingBodyOf(value: LlmModelFieldsValue) {
 	return {
 		operatedBy: value.operatedBy,
-		keptAfterReply: value.keptAfterReply,
 		dataHandlingNote: value.dataHandlingNote.trim() || undefined,
 	};
 }
@@ -155,8 +147,6 @@ interface FactChoiceProps<TValue extends string> {
 	defs: StatusDefs<TValue>;
 	value: TValue | undefined;
 	onChange: (value: TValue) => void;
-	invalid: boolean;
-	describedBy?: string;
 }
 
 /** One fact as a radio group of cards: icon, title and the sentence the admin is agreeing to. */
@@ -167,11 +157,9 @@ function FactChoice<TValue extends string>({
 	defs,
 	value,
 	onChange,
-	invalid,
-	describedBy,
 }: FactChoiceProps<TValue>) {
 	return (
-		<Field data-invalid={invalid}>
+		<Field>
 			<FieldTitle id={labelId}>{label}</FieldTitle>
 			<RadioGroup
 				// `undefined` would make Base UI treat the group as uncontrolled for its whole life, so
@@ -184,8 +172,6 @@ function FactChoice<TValue extends string>({
 				}}
 				className="gap-3"
 				aria-labelledby={labelId}
-				aria-invalid={invalid}
-				aria-describedby={describedBy}
 			>
 				{statusValues(defs).map((option) => {
 					const { icon: Icon, label: title, description } = defs[option];
@@ -244,16 +230,13 @@ export function LlmModelFields({
 	const upstreamModelIdErrorId = useId();
 	const contextWindowErrorId = useId();
 	const maxOutputTokensErrorId = useId();
-	const dataHandlingErrorId = useId();
 	const trainingErrorId = useId();
 	const dataHandlingNoteErrorId = useId();
 	const suggestionsId = `${idPrefix}-upstream-id-options`;
 
-	const previewTier = deriveDataHandlingTier(value.operatedBy, value.keptAfterReply);
-	const anyFactSet = value.operatedBy !== undefined || value.keptAfterReply !== undefined;
-	const dataHandlingInvalid = Boolean(errors.dataHandling);
-	const dataHandlingDescribedBy = hasText(errors.dataHandling) ? dataHandlingErrorId : undefined;
-	// A declared row holds only its exact tier, while the undeclared row takes any model — so
+	const previewTier = deriveDataHandlingTier(value.operatedBy);
+	const declared = value.operatedBy !== undefined;
+	// A declared row holds only its exact tier, while the undeclared row takes any model, so
 	// only a model leaving a declared tier drops out of the rows that hold it.
 	const leftTier =
 		savedTier !== undefined && savedTier !== "UNDECLARED" && previewTier !== savedTier
@@ -347,8 +330,8 @@ export function LlmModelFields({
 			<FieldSet>
 				<FieldLegend variant="label">Data handling</FieldLegend>
 				<FieldDescription>
-					Developers read this as your promise. Declare what the agreement says, not what the
-					hostname suggests.
+					Developers read this as your promise. Declare what the agreement says. The hostname is not
+					the agreement.
 				</FieldDescription>
 
 				<FactChoice
@@ -358,31 +341,14 @@ export function LlmModelFields({
 					defs={OPERATED_BY_DEFS}
 					value={value.operatedBy}
 					onChange={(operatedBy) => update({ operatedBy })}
-					invalid={dataHandlingInvalid}
-					describedBy={dataHandlingDescribedBy}
 				/>
-
-				<FactChoice
-					idPrefix={`${idPrefix}-kept-after-reply`}
-					labelId={`${idPrefix}-kept-after-reply-label`}
-					label="Kept after the reply"
-					defs={KEPT_AFTER_REPLY_DEFS}
-					value={value.keptAfterReply}
-					onChange={(keptAfterReply) => update({ keptAfterReply })}
-					invalid={dataHandlingInvalid}
-					describedBy={dataHandlingDescribedBy}
-				/>
-
-				{hasText(errors.dataHandling) && (
-					<FieldError id={dataHandlingErrorId}>{errors.dataHandling}</FieldError>
-				)}
 
 				<Field orientation="horizontal" data-invalid={Boolean(errors.trainingConfirmed)}>
 					<Checkbox
 						id={`${idPrefix}-training`}
 						checked={value.trainingConfirmed}
 						onCheckedChange={(trainingConfirmed) => update({ trainingConfirmed })}
-						required={anyFactSet}
+						required={declared}
 						aria-invalid={Boolean(errors.trainingConfirmed)}
 						aria-describedby={hasText(errors.trainingConfirmed) ? trainingErrorId : undefined}
 					/>
@@ -397,15 +363,13 @@ export function LlmModelFields({
 					</FieldContent>
 				</Field>
 
-				{anyFactSet && (
+				{declared && (
 					<Button
 						type="button"
 						variant="ghost"
 						size="sm"
 						className="-ml-2 w-fit"
-						onClick={() =>
-							update({ operatedBy: undefined, keptAfterReply: undefined, trainingConfirmed: false })
-						}
+						onClick={() => update({ operatedBy: undefined, trainingConfirmed: false })}
 					>
 						Leave undeclared
 					</Button>
@@ -439,7 +403,7 @@ export function LlmModelFields({
 						}
 					/>
 					<FieldDescription>
-						Region, agreement, renewal date. Shown to admins only, never to developers.
+						Region, agreement or renewal date. Only admins see it.
 					</FieldDescription>
 					{hasText(errors.dataHandlingNote) && (
 						<FieldError id={dataHandlingNoteErrorId}>{errors.dataHandlingNote}</FieldError>
@@ -453,7 +417,7 @@ export function LlmModelFields({
 					</div>
 					{previewTier === "UNDECLARED" ? (
 						<p className="text-sm text-muted-foreground">
-							Choose both facts to declare this model.
+							Choose who operates this model to declare it.
 						</p>
 					) : (
 						<FactList facts={DATA_HANDLING_DEFS[previewTier].facts} />
@@ -465,7 +429,7 @@ export function LlmModelFields({
 				<CollapsibleTrigger
 					render={
 						<Button type="button" variant="ghost" size="sm" className="group/adv -ml-2">
-							Advanced: limits and capabilities
+							Limits and capabilities
 							<ChevronDown
 								className="transition-transform group-aria-expanded/adv:rotate-180"
 								aria-hidden

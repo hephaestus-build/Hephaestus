@@ -42,13 +42,10 @@ public record WorkspaceLlmModelDTO(
         @Nullable @Schema(description = "Who operates the systems the work is sent to; null until declared")
         LlmDataOperator operatedBy,
 
-        @Nullable @Schema(description = "What stays behind after the reply; null until declared")
-        LlmDataRetention keptAfterReply,
-
         @Nullable @Schema(description = "Admin-only note: region, agreement, renewal date")
         String dataHandlingNote,
 
-        @NonNull @Schema(description = "Data-handling tier derived from the two facts; UNDECLARED until both are set")
+        @NonNull @Schema(description = "Data-handling tier derived from the operator; UNDECLARED until it is set")
         DataHandlingTier dataHandlingTier,
 
         @NonNull @Schema(description = "Active toggle") Boolean enabled,
@@ -84,7 +81,6 @@ public record WorkspaceLlmModelDTO(
                 model.getMaxOutputTokens(),
                 model.isSupportsReasoning(),
                 model.getDataHandling().getOperatedBy(),
-                model.getDataHandling().getKeptAfterReply(),
                 model.getDataHandling().getNote(),
                 model.getDataHandlingTier(),
                 model.isEnabled(),

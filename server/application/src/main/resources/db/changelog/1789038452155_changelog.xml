@@ -71,16 +71,6 @@
             </column>
         </addColumn>
     </changeSet>
-    <changeSet id="1789038452155-6" author="hephaestus">
-        <addColumn tableName="llm_model">
-            <column name="kept_after_reply" type="VARCHAR(24)"/>
-        </addColumn>
-    </changeSet>
-    <changeSet id="1789038452155-7" author="hephaestus">
-        <addColumn tableName="workspace_llm_model">
-            <column name="kept_after_reply" type="VARCHAR(24)"/>
-        </addColumn>
-    </changeSet>
     <changeSet id="1789038452155-8" author="hephaestus">
         <addColumn tableName="llm_model">
             <column name="operated_by" type="VARCHAR(24)"/>
@@ -115,11 +105,9 @@
     <changeSet id="1789038452155-16" author="hephaestus">
         <sql>
             ALTER TABLE llm_model ADD CONSTRAINT ck_llm_model_operated_by CHECK (operated_by IN ('OWN_ORGANISATION', 'PROVIDER'));
-            ALTER TABLE llm_model ADD CONSTRAINT ck_llm_model_kept_after_reply CHECK (kept_after_reply IN ('NONE', 'FOR_SAFETY_CHECKS'));
             ALTER TABLE workspace_llm_model ADD CONSTRAINT ck_workspace_llm_model_operated_by CHECK (operated_by IN ('OWN_ORGANISATION', 'PROVIDER'));
-            ALTER TABLE workspace_llm_model ADD CONSTRAINT ck_workspace_llm_model_kept_after_reply CHECK (kept_after_reply IN ('NONE', 'FOR_SAFETY_CHECKS'));
-            ALTER TABLE workspace_agent_binding ADD CONSTRAINT ck_agent_binding_data_handling_tier CHECK (data_handling_tier IN ('IN_HOUSE', 'PROVIDER_NOT_KEPT', 'PROVIDER_KEPT', 'UNDECLARED'));
-            ALTER TABLE account_ai_choice ADD CONSTRAINT ck_account_ai_choice CHECK (ai_choice IN ('NO_AI', 'IN_HOUSE_ONLY', 'NOT_KEPT_ONLY', 'ANY_DECLARED'));
+            ALTER TABLE workspace_agent_binding ADD CONSTRAINT ck_agent_binding_data_handling_tier CHECK (data_handling_tier IN ('IN_HOUSE', 'CLOUD', 'UNDECLARED'));
+            ALTER TABLE account_ai_choice ADD CONSTRAINT ck_account_ai_choice CHECK (ai_choice IN ('NO_AI', 'IN_HOUSE_ONLY', 'CLOUD'));
             ALTER TABLE workspace_onboarding_settings ADD CONSTRAINT ck_onboarding_requires_choice CHECK (NOT enabled OR ai_choice_required);
             ALTER TABLE workspace_onboarding_settings ADD CONSTRAINT ck_onboarding_required_links_array CHECK (jsonb_typeof(required_connection_ids) = 'array');
         </sql>
@@ -131,8 +119,8 @@
                         OR EXISTS (SELECT 1 FROM workspace_member_onboarding)
                         OR EXISTS (SELECT 1 FROM workspace_onboarding_settings)
                         OR EXISTS (SELECT 1 FROM workspace_agent_binding WHERE data_handling_tier <> 'UNDECLARED')
-                        OR EXISTS (SELECT 1 FROM llm_model WHERE operated_by IS NOT NULL OR kept_after_reply IS NOT NULL)
-                        OR EXISTS (SELECT 1 FROM workspace_llm_model WHERE operated_by IS NOT NULL OR kept_after_reply IS NOT NULL) THEN
+                        OR EXISTS (SELECT 1 FROM llm_model WHERE operated_by IS NOT NULL)
+                        OR EXISTS (SELECT 1 FROM workspace_llm_model WHERE operated_by IS NOT NULL) THEN
                         RAISE EXCEPTION 'Member onboarding is in use; restore a verified pre-upgrade backup instead of discarding AI choices';
                     END IF;
                 END $$;
@@ -142,9 +130,7 @@
                 ALTER TABLE workspace_onboarding_settings DROP CONSTRAINT ck_onboarding_requires_choice;
                 ALTER TABLE account_ai_choice DROP CONSTRAINT ck_account_ai_choice;
                 ALTER TABLE workspace_agent_binding DROP CONSTRAINT ck_agent_binding_data_handling_tier;
-                ALTER TABLE workspace_llm_model DROP CONSTRAINT ck_workspace_llm_model_kept_after_reply;
                 ALTER TABLE workspace_llm_model DROP CONSTRAINT ck_workspace_llm_model_operated_by;
-                ALTER TABLE llm_model DROP CONSTRAINT ck_llm_model_kept_after_reply;
                 ALTER TABLE llm_model DROP CONSTRAINT ck_llm_model_operated_by;
             </sql>
         </rollback>

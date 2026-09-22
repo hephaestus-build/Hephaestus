@@ -173,8 +173,8 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
     @Test
     void shouldAnswerTheAccountEndpointWithoutAWorkspace() {
         assertThat(service.accountChoice(10L)).isEqualTo(new AccountAiChoiceDTO(null, null));
-        var result = service.chooseForAccount(10L, MemberAiChoice.NOT_KEPT_ONLY);
-        assertThat(result.choice()).isEqualTo(MemberAiChoice.NOT_KEPT_ONLY);
+        var result = service.chooseForAccount(10L, MemberAiChoice.CLOUD);
+        assertThat(result.choice()).isEqualTo(MemberAiChoice.CLOUD);
         assertThat(result.updatedAt()).isEqualTo(NOW);
         verifyNoInteractions(memberships, settings, members);
     }
@@ -200,8 +200,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         when(availability.options(1L))
                 .thenReturn(List.of(
                         new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false),
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.NOT_KEPT_ONLY, false, false),
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.ANY_DECLARED, true, true)));
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.CLOUD, true, true)));
         var result = service.choose(context, 10L, MemberAiChoice.IN_HOUSE_ONLY);
         var saved = ArgumentCaptor.forClass(AccountAiChoice.class);
         verify(choices).save(saved.capture());
@@ -218,10 +217,10 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
     void shouldNotAskAgainInAnotherWorkspaceOnceTheAccountHasAnswered() {
         member();
         enabledPolicy();
-        chose(MemberAiChoice.NOT_KEPT_ONLY);
+        chose(MemberAiChoice.CLOUD);
         var result = service.state(context, 10L);
         assertThat(result.needsSetup()).isFalse();
-        assertThat(result.aiChoice()).isEqualTo(MemberAiChoice.NOT_KEPT_ONLY);
+        assertThat(result.aiChoice()).isEqualTo(MemberAiChoice.CLOUD);
         assertThat(result.aiChoiceRequired()).isTrue();
         verify(members, never()).save(any());
     }
@@ -231,7 +230,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         member();
         var policy = enabledPolicy();
         policy.setRequiredConnectionIds(List.of(9L));
-        chose(MemberAiChoice.NOT_KEPT_ONLY);
+        chose(MemberAiChoice.CLOUD);
         when(links.options(1L, 10L, List.of(9L))).thenReturn(List.of(OPEN_SLACK));
         assertThat(service.state(context, 10L).needsSetup()).isTrue();
         when(links.options(1L, 10L, List.of(9L))).thenReturn(List.of(UNAVAILABLE_SLACK));
@@ -243,7 +242,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         var workspace = member();
         var policy = enabledPolicy();
         policy.setRequiredConnectionIds(List.of(9L));
-        chose(MemberAiChoice.NOT_KEPT_ONLY);
+        chose(MemberAiChoice.CLOUD);
         when(links.options(1L, 10L, List.of(9L))).thenReturn(List.of(OPEN_SLACK));
         var row = seen(workspace, 3);
         assertThat(service.state(context, 10L).needsSetup()).isFalse();

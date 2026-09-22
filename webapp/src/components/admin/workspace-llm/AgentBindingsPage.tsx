@@ -96,11 +96,7 @@ const PURPOSES: PurposeMeta[] = [
 ];
 
 /** The developer answers the preview walks, in card order; No AI is served by nothing. */
-const PREVIEWED_CHOICES = [
-	"IN_HOUSE_ONLY",
-	"NOT_KEPT_ONLY",
-	"ANY_DECLARED",
-] satisfies MemberAiChoice[];
+const PREVIEWED_CHOICES = ["IN_HOUSE_ONLY", "CLOUD"] satisfies MemberAiChoice[];
 
 const UNCHOSEN_ROW_TITLE = "Members who haven't chosen";
 
@@ -207,7 +203,7 @@ export function AgentBindingsPage({
 			<PageHeader
 				icon={<BrainCircuit />}
 				title="AI models"
-				description="Choose the models that power workspace AI features."
+				description="Choose the models that run practice reviews and Heph."
 			/>
 
 			<div className="max-w-4xl space-y-6">
@@ -248,8 +244,8 @@ export function AgentBindingsPage({
 							<div className="space-y-1">
 								<h2 className="text-lg font-semibold">Model assignments</h2>
 								<p className="text-sm text-muted-foreground">
-									A member’s AI choice is a ceiling: the loosest ready row within it serves them,
-									and nothing moves them to a looser one.
+									A member’s AI choice is a ceiling. The loosest ready row within it serves them.
+									Nothing moves them to a looser one.
 								</p>
 							</div>
 							{PURPOSES.map((meta) => (
@@ -399,19 +395,18 @@ function BindingPreview({
 }: BindingPreviewProps) {
 	const served = (choice: MemberAiChoice | null): ReactNode => {
 		if (featureOffLabel !== undefined) {
-			return `→ nothing runs for them (${featureOffLabel})`;
+			return `Nothing runs for them (${featureOffLabel})`;
 		}
 		const binding = bindingFor(choice, bindings);
 		if (!binding) {
-			return "→ nothing runs for them";
+			return "Nothing runs for them";
 		}
 		return (
 			<>
-				→{" "}
 				<span className="font-medium text-foreground">
-					{DATA_HANDLING_DEFS[binding.dataHandlingTier].label}
-				</span>
-				: {modelOf(binding, availableModels)?.displayName ?? "a model no longer offered here"}
+					{modelOf(binding, availableModels)?.displayName ?? "A model no longer offered here"}
+				</span>{" "}
+				({DATA_HANDLING_DEFS[binding.dataHandlingTier].label})
 			</>
 		);
 	};

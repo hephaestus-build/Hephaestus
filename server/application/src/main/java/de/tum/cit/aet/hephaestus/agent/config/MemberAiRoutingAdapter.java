@@ -59,14 +59,14 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
     public List<Option> options(long workspaceId) {
         var workspace = workspaces.findById(workspaceId).orElseThrow();
         // A purpose whose feature is off has no rows worth loading; each enabled purpose is loaded once
-        // and shared by the three choices.
+        // and shared by both choices.
         var reviewRows = rowsIfEnabled(
                 workspaceId,
                 AgentPurpose.PRACTICE_REVIEW,
                 workspace.getFeatures().getPracticesEnabled());
         var mentorRows = rowsIfEnabled(
                 workspaceId, AgentPurpose.MENTOR, workspace.getFeatures().getMentorEnabled());
-        var choices = List.of(MemberAiChoice.IN_HOUSE_ONLY, MemberAiChoice.NOT_KEPT_ONLY, MemberAiChoice.ANY_DECLARED);
+        var choices = List.of(MemberAiChoice.IN_HOUSE_ONLY, MemberAiChoice.CLOUD);
         var options = new ArrayList<Option>();
         for (var choice : choices) {
             var review = choice.ceiling().flatMap(ceiling -> loosestWithin(reviewRows, ceiling));

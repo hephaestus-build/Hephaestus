@@ -95,7 +95,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
             stubResolver(binding);
             var snapshot =
                     ConfigSnapshot.from(binding, resolver).withPriceSnapshot(LlmPriceSnapshot.unpricedInstance());
-            binding.setDataHandlingTier(DataHandlingTier.PROVIDER_KEPT);
+            binding.setDataHandlingTier(DataHandlingTier.CLOUD);
 
             assertThat(ConfigSnapshot.fromJson(snapshot.toJson(OBJECT_MAPPER), OBJECT_MAPPER)
                             .dataHandlingTier())

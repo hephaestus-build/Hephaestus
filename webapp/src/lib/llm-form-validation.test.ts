@@ -121,13 +121,8 @@ describe("validateLlmModelForm", () => {
 		expect(validateLlmModelForm({ ...validModel, trainingConfirmed: false })).toStrictEqual({});
 	});
 
-	it("rejects one declared fact without the other", () => {
-		const errors = validateLlmModelForm({ ...validModel, operatedBy: "PROVIDER" });
-		expect(errors.dataHandling).toBe("Declare both facts or leave data handling undeclared.");
-	});
-
-	it("requires the training guarantee once both facts are declared", () => {
-		const declared = { ...validModel, operatedBy: "PROVIDER", keptAfterReply: "NONE" } as const;
+	it("requires the training guarantee once the model is declared", () => {
+		const declared = { ...validModel, operatedBy: "PROVIDER" } as const;
 		expect(validateLlmModelForm(declared)).toStrictEqual({
 			trainingConfirmed: "Confirm the training guarantee, or leave data handling undeclared.",
 		});

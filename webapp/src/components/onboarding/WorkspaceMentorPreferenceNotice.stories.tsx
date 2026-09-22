@@ -46,18 +46,18 @@ export const ChoiceRequired: Story = {
 };
 
 export const Unavailable: Story = {
-	args: { notice: { reason: "unavailable", choice: "NOT_KEPT_ONLY" } },
+	args: { notice: { reason: "unavailable", choice: "CLOUD" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent(
 			"Heph isn't set up for your AI choice yet",
 		);
 		// The title is emphasised so its comma does not split the sentence.
-		const title = canvas.getByText("Provider, nothing kept", {
+		const title = canvas.getByText("Cloud", {
 			selector: "em",
 		});
 		await expect(title).toBeVisible();
 		await expect(title.parentElement).toHaveTextContent(
-			"No Heph model is within Provider, nothing kept yet. Nothing switches you elsewhere — ask a workspace owner, or change your choice.",
+			"No Heph model is within Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
 		);
 		await expect(canvas.getByRole("link", { name: "Change your AI choice" })).toHaveAttribute(
 			"href",

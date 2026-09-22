@@ -79,7 +79,6 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 null,
                 null,
                 null,
-                null,
                 true,
                 PricingMode.NO_CHARGE,
                 null,
@@ -150,7 +149,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .isEqualTo(1);
 
         var updateRequest = new UpdateWorkspaceLlmModelRequestDTO(
-                "Renamed Model", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                "Renamed Model", null, null, null, null, null, null, null, null, null, null, null, null);
         webTestClient
                 .patch()
                 .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), created.id())
@@ -196,7 +195,6 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 null,
                 null,
                 LlmDataOperator.PROVIDER,
-                LlmDataRetention.NONE,
                 "EU region, DPA renews next spring",
                 true,
                 PricingMode.NO_CHARGE,
@@ -221,18 +219,17 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .returnResult()
                 .getResponseBody());
         assertThat(created.operatedBy()).isEqualTo(LlmDataOperator.PROVIDER);
-        assertThat(created.keptAfterReply()).isEqualTo(LlmDataRetention.NONE);
         assertThat(created.dataHandlingNote()).isEqualTo("EU region, DPA renews next spring");
-        assertThat(created.dataHandlingTier()).isEqualTo(DataHandlingTier.PROVIDER_NOT_KEPT);
+        assertThat(created.dataHandlingTier()).isEqualTo(DataHandlingTier.CLOUD);
 
         DataHandlingFacts stored = workspaceLlmModelRepository
                 .findByIdAndWorkspaceId(created.id(), workspace.getId())
                 .orElseThrow()
                 .getDataHandling();
         assertThat(stored.getOperatedBy()).isEqualTo(LlmDataOperator.PROVIDER);
-        assertThat(stored.getKeptAfterReply()).isEqualTo(LlmDataRetention.NONE);
         assertThat(stored.getNote()).isEqualTo("EU region, DPA renews next spring");
 
+        // The declaration is replaced wholesale: an update naming only the operator drops the note.
         webTestClient
                 .patch()
                 .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), created.id())
@@ -241,10 +238,12 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .bodyValue(Map.of("operatedBy", "PROVIDER"))
                 .exchange()
                 .expectStatus()
-                .isBadRequest()
+                .isOk()
                 .expectBody()
-                .jsonPath("$.detail")
-                .isEqualTo("Declare both facts or neither");
+                .jsonPath("$.dataHandlingNote")
+                .doesNotExist()
+                .jsonPath("$.dataHandlingTier")
+                .isEqualTo("CLOUD");
 
         webTestClient
                 .patch()
@@ -252,7 +251,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateWorkspaceLlmModelRequestDTO(
-                        null, null, null, null, null, null, null, null, null, null, null, null, null, null))
+                        null, null, null, null, null, null, null, null, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -372,7 +371,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateWorkspaceLlmModelRequestDTO(
-                        null, null, null, null, null, null, null, false, null, null, null, null, null, null))
+                        null, null, null, null, null, null, false, null, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()

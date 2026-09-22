@@ -31,7 +31,7 @@ const MODELS = [
 		connectionDisplayName: "Shared OpenAI",
 		supportsReasoning: false,
 		pricingMode: "NO_CHARGE",
-		dataHandlingTier: "PROVIDER_NOT_KEPT",
+		dataHandlingTier: "CLOUD",
 	},
 ];
 
@@ -82,7 +82,7 @@ function mockModelsRoute(bindings: () => AgentBinding[], aiChoiceRequired = fals
 			HttpResponse.json({
 				...workspaceOnboarding(),
 				aiChoiceRequired: true,
-				aiChoice: "ANY_DECLARED",
+				aiChoice: "CLOUD",
 			}),
 		),
 		http.get("*/workspaces/:workspaceSlug/agents", () => HttpResponse.json(bindings())),
@@ -286,7 +286,7 @@ describe("workspace AI models route", () => {
 	it("reads whether the choice is required from the workspace, not from the admin's own state", async () => {
 		await renderModelsRoute(() => [binding("PRACTICE_REVIEW", 20)]);
 		expect(previewTerm("Practice reviews", UNCHOSEN)?.nextElementSibling?.textContent).toBe(
-			"→ Not declared: GPT Test",
+			"GPT Test (Not declared)",
 		);
 		expect(within(row("Practice reviews")).queryByText(/serves no one now/u)).toBeNull();
 	});
@@ -307,23 +307,17 @@ describe("workspace AI models route", () => {
 		);
 		await renderModelsRoute(() => [
 			binding("PRACTICE_REVIEW", 20, "IN_HOUSE"),
-			binding("PRACTICE_REVIEW", 21, "PROVIDER_NOT_KEPT"),
+			binding("PRACTICE_REVIEW", 21, "CLOUD"),
 		]);
 
-		fireEvent.click(saveButton("Practice reviews", "Stays in-house"));
+		fireEvent.click(saveButton("Practice reviews", "In-house"));
 
-		await waitFor(() =>
-			expect(saveButton("Practice reviews", "Stays in-house").disabled).toBe(true),
-		);
-		expect(saveButton("Practice reviews", "Provider, nothing kept").disabled).toBe(false);
-		expect(
-			pickerOf(row("Practice reviews", "Provider, nothing kept")).hasAttribute("disabled"),
-		).toBe(false);
+		await waitFor(() => expect(saveButton("Practice reviews", "In-house").disabled).toBe(true));
+		expect(saveButton("Practice reviews", "Cloud").disabled).toBe(false);
+		expect(pickerOf(row("Practice reviews", "Cloud")).hasAttribute("disabled")).toBe(false);
 
 		releaseSlowSave();
-		await waitFor(() =>
-			expect(saveButton("Practice reviews", "Stays in-house").disabled).toBe(false),
-		);
+		await waitFor(() => expect(saveButton("Practice reviews", "In-house").disabled).toBe(false));
 	});
 
 	it("words the server's slot refusal from the registry and keeps it on the row that sent it", async () => {
@@ -335,7 +329,7 @@ describe("workspace AI models route", () => {
 						title: "Conflict",
 						status: 409,
 						detail: "This model is declared as a different tier; assign it to that row.",
-						declaredTier: "PROVIDER_NOT_KEPT",
+						declaredTier: "CLOUD",
 					},
 					{ status: 409 },
 				),
@@ -343,12 +337,10 @@ describe("workspace AI models route", () => {
 		);
 		await renderModelsRoute(() => [binding("PRACTICE_REVIEW", 20, "IN_HOUSE")]);
 
-		fireEvent.click(saveButton("Practice reviews", "Stays in-house"));
+		fireEvent.click(saveButton("Practice reviews", "In-house"));
 
-		const inHouse = row("Practice reviews", "Stays in-house");
-		await within(inHouse).findByText(
-			"This model is declared as Provider, nothing kept; assign it to that row.",
-		);
+		const inHouse = row("Practice reviews", "In-house");
+		await within(inHouse).findByText("This model is declared as Cloud. Assign it to that row.");
 		expect(pickerOf(inHouse).getAttribute("aria-invalid")).toBe("true");
 		expect(within(row("Practice reviews")).queryByRole("alert")).toBeNull();
 		expect(screen.queryByRole("status")).toBeNull();
@@ -371,9 +363,9 @@ it("shows a slot refusal that names no tier as the server phrased it", async () 
 	);
 	await renderModelsRoute(() => [binding("PRACTICE_REVIEW", 20, "IN_HOUSE")]);
 
-	fireEvent.click(saveButton("Practice reviews", "Stays in-house"));
+	fireEvent.click(saveButton("Practice reviews", "In-house"));
 
-	await within(row("Practice reviews", "Stays in-house")).findByText(
+	await within(row("Practice reviews", "In-house")).findByText(
 		"This model's data handling isn't declared yet.",
 	);
 });
@@ -382,7 +374,7 @@ it("saves and clears only the selected tier and lists only that tier's models", 
 	const user = userEvent.setup();
 	let bindings: AgentBinding[] = [
 		binding("PRACTICE_REVIEW", 20, "IN_HOUSE"),
-		binding("PRACTICE_REVIEW", 21, "PROVIDER_NOT_KEPT"),
+		binding("PRACTICE_REVIEW", 21, "CLOUD"),
 	];
 	mockModelsRoute(() => bindings);
 	let savedTier: string | null = null;
@@ -390,7 +382,7 @@ it("saves and clears only the selected tier and lists only that tier's models", 
 	server.use(
 		http.put("*/workspaces/acme/agents/PRACTICE_REVIEW", ({ request }) => {
 			savedTier = new URL(request.url).searchParams.get("dataHandlingTier");
-			return HttpResponse.json(binding("PRACTICE_REVIEW", 21, "PROVIDER_NOT_KEPT"));
+			return HttpResponse.json(binding("PRACTICE_REVIEW", 21, "CLOUD"));
 		}),
 		http.delete("*/workspaces/acme/agents/PRACTICE_REVIEW", ({ request }) => {
 			deletedTier = new URL(request.url).searchParams.get("dataHandlingTier");
@@ -402,27 +394,23 @@ it("saves and clears only the selected tier and lists only that tier's models", 
 	await screen.findByRole("region", { name: "Practice reviews" }, ROUTE_RENDER_WAIT);
 	const reviews = within(screen.getByRole("region", { name: "Practice reviews" }));
 
-	await user.click(reviews.getByRole("combobox", { name: /Provider, nothing kept/u }));
+	await user.click(reviews.getByRole("combobox", { name: /Cloud/u }));
 	const compatible = await screen.findByRole("option", { name: /GPT Other/u });
 	expect(screen.queryByRole("option", { name: /GPT Test/u })).toBeNull();
 	await user.click(compatible);
-	await user.click(saveButton("Practice reviews", "Provider, nothing kept"));
-	await waitFor(() => expect(savedTier).toBe("PROVIDER_NOT_KEPT"));
-	await waitFor(() =>
-		expect(saveButton("Practice reviews", "Provider, nothing kept").disabled).toBe(false),
-	);
+	await user.click(saveButton("Practice reviews", "Cloud"));
+	await waitFor(() => expect(savedTier).toBe("CLOUD"));
+	await waitFor(() => expect(saveButton("Practice reviews", "Cloud").disabled).toBe(false));
 
-	await user.click(clearButton(row("Practice reviews", "Provider, nothing kept")));
-	await waitFor(() => expect(deletedTier).toBe("PROVIDER_NOT_KEPT"));
+	await user.click(clearButton(row("Practice reviews", "Cloud")));
+	await waitFor(() => expect(deletedTier).toBe("CLOUD"));
 	await waitFor(() =>
 		expect(queryClient.getQueryData<AgentBinding[]>(AGENTS_QUERY_KEY)).toStrictEqual([
 			binding("PRACTICE_REVIEW", 20, "IN_HOUSE"),
 		]),
 	);
-	expect(pickerOf(row("Practice reviews", "Stays in-house")).textContent).toContain("GPT Test");
-	expect(pickerOf(row("Practice reviews", "Provider, nothing kept")).textContent).toContain(
-		"Select a model",
-	);
+	expect(pickerOf(row("Practice reviews", "In-house")).textContent).toContain("GPT Test");
+	expect(pickerOf(row("Practice reviews", "Cloud")).textContent).toContain("Select a model");
 });
 
 it("resets model drafts on workspace navigation while a previous workspace save completes", async () => {

@@ -91,7 +91,8 @@ const AI_FACTS: readonly Fact[] = [
 	{
 		icon: BotIcon,
 		term: "What AI does",
-		detail: "Reviews your work against your team’s practices, and talks it through as Heph.",
+		detail:
+			"Hephaestus reviews your work against your team’s practices. Heph talks it through with you.",
 	},
 	{
 		icon: GraduationCapIcon,
@@ -130,6 +131,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 		canSubmit,
 		coverage,
 		heading,
+		intro,
 		hint,
 	} = memberSetupState(data, draft, focus);
 	const submission: OnboardingSubmission = ready?.submission ?? { status: "idle" };
@@ -151,9 +153,6 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 			alertRef.current?.focus();
 		}
 	}, [submissionStatus]);
-
-	const workspaceName = data?.workspaceName ?? "this workspace";
-	const intro = `I only read your work in ${workspaceName} within the AI you allow. You answer once, for all your workspaces.`;
 
 	// Heph narrates the reader's answers; the footer hint says the same thing factually and reaches
 	// the button through `aria-describedby`, so focusing it does not replay the line.
@@ -229,18 +228,17 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 							    as "not the current question", so a nested fieldset is what holds the cards still. */}
 							<QuestionnaireItem name="ai-choice" required>
 								<QuestionnaireTitle>
-									<span className="flex items-start gap-3">
+									<span className="flex items-center gap-3">
 										<StepMarker icon={SparklesIcon} done={answered} />
 										Which AI may handle your work?
 									</span>
 								</QuestionnaireTitle>
 								<QuestionnaireDescription>
-									Each answer also allows everything stricter than it; the bar on a card shows how
-									far your work may travel. Allowing more does not mean better results.
+									Compare the three and pick one. Cloud also allows in-house AI.
 								</QuestionnaireDescription>
 								<FactList facts={AI_FACTS} />
 								<fieldset disabled={saving} className="min-w-0 disabled:opacity-50">
-									<AiChoiceCards choice={choice} onChoice={setDraft} />
+									<AiChoiceCards choice={choice} saved={data?.aiChoice} onChoice={setDraft} />
 								</fieldset>
 								{hasText(coverage?.sentence) && (
 									<p className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -274,11 +272,11 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 										<ItemGroup>
 											{links.map((link) => {
 												const Icon = getProviderIcon(link.providerType);
-												const prefix = hasText(link.teamName) ? `${link.teamName} · ` : "";
+												const team = hasText(link.teamName) ? ` for ${link.teamName}` : "";
 												const rowDescription =
 													!link.available && !link.linked
-														? `${prefix}Unavailable right now — it doesn't hold you up.`
-														: `${prefix}${link.required ? "Required" : "Optional"}`;
+														? `Unavailable right now${team}. It doesn't hold you up.`
+														: `${link.required ? "Required" : "Optional"}${team}`;
 												const descriptionId = `${id}-link-${link.connectionId}`;
 												return (
 													<Item key={link.connectionId} variant="outline" role="listitem">
@@ -312,7 +310,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 																		}
 																	}}
 																>
-																	{changed ? "Save & connect" : "Connect"}
+																	{changed ? "Save and connect" : "Connect"}
 																</Button>
 															)}
 														</ItemActions>
@@ -422,30 +420,30 @@ function onboardingNarration({
 	afterLink: boolean;
 }): string {
 	if (status === "loading") {
-		return "Give me a moment — I'm fetching your setup.";
+		return "Give me a moment. Hephaestus is fetching your setup.";
 	}
 	if (status === "error") {
-		return "I couldn't fetch your setup just now.";
+		return "Hephaestus couldn't fetch your setup just now.";
 	}
 	if (changed) {
 		// A draft nobody has built up to is still an answer worth saving; say so before the cue.
 		const uncovered =
-			coverage === "none" ? "That isn't set up here yet, and I won't switch you elsewhere. " : "";
+			coverage === "none" ? "That isn't set up here yet. Nothing switches you elsewhere. " : "";
 		if (firstVisit) {
 			return requiredSatisfied
-				? `${uncovered}Press Continue and I'll remember it everywhere.`
+				? `${uncovered}Press Continue and it holds in every workspace.`
 				: `${uncovered}Save your AI choice now. You can connect your accounts separately.`;
 		}
 		return `${uncovered}Save to apply your new choice in every workspace. Requests already sent cannot be recalled.`;
 	}
 	if (choice === undefined) {
-		return "One question: which AI may handle your work. Any answer is fine by me, including none.";
+		return "Which AI may handle your work? Any answer is fine, including none.";
 	}
 	if (coverage === "none") {
-		return "Your choice isn't set up here yet. I won't switch you anywhere else.";
+		return "Your choice isn't set up here yet. Nothing switches you anywhere else.";
 	}
 	if (coverage === "partial") {
-		return "Part of your choice isn't set up here yet. I won't switch you anywhere else.";
+		return "Part of your choice isn't set up here yet. Nothing switches you anywhere else.";
 	}
 	if (firstVisit && answered) {
 		// The same line whether the answer was just saved here or made in another workspace.
@@ -483,17 +481,19 @@ function memberSetupState(
 	const requiredSatisfied = openRequired.length === 0;
 	// Saving an AI choice is independent of connecting accounts, even on a first visit.
 	const canSubmit = choice !== undefined && (changed || (firstVisit && requiredSatisfied));
-	let heading = "Workspace setup";
-	if (data !== undefined) {
-		heading = firstVisit ? `Welcome to ${data.workspaceName}` : "Your AI choice";
-	}
+	const heading = "Your AI choice";
+	const workspaceName = data?.workspaceName ?? "this workspace";
+	// Heph speaks about Hephaestus, never as the reader of the work.
+	const intro = firstVisit
+		? `Before you start in ${workspaceName}, one question. Hephaestus only reads your work with the AI you allow, and you answer once for all your workspaces.`
+		: `Hephaestus only reads your work in ${workspaceName} with the AI you allow. Your answer holds in all your workspaces.`;
 	let hint: string | undefined;
 	if (data !== undefined) {
 		if (choice === undefined) {
 			hint = firstVisit ? "Choose an answer to continue." : "Choose an answer, then save.";
 		} else if (firstVisit && !requiredSatisfied) {
 			hint = changed
-				? `Save your AI choice now; connect ${openRequiredNames} to finish setup.`
+				? `Save your AI choice now. Connect ${openRequiredNames} to finish setup.`
 				: `Connect ${openRequiredNames} to finish setup.`;
 		} else if (!firstVisit && !changed) {
 			hint = "Applies in all your workspaces. Change it any time.";
@@ -512,6 +512,7 @@ function memberSetupState(
 		canSubmit,
 		coverage,
 		heading,
+		intro,
 		hint,
 	};
 }

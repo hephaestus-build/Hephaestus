@@ -43,20 +43,8 @@ function modelDeclaredAs(tier: AvailableLlmModel["dataHandlingTier"]): Available
 }
 
 const inHouseModel = modelDeclaredAs("IN_HOUSE");
-const notKeptModel = modelDeclaredAs("PROVIDER_NOT_KEPT");
+const cloudModel = modelDeclaredAs("CLOUD");
 const undeclaredModel = modelDeclaredAs("UNDECLARED");
-
-const keptModel: AvailableLlmModel = {
-	dataHandlingTier: "PROVIDER_KEPT",
-	id: 11,
-	scope: "WORKSPACE",
-	displayName: "Team gateway",
-	connectionDisplayName: "Own provider",
-	pricingMode: "UNPRICED",
-	supportsReasoning: true,
-};
-
-const models = [...mockAvailableModels, keptModel];
 
 function binding(
 	tier: AgentBinding["dataHandlingTier"],
@@ -79,7 +67,7 @@ function binding(
 
 const partiallyCovered: AgentBinding[] = [
 	binding("IN_HOUSE", inHouseModel),
-	binding("PROVIDER_KEPT", keptModel, { ready: false }),
+	binding("CLOUD", cloudModel, { ready: false }),
 	binding("UNDECLARED", undeclaredModel),
 ];
 
@@ -88,7 +76,7 @@ const partiallyCovered: AgentBinding[] = [
  * server picks the loosest ready row within it. The preview at the top of each card runs the same
  * rule client-side so an owner sees who gets which model before anyone asks.
  *
- * Rejected: one picker per purpose with a page-level tier filter — it hid the rows an owner was not
+ * Rejected: one picker per purpose with a page-level tier filter. It hid the rows an owner was not
  * looking at, and a member's answer spans several of them.
  */
 const meta = {
@@ -99,7 +87,7 @@ const meta = {
 	args: {
 		workspaceSlug: "acme",
 		bindings: [binding("IN_HOUSE", inHouseModel)],
-		availableModels: models,
+		availableModels: mockAvailableModels,
 		practicesEnabled: true,
 		mentorEnabled: true,
 		aiChoiceRequired: false,
@@ -123,30 +111,22 @@ export const TiersPartiallyCovered: Story = {
 	play: async ({ canvas }) => {
 		const reviews = purposeCard(canvas, "Practice reviews");
 
-		await expect(previewRow(reviews, "In-house only")).toHaveTextContent(
-			"→ Stays in-house: Local Llama (self-hosted)",
+		await expect(previewRow(reviews, "In-house")).toHaveTextContent(
+			"Local Llama (self-hosted) (In-house)",
 		);
-		await expect(previewRow(reviews, "Provider, nothing kept")).toHaveTextContent(
-			"→ Stays in-house: Local Llama (self-hosted)",
-		);
-		await expect(previewRow(reviews, "Provider, kept for safety checks")).toHaveTextContent(
-			"→ Stays in-house: Local Llama (self-hosted)",
+		await expect(previewRow(reviews, "Cloud")).toHaveTextContent(
+			"Local Llama (self-hosted) (In-house)",
 		);
 		await expect(previewRow(reviews, UNCHOSEN_ROW)).toHaveTextContent(
-			"→ Not declared: My OpenAI key",
+			"My OpenAI key (Not declared)",
 		);
 
-		await expect(row(reviews, "Stays in-house").getByText("Ready")).toBeVisible();
-		await expect(
-			row(reviews, "Provider, kept for safety checks").getByText("Not ready"),
-		).toBeVisible();
-		await expect(row(reviews, "Provider, nothing kept").queryByText(/ready/iu)).toBeNull();
+		await expect(row(reviews, "In-house").getByText("Ready")).toBeVisible();
+		await expect(row(reviews, "Cloud").getByText("Not ready")).toBeVisible();
+		// Heph binds nothing here, so its rows carry no readiness at all.
+		await expect(row(purposeCard(canvas, "Heph"), "In-house").queryByText(/ready/iu)).toBeNull();
 
-		await userEvent.click(
-			row(reviews, "Provider, nothing kept").getByRole("combobox", {
-				name: /Provider, nothing kept/u,
-			}),
-		);
+		await userEvent.click(row(reviews, "Cloud").getByRole("combobox", { name: /Cloud/u }));
 		await expect(await screen.findByRole("option", { name: /GPT-5/u })).toBeVisible();
 		await expect(screen.queryByRole("option", { name: /Local Llama/u })).toBeNull();
 		await expect(screen.queryByRole("option", { name: /My OpenAI key/u })).toBeNull();
@@ -157,15 +137,11 @@ export const NothingCovered: Story = {
 	args: { bindings: [binding("UNDECLARED", undeclaredModel)] },
 	play: async ({ canvas }) => {
 		const reviews = purposeCard(canvas, "Practice reviews");
-		for (const term of [
-			"In-house only",
-			"Provider, nothing kept",
-			"Provider, kept for safety checks",
-		]) {
-			await expect(previewRow(reviews, term)).toHaveTextContent("→ nothing runs for them");
+		for (const term of ["In-house", "Cloud"]) {
+			await expect(previewRow(reviews, term)).toHaveTextContent("Nothing runs for them");
 		}
 		await expect(previewRow(reviews, UNCHOSEN_ROW)).toHaveTextContent(
-			"→ Not declared: My OpenAI key",
+			"My OpenAI key (Not declared)",
 		);
 	},
 };
@@ -186,39 +162,39 @@ export const SlotRejected: Story = {
 		bindings: partiallyCovered,
 		saveErrors: {
 			[bindingTargetKey({ purpose: "PRACTICE_REVIEW", tier: "IN_HOUSE" })]:
-				"This model is declared as Provider, nothing kept; assign it to that row.",
+				"This model is declared as Cloud. Assign it to that row.",
 		},
 	},
 	play: async ({ canvas, args }) => {
-		const inHouse = row(purposeCard(canvas, "Practice reviews"), "Stays in-house");
+		const inHouse = row(purposeCard(canvas, "Practice reviews"), "In-house");
 		await userEvent.click(inHouse.getByRole("button", { name: /^Save assignment/u }));
 		await expect(args.onSave).toHaveBeenCalledWith(
 			{ purpose: "PRACTICE_REVIEW", tier: "IN_HOUSE" },
 			expect.objectContaining({ instanceModelId: 2 }),
 		);
-		const picker = inHouse.getByRole("combobox", { name: /Stays in-house/u });
+		const picker = inHouse.getByRole("combobox", { name: /In-house/u });
 		await expect(picker).toHaveAttribute("aria-invalid", "true");
 		await expect(inHouse.getByRole("alert")).toHaveTextContent(
-			"This model is declared as Provider, nothing kept; assign it to that row.",
+			"This model is declared as Cloud. Assign it to that row.",
 		);
 		await expect(picker).toHaveAccessibleDescription(
-			/This model is declared as Provider, nothing kept; assign it to that row\./u,
+			/This model is declared as Cloud\. Assign it to that row\./u,
 		);
 	},
 };
 
-/** A bound model whose facts were re-declared keeps its name on the row, which says why it stopped. */
+/** A bound model that was re-declared keeps its name on the row, which says why it stopped. */
 export const BoundModelMoved: Story = {
 	args: {
-		bindings: [binding("IN_HOUSE", notKeptModel, { ready: false })],
+		bindings: [binding("IN_HOUSE", cloudModel, { ready: false })],
 	},
 	play: async ({ canvas }) => {
-		const inHouse = row(purposeCard(canvas, "Practice reviews"), "Stays in-house");
+		const inHouse = row(purposeCard(canvas, "Practice reviews"), "In-house");
 		await expect(inHouse.getByText("Not ready")).toBeVisible();
-		const picker = inHouse.getByRole("combobox", { name: /Stays in-house/u });
+		const picker = inHouse.getByRole("combobox", { name: /In-house/u });
 		await expect(picker).toHaveTextContent("GPT-5");
 		await expect(picker).toHaveAccessibleDescription(
-			"GPT-5 is now declared as Provider, nothing kept and no longer serves this row. Choose another model, or clear the assignment.",
+			"GPT-5 is now declared as Cloud and no longer serves this row. Choose another model, or clear the assignment.",
 		);
 	},
 };
@@ -226,15 +202,15 @@ export const BoundModelMoved: Story = {
 /** With no other model of the row's tier on offer, the picker has nothing to choose, so the hint says so. */
 export const BoundModelMovedNoAlternative: Story = {
 	args: {
-		bindings: [binding("IN_HOUSE", notKeptModel, { ready: false })],
-		availableModels: [notKeptModel],
+		bindings: [binding("IN_HOUSE", cloudModel, { ready: false })],
+		availableModels: [cloudModel],
 	},
 	play: async ({ canvas }) => {
-		const inHouse = row(purposeCard(canvas, "Practice reviews"), "Stays in-house");
-		const picker = inHouse.getByRole("combobox", { name: /Stays in-house/u });
+		const inHouse = row(purposeCard(canvas, "Practice reviews"), "In-house");
+		const picker = inHouse.getByRole("combobox", { name: /In-house/u });
 		await expect(picker).toBeDisabled();
 		await expect(picker).toHaveAccessibleDescription(
-			"GPT-5 is now declared as Provider, nothing kept and no longer serves this row. Clear the assignment, or ask your host for a model declared as Stays in-house.",
+			"GPT-5 is now declared as Cloud and no longer serves this row. Clear the assignment, or ask your host for a model declared as In-house.",
 		);
 		await expect(inHouse.getByRole("button", { name: /^Clear assignment/u })).toBeEnabled();
 	},
@@ -248,10 +224,8 @@ export const NoModelsAvailable: Story = {
 	args: { bindings: [], availableModels: [] },
 	play: async ({ canvas }) => {
 		const reviews = purposeCard(canvas, "Practice reviews");
-		await expect(
-			row(reviews, "Provider, nothing kept").getByText(/No model declared as/u),
-		).toHaveTextContent(
-			"No model declared as Provider, nothing kept is available here yet. Ask your host, or add one under your own providers.",
+		await expect(row(reviews, "Cloud").getByText(/No model declared as/u)).toHaveTextContent(
+			"No model declared as Cloud is available here yet. Ask your host, or add one under your own providers.",
 		);
 		await expect(
 			row(reviews, UNCHOSEN_ROW).getByText(/No models are available yet/u),
@@ -282,26 +256,21 @@ export const ProjectReviewsDisabled: Story = {
 	play: async ({ canvas }) => {
 		const card = purposeCard(canvas, "Practice reviews");
 		await expect(card.getByText("Practice reviews off")).toBeVisible();
-		for (const term of [
-			"In-house only",
-			"Provider, nothing kept",
-			"Provider, kept for safety checks",
-			UNCHOSEN_ROW,
-		]) {
+		for (const term of ["In-house", "Cloud", UNCHOSEN_ROW]) {
 			await expect(previewRow(card, term)).toHaveTextContent(
-				"→ nothing runs for them (Practice reviews off)",
+				"Nothing runs for them (Practice reviews off)",
 			);
 		}
 		// Heph is on but unbound here: nothing runs, and no switch is to blame.
-		await expect(previewRow(purposeCard(canvas, "Heph"), "In-house only")).toHaveTextContent(
-			/^→ nothing runs for them$/u,
+		await expect(previewRow(purposeCard(canvas, "Heph"), "In-house")).toHaveTextContent(
+			/^Nothing runs for them$/u,
 		);
 		await expect(card.getByRole("link", { name: "Open Review: When and where" })).toHaveAttribute(
 			"href",
 			"/w/acme/admin/practices/review?section=when-and-where",
 		);
 		await expect(
-			row(card, "Stays in-house").getByRole("button", { name: /^Save assignment/u }),
+			row(card, "In-house").getByRole("button", { name: /^Save assignment/u }),
 		).toBeEnabled();
 	},
 };
@@ -314,15 +283,13 @@ export const OnlyThePendingRowIsFrozen: Story = {
 	play: async ({ canvas }) => {
 		const reviews = purposeCard(canvas, "Practice reviews");
 		await expect(
-			row(reviews, "Stays in-house").getByRole("button", { name: /^Save assignment/u }),
+			row(reviews, "In-house").getByRole("button", { name: /^Save assignment/u }),
 		).toBeDisabled();
 		await expect(
-			row(reviews, "Provider, kept for safety checks").getByRole("button", {
-				name: /^Save assignment/u,
-			}),
+			row(reviews, "Cloud").getByRole("button", { name: /^Save assignment/u }),
 		).toBeEnabled();
 		await expect(
-			row(purposeCard(canvas, "Heph"), "Stays in-house").getByRole("button", {
+			row(purposeCard(canvas, "Heph"), "In-house").getByRole("button", {
 				name: /^Save assignment/u,
 			}),
 		).toBeEnabled();
@@ -331,10 +298,10 @@ export const OnlyThePendingRowIsFrozen: Story = {
 
 export const AdvancedDisclosure: Story = {
 	play: async ({ canvas }) => {
-		const reviews = row(purposeCard(canvas, "Practice reviews"), "Stays in-house");
+		const reviews = row(purposeCard(canvas, "Practice reviews"), "In-house");
 		await openAdvanced(reviews);
 		await expect(reviews.getByLabelText(/^Max concurrent runs/u)).toHaveValue(3);
-		const mentor = row(purposeCard(canvas, "Heph"), "Stays in-house");
+		const mentor = row(purposeCard(canvas, "Heph"), "In-house");
 		await openAdvanced(mentor);
 		await expect(mentor.queryByLabelText(/^Max concurrent runs/u)).toBeNull();
 		await expect(mentor.getByLabelText(/^Timeout \(seconds\)/u)).toHaveValue(10_800);
@@ -343,7 +310,7 @@ export const AdvancedDisclosure: Story = {
 
 export const InvalidRunLimit: Story = {
 	play: async ({ canvas }) => {
-		const inHouse = row(purposeCard(canvas, "Practice reviews"), "Stays in-house");
+		const inHouse = row(purposeCard(canvas, "Practice reviews"), "In-house");
 		await openAdvanced(inHouse);
 
 		await userEvent.clear(inHouse.getByLabelText(/^Timeout \(seconds\)/u));
@@ -364,10 +331,9 @@ export const MobileReflow: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("Practice reviews");
 		await expectNoPageOverflow();
-		const save = row(purposeCard(canvas, "Practice reviews"), "Stays in-house").getByRole(
-			"button",
-			{ name: /^Save assignment/u },
-		);
+		const save = row(purposeCard(canvas, "Practice reviews"), "In-house").getByRole("button", {
+			name: /^Save assignment/u,
+		});
 		// Vertical page scrolling is expected; saving must not need horizontal scrolling.
 		save.scrollIntoView({ block: "center" });
 		await expectControlOnScreen(save);

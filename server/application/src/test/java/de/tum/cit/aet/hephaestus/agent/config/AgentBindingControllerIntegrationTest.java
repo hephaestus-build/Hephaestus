@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataRetention;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -169,13 +168,13 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
     void bindingAModelDeclaredAsAnotherTierIsRefusedWithTheDeclaredTier() {
         Workspace workspace = setupWorkspace("binding-slot");
         LlmModel model = seedInstanceModel("binding-slot");
-        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, LlmDataRetention.NONE, null));
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
         llmModelRepository.save(model);
 
         webTestClient
                 .put()
                 .uri(
-                        "/workspaces/{slug}/agents/{purpose}?dataHandlingTier=PROVIDER_NOT_KEPT",
+                        "/workspaces/{slug}/agents/{purpose}?dataHandlingTier=CLOUD",
                         workspace.getWorkspaceSlug(),
                         "PRACTICE_REVIEW")
                 .headers(TestAuthUtils.withCurrentUser())

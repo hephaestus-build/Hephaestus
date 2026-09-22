@@ -44,7 +44,7 @@ export const MENTOR_PREFERENCE_COPY = {
 	"no-ai": {
 		title: "Heph is off for you",
 		description:
-			"You chose No AI: no new practice reviews about you and no new conversations with Heph in any of your workspaces. Your membership, existing feedback and earlier conversations are unchanged.",
+			"You chose No AI. There are no new practice reviews about you and no new conversations with Heph in any workspace. Your membership, earlier feedback and past conversations stay.",
 		cta: "Change your AI choice",
 	},
 	"choice-required": {
@@ -57,7 +57,7 @@ export const MENTOR_PREFERENCE_COPY = {
 		title: "Heph isn't set up for your AI choice yet",
 		description: {
 			before: "No Heph model is within ",
-			after: " yet. Nothing switches you elsewhere — ask a workspace owner, or change your choice.",
+			after: " yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
 		},
 		cta: "Change your AI choice",
 	},

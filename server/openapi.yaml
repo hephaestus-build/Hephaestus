@@ -2689,8 +2689,7 @@ paths:
           default: UNDECLARED
           enum:
           - IN_HOUSE
-          - PROVIDER_NOT_KEPT
-          - PROVIDER_KEPT
+          - CLOUD
           - UNDECLARED
       responses:
         "204":
@@ -2724,8 +2723,7 @@ paths:
           default: UNDECLARED
           enum:
           - IN_HOUSE
-          - PROVIDER_NOT_KEPT
-          - PROVIDER_KEPT
+          - CLOUD
           - UNDECLARED
       requestBody:
         content:
@@ -8037,8 +8035,7 @@ components:
           enum:
           - NO_AI
           - IN_HOUSE_ONLY
-          - NOT_KEPT_ONLY
-          - ANY_DECLARED
+          - CLOUD
         updatedAt:
           type: string
           format: date-time
@@ -8050,8 +8047,7 @@ components:
           enum:
           - NO_AI
           - IN_HOUSE_ONLY
-          - NOT_KEPT_ONLY
-          - ANY_DECLARED
+          - CLOUD
       required:
       - choice
     AccountRef:
@@ -8225,8 +8221,7 @@ components:
           type: string
           enum:
           - IN_HOUSE
-          - PROVIDER_NOT_KEPT
-          - PROVIDER_KEPT
+          - CLOUD
           - UNDECLARED
         enabled:
           type: boolean
@@ -8628,8 +8623,7 @@ components:
           description: Data-handling tier derived from the admin's declared facts
           enum:
           - IN_HOUSE
-          - PROVIDER_NOT_KEPT
-          - PROVIDER_KEPT
+          - CLOUD
           - UNDECLARED
         displayName:
           type: string
@@ -9496,12 +9490,6 @@ components:
         enabled:
           type: boolean
           description: Whether the model is active (default false)
-        keptAfterReply:
-          type: string
-          description: What stays behind after the reply; declare both facts or neither
-          enum:
-          - NONE
-          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
@@ -9509,8 +9497,8 @@ components:
           minimum: 1
         operatedBy:
           type: string
-          description: Who operates the systems the work is sent to; declare both
-            facts or neither
+          description: Who operates the systems the work is sent to; omit to leave
+            the model undeclared
           enum:
           - OWN_ORGANISATION
           - PROVIDER
@@ -9855,12 +9843,6 @@ components:
         enabled:
           type: boolean
           description: Whether the model is active (default false)
-        keptAfterReply:
-          type: string
-          description: What stays behind after the reply; declare both facts or neither
-          enum:
-          - NONE
-          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
@@ -9868,8 +9850,8 @@ components:
           minimum: 1
         operatedBy:
           type: string
-          description: Who operates the systems the work is sent to; declare both
-            facts or neither
+          description: Who operates the systems the work is sent to; omit to leave
+            the model undeclared
           enum:
           - OWN_ORGANISATION
           - PROVIDER
@@ -11397,12 +11379,11 @@ components:
           description: "Admin-only note: region, agreement, renewal date"
         dataHandlingTier:
           type: string
-          description: Data-handling tier derived from the two facts; UNDECLARED until
-            both are set
+          description: Data-handling tier derived from the operator; UNDECLARED until
+            it is set
           enum:
           - IN_HOUSE
-          - PROVIDER_NOT_KEPT
-          - PROVIDER_KEPT
+          - CLOUD
           - UNDECLARED
         displayName:
           type: string
@@ -11421,12 +11402,6 @@ components:
           type: integer
           format: int64
           description: Model id
-        keptAfterReply:
-          type: string
-          description: What stays behind after the reply; null until declared
-          enum:
-          - NONE
-          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
@@ -11676,8 +11651,7 @@ components:
           enum:
           - NO_AI
           - IN_HOUSE_ONLY
-          - NOT_KEPT_ONLY
-          - ANY_DECLARED
+          - CLOUD
       required:
       - choice
     ObservationDetail:
@@ -16329,12 +16303,6 @@ components:
         enabled:
           type: boolean
           description: Active toggle (off = existing settings stop working)
-        keptAfterReply:
-          type: string
-          description: What stays behind after the reply; declare both facts or neither
-          enum:
-          - NONE
-          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
@@ -16342,8 +16310,8 @@ components:
           minimum: 1
         operatedBy:
           type: string
-          description: Who operates the systems the work is sent to; declare both
-            facts or neither
+          description: Who operates the systems the work is sent to; omit to leave
+            the model undeclared
           enum:
           - OWN_ORGANISATION
           - PROVIDER
@@ -16735,12 +16703,6 @@ components:
         enabled:
           type: boolean
           description: Active toggle
-        keptAfterReply:
-          type: string
-          description: What stays behind after the reply; declare both facts or neither
-          enum:
-          - NONE
-          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
@@ -16748,8 +16710,8 @@ components:
           minimum: 1
         operatedBy:
           type: string
-          description: Who operates the systems the work is sent to; declare both
-            facts or neither
+          description: Who operates the systems the work is sent to; omit to leave
+            the model undeclared
           enum:
           - OWN_ORGANISATION
           - PROVIDER
@@ -17068,8 +17030,7 @@ components:
           enum:
           - NO_AI
           - IN_HOUSE_ONLY
-          - NOT_KEPT_ONLY
-          - ANY_DECLARED
+          - CLOUD
         mentorReady:
           type: boolean
         practiceReviewsReady:
@@ -17222,12 +17183,11 @@ components:
           description: "Admin-only note: region, agreement, renewal date"
         dataHandlingTier:
           type: string
-          description: Data-handling tier derived from the two facts; UNDECLARED until
-            both are set
+          description: Data-handling tier derived from the operator; UNDECLARED until
+            it is set
           enum:
           - IN_HOUSE
-          - PROVIDER_NOT_KEPT
-          - PROVIDER_KEPT
+          - CLOUD
           - UNDECLARED
         displayName:
           type: string
@@ -17239,12 +17199,6 @@ components:
           type: integer
           format: int64
           description: Model id
-        keptAfterReply:
-          type: string
-          description: What stays behind after the reply; null until declared
-          enum:
-          - NONE
-          - FOR_SAFETY_CHECKS
         maxOutputTokens:
           type: integer
           format: int32
@@ -17472,8 +17426,7 @@ components:
           enum:
           - NO_AI
           - IN_HOUSE_ONLY
-          - NOT_KEPT_ONLY
-          - ANY_DECLARED
+          - CLOUD
         aiChoiceRequired:
           type: boolean
         aiOptions:

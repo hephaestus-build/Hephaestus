@@ -188,65 +188,75 @@ available. If there is no material change to check, record the evidenced lack of
 admission request, approval, entitlement, or provisioning workflow. It is configuration and a
 member's own choice, not research consent. The member-facing word is **setup**: a workspace
 *needs setup* while its page is still owed. Retired words: *processing location*, *Unclassified*,
-*AI preference*, *Workspace preferences*, *Workspace default*, and *welcome* as the name of the
-setup or its state; the greeting in the page heading (`Welcome to {workspaceName}`) stays.
+*AI preference*, *Workspace preferences*, *Workspace default*, *welcome* as the name of the setup,
+its state or the page heading, *Provider, nothing kept*, *Provider, kept for safety checks*,
+*Stays in-house*, *Kept after the reply* and *reach*.
 
-**Data handling** is what an admin declares about a model: two facts, never an inference from a
-hostname, connection or provider kind. **Operated by** is *Your organisation* or *A provider*;
-**Kept after the reply** is *Nothing* or *For safety checks*. Declaring them is also the admin's
-confirmation that the model's terms rule out training on what it receives; Hephaestus does not
-accept a model that trains on developers' work. An admin-only **note** carries region, agreement
-and renewal date and is never shown to developers. No retention period appears in product copy.
+**Data handling** is what an admin declares about a model: one fact, never an inference from a
+hostname, connection or provider kind. **Operated by** is *Your organisation* or *A provider* under
+terms your organisation accepted. Declaring it is also the admin's confirmation that the model's
+terms rule out training on what it receives. Hephaestus does not accept a model that trains on
+developers' work. An admin-only **note** carries region, agreement, renewal date and retention
+details and is never shown to developers. No retention period appears in product copy.
 
-From the two facts Hephaestus derives one **data-handling tier**, strictest first, and shows it as a
+From that fact Hephaestus derives one **data-handling tier**, strictest first, and shows it as a
 badge with a label and an icon everywhere a model appears:
 
 | Tier | Label | Derived when | What a developer reads |
 | --- | --- | --- | --- |
-| `IN_HOUSE` | **Stays in-house** | operated by your organisation | Runs only on systems your organisation operates. |
-| `PROVIDER_NOT_KEPT` | **Provider, nothing kept** | a provider, nothing kept | A provider under terms your organisation accepted processes it and keeps nothing after the reply. |
-| `PROVIDER_KEPT` | **Provider, kept for safety checks** | a provider, kept for safety checks | A provider under terms your organisation accepted keeps it for a limited time for safety checks, which its staff may read if flagged. |
-| `UNDECLARED` | **Not declared** | either fact missing | Never shown to developers; an admin to-do. |
+| `IN_HOUSE` | **In-house** | operated by your organisation | Runs only on systems your organisation runs. Your work never leaves it. |
+| `CLOUD` | **Cloud** | operated by a provider | A provider your organisation approved handles it. Your work leaves your organisation, the provider may keep it briefly for safety checks, and its staff may read flagged content. |
+| `UNDECLARED` | **Not declared** | the fact is missing | Never shown to developers. An admin to-do. |
 
 A developer's **AI choice** is a ceiling: the loosest tier they accept, or **No AI**. It is the
 person's, answered once per account, and holds in every workspace they are a member of on this
-instance; a workspace decides what runs within it, never the ceiling itself. The three AI answers
-are **In-house only**, **Provider, nothing kept** and **Allow storage for safety
-checks**; anything stricter than the answer also counts, nothing ever switches a developer to a
+instance. A workspace decides what runs within it, never the ceiling itself. The three AI answers
+are **In-house** (`IN_HOUSE_ONLY`, only systems the organisation runs), **Cloud** (`CLOUD`,
+in-house plus the providers the organisation approved) and **No AI**. Anything stricter than the
+answer also counts, so Cloud allows in-house models too. Nothing ever switches a developer to a
 looser tier, and *Not declared* sits outside every ceiling. A member may choose any answer
 regardless of what any workspace has bound today: consent is to a boundary, not to the current
 inventory, so adding, removing or re-declaring a model never asks again. The member-facing name for
 the choice is **your AI choice** on every surface: the sidebar item, the heading, the notice, the
 **User settings** section and the copy.
 
-**Members who haven't chosen** names the *Not declared* row on the workspace admin's model page: it
-serves only members who have not chosen yet, where the choice is optional, and never a member who
-chose. (*Workspace default* is retired here; it already names practice autonomy.)
+The workspace admin's model page has one row per tier and purpose: **In-house**, **Cloud** and
+**Members who haven't chosen**. The last names the *Not declared* row. It serves only members who
+have not chosen yet, where the choice is optional, and never a member who chose. (*Workspace
+default* is retired here. It already names practice autonomy.)
 
 Two phrases, two meanings, never swapped: an AI answer that no ready model covers is **not set up
-here yet** (a workspace owner adds a model); an account link whose integration is broken is
+here yet** (a workspace owner adds a model), and an account link whose integration is broken is
 **unavailable right now** (it does not hold the member up).
 
 The sign-in and first-visit pages follow ten rules:
 
-1. Heph speaks in the first person only inside `HephSays`, and introduces himself once, on the
-   sign-in setup page.
-2. Outside the bubble: plain second person, no "please", contractions allowed; alert titles start
+1. Heph speaks only inside `HephSays`, and about Hephaestus in the third person: "Hephaestus reads
+   your work only with the AI you allow", never "I read your work". He introduces himself once, on
+   the sign-in setup page.
+2. Outside the bubble: plain second person, no "please", contractions allowed. Alert titles start
    "Couldn't …".
 3. Buttons: **Continue** moves on, **Save AI choice** saves before required account links are complete,
    **Save** on a return visit, **Skip for now** defers, **Sign out**
-   only on the sign-in setup page, **Back to workspace** on a return visit; never Next, Finish,
+   only on the sign-in setup page, **Back to workspace** on a return visit. Never Next, Finish,
    Submit or Done.
 4. Section titles are the question or the noun.
 5. Hints are one sentence and the primary button's accessible description.
-6. *Not set up here yet* for an AI answer; *unavailable right now* for an account link. The cards
-   carry no configuration rows and no prose: an icon chip, the title, a tagline, icon rows for the
-   trade-offs and a reach meter. One sentence below them names what this workspace has not set up
-   within the selected answer, and nothing when it is covered.
+6. *Not set up here yet* for an AI answer, *unavailable right now* for an account link. The three
+   cards sit side by side with the same anatomy: a hero band with the choice's icon, the title, then
+   aligned rows that compare the same five facts on every card, in this order: practice feedback and
+   Heph, where it runs, what is kept, who can read it, which models. Each row carries a green check
+   for a plus, an orange triangle for a caveat or a red cross for a minus, and one neutral grey info
+   row. No reach meter, no "Allows" or "Consider" prose, no configuration rows. The facts above the
+   cards are grouped items with the icon, term and detail stacked, not two-column rows. One sentence
+   below the cards names what this workspace has not set up within the selected answer, and nothing
+   when it is covered.
 7. Ask "a workspace owner" on the workspace page, "whoever runs this Hephaestus instance" on the
    sign-in page.
-8. `{workspaceName}` in the heading and in Heph's intro; "this workspace" in body text.
-9. "AI" when reviews and Heph are both meant; "practice reviews" or "Heph" when one is; never
+8. The first-visit heading is **Your AI choice**, never a greeting. Heph's first line on the
+   workspace page names the workspace through `{workspaceName}`. "This workspace" in body text.
+9. "AI" when reviews and Heph are both meant, "practice reviews" or "Heph" when one is, and never
    *model*, *LLM* or *agent*.
-10. Both pages open on "Give me a moment — I'm fetching your setup." and close on "That's
-    everything. Let's get to work."
+10. Both pages open on "Give me a moment. Hephaestus is fetching your setup." and close on "That's
+    everything. Let's get to work." When the setup cannot be read, Heph says "Hephaestus couldn't
+    fetch your setup just now."

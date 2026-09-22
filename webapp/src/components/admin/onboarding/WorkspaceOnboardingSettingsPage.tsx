@@ -69,7 +69,7 @@ export function WorkspaceOnboardingSettingsPage({
 			<PageHeader
 				icon={<HandshakeIcon />}
 				title="Member onboarding"
-				description="Set up developers after they join this workspace. This does not grant membership or change how people join."
+				description="Set up developers after they join this workspace. Membership is granted elsewhere."
 			/>
 			{state.status === "loading" && (
 				<div
@@ -198,11 +198,10 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 								Ask members to set up on their first visit
 							</FieldLabel>
 							<FieldDescription id={`${id}-enabled-description`}>
-								Members see the setup page once and can finish it later from Your AI choice in the
-								sidebar. The AI choice is the member’s, made once for every workspace they’re in;
-								members who have already answered elsewhere are only asked to connect required
-								accounts. Once on, every member must have chosen before AI runs for them; turning
-								this off does not undo that.
+								Members see the setup page once. They can finish it later from Your AI choice in the
+								sidebar. Each member answers once for all their workspaces, so members who answered
+								elsewhere are only asked to connect required accounts. Once this is on, every member
+								must choose before AI runs for them. Turning it off does not undo that.
 							</FieldDescription>
 						</FieldContent>
 					</Field>
@@ -222,7 +221,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 				title="Required account links"
 				description={
 					links.length > 0
-						? "Members connect these to finish setup. A link that is unavailable never holds a member up; clear a requirement to make the link optional."
+						? "Members connect these to finish setup. An unavailable link never holds a member up. Clear a requirement to make the link optional."
 						: undefined
 				}
 			>
@@ -258,8 +257,8 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 							let detail = link.teamName;
 							if (!link.available) {
 								detail = required
-									? "Unavailable — repair it under Integrations or clear this requirement."
-									: "Unavailable — repair it under Integrations before requiring it.";
+									? "Unavailable. Repair it under Integrations or clear this requirement."
+									: "Unavailable. Repair it under Integrations before requiring it.";
 							}
 							const controlId = `${id}-link-${link.connectionId}`;
 							return (

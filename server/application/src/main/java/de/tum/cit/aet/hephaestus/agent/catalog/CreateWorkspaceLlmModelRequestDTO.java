@@ -31,11 +31,9 @@ public record CreateWorkspaceLlmModelRequestDTO(
         @Nullable @Schema(description = "Whether the model supports a reasoning mode")
         Boolean supportsReasoning,
 
-        @Nullable @Schema(description = "Who operates the systems the work is sent to; declare both facts or neither")
+        @Nullable
+        @Schema(description = "Who operates the systems the work is sent to; omit to leave the model undeclared")
         LlmDataOperator operatedBy,
-
-        @Nullable @Schema(description = "What stays behind after the reply; declare both facts or neither")
-        LlmDataRetention keptAfterReply,
 
         @Nullable @Size(max = 200) @Schema(description = "Admin-only note: region, agreement, renewal date")
         String dataHandlingNote,

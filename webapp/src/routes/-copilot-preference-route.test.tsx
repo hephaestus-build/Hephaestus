@@ -108,6 +108,6 @@ it("keeps setup free of the floating composer even when AI is available", async 
 		aiOptions: [{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true }],
 	});
 	renderRouteAtWithRouter("/w/acme/onboarding");
-	await screen.findByRole("heading", { name: "Welcome to Acme" }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("radio", { name: /^In-house /u }, ROUTE_RENDER_WAIT);
 	expect(screen.queryByRole("button", { name: "Open Heph, AI mentor" })).toBeNull();
 });

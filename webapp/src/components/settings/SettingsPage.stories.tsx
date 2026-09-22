@@ -47,7 +47,7 @@ const defaultLinkedAccountsProps = {
 };
 
 const defaultAiChoiceProps = {
-	choice: "NOT_KEPT_ONLY",
+	choice: "CLOUD",
 	onSave: fn(),
 } satisfies AiChoiceSectionProps;
 

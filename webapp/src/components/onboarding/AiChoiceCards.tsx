@@ -2,9 +2,12 @@ import { cn } from "cn";
 
 import { statusValues } from "@/components/common/status-def";
 import {
+	CHOICE_FACT_SLOTS,
+	CHOICE_TONE_DEFS,
 	MEMBER_AI_CHOICE_DEFS,
 	type MemberAiChoice,
 } from "@/components/practice-vocabulary/data-handling-defs";
+import { Badge } from "@/components/ui/badge";
 import {
 	QuestionnaireChoice,
 	QuestionnaireChoiceDescription,
@@ -14,32 +17,25 @@ import {
 export const AI_CHOICES = statusValues(MEMBER_AI_CHOICE_DEFS);
 
 export interface AiChoiceCardsProps {
-	/** The checked card; `undefined` checks nothing, so a first answer is never pre-selected. */
+	/** The checked card. `undefined` checks nothing, so a first answer is never pre-selected. */
 	choice: MemberAiChoice | undefined;
+	/** The answer already saved, if any. Its card wears a Current badge and nothing else changes. */
+	saved?: MemberAiChoice;
 	onChoice: (choice: MemberAiChoice) => void;
 }
 
 /**
- * The four answers as equal cards inside a `QuestionnaireItem` the caller owns. Every card has the
- * same anatomy, top to bottom: an icon chip and the title, a one-line tagline, the trade-offs as
- * icon rows, and a reach meter with a caption; the title is the admin's tier wording. Nothing is pre-selected, no card
- * carries workspace configuration, and the meter is the only ordered element: it shows how far the
- * work may travel, filled from in-house outward, so the strictest and loosest answers read as such
- * without a sentence. No AI has an empty meter; it is the answer that sends nothing anywhere.
+ * The three answers side by side, inside a `QuestionnaireItem` the caller owns. Every card has the
+ * same anatomy: a hero band with the answer's icon, the title and a one-line tagline, then the same
+ * five facts in the same rows, each marked as a plus, a caveat or a minus with an icon and a colour.
+ * Fixed hero and header heights keep the rows level across cards, so the reader compares by
+ * scanning across. Nothing is pre-selected and no card carries workspace configuration.
  */
-export function AiChoiceCards({ choice, onChoice }: AiChoiceCardsProps) {
+export function AiChoiceCards({ choice, saved, onChoice }: AiChoiceCardsProps) {
 	return (
-		<QuestionnaireChoices className="gap-3 sm:grid-cols-2">
+		<QuestionnaireChoices className="gap-3 md:grid-cols-3">
 			{AI_CHOICES.map((value) => {
-				const {
-					icon: Icon,
-					label,
-					description,
-					points,
-					reach,
-					reachLabel,
-					ceiling,
-				} = MEMBER_AI_CHOICE_DEFS[value];
+				const { icon: Icon, label, description, facts, ceiling } = MEMBER_AI_CHOICE_DEFS[value];
 				const off = ceiling === null;
 				return (
 					<QuestionnaireChoice
@@ -52,59 +48,48 @@ export function AiChoiceCards({ choice, onChoice }: AiChoiceCardsProps) {
 							}
 						}}
 					>
-						<span className="flex items-center gap-3">
+						<span
+							aria-hidden="true"
+							className={cn(
+								"flex h-20 items-center justify-center rounded-md",
+								off ? "bg-muted" : "bg-mentor/10",
+							)}
+						>
 							<span
-								aria-hidden="true"
 								className={cn(
-									"inline-flex size-9 shrink-0 items-center justify-center rounded-md [&_svg]:size-5",
-									off ? "bg-muted text-muted-foreground" : "bg-mentor/10 text-mentor",
+									"inline-flex size-12 items-center justify-center rounded-full bg-background shadow-xs [&_svg]:size-6",
+									off ? "text-muted-foreground" : "text-mentor",
 								)}
 							>
 								<Icon />
 							</span>
-							<span className="flex min-w-0 flex-col">
-								<span className="font-medium">{label}</span>{" "}
-								<span className="text-xs text-muted-foreground">{description}</span>
-							</span>
+						</span>{" "}
+						<span className="mt-3 flex min-h-14 flex-col gap-0.5">
+							<span className="flex items-center gap-2 text-base font-medium">
+								{label} {saved === value && <Badge variant="secondary">Current</Badge>}
+							</span>{" "}
+							<span className="text-xs text-muted-foreground">{description}</span>
 						</span>{" "}
 						<QuestionnaireChoiceDescription>
-							<span className="mt-3 flex flex-col gap-1.5 border-t pt-3 text-xs">
-								{points.map(({ icon: PointIcon, text }) => (
-									<span key={text} className="flex items-start gap-2">
-										<PointIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-										{text}{" "}
-									</span>
-								))}
-							</span>{" "}
-							<span className="mt-3 flex items-center gap-2 text-xs">
-								<ReachMeter reach={reach} />
-								{reachLabel}
+							<span className="mt-3 flex flex-col gap-2 border-t pt-3 text-xs">
+								{CHOICE_FACT_SLOTS.map((slot) => {
+									const { tone, text } = facts[slot];
+									const { icon: ToneIcon, className } = CHOICE_TONE_DEFS[tone];
+									return (
+										<span key={slot} className="flex items-start gap-2">
+											<ToneIcon
+												className={cn("mt-px size-3.5 shrink-0", className)}
+												aria-hidden="true"
+											/>
+											{text}{" "}
+										</span>
+									);
+								})}
 							</span>
 						</QuestionnaireChoiceDescription>
 					</QuestionnaireChoice>
 				);
 			})}
 		</QuestionnaireChoices>
-	);
-}
-
-/**
- * Three segments filled from the left: in-house, then a provider that keeps nothing, then one that
- * keeps content. Fill is the channel, not colour, so the order survives greyscale; the sentence
- * beside it names the ceiling for a screen reader.
- */
-function ReachMeter({ reach }: { reach: 0 | 1 | 2 | 3 }) {
-	return (
-		<span aria-hidden="true" className="inline-flex shrink-0 gap-0.5">
-			{[1, 2, 3].map((segment) => (
-				<span
-					key={segment}
-					className={cn(
-						"h-1.5 w-4 rounded-full",
-						segment <= reach ? "bg-mentor" : "bg-muted-foreground/25",
-					)}
-				/>
-			))}
-		</span>
 	);
 }

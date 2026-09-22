@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { WorkspaceLlmModel } from "@/api/types.gen";
+import { DATA_HANDLING_DEFS } from "@/components/practice-vocabulary/data-handling-defs";
 import { expectSettledVisible } from "@/stories/overlay";
 import { expectDialogFitsViewport } from "@/stories/reflow";
 
@@ -13,7 +14,6 @@ import {
 const mockModel: WorkspaceLlmModel = {
 	dataHandlingTier: "IN_HOUSE",
 	operatedBy: "OWN_ORGANISATION",
-	keptAfterReply: "NONE",
 	dataHandlingNote: "Runs in the Garching data centre",
 	id: 1,
 	slug: "gpt-5-mini",
@@ -32,7 +32,7 @@ const mockModel: WorkspaceLlmModel = {
 	createdAt: new Date("2026-06-01T10:00:00Z"),
 };
 
-/** A model from before data handling could be declared: null facts, still saveable. */
+/** A model from before data handling could be declared: no operator, still saveable. */
 const legacyModel: WorkspaceLlmModel = {
 	...mockModel,
 	id: 2,
@@ -40,13 +40,12 @@ const legacyModel: WorkspaceLlmModel = {
 	displayName: "Legacy model",
 	dataHandlingTier: "UNDECLARED",
 	operatedBy: undefined,
-	keptAfterReply: undefined,
 	dataHandlingNote: undefined,
 };
 
 /**
  * The same fields as the instance catalog's dialog, with the price inline: the workspace scope has
- * no separate price endpoint. The data-handling declaration is scope-neutral on purpose — a
+ * no separate price endpoint. The data-handling declaration is scope-neutral on purpose, because a
  * workspace admin's own provider makes the same promise to the same developers.
  */
 const meta = {
@@ -77,18 +76,10 @@ export const AddModel: Story = {
 	play: async ({ args }) => {
 		const dialog = await screen.findByRole("dialog");
 		within(dialog).getByRole("radiogroup", { name: "Operated by" });
-		within(dialog).getByRole("radiogroup", { name: "Kept after the reply" });
 		await expectSettledVisible(within(dialog).getByText("Not declared"));
 
 		await fillIdentity(dialog);
 		await userEvent.click(within(dialog).getByRole("radio", { name: "A provider" }));
-		await userEvent.click(within(dialog).getByRole("button", { name: /add inactive model/iu }));
-		await expectSettledVisible(
-			await within(dialog).findByText("Declare both facts or leave data handling undeclared."),
-		);
-		await expect(args.onCreate).not.toHaveBeenCalled();
-
-		await userEvent.click(within(dialog).getByRole("radio", { name: "Nothing" }));
 		await userEvent.click(within(dialog).getByRole("button", { name: /add inactive model/iu }));
 		await expectSettledVisible(
 			await within(dialog).findByText(
@@ -104,24 +95,18 @@ export const DeclaredPreview: Story = {
 		const dialog = await screen.findByRole("dialog");
 		await fillIdentity(dialog);
 		await userEvent.click(within(dialog).getByRole("radio", { name: "A provider" }));
-		await userEvent.click(within(dialog).getByRole("radio", { name: "Nothing" }));
 		await userEvent.click(within(dialog).getByRole("checkbox", { name: /rule out training/u }));
 
-		await expectSettledVisible(within(dialog).getByText("Provider, nothing kept"));
+		await expectSettledVisible(within(dialog).getByText("Cloud"));
 		// The preview's guarantee rows are the only definition list in the form.
 		const rows = within(dialog).getAllByRole("term");
-		await expect(rows.map((row) => row.textContent)).toStrictEqual([
-			"Operated by",
-			"Kept after the reply",
-			"Training",
-		]);
+		await expect(rows.map((row) => row.textContent)).toStrictEqual(
+			DATA_HANDLING_DEFS.CLOUD.facts.map((fact) => fact.term),
+		);
 
 		await userEvent.click(within(dialog).getByRole("button", { name: /add inactive model/iu }));
 		await expect(args.onCreate).toHaveBeenCalledOnce();
-		await expect(args.onCreate.mock.calls[0]?.[0]).toMatchObject({
-			operatedBy: "PROVIDER",
-			keptAfterReply: "NONE",
-		});
+		await expect(args.onCreate.mock.calls[0]?.[0]).toMatchObject({ operatedBy: "PROVIDER" });
 	},
 };
 
@@ -130,7 +115,7 @@ export const EditModel: Story = {
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
 		await expect(within(dialog).getByRole("radio", { name: "Your organisation" })).toBeChecked();
-		await expectSettledVisible(within(dialog).getByText("Stays in-house"));
+		await expectSettledVisible(within(dialog).getByText("In-house"));
 	},
 };
 
@@ -138,7 +123,7 @@ export const EditLegacyUndeclared: Story = {
 	args: { editing: legacyModel },
 	play: async ({ args }) => {
 		const dialog = await screen.findByRole("dialog");
-		for (const name of ["Your organisation", "A provider", "Nothing", "For safety checks"]) {
+		for (const name of ["Your organisation", "A provider"]) {
 			await expect(within(dialog).getByRole("radio", { name })).not.toBeChecked();
 		}
 		await expectSettledVisible(within(dialog).getByText("Not declared"));
@@ -177,6 +162,6 @@ export const Dark: Story = {
 	globals: { theme: "dark" },
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
-		await expectSettledVisible(within(dialog).getByText("Stays in-house"));
+		await expectSettledVisible(within(dialog).getByText("In-house"));
 	},
 };

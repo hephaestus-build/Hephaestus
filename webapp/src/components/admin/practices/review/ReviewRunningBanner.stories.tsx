@@ -27,7 +27,7 @@ export const Running: Story = {
 	play: async ({ canvas }) => {
 		const status = canvas.getByRole("status");
 		await expect(status).toHaveTextContent("Reviews are running");
-		await expect(status).toHaveTextContent("a review model declared as Stays in-house is ready");
+		await expect(status).toHaveTextContent("a review model declared as In-house is ready");
 	},
 };
 

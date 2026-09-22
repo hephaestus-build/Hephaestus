@@ -8,7 +8,7 @@ import { ModelPicker, type ModelPickerProps } from "./ModelPicker";
 
 const models: AvailableLlmModel[] = [
 	{
-		dataHandlingTier: "PROVIDER_NOT_KEPT",
+		dataHandlingTier: "CLOUD",
 		id: 1,
 		scope: "SHARED",
 		displayName: "GPT-5",
@@ -64,10 +64,10 @@ describe("ModelPicker", () => {
 		fireEvent.click(screen.getByRole("combobox"));
 
 		screen.getByRole("option", {
-			name: "GPT-5 · Organization endpoint · Provider, nothing kept · $1.00 input · $2.00 output / 1M tokens",
+			name: "GPT-5 · Organization endpoint · Cloud · $1.00 input · $2.00 output / 1M tokens",
 		});
 		screen.getByRole("option", {
-			name: "GPT-5 · Workspace endpoint · Stays in-house · No metered API cost",
+			name: "GPT-5 · Workspace endpoint · In-house · No metered API cost",
 		});
 	});
 
@@ -87,10 +87,10 @@ describe("ModelPicker", () => {
 
 	it("disables itself when the tier filter leaves nothing to list", () => {
 		renderPicker({
-			availableModels: models,
+			availableModels: models.filter((model) => model.dataHandlingTier === "CLOUD"),
 			value: null,
 			onChange: vi.fn(),
-			tier: "PROVIDER_KEPT",
+			tier: "IN_HOUSE",
 		});
 		expect(screen.getByRole("combobox").hasAttribute("disabled")).toBe(true);
 	});

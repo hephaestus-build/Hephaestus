@@ -75,19 +75,22 @@ it requires an account you have not connected. Your answer is a boundary, not a 
 models: anything stricter than your answer also counts, and nothing ever switches you to anything
 looser.
 
-| Answer                                         | What it means                                                                                                            |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **In-house only**                              | Runs only on systems your organisation operates.                                                                         |
-| **Provider, nothing kept** | Also allows approved providers that do not store your prompts or replies after responding. Usage metadata may still be kept. |
-| **Provider, kept for safety checks**               | Also a provider that keeps it for a limited time for safety checks, which its staff may read if flagged.                 |
-| **No AI**                                      | No new practice reviews about you or new requests to Heph in any workspace.                                                                                    |
+| Answer       | What it means                                                                                                                                                                                  |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **In-house** | Only systems your organisation runs. Your work never leaves it.                                                                                                                                |
+| **Cloud**    | In-house, plus the providers your organisation approved. Your work leaves your organisation, a provider may keep it briefly for safety checks, and its staff may read content that is flagged. |
+| **No AI**    | No new practice reviews about you and no new requests to Heph, in any workspace.                                                                                                               |
+
+The three cards compare the same facts row by row: whether you get practice feedback and Heph, where
+your work runs, what is kept, who can read it, and which models are allowed. A green check marks a
+plus, an orange triangle a caveat and a red cross a minus.
 
 Each workspace sets up its own models within these answers. When nothing in the workspace you are
 looking at is set up within your selected answer, one sentence below the cards says so: that answer is
 *not set up here yet*, nothing runs for you for that purpose in this workspace, and Hephaestus never
 switches you to another answer. Wait for a workspace owner to add a model, or change your answer.
 "Set up" describes the configuration, not current service health or a guarantee of speed. In-house
-models depend on your organisation's capacity and storage rules; allowing providers does not
+models depend on your organisation's capacity and storage rules, and allowing the cloud does not
 guarantee better models or faster replies. No declared model uses your work for training.
 
 On your first visit, nothing is preselected. Choose an answer and select **Continue**; on a return

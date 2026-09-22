@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataRetention;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
@@ -133,16 +132,16 @@ class AgentBindingServiceTest extends BaseUnitTest {
         Workspace w = workspace();
         when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
         when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
-                        1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.PROVIDER_NOT_KEPT))
+                        1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.CLOUD))
                 .thenReturn(Optional.empty());
         LlmModel model = new LlmModel();
         model.setId(99L);
-        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, LlmDataRetention.NONE, null));
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
 
         var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
-        assertThatThrownBy(() -> service.upsertBinding(
-                        context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.PROVIDER_NOT_KEPT, request))
+        assertThatThrownBy(() ->
+                        service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.CLOUD, request))
                 .isInstanceOf(AgentBindingSlotMismatchException.class)
                 .hasMessage("This model is declared as a different tier; assign it to that row.")
                 .extracting("declaredTier")
@@ -178,24 +177,23 @@ class AgentBindingServiceTest extends BaseUnitTest {
         Workspace w = workspace();
         when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
         when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
-                        1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.PROVIDER_NOT_KEPT))
+                        1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.CLOUD))
                 .thenReturn(Optional.empty());
         LlmModel model = new LlmModel();
         model.setId(99L);
-        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.NONE, null));
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
         when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
-        WorkspaceAgentBinding saved = service.upsertBinding(
-                context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.PROVIDER_NOT_KEPT, request);
+        WorkspaceAgentBinding saved =
+                service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.CLOUD, request);
 
-        assertThat(saved.getDataHandlingTier()).isEqualTo(DataHandlingTier.PROVIDER_NOT_KEPT);
+        assertThat(saved.getDataHandlingTier()).isEqualTo(DataHandlingTier.CLOUD);
         ArgumentCaptor<ConfigAuditEntry> entry = ArgumentCaptor.forClass(ConfigAuditEntry.class);
         verify(configAudit).record(entry.capture());
-        assertThat(entry.getValue().after())
-                .hasFieldOrPropertyWithValue("dataHandlingTier", DataHandlingTier.PROVIDER_NOT_KEPT);
+        assertThat(entry.getValue().after()).hasFieldOrPropertyWithValue("dataHandlingTier", DataHandlingTier.CLOUD);
     }
 
     @Test
@@ -207,7 +205,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.empty());
         LlmModel model = new LlmModel();
         model.setId(99L);
-        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, LlmDataRetention.FOR_SAFETY_CHECKS, null));
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
         when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

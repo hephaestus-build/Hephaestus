@@ -35,7 +35,6 @@ const mockModels: LlmModel[] = [
 		upstreamModelId: "meta/llama-3-70b",
 		dataHandlingTier: "IN_HOUSE",
 		operatedBy: "OWN_ORGANISATION",
-		keptAfterReply: "NONE",
 		dataHandlingNote: "Garching data centre",
 		supportsReasoning: false,
 		visibility: "GRANTED",
@@ -54,20 +53,9 @@ const mockModels: LlmModel[] = [
 		slug: "gpt-5-eu",
 		displayName: "GPT-5",
 		upstreamModelId: "gpt-5",
-		dataHandlingTier: "PROVIDER_NOT_KEPT",
+		dataHandlingTier: "CLOUD",
 		operatedBy: "PROVIDER",
-		keptAfterReply: "NONE",
 		dataHandlingNote: "EU region, zero-retention agreement renews 2027-01",
-	},
-	{
-		...base,
-		id: 3,
-		slug: "gpt-5-mini",
-		displayName: "GPT-5 mini",
-		upstreamModelId: "gpt-5-mini",
-		dataHandlingTier: "PROVIDER_KEPT",
-		operatedBy: "PROVIDER",
-		keptAfterReply: "FOR_SAFETY_CHECKS",
 	},
 	{
 		...base,
@@ -119,18 +107,8 @@ export const Default: Story = {
 				.getAllByRole("cell")
 				.map((cell) => cell.textContent),
 		);
-		await expect(cells.map((row) => row[1])).toStrictEqual([
-			"Stays in-house",
-			"Provider, nothing kept",
-			"Provider, kept for safety checks",
-			"Not declared",
-		]);
-		await expect(cells.map((row) => row[4])).toStrictEqual([
-			"Ready",
-			"Ready",
-			"Ready",
-			"Price missing",
-		]);
+		await expect(cells.map((row) => row[1])).toStrictEqual(["In-house", "Cloud", "Not declared"]);
+		await expect(cells.map((row) => row[4])).toStrictEqual(["Ready", "Ready", "Price missing"]);
 	},
 };
 

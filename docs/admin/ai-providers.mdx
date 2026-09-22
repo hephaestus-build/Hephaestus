@@ -270,24 +270,24 @@ Owners configure **Administration → Member onboarding** after membership is al
 workspace's existing mechanism. The setup page is hidden by default. Declare and assign models before
 enabling it, and wait until every runtime role has been upgraded before assigning models by tier.
 
-1. In either model console, declare each model's **Data handling**: who operates the systems the
-   work is sent to (**Your organisation** or **A provider**) and whether anything is kept after the
-   reply (**Nothing** or **For safety checks**). Declaring them also confirms that the model's terms
-   rule out training on what it receives; Hephaestus does not accept a model that trains on
-   developers' work. From the two facts Hephaestus derives one tier — **Stays in-house**,
-   **Provider, nothing kept** or **Provider, kept for safety checks** — and shows it as a badge
-   wherever the model appears. Declare what the agreement says, not what the hostname suggests:
-   verify the endpoint, gateway routing, subprocessors and data-handling agreement first. A note
-   for admins (region, agreement, renewal date) is shown to admins only. Token limits and the
-   reasoning switch sit under **Advanced**.
-2. In the workspace's **AI models**, each purpose — **Practice reviews** and **Heph** — has one row
-   per tier. A row holds only a model declared as that tier: assigning a model declared as another
-   tier is refused with *This model is declared as \{tier\}; assign it to that row.*, and an
-   undeclared model with *This model's data handling isn't declared yet. Declare it first, or
-   assign it to Members who haven't chosen.* A model whose facts
-   later loosen no longer matches its row, reads **Not ready** and stops serving until you reassign
-   it; nothing is substituted. Existing grants, price declarations, funding sources, feature switches
-   and budgets still apply, and **Max concurrent runs** applies independently to each row.
+1. In either model console, declare each model's **Data handling** with one fact, **Operated by**:
+   **Your organisation**, or **A provider** under terms your organisation accepted. Declaring it
+   also confirms that the model's terms rule out training on what it receives. Hephaestus does not
+   accept a model that trains on developers' work. From that fact Hephaestus derives one tier,
+   **In-house** or **Cloud**, and shows it as a badge wherever the model appears. Declare what the
+   agreement says, not what the hostname suggests: verify the endpoint, gateway routing,
+   subprocessors and data-handling agreement first. A note for admins carries the region, the
+   agreement, its renewal date and any retention details, and is shown to admins only. Token
+   limits and the reasoning switch sit under **Advanced**.
+2. In the workspace's **AI models**, each purpose (**Practice reviews** and **Heph**) has three
+   rows: **In-house**, **Cloud** and **Members who haven't chosen**. A row holds only a model
+   declared as that tier. Assigning a model declared as another tier is refused with *This model
+   is declared as \{tier\}. Assign it to that row.*, and an undeclared model with *This model's
+   data handling isn't declared yet. Declare it first, or assign it to Members who haven't
+   chosen.* A model whose declaration later loosens no longer matches its row, reads **Not ready**
+   and stops serving until you reassign it. Nothing is substituted. Existing grants, price
+   declarations, funding sources, feature switches and budgets still apply, and **Max concurrent
+   runs** applies independently to each row.
 3. Optionally require Slack or Outline account links under **Member onboarding**. A required link
    needs an active integration and an enabled account-linking provider for the same server. Slack
    also needs the configured team; Outline needs the configured instance identity.
@@ -298,11 +298,11 @@ enabling it, and wait until every runtime role has been upgraded before assignin
    to have agreed.
 
 A member's choice is a ceiling: the loosest tier they accept. It belongs to the account, is answered
-once, and holds in every workspace the member belongs to on this instance; members change it from
-**Your AI choice** in any workspace's sidebar or in **User settings**. **In-house only** is served by
-the **Stays in-house** row; **Provider, nothing kept** by that row or the stricter
-one; **Provider, kept for safety checks** by any declared row. Hephaestus picks the loosest ready row
-within the ceiling and never a looser one, in each workspace from that workspace's rows. A member
+once, and holds in every workspace the member belongs to on this instance. Members change it from
+**Your AI choice** in any workspace's sidebar or in **User settings**. **In-house** is served by
+the **In-house** row, and **Cloud** by the **Cloud** row or the **In-house** row. Hephaestus picks
+the loosest ready row within the ceiling and never a looser one, in each workspace from that
+workspace's rows. A member
 whose ceiling no ready row in this workspace is within gets no practice reviews and no Heph here, and
 the page they chose on says so in one sentence below the answers. Members may choose any answer,
 including one no row covers yet.
@@ -314,8 +314,8 @@ those who skipped it or have a newly required link still open.
 
 The **Members who haven't chosen** row preserves existing assignments for workspaces that have never
 required member choices. It serves only members without a choice where the choice is optional and
-is never a fallback for a member who chose. Existing models upgrade with no facts declared
-(**Not declared**) and existing assignments land in that row; Hephaestus does not infer data handling
+is never a fallback for a member who chose. Existing models upgrade with nothing declared
+(**Not declared**) and existing assignments land in that row. Hephaestus does not infer data handling
 from names or endpoints.
 
 A reviewed developer no account resolves to — never signed in, or their identity unlinked — counts
@@ -345,7 +345,7 @@ requests; it never substitutes a looser tier. Turning an assignment off and on d
 member's choice.
 
 The schema upgrade is additive apart from widening the assignment's uniqueness key to include its
-tier. A rollback is supported before onboarding settings, member choices, declared facts or
+tier. A rollback is supported before onboarding settings, member choices, declarations or
 tier-specific assignments have been saved. Once used, rollback is deliberately refused: losing a
 saved refusal could restore unrestricted processing. Recover through a [verified pre-upgrade backup](./backup-restore),
 not by deleting member choices to bypass the safeguard.

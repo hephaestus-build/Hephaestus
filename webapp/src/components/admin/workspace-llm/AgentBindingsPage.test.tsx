@@ -15,8 +15,8 @@ const inHouseModel: AvailableLlmModel = {
 	pricingMode: "NO_CHARGE",
 };
 
-const keptModel: AvailableLlmModel = {
-	dataHandlingTier: "PROVIDER_KEPT",
+const cloudModel: AvailableLlmModel = {
+	dataHandlingTier: "CLOUD",
 	id: 21,
 	scope: "SHARED",
 	displayName: "GPT Other",
@@ -43,7 +43,7 @@ function renderPage(overrides: Partial<AgentBindingsPageProps> = {}) {
 		<AgentBindingsPage
 			workspaceSlug="demo"
 			bindings={[inHouseBinding]}
-			availableModels={[inHouseModel, keptModel]}
+			availableModels={[inHouseModel, cloudModel]}
 			practicesEnabled
 			mentorEnabled
 			aiChoiceRequired={false}
@@ -69,7 +69,13 @@ function row(purpose: string, title: string): Scope {
 	return within(within(card).getByRole("group", { name: title }));
 }
 
-const reviewsInHouse = () => row("Practice reviews", "Stays in-house");
+const reviewsInHouse = () => row("Practice reviews", "In-house");
+const cloudBinding: AgentBinding = {
+	...inHouseBinding,
+	dataHandlingTier: "CLOUD",
+	instanceModelId: 21,
+	ready: false,
+};
 const saveButton = (scope: Scope) => scope.getByRole("button", { name: /^Save assignment/u });
 const timeoutInput = (scope: Scope) =>
 	scope.getByLabelText<HTMLInputElement>(/^Timeout \(seconds\)/u);
@@ -82,14 +88,9 @@ describe("AgentBindingsPage", () => {
 			.getAllByRole("heading", { level: 3 })
 			.map((heading) => heading.textContent)
 			.filter((name) => name !== "Who gets which model");
-		expect(rowNames).toStrictEqual([
-			"Stays in-house",
-			"Provider, nothing kept",
-			"Provider, kept for safety checks",
-			UNCHOSEN_ROW,
-		]);
+		expect(rowNames).toStrictEqual(["In-house", "Cloud", UNCHOSEN_ROW]);
 
-		const unassignedSwitch = row("Heph", "Stays in-house").getByRole("switch", {
+		const unassignedSwitch = row("Heph", "In-house").getByRole("switch", {
 			name: /^Use this model/u,
 		});
 		expect(unassignedSwitch.getAttribute("aria-checked")).toBe("false");
@@ -97,19 +98,14 @@ describe("AgentBindingsPage", () => {
 	});
 
 	it("previews who gets which model by the ceiling rule, including members who haven't chosen", () => {
-		renderPage({
-			bindings: [
-				inHouseBinding,
-				{ ...inHouseBinding, dataHandlingTier: "PROVIDER_KEPT", instanceModelId: 21, ready: false },
-			],
-		});
+		renderPage({ bindings: [inHouseBinding, cloudBinding] });
 		const reviews = within(screen.getByRole("region", { name: "Practice reviews" }));
 		const definitionAfter = (term: string) =>
 			reviews.getByText(term, { selector: "dt" }).nextElementSibling?.textContent;
 
-		expect(definitionAfter("In-house only")).toBe("→ Stays in-house: GPT Test");
-		expect(definitionAfter("Provider, kept for safety checks")).toBe("→ Stays in-house: GPT Test");
-		expect(definitionAfter("Members who haven't chosen")).toBe("→ nothing runs for them");
+		expect(definitionAfter("In-house")).toBe("GPT Test (In-house)");
+		expect(definitionAfter("Cloud")).toBe("GPT Test (In-house)");
+		expect(definitionAfter("Members who haven't chosen")).toBe("Nothing runs for them");
 	});
 
 	it("drops the unchosen preview row once the choice is required", () => {
@@ -120,28 +116,23 @@ describe("AgentBindingsPage", () => {
 	});
 
 	it("names the readiness of a bound row and says nothing for an empty one", () => {
-		renderPage({
-			bindings: [
-				inHouseBinding,
-				{ ...inHouseBinding, dataHandlingTier: "PROVIDER_KEPT", instanceModelId: 21, ready: false },
-			],
-		});
+		renderPage({ bindings: [inHouseBinding, cloudBinding] });
 		reviewsInHouse().getByText("Ready");
-		row("Practice reviews", "Provider, kept for safety checks").getByText("Not ready");
-		expect(row("Practice reviews", "Provider, nothing kept").queryByText(/ready/iu)).toBeNull();
+		row("Practice reviews", "Cloud").getByText("Not ready");
+		expect(row("Heph", "In-house").queryByText(/ready/iu)).toBeNull();
 	});
 
 	it("tells an admin to clear a moved model when no other model of the row's tier exists", () => {
 		renderPage({
 			bindings: [{ ...inHouseBinding, instanceModelId: 21 }],
-			availableModels: [keptModel],
+			availableModels: [cloudModel],
 		});
 		const inHouse = reviewsInHouse();
-		expect(
-			inHouse.getByRole("combobox", { name: /Stays in-house/u }).hasAttribute("disabled"),
-		).toBe(true);
+		expect(inHouse.getByRole("combobox", { name: /In-house/u }).hasAttribute("disabled")).toBe(
+			true,
+		);
 		expect(inHouse.getByText(/is now declared as/u).textContent).toBe(
-			"GPT Other is now declared as Provider, kept for safety checks and no longer serves this row. Clear the assignment, or ask your host for a model declared as Stays in-house.",
+			"GPT Other is now declared as Cloud and no longer serves this row. Clear the assignment, or ask your host for a model declared as In-house.",
 		);
 	});
 
@@ -165,20 +156,17 @@ describe("AgentBindingsPage", () => {
 	it("shows the server's refusal on the row it refused", () => {
 		renderPage({
 			saveErrors: {
-				"PRACTICE_REVIEW:IN_HOUSE":
-					"This model is declared as Provider, kept for safety checks; assign it to that row.",
+				"PRACTICE_REVIEW:IN_HOUSE": "This model is declared as Cloud. Assign it to that row.",
 			},
 		});
 		const inHouse = reviewsInHouse();
 		expect(inHouse.getByRole("alert").textContent).toBe(
-			"This model is declared as Provider, kept for safety checks; assign it to that row.",
+			"This model is declared as Cloud. Assign it to that row.",
 		);
-		expect(
-			inHouse.getByRole("combobox", { name: /Stays in-house/u }).getAttribute("aria-invalid"),
-		).toBe("true");
-		expect(
-			row("Practice reviews", "Provider, kept for safety checks").queryByRole("alert"),
-		).toBeNull();
+		expect(inHouse.getByRole("combobox", { name: /In-house/u }).getAttribute("aria-invalid")).toBe(
+			"true",
+		);
+		expect(row("Practice reviews", "Cloud").queryByRole("alert")).toBeNull();
 	});
 
 	it("exposes the advanced settings as a disclosure", () => {

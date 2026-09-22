@@ -8,12 +8,12 @@ export type ClientOptions = {
  * The signed-in account's AI choice; both fields are absent until the person has answered.
  */
 export type AccountAiChoice = {
-  choice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
+  choice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
   updatedAt?: Date;
 };
 
 export type AccountAiChoiceRequest = {
-  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
+  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
 };
 
 /**
@@ -119,7 +119,7 @@ export type AdminWorkspaceView = {
  */
 export type AgentBinding = {
   allowInternet?: boolean;
-  dataHandlingTier: 'IN_HOUSE' | 'PROVIDER_NOT_KEPT' | 'PROVIDER_KEPT' | 'UNDECLARED';
+  dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
   enabled: boolean;
   instanceModelId?: number;
   maxConcurrentJobs?: number;
@@ -405,7 +405,7 @@ export type AvailableLlmModel = {
   /**
    * Data-handling tier derived from the admin's declared facts
    */
-  dataHandlingTier: 'IN_HOUSE' | 'PROVIDER_NOT_KEPT' | 'PROVIDER_KEPT' | 'UNDECLARED';
+  dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
   /**
    * Human-readable name
    */
@@ -906,15 +906,11 @@ export type CreateLlmModelRequest = {
    */
   enabled?: boolean;
   /**
-   * What stays behind after the reply; declare both facts or neither
-   */
-  keptAfterReply?: 'NONE' | 'FOR_SAFETY_CHECKS';
-  /**
    * Maximum output tokens
    */
   maxOutputTokens?: number;
   /**
-   * Who operates the systems the work is sent to; declare both facts or neither
+   * Who operates the systems the work is sent to; omit to leave the model undeclared
    */
   operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
@@ -1153,15 +1149,11 @@ export type CreateWorkspaceLlmModelRequest = {
    */
   enabled?: boolean;
   /**
-   * What stays behind after the reply; declare both facts or neither
-   */
-  keptAfterReply?: 'NONE' | 'FOR_SAFETY_CHECKS';
-  /**
    * Maximum output tokens
    */
   maxOutputTokens?: number;
   /**
-   * Who operates the systems the work is sent to; declare both facts or neither
+   * Who operates the systems the work is sent to; omit to leave the model undeclared
    */
   operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
@@ -2137,9 +2129,9 @@ export type LlmModel = {
    */
   dataHandlingNote?: string;
   /**
-   * Data-handling tier derived from the two facts; UNDECLARED until both are set
+   * Data-handling tier derived from the operator; UNDECLARED until it is set
    */
-  dataHandlingTier: 'IN_HOUSE' | 'PROVIDER_NOT_KEPT' | 'PROVIDER_KEPT' | 'UNDECLARED';
+  dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
   /**
    * Human-readable name
    */
@@ -2156,10 +2148,6 @@ export type LlmModel = {
    * Model id
    */
   id: number;
-  /**
-   * What stays behind after the reply; null until declared
-   */
-  keptAfterReply?: 'NONE' | 'FOR_SAFETY_CHECKS';
   /**
    * Maximum output tokens
    */
@@ -2329,7 +2317,7 @@ export type LoginProviderView = {
 };
 
 export type MemberAiChoiceRequest = {
-  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
+  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
 };
 
 /**
@@ -5373,15 +5361,11 @@ export type UpdateLlmModelRequest = {
    */
   enabled?: boolean;
   /**
-   * What stays behind after the reply; declare both facts or neither
-   */
-  keptAfterReply?: 'NONE' | 'FOR_SAFETY_CHECKS';
-  /**
    * Maximum output tokens
    */
   maxOutputTokens?: number;
   /**
-   * Who operates the systems the work is sent to; declare both facts or neither
+   * Who operates the systems the work is sent to; omit to leave the model undeclared
    */
   operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
@@ -5702,15 +5686,11 @@ export type UpdateWorkspaceLlmModelRequest = {
    */
   enabled?: boolean;
   /**
-   * What stays behind after the reply; declare both facts or neither
-   */
-  keptAfterReply?: 'NONE' | 'FOR_SAFETY_CHECKS';
-  /**
    * Maximum output tokens
    */
   maxOutputTokens?: number;
   /**
-   * Who operates the systems the work is sent to; declare both facts or neither
+   * Who operates the systems the work is sent to; omit to leave the model undeclared
    */
   operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
@@ -5986,7 +5966,7 @@ export type Workspace = {
 };
 
 export type WorkspaceAiOption = {
-  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
+  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
   mentorReady: boolean;
   practiceReviewsReady: boolean;
 };
@@ -6124,9 +6104,9 @@ export type WorkspaceLlmModel = {
    */
   dataHandlingNote?: string;
   /**
-   * Data-handling tier derived from the two facts; UNDECLARED until both are set
+   * Data-handling tier derived from the operator; UNDECLARED until it is set
    */
-  dataHandlingTier: 'IN_HOUSE' | 'PROVIDER_NOT_KEPT' | 'PROVIDER_KEPT' | 'UNDECLARED';
+  dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
   /**
    * Human-readable name
    */
@@ -6139,10 +6119,6 @@ export type WorkspaceLlmModel = {
    * Model id
    */
   id: number;
-  /**
-   * What stays behind after the reply; null until declared
-   */
-  keptAfterReply?: 'NONE' | 'FOR_SAFETY_CHECKS';
   /**
    * Maximum output tokens
    */
@@ -6317,7 +6293,7 @@ export type WorkspaceMembership = {
  *  what differs between workspaces.
  */
 export type WorkspaceOnboarding = {
-  aiChoice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
+  aiChoice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
   aiChoiceRequired: boolean;
   aiOptions: Array<WorkspaceAiOption>;
   enabled: boolean;
@@ -9123,7 +9099,7 @@ export type DeleteAgentData = {
     purpose: 'PRACTICE_REVIEW' | 'MENTOR';
   };
   query?: {
-    dataHandlingTier?: 'IN_HOUSE' | 'PROVIDER_NOT_KEPT' | 'PROVIDER_KEPT' | 'UNDECLARED';
+    dataHandlingTier?: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
   };
   url: '/workspaces/{workspaceSlug}/agents/{purpose}';
 };
@@ -9147,7 +9123,7 @@ export type ConfigureAgentData = {
     purpose: 'PRACTICE_REVIEW' | 'MENTOR';
   };
   query?: {
-    dataHandlingTier?: 'IN_HOUSE' | 'PROVIDER_NOT_KEPT' | 'PROVIDER_KEPT' | 'UNDECLARED';
+    dataHandlingTier?: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
   };
   url: '/workspaces/{workspaceSlug}/agents/{purpose}';
 };

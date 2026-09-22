@@ -69,9 +69,7 @@ export const Invalid: Story = {
 export const OpensAndListsGroups: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
-		await expect(
-			await screen.findByRole("option", { name: /GPT-5 .* Provider, nothing kept/u }),
-		).toBeVisible();
+		await expect(await screen.findByRole("option", { name: /GPT-5 .* Cloud/u })).toBeVisible();
 		await expect(
 			await screen.findByRole("option", { name: /My OpenAI key .* Not declared/u }),
 		).toBeVisible();
@@ -83,7 +81,7 @@ export const FilteredToTier: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
 		await expect(
-			await screen.findByRole("option", { name: /Local Llama .* Stays in-house/u }),
+			await screen.findByRole("option", { name: /Local Llama .* In-house/u }),
 		).toBeVisible();
 		await expect(screen.getAllByRole("option")).toHaveLength(1);
 	},
@@ -95,13 +93,17 @@ export const FilteredToTier: Story = {
  * a model.
  */
 export const NoModelsForTier: Story = {
-	args: { tier: "PROVIDER_KEPT", "aria-describedby": "model-picker-empty" },
+	args: {
+		tier: "CLOUD",
+		availableModels: mockAvailableModels.filter((model) => model.dataHandlingTier !== "CLOUD"),
+		"aria-describedby": "model-picker-empty",
+	},
 	render: (args) => (
 		<div className="space-y-2">
 			<ModelPicker {...args} />
 			<p id="model-picker-empty" className="text-sm text-muted-foreground">
-				No model declared as <span className="font-medium">Provider, kept for safety checks</span>{" "}
-				is available here yet. Ask your host, or add one under your own providers.
+				No model declared as <span className="font-medium">Cloud</span> is available here yet. Ask
+				your host, or add one under your own providers.
 			</p>
 		</div>
 	),

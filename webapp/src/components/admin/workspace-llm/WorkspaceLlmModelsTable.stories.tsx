@@ -32,7 +32,6 @@ const mockModels: WorkspaceLlmModel[] = [
 		upstreamModelId: "local/llama-3-70b",
 		dataHandlingTier: "IN_HOUSE",
 		operatedBy: "OWN_ORGANISATION",
-		keptAfterReply: "NONE",
 		enabled: false,
 		supportsReasoning: false,
 		pricingMode: "NO_CHARGE",
@@ -46,20 +45,9 @@ const mockModels: WorkspaceLlmModel[] = [
 		slug: "gpt-5-mini",
 		displayName: "GPT-5 mini",
 		upstreamModelId: "openai/gpt-5-mini",
-		dataHandlingTier: "PROVIDER_NOT_KEPT",
+		dataHandlingTier: "CLOUD",
 		operatedBy: "PROVIDER",
-		keptAfterReply: "NONE",
 		dataHandlingNote: "EU region",
-	},
-	{
-		...base,
-		id: 3,
-		slug: "gpt-5",
-		displayName: "GPT-5",
-		upstreamModelId: "openai/gpt-5",
-		dataHandlingTier: "PROVIDER_KEPT",
-		operatedBy: "PROVIDER",
-		keptAfterReply: "FOR_SAFETY_CHECKS",
 	},
 	{
 		...base,
@@ -90,12 +78,7 @@ export const Default: Story = {
 	play: async ({ canvas }) => {
 		const rows = canvas.getAllByRole("row").slice(1);
 		const tiers = rows.map((row) => within(row).getAllByRole("cell")[1]?.textContent);
-		await expect(tiers).toStrictEqual([
-			"Stays in-house",
-			"Provider, nothing kept",
-			"Provider, kept for safety checks",
-			"Not declared",
-		]);
+		await expect(tiers).toStrictEqual(["In-house", "Cloud", "Not declared"]);
 	},
 };
 

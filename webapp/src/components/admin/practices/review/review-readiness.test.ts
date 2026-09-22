@@ -20,9 +20,9 @@ const inHouse: AgentBinding = {
 	enabled: true,
 	ready: true,
 };
-const providerKept: AgentBinding = {
+const cloud: AgentBinding = {
 	purpose: "PRACTICE_REVIEW",
-	dataHandlingTier: "PROVIDER_KEPT",
+	dataHandlingTier: "CLOUD",
 	enabled: true,
 	ready: true,
 };
@@ -35,7 +35,7 @@ describe("workspace review model readiness", () => {
 	});
 
 	it("names the strictest ready tier, the one within the most developers' choices", () => {
-		expect(availableReviewBinding([providerKept, inHouse])).toBe(inHouse);
+		expect(availableReviewBinding([cloud, inHouse])).toBe(inHouse);
 	});
 
 	it("does not mistake a ready mentor assignment for a practice-review model", () => {
@@ -50,7 +50,7 @@ describe("workspace review model readiness", () => {
 		expect(
 			reviewRunningDescription({ enabled: true, model: { status: "ready", binding: inHouse } }),
 		).toBe(
-			"Practice reviews are on and a review model declared as Stays in-house is ready. Each developer's AI choice still decides whether it runs for them.",
+			"Practice reviews are on and a review model declared as In-house is ready. Each developer's AI choice still decides whether it runs for them.",
 		);
 		expect(
 			reviewRunningDescription({

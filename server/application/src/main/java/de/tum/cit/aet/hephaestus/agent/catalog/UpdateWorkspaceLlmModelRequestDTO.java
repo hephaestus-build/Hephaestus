@@ -13,8 +13,8 @@ import org.jspecify.annotations.Nullable;
  * <p>Pricing is the exception: it is replaced wholesale, and only when {@code pricingMode} is given. A
  * rate sent without a {@code pricingMode} is ignored; a rate omitted alongside one is cleared.
  *
- * <p>Data handling is the other: the two facts and the note are replaced wholesale on every update,
- * so sending neither fact declares the model undeclared again.
+ * <p>Data handling is the other: the operator and the note are replaced wholesale on every update,
+ * so omitting the operator declares the model undeclared again.
  */
 @Schema(description = "Update a model on your AI provider (all fields optional)")
 public record UpdateWorkspaceLlmModelRequestDTO(
@@ -30,11 +30,9 @@ public record UpdateWorkspaceLlmModelRequestDTO(
         @Nullable @Schema(description = "Whether the model supports a reasoning mode")
         Boolean supportsReasoning,
 
-        @Nullable @Schema(description = "Who operates the systems the work is sent to; declare both facts or neither")
+        @Nullable
+        @Schema(description = "Who operates the systems the work is sent to; omit to leave the model undeclared")
         LlmDataOperator operatedBy,
-
-        @Nullable @Schema(description = "What stays behind after the reply; declare both facts or neither")
-        LlmDataRetention keptAfterReply,
 
         @Nullable @Size(max = 200) @Schema(description = "Admin-only note: region, agreement, renewal date")
         String dataHandlingNote,

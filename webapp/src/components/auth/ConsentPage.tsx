@@ -81,7 +81,8 @@ const TERMS: readonly Fact[] = [
 	{
 		icon: EyeIcon,
 		term: "What it reads",
-		detail: "The work in the tools your project connects — pull requests, issues, reviews, chat.",
+		detail:
+			"The work in the tools your project connects, such as pull requests, issues, reviews and chat.",
 	},
 	{
 		icon: TriangleAlertIcon,
@@ -167,10 +168,10 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 	// and reaches the button through `aria-describedby`, so focusing Continue does not replay it.
 	function narrate() {
 		if (state.status === "loading") {
-			return "Give me a moment — I'm fetching your setup.";
+			return "Give me a moment. Hephaestus is fetching your setup.";
 		}
 		if (state.status === "error") {
-			return "I couldn't fetch your setup just now.";
+			return "Hephaestus couldn't fetch your setup just now.";
 		}
 		if (stale) {
 			return "Hephaestus was updated while this page was open.";
@@ -179,13 +180,13 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 			return "That's everything. Let's get to work.";
 		}
 		if (!asksAboutResearch) {
-			return "One thing first: the rules.";
+			return "The rules first.";
 		}
 		if (termsAccepted) {
-			return "Thanks. One question to go, and either answer is fine by me.";
+			return "Thanks. One question to go, and either answer is fine.";
 		}
 		if (answer === undefined) {
-			return "Two things first: the rules, and whether you'd like to take part in the research.";
+			return "Two things first. Accept the rules, then say if you'd like to take part in the research.";
 		}
 		return "Noted. Just the terms left.";
 	}
@@ -324,7 +325,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 						{submissionFailed && (
 							<Alert variant="destructive">
 								<AlertTitle>Your answers weren’t saved</AlertTitle>
-								<AlertDescription>Please try again.</AlertDescription>
+								<AlertDescription>Try again.</AlertDescription>
 							</Alert>
 						)}
 					</ConsentBody>
