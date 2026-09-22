@@ -189,7 +189,7 @@ admission request, approval, entitlement, or provisioning workflow. It is config
 member's own choice, not research consent. The member-facing word is **setup**: a workspace
 *needs setup* while its page is still owed. Retired words: *processing location*, *Unclassified*,
 *AI preference*, *Workspace preferences*, *Workspace default*, and *welcome* as the name of the
-setup or its state; the greeting in the page heading (*Welcome to {workspaceName}*) stays.
+setup or its state; the greeting in the page heading (`Welcome to {workspaceName}`) stays.
 
 **Data handling** is what an admin declares about a model: two facts, never an inference from a
 hostname, connection or provider kind. **Operated by** is *Your organisation* or *A provider*;
