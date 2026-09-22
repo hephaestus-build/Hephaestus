@@ -5930,6 +5930,7 @@ paths:
             enum:
             - VOLUME_CAPPED
             - COMPOSER_DEDUPED
+            - COMPOSER_WITHHELD
             - REACTED_DISPUTED
             - REACTED_NOT_APPLICABLE
             - CONVERSATION_EXPIRED
@@ -10093,6 +10094,7 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -13092,6 +13094,7 @@ components:
             enum:
             - VOLUME_CAPPED
             - COMPOSER_DEDUPED
+            - COMPOSER_WITHHELD
             - REACTED_DISPUTED
             - REACTED_NOT_APPLICABLE
             - CONVERSATION_EXPIRED
@@ -14104,6 +14107,7 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -14275,6 +14279,7 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -14415,6 +14420,7 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED

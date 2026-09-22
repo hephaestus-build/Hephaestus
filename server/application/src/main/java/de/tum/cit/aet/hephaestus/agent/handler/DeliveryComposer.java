@@ -111,11 +111,24 @@ class DeliveryComposer {
         // Reported on the DeliveryContent so the ledger marks these SUPPRESSED, not DELIVERED.
         List<ValidatedObservation> dedupDropped = new ArrayList<>();
         List<ValidatedObservation> capDropped = new ArrayList<>();
+        List<ValidatedObservation> composerWithheld = new ArrayList<>();
 
         List<ValidatedObservation> negatives = observations.stream()
                 .filter(DeliveryComposer::isProblem)
                 .sorted(Comparator.comparingInt(f -> severity(f).ordinal()))
                 .toList();
+
+        // A practice the composer withheld from the work, with a reason, is a decision: nothing of it
+        // reaches a line or the summary, and it is recorded as withheld rather than rendered as a bare
+        // headline no note claimed. A practice the composer also wrote a note for keeps that note.
+        {
+            Set<String> withheldSlugs = withheldInContext(composed);
+            List<ValidatedObservation> before = negatives;
+            negatives = negatives.stream()
+                    .filter(f -> !withheldSlugs.contains(f.practiceSlug()))
+                    .toList();
+            composerWithheld.addAll(identityDiff(before, negatives));
+        }
 
         if (ArtifactKinds.ISSUE.equals(artifact)) {
             List<ValidatedObservation> before = negatives;
@@ -159,7 +172,8 @@ class DeliveryComposer {
             var sb = new StringBuilder(1024);
             sb.append(openingOf(rendering));
             appendRecurring(sb, recurring);
-            return new DeliveryContent(sb.toString(), List.of(), withheldObservations(dedupDropped, capDropped));
+            return new DeliveryContent(
+                    sb.toString(), List.of(), withheldObservations(dedupDropped, capDropped, composerWithheld));
         }
         if (negatives.isEmpty()) {
             // Ranked best-attested first, so the strengths that survive the cap are the ones we saw in the
@@ -211,7 +225,7 @@ class DeliveryComposer {
         }
         List<DiffNote> diffNotes = placed.notes();
 
-        return new DeliveryContent(mrNote, diffNotes, withheldObservations(dedupDropped, capDropped));
+        return new DeliveryContent(mrNote, diffNotes, withheldObservations(dedupDropped, capDropped, composerWithheld));
     }
 
     private static boolean hasArtifactPlacement(String practiceSlug, List<ComposedFeedbackUnit> composed) {
@@ -239,11 +253,36 @@ class DeliveryComposer {
         return dropped;
     }
 
+    /**
+     * The practices whose every IN_CONTEXT unit is a WITHHOLD: the composer decided against the work as
+     * a surface for them. A practice with a NEW or SUPERSEDE unit beside a withheld one is not withheld.
+     */
+    private static Set<String> withheldInContext(List<ComposedFeedbackUnit> composed) {
+        Set<String> withheld = new HashSet<>();
+        Set<String> written = new HashSet<>();
+        for (ComposedFeedbackUnit unit : composed) {
+            if (unit.channel() != FeedbackChannel.IN_CONTEXT) {
+                continue;
+            }
+            if (unit.action() == ComposedFeedbackUnit.Action.WITHHOLD) {
+                withheld.add(unit.practiceSlug());
+            } else {
+                written.add(unit.practiceSlug());
+            }
+        }
+        withheld.removeAll(written);
+        return withheld;
+    }
+
     private static List<PracticeDetectionResultParser.WithheldObservation> withheldObservations(
-            List<ValidatedObservation> dedupDropped, List<ValidatedObservation> capDropped) {
-        return Stream.concat(
+            List<ValidatedObservation> dedupDropped,
+            List<ValidatedObservation> capDropped,
+            List<ValidatedObservation> composerWithheld) {
+        return Stream.of(
+                        composerWithheld.stream().map(f -> withheld(f, FeedbackSuppressionReason.COMPOSER_WITHHELD)),
                         dedupDropped.stream().map(f -> withheld(f, FeedbackSuppressionReason.COMPOSER_DEDUPED)),
                         capDropped.stream().map(f -> withheld(f, FeedbackSuppressionReason.VOLUME_CAPPED)))
+                .flatMap(stream -> stream)
                 .filter(Objects::nonNull)
                 .toList();
     }

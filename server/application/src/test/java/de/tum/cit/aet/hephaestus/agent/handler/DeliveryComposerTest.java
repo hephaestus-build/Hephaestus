@@ -1832,12 +1832,11 @@ class DeliveryComposerTest extends BaseUnitTest {
                 .doesNotContain("SECOND LOCUS REASONING");
     }
 
-    @Test
-    void compose_withholdUnit_leavesThePracticeOnTodaysRenderingRatherThanSilencingIt() {
-        ComposedFeedbackUnit withheld = new ComposedFeedbackUnit(
+    private static ComposedFeedbackUnit withholdUnit(String slug, String observationId) {
+        return new ComposedFeedbackUnit(
                 FeedbackChannel.IN_CONTEXT,
-                "ships-tests-with-the-change",
-                List.of("obs-0"),
+                slug,
+                List.of(observationId),
                 ComposedFeedbackUnit.Action.WITHHOLD,
                 null,
                 ComposedFeedbackUnit.WithholdReason.ALREADY_SAID,
@@ -1846,13 +1845,79 @@ class DeliveryComposerTest extends BaseUnitTest {
                 null,
                 null,
                 null);
+    }
+
+    @Test
+    void compose_withholdUnit_deliversNothingForThePracticeAndRecordsTheDecision() {
+        // The composer decided, with a reason, that the work is not the surface for this practice: no
+        // inline note, no summary line, and the observation is withheld under the composer's own reason
+        // rather than rendered as a bare headline no note claimed.
+        ValidatedObservation withheld = untestedBranchObservation().withKeys(new ObservationKeys("occ-w", "rk-w"));
 
         DeliveryContent result = DeliveryComposer.composeAdmitted(
-                List.of(untestedBranchObservation()), ArtifactKinds.PULL_REQUEST, Map.of(), List.of(withheld), null);
+                List.of(withheld),
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(withholdUnit("ships-tests-with-the-change", "obs-0")),
+                null);
+
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void compose_withholdUnit_besideOtherNegatives_withholdsOnlyItsPracticeAndDoesNotCountItAsHidden() {
+        ValidatedObservation withheld = untestedBranchObservation().withKeys(new ObservationKeys("occ-w", "rk-w"));
+        List<ValidatedObservation> observations = new ArrayList<>();
+        observations.add(withheld);
+        for (int i = 0; i < DeliveryComposer.MAX_IMPROVEMENT_SUGGESTIONS; i++) {
+            observations.add(negativeObservation(
+                            "nudge-" + i,
+                            "Nudge " + i,
+                            Severity.MINOR,
+                            List.of(new LocationSpec("Views/N" + i + ".swift", 10 + i)),
+                            null,
+                            "Reasoning " + i + ".")
+                    .withKeys(new ObservationKeys("occ-" + i, "rk-" + i)));
+        }
+
+        DeliveryContent result = DeliveryComposer.composeAdmitted(
+                observations,
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(withholdUnit("ships-tests-with-the-change", "obs-0")),
+                null);
 
         assertThat(result).isNotNull();
-        assertThat(result.diffNotes()).hasSize(1);
-        assertThat(result.diffNotes().get(0).body()).doesNotContain("MEASURED REASONING");
+        assertThat(result.mrNote()).doesNotContain("New branch ships without a test");
+        assertThat(result.diffNotes()).noneMatch(note -> note.body().contains("New branch ships without a test"));
+        assertThat(result.withheld()).singleElement().satisfies(w -> {
+            assertThat(w.occurrenceKey()).isEqualTo("occ-w");
+            assertThat(w.reason()).isEqualTo(FeedbackSuppressionReason.COMPOSER_WITHHELD);
+        });
+        // A withheld practice is a decision, not a hidden suggestion: the count of what the cap hid is 0.
+        assertThat(result.mrNote()).doesNotContain("not shown");
+    }
+
+    @Test
+    void compose_withholdUnit_besideANewUnitForTheSamePractice_keepsTheNewUnit() {
+        ValidatedObservation observation = untestedBranchObservation().withKeys(new ObservationKeys("occ-w", "rk-w"));
+        ComposedFeedbackUnit written = inContextUnit(
+                "ships-tests-with-the-change",
+                "Cover the tax-exempt branch",
+                COMPOSED_NEXT_STEP,
+                new ComposedFeedbackUnit.InContextPlacement(
+                        ComposedFeedbackUnit.InContextPlacement.PlacementKind.ARTIFACT, null));
+
+        DeliveryContent result = DeliveryComposer.composeAdmitted(
+                List.of(observation),
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(written, withholdUnit("ships-tests-with-the-change", "obs-1")),
+                null);
+
+        assertThat(result).isNotNull();
+        assertThat(result.withheld()).isEmpty();
+        assertThat(result.mrNote()).contains("Cover the tax-exempt branch").contains(COMPOSED_NEXT_STEP);
     }
 
     @Test

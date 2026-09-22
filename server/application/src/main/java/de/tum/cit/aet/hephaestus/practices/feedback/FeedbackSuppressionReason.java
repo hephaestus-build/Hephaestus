@@ -4,6 +4,8 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 public enum FeedbackSuppressionReason {
     VOLUME_CAPPED,
     COMPOSER_DEDUPED,
+    /** The composer decided, with a reason, that this practice's feedback should not go on the work. */
+    COMPOSER_WITHHELD,
     REACTED_DISPUTED,
     REACTED_NOT_APPLICABLE,
     CONVERSATION_EXPIRED,

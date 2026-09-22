@@ -36,4 +36,38 @@
     <changeSet id="1789135709162-7" author="hephaestus">
         <addForeignKeyConstraint baseColumnNames="pull_request_id" baseTableName="pull_request_closing_issue" constraintName="fk_pull_request_closing_issue_pull_request" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="issue" validate="true"/>
     </changeSet>
+    <changeSet id="1789135709162-8" author="hephaestus">
+        <preConditions onFail="MARK_RAN" onFailMessage="feedback suppression reasons already admit COMPOSER_WITHHELD">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM pg_constraint
+                WHERE conname = 'chk_feedback_suppression_reason'
+                  AND conrelid = 'feedback'::regclass
+                  AND pg_get_constraintdef(oid) LIKE '%COMPOSER_WITHHELD%'
+            </sqlCheck>
+        </preConditions>
+        <comment>Admit "the composer withheld this practice from the work, with a reason" as a withholding rationale.</comment>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE feedback DROP CONSTRAINT IF EXISTS chk_feedback_suppression_reason;
+            ALTER TABLE feedback ADD CONSTRAINT chk_feedback_suppression_reason
+                CHECK (suppression_reason IS NULL OR suppression_reason IN (
+                    'VOLUME_CAPPED', 'COMPOSER_DEDUPED', 'COMPOSER_WITHHELD', 'REACTED_DISPUTED',
+                    'REACTED_NOT_APPLICABLE', 'CONVERSATION_EXPIRED', 'ARTIFACT_GONE', 'ARTIFACT_CLOSED',
+                    'ARTIFACT_MERGED', 'ARTIFACT_DRAFT', 'RECIPIENT_OPTED_OUT', 'EMPTY_AFTER_SANITIZE',
+                    'INSTANCE_SILENCED', 'PRACTICE_REQUIRES_APPROVAL', 'BACKFILL_QUIET', 'WORKSPACE_DISABLED',
+                    'APPROVAL_STALE', 'APPROVAL_NO_LONGER_ELIGIBLE', 'WORKSPACE_DELIVERY_PAUSED',
+                    'STALE_ROLLOUT_REVISION', 'OUTSIDE_CURRENT_COVERAGE'));
+        ]]></sql>
+        <rollback><![CDATA[
+            DELETE FROM feedback WHERE suppression_reason = 'COMPOSER_WITHHELD';
+            ALTER TABLE feedback DROP CONSTRAINT IF EXISTS chk_feedback_suppression_reason;
+            ALTER TABLE feedback ADD CONSTRAINT chk_feedback_suppression_reason
+                CHECK (suppression_reason IS NULL OR suppression_reason IN (
+                    'VOLUME_CAPPED', 'COMPOSER_DEDUPED', 'REACTED_DISPUTED', 'REACTED_NOT_APPLICABLE',
+                    'CONVERSATION_EXPIRED', 'ARTIFACT_GONE', 'ARTIFACT_CLOSED', 'ARTIFACT_MERGED',
+                    'ARTIFACT_DRAFT', 'RECIPIENT_OPTED_OUT', 'EMPTY_AFTER_SANITIZE', 'INSTANCE_SILENCED',
+                    'PRACTICE_REQUIRES_APPROVAL', 'BACKFILL_QUIET', 'WORKSPACE_DISABLED', 'APPROVAL_STALE',
+                    'APPROVAL_NO_LONGER_ELIGIBLE', 'WORKSPACE_DELIVERY_PAUSED', 'STALE_ROLLOUT_REVISION',
+                    'OUTSIDE_CURRENT_COVERAGE'));
+        ]]></rollback>
+    </changeSet>
 </databaseChangeLog>

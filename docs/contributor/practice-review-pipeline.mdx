@@ -387,7 +387,9 @@ The sweeper retries preparation from existing review outputs, not model composit
 ## Delivery and human approval
 
 Composition creates immutable feedback units before release authority is applied. A composer `WITHHOLD`
-means there was nothing useful to say and creates no feedback row. A policy refusal is instead persisted as
+means there was nothing useful to say and creates no feedback row; the negative observations it covers on
+the work are recorded `SUPPRESSED` with `COMPOSER_WITHHELD`, so a withheld practice is a recorded decision
+and never a bare headline rendered without a note. A policy refusal is instead persisted as
 `SUPPRESSED` with a server-owned reason. These outcomes must not be conflated with a human rejection.
 
 Autonomy is only the authority step, and the glossary owns it in full — the resolution chain and the three
