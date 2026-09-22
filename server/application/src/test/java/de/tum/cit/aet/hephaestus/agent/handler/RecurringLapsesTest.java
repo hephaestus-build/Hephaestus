@@ -22,6 +22,10 @@ import org.junit.jupiter.api.Test;
 class RecurringLapsesTest extends BaseUnitTest {
 
     private static Observation negative(String slug, long artifactId) {
+        return observed(slug, artifactId, Presence.ABSENT);
+    }
+
+    private static Observation observed(String slug, long artifactId, Presence presence) {
         Practice practice = new Practice();
         practice.setSlug(slug);
         return Observation.builder()
@@ -30,7 +34,7 @@ class RecurringLapsesTest extends BaseUnitTest {
                 .aboutUserId(7L)
                 .artifactId(artifactId)
                 .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.ABSENT)
+                .presence(presence)
                 .assessment(Assessment.GOOD)
                 .build();
     }
@@ -59,5 +63,25 @@ class RecurringLapsesTest extends BaseUnitTest {
                         List.of(negative("describe-what-and-why", 42), negative("ships-tests-with-the-change", 42)));
 
         assertThat(recurring).containsExactly("describe-what-and-why");
+    }
+
+    @Test
+    void shouldNotCountALapseTheNextReviewFoundFixed() {
+        ObservationRepository repository = mock(ObservationRepository.class);
+        Clock clock = Clock.fixed(Instant.parse("2026-09-19T12:00:00Z"), ZoneOffset.UTC);
+        Observation fixed = observed("describe-what-and-why", 40, Presence.PRESENT);
+        // Newest first: work 40 was negative as a draft and fixed by the review that followed.
+        when(repository.findRecentForSubjectAndPractice(eq(1L), eq(7L), eq("describe-what-and-why"), any(), any()))
+                .thenReturn(List.of(
+                        negative("describe-what-and-why", 42),
+                        fixed,
+                        negative("describe-what-and-why", 40),
+                        negative("describe-what-and-why", 38),
+                        negative("describe-what-and-why", 31)));
+
+        var recurring =
+                new RecurringLapses(repository, clock).recurringSlugs(List.of(negative("describe-what-and-why", 42)));
+
+        assertThat(recurring).isEmpty();
     }
 }

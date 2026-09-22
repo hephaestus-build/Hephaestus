@@ -7,8 +7,10 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.springframework.data.domain.PageRequest;
@@ -57,14 +59,15 @@ class RecurringLapses {
                 continue;
             }
             Long artifact = observation.getArtifactId();
-            long others = observationRepository
+            // Each piece of work counts by its latest review, newest first: a lapse a draft review found
+            // and the next review found fixed is not part of a habit.
+            Map<Long, Outcome> latestByArtifact = new HashMap<>();
+            observationRepository
                     .findRecentForSubjectAndPractice(
                             observation.getWorkspaceId(), observation.getAboutUserId(), slug, since, RECENT)
-                    .stream()
-                    .filter(o -> o.getOutcome() == Outcome.NEGATIVE)
-                    .map(Observation::getArtifactId)
-                    .filter(id -> !Objects.equals(id, artifact))
-                    .distinct()
+                    .forEach(o -> latestByArtifact.putIfAbsent(o.getArtifactId(), o.getOutcome()));
+            long others = latestByArtifact.entrySet().stream()
+                    .filter(e -> e.getValue() == Outcome.NEGATIVE && !Objects.equals(e.getKey(), artifact))
                     .count();
             if (others >= RECURRING_MIN_ARTIFACTS) {
                 recurring.add(slug);
