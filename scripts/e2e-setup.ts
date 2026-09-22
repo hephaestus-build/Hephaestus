@@ -120,7 +120,7 @@ export function loadConfig(env: Record<string, string | undefined>, args: string
 		"provider must be github or gitlab",
 	);
 	const protocol = oneOf(
-		get("--llm-protocol", "E2E_LLM_PROTOCOL", "openai-completions"),
+		get("--llm-protocol", "E2E_LLM_PROTOCOL", "openai-responses"),
 		["openai-completions", "openai-responses"],
 		"E2E_LLM_PROTOCOL is invalid",
 	);

@@ -67,8 +67,9 @@ declaration: use `PRICED` with contract rates, or `NO_CHARGE` with `E2E_LLM_PRIC
 repository is selected. For GitLab, use the narrowest suitable group or subgroup because initial sync
 covers every project below that path.
 
-Other useful options are `--provider`, `--server-url`, and `--app-url`. Use
-`E2E_LLM_PROTOCOL=openai-responses` or `E2E_LLM_AUTH_MODE=API_KEY` when required by the provider.
+Other useful options are `--provider`, `--server-url`, and `--app-url`. The model connection uses
+the Responses API; use `E2E_LLM_PROTOCOL=openai-completions` for an endpoint that serves Chat
+Completions alone, or `E2E_LLM_AUTH_MODE=API_KEY` when required by the provider.
 Existing resources are reused only when their immutable SCM and model-routing fields match.
 
 ## Running the review

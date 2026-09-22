@@ -9247,7 +9247,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
           minLength: 1
           pattern: openai-completions|openai-responses
         authMode:
@@ -9597,7 +9597,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
           minLength: 1
           pattern: openai-completions|openai-responses
         authMode:
@@ -11114,7 +11114,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
         authMode:
           type: string
           description: Credential shape
@@ -16885,7 +16885,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
         authMode:
           type: string
           description: Credential shape

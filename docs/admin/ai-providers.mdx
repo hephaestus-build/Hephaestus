@@ -59,7 +59,7 @@ required.
 | --- | --- | --- |
 | **Display name** | yes | Free text, ≤ 128 characters. The only field you can rename later. |
 | **Base URL** | yes | The provider's OpenAI-compatible root, ≤ 2048 characters — e.g. `https://api.openai.com/v1`, or `https://<resource>.openai.azure.com/openai/v1` for Azure. Must be HTTPS, must carry no credentials, query string or fragment. **Immutable after create.** |
-| **API shape** | yes | `openai-completions` (Chat Completions) or `openai-responses` (Responses API). In the form this is the *"Use the Responses API instead of Chat Completions"* checkbox. **Immutable after create.** |
+| **API shape** | yes | `openai-responses` (Responses API) or `openai-completions` (Chat Completions). In the form this is the *"Use the Responses API"* checkbox, ticked for a new connection. Prefer the Responses API: a review or the mentor calls tools across many turns, and only this API carries the model's reasoning from one turn to the next. OpenAI, the Vercel AI Gateway, OpenRouter and vLLM serve it; clear the checkbox only for an endpoint that serves Chat Completions alone. **Immutable after create.** |
 | **Authentication** | no | `BEARER` → `Authorization: Bearer <key>`, or `API_KEY` → `api-key: <key>`. Defaults to `BEARER`; Azure needs `API_KEY`. **Immutable after create.** |
 | **API key** | no | Write-only. Encrypted at rest, never returned — a saved connection reports only `hasApiKey` and the last four characters. Leave it blank on edit to keep the stored key; tick **Remove stored API key** to delete it. Genuinely optional: a self-hosted vLLM or Ollama gateway may need no credential at all. |
 | **Slug** | no | Internal identifier, ≤ 63 characters. Derived from the display name when you omit it. **Immutable after create.** |

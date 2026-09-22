@@ -628,6 +628,59 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(Objects.requireNonNull(initial.getBody()).utf8()).contains("stream_options");
             assertThat(Objects.requireNonNull(retry.getBody()).utf8()).doesNotContain("stream_options");
         }
+
+        @Test
+        @DisplayName("a streamed Responses call is billed from its completed event, unchanged on the way out")
+        void aStreamedResponsesCallIsBilled() throws Exception {
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "text/event-stream")
+                    .body("event: response.output_text.delta\n"
+                            + "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\n"
+                            + "event: response.completed\n"
+                            + "data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":100,"
+                            + "\"input_tokens_details\":{\"cached_tokens\":25},\"output_tokens\":40,"
+                            + "\"output_tokens_details\":{\"reasoning_tokens\":30}}}}\n\n")
+                    .build());
+            ProxyRouting routing = new ProxyRouting(
+                    "job:stream",
+                    "openai-responses",
+                    upstream.url("/v1").toString(),
+                    FundingSource.INSTANCE,
+                    7L,
+                    8L,
+                    9L,
+                    ATTEMPT);
+            authenticate(routing);
+            stubCredential(
+                    routing,
+                    new LlmModelResolver.ProxyCredential(
+                            upstream.url("/v1").toString(),
+                            "openai-responses",
+                            LlmAuthMode.BEARER,
+                            "catalog-model",
+                            "secret"));
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            streamingController.proxy(
+                    request("POST", "/internal/llm/responses"),
+                    response,
+                    new HttpHeaders(),
+                    "{\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"],\"input\":[]}"
+                            .getBytes(StandardCharsets.UTF_8));
+
+            assertThat(response.getContentAsString()).contains("\"delta\":\"hi\"");
+            RecordedRequest sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
+            assertThat(sent.getUrl().encodedPath()).isEqualTo("/v1/responses");
+            String sentBody = Objects.requireNonNull(sent.getBody()).utf8();
+            assertThat(sentBody).contains("reasoning.encrypted_content").doesNotContain("stream_options");
+            ArgumentCaptor<ProxyTokenUsage> usage = ArgumentCaptor.forClass(ProxyTokenUsage.class);
+            verify(usageAccumulator).accumulate(eq(ATTEMPT), usage.capture());
+            assertThat(usage.getValue().billableInputTokens()).isEqualTo(75);
+            assertThat(usage.getValue().outputTokens()).isEqualTo(40);
+            assertThat(usage.getValue().reasoningTokens()).isEqualTo(30);
+            assertThat(usage.getValue().cacheReadTokens()).isEqualTo(25);
+        }
     }
 
     @Nested

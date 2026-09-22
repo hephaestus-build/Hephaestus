@@ -22,7 +22,7 @@ public record WorkspaceLlmConnectionDTO(
 
         @NonNull @Schema(description = "Provider base URL") String baseUrl,
 
-        @NonNull @Schema(description = "Wire protocol", example = "openai-completions")
+        @NonNull @Schema(description = "Wire protocol", example = "openai-responses")
         String apiProtocol,
 
         @NonNull @Schema(description = "Credential shape") LlmAuthMode authMode,
