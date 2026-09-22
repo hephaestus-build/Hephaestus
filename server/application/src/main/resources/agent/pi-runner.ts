@@ -47,7 +47,7 @@ import {
 	validateSearchScope,
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
-import { loadProviderConfig, registerHephaestusProvider } from "./pi-provider.ts";
+import { loadProviderConfig, reasoningSetting, registerHephaestusProvider } from "./pi-provider.ts";
 import { buildBrief } from "./pi-review-brief.ts";
 import { deriveWindows, missingSlugs, planTurns, turnShare } from "./pi-review-turns.ts";
 import {
@@ -2971,6 +2971,10 @@ async function main() {
 		`[pi-runner] registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} ` +
 			`model=${providerConfig.modelId} contextWindow=${model.contextWindow}`,
 	);
+	const { thinkingLevel } = reasoningSetting(providerConfig.reasoningEffort);
+	console.error(
+		`[pi-runner] reasoning effort: ${providerConfig.reasoningEffort?.toLowerCase() ?? "provider default"}`,
+	);
 
 	const compositionRequest = loadCompositionRequest();
 	const feedbackTool = compositionRequest
@@ -3116,6 +3120,7 @@ async function main() {
 		resourceLoader: loader,
 		modelRuntime,
 		model,
+		thinkingLevel,
 	});
 	for (const error of extensionsResult.errors) {
 		console.error(`[pi-runner] extension error: ${error.path}: ${error.error}`);

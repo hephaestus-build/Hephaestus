@@ -584,7 +584,7 @@ class DockerInteractiveSandboxLiveTest {
                 "stub-model",
                 null,
                 null,
-                false,
+                null,
                 "stub-proxy-token",
                 true,
                 120,

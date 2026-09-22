@@ -54,7 +54,7 @@ describe("AdminLlmModelFormDialog", () => {
 			connectionId: 1,
 			connectionDisplayName: "OpenAI",
 			enabled: false,
-			supportsReasoning: true,
+			reasoningEffort: "MEDIUM",
 			visibility: "PUBLIC",
 			grantedWorkspaceIds: [],
 			createdAt: new Date("2026-07-01T00:00:00Z"),
@@ -151,7 +151,7 @@ describe("AdminLlmModelFormDialog", () => {
 			connectionId: 1,
 			connectionDisplayName: "OpenAI",
 			enabled: true,
-			supportsReasoning: true,
+			reasoningEffort: "MEDIUM",
 			visibility: "GRANTED",
 			grantedWorkspaceIds: [],
 			currentPrice: {

@@ -206,12 +206,12 @@ class MentorChatServiceTest extends BaseUnitTest {
 
         when(llmModelResolver.resolve(any()))
                 .thenReturn(new ResolvedLlmModel(
-                        "https://api.openai.com", "openai-completions", "test-model", null, null, false));
+                        "https://api.openai.com", "openai-completions", "test-model", null, null, null));
         when(llmModelResolver.connectionRef(any())).thenReturn(LlmModelResolver.ConnectionRef.NONE);
         when(llmAdmissionService.admit(any(WorkspaceAgentBinding.class)))
                 .thenReturn(new AdmittedLlmModel(
                         new ResolvedLlmModel(
-                                "https://api.openai.com", "openai-completions", "test-model", null, null, false),
+                                "https://api.openai.com", "openai-completions", "test-model", null, null, null),
                         new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 1L, 2L, WORKSPACE_ID),
                         new LlmPriceSnapshot(
                                 FundingSource.INSTANCE, PricingState.NO_CHARGE, 3L, null, null, null, null, null)));
@@ -471,7 +471,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         when(llmAdmissionService.admit(any(WorkspaceAgentBinding.class)))
                 .thenReturn(new AdmittedLlmModel(
                         new ResolvedLlmModel(
-                                "https://byo.example.com", "openai-completions", "byo-model", null, null, false),
+                                "https://byo.example.com", "openai-completions", "byo-model", null, null, null),
                         new LlmModelResolver.ConnectionRef(FundingSource.WORKSPACE, 1L, 2L, WORKSPACE_ID),
                         new LlmPriceSnapshot(
                                 FundingSource.WORKSPACE, PricingState.NO_CHARGE, null, 4L, null, null, null, null)));
@@ -789,7 +789,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         when(llmAdmissionService.admit(any(WorkspaceAgentBinding.class)))
                 .thenReturn(new AdmittedLlmModel(
                         new ResolvedLlmModel(
-                                "https://api.openai.com", "openai-completions", "test-model", null, null, false),
+                                "https://api.openai.com", "openai-completions", "test-model", null, null, null),
                         new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 1L, 2L, WORKSPACE_ID),
                         new LlmPriceSnapshot(
                                 FundingSource.INSTANCE,

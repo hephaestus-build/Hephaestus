@@ -237,7 +237,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         null,
                         null,
                         null,
-                        false,
+                        null,
                         null,
                         null,
                         null,

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.runtime;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -18,7 +19,7 @@ public record PiPlanSpec(
         String upstreamModelId,
         @Nullable Integer contextWindow,
         @Nullable Integer maxOutputTokens,
-        boolean supportsReasoning,
+        @Nullable ReasoningEffort reasoningEffort,
         @Nullable String jobToken,
         boolean allowInternet,
         int timeoutSeconds,

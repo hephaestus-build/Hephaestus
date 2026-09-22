@@ -33,7 +33,7 @@ public class PracticePiAdapter {
                 request.upstreamModelId(),
                 request.contextWindow(),
                 request.maxOutputTokens(),
-                request.supportsReasoning(),
+                request.reasoningEffort(),
                 request.jobToken(),
                 // Native shell access must not provide a route to push or fetch uncaptured evidence.
                 false,

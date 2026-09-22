@@ -147,7 +147,7 @@ class AgentJobServiceTest extends BaseUnitTest {
         lenient()
                 .when(llmModelResolver.resolve(any()))
                 .thenReturn(new ResolvedLlmModel(
-                        "https://api.anthropic.com", "anthropic-messages", "claude-sonnet-4", null, null, false));
+                        "https://api.anthropic.com", "anthropic-messages", "claude-sonnet-4", null, null, null));
         lenient()
                 .when(llmModelResolver.connectionRef(any()))
                 .thenReturn(new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 99L, null, null));

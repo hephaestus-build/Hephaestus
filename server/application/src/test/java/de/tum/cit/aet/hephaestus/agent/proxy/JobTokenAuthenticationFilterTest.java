@@ -558,7 +558,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
                 null,
                 null,
                 null,
-                false,
+                null,
                 null,
                 null,
                 null,

@@ -151,6 +151,21 @@ is never "Hephaestus is broken":
 A workspace admin sees a deliberately narrower result: *Connected. N models available.* or the same
 failure message, but never the provider's model ids.
 
+### Reasoning effort
+
+A model's **Reasoning effort** is how hard a reasoning model is asked to think on every call a review
+or the mentor makes with it: **None**, **Minimal**, **Low**, **Medium**, **High**, **Extra high** or
+**Max**, OpenAI's scale, sent as `reasoning_effort` on chat completions and `reasoning.effort` on the
+responses API. **Provider default** sends nothing, so the provider's own default applies — medium for
+OpenAI's GPT-5 family. **None** asks a reasoning model not to reason; a model that does not reason at
+all belongs at **Provider default**, because a provider may reject the parameter. Not every model takes
+every level, and a level the model refuses fails the call rather than being rounded. The same field
+exists on a workspace's own models. Higher efforts spend more output tokens; the reasoning share is
+recorded with each job's usage and priced as output, never twice.
+
+A model that was marked as supporting reasoning before this field existed keeps what it was sent:
+**Medium**.
+
 ## 4. Pricing a model
 
 **Hephaestus never infers a price.** OpenAI-compatible responses report token *counts*, not your
@@ -240,7 +255,7 @@ reviews. Work through
 [the triage list](./practice-review#when-a-workspace-goes-quiet) when that
 happens.
 
-A workspace admin choosing a model sees only its display name, connection name, reasoning support
+A workspace admin choosing a model sees only its display name, connection name, reasoning effort
 and price framing — never an upstream model id, base URL or credential.
 
 ## 6. Errors you can hit

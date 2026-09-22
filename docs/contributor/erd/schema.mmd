@@ -694,6 +694,7 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(16) reasoning_effort
     }
 
     LlmModelPrice {
@@ -1528,6 +1529,7 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(16) reasoning_effort
     }
 
     WorkspaceMembership {

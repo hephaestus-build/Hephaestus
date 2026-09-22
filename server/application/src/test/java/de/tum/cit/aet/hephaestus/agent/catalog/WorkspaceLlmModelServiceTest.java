@@ -257,7 +257,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
             UpdateWorkspaceLlmModelRequestDTO request = new UpdateWorkspaceLlmModelRequestDTO(
-                    "New name", null, null, null, null, null, null, null, null, null, null);
+                    "New name", null, null, null, null, null, null, null, null, null, null, null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
 
@@ -308,7 +308,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
             UpdateWorkspaceLlmModelRequestDTO request = new UpdateWorkspaceLlmModelRequestDTO(
-                    "Renamed", null, null, null, null, null, null, null, null, null, null);
+                    "Renamed", null, null, null, null, null, null, null, null, null, null, null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
 

@@ -175,7 +175,11 @@ public class PiRuntimeFactory {
         Map<String, Object> provider = new LinkedHashMap<>();
         provider.put("apiProtocol", spec.apiProtocol());
         provider.put("modelId", spec.upstreamModelId());
-        provider.put("supportsReasoning", spec.supportsReasoning());
+        // The Pi runner maps the effort onto a thinking level and the provider's wire value; absent,
+        // the runner sends none and the provider's own default applies.
+        if (spec.reasoningEffort() != null) {
+            provider.put("reasoningEffort", spec.reasoningEffort().name());
+        }
         if (spec.contextWindow() != null) {
             provider.put("contextWindow", spec.contextWindow());
         }

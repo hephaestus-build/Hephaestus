@@ -82,7 +82,7 @@ public class MentorPiAdapter {
                 llmConfig.upstreamModelId(),
                 llmConfig.contextWindow(),
                 llmConfig.maxOutputTokens(),
-                llmConfig.supportsReasoning(),
+                llmConfig.reasoningEffort(),
                 proxyToken,
                 llmConfig.allowInternet(),
                 timeoutSeconds,

@@ -418,13 +418,13 @@ export type AvailableLlmModel = {
    */
   pricingMode: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
+   * Reasoning effort requested of the model; null sends none, the provider's default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * SHARED (instance catalog) or WORKSPACE (your own provider)
    */
   scope: 'SHARED' | 'WORKSPACE';
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning: boolean;
 };
 
 /**
@@ -889,13 +889,13 @@ export type CreateLlmModelRequest = {
    */
   maxOutputTokens?: number;
   /**
+   * Reasoning effort to request; null sends none, so the provider's own default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * Optional internal slug; generated from displayName when omitted
    */
   slug?: string;
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning?: boolean;
   /**
    * Upstream provider model id
    */
@@ -1148,13 +1148,13 @@ export type CreateWorkspaceLlmModelRequest = {
    */
   pricingMode?: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
+   * Reasoning effort to request; null sends none, so the provider's own default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * Optional internal slug; generated from displayName when omitted
    */
   slug?: string;
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning?: boolean;
   /**
    * Upstream provider model id
    */
@@ -2113,13 +2113,13 @@ export type LlmModel = {
    */
   maxOutputTokens?: number;
   /**
+   * Reasoning effort requested of the model; null sends none, the provider's default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * Unique slug within the connection
    */
   slug: string;
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning: boolean;
   /**
    * Last update timestamp
    */
@@ -5297,6 +5297,10 @@ export type UpdateLlmModelPriceRequest = {
  */
 export type UpdateLlmModelRequest = {
   /**
+   * True clears the reasoning effort, so the provider's own default applies
+   */
+  clearReasoningEffort?: boolean;
+  /**
    * Context window in tokens
    */
   contextWindow?: number;
@@ -5313,9 +5317,9 @@ export type UpdateLlmModelRequest = {
    */
   maxOutputTokens?: number;
   /**
-   * Whether the model supports a reasoning mode
+   * Reasoning effort to request; null keeps the current one (see clearReasoningEffort)
    */
-  supportsReasoning?: boolean;
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
 };
 
 /**
@@ -5614,6 +5618,10 @@ export type UpdateWorkspaceLlmConnectionRequest = {
  */
 export type UpdateWorkspaceLlmModelRequest = {
   /**
+   * True clears the reasoning effort, so the provider's own default applies
+   */
+  clearReasoningEffort?: boolean;
+  /**
    * Context window in tokens
    */
   contextWindow?: number;
@@ -5654,9 +5662,9 @@ export type UpdateWorkspaceLlmModelRequest = {
    */
   pricingMode?: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
-   * Whether the model supports a reasoning mode
+   * Reasoning effort to request; null keeps the current one (see clearReasoningEffort)
    */
-  supportsReasoning?: boolean;
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
 };
 
 /**
@@ -6070,13 +6078,13 @@ export type WorkspaceLlmModel = {
    */
   pricingMode: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
+   * Reasoning effort requested of the model; null sends none, the provider's default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * Unique slug within the workspace
    */
   slug: string;
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning: boolean;
   /**
    * Last update timestamp
    */

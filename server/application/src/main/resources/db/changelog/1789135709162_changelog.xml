@@ -70,4 +70,25 @@
                     'OUTSIDE_CURRENT_COVERAGE'));
         ]]></rollback>
     </changeSet>
+    <changeSet id="1789135709162-9" author="hephaestus">
+        <addColumn tableName="llm_model">
+            <column name="reasoning_effort" type="VARCHAR(16)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789135709162-10" author="hephaestus">
+        <addColumn tableName="workspace_llm_model">
+            <column name="reasoning_effort" type="VARCHAR(16)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789135709162-11" author="hephaestus">
+        <comment>A reasoning model ran at the Pi session's default thinking level, which sends medium; it keeps asking for medium. supports_reasoning is no longer read or written and is dropped in the next release (pending contraction).</comment>
+        <sql><![CDATA[
+            UPDATE llm_model SET reasoning_effort = 'MEDIUM' WHERE supports_reasoning AND reasoning_effort IS NULL;
+            UPDATE workspace_llm_model SET reasoning_effort = 'MEDIUM' WHERE supports_reasoning AND reasoning_effort IS NULL;
+        ]]></sql>
+        <rollback><![CDATA[
+            UPDATE llm_model SET supports_reasoning = (reasoning_effort IS NOT NULL);
+            UPDATE workspace_llm_model SET supports_reasoning = (reasoning_effort IS NOT NULL);
+        ]]></rollback>
+    </changeSet>
 </databaseChangeLog>

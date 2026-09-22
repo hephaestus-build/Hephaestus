@@ -766,7 +766,7 @@ public class AgentJobExecutor {
                     snapshot.upstreamModelId(),
                     snapshot.contextWindow(),
                     snapshot.maxOutputTokens(),
-                    snapshot.supportsReasoning(),
+                    snapshot.reasoningEffort(),
                     jobToken,
                     snapshot.timeoutSeconds());
 
@@ -1374,13 +1374,16 @@ public class AgentJobExecutor {
             // otherwise a runner that never wrote usage.json would book real spend as zero.
             TerminalUsage usage = TerminalUsage.resolve(runnerUsage, proxyCounts);
 
+            // The row carries what the ledger bills: per bucket the larger of the runner's report and the
+            // proxy's count. The runner cannot see reasoning tokens at all — the Pi SDK folds them into
+            // output and drops the detail — so writing its report alone erased the proxy's reasoning count.
             if (runnerUsage != null && runnerUsage.totalCalls() > 0) {
-                freshJob.setLlmTotalCalls(runnerUsage.totalCalls());
-                freshJob.setLlmTotalInputTokens(runnerUsage.inputTokens());
-                freshJob.setLlmTotalOutputTokens(runnerUsage.outputTokens());
-                freshJob.setLlmTotalReasoningTokens(runnerUsage.reasoningTokens());
-                freshJob.setLlmCacheReadTokens(runnerUsage.cacheReadTokens());
-                freshJob.setLlmCacheWriteTokens(runnerUsage.cacheWriteTokens());
+                freshJob.setLlmTotalCalls(usage.totalCalls());
+                freshJob.setLlmTotalInputTokens(clampToInt(usage.inputTokens()));
+                freshJob.setLlmTotalOutputTokens(clampToInt(usage.outputTokens()));
+                freshJob.setLlmTotalReasoningTokens(clampToInt(usage.reasoningTokens()));
+                freshJob.setLlmCacheReadTokens(clampToInt(usage.cacheReadTokens()));
+                freshJob.setLlmCacheWriteTokens(clampToInt(usage.cacheWriteTokens()));
             }
             // Provider output is telemetry only. The admitted snapshot is authoritative identity.
             freshJob.setLlmModel(snapshot.upstreamModelId());
@@ -1487,5 +1490,9 @@ public class AgentJobExecutor {
         return message.length() > MAX_ERROR_MESSAGE_LENGTH
                 ? message.substring(0, MAX_ERROR_MESSAGE_LENGTH) + "... [truncated]"
                 : message;
+    }
+
+    private static int clampToInt(long value) {
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(0, value));
     }
 }

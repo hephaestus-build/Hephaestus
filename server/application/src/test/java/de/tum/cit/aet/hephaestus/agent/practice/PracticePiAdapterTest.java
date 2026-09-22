@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.practice;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
@@ -44,7 +45,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
 
     private PracticeAgentRequest proxyRequest() {
         return new PracticeAgentRequest(
-                "azure-openai-responses", "gpt-5.4-mini", null, null, false, "job-token-123", 600);
+                "azure-openai-responses", "gpt-5.4-mini", null, null, null, "job-token-123", 600);
     }
 
     @Test
@@ -93,7 +94,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
     @Test
     void buildsWithCapabilityFields() {
         PracticeAgentRequest request = new PracticeAgentRequest(
-                "openai-completions", "gpt-oss-120b", 131072, 4096, true, "job-token-123", 600);
+                "openai-completions", "gpt-oss-120b", 131072, 4096, ReasoningEffort.MEDIUM, "job-token-123", 600);
 
         var spec = adapter.buildSandboxSpec(request);
 

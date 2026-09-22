@@ -108,7 +108,8 @@ export function addAssistantUsage(
 	// {input, output, cacheRead, cacheWrite, totalTokens, cost}, so a reasoning bucket never arrives —
 	// and for the responses path it would double-count anyway, because OpenAI's completion_tokens
 	// (which lands in `output`) already includes reasoning tokens. The bucket stays in the report
-	// because usage.json is a contract with the server.
+	// because usage.json is a contract with the server, which takes the reasoning count from the LLM
+	// proxy's reading of each response's usage details instead.
 	ledger.cacheReadTokens += usage.cacheRead || 0;
 	ledger.cacheWriteTokens += usage.cacheWrite || 0;
 	// Every pi-ai provider builds the cost block alongside the token counts, so a usage block that

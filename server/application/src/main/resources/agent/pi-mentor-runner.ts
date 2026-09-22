@@ -46,7 +46,7 @@ import {
 	type MentorResult,
 	type MentorWireEvent,
 } from "./pi-mentor-protocol.ts";
-import { loadProviderConfig, registerHephaestusProvider } from "./pi-provider.ts";
+import { loadProviderConfig, reasoningSetting, registerHephaestusProvider } from "./pi-provider.ts";
 import { hasText } from "./pi-text.ts";
 
 /** The Pi SDK module, resolved from `<workspace>/node_modules` by bare specifier at runtime. */
@@ -434,6 +434,8 @@ async function createPiRuntime(sdk: PiSdk, agentDir: string): Promise<MentorRunt
 	log(
 		`registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} model=${providerConfig.modelId}`,
 	);
+	const { thinkingLevel } = reasoningSetting(providerConfig.reasoningEffort);
+	log(`reasoning effort: ${providerConfig.reasoningEffort?.toLowerCase() ?? "provider default"}`);
 
 	const mentorSystemPrompt = systemPrompt;
 	if (mentorSystemPrompt === null) {
@@ -464,6 +466,7 @@ async function createPiRuntime(sdk: PiSdk, agentDir: string): Promise<MentorRunt
 			customTools: [fetchContextTool, linkObservationTool],
 			tools: [...MENTOR_TOOL_NAMES],
 			model,
+			thinkingLevel,
 		});
 		return { ...result, services, diagnostics: services.diagnostics };
 	};

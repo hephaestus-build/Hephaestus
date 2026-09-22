@@ -191,7 +191,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 null,
                 null,
                 null,
-                false,
+                null,
                 null,
                 null,
                 null,
@@ -1775,6 +1775,39 @@ class AgentJobExecutorTest extends BaseUnitTest {
             assertThat(sample.getValue().totalCalls()).isEqualTo(6);
             assertThat(sample.getValue().inputTokens()).isEqualTo(1000);
             assertThat(sample.getValue().outputTokens()).isEqualTo(700);
+        }
+
+        @Test
+        @DisplayName("the reasoning tokens the proxy counted reach the job row though the runner reports none")
+        void cleanCompletionWithRunnerUsage_keepsTheProxysReasoningCount() {
+            // The Pi SDK folds reasoning into output and drops the detail, so the runner always reports
+            // zero; the proxy reads completion_tokens_details / output_tokens_details.reasoning_tokens.
+            job.setConfigSnapshot(snapshot.withPriceSnapshot(pricedSnapshot()).toJson(objectMapper));
+            stubClaimableJob();
+            setupFullExecution();
+            when(practiceAgent.parseResult(any()))
+                    .thenReturn(new AgentResult(
+                            true,
+                            Map.of("review", "LGTM"),
+                            new AgentResult.LlmUsage("gpt-5", 1000, 700, 0, 10, 20, 0.0, 6)));
+
+            AgentJob freshJob = freshJob();
+            when(jobRepository.findById(any(UUID.class))).thenReturn(Optional.of(freshJob));
+            lenient()
+                    .when(jobRepository.findLlmUsageById(jobId))
+                    .thenReturn(Optional.of(new AgentJobLlmUsage(6, 1000, 700, 320, 10, 20)));
+            when(jobRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(jobRepository.transitionStatus(any(), eq(AgentJobStatus.COMPLETED), any(), any(), any()))
+                    .thenReturn(1);
+
+            executor.processJob(jobId);
+
+            assertThat(freshJob.getLlmTotalReasoningTokens()).isEqualTo(320);
+            assertThat(freshJob.getLlmTotalInputTokens()).isEqualTo(1000);
+            ArgumentCaptor<LlmUsageRecorder.LlmUsageSample> sample =
+                    ArgumentCaptor.forClass(LlmUsageRecorder.LlmUsageSample.class);
+            verify(usageRecorder).record(eq(99L), sample.capture());
+            assertThat(sample.getValue().reasoningTokens()).isEqualTo(320);
         }
     }
 

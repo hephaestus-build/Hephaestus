@@ -188,7 +188,7 @@ class AgentJobStaleReapIntegrationTest extends BaseIntegrationTest {
                         null,
                         null,
                         null,
-                        false,
+                        null,
                         FundingSource.INSTANCE,
                         instanceModel.getConnection().getId(),
                         instanceModel.getId(),

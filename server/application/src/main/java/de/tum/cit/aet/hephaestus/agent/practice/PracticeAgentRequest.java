@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.practice;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
@@ -12,7 +13,7 @@ public record PracticeAgentRequest(
         String upstreamModelId,
         @Nullable Integer contextWindow,
         @Nullable Integer maxOutputTokens,
-        boolean supportsReasoning,
+        @Nullable ReasoningEffort reasoningEffort,
         String jobToken,
         int timeoutSeconds) {
     public PracticeAgentRequest {
