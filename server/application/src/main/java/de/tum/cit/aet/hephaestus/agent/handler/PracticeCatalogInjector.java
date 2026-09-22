@@ -48,6 +48,9 @@ class PracticeCatalogInjector {
     /** Job-metadata key naming the signal that occasioned the review. */
     static final String SIGNAL_METADATA_KEY = "signal";
 
+    /** Job-metadata key: whether the work was a draft when the signal occasioned the review. */
+    static final String DRAFT_METADATA_KEY = "draft";
+
     /** The author of the reviewed pull request, so a MERGER practice can tell whether the author merged. */
     static final String AUTHOR_ID_METADATA_KEY = "author_id";
 
@@ -180,8 +183,10 @@ class PracticeCatalogInjector {
                 .toList();
         SignalName signal = signalOf(job);
         if (signal != null) {
+            boolean draft = job.getMetadata() != null
+                    && job.getMetadata().path(DRAFT_METADATA_KEY).asBoolean(false);
             practices = practices.stream()
-                    .filter(p -> p.getBindings().stream().anyMatch(binding -> binding.matches(signal)))
+                    .filter(p -> p.getBindings().stream().anyMatch(binding -> binding.occasionedBy(signal, draft)))
                     .toList();
         }
         practices = practices.stream().filter(p -> attributable(p, signal, job)).toList();

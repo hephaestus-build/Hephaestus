@@ -179,6 +179,15 @@ reports the source unavailable (`SourceAbsenceReason.NOT_FOUND`) on a missing or
 than making an observation about the developer. This check does not fence edits after capture or invalidate
 earlier observations and feedback.
 
+#### Push coalescing
+
+`scm.pull_request.synchronized` is coalesced the same way. GitHub names a push; GitLab raises it when a
+merge-request update carries `oldrev` or moves the stored head, since GitLab omits `oldrev` on some
+pushes. `AgentJobEventListener` defers a live push, and `PullRequestPushCoalescer` reviews the head a burst
+settles on after ten quiet minutes (at most an hour after the first push), marking the heads it overtook
+`SUPPRESSED / COALESCED`. The workspace cooldown delays that settlement instead of refusing it, so the newest
+head is never the one dropped. A push overtaken by a merge or a close is left to that occasion.
+
 ## Capture
 
 Capture stages **every source the contract says applies to the artifact kind under review** — all of them,

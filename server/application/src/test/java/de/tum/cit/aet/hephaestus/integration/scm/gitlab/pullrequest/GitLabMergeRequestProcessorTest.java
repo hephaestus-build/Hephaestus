@@ -502,6 +502,79 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         }
 
         @Test
+        @DisplayName("a new merge request opened ready is Created only, as a GitHub pull request is")
+        void shouldNotRaiseReadyWhenANonDraftMergeRequestIsOpened() {
+            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.of(createPullRequestEntity()));
+            when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
+                    .thenReturn(createUserEntity());
+
+            processor.process(createEvent("open", "opened", false), createContext());
+
+            verify(eventPublisher).publishEvent(any(ScmDomainEvent.PullRequestCreated.class));
+            verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.PullRequestReady.class));
+            verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.PullRequestSynchronized.class));
+        }
+
+        @Test
+        @DisplayName(
+                "an update that pushed commits raises Synchronized, whether GitLab names oldrev or only the head moved")
+        void shouldRaiseSynchronizedWhenAnUpdateMovesTheHead() {
+            PullRequest pr = createPullRequestEntity();
+            pr.setHeadRefOid("a".repeat(40));
+            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
+            when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
+                    .thenReturn(createUserEntity());
+
+            processor.process(pushEvent("b".repeat(40), null), createContext());
+
+            verify(eventPublisher).publishEvent(any(ScmDomainEvent.PullRequestSynchronized.class));
+        }
+
+        @Test
+        @DisplayName("an update that pushed nothing, such as a title edit, raises no Synchronized")
+        void shouldNotRaiseSynchronizedWhenTheHeadStays() {
+            PullRequest pr = createPullRequestEntity();
+            pr.setHeadRefOid("a".repeat(40));
+            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
+            when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
+                    .thenReturn(createUserEntity());
+
+            processor.process(pushEvent("a".repeat(40), null), createContext());
+
+            verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.PullRequestSynchronized.class));
+        }
+
+        private GitLabMergeRequestEventDTO pushEvent(String head, @Nullable String oldrev) {
+            var attrs = new GitLabMergeRequestEventDTO.ObjectAttributes(
+                    RAW_MR_ID,
+                    MR_IID,
+                    "Add awesome feature",
+                    "This MR adds an awesome feature",
+                    "opened",
+                    "update",
+                    "feature/awesome-feature",
+                    "main",
+                    false,
+                    RAW_USER_ID,
+                    null,
+                    null,
+                    "2024-01-15T10:00:00Z",
+                    "2024-01-16T10:00:00Z",
+                    null,
+                    null,
+                    "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                    new GitLabMergeRequestEventDTO.LastCommit(head, "Fix", "Fix"),
+                    null,
+                    oldrev);
+            return new GitLabMergeRequestEventDTO(
+                    "merge_request", "merge_request", createUser(), createProject(), attrs, List.of(), null, null);
+        }
+
+        @Test
         void processUpdatesExistingPR() {
             PullRequest pr = createPullRequestEntity();
             // 2 calls: stale check + isNew (process), post-upsert fetch (upsertMergeRequest)
@@ -828,6 +901,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     "2024-01-15T14:00:00Z",
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
                     null,
+                    null,
                     null);
             GitLabMergeRequestEventDTO event = new GitLabMergeRequestEventDTO(
                     "merge_request",
@@ -913,6 +987,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                    null,
                     null,
                     null);
             GitLabMergeRequestEventDTO event = new GitLabMergeRequestEventDTO(
@@ -1103,6 +1178,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                    null,
                     null,
                     null);
             GitLabMergeRequestEventDTO event = new GitLabMergeRequestEventDTO(
@@ -2183,6 +2259,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
                 null,
+                null,
                 null);
         return new GitLabMergeRequestEventDTO(
                 "merge_request",
@@ -2214,6 +2291,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                null,
                 null,
                 null);
         return new GitLabMergeRequestEventDTO(
@@ -2247,6 +2325,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
                 null,
+                null,
                 null);
         return new GitLabMergeRequestEventDTO(
                 "merge_request", "confidential_merge_request", createUser(), createProject(), attrs, null, null, null);
@@ -2271,6 +2350,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                null,
                 null,
                 null);
         return new GitLabMergeRequestEventDTO(

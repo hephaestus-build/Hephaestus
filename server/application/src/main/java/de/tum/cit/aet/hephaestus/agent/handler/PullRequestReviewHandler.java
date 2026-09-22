@@ -130,6 +130,9 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             metadata.put(
                     PracticeCatalogInjector.SIGNAL_METADATA_KEY,
                     submissionRequest.triggerSignal().value());
+            // The gate admitted the practices this signal occasions on work in this draft state; the
+            // injector applies the same rule, so a draft is not reviewed for practices that skip drafts.
+            metadata.put(PracticeCatalogInjector.DRAFT_METADATA_KEY, pullRequestData.isDraft());
         }
         if (submissionRequest.reviewId() != null && submissionRequest.aboutUserId() != null) {
             metadata.put("review_id", submissionRequest.reviewId());

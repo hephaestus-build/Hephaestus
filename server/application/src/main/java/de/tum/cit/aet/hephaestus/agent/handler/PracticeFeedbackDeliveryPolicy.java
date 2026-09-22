@@ -293,11 +293,14 @@ public class PracticeFeedbackDeliveryPolicy {
                 ? pullRequest
                 : null;
         PracticeReviewSettings settings = workspace == null ? null : workspace.getReviewSettings();
+        // Merged work keeps its feedback on the developer's own surfaces: a retrospective is what the
+        // merge-stage practices exist for. Only a comment on the merged work itself is the setting's call.
         FeedbackSuppressionReason artifactRefusal = target == null || settings == null
                 ? FeedbackSuppressionReason.ARTIFACT_GONE
                 : target.getState() == Issue.State.CLOSED
                         ? FeedbackSuppressionReason.ARTIFACT_CLOSED
                         : target.getState() == Issue.State.MERGED
+                                        && surface == DeliveryPolicySurface.ARTIFACT
                                         && !settings.resolveDeliverToMerged(reviewProperties.deliverToMerged())
                                 ? FeedbackSuppressionReason.ARTIFACT_MERGED
                                 : null;

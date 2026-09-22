@@ -209,7 +209,6 @@
 						{
 							"signals": [
 								"scm.pull_request.merged",
-								"scm.pull_request.reviewed",
 								"scm.pull_request.synchronized"
 							],
 							"needs": [

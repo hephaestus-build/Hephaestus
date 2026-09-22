@@ -286,6 +286,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                     null,
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
                     null,
+                    null,
                     null);
             GitLabMergeRequestEventDTO event = new GitLabMergeRequestEventDTO(
                     "merge_request",
@@ -345,6 +346,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                     null,
                     null,
                     "https://example.com",
+                    null,
                     null,
                     null);
             GitLabMergeRequestEventDTO event = new GitLabMergeRequestEventDTO(
@@ -413,6 +415,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                 null,
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                null,
                 null,
                 null);
         return new GitLabMergeRequestEventDTO(

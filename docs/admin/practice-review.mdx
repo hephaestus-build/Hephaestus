@@ -203,7 +203,9 @@ misconfiguration and a bill.
    a workspace's spend on shared models you registered, and the *workspace's own* budget caps its spend on
    its own connected provider. Each pauses only the work it funds. Setting either to exactly `0` is the
    supported way to hard-stop that purse mid-month; clearing the field removes the cap.
-2. **The cooldown.** The minimum gap between reviews of the same pull or merge request.
+2. **The cooldown.** The minimum gap between reviews of the same pull or merge request. New commits
+   are reviewed once the pushes stop for ten minutes, at the latest commit; a push inside the cooldown
+   waits for it to end rather than going unreviewed.
 3. **The per-person hourly allowance** on hand-requested reviews.
 4. **Coverage and autonomy**, which decide how much work is eligible in the first place.
 

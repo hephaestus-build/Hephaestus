@@ -91,7 +91,16 @@ public class AgentJobEventListener {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPullRequestSynchronized(ScmDomainEvent.PullRequestSynchronized event) {
-        handlePullRequestEvent(event.pullRequest(), event.context(), TriggerEventNames.PULL_REQUEST_SYNCHRONIZED);
+        ScmEventPayload.PullRequestData prData = event.pullRequest();
+        if (event.context().isSync() || isClosedOrMerged(prData.state(), prData.isMerged())) {
+            handlePullRequestEvent(prData, event.context(), TriggerEventNames.PULL_REQUEST_SYNCHRONIZED);
+            return;
+        }
+        // A push arrives in bursts; PullRequestPushCoalescer reviews the head the burst settles on.
+        SignalKey key = signalKeyFor(prData, TriggerEventNames.PULL_REQUEST_SYNCHRONIZED, null);
+        if (key != null) {
+            signalRecorder.defer(key, event.context().occurredAt());
+        }
     }
 
     @Async

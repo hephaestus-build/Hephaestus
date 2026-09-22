@@ -242,6 +242,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         // Also determines isNew and captures old draft state for transition detection.
         boolean isNew = true;
         Boolean wasDraft = null;
+        String previousHead = null;
         if (attrs.iid() != null) {
             Optional<PullRequest> existingOpt = pullRequestRepository.findByRepositoryIdAndNumber(
                     Objects.requireNonNull(context.repository()).getId(), attrs.iid());
@@ -249,6 +250,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 isNew = false;
                 PullRequest existing = existingOpt.get();
                 wasDraft = existing.isDraft();
+                previousHead = existing.getHeadRefOid();
                 Instant eventUpdatedAt = parseGitLabTimestamp(attrs.updatedAt());
                 if (existing.getUpdatedAt() != null
                         && eventUpdatedAt != null
@@ -305,15 +307,20 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             pr = pullRequestRepository.save(pr);
         }
 
-        // Detect draft transitions and emit lifecycle events.
-        // For new non-draft MRs, PullRequestReady is emitted so the practice review gate
-        // can trigger immediately (matching GitHub's behavior for non-draft PR creation).
+        // Detect draft transitions and pushes. A new merge request is Created only, as a GitHub pull
+        // request opened ready is: raising Ready as well would review the same head twice.
         var prData = ScmEventPayload.PullRequestData.from(pr);
         var eventCtx = EventContext.from(context);
-        if (isNew && !attrs.draft()) {
-            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReady(prData, eventCtx));
-            log.debug("New non-draft merge request ready: prId={}", pr.getId());
-        } else if (!isNew && wasDraft != null) {
+        // GitLab names the previous head only when the update pushed commits, and not always then, so a
+        // moved head counts too; a sync that stored the new head first still leaves oldrev to say so.
+        boolean pushed = !isNew
+                && headRefOid != null
+                && (attrs.oldrev() != null || (previousHead != null && !previousHead.equals(headRefOid)));
+        if (pushed) {
+            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestSynchronized(prData, eventCtx));
+            log.debug("Merge request received new commits: prId={}, iid={}", pr.getId(), attrs.iid());
+        }
+        if (!isNew && wasDraft != null) {
             if (wasDraft && !attrs.draft()) {
                 eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReady(prData, eventCtx));
                 log.info("Merge request marked ready: prId={}, iid={}", pr.getId(), attrs.iid());

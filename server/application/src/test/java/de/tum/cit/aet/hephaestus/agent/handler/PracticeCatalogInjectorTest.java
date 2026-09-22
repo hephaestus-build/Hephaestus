@@ -120,6 +120,28 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
     }
 
     @Test
+    @DisplayName("a review of a draft materialises only the practices that review drafts, as the gate admitted")
+    void shouldSelectOnlyDraftPracticesWhenTheWorkWasADraft() {
+        Practice onDrafts = practice("handoff", ScmSignals.PULL_REQUEST_OPENED);
+        onDrafts.setBindings(List.of(new PracticeBinding(
+                List.of(ScmSignals.PULL_REQUEST_OPENED),
+                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                true,
+                ActorRole.AUTHOR)));
+        when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.PULL_REQUEST))
+                .thenReturn(List.of(onDrafts, practice("describe", ScmSignals.PULL_REQUEST_OPENED)));
+        AgentJob job = job(ScmSignals.PULL_REQUEST_OPENED);
+        org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, job.getMetadata())
+                .put(PracticeCatalogInjector.DRAFT_METADATA_KEY, true);
+        Map<String, byte[]> files = new HashMap<>();
+
+        injector.inject(files, job, ArtifactKinds.PULL_REQUEST);
+
+        assertThat(files).containsKey(md("handoff"));
+        assertThat(files).doesNotContainKey(md("describe"));
+    }
+
+    @Test
     void shouldSelectOnlyReviewerPracticesWhenSubmittedReviewNamesReviewer() {
         Practice author = practice("author-engagement", ScmSignals.PULL_REQUEST_REVIEWED);
         Practice reviewer = practice("review-comment-quality", ScmSignals.PULL_REQUEST_REVIEWED);
