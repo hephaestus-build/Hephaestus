@@ -15,13 +15,11 @@ import { LegalLinks } from "@/components/auth/LegalLinks";
 import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { statusValues } from "@/components/common/status-def";
 import { getProviderIcon } from "@/components/icons/integration-provider-icons";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
 import { HephSays } from "@/components/mentor/HephSays";
 import {
-	MEMBER_AI_CHOICE_DEFS,
 	type MemberAiChoice,
 	memberAiChoiceTitle,
 } from "@/components/practice-vocabulary/data-handling-defs";
@@ -39,9 +37,6 @@ import {
 } from "@/components/ui/item";
 import {
 	Questionnaire,
-	QuestionnaireChoice,
-	QuestionnaireChoiceDescription,
-	QuestionnaireChoices,
 	QuestionnaireDescription,
 	QuestionnaireItem,
 	QuestionnaireTitle,
@@ -50,6 +45,9 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { openRequiredLinks } from "@/lib/onboarding-links";
+import { type WorkspaceCoverage, workspaceCoverage } from "@/lib/workspace-coverage";
+
+import { AiChoiceCards } from "./AiChoiceCards";
 
 export type OnboardingAction = "save" | "continue";
 export type OnboardingSubmission =
@@ -79,14 +77,14 @@ export interface WorkspaceOnboardingPageProps {
 				onSubmit: (choice: MemberAiChoice) => void;
 				/** Persists `draft` before the OAuth redirect so the round-trip never loses an answer. */
 				onLink: (registrationId: string, draft: MemberAiChoice | undefined) => void;
-				/** First visit: dismiss (writes `welcomedAt`) then leave. Return visit: plain navigation, no write. */
+				/** First visit: dismiss (records the setup as seen) then leave. Return visit: plain navigation, no write. */
 				onLeave: () => void;
 		  };
 }
 
 /**
  * Everything that explains the choice, addressed to every answer at once; the answers themselves
- * carry a title and one sentence each. The stories' meta block has the reasoning.
+ * carry a title and two sentences each. The stories' meta block has the reasoning.
  */
 const AI_FACTS: readonly Fact[] = [
 	{
@@ -105,48 +103,15 @@ const AI_FACTS: readonly Fact[] = [
 		icon: RefreshCwIcon,
 		term: "What never changes",
 		detail:
-			"Your membership, existing feedback and earlier conversations. Change your answer any time under Your AI choice in the sidebar.",
+			"Your membership, existing feedback and earlier conversations. Change your answer any time under Your AI choice in the sidebar or in User settings.",
 	},
 ];
-
-const AI_CHOICES = statusValues(MEMBER_AI_CHOICE_DEFS);
-
-/**
- * What the workspace has set up under this answer's ceiling, per purpose. An answer the server has
- * no option for counts as set up for neither: a card may claim readiness only from the server's
- * word. No AI needs nothing set up, so it is always covered.
- */
-function coverage(data: WorkspaceOnboarding, choice: MemberAiChoice) {
-	if (choice === "NO_AI") {
-		return { practiceReviews: true, mentor: true };
-	}
-	const option = data.aiOptions.find((entry) => entry.choice === choice);
-	return {
-		practiceReviews: option?.practiceReviewsReady === true,
-		mentor: option?.mentorReady === true,
-	};
-}
-
-/** The sentence a card appends when part of the answer runs nothing here; `undefined` when all of it runs. */
-function readinessSentence(data: WorkspaceOnboarding, choice: MemberAiChoice): string | undefined {
-	const { practiceReviews, mentor } = coverage(data, choice);
-	if (!practiceReviews && !mentor) {
-		return "Not set up here yet — nothing runs for you until a workspace owner adds a model.";
-	}
-	if (!mentor) {
-		return "Heph isn't set up for this answer yet.";
-	}
-	if (!practiceReviews) {
-		return "Practice reviews aren't set up for this answer yet.";
-	}
-	return undefined;
-}
 
 function joinNames(names: readonly string[]): string {
 	return names.join(" and ");
 }
 
-/** One workspace decision, with account linking kept separate from saving the answer. */
+/** One account-wide decision, with this workspace's account links kept separate from saving it. */
 export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPageProps) {
 	const [draft, setDraft] = useState<MemberAiChoice>();
 	const id = useId();
@@ -157,17 +122,18 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 	const data = ready?.data;
 	const {
 		firstVisit,
+		afterLink,
+		answered,
 		choice,
 		changed,
 		links,
 		openRequiredNames,
 		requiredSatisfied,
 		canSubmit,
-		savedFullyUncovered,
-		savedUncovered,
+		coverage,
 		heading,
 		hint,
-	} = memberSetupState(data, draft);
+	} = memberSetupState(data, draft, focus);
 	const submission: OnboardingSubmission = ready?.submission ?? { status: "idle" };
 	const saving = submission.status === "saving";
 	const savingAction = submission.status === "saving" ? submission.action : undefined;
@@ -188,7 +154,8 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 		}
 	}, [submissionStatus]);
 
-	const intro = `Choose how AI may handle your work in ${data?.workspaceName ?? "this workspace"}. This choice is separate from your account setup and applies only here.`;
+	const workspaceName = data?.workspaceName ?? "this workspace";
+	const intro = `I read your work in ${workspaceName} only within the AI choice you make once for all your workspaces. You can change it any time.`;
 
 	// Heph narrates the reader's answers; the footer hint says the same thing factually and reaches
 	// the button through `aria-describedby`, so focusing it does not replay the line.
@@ -196,11 +163,12 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 		status: state.status,
 		changed,
 		firstVisit,
+		answered,
 		requiredSatisfied,
 		choice,
-		savedFullyUncovered,
-		savedUncovered,
+		coverage: coverage?.level ?? "covered",
 		openRequiredNames,
+		afterLink,
 	});
 
 	let saveLabel = firstVisit ? "Continue" : "Save";
@@ -259,24 +227,28 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 					)}
 					{state.status === "ready" && (
 						<>
-							<QuestionnaireItem name="ai-choice" required disabled={saving}>
+							{/* Not `disabled` on the item: the primitive hides a disabled item (`hidden` + `inert`)
+							    as "not the current question", so a nested fieldset is what holds the cards still. */}
+							<QuestionnaireItem name="ai-choice" required>
 								<QuestionnaireTitle>
 									<span className="flex items-start gap-3">
-										<StepMarker icon={SparklesIcon} done={data?.aiChoice != null} />
+										<StepMarker icon={SparklesIcon} done={answered} />
 										Which AI may handle your work?
 									</span>
 								</QuestionnaireTitle>
 								<QuestionnaireDescription>
-									For you, in this workspace only. Allowing a provider also allows in-house models.
-									Nothing outside your choice is used. No model is used for training on your work.
-									Model quality and capacity depend on what this workspace has set up; allowing more
-									does not guarantee better results.
+									One answer for every workspace you’re in on this Hephaestus instance. Allowing a
+									provider also allows in-house models. Nothing outside your answer is used, and
+									nothing is used to train on your work. Allowing more does not guarantee better
+									results; each workspace decides which models it sets up.
 								</QuestionnaireDescription>
 								<FactList facts={AI_FACTS} />
-								<AiChoiceCards data={state.data} choice={choice} onChoice={setDraft} />
-								<p className="text-sm text-muted-foreground">
-									“Set up” describes this workspace’s configuration, not current service health.
-								</p>
+								<fieldset disabled={saving} className="min-w-0 disabled:opacity-50">
+									<AiChoiceCards choice={choice} onChoice={setDraft} />
+								</fieldset>
+								{hasText(coverage?.sentence) && (
+									<p className="text-sm text-muted-foreground">{coverage.sentence}</p>
+								)}
 							</QuestionnaireItem>
 
 							{links.length > 0 && (
@@ -428,93 +400,27 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 	);
 }
 
-function AiChoiceCards({
-	data,
-	choice,
-	onChoice,
-}: {
-	data: WorkspaceOnboarding;
-	choice: MemberAiChoice | undefined;
-	onChoice: (choice: MemberAiChoice) => void;
-}) {
-	return (
-		<QuestionnaireChoices className="gap-3 sm:grid-cols-2">
-			{AI_CHOICES.map((value) => {
-				const { icon: Icon, label, description, consideration } = MEMBER_AI_CHOICE_DEFS[value];
-				const readiness = readinessSentence(data, value);
-				const setup = coverage(data, value);
-				const sameModelsAs = data.aiOptions.find((option) => option.choice === value)?.sameModelsAs;
-				return (
-					<QuestionnaireChoice
-						key={value}
-						value={value}
-						checked={choice === value}
-						onChange={(event) => {
-							if (event.target.checked) {
-								onChoice(value);
-							}
-						}}
-					>
-						<span className="mb-2 flex items-center gap-2 font-medium">
-							<Icon className="size-5 shrink-0 text-mentor" aria-hidden="true" />
-							{label}
-						</span>{" "}
-						<QuestionnaireChoiceDescription>
-							<span className="block">
-								<span className="font-medium text-foreground">Allows</span> {description}
-							</span>{" "}
-							<span className="mt-3 block">
-								<span className="font-medium text-foreground">Consider</span> {consideration}
-							</span>{" "}
-							<span className="mt-3 block border-t pt-3">
-								<span className="block font-medium text-foreground">In this workspace</span>{" "}
-								<span className="flex justify-between gap-2">
-									<span>Practice reviews</span>{" "}
-									<span>{setupLabel(value, setup.practiceReviews)}</span>
-								</span>{" "}
-								<span className="flex justify-between gap-2">
-									<span>Heph</span> <span>{setupLabel(value, setup.mentor)}</span>
-								</span>{" "}
-								{sameModelsAs && (
-									<span className="mt-2 block">
-										Same models as “{MEMBER_AI_CHOICE_DEFS[sameModelsAs].label}” today.
-									</span>
-								)}
-								{hasText(readiness) && <span className="mt-2 block">{readiness}</span>}
-							</span>
-						</QuestionnaireChoiceDescription>
-					</QuestionnaireChoice>
-				);
-			})}
-		</QuestionnaireChoices>
-	);
-}
-
-function setupLabel(choice: MemberAiChoice, ready: boolean): string {
-	if (choice === "NO_AI") {
-		return "Off for you";
-	}
-	return ready ? "Set up" : "Not set up";
-}
-
 function onboardingNarration({
 	status,
 	changed,
 	firstVisit,
+	answered,
 	requiredSatisfied,
 	choice,
-	savedFullyUncovered,
-	savedUncovered,
+	coverage,
 	openRequiredNames,
+	afterLink,
 }: {
 	status: WorkspaceOnboardingPageProps["state"]["status"];
 	changed: boolean;
 	firstVisit: boolean;
+	answered: boolean;
 	requiredSatisfied: boolean;
 	choice: MemberAiChoice | undefined;
-	savedFullyUncovered: boolean;
-	savedUncovered: boolean;
+	coverage: WorkspaceCoverage["level"];
 	openRequiredNames: string;
+	/** A return visit reached through an OAuth round-trip: nothing is owed, the exit is the ghost button. */
+	afterLink: boolean;
 }): string {
 	if (status === "loading") {
 		return "Give me a moment — I'm fetching your setup.";
@@ -522,27 +428,39 @@ function onboardingNarration({
 	if (status === "error") {
 		return "I couldn't fetch your setup just now.";
 	}
-	if (changed && firstVisit) {
-		return requiredSatisfied
-			? "Noted. Press Continue and I'll remember that."
-			: "Save your AI choice now. You can connect your accounts separately.";
-	}
 	if (changed) {
-		return "Save to apply your new choice. Requests already sent cannot be recalled.";
+		// A draft nobody has built up to is still an answer worth saving; say so before the cue.
+		const uncovered =
+			coverage === "none" ? "That isn't set up here yet, and I won't switch you elsewhere. " : "";
+		if (firstVisit) {
+			return requiredSatisfied
+				? `${uncovered}Press Continue and I'll remember it everywhere.`
+				: `${uncovered}Save your AI choice now. You can connect your accounts separately.`;
+		}
+		return `${uncovered}Save to apply your new choice in every workspace. Requests already sent cannot be recalled.`;
 	}
 	if (choice === undefined) {
 		return "One question: which AI may handle your work. Any answer is fine by me, including none.";
 	}
-	if (savedFullyUncovered) {
+	if (coverage === "none") {
 		return "Your choice isn't set up here yet. I won't switch you anywhere else.";
 	}
-	if (savedUncovered) {
+	if (coverage === "partial") {
 		return "Part of your choice isn't set up here yet. I won't switch you anywhere else.";
+	}
+	if (firstVisit && answered) {
+		// The same line whether the answer was just saved here or made in another workspace.
+		return requiredSatisfied
+			? "Your AI choice is set and holds in all your workspaces. Let's get to work."
+			: `Your AI choice is set and holds in all your workspaces. Connect ${openRequiredNames} and you're in.`;
 	}
 	if (firstVisit) {
 		return requiredSatisfied
 			? "That's everything. Let's get to work."
 			: `Noted. Connect ${openRequiredNames} and you're in.`;
+	}
+	if (afterLink) {
+		return "Your accounts are connected. Head back to your workspace whenever you're ready.";
 	}
 	return `You chose ${memberAiChoiceTitle(choice)}. Change it whenever you like.`;
 }
@@ -550,16 +468,16 @@ function onboardingNarration({
 function memberSetupState(
 	data: WorkspaceOnboarding | undefined,
 	draft: MemberAiChoice | undefined,
+	focus: WorkspaceOnboardingPageProps["focus"],
 ) {
-	const firstVisit = data?.needsWelcome === true;
+	const firstVisit = data?.needsSetup === true;
+	// A return visit reached through an OAuth round-trip: nothing is owed, so Heph names the exit.
+	const afterLink = focus === "accounts" && data !== undefined && !firstVisit;
+	const answered = data?.aiChoice != null;
 	const choice = draft ?? data?.aiChoice;
 	const changed = choice !== data?.aiChoice;
-	const savedCoverage =
-		data !== undefined && data.aiChoice != null ? coverage(data, data.aiChoice) : undefined;
-	const savedUncovered =
-		savedCoverage !== undefined && !(savedCoverage.practiceReviews && savedCoverage.mentor);
-	const savedFullyUncovered =
-		savedCoverage !== undefined && !savedCoverage.practiceReviews && !savedCoverage.mentor;
+	const coverage =
+		data !== undefined && choice !== undefined ? workspaceCoverage(data, choice) : undefined;
 	const links = data?.links ?? [];
 	const openRequired = openRequiredLinks(links);
 	const openRequiredNames = joinNames(openRequired.map((link) => link.displayName));
@@ -568,9 +486,7 @@ function memberSetupState(
 	const canSubmit = choice !== undefined && (changed || (firstVisit && requiredSatisfied));
 	let heading = "Workspace setup";
 	if (data !== undefined) {
-		heading = firstVisit
-			? `Welcome to ${data.workspaceName}`
-			: `Your AI choice in ${data.workspaceName}`;
+		heading = firstVisit ? `Welcome to ${data.workspaceName}` : "Your AI choice";
 	}
 	let hint: string | undefined;
 	if (data !== undefined) {
@@ -581,20 +497,21 @@ function memberSetupState(
 				? `Save your AI choice now; connect ${openRequiredNames} to finish setup.`
 				: `Connect ${openRequiredNames} to finish setup.`;
 		} else if (!firstVisit && !changed) {
-			hint = "You can change this any time from the sidebar.";
+			hint = "Applies in all your workspaces. Change it any time.";
 		}
 	}
 
 	return {
 		firstVisit,
+		afterLink,
+		answered,
 		choice,
 		changed,
 		links,
 		openRequiredNames,
 		requiredSatisfied,
 		canSubmit,
-		savedFullyUncovered,
-		savedUncovered,
+		coverage,
 		heading,
 		hint,
 	};

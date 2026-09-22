@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import {
-	completeMemberOnboardingMutation,
 	dismissMemberOnboardingMutation,
+	getAccountAiChoiceQueryKey,
 	getMemberOnboardingOptions,
 	getMemberOnboardingQueryKey,
 	updateMemberAiChoiceMutation,
@@ -16,8 +16,9 @@ import {
 	WorkspaceOnboardingPage,
 } from "@/components/onboarding/WorkspaceOnboardingPage";
 import type { MemberAiChoice } from "@/components/practice-vocabulary/data-handling-defs";
+import { memberOnboardingQueryScope } from "@/hooks/use-member-onboarding";
 import { openRequiredLinks } from "@/lib/onboarding-links";
-import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import { problemDetailOf } from "@/lib/problem-detail";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/guard";
 
@@ -100,30 +101,22 @@ function OnboardingRoute() {
 	const retry = () => {
 		void query.refetch();
 	};
-	const refreshOnConflict = async (
-		error: unknown,
-		variables: { path: { workspaceSlug: string } },
-	) => {
-		if (problemStatusOf(error) === 409) {
-			await queryClient.invalidateQueries({
-				queryKey: getMemberOnboardingQueryKey({ path: variables.path }),
-			});
-		}
-	};
 	const choice = useMutation({
 		...updateMemberAiChoiceMutation(),
-		onSuccess: updateCache,
-		onError: refreshOnConflict,
-	});
-	const completion = useMutation({
-		...completeMemberOnboardingMutation(),
-		onSuccess: updateCache,
-		onError: refreshOnConflict,
+		onSuccess: (data, variables) => {
+			updateCache(data, variables);
+			// The answer is the account's: User settings and every other workspace's setup page read it.
+			void queryClient.invalidateQueries({ queryKey: getAccountAiChoiceQueryKey({}) });
+			// This workspace's entry was just set from the response; the others refetch when next shown.
+			void queryClient.invalidateQueries({
+				queryKey: memberOnboardingQueryScope(),
+				refetchType: "none",
+			});
+		},
 	});
 	const dismissal = useMutation({ ...dismissMemberOnboardingMutation(), onSuccess: updateCache });
 	const submission = submissionOf([
 		{ action: "save", mutation: choice },
-		{ action: "save", mutation: completion },
 		{ action: "continue", mutation: dismissal },
 	]);
 	const { data } = query;
@@ -132,14 +125,14 @@ function OnboardingRoute() {
 	// are dropped once this route unmounts, so a save that finishes after the reader has moved to
 	// another workspace cannot navigate them or redirect them from there. A failure stays in the
 	// mutation's own state, which is what the page reads.
+	//
+	// Setup is done when nothing is owed, which the server reports as `needsSetup: false` right after
+	// the answer is saved; there is no completion to record, so Continue simply leaves.
 	const finish = (current: WorkspaceOnboarding) => {
-		if (!current.needsWelcome) {
-			return;
-		}
 		if (openRequiredLinks(current.links).length > 0) {
 			return;
 		}
-		completion.mutate({ path, body: { revision: current.revision } }, { onSuccess: leave });
+		leave();
 	};
 	const submit = (current: WorkspaceOnboarding, value: MemberAiChoice) => {
 		if (value === current.aiChoice) {
@@ -174,8 +167,7 @@ function OnboardingRoute() {
 			refresh: query.isError ? { status: "error", error: query.error, onRetry: retry } : undefined,
 			onSubmit: (value) => submit(data, value),
 			onLink: (registrationId, draft) => link(data, registrationId, draft),
-			onLeave: () =>
-				data.needsWelcome ? dismissal.mutate({ path }, { onSuccess: leave }) : leave(),
+			onLeave: () => (data.needsSetup ? dismissal.mutate({ path }, { onSuccess: leave }) : leave()),
 		};
 	} else if (query.isError) {
 		state = { status: "error", error: query.error, onRetry: retry, onLeave: leave };

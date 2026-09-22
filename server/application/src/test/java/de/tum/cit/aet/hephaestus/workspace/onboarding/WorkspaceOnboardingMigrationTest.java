@@ -36,7 +36,7 @@ class WorkspaceOnboardingMigrationTest {
                 int count = (int) pending.stream()
                         .filter(change -> change.getFilePath().endsWith(CHANGELOG))
                         .count();
-                assertThat(count).isEqualTo(16);
+                assertThat(count).isEqualTo(18);
                 liquibase.update(before, contexts, labels);
                 liquibase.tag("before-member-onboarding");
                 execute(connection, """
@@ -77,32 +77,35 @@ class WorkspaceOnboardingMigrationTest {
      VALUES (990108, 990101, 990107, 'own', 'Own', 'own-model', 'OWN_ORGANISATION', 'NONE', now());
      INSERT INTO workspace_agent_binding (workspace_id, purpose, instance_model_id, data_handling_tier)
      VALUES (990101, 'PRACTICE_REVIEW', 990105, 'IN_HOUSE'), (990101, 'PRACTICE_REVIEW', 990105, 'PROVIDER_NOT_KEPT'), (990101, 'PRACTICE_REVIEW', 990105, 'PROVIDER_KEPT');
-     INSERT INTO workspace_member_onboarding (workspace_id, account_id, ai_choice, updated_at)
-     VALUES (990101, 990103, 'NO_AI', now()), (990102, 990103, 'IN_HOUSE_ONLY', now());
+     INSERT INTO account_ai_choice (account_id, ai_choice, updated_at) VALUES (990103, 'NO_AI', now());
+     INSERT INTO workspace_member_onboarding (workspace_id, account_id, seen_revision, updated_at)
+     VALUES (990101, 990103, 0, now());
      """);
                 connection.commit();
-                assertThat(
-                                scalar(
-                                        connection,
-                                        "SELECT ai_choice FROM workspace_member_onboarding WHERE workspace_id = 990101 AND account_id = 990103"))
+                assertThat(scalar(connection, "SELECT ai_choice FROM account_ai_choice WHERE account_id = 990103"))
                         .isEqualTo("NO_AI");
                 assertThatThrownBy(
                                 () -> execute(
                                         connection,
-                                        "INSERT INTO workspace_member_onboarding (workspace_id, account_id, updated_at) VALUES (990101, 990103, now())"))
+                                        "INSERT INTO workspace_member_onboarding (workspace_id, account_id, seen_revision, updated_at) VALUES (990101, 990103, 0, now())"))
                         .hasMessageContaining("ux_member_onboarding_workspace_account");
                 connection.rollback();
                 assertThatThrownBy(
                                 () -> execute(
                                         connection,
-                                        "INSERT INTO workspace_member_onboarding (workspace_id, account_id, updated_at) VALUES (990101, 999999999, now())"))
+                                        "INSERT INTO workspace_member_onboarding (workspace_id, account_id, seen_revision, updated_at) VALUES (990101, 999999999, 0, now())"))
                         .hasMessageContaining("sfk_member_onboarding_account");
                 connection.rollback();
                 assertThatThrownBy(
                                 () -> execute(
                                         connection,
-                                        "UPDATE workspace_member_onboarding SET ai_choice = 'AUTOMATIC' WHERE workspace_id = 990101 AND account_id = 990103"))
-                        .hasMessageContaining("ck_member_onboarding_ai_choice");
+                                        "INSERT INTO account_ai_choice (account_id, ai_choice, updated_at) VALUES (999999999, 'NO_AI', now())"))
+                        .hasMessageContaining("sfk_account_ai_choice_account");
+                connection.rollback();
+                assertThatThrownBy(() -> execute(
+                                connection,
+                                "UPDATE account_ai_choice SET ai_choice = 'AUTOMATIC' WHERE account_id = 990103"))
+                        .hasMessageContaining("ck_account_ai_choice");
                 connection.rollback();
                 assertThatThrownBy(() ->
                                 execute(connection, "UPDATE llm_model SET operated_by = 'AUTOMATIC' WHERE id = 990105"))
@@ -136,10 +139,7 @@ class WorkspaceOnboardingMigrationTest {
                 connection.rollback();
                 assertThatThrownBy(() -> liquibase.rollback("before-member-onboarding", contexts, labels))
                         .hasStackTraceContaining("instead of discarding AI choices");
-                assertThat(
-                                scalar(
-                                        connection,
-                                        "SELECT ai_choice FROM workspace_member_onboarding WHERE workspace_id = 990101 AND account_id = 990103"))
+                assertThat(scalar(connection, "SELECT ai_choice FROM account_ai_choice WHERE account_id = 990103"))
                         .isEqualTo("NO_AI");
             }
         }

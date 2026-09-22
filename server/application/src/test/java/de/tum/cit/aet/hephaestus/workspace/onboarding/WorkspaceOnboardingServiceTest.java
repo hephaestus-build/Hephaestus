@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAiAvailability;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,6 +42,9 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
     private WorkspaceMemberOnboardingRepository members;
 
     @Mock
+    private AccountAiChoiceRepository choices;
+
+    @Mock
     private AccountWorkspaceMembershipQuery memberships;
 
     @Mock
@@ -53,6 +57,12 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
     private ConfigAuditPort audit;
 
     private static final Instant NOW = Instant.parse("2026-09-01T12:00:00Z");
+    private final Map<Long, AccountAiChoice> savedChoices = new HashMap<>();
+    private static final WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO OPEN_SLACK =
+            new WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO(
+                    9L, "Slack", "SLACK", "slack", "Team", true, true, false);
+    private static final WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO UNAVAILABLE_SLACK =
+            new WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO(9L, "Slack", "SLACK", null, null, true, false, false);
     private final WorkspaceContext context =
             new WorkspaceContext(1L, "engineering", "Engineering", null, null, true, true, Set.of());
     private WorkspaceOnboardingService service;
@@ -63,11 +73,21 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
                 workspaces,
                 settings,
                 members,
+                choices,
                 memberships,
                 links,
                 availability,
                 audit,
                 Clock.fixed(NOW, ZoneOffset.UTC));
+        // The account row is read back by the same method that wrote it, so the mock keeps what it saved.
+        lenient().when(choices.save(any())).thenAnswer(invocation -> {
+            AccountAiChoice row = invocation.getArgument(0);
+            savedChoices.put(row.getAccountId(), row);
+            return row;
+        });
+        lenient()
+                .when(choices.findById(anyLong()))
+                .thenAnswer(invocation -> Optional.ofNullable(savedChoices.get(invocation.<Long>getArgument(0))));
     }
 
     @AfterEach
@@ -95,13 +115,31 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         return policy;
     }
 
+    private AccountAiChoice chose(MemberAiChoice choice) {
+        var row = new AccountAiChoice();
+        row.setAccountId(10L);
+        row.setAiChoice(choice);
+        row.setUpdatedAt(NOW.minusSeconds(60));
+        savedChoices.put(10L, row);
+        return row;
+    }
+
+    private WorkspaceMemberOnboarding seen(Workspace workspace, long revision) {
+        var row = new WorkspaceMemberOnboarding();
+        row.setWorkspace(workspace);
+        row.setAccountId(10L);
+        row.setSeenRevision(revision);
+        when(members.findByWorkspace_IdAndAccountId(1L, 10L)).thenReturn(Optional.of(row));
+        return row;
+    }
+
     @Test
     void shouldRejectPublicReadersWithoutActualMembership() {
         assertThatThrownBy(() -> service.state(context, 10L))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
-        verifyNoInteractions(settings, members, links, availability);
+        verifyNoInteractions(settings, members, choices, links, availability);
     }
 
     @Test
@@ -109,38 +147,50 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         member();
         enabledPolicy();
         var result = service.state(context, 10L);
-        assertThat(result.needsWelcome()).isTrue();
+        assertThat(result.needsSetup()).isTrue();
         assertThat(result.aiChoice()).isNull();
-        assertThat(result.completed()).isFalse();
+        verify(members, never()).save(any());
+        verify(choices, never()).save(any());
+    }
+
+    @Test
+    void shouldSaveTheChoiceOnTheAccountEvenWhenRequiredAccountIsUnavailable() {
+        member();
+        var policy = enabledPolicy();
+        policy.setRequiredConnectionIds(List.of(9L));
+        when(links.options(1L, 10L, List.of(9L))).thenReturn(List.of(UNAVAILABLE_SLACK));
+        var result = service.choose(context, 10L, MemberAiChoice.NO_AI);
+        var saved = ArgumentCaptor.forClass(AccountAiChoice.class);
+        verify(choices).save(saved.capture());
+        assertThat(saved.getValue().getAiChoice()).isEqualTo(MemberAiChoice.NO_AI);
+        assertThat(saved.getValue().getAccountId()).isEqualTo(10L);
+        assertThat(saved.getValue().getUpdatedAt()).isEqualTo(NOW);
+        // The page reads the answer back the same way every other workspace will.
+        assertThat(result.aiChoice()).isEqualTo(MemberAiChoice.NO_AI);
         verify(members, never()).save(any());
     }
 
     @Test
-    void shouldSaveNoAiEvenWhenRequiredAccountIsUnavailable() {
-        member();
-        var policy = enabledPolicy();
-        policy.setRequiredConnectionIds(List.of(9L));
-        when(links.options(1L, 10L, List.of(9L)))
-                .thenReturn(List.of(new WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO(
-                        9L, "Slack", "SLACK", null, null, true, false, false)));
-        service.choose(context, 10L, MemberAiChoice.NO_AI);
-        var saved = ArgumentCaptor.forClass(WorkspaceMemberOnboarding.class);
-        verify(members).save(saved.capture());
-        assertThat(saved.getValue().getAiChoice()).isEqualTo(MemberAiChoice.NO_AI);
-        assertThat(saved.getValue().getCompletedAt()).isNull();
-        assertThat(saved.getValue().getAccountId()).isEqualTo(10L);
+    void shouldAnswerTheAccountEndpointWithoutAWorkspace() {
+        assertThat(service.accountChoice(10L)).isEqualTo(new AccountAiChoiceDTO(null, null));
+        var result = service.chooseForAccount(10L, MemberAiChoice.NOT_KEPT_ONLY);
+        assertThat(result.choice()).isEqualTo(MemberAiChoice.NOT_KEPT_ONLY);
+        assertThat(result.updatedAt()).isEqualTo(NOW);
+        verifyNoInteractions(memberships, settings, members);
     }
 
     @Test
-    void shouldNotTreatNotNowAsConsentOrCompletedSetup() {
-        member();
+    void shouldNotTreatSkipAsAnAnswer() {
+        var workspace = member();
         enabledPolicy();
-        service.dismiss(context, 10L);
+        var result = service.dismiss(context, 10L);
         var saved = ArgumentCaptor.forClass(WorkspaceMemberOnboarding.class);
         verify(members).save(saved.capture());
-        assertThat(saved.getValue().getWelcomedAt()).isEqualTo(NOW);
-        assertThat(saved.getValue().getAiChoice()).isNull();
-        assertThat(saved.getValue().getCompletedAt()).isNull();
+        assertThat(saved.getValue().getSeenRevision()).isEqualTo(3);
+        assertThat(saved.getValue().getWorkspace()).isSameAs(workspace);
+        assertThat(saved.getValue().getUpdatedAt()).isEqualTo(NOW);
+        verify(choices, never()).save(any());
+        assertThat(result.aiChoice()).isNull();
     }
 
     @Test
@@ -149,12 +199,12 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         enabledPolicy();
         when(availability.options(1L))
                 .thenReturn(List.of(
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false, null),
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.NOT_KEPT_ONLY, false, false, null),
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.ANY_DECLARED, true, true, null)));
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false),
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.NOT_KEPT_ONLY, false, false),
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.ANY_DECLARED, true, true)));
         var result = service.choose(context, 10L, MemberAiChoice.IN_HOUSE_ONLY);
-        var saved = ArgumentCaptor.forClass(WorkspaceMemberOnboarding.class);
-        verify(members).save(saved.capture());
+        var saved = ArgumentCaptor.forClass(AccountAiChoice.class);
+        verify(choices).save(saved.capture());
         assertThat(saved.getValue().getAiChoice()).isEqualTo(MemberAiChoice.IN_HOUSE_ONLY);
         assertThat(result.aiOptions())
                 .filteredOn(option -> option.choice() == MemberAiChoice.IN_HOUSE_ONLY)
@@ -165,69 +215,60 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseCompletionWhenPolicyChanged() {
+    void shouldNotAskAgainInAnotherWorkspaceOnceTheAccountHasAnswered() {
         member();
         enabledPolicy();
-        assertThatThrownBy(() -> service.complete(context, 10L, 2))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("changed");
-        verifyNoInteractions(members);
-    }
-
-    @Test
-    void shouldRefuseCompletionUntilRequiredAccountIsLinked() {
-        var workspace = member();
-        var policy = enabledPolicy();
-        policy.setRequiredConnectionIds(List.of(9L));
-        var row = new WorkspaceMemberOnboarding();
-        row.setWorkspace(workspace);
-        row.setAccountId(10L);
-        row.setAiChoice(MemberAiChoice.NO_AI);
-        when(members.findByWorkspace_IdAndAccountId(1L, 10L)).thenReturn(Optional.of(row));
-        when(links.options(1L, 10L, List.of(9L)))
-                .thenReturn(List.of(new WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO(
-                        9L, "Slack", "SLACK", "slack", "Team", true, true, false)));
-        assertThatThrownBy(() -> service.complete(context, 10L, 3))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("required workspace accounts");
-        assertThat(row.getCompletedAt()).isNull();
+        chose(MemberAiChoice.NOT_KEPT_ONLY);
+        var result = service.state(context, 10L);
+        assertThat(result.needsSetup()).isFalse();
+        assertThat(result.aiChoice()).isEqualTo(MemberAiChoice.NOT_KEPT_ONLY);
+        assertThat(result.aiChoiceRequired()).isTrue();
         verify(members, never()).save(any());
     }
 
     @Test
-    void shouldFinishWhenRequiredAccountIsUnavailable() {
-        var workspace = member();
+    void shouldStillAskForARequiredAccountLinkWhenTheChoiceIsAlreadyMade() {
+        member();
         var policy = enabledPolicy();
         policy.setRequiredConnectionIds(List.of(9L));
-        var row = new WorkspaceMemberOnboarding();
-        row.setWorkspace(workspace);
-        row.setAccountId(10L);
-        row.setAiChoice(MemberAiChoice.NO_AI);
-        when(members.findByWorkspace_IdAndAccountId(1L, 10L)).thenReturn(Optional.of(row));
-        when(links.options(1L, 10L, List.of(9L)))
-                .thenReturn(List.of(new WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO(
-                        9L, "Slack", "SLACK", null, null, true, false, false)));
-        var result = service.complete(context, 10L, 3);
-        assertThat(row.getCompletedAt()).isEqualTo(NOW);
-        assertThat(result.completed()).isTrue();
-        assertThat(result.needsWelcome()).isFalse();
-        verify(members).save(row);
+        chose(MemberAiChoice.NOT_KEPT_ONLY);
+        when(links.options(1L, 10L, List.of(9L))).thenReturn(List.of(OPEN_SLACK));
+        assertThat(service.state(context, 10L).needsSetup()).isTrue();
+        when(links.options(1L, 10L, List.of(9L))).thenReturn(List.of(UNAVAILABLE_SLACK));
+        assertThat(service.state(context, 10L).needsSetup()).isFalse();
     }
 
     @Test
-    void shouldFinishWithNoAiAndPersistWelcomeIndependently() {
+    void shouldReturnAfterASkipOnlyOnceTheOwnerChangedTheSetup() {
+        var workspace = member();
+        var policy = enabledPolicy();
+        policy.setRequiredConnectionIds(List.of(9L));
+        chose(MemberAiChoice.NOT_KEPT_ONLY);
+        when(links.options(1L, 10L, List.of(9L))).thenReturn(List.of(OPEN_SLACK));
+        var row = seen(workspace, 3);
+        assertThat(service.state(context, 10L).needsSetup()).isFalse();
+        row.setSeenRevision(2);
+        assertThat(service.state(context, 10L).needsSetup()).isTrue();
+    }
+
+    @Test
+    void shouldReturnAfterASkipWithoutAnAnswerOnlyOnceTheOwnerChangedTheSetup() {
         var workspace = member();
         enabledPolicy();
-        var row = new WorkspaceMemberOnboarding();
-        row.setWorkspace(workspace);
-        row.setAccountId(10L);
-        row.setAiChoice(MemberAiChoice.NO_AI);
-        when(members.findByWorkspace_IdAndAccountId(1L, 10L)).thenReturn(Optional.of(row));
-        var result = service.complete(context, 10L, 3);
-        assertThat(row.getCompletedAt()).isEqualTo(NOW);
-        assertThat(result.completed()).isTrue();
-        assertThat(result.needsWelcome()).isFalse();
-        assertThat(result.aiChoice()).isEqualTo(MemberAiChoice.NO_AI);
+        var row = seen(workspace, 3);
+        assertThat(service.state(context, 10L).needsSetup()).isFalse();
+        row.setSeenRevision(1);
+        assertThat(service.state(context, 10L).needsSetup()).isTrue();
+    }
+
+    @Test
+    void shouldNeverShowTheSetupPageWhenTheOwnerTurnedItOff() {
+        member();
+        var policy = enabledPolicy();
+        policy.setEnabled(false);
+        assertThat(service.state(context, 10L).needsSetup()).isFalse();
+        service.dismiss(context, 10L);
+        verify(members, never()).save(any());
     }
 
     @Test
@@ -255,8 +296,10 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         assertThatThrownBy(() -> service.choose(context, 10L, MemberAiChoice.IN_HOUSE_ONLY))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("account owner");
+        assertThatThrownBy(() -> service.chooseForAccount(10L, MemberAiChoice.IN_HOUSE_ONLY))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("account owner");
         assertThatThrownBy(() -> service.dismiss(context, 10L)).isInstanceOf(ResponseStatusException.class);
-        assertThatThrownBy(() -> service.complete(context, 10L, 0)).isInstanceOf(ResponseStatusException.class);
-        verifyNoInteractions(members, workspaces);
+        verifyNoInteractions(members, choices, workspaces);
     }
 }

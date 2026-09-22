@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { optionalIntegrationsAvailable } from "@/runtime/consent";
 
+import { AiChoiceSection, type AiChoiceSectionProps } from "./AiChoiceSection";
 import { CookiePreferencesSection } from "./CookiePreferencesSection";
 import { DangerZoneSection } from "./DangerZoneSection";
 import { LinkedAccountsSection, type LinkedAccountsSectionProps } from "./LinkedAccountsSection";
@@ -27,6 +28,7 @@ export interface SettingsPageProps {
 	practiceFeedbackProps: PracticeFeedbackSectionProps;
 	researchProps: ResearchParticipationSectionProps;
 	showResearchSection: boolean;
+	aiChoiceProps: AiChoiceSectionProps;
 	linkedAccountsProps: LinkedAccountsSectionProps;
 	slackPreferencesProps: SlackPreferencesSectionProps;
 	showSlackPreferencesSection?: boolean;
@@ -40,6 +42,7 @@ export function SettingsPage({
 	practiceFeedbackProps,
 	researchProps,
 	showResearchSection,
+	aiChoiceProps,
 	linkedAccountsProps,
 	slackPreferencesProps,
 	showSlackPreferencesSection = true,
@@ -51,6 +54,7 @@ export function SettingsPage({
 	const { isLoading: practiceFeedbackLoading = false, ...practiceFeedbackRest } =
 		practiceFeedbackProps;
 	const { isLoading: researchLoading = false, ...researchRest } = researchProps;
+	const { isLoading: aiChoiceLoading = false, ...aiChoiceRest } = aiChoiceProps;
 	const { isLoading: linkedLoading = false, ...linkedRest } = linkedAccountsProps;
 	const { isLoading: slackLoading = false, ...slackRest } = slackPreferencesProps;
 
@@ -100,6 +104,10 @@ export function SettingsPage({
 						)}
 					</>
 				)}
+
+				{/* Its own read, so a failed preferences load does not hide it. */}
+				<Separator />
+				<AiChoiceSection {...aiChoiceRest} isLoading={isLoading || aiChoiceLoading} />
 
 				<Separator />
 				<LinkedAccountsSection {...linkedRest} isLoading={isLoading || linkedLoading} />

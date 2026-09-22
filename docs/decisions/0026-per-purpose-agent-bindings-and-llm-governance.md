@@ -1,6 +1,6 @@
 # ADR 0026: Per-purpose agent bindings and governed OpenAI-compatible LLM catalog
 
-**Status:** Accepted (amended 2026-07-26 — named-agent-config model deleted)
+**Status:** Accepted (amended 2026-07-26 — named-agent-config model deleted; amended 2026-09-22 — member AI choice is per account)
 **Date:** 2026-07-24
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0006](0006-llm-proxy-on-coordinator-trust-model.md) (in-app LLM proxy as the sole credential path), [ADR 0025](0025-agent-job-queue-on-postgresql.md) (PostgreSQL agent job queue)
@@ -10,6 +10,24 @@
 > write-through `sync` are deleted; `WorkspaceAgentBinding` is the sole `ModelBindingSource` and the
 > practice-review settings page reads bindings directly. Text below that describes the mirror as
 > present is retained as the record of the decision, not as a description of the current code.
+>
+> **Amendment (2026-09-22):** a developer's AI choice — the data-handling ceiling over the tiers
+> the bindings are assigned by, or No AI — is stored once per account (`account_ai_choice`,
+> registered GLOBAL in the tenancy layer) and holds in every workspace the account is a member of
+> on the instance; `workspace_member_onboarding` keeps only the settings revision at which the
+> member finished or skipped a workspace's setup page. The tiers are facts about who operates a
+> model and whether anything is kept, which do not vary by workspace, and comparable products keep
+> the person's data-use choice with the signed-in identity while organisations only tighten. The
+> workspace still owns what runs: one binding per purpose and tier, and the routing rule below is
+> unchanged — loosest ready binding within the ceiling, never looser. A person is asked on their
+> first visit to a workspace that turned member setup on, only if they have not answered; adding,
+> removing or re-declaring models never asks again, because the ceiling is enforced on every
+> request and a binding whose model loosened stops serving until reassigned. A change to what the
+> tiers *mean* ships with a migration that clears choices; a looser tier added later never touches
+> an existing ceiling. A developer no account resolves to counts as not having answered, and only a
+> workspace's "choice required" setting keeps AI off their work. A narrow-only per-workspace
+> override (effective ceiling = the stricter of workspace and account) would fit later without
+> changing this model; none was built, since no comparable product has one.
 
 ## Context
 

@@ -15,11 +15,19 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAiAvailability;
 import java.time.Clock;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * The AI choice is the account's and is written here whichever page asks for it; the setup page is
+ * the workspace's and returns only while it still has something to ask: the choice itself, or a
+ * required account link the workspace can offer right now. Setup is done when nothing is owed, so
+ * there is no completion to record; a skip is recorded so the page stays away until the owner
+ * changes what it asks for.
+ */
 @Service
 @ConditionalOnServerRole
 @RequiredArgsConstructor
@@ -27,6 +35,7 @@ class WorkspaceOnboardingService {
     private final WorkspaceRepository workspaces;
     private final WorkspaceOnboardingSettingsRepository settings;
     private final WorkspaceMemberOnboardingRepository members;
+    private final AccountAiChoiceRepository choices;
     private final AccountWorkspaceMembershipQuery memberships;
     private final WorkspaceOnboardingLinks links;
     private final WorkspaceAiAvailability availability;
@@ -41,72 +50,68 @@ class WorkspaceOnboardingService {
     private WorkspaceOnboardingDTO memberState(WorkspaceContext context, long accountId) {
         requireMember(context.id(), accountId);
         var policy = settings.findByWorkspaceId(context.id()).orElseGet(WorkspaceOnboardingSettings::new);
-        var member =
-                members.findByWorkspace_IdAndAccountId(context.id(), accountId).orElse(null);
+        var choice =
+                choices.findById(accountId).map(AccountAiChoice::getAiChoice).orElse(null);
         var linkOptions = links.options(context.id(), accountId, policy.getRequiredConnectionIds());
-        boolean completed = member != null
-                && member.getCompletedAt() != null
-                && linkOptions.stream()
-                        .filter(link -> link.required() && link.available())
-                        .allMatch(WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO::linked);
+        @Nullable
+        Long seenRevision = members.findByWorkspace_IdAndAccountId(context.id(), accountId)
+                .map(WorkspaceMemberOnboarding::getSeenRevision)
+                .orElse(null);
+        // A member who has already answered, and whom this workspace asks nothing else of, never
+        // sees the page; a member who skipped it sees it again only once the owner changes the setup.
+        boolean needsSetup = policy.isEnabled()
+                && (seenRevision == null || seenRevision != policy.getRevision())
+                && (choice == null || hasOpenRequiredLink(linkOptions));
         return new WorkspaceOnboardingDTO(
                 context.displayName(),
                 policy.isEnabled(),
-                policy.isEnabled() && (member == null || member.getWelcomedAt() == null),
-                policy.getRevision(),
-                policy.isAiChoiceRequired() || member != null,
-                member == null ? null : member.getAiChoice(),
-                completed,
+                needsSetup,
+                policy.isAiChoiceRequired() || choice != null,
+                choice,
                 availability.options(context.id()).stream()
                         .map(option -> new WorkspaceOnboardingDTO.WorkspaceAiOptionDTO(
-                                option.choice(),
-                                option.practiceReviewsReady(),
-                                option.mentorReady(),
-                                option.sameModelsAs()))
+                                option.choice(), option.practiceReviewsReady(), option.mentorReady()))
                         .toList(),
                 linkOptions);
+    }
+
+    private static boolean hasOpenRequiredLink(List<WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO> linkOptions) {
+        // A required link the workspace cannot offer right now is the owner's to repair; it never
+        // holds a member's setup open.
+        return linkOptions.stream().anyMatch(link -> link.required() && link.available() && !link.linked());
     }
 
     /** The choice is a boundary, not a pick from today's bindings: any of the four values is accepted. */
     @Transactional
     public WorkspaceOnboardingDTO choose(WorkspaceContext context, long accountId, MemberAiChoice choice) {
         requireSelf();
-        Workspace workspace = lockWorkspace(context.id());
         requireMember(context.id(), accountId);
-        var member = members.findByWorkspace_IdAndAccountId(context.id(), accountId)
-                .orElseGet(() -> {
-                    var created = new WorkspaceMemberOnboarding();
-                    created.setWorkspace(workspace);
-                    created.setAccountId(accountId);
-                    return created;
-                });
-        member.setAiChoice(choice);
-        member.setUpdatedAt(clock.instant());
-        members.save(member);
+        writeChoice(accountId, choice);
         return memberState(context, accountId);
     }
 
+    @Transactional(readOnly = true)
+    public AccountAiChoiceDTO accountChoice(long accountId) {
+        return choices.findById(accountId)
+                .map(WorkspaceOnboardingService::toDTO)
+                .orElseGet(() -> new AccountAiChoiceDTO(null, null));
+    }
+
     @Transactional
-    public WorkspaceOnboardingDTO complete(WorkspaceContext context, long accountId, long revision) {
+    public AccountAiChoiceDTO chooseForAccount(long accountId, MemberAiChoice choice) {
         requireSelf();
-        lockWorkspace(context.id());
-        requireMember(context.id(), accountId);
-        var policy = settings.findByWorkspaceId(context.id()).orElseGet(WorkspaceOnboardingSettings::new);
-        if (policy.getRevision() != revision)
-            throw conflict("Workspace onboarding changed. Review the current requirements and try again.");
-        var member = members.findByWorkspace_IdAndAccountId(context.id(), accountId)
-                .filter(row -> row.getAiChoice() != null)
-                .orElseThrow(() -> conflict("Make your AI choice first; No AI is always available."));
-        // A required link the workspace cannot offer right now is the owner's to repair; it never
-        // holds a member's setup open.
-        if (links.options(context.id(), accountId, policy.getRequiredConnectionIds()).stream()
-                .anyMatch(link -> link.required() && link.available() && !link.linked()))
-            throw conflict("Connect the required workspace accounts before finishing.");
-        member.setWelcomedAt(clock.instant());
-        member.setCompletedAt(clock.instant());
-        member.setUpdatedAt(clock.instant());
-        members.save(member);
-        return memberState(context, accountId);
+        return toDTO(writeChoice(accountId, choice));
+    }
+
+    private AccountAiChoice writeChoice(long accountId, MemberAiChoice choice) {
+        var row = choices.findById(accountId).orElseGet(() -> {
+            var created = new AccountAiChoice();
+            created.setAccountId(accountId);
+            return created;
+        });
+        row.setAiChoice(choice);
+        row.setUpdatedAt(clock.instant());
+        return choices.save(row);
     }
 
     @Transactional
@@ -114,20 +119,23 @@ class WorkspaceOnboardingService {
         requireSelf();
         var workspace = lockWorkspace(context.id());
         requireMember(context.id(), accountId);
-        if (!settings.findByWorkspaceId(context.id())
-                .map(WorkspaceOnboardingSettings::isEnabled)
-                .orElse(false)) return memberState(context, accountId);
-        var member = members.findByWorkspace_IdAndAccountId(context.id(), accountId)
+        var policy = settings.findByWorkspaceId(context.id()).orElse(null);
+        if (policy == null || !policy.isEnabled()) return memberState(context, accountId);
+        markSeen(workspace, accountId, policy.getRevision());
+        return memberState(context, accountId);
+    }
+
+    private void markSeen(Workspace workspace, long accountId, long revision) {
+        var member = members.findByWorkspace_IdAndAccountId(workspace.getId(), accountId)
                 .orElseGet(() -> {
                     var created = new WorkspaceMemberOnboarding();
                     created.setWorkspace(workspace);
                     created.setAccountId(accountId);
                     return created;
                 });
-        member.setWelcomedAt(clock.instant());
+        member.setSeenRevision(revision);
         member.setUpdatedAt(clock.instant());
         members.save(member);
-        return memberState(context, accountId);
     }
 
     @Transactional(readOnly = true)
@@ -196,6 +204,10 @@ class WorkspaceOnboardingService {
         return workspaces
                 .findByIdForUpdate(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace not found"));
+    }
+
+    private static AccountAiChoiceDTO toDTO(AccountAiChoice row) {
+        return new AccountAiChoiceDTO(row.getAiChoice(), row.getUpdatedAt());
     }
 
     private static WorkspaceOnboardingSettingsDTO toDTO(WorkspaceOnboardingSettings policy) {

@@ -5,6 +5,7 @@ import { AuthProvider } from "@/runtime/auth/AuthContext";
 import { withStandardPage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
+import type { AiChoiceSectionProps } from "./AiChoiceSection";
 import { SettingsPage } from "./SettingsPage";
 
 const meta = {
@@ -45,6 +46,11 @@ const defaultLinkedAccountsProps = {
 	onUnlink: fn(),
 };
 
+const defaultAiChoiceProps = {
+	choice: "NOT_KEPT_ONLY",
+	onSave: fn(),
+} satisfies AiChoiceSectionProps;
+
 const defaultSlackPreferencesProps = {
 	workspaces: [
 		{
@@ -76,6 +82,7 @@ export const Default: Story = {
 			participateInResearch: true,
 			onToggleResearch: fn(),
 		},
+		aiChoiceProps: defaultAiChoiceProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
 		onAccountDeleted: fn(),
@@ -95,6 +102,7 @@ export const AllTogglesDisabled: Story = {
 			participateInResearch: false,
 			onToggleResearch: fn(),
 		},
+		aiChoiceProps: defaultAiChoiceProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
 		onAccountDeleted: fn(),
@@ -114,6 +122,7 @@ export const Loading: Story = {
 			participateInResearch: true,
 			onToggleResearch: fn(),
 		},
+		aiChoiceProps: defaultAiChoiceProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
 		onAccountDeleted: fn(),
@@ -133,6 +142,7 @@ export const ResearchHidden: Story = {
 			participateInResearch: true,
 			onToggleResearch: fn(),
 		},
+		aiChoiceProps: defaultAiChoiceProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
 		onAccountDeleted: fn(),

@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceAiExport;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAiChoiceExport;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -21,13 +21,16 @@ class WorkspaceOnboardingLifecycleIntegrationTest extends AbstractWorkspaceInteg
     private WorkspaceMemberOnboardingRepository members;
 
     @Autowired
+    private AccountAiChoiceRepository choices;
+
+    @Autowired
     private WorkspaceOnboardingSettingsRepository settings;
 
     @Autowired
     private AccountRepository accounts;
 
     @Autowired
-    private AccountWorkspaceAiExport exports;
+    private AccountAiChoiceExport exports;
 
     @Autowired
     private WorkspaceOnboardingLifecycle lifecycle;
@@ -36,7 +39,7 @@ class WorkspaceOnboardingLifecycleIntegrationTest extends AbstractWorkspaceInteg
     private PlatformTransactionManager transactions;
 
     @Test
-    void shouldExportOnlyOwnChoicesAndEraseOnlyTheRequestedAccountOrWorkspace() {
+    void shouldExportOnlyOwnChoiceAndEraseOnlyTheRequestedAccountOrWorkspace() {
         var first =
                 createWorkspace("privacy-first", "First", "first", AccountType.ORG, persistUser("privacy-owner-one"));
         var second = createWorkspace(
@@ -45,23 +48,28 @@ class WorkspaceOnboardingLifecycleIntegrationTest extends AbstractWorkspaceInteg
                 accounts.save(new Account("Export subject")).getId());
         long other = Objects.requireNonNull(
                 accounts.save(new Account("Other member")).getId());
-        preference(first, account);
-        preference(second, account);
-        preference(first, other);
-        preference(second, other);
+        chose(account, MemberAiChoice.NO_AI);
+        chose(other, MemberAiChoice.IN_HOUSE_ONLY);
+        seen(first, account);
+        seen(second, account);
+        seen(first, other);
+        seen(second, other);
         var policy = new WorkspaceOnboardingSettings();
         policy.setWorkspace(first);
         settings.save(policy);
 
-        assertThat(exports.preferences(account))
-                .extracting(AccountWorkspaceAiExport.Preference::workspaceSlug)
-                .containsExactlyInAnyOrder(first.getWorkspaceSlug(), second.getWorkspaceSlug());
-        assertThat(exports.preferences(account))
-                .allSatisfy(preference -> assertThat(preference.aiChoice()).isEqualTo("NO_AI"));
+        var exported = exports.choice(account);
+        assertThat(exported).isNotNull();
+        assertThat(exported.aiChoice()).isEqualTo("NO_AI");
 
         new TransactionTemplate(transactions).executeWithoutResult(status -> lifecycle.eraseAccount(account));
-        assertThat(exports.preferences(account)).isEmpty();
-        assertThat(exports.preferences(other)).hasSize(2);
+        assertThat(exports.choice(account)).isNull();
+        assertThat(members.findByWorkspace_IdAndAccountId(first.getId(), account))
+                .isEmpty();
+        var otherExport = exports.choice(other);
+        assertThat(otherExport).isNotNull();
+        assertThat(otherExport.aiChoice()).isEqualTo("IN_HOUSE_ONLY");
+        assertThat(members.findByWorkspace_IdAndAccountId(first.getId(), other)).isPresent();
         assertThat(settings.findByWorkspaceId(first.getId())).isPresent();
 
         new TransactionTemplate(transactions)
@@ -70,13 +78,23 @@ class WorkspaceOnboardingLifecycleIntegrationTest extends AbstractWorkspaceInteg
         assertThat(members.findByWorkspace_IdAndAccountId(first.getId(), other)).isEmpty();
         assertThat(members.findByWorkspace_IdAndAccountId(second.getId(), other))
                 .isPresent();
+        // Purging a workspace never touches a member's account-level answer.
+        assertThat(exports.choice(other)).isNotNull();
     }
 
-    private void preference(Workspace workspace, long accountId) {
+    private void chose(long accountId, MemberAiChoice choice) {
+        var row = new AccountAiChoice();
+        row.setAccountId(accountId);
+        row.setAiChoice(choice);
+        row.setUpdatedAt(Instant.now());
+        choices.save(row);
+    }
+
+    private void seen(Workspace workspace, long accountId) {
         var member = new WorkspaceMemberOnboarding();
         member.setWorkspace(workspace);
         member.setAccountId(accountId);
-        member.setAiChoice(MemberAiChoice.NO_AI);
+        member.setSeenRevision(0);
         member.setUpdatedAt(Instant.now());
         members.save(member);
     }

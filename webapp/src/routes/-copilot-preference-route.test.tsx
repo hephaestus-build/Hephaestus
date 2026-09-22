@@ -103,7 +103,7 @@ it("starts a separate floating conversation with the new workspace's transport",
 it("keeps setup free of the floating composer even when AI is available", async () => {
 	mockCopilot({
 		...workspaceOnboarding(),
-		needsWelcome: true,
+		needsSetup: true,
 		aiChoice: "IN_HOUSE_ONLY",
 		aiOptions: [{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true }],
 	});

@@ -41,7 +41,7 @@ it("keeps an existing conversation readable under No AI and restores its compose
 	);
 	const { queryClient } = renderRouteAtWithRouter(`/w/acme/mentor/${threadId}`);
 	await screen.findByText("Earlier guidance remains readable.", {}, ROUTE_RENDER_WAIT);
-	await screen.findByRole("heading", { name: "Heph is off for you in this workspace" });
+	await screen.findByRole("heading", { name: "Heph is off for you" });
 	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
 		"/w/acme/onboarding?returnTo=%2Fw%2Facme%2Fmentor%2F65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed",
 	);
@@ -59,9 +59,7 @@ it("keeps an existing conversation readable under No AI and restores its compose
 		);
 	});
 	await screen.findByRole("textbox", {}, ROUTE_RENDER_WAIT);
-	expect(
-		screen.queryByRole("heading", { name: "Heph is off for you in this workspace" }),
-	).toBeNull();
+	expect(screen.queryByRole("heading", { name: "Heph is off for you" })).toBeNull();
 });
 
 it("names the saved choice when no Heph model is within it", async () => {

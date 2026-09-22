@@ -22,6 +22,12 @@ erDiagram
         BIGINT version "NOT NULL"
     }
 
+    AccountAiChoice {
+        BIGINT account_id PK,FK
+        VARCHAR(24) ai_choice "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+    }
+
     AccountExport {
         BIGINT id PK
         BIGINT account_id FK "NOT NULL"
@@ -1531,10 +1537,8 @@ erDiagram
     WorkspaceMemberOnboarding {
         BIGINT id PK
         BIGINT account_id FK,UK "NOT NULL"
-        VARCHAR(24) ai_choice
-        TIMESTAMPTZ completed_at
+        BIGINT seen_revision "NOT NULL"
         TIMESTAMPTZ updated_at "NOT NULL"
-        TIMESTAMPTZ welcomed_at
         BIGINT workspace_id FK,UK "NOT NULL"
     }
 
@@ -1585,6 +1589,7 @@ erDiagram
 
     %% Relationships
     %% One-to-One relationships
+    Account ||--|| AccountAiChoice : has
     ChatMessage ||--|| ChatMessageVote : has
     DiscussionComment ||--|| Discussion : references
     PracticeRevision ||--|| Practice : references

@@ -199,8 +199,10 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 							</FieldLabel>
 							<FieldDescription id={`${id}-enabled-description`}>
 								Members see the setup page once and can finish it later from Your AI choice in the
-								sidebar. Once on, every member must choose before AI runs for them; turning this off
-								does not undo that.
+								sidebar. The AI choice is the member’s, made once for every workspace they’re in;
+								members who have already answered elsewhere are only asked to connect required
+								accounts. Once on, every member must have chosen before AI runs for them; turning
+								this off does not undo that.
 							</FieldDescription>
 						</FieldContent>
 					</Field>

@@ -292,14 +292,25 @@ enabling it, and wait until every runtime role has been upgraded before assignin
    needs an active integration and an enabled account-linking provider for the same server. Slack
    also needs the configured team; Outline needs the configured instance identity.
 4. Turn on **Ask members to set up on their first visit**. From then on, personal AI activity
-   requires an explicit member choice. Unknown or unlinked developers are not assumed to have agreed.
+   requires an explicit member choice. The page asks only members who have not answered anywhere on
+   this instance; a member who already chose in another workspace sees it only if this workspace
+   requires an account link they have not connected. Unknown or unlinked developers are not assumed
+   to have agreed.
 
-A member's choice is a ceiling: the loosest tier they accept. **Only in-house** is served by the
-**Stays in-house** row; **Allow providers without content storage** by that row or the stricter
+A member's choice is a ceiling: the loosest tier they accept. It belongs to the account, is answered
+once, and holds in every workspace the member belongs to on this instance; members change it from
+**Your AI choice** in any workspace's sidebar or in **User settings**. **Only in-house** is served by
+the **Stays in-house** row; **Allow providers without content storage** by that row or the stricter
 one; **Allow storage for safety checks** by any declared row. Hephaestus picks the loosest ready row
-within the ceiling and never a looser one. A member whose ceiling no ready row is within gets no
-practice reviews and no Heph, and the page they chose on says so; each purpose card previews which
-model serves each answer. Members may choose any answer, including one no row covers yet.
+within the ceiling and never a looser one, in each workspace from that workspace's rows. A member
+whose ceiling no ready row in this workspace is within gets no practice reviews and no Heph here, and
+the page they chose on says so in one sentence below the answers. Members may choose any answer,
+including one no row covers yet.
+
+Adding, removing or re-declaring models and providers never asks members again: the ceiling is
+checked on every request, and a model whose declared facts loosen stops serving until you reassign
+it. Members see the setup page again only after you change **Member onboarding** itself, and only
+those who skipped it or have a newly required link still open.
 
 The **Members who haven't chosen** row preserves existing assignments for workspaces that have never
 required member choices. It serves only members without a choice where the choice is optional and
@@ -307,13 +318,14 @@ is never a fallback for a member who chose. Existing models upgrade with no fact
 (**Not declared**) and existing assignments land in that row; Hephaestus does not infer data handling
 from names or endpoints.
 
-When individual member choices exist, an unknown or unlinked reviewed developer cannot use that
-legacy row either: Hephaestus cannot safely distinguish them from a member whose identity was
-unlinked after choosing a ceiling or No AI. Reconnect the developer's identity to restore their own
-choice; this does not change another identified member's choice or another workspace.
+A reviewed developer no account resolves to — never signed in, or their identity unlinked — counts
+as not having answered: that row serves them where the choice is optional, and only a workspace that
+has turned the setup page on, which makes a choice required there, keeps AI off their work.
+Reconnect the developer's identity to restore their own choice; this does not change another
+identified member's choice.
 
 Members may choose **No AI** even when model configuration or required account links are unavailable.
-This stops new practice reviews about them and new conversations with Heph in that workspace, not
+This stops new practice reviews about them and new conversations with Heph in every workspace, not
 membership or access to existing feedback. A review is checked against the developer whose work is
 being reviewed, not the administrator who requested it. A changed choice is checked again at
 execution, before each model request, and before new feedback is accepted or delivered. An outbound

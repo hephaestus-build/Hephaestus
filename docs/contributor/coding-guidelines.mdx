@@ -47,12 +47,13 @@ one product surface. These rules apply to that onboarding journey, not to every 
 Each rule names the source it comes from.
 
 - **Group the decision with its question.** Use the shared [shadcn questionnaire](https://ui.shadcn.com/docs/components/base/questionnaire)
-  for the workspace choice, with a native fieldset and legend. Account linking remains a separate
-  section below it; saving the AI choice never depends on linking an account. —
+  for the AI choice, with a native fieldset and legend. The answer is the account's and holds in
+  every workspace; the workspace page and **User settings** edit the same record. Account linking
+  remains a separate section below it; saving the AI choice never depends on linking an account. —
   [W3C grouping controls](https://www.w3.org/WAI/tutorials/forms/grouping/)
 - **Do not invent a journey total.** Onboarding cannot count the sign-in stages that preceded it.
   A survey with a defined question list can use the questionnaire's own progress component.
-  The workspace choice marker reports a saved answer, not an unsaved selection. —
+  The AI choice marker reports a saved answer, not an unsaved selection. —
   [GOV.UK question pages](https://design-system.service.gov.uk/patterns/question-pages/)
 - **Never pre-select an answer.** Keep a first visit unanswered. A saved answer shown
   checked on a return visit is the current fact, not a default, and the copy says so. —
@@ -65,9 +66,10 @@ Each rule names the source it comes from.
   [NN/g on confirmation dialogs](https://www.nngroup.com/articles/confirmation-dialog/)
 - **Consequences are read once, before choosing, never behind a disclosure.** — EDPB 03/2022 "Left
   in the dark"; [Hick's law](https://lawsofux.com/hicks-law/)
-- **An answer the workspace has not set up yet stays selectable, with the consequence in the card
-  text.** The answer is a boundary, not a pick from today's models: nothing runs for that purpose,
-  the card and Heph say so, and never an automatic switch to another answer. —
+- **An answer the workspace has not set up yet stays selectable, with the consequence in one
+  sentence below the cards.** The answer is a boundary, not a pick from today's models, so the cards
+  carry no per-workspace configuration rows: nothing runs for that purpose in this workspace, the
+  sentence says so, and never an automatic switch to another answer. —
   [Inactive buttons](https://www.uxtigers.com/post/inactive-buttons)
 - **Optional stages say so in their heading; a stage with nothing in it is not rendered.** —
   [W3C multi-page forms](https://www.w3.org/WAI/tutorials/forms/multi-page/)
@@ -90,8 +92,10 @@ Each rule names the source it comes from.
   arrives right after one that has neither. — [Aesthetic-usability effect](https://lawsofux.com/aesthetic-usability-effect/);
   motion rules in `webapp/AGENTS.md` § Motion
 - **One name per thing on every surface the member sees.** The member's choice is "your AI choice" in
-  the sidebar, the notice, the heading and the copy; "Member onboarding" is the owner's page. A
-  consequence sentence is written once and quoted, not paraphrased.
+  the sidebar, the notice, the heading, the **User settings** section and the copy; "setup" is what a
+  workspace still owes, never "welcome" (the heading's greeting is not a state); "Member
+  onboarding" is the owner's page. A consequence
+  sentence is written once and quoted, not paraphrased.
 
 ### Quality gates
 

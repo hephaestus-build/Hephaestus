@@ -186,8 +186,10 @@ available. If there is no material change to check, record the evidenced lack of
 
 **Member onboarding** is first-visit setup after existing workspace membership. It is not an
 admission request, approval, entitlement, or provisioning workflow. It is configuration and a
-member's own choice, not research consent. Retired words: *processing location*, *Unclassified*,
-*AI preference*, *Workspace preferences*, *Workspace default*.
+member's own choice, not research consent. The member-facing word is **setup**: a workspace
+*needs setup* while its page is still owed. Retired words: *processing location*, *Unclassified*,
+*AI preference*, *Workspace preferences*, *Workspace default*, and *welcome* as the name of the
+setup or its state; the greeting in the page heading (*Welcome to {workspaceName}*) stays.
 
 **Data handling** is what an admin declares about a model: two facts, never an inference from a
 hostname, connection or provider kind. **Operated by** is *Your organisation* or *A provider*;
@@ -206,13 +208,16 @@ badge with a label and an icon everywhere a model appears:
 | `PROVIDER_KEPT` | **Provider, kept for safety checks** | a provider, kept for safety checks | A provider under terms your organisation accepted keeps it for a limited time for safety checks, which its staff may read if flagged. |
 | `UNDECLARED` | **Not declared** | either fact missing | Never shown to developers; an admin to-do. |
 
-A developer's **AI choice** is a ceiling: the loosest tier they accept in one workspace, or **No
-AI**. The three AI answers are **Only in-house**, **Allow providers without content storage**
-and **Allow storage for safety checks**; anything stricter than the answer also counts, nothing ever
-switches a developer to a looser tier, and *Not declared* sits outside every ceiling. A member may
-choose any answer regardless of what the workspace has bound today: consent is to a boundary, not
-to the current inventory. The member-facing name for the choice is **your AI choice** on every
-surface: the sidebar item, the heading, the notice and the copy.
+A developer's **AI choice** is a ceiling: the loosest tier they accept, or **No AI**. It is the
+person's, answered once per account, and holds in every workspace they are a member of on this
+instance; a workspace decides what runs within it, never the ceiling itself. The three AI answers
+are **Only in-house**, **Allow providers without content storage** and **Allow storage for safety
+checks**; anything stricter than the answer also counts, nothing ever switches a developer to a
+looser tier, and *Not declared* sits outside every ceiling. A member may choose any answer
+regardless of what any workspace has bound today: consent is to a boundary, not to the current
+inventory, so adding, removing or re-declaring a model never asks again. The member-facing name for
+the choice is **your AI choice** on every surface: the sidebar item, the heading, the notice, the
+**User settings** section and the copy.
 
 **Members who haven't chosen** names the *Not declared* row on the workspace admin's model page: it
 serves only members who have not chosen yet, where the choice is optional, and never a member who
@@ -234,9 +239,9 @@ The sign-in and first-visit pages follow ten rules:
    Submit or Done.
 4. Section titles are the question or the noun.
 5. Hints are one sentence and the primary button's accessible description.
-6. *Not set up here yet* for an AI answer; *unavailable right now* for an account link. When only
-   one of practice reviews and Heph is covered, Heph says *part of your choice* is not set up yet,
-   never that the whole choice is.
+6. *Not set up here yet* for an AI answer; *unavailable right now* for an account link. The cards
+   carry no configuration rows; one sentence below them names what this workspace has not set up
+   within the selected answer, and nothing when it is covered.
 7. Ask "a workspace owner" on the workspace page, "whoever runs this Hephaestus instance" on the
    sign-in page.
 8. `{workspaceName}` in the heading and in Heph's intro; "this workspace" in body text.

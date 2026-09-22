@@ -2105,6 +2105,37 @@ paths:
       summary: Get the current user
       tags:
       - Account
+  /user/ai-choice:
+    get:
+      operationId: getAccountAiChoice
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountAiChoice"
+          description: OK
+      summary: Get your AI choice
+      tags:
+      - Account
+    put:
+      operationId: updateAccountAiChoice
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountAiChoiceRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountAiChoice"
+          description: OK
+      summary: Change your AI choice for every workspace you are in
+      tags:
+      - Account
   /user/consent:
     get:
       operationId: getConsentStatus
@@ -4258,33 +4289,6 @@ paths:
       summary: Change your AI choice without changing workspace membership
       tags:
       - workspace-onboarding
-  /workspaces/{workspaceSlug}/onboarding/me/completion:
-    put:
-      operationId: completeMemberOnboarding
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/OnboardingCompletionRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceOnboarding"
-          description: OK
-      summary: Finish first-visit setup after required account links are complete
-      tags:
-      - workspace-onboarding
   /workspaces/{workspaceSlug}/onboarding/me/dismissal:
     put:
       operationId: dismissMemberOnboarding
@@ -4303,8 +4307,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceOnboarding"
           description: OK
-      summary: Continue to the workspace without treating dismissal as an AI choice
-        or completed setup
+      summary: Skip first-visit setup for now without treating that as an AI choice
       tags:
       - workspace-onboarding
   /workspaces/{workspaceSlug}/onboarding/settings:
@@ -8024,6 +8027,33 @@ paths:
       - workspace
 components:
   schemas:
+    AccountAiChoice:
+      type: object
+      description: The signed-in account's AI choice; both fields are absent until
+        the person has answered.
+      properties:
+        choice:
+          type: string
+          enum:
+          - NO_AI
+          - IN_HOUSE_ONLY
+          - NOT_KEPT_ONLY
+          - ANY_DECLARED
+        updatedAt:
+          type: string
+          format: date-time
+    AccountAiChoiceRequest:
+      type: object
+      properties:
+        choice:
+          type: string
+          enum:
+          - NO_AI
+          - IN_HOUSE_ONLY
+          - NOT_KEPT_ONLY
+          - ANY_DECLARED
+      required:
+      - choice
     AccountRef:
       type: object
       description: A human-readable account identity. <code>displayName</code>/<code>email</code>
@@ -11856,12 +11886,6 @@ components:
       - practiceName
       - practiceSlug
       - summary
-    OnboardingCompletionRequest:
-      type: object
-      properties:
-        revision:
-          type: integer
-          format: int64
     OptionCount:
       type: object
       properties:
@@ -17050,13 +17074,6 @@ components:
           type: boolean
         practiceReviewsReady:
           type: boolean
-        sameModelsAs:
-          type: string
-          enum:
-          - NO_AI
-          - IN_HOUSE_ONLY
-          - NOT_KEPT_ONLY
-          - ANY_DECLARED
       required:
       - choice
       - mentorReady
@@ -17445,6 +17462,10 @@ components:
           description: Display name of the user
     WorkspaceOnboarding:
       type: object
+      description: |-
+        One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
+         every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
+         what differs between workspaces.
       properties:
         aiChoice:
           type: string
@@ -17459,29 +17480,22 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WorkspaceAiOption"
-        completed:
-          type: boolean
         enabled:
           type: boolean
         links:
           type: array
           items:
             $ref: "#/components/schemas/WorkspaceOnboardingLink"
-        needsWelcome:
+        needsSetup:
           type: boolean
-        revision:
-          type: integer
-          format: int64
         workspaceName:
           type: string
       required:
       - aiChoiceRequired
       - aiOptions
-      - completed
       - enabled
       - links
-      - needsWelcome
-      - revision
+      - needsSetup
       - workspaceName
     WorkspaceOnboardingLink:
       type: object

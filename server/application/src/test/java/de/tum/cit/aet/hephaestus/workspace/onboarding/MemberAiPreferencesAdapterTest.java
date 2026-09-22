@@ -20,7 +20,7 @@ class MemberAiPreferencesAdapterTest extends BaseUnitTest {
     private WorkspaceOnboardingSettingsRepository settings;
 
     @Mock
-    private WorkspaceMemberOnboardingRepository members;
+    private AccountAiChoiceRepository choices;
 
     @Mock
     private AccountIdentityQuery identities;
@@ -32,7 +32,7 @@ class MemberAiPreferencesAdapterTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        preferences = new MemberAiPreferencesAdapter(settings, members, identities, users);
+        preferences = new MemberAiPreferencesAdapter(settings, choices, identities, users);
     }
 
     private void linkedDeveloper() {
@@ -47,24 +47,30 @@ class MemberAiPreferencesAdapterTest extends BaseUnitTest {
         when(identities.resolveActiveAccountId(7L, "123", null)).thenReturn(Optional.of(10L));
     }
 
+    private void chose(MemberAiChoice choice) {
+        var row = new AccountAiChoice();
+        row.setAccountId(10L);
+        row.setAiChoice(choice);
+        when(choices.findById(10L)).thenReturn(Optional.of(row));
+    }
+
     @Test
-    void shouldResolveTheStableIdentityAndPreserveNoAiWhenSetupIsHidden() {
+    void shouldApplyTheAccountChoiceInEveryWorkspaceEvenWhereSetupIsHidden() {
         linkedDeveloper();
-        var row = new WorkspaceMemberOnboarding();
-        row.setAiChoice(MemberAiChoice.NO_AI);
-        when(members.findByWorkspace_IdAndAccountId(1L, 10L)).thenReturn(Optional.of(row));
+        chose(MemberAiChoice.NO_AI);
         assertThat(preferences.forDeveloper(1L, 20L).permitsAi()).isFalse();
-        assertThat(preferences.forDeveloper(2L, 20L).permitsAi()).isTrue();
+        assertThat(preferences.forDeveloper(2L, 20L).permitsAi()).isFalse();
         verify(identities, times(2)).resolveActiveAccountId(7L, "123", null);
     }
 
     @Test
-    void shouldNotTreatDismissalAsAnAiChoiceEvenIfSetupIsLaterHidden() {
+    void shouldCarryTheCeilingAsBindingOnceChosen() {
         linkedDeveloper();
-        when(members.findByWorkspace_IdAndAccountId(1L, 10L)).thenReturn(Optional.of(new WorkspaceMemberOnboarding()));
-        var result = preferences.forDeveloper(1L, 20L);
-        assertThat(result.choice()).isNull();
-        assertThat(result.permitsAi()).isFalse();
+        chose(MemberAiChoice.IN_HOUSE_ONLY);
+        var decision = preferences.forDeveloper(1L, 20L);
+        assertThat(decision.choiceRequired()).isTrue();
+        assertThat(decision.choice()).isEqualTo(MemberAiChoice.IN_HOUSE_ONLY);
+        assertThat(decision.permitsAi()).isTrue();
     }
 
     @Test
@@ -74,27 +80,26 @@ class MemberAiPreferencesAdapterTest extends BaseUnitTest {
         when(settings.findByWorkspaceId(1L)).thenReturn(Optional.of(policy));
         assertThat(preferences.forDeveloper(1L, 20L).permitsAi()).isFalse();
         assertThat(preferences.forDeveloper(1L, null).permitsAi()).isFalse();
-        verifyNoInteractions(members);
+        verifyNoInteractions(choices);
     }
 
     @Test
-    void shouldRefuseAnUnlinkedIdentityWhenIndividualChoicesExistWithoutEnabledSetup() {
+    void shouldPreserveTheLegacyDefaultForAMemberWhoHasNotChosenWhereTheChoiceIsOptional() {
+        linkedDeveloper();
+        assertThat(preferences.forDeveloper(1L, 20L).choice()).isNull();
+        assertThat(preferences.forDeveloper(1L, 20L).permitsAi()).isTrue();
+        assertThat(preferences.forDeveloper(1L, null).permitsAi()).isTrue();
+    }
+
+    @Test
+    void shouldTreatAnUnlinkedIdentityAsNotHavingAnswered() {
         linkedDeveloper();
         when(identities.resolveActiveAccountId(7L, "123", null)).thenReturn(Optional.empty());
-        when(members.existsByWorkspace_Id(1L)).thenReturn(true);
-
+        var policy = new WorkspaceOnboardingSettings();
+        policy.setAiChoiceRequired(true);
+        when(settings.findByWorkspaceId(1L)).thenReturn(Optional.of(policy));
         assertThat(preferences.forDeveloper(1L, 20L).permitsAi()).isFalse();
-        assertThat(preferences.forDeveloper(1L, null).permitsAi()).isFalse();
         assertThat(preferences.forDeveloper(2L, 20L).permitsAi()).isTrue();
-    }
-
-    @Test
-    void shouldPreserveTheLegacyDefaultForAnIdentifiedMemberWithoutTheirOwnChoice() {
-        linkedDeveloper();
-
-        when(members.existsByWorkspace_Id(1L)).thenReturn(true);
-
-        assertThat(preferences.forDeveloper(1L, null).permitsAi()).isFalse();
-        assertThat(preferences.forDeveloper(1L, 20L).permitsAi()).isTrue();
+        verifyNoInteractions(choices);
     }
 }

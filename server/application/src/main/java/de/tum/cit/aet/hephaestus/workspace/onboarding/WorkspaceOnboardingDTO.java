@@ -5,21 +5,23 @@ import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
+/**
+ * One member's view of setup in one workspace. {@code aiChoice} is the account's answer, the same in
+ * every workspace; {@code aiOptions} says what this workspace has set up under each answer, which is
+ * what differs between workspaces.
+ */
 public record WorkspaceOnboardingDTO(
         @NonNull String workspaceName,
         @NonNull boolean enabled,
-        @NonNull boolean needsWelcome,
-        @NonNull long revision,
+        @NonNull boolean needsSetup,
         @NonNull boolean aiChoiceRequired,
         @Nullable MemberAiChoice aiChoice,
-        @NonNull boolean completed,
         @NonNull List<WorkspaceAiOptionDTO> aiOptions,
         @NonNull List<WorkspaceOnboardingLinkDTO> links) {
     public record WorkspaceAiOptionDTO(
             @NonNull MemberAiChoice choice,
             @NonNull boolean practiceReviewsReady,
-            @NonNull boolean mentorReady,
-            @Nullable MemberAiChoice sameModelsAs) {}
+            @NonNull boolean mentorReady) {}
 
     public record WorkspaceOnboardingLinkDTO(
             @NonNull long connectionId,

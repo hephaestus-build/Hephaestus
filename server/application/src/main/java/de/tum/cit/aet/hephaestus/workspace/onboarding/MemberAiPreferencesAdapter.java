@@ -3,16 +3,22 @@ package de.tum.cit.aet.hephaestus.workspace.onboarding;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * A developer's choice reaches a review through the account their provider identity is linked to.
+ * A developer with no resolvable account (never signed in, or unlinked since) has not answered, so
+ * only the workspace's own {@code aiChoiceRequired} keeps AI off their work.
+ */
 @Service
 @RequiredArgsConstructor
 class MemberAiPreferencesAdapter implements MemberAiPreferences {
     private final WorkspaceOnboardingSettingsRepository settings;
-    private final WorkspaceMemberOnboardingRepository members;
+    private final AccountAiChoiceRepository choices;
     private final AccountIdentityQuery identities;
     private final UserRepository users;
 
@@ -22,21 +28,16 @@ class MemberAiPreferencesAdapter implements MemberAiPreferences {
         boolean required = settings.findByWorkspaceId(workspaceId)
                 .map(WorkspaceOnboardingSettings::isAiChoiceRequired)
                 .orElse(false);
-        if (developerId == null) return unresolved(workspaceId, required);
-        var account = users.findById(developerId)
+        if (developerId == null) return new Decision(required, null);
+        var choice = users.findById(developerId)
                 .flatMap(user -> identities.resolveActiveAccountId(
-                        java.util.Objects.requireNonNull(user.getProvider().getId()),
+                        Objects.requireNonNull(user.getProvider().getId()),
                         user.getNativeId().toString(),
-                        null));
-        if (account.isEmpty()) return unresolved(workspaceId, required);
-        var preference = members.findByWorkspace_IdAndAccountId(workspaceId, account.get());
-        // A saved refusal remains binding even when an owner turns off the setup page.
-        if (preference.isPresent()) return new Decision(true, preference.get().getAiChoice());
+                        null))
+                .flatMap(choices::findById)
+                .map(AccountAiChoice::getAiChoice);
+        // A saved answer remains binding even when an owner turns off the setup page.
+        if (choice.isPresent()) return new Decision(true, choice.get());
         return new Decision(required, null);
-    }
-
-    private Decision unresolved(long workspaceId, boolean required) {
-        // Unlinking an identity must not turn its saved ceiling or refusal into the legacy default.
-        return new Decision(required || members.existsByWorkspace_Id(workspaceId), null);
     }
 }

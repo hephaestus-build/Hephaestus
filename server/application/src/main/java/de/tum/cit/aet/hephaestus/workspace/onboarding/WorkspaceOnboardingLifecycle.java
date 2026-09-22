@@ -10,10 +10,12 @@ import org.springframework.stereotype.Component;
 class WorkspaceOnboardingLifecycle implements AccountErasureContributor, WorkspacePurgeContributor {
     private final WorkspaceOnboardingSettingsRepository settings;
     private final WorkspaceMemberOnboardingRepository members;
+    private final AccountAiChoiceRepository choices;
 
     @Override
     public void eraseAccount(long accountId) {
         members.deleteByAccountId(accountId);
+        choices.findById(accountId).ifPresent(choices::delete);
     }
 
     @Override

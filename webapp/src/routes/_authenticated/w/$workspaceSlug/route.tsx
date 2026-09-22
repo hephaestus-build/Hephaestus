@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 			const onboarding = await context.queryClient
 				.query(getMemberOnboardingOptions({ path: { workspaceSlug: params.workspaceSlug } }))
 				.catch(() => undefined);
-			if (onboarding?.needsWelcome === true) {
+			if (onboarding?.needsSetup === true) {
 				throw redirect({
 					to: "/w/$workspaceSlug/onboarding",
 					params,

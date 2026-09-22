@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-Compare what each workspace AI choice allows, its data-handling trade-offs, and whether practice reviews and Heph are set up. Broader choices now explain when they use the same models instead of implying an improvement in quality or capacity.
+Compare what each AI choice allows and its data-handling trade-offs on equal cards. One sentence below the cards says when nothing in the current workspace is set up within the selected answer, instead of implying an improvement in quality or capacity from a broader choice.

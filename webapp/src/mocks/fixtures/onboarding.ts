@@ -4,10 +4,8 @@ export function workspaceOnboarding(workspaceName = "Acme"): WorkspaceOnboarding
 	return {
 		workspaceName,
 		enabled: false,
-		needsWelcome: false,
+		needsSetup: false,
 		aiChoiceRequired: false,
-		completed: false,
-		revision: 0,
 		links: [],
 		aiOptions: [],
 	};

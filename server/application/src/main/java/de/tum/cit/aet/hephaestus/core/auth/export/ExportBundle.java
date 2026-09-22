@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.export;
 
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceAiExport;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAiChoiceExport;
 import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -24,7 +24,7 @@ public record ExportBundle(
         List<String> featureFlags,
         @Nullable Preferences preferences,
         List<AuthEvent> authEvents,
-        List<AccountWorkspaceAiExport.Preference> workspaceAiPreferences) {
+        AccountAiChoiceExport.@Nullable Choice aiChoice) {
     /** Current export schema version. Bump on any breaking shape change. */
     public static final String SCHEMA_VERSION = "1.0";
 

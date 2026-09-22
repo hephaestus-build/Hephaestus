@@ -68,20 +68,10 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
                 workspaceId, AgentPurpose.MENTOR, workspace.getFeatures().getMentorEnabled());
         var choices = List.of(MemberAiChoice.IN_HOUSE_ONLY, MemberAiChoice.NOT_KEPT_ONLY, MemberAiChoice.ANY_DECLARED);
         var options = new ArrayList<Option>();
-        Optional<WorkspaceAgentBinding> previousReview = Optional.empty();
-        Optional<WorkspaceAgentBinding> previousMentor = Optional.empty();
-        MemberAiChoice previousChoice = null;
         for (var choice : choices) {
             var review = choice.ceiling().flatMap(ceiling -> loosestWithin(reviewRows, ceiling));
             var mentor = choice.ceiling().flatMap(ceiling -> loosestWithin(mentorRows, ceiling));
-            // Compare the selected bindings, not readiness flags or model display names.
-            var unchanged = (review.isPresent() || mentor.isPresent())
-                    && review.orElse(null) == previousReview.orElse(null)
-                    && mentor.orElse(null) == previousMentor.orElse(null);
-            options.add(new Option(choice, review.isPresent(), mentor.isPresent(), unchanged ? previousChoice : null));
-            previousReview = review;
-            previousMentor = mentor;
-            previousChoice = choice;
+            options.add(new Option(choice, review.isPresent(), mentor.isPresent()));
         }
         return List.copyOf(options);
     }

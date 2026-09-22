@@ -42,7 +42,7 @@ describe("workspace route gate", () => {
 					...workspaceOnboarding(),
 					enabled: true,
 					aiChoiceRequired: true,
-					needsWelcome: true,
+					needsSetup: true,
 				}),
 			),
 		);
@@ -53,7 +53,7 @@ describe("workspace route gate", () => {
 		listWorkspaces("acme");
 		server.use(
 			http.get("*/workspaces/acme/onboarding/me", () =>
-				HttpResponse.json({ ...workspaceOnboarding(), enabled: true, needsWelcome: true }),
+				HttpResponse.json({ ...workspaceOnboarding(), enabled: true, needsSetup: true }),
 			),
 		);
 		const destination = "/w/acme/teams?view=mine#feedback";
@@ -65,7 +65,7 @@ describe("workspace route gate", () => {
 		listWorkspaces("acme");
 		server.use(
 			http.get("*/workspaces/acme/onboarding/me", () =>
-				HttpResponse.json({ ...workspaceOnboarding(), enabled: true, needsWelcome: true }),
+				HttpResponse.json({ ...workspaceOnboarding(), enabled: true, needsSetup: true }),
 			),
 		);
 		const location = await land("/w/acme/onboarding");

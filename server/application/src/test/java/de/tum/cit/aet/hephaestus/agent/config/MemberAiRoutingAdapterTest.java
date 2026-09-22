@@ -167,32 +167,12 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(notKept, undeclared));
         assertThat(routing.options(1L))
                 .containsExactly(
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false, null),
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.NOT_KEPT_ONLY, false, true, null),
-                        new WorkspaceAiAvailability.Option(
-                                MemberAiChoice.ANY_DECLARED, false, true, MemberAiChoice.NOT_KEPT_ONLY));
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false),
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.NOT_KEPT_ONLY, false, true),
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.ANY_DECLARED, false, true));
         // One query per enabled purpose, shared by the three choices; a disabled purpose loads nothing.
         verify(bindings, times(1)).findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR);
         verify(bindings, never()).findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW);
-    }
-
-    @Test
-    void shouldNotCallDifferentSelectedBindingsTheSameEvenWhenBothPurposesStayReady() {
-        var workspace = new Workspace();
-        workspace.getFeatures().setMentorEnabled(true);
-        workspace.getFeatures().setPracticesEnabled(true);
-        when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
-        var inHouse = ready(DataHandlingTier.IN_HOUSE);
-        var provider = ready(DataHandlingTier.PROVIDER_NOT_KEPT);
-        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(inHouse, provider));
-        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
-                .thenReturn(List.of(inHouse));
-        assertThat(routing.options(1L))
-                .containsExactly(
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, true, true, null),
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.NOT_KEPT_ONLY, true, true, null),
-                        new WorkspaceAiAvailability.Option(
-                                MemberAiChoice.ANY_DECLARED, true, true, MemberAiChoice.NOT_KEPT_ONLY));
     }
 
     @Test
@@ -202,7 +182,6 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         workspace.getFeatures().setPracticesEnabled(false);
         when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
         assertThat(routing.options(1L)).allSatisfy(option -> {
-            assertThat(option.sameModelsAs()).isNull();
             assertThat(option.practiceReviewsReady()).isFalse();
             assertThat(option.mentorReady()).isFalse();
         });

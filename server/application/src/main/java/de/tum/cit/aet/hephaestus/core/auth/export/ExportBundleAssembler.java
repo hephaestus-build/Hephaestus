@@ -7,8 +7,8 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAiChoiceExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceAiExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -36,7 +36,7 @@ public class ExportBundleAssembler {
     private final AccountPreferencesQuery preferencesQuery;
     private final GitProviderRegistry gitProviderRegistry;
     private final Clock clock;
-    private final AccountWorkspaceAiExport workspaceAiExport;
+    private final AccountAiChoiceExport aiChoiceExport;
 
     public ExportBundleAssembler(
             AccountService accountService,
@@ -46,7 +46,7 @@ public class ExportBundleAssembler {
             AccountPreferencesQuery preferencesQuery,
             GitProviderRegistry gitProviderRegistry,
             Clock clock,
-            AccountWorkspaceAiExport workspaceAiExport) {
+            AccountAiChoiceExport aiChoiceExport) {
         this.accountService = accountService;
         this.accountFeatureRepository = accountFeatureRepository;
         this.authEventRepository = authEventRepository;
@@ -54,7 +54,7 @@ public class ExportBundleAssembler {
         this.preferencesQuery = preferencesQuery;
         this.gitProviderRegistry = gitProviderRegistry;
         this.clock = clock;
-        this.workspaceAiExport = workspaceAiExport;
+        this.aiChoiceExport = aiChoiceExport;
     }
 
     @Transactional(readOnly = true)
@@ -106,7 +106,7 @@ public class ExportBundleAssembler {
                 featureFlags,
                 preferences,
                 authEvents,
-                workspaceAiExport.preferences(accountId));
+                aiChoiceExport.choice(accountId));
     }
 
     private ExportBundle.Identity toIdentity(IdentityLink il) {

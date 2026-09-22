@@ -50,13 +50,16 @@ Review this map with the [record of processing](./record-of-processing.md),
 
 ## Member onboarding and AI choices
 
-`workspace_member_onboarding` stores an account's AI choice (`ai_choice`: `NO_AI`, `IN_HOUSE_ONLY`,
-`NOT_KEPT_ONLY`, `ANY_DECLARED`, or null until chosen) and its first-visit and completion timestamps
-in a workspace. The account export includes its own rows with the choice as that literal; account
-erasure deletes them. Workspace purge also deletes them. `workspace_onboarding_settings` stores
-whether the setup page is on, whether a choice is required, and required integration identifiers; it
-holds no free text and is removed with workspace purge. The data-handling note on `llm_model` and
-`workspace_llm_model` (`data_handling_note`) is an admin-only field for region, agreement and renewal
-date; it is shown to admins only, never to developers, and must not name individuals. Neither table
-has an independent expiry. Configuration changes also follow the existing configuration-audit
-retention policy.
+`account_ai_choice` stores an account's AI choice (`ai_choice`: `NO_AI`, `IN_HOUSE_ONLY`,
+`NOT_KEPT_ONLY` or `ANY_DECLARED`) and when it was last changed. It is answered once and holds in
+every workspace the account is a member of; a row exists only once the person has answered. The
+account export includes it with the choice as that literal; account erasure deletes it. Workspace
+purge never touches it. `workspace_member_onboarding` stores which settings revision an account
+finished or skipped a workspace's setup page at (`seen_revision`); it carries no choice and no free
+text, and is removed with account erasure and with workspace purge. `workspace_onboarding_settings`
+stores whether the setup page is on, whether a choice is required, and required integration
+identifiers; it holds no free text and is removed with workspace purge. The data-handling note on
+`llm_model` and `workspace_llm_model` (`data_handling_note`) is an admin-only field for region,
+agreement and renewal date; it is shown to admins only, never to developers, and must not name
+individuals. None of these tables has an independent expiry. Configuration changes also follow the
+existing configuration-audit retention policy.

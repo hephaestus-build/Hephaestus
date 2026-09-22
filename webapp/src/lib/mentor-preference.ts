@@ -42,15 +42,15 @@ export function mentorPreferenceReason(preference: WorkspaceOnboarding): MentorN
  */
 export const MENTOR_PREFERENCE_COPY = {
 	"no-ai": {
-		title: "Heph is off for you in this workspace",
+		title: "Heph is off for you",
 		description:
-			"You chose No AI here: no new practice reviews about you and no new conversations with Heph. Your membership, existing feedback and earlier conversations are unchanged.",
+			"You chose No AI: no new practice reviews about you and no new conversations with Heph in any of your workspaces. Your membership, existing feedback and earlier conversations are unchanged.",
 		cta: "Change your AI choice",
 	},
 	"choice-required": {
 		title: "Choose which AI may handle your work",
 		description:
-			"Until you choose, there are no practice reviews about you and no Heph in this workspace.",
+			"Until you choose, there are no practice reviews about you and no Heph in this workspace. You answer once, for all your workspaces.",
 		cta: "Make your AI choice",
 	},
 	unavailable: {

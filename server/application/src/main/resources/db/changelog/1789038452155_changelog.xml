@@ -8,16 +8,32 @@
             <column name="account_id" type="BIGINT">
                 <constraints nullable="false"/>
             </column>
-            <column name="ai_choice" type="VARCHAR(24)"/>
-            <column name="completed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="seen_revision" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
             <column name="updated_at" type="TIMESTAMP(6) WITH TIME ZONE">
                 <constraints nullable="false"/>
             </column>
-            <column name="welcomed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
             <column name="workspace_id" type="BIGINT">
                 <constraints nullable="false"/>
             </column>
         </createTable>
+    </changeSet>
+    <changeSet id="1789038452155-17" author="hephaestus">
+        <createTable tableName="account_ai_choice">
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="account_ai_choicePK"/>
+            </column>
+            <column name="ai_choice" type="VARCHAR(24)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1789038452155-18" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="account_id" baseTableName="account_ai_choice" constraintName="sfk_account_ai_choice_account" referencedColumnNames="id" referencedTableName="account"/>
     </changeSet>
     <changeSet id="1789038452155-2" author="hephaestus">
         <createTable tableName="workspace_onboarding_settings">
@@ -103,7 +119,7 @@
             ALTER TABLE workspace_llm_model ADD CONSTRAINT ck_workspace_llm_model_operated_by CHECK (operated_by IN ('OWN_ORGANISATION', 'PROVIDER'));
             ALTER TABLE workspace_llm_model ADD CONSTRAINT ck_workspace_llm_model_kept_after_reply CHECK (kept_after_reply IN ('NONE', 'FOR_SAFETY_CHECKS'));
             ALTER TABLE workspace_agent_binding ADD CONSTRAINT ck_agent_binding_data_handling_tier CHECK (data_handling_tier IN ('IN_HOUSE', 'PROVIDER_NOT_KEPT', 'PROVIDER_KEPT', 'UNDECLARED'));
-            ALTER TABLE workspace_member_onboarding ADD CONSTRAINT ck_member_onboarding_ai_choice CHECK (ai_choice IN ('NO_AI', 'IN_HOUSE_ONLY', 'NOT_KEPT_ONLY', 'ANY_DECLARED'));
+            ALTER TABLE account_ai_choice ADD CONSTRAINT ck_account_ai_choice CHECK (ai_choice IN ('NO_AI', 'IN_HOUSE_ONLY', 'NOT_KEPT_ONLY', 'ANY_DECLARED'));
             ALTER TABLE workspace_onboarding_settings ADD CONSTRAINT ck_onboarding_requires_choice CHECK (NOT enabled OR ai_choice_required);
             ALTER TABLE workspace_onboarding_settings ADD CONSTRAINT ck_onboarding_required_links_array CHECK (jsonb_typeof(required_connection_ids) = 'array');
         </sql>
@@ -111,7 +127,8 @@
             <!-- Losing a saved refusal or a declared model would silently restore the old unrestricted default. -->
             <sql splitStatements="false"><![CDATA[
                 DO $$ BEGIN
-                    IF EXISTS (SELECT 1 FROM workspace_member_onboarding)
+                    IF EXISTS (SELECT 1 FROM account_ai_choice)
+                        OR EXISTS (SELECT 1 FROM workspace_member_onboarding)
                         OR EXISTS (SELECT 1 FROM workspace_onboarding_settings)
                         OR EXISTS (SELECT 1 FROM workspace_agent_binding WHERE data_handling_tier <> 'UNDECLARED')
                         OR EXISTS (SELECT 1 FROM llm_model WHERE operated_by IS NOT NULL OR kept_after_reply IS NOT NULL)
@@ -123,7 +140,7 @@
             <sql>
                 ALTER TABLE workspace_onboarding_settings DROP CONSTRAINT ck_onboarding_required_links_array;
                 ALTER TABLE workspace_onboarding_settings DROP CONSTRAINT ck_onboarding_requires_choice;
-                ALTER TABLE workspace_member_onboarding DROP CONSTRAINT ck_member_onboarding_ai_choice;
+                ALTER TABLE account_ai_choice DROP CONSTRAINT ck_account_ai_choice;
                 ALTER TABLE workspace_agent_binding DROP CONSTRAINT ck_agent_binding_data_handling_tier;
                 ALTER TABLE workspace_llm_model DROP CONSTRAINT ck_workspace_llm_model_kept_after_reply;
                 ALTER TABLE workspace_llm_model DROP CONSTRAINT ck_workspace_llm_model_operated_by;

@@ -26,8 +26,6 @@ public class WorkspaceOnboardingController {
 
     public record MemberAiChoiceRequestDTO(@NonNull @NotNull MemberAiChoice choice) {}
 
-    public record OnboardingCompletionRequestDTO(long revision) {}
-
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get your first-visit setup and AI choice in this workspace")
@@ -43,17 +41,9 @@ public class WorkspaceOnboardingController {
         return service.choose(context, CurrentAccount.requireId(), request.choice());
     }
 
-    @PutMapping("/me/completion")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Finish first-visit setup after required account links are complete")
-    public WorkspaceOnboardingDTO completeMemberOnboarding(
-            WorkspaceContext context, @Valid @RequestBody OnboardingCompletionRequestDTO request) {
-        return service.complete(context, CurrentAccount.requireId(), request.revision());
-    }
-
     @PutMapping("/me/dismissal")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Continue to the workspace without treating dismissal as an AI choice or completed setup")
+    @Operation(summary = "Skip first-visit setup for now without treating that as an AI choice")
     public WorkspaceOnboardingDTO dismissMemberOnboarding(WorkspaceContext context) {
         return service.dismiss(context, CurrentAccount.requireId());
     }

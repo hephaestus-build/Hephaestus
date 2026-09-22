@@ -1,14 +1,16 @@
 package de.tum.cit.aet.hephaestus.workspace.onboarding;
 
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import jakarta.persistence.*;
 import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
-import org.jspecify.annotations.Nullable;
 
-/** One account's own, reversible AI choice and first-visit completion in one workspace. */
+/**
+ * One account's first-visit setup in one workspace: the settings revision it finished or skipped
+ * at. The AI choice itself is the account's ({@link AccountAiChoice}); this row only keeps the setup
+ * page from returning until the owner changes what it asks for.
+ */
 @Entity
 @Table(
         name = "workspace_member_onboarding",
@@ -33,18 +35,9 @@ class WorkspaceMemberOnboarding {
     @Column(name = "account_id", nullable = false)
     private Long accountId;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "ai_choice", length = 24)
-    private @Nullable MemberAiChoice aiChoice;
+    @Column(name = "seen_revision", nullable = false)
+    private long seenRevision;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-
-    @Nullable
-    @Column(name = "welcomed_at")
-    private Instant welcomedAt;
-
-    @Nullable
-    @Column(name = "completed_at")
-    private Instant completedAt;
 }

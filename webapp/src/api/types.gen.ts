@@ -5,6 +5,18 @@ export type ClientOptions = {
 };
 
 /**
+ * The signed-in account's AI choice; both fields are absent until the person has answered.
+ */
+export type AccountAiChoice = {
+  choice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
+  updatedAt?: Date;
+};
+
+export type AccountAiChoiceRequest = {
+  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
+};
+
+/**
  * A human-readable account identity. <code>displayName</code>/<code>email</code> are null for deleted accounts.
  */
 export type AccountRef = {
@@ -2457,10 +2469,6 @@ export type ObservationList = {
    * Observation summary
    */
   summary: string;
-};
-
-export type OnboardingCompletionRequest = {
-  revision?: number;
 };
 
 export type OptionCount = {
@@ -5981,7 +5989,6 @@ export type WorkspaceAiOption = {
   choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
   mentorReady: boolean;
   practiceReviewsReady: boolean;
-  sameModelsAs?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
 };
 
 /**
@@ -6304,15 +6311,18 @@ export type WorkspaceMembership = {
   userName?: string;
 };
 
+/**
+ * One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
+ *  every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
+ *  what differs between workspaces.
+ */
 export type WorkspaceOnboarding = {
   aiChoice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'NOT_KEPT_ONLY' | 'ANY_DECLARED';
   aiChoiceRequired: boolean;
   aiOptions: Array<WorkspaceAiOption>;
-  completed: boolean;
   enabled: boolean;
   links: Array<WorkspaceOnboardingLink>;
-  needsWelcome: boolean;
-  revision: number;
+  needsSetup: boolean;
   workspaceName: string;
 };
 
@@ -8550,6 +8560,38 @@ export type GetCurrentUserResponses = {
 
 export type GetCurrentUserResponse = GetCurrentUserResponses[keyof GetCurrentUserResponses];
 
+export type GetAccountAiChoiceData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/ai-choice';
+};
+
+export type GetAccountAiChoiceResponses = {
+  /**
+   * OK
+   */
+  200: AccountAiChoice;
+};
+
+export type GetAccountAiChoiceResponse = GetAccountAiChoiceResponses[keyof GetAccountAiChoiceResponses];
+
+export type UpdateAccountAiChoiceData = {
+  body: AccountAiChoiceRequest;
+  path?: never;
+  query?: never;
+  url: '/user/ai-choice';
+};
+
+export type UpdateAccountAiChoiceResponses = {
+  /**
+   * OK
+   */
+  200: AccountAiChoice;
+};
+
+export type UpdateAccountAiChoiceResponse = UpdateAccountAiChoiceResponses[keyof UpdateAccountAiChoiceResponses];
+
 export type GetConsentStatusData = {
   body?: never;
   path?: never;
@@ -10376,27 +10418,6 @@ export type UpdateMemberAiChoiceResponses = {
 };
 
 export type UpdateMemberAiChoiceResponse = UpdateMemberAiChoiceResponses[keyof UpdateMemberAiChoiceResponses];
-
-export type CompleteMemberOnboardingData = {
-  body: OnboardingCompletionRequest;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/onboarding/me/completion';
-};
-
-export type CompleteMemberOnboardingResponses = {
-  /**
-   * OK
-   */
-  200: WorkspaceOnboarding;
-};
-
-export type CompleteMemberOnboardingResponse = CompleteMemberOnboardingResponses[keyof CompleteMemberOnboardingResponses];
 
 export type DismissMemberOnboardingData = {
   body?: never;

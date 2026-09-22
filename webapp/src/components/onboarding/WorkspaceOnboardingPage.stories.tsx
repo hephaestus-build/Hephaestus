@@ -47,9 +47,7 @@ const welcome = {
 	workspaceName: "Engineering",
 	enabled: true,
 	aiChoiceRequired: true,
-	needsWelcome: true,
-	completed: false,
-	revision: 2,
+	needsSetup: true,
 	aiOptions: allCovered,
 	links: [slack, outline],
 } satisfies WorkspaceOnboarding;
@@ -192,7 +190,7 @@ export const AnswerAndContinue: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await userEvent.click(canvas.getByRole("radio", { name: ANY }));
 		await expect(canvas.getByRole("radio", { name: ANY })).toBeChecked();
-		await expect(canvas.getByText("Noted. Press Continue and I'll remember that.")).toBeVisible();
+		await expect(canvas.getByText("Press Continue and I'll remember it everywhere.")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("ANY_DECLARED");
@@ -203,7 +201,7 @@ export const NoAi: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
-			/No AI Allows No new practice reviews.*Consider.*Membership and existing feedback.*Practice reviews Off for you.*Heph Off for you/u,
+			/No AI Allows No new practice reviews.*Consider.*Membership and existing feedback stay unchanged\.$/u,
 		);
 		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toHaveAccessibleName(
 			/Only in-house Allows Runs only on systems your organisation operates.*Consider.*models and capacity/u,
@@ -233,7 +231,12 @@ export const RequiredLinkOpen: Story = {
 		const submit = canvas.getByRole("button", { name: "Continue" });
 		await expectGenuinelyDisabled(submit);
 		await expect(submit).toHaveAccessibleDescription("Connect Slack to finish setup.");
-		await expect(canvas.getByText("Noted. Connect Slack and you're in.")).toBeVisible();
+		// A saved answer on a first visit came from another workspace: it holds here as well.
+		await expect(
+			canvas.getByText(
+				"Your AI choice is set and holds in all your workspaces. Connect Slack and you're in.",
+			),
+		).toBeVisible();
 		// Each account row carries its provider's own mark, not the generic link glyph.
 		await expect(canvas.getByTitle("SlackIcon")).toBeVisible();
 		await expect(canvas.getByTitle("OutlineIcon")).toBeVisible();
@@ -305,13 +308,25 @@ export const OptionUncovered: Story = {
 	},
 	play: async ({ canvas, userEvent, args }) => {
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
+		// The cards carry no configuration: the consequence appears once the answer is selected.
 		await expect(inHouse).toHaveAccessibleName(
-			/Only in-house.*Practice reviews Not set up.*Heph Not set up.*nothing runs for you/u,
+			/models and capacity.*storage rules still apply\.$/u,
 		);
+		await expect(canvas.queryByText(/is set up within this answer yet/u)).toBeNull();
 		// A ceiling nobody has built up to is still a valid answer, so the card is not disabled.
 		await expect(inHouse).not.toHaveAttribute("aria-disabled");
 		await userEvent.click(inHouse);
 		await expect(inHouse).toBeChecked();
+		await expect(
+			canvas.getByText(
+				"Nothing in Engineering is set up within this answer yet, so you get no AI here until a workspace owner adds a model that fits. Your choice still counts.",
+			),
+		).toBeVisible();
+		await expect(
+			canvas.getByText(
+				"That isn't set up here yet, and I won't switch you elsewhere. Press Continue and I'll remember it everywhere.",
+			),
+		).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("IN_HOUSE_ONLY");
@@ -333,22 +348,26 @@ export const HephNotCovered: Story = {
 			},
 		},
 	},
-	play: async ({ canvas }) => {
+	play: async ({ canvas, userEvent }) => {
 		// Reviews run for the saved answer, so Heph claims only the part that does not.
 		await expect(
 			canvas.getByText(
 				"Part of your choice isn't set up here yet. I won't switch you anywhere else.",
 			),
 		).toBeVisible();
-		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toHaveAccessibleName(
-			/Heph isn't set up for this answer yet\.$/u,
-		);
-		await expect(canvas.getByRole("radio", { name: NOT_KEPT })).toHaveAccessibleName(
-			/Practice reviews aren't set up for this answer yet\.$/u,
-		);
-		await expect(canvas.getByRole("radio", { name: ANY })).toHaveAccessibleName(
-			/provider staff may read flagged content.*Practice reviews Set up.*Heph Set up/u,
-		);
+		await expect(
+			canvas.getByText(
+				"Heph isn't set up within this answer in Engineering yet; practice reviews are.",
+			),
+		).toBeVisible();
+		await userEvent.click(canvas.getByRole("radio", { name: NOT_KEPT }));
+		await expect(
+			canvas.getByText(
+				"Practice reviews aren't set up within this answer in Engineering yet; Heph is.",
+			),
+		).toBeVisible();
+		await userEvent.click(canvas.getByRole("radio", { name: ANY }));
+		await expect(canvas.queryByText(/set up within this answer/u)).toBeNull();
 	},
 };
 
@@ -358,7 +377,7 @@ export const SavedChoiceUncovered: Story = {
 			...ready,
 			data: {
 				...welcome,
-				needsWelcome: false,
+				needsSetup: false,
 				aiChoice: "NOT_KEPT_ONLY",
 				aiOptions: [
 					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: true },
@@ -386,28 +405,27 @@ export const ReturnVisit: Story = {
 			...ready,
 			data: {
 				...welcome,
-				needsWelcome: false,
-				completed: true,
+				needsSetup: false,
 				aiChoice: "IN_HOUSE_ONLY",
 				links: [{ ...slack, linked: true }, outline],
 			},
 		},
 	},
 	play: async ({ canvas, userEvent, args }) => {
-		await expect(
-			canvas.getByRole("heading", { level: 1, name: "Your AI choice in Engineering" }),
-		).toBeVisible();
+		await expect(canvas.getByRole("heading", { level: 1, name: "Your AI choice" })).toBeVisible();
 		await expect(
 			canvas.getByText("You chose Only in-house. Change it whenever you like."),
 		).toBeVisible();
 		const save = canvas.getByRole("button", { name: "Save" });
 		await expectGenuinelyDisabled(save);
 		await expect(save).toHaveAccessibleDescription(
-			"You can change this any time from the sidebar.",
+			"Applies in all your workspaces. Change it any time.",
 		);
 		await userEvent.click(canvas.getByRole("radio", { name: ANY }));
 		await expect(
-			canvas.getByText("Save to apply your new choice. Requests already sent cannot be recalled."),
+			canvas.getByText(
+				"Save to apply your new choice in every workspace. Requests already sent cannot be recalled.",
+			),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("radio", { name: IN_HOUSE }));
 		await userEvent.click(canvas.getByRole("button", { name: "Back to workspace" }));
@@ -424,19 +442,21 @@ export const ReturnVisitRequiredLinkOpen: Story = {
 	args: {
 		state: {
 			...ready,
-			data: { ...welcome, needsWelcome: false, aiChoice: "IN_HOUSE_ONLY" },
+			data: { ...welcome, needsSetup: false, aiChoice: "IN_HOUSE_ONLY" },
 		},
 	},
 	play: async ({ canvas, userEvent, args }) => {
 		const save = canvas.getByRole("button", { name: "Save" });
 		await expectGenuinelyDisabled(save);
 		await expect(save).toHaveAccessibleDescription(
-			"You can change this any time from the sidebar.",
+			"Applies in all your workspaces. Change it any time.",
 		);
 		await expect(canvas.getByRole("button", { name: "Connect Slack" })).toBeEnabled();
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await expect(
-			canvas.getByText("Save to apply your new choice. Requests already sent cannot be recalled."),
+			canvas.getByText(
+				"Save to apply your new choice in every workspace. Requests already sent cannot be recalled.",
+			),
 		).toBeVisible();
 		await expect(save).toBeEnabled();
 		await expect(save).not.toHaveAccessibleDescription(/finish setup/u);
@@ -457,6 +477,56 @@ export const OAuthReturn: Story = {
 	},
 };
 
+/**
+ * The round-trip that connected the last required account: the server now reports nothing owed, so
+ * the page is a return visit and Heph names the exit instead of leaving a disabled Save as the
+ * only visible control.
+ */
+export const OAuthReturnDone: Story = {
+	args: {
+		focus: "accounts",
+		state: {
+			...ready,
+			data: {
+				...welcome,
+				needsSetup: false,
+				aiChoice: "IN_HOUSE_ONLY",
+				links: [{ ...slack, linked: true }, outline],
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText(
+				"Your accounts are connected. Head back to your workspace whenever you're ready.",
+			),
+		).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Back to workspace" })).toBeEnabled();
+		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save" }));
+	},
+};
+
+/**
+ * A member who answered in another workspace is never asked again: the saved answer is checked,
+ * Heph says it holds here, and only this workspace's required account link stands between them
+ * and the workspace.
+ */
+export const AnsweredElsewhere: Story = {
+	args: { state: { ...ready, data: { ...welcome, aiChoice: "NOT_KEPT_ONLY", links: [slack] } } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("radio", { name: NOT_KEPT })).toBeChecked();
+		await expect(
+			canvas.getByText(
+				"Your AI choice is set and holds in all your workspaces. Connect Slack and you're in.",
+			),
+		).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Connect Slack" })).toBeEnabled();
+		await expect(canvas.getByRole("button", { name: "Skip for now" })).toHaveAccessibleDescription(
+			"Skipping does not save an answer selected above. Your saved choice (Allow providers without content storage) stays in effect.",
+		);
+	},
+};
+
 export const Saving: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	render: (args) => <Harness {...args} afterSubmit={{ status: "saving", action: "save" }} />,
@@ -465,7 +535,9 @@ export const Saving: Story = {
 		await userEvent.click(noAi);
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Saving…" }));
-		for (const radio of canvas.getAllByRole("radio", { hidden: true })) {
+		// The cards stay on screen while the write is in flight; only their controls are held.
+		for (const radio of canvas.getAllByRole("radio")) {
+			await expect(radio.closest("label")).toBeVisible();
 			await expect(radio).toBeDisabled();
 		}
 		await expect(noAi).toBeChecked();
@@ -636,40 +708,5 @@ export const SkipWithoutSaving: Story = {
 		await userEvent.click(skip);
 		await expect(readyArgs(args).onSubmit).not.toHaveBeenCalled();
 		await expect(readyArgs(args).onLeave).toHaveBeenCalledOnce();
-	},
-};
-
-export const SameModelsForBroaderChoice: Story = {
-	args: {
-		state: {
-			...ready,
-			data: {
-				...welcome,
-				links: [],
-				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: true },
-					{
-						choice: "NOT_KEPT_ONLY",
-						practiceReviewsReady: true,
-						mentorReady: true,
-						sameModelsAs: "IN_HOUSE_ONLY",
-					},
-					{
-						choice: "ANY_DECLARED",
-						practiceReviewsReady: true,
-						mentorReady: true,
-						sameModelsAs: "NOT_KEPT_ONLY",
-					},
-				],
-			},
-		},
-	},
-	play: async ({ canvas, userEvent, args }) => {
-		await expect(canvas.getByRole("radio", { name: NOT_KEPT })).toHaveAccessibleName(
-			/Same models as “Only in-house” today/u,
-		);
-		await userEvent.click(canvas.getByRole("radio", { name: IN_HOUSE }));
-		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
-		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("IN_HOUSE_ONLY");
 	},
 };

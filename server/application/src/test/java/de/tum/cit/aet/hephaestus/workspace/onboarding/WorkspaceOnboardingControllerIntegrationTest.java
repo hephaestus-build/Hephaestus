@@ -28,6 +28,9 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
     private WorkspaceMemberOnboardingRepository members;
 
     @Autowired
+    private AccountAiChoiceRepository choices;
+
+    @Autowired
     private WorkspaceOnboardingSettingsRepository settings;
 
     @Autowired
@@ -67,25 +70,65 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
     }
 
     @Test
-    void shouldSaveNoAiOnlyForTheAuthenticatedMemberAndWorkspace() {
+    void shouldSaveTheChoiceOnceForEveryWorkspaceOfTheAuthenticatedMember() {
         var user = persistUser("testuser");
         var first = workspace("onboarding-one", user);
         var second = workspace("onboarding-two", user);
         var result = choose(first.getWorkspaceSlug(), "NO_AI");
         assertThat(result.aiChoice()).isEqualTo(MemberAiChoice.NO_AI);
-        assertThat(result.completed()).isFalse();
-        assertThat(members.findByWorkspace_IdAndAccountId(first.getId(), accountId(user)))
+        assertThat(result.needsSetup()).isFalse();
+        assertThat(choices.findById(accountId(user)))
                 .get()
-                .extracting(WorkspaceMemberOnboarding::getAiChoice)
+                .extracting(AccountAiChoice::getAiChoice)
                 .isEqualTo(MemberAiChoice.NO_AI);
+        // Answering is not finishing a workspace's setup; neither workspace gets a setup row.
+        assertThat(members.findByWorkspace_IdAndAccountId(first.getId(), accountId(user)))
+                .isEmpty();
         assertThat(members.findByWorkspace_IdAndAccountId(second.getId(), accountId(user)))
                 .isEmpty();
         assertThat(preferences.forDeveloper(first.getId(), user.getId()).permitsAi())
                 .isFalse();
-        assertThat(preferences.forDeveloper(first.getId(), null).permitsAi()).isFalse();
-        assertThat(preferences.forDeveloper(second.getId(), null).permitsAi()).isTrue();
+        assertThat(preferences.forDeveloper(second.getId(), user.getId()).permitsAi())
+                .isFalse();
+        // A developer no account resolves to has not answered; the choice is optional here.
+        assertThat(preferences.forDeveloper(first.getId(), null).permitsAi()).isTrue();
         assertThat(workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(first.getId(), user.getId()))
                 .isPresent();
+
+        // The account endpoint reads and writes the same answer without a workspace.
+        client.get()
+                .uri("/user/ai-choice")
+                .headers(headers -> headers.setBearerAuth(MEMBER))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.choice")
+                .isEqualTo("NO_AI")
+                .jsonPath("$.updatedAt")
+                .exists();
+        client.put()
+                .uri("/user/ai-choice")
+                .headers(headers -> headers.setBearerAuth(MEMBER))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(java.util.Map.of("choice", "IN_HOUSE_ONLY"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.choice")
+                .isEqualTo("IN_HOUSE_ONLY");
+        client.get()
+                .uri("/workspaces/{slug}/onboarding/me", second.getWorkspaceSlug())
+                .headers(headers -> headers.setBearerAuth(MEMBER))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.aiChoice")
+                .isEqualTo("IN_HOUSE_ONLY");
+        assertThat(preferences.forDeveloper(second.getId(), user.getId()).permitsAi())
+                .isTrue();
     }
 
     @Test
@@ -182,7 +225,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.needsWelcome")
+                .jsonPath("$.needsSetup")
                 .isEqualTo(true)
                 .jsonPath("$.aiChoiceRequired")
                 .isEqualTo(true);
@@ -228,7 +271,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 .expectBody()
                 .jsonPath("$.aiChoiceRequired")
                 .isEqualTo(false)
-                .jsonPath("$.completed")
+                .jsonPath("$.needsSetup")
                 .isEqualTo(false);
 
         assertThat(members.findByWorkspace_IdAndAccountId(workspace.getId(), accountId(user)))
@@ -255,23 +298,15 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.completed")
-                .isEqualTo(false);
+                .jsonPath("$.needsSetup")
+                .isEqualTo(false)
+                .jsonPath("$.aiChoice")
+                .doesNotExist();
         var member = members.findByWorkspace_IdAndAccountId(workspace.getId(), accountId(user))
                 .orElseThrow();
-        assertThat(member.getAiChoice()).isNull();
-        assertThat(member.getWelcomedAt()).isNotNull();
-        assertThat(member.getCompletedAt()).isNull();
+        assertThat(member.getSeenRevision()).isEqualTo(policy.getRevision());
+        assertThat(choices.findById(accountId(user))).isEmpty();
         assertThat(preferences.forDeveloper(workspace.getId(), user.getId()).permitsAi())
                 .isFalse();
-        client.put()
-                .uri("/workspaces/{slug}/onboarding/me/completion", workspace.getWorkspaceSlug())
-                .headers(headers -> headers.setBearerAuth(MEMBER))
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(java.util.Map.of("revision", 0))
-                .exchange()
-                .expectStatus()
-                .isEqualTo(409)
-                .expectBody(Void.class);
     }
 }
