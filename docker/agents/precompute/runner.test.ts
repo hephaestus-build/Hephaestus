@@ -80,7 +80,10 @@ void test("a practice that scanned the diff and found nothing says what it scann
 		scanned: script({ hints: [], metrics: { linesAdded: 120, filesScanned: 4 }, directions: [] }),
 		bare: script({ hints: [], metrics: {}, directions: ["no record captured"] }),
 	});
-	assert.match(summary, /## scanned\n\nScanned 120 added lines in 4 files; nothing matched\./u);
+	assert.match(
+		summary,
+		/## scanned\n\nScanned 120 added lines in 4 files for this practice's line patterns; none matched\. A pattern sees one line/u,
+	);
 	assert.match(summary, /## bare\n\n- no record captured\n\n(?!Nothing matched)/u);
 	assert.doesNotMatch(summary, /Nothing matched/u);
 });

@@ -224,12 +224,14 @@ function renderPractice(result: PracticeResult, recordRows: number, inDiffRows: 
 	}
 
 	// A scan of the diff that matched nothing says so with its extent, so the model does not grep
-	// again. A script that scanned nothing — a record script, a census — has its directions and no
-	// such line: "nothing matched" under "no test files were found" reads as a second absence.
+	// again — and says what a scan is, because "nothing matched" alone read as a clean bill: on one
+	// holdout the error-handling recall fell by half while the model recorded from this line without
+	// enumerating the early returns and discarded results a line pattern cannot see. A script that
+	// scanned nothing — a record script, a census — has its directions and no such line.
 	const { linesAdded, filesScanned } = result.metrics;
 	if (result.hints.length === 0 && result.status === "ok" && linesAdded !== undefined) {
 		lines.push(
-			`Scanned ${linesAdded} added lines${filesScanned === undefined ? "" : ` in ${filesScanned} files`}; nothing matched.`,
+			`Scanned ${linesAdded} added lines${filesScanned === undefined ? "" : ` in ${filesScanned} files`} for this practice's line patterns; none matched. A pattern sees one line: what spans lines or has no keyword — an early return, a discarded result, a missing else — is yours to enumerate from the diff.`,
 			"",
 		);
 	}
