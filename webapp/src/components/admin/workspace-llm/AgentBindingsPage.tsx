@@ -11,7 +11,6 @@ import {
 } from "react";
 import { hasText } from "@/lib/text";
 
-import { cn } from "cn";
 import type {
 	AgentBinding,
 	AgentBindingRequest,
@@ -418,7 +417,7 @@ function BindingPreview({
 	};
 	const facts: Fact[] = PREVIEWED_CHOICES.map((choice) => ({
 		icon: MEMBER_AI_CHOICE_DEFS[choice].icon,
-		term: `Members who chose ${MEMBER_AI_CHOICE_DEFS[choice].label}`,
+		term: MEMBER_AI_CHOICE_DEFS[choice].label,
 		detail: served(choice),
 	}));
 	if (!aiChoiceRequired) {
@@ -426,7 +425,8 @@ function BindingPreview({
 	}
 	return (
 		<div className="space-y-2">
-			<h3 className="text-sm font-medium">Preview</h3>
+			<h3 className="text-sm font-medium">Who gets which model</h3>
+			<p className="text-sm text-muted-foreground">By the answer a member gave.</p>
 			<FactList facts={facts} />
 		</div>
 	);
@@ -459,7 +459,7 @@ function BindingRow({
 	const formRef = useRef<HTMLFormElement>(null);
 
 	const undeclared = tier === "UNDECLARED";
-	const tierLabel = DATA_HANDLING_DEFS[tier].label;
+	const { label: tierLabel, icon: TierIcon } = DATA_HANDLING_DEFS[tier];
 	const rowTitle = undeclared ? UNCHOSEN_ROW_TITLE : tierLabel;
 	// The undeclared row takes any model; a declared row holds only models of its own tier.
 	const pickerTier = undeclared ? undefined : tier;
@@ -540,12 +540,13 @@ function BindingRow({
 		<div role="group" aria-labelledby={headingId} className="space-y-4 rounded-lg border p-4">
 			<div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
 				<div className="min-w-0 flex-1 space-y-1">
-					{/* A declared row is titled by its tier, which the badge already shows. */}
+					{/* A declared row wears its tier's icon and words, the same ones a developer's card shows. */}
 					<div className="flex flex-wrap items-center gap-2">
-						<h3 id={headingId} className={cn("text-sm font-medium", !undeclared && "sr-only")}>
+						<h3 id={headingId} className="flex items-center gap-2 text-sm font-medium">
+							<TierIcon className="size-4 shrink-0 text-mentor" aria-hidden="true" />
 							{rowTitle}
 						</h3>
-						<DataHandlingBadge tier={tier} />
+						{undeclared && <DataHandlingBadge tier={tier} />}
 					</div>
 					<p className="text-sm text-muted-foreground">
 						{bindingAudience(undeclared, aiChoiceRequired, tierLabel)}

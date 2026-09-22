@@ -87,10 +87,10 @@ function AiChoiceForm({
 			<QuestionnaireItem name="ai-choice" required>
 				<QuestionnaireTitle>Which AI may handle your work?</QuestionnaireTitle>
 				<QuestionnaireDescription>
-					Allowing a provider also allows in-house models. Nothing outside your answer is used, and
-					nothing is used to train on your work. Requests already sent cannot be recalled. Which
-					models run under your answer is set up per workspace; Your AI choice in a workspace’s
-					sidebar shows what that workspace has set up.
+					Each answer also allows everything stricter than it; the bar on a card shows how far your
+					work may travel. Your work is never used for training. Which models run under your answer
+					is each workspace’s own setup: Your AI choice in a workspace’s sidebar shows what runs
+					there.
 				</QuestionnaireDescription>
 				{isLoading ? (
 					<div className="grid gap-3 sm:grid-cols-2" aria-busy="true">

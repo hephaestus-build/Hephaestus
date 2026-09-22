@@ -211,7 +211,7 @@ badge with a label and an icon everywhere a model appears:
 A developer's **AI choice** is a ceiling: the loosest tier they accept, or **No AI**. It is the
 person's, answered once per account, and holds in every workspace they are a member of on this
 instance; a workspace decides what runs within it, never the ceiling itself. The three AI answers
-are **Only in-house**, **Allow providers without content storage** and **Allow storage for safety
+are **In-house only**, **Provider, nothing kept** and **Allow storage for safety
 checks**; anything stricter than the answer also counts, nothing ever switches a developer to a
 looser tier, and *Not declared* sits outside every ceiling. A member may choose any answer
 regardless of what any workspace has bound today: consent is to a boundary, not to the current
@@ -240,7 +240,8 @@ The sign-in and first-visit pages follow ten rules:
 4. Section titles are the question or the noun.
 5. Hints are one sentence and the primary button's accessible description.
 6. *Not set up here yet* for an AI answer; *unavailable right now* for an account link. The cards
-   carry no configuration rows; one sentence below them names what this workspace has not set up
+   carry no configuration rows and no prose: an icon chip, the title, a tagline, icon rows for the
+   trade-offs and a reach meter. One sentence below them names what this workspace has not set up
    within the selected answer, and nothing when it is covered.
 7. Ask "a workspace owner" on the workspace page, "whoever runs this Hephaestus instance" on the
    sign-in page.

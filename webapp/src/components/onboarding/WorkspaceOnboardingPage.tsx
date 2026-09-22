@@ -1,7 +1,8 @@
 import {
 	BotIcon,
 	CheckIcon,
-	CircleOffIcon,
+	GraduationCapIcon,
+	InfoIcon,
 	Link2Icon,
 	RefreshCwIcon,
 	SparklesIcon,
@@ -90,20 +91,17 @@ const AI_FACTS: readonly Fact[] = [
 	{
 		icon: BotIcon,
 		term: "What AI does",
-		detail:
-			"Practice reviews about your work, and Heph to talk it through — only with AI within your answer. Nothing switches you elsewhere.",
+		detail: "Reviews your work against your team’s practices, and talks it through as Heph.",
 	},
 	{
-		icon: CircleOffIcon,
-		term: "No AI",
-		detail:
-			"Stops new practice reviews about you, new Heph requests and feedback delivery. Requests already sent cannot be recalled.",
+		icon: GraduationCapIcon,
+		term: "Never for training",
+		detail: "Your work is never used to train a model, whichever answer you give.",
 	},
 	{
 		icon: RefreshCwIcon,
-		term: "What never changes",
-		detail:
-			"Your membership, existing feedback and earlier conversations. Change your answer any time under Your AI choice in the sidebar or in User settings.",
+		term: "Change it any time",
+		detail: "From the sidebar or User settings. It applies in all your workspaces.",
 	},
 ];
 
@@ -155,7 +153,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 	}, [submissionStatus]);
 
 	const workspaceName = data?.workspaceName ?? "this workspace";
-	const intro = `I read your work in ${workspaceName} only within the AI choice you make once for all your workspaces. You can change it any time.`;
+	const intro = `I only read your work in ${workspaceName} within the AI you allow. You answer once, for all your workspaces.`;
 
 	// Heph narrates the reader's answers; the footer hint says the same thing factually and reaches
 	// the button through `aria-describedby`, so focusing it does not replay the line.
@@ -237,17 +235,18 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 									</span>
 								</QuestionnaireTitle>
 								<QuestionnaireDescription>
-									One answer for every workspace you’re in on this Hephaestus instance. Allowing a
-									provider also allows in-house models. Nothing outside your answer is used, and
-									nothing is used to train on your work. Allowing more does not guarantee better
-									results; each workspace decides which models it sets up.
+									Each answer also allows everything stricter than it; the bar on a card shows how
+									far your work may travel. Allowing more does not mean better results.
 								</QuestionnaireDescription>
 								<FactList facts={AI_FACTS} />
 								<fieldset disabled={saving} className="min-w-0 disabled:opacity-50">
 									<AiChoiceCards choice={choice} onChoice={setDraft} />
 								</fieldset>
 								{hasText(coverage?.sentence) && (
-									<p className="text-sm text-muted-foreground">{coverage.sentence}</p>
+									<p className="flex items-start gap-2 text-sm text-muted-foreground">
+										<InfoIcon className="mt-0.5 size-4 shrink-0 text-mentor" aria-hidden="true" />
+										{coverage.sentence}
+									</p>
 								)}
 							</QuestionnaireItem>
 

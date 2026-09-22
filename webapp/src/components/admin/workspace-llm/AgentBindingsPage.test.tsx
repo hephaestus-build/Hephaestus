@@ -81,7 +81,7 @@ describe("AgentBindingsPage", () => {
 		const rowNames = reviews
 			.getAllByRole("heading", { level: 3 })
 			.map((heading) => heading.textContent)
-			.filter((name) => name !== "Preview");
+			.filter((name) => name !== "Who gets which model");
 		expect(rowNames).toStrictEqual([
 			"Stays in-house",
 			"Provider, nothing kept",
@@ -107,10 +107,8 @@ describe("AgentBindingsPage", () => {
 		const definitionAfter = (term: string) =>
 			reviews.getByText(term, { selector: "dt" }).nextElementSibling?.textContent;
 
-		expect(definitionAfter("Members who chose Only in-house")).toBe("→ Stays in-house: GPT Test");
-		expect(definitionAfter("Members who chose Allow storage for safety checks")).toBe(
-			"→ Stays in-house: GPT Test",
-		);
+		expect(definitionAfter("In-house only")).toBe("→ Stays in-house: GPT Test");
+		expect(definitionAfter("Provider, kept for safety checks")).toBe("→ Stays in-house: GPT Test");
 		expect(definitionAfter("Members who haven't chosen")).toBe("→ nothing runs for them");
 	});
 

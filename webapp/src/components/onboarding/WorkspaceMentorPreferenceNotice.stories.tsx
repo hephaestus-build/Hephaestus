@@ -52,12 +52,12 @@ export const Unavailable: Story = {
 			"Heph isn't set up for your AI choice yet",
 		);
 		// The title is emphasised so its comma does not split the sentence.
-		const title = canvas.getByText("Allow providers without content storage", {
+		const title = canvas.getByText("Provider, nothing kept", {
 			selector: "em",
 		});
 		await expect(title).toBeVisible();
 		await expect(title.parentElement).toHaveTextContent(
-			"No Heph model is within Allow providers without content storage yet. Nothing switches you elsewhere — ask a workspace owner, or change your choice.",
+			"No Heph model is within Provider, nothing kept yet. Nothing switches you elsewhere — ask a workspace owner, or change your choice.",
 		);
 		await expect(canvas.getByRole("link", { name: "Change your AI choice" })).toHaveAttribute(
 			"href",

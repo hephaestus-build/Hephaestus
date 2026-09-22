@@ -1,12 +1,18 @@
 import {
+	ActivityIcon,
 	Building2Icon,
+	CheckIcon,
 	CircleHelpIcon,
 	CircleOffIcon,
 	ClockIcon,
+	CloudIcon,
 	EyeIcon,
 	GraduationCapIcon,
 	HandshakeIcon,
 	LockIcon,
+	type LucideIcon,
+	SendIcon,
+	ServerIcon,
 	ShieldCheckIcon,
 	TimerOffIcon,
 } from "lucide-react";
@@ -159,54 +165,90 @@ export const KEPT_AFTER_REPLY_DEFS: StatusDefs<KeptAfterReply> = {
 	},
 };
 
-/** A choice's entry names the loosest tier the developer accepts; `null` is no AI at all. */
+/** One scannable row on an answer's card: an icon and at most seven words. */
+export interface ChoicePoint {
+	icon: LucideIcon;
+	text: string;
+}
+
+/**
+ * A choice's entry names the loosest tier the developer accepts; `null` is no AI at all. `reach`
+ * is how many of the three tiers the answer opens, drawn as a segmented meter so the ordering is
+ * visible without reading; the card's bottom row shows the ceiling's own badge, so a developer's
+ * answer and an admin's row wear the same words and icon.
+ */
 export interface MemberAiChoiceDef extends StatusDef {
-	consideration: string;
+	points: readonly ChoicePoint[];
+	reach: 0 | 1 | 2 | 3;
+	/** The caption beside the meter: how far the work may travel, in at most four words. */
+	reachLabel: string;
 	ceiling: DataHandlingTier | null;
 }
+
+const LEAVES_ORGANISATION: ChoicePoint = {
+	icon: CloudIcon,
+	text: "Your work leaves your organisation",
+};
 
 /**
  * Card order: the three AI answers strictest first, then the answer that needs nothing set up. A
  * choice is a ceiling, so anything stricter also counts and nothing ever moves a developer to a
- * looser tier.
+ * looser tier. Titles match the tier badges an admin assigns models under. `description` is the
+ * one-line tagline under the title; the points are the trade-offs, never a sales pitch.
  */
 export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = {
 	IN_HOUSE_ONLY: {
-		label: "Only in-house",
+		label: "In-house only",
 		icon: Building2Icon,
 		badgeVariant: "secondary",
-		description: "Runs only on systems your organisation operates.",
-		consideration:
-			"Limited to your organisation’s models and capacity. Its own storage rules still apply.",
+		description: "Only systems your organisation runs.",
+		points: [
+			{ icon: LockIcon, text: "Never leaves your organisation" },
+			{ icon: ServerIcon, text: "Only its models and capacity" },
+		],
+		reach: 1,
+		reachLabel: "Stays in-house",
 		ceiling: "IN_HOUSE",
 	},
 	NOT_KEPT_ONLY: {
-		label: "Allow providers without content storage",
+		label: "Provider, nothing kept",
 		icon: ShieldCheckIcon,
 		badgeVariant: "secondary",
-		description:
-			"Also allows approved providers that do not store your prompts or replies after responding.",
-		consideration:
-			"Your work may leave your organisation. Providers may still keep usage metadata; in-house storage rules still apply.",
+		description: "Also approved providers that store nothing after the reply.",
+		points: [
+			LEAVES_ORGANISATION,
+			{ icon: TimerOffIcon, text: "Nothing kept after the reply" },
+			{ icon: ActivityIcon, text: "Usage metadata may be kept" },
+		],
+		reach: 2,
+		reachLabel: "Reaches a provider",
 		ceiling: "PROVIDER_NOT_KEPT",
 	},
 	ANY_DECLARED: {
-		label: "Allow storage for safety checks",
+		label: "Provider, kept for safety checks",
 		icon: ClockIcon,
 		badgeVariant: "secondary",
-		description:
-			"Also allows approved providers that retain content for safety checks. This permits more options, not necessarily better models.",
-		consideration:
-			"Prompts and replies may be stored for safety checks, and provider staff may read flagged content.",
+		description: "Also providers that keep your work briefly for safety checks.",
+		points: [
+			LEAVES_ORGANISATION,
+			{ icon: ClockIcon, text: "Kept for a limited time, then deleted" },
+			{ icon: EyeIcon, text: "Staff may read flagged content" },
+		],
+		reach: 3,
+		reachLabel: "A provider may keep it",
 		ceiling: "PROVIDER_KEPT",
 	},
 	NO_AI: {
 		label: "No AI",
 		icon: CircleOffIcon,
 		badgeVariant: "secondary",
-		description: "No new practice reviews about you or new requests to Heph in this workspace.",
-		consideration:
-			"You won’t get new AI feedback or use Heph here. Membership and existing feedback stay unchanged.",
+		description: "No practice reviews about you and no Heph.",
+		points: [
+			{ icon: SendIcon, text: "Nothing new is sent to any AI" },
+			{ icon: CheckIcon, text: "Membership and past feedback stay" },
+		],
+		reach: 0,
+		reachLabel: "Sends nothing",
 		ceiling: null,
 	},
 };

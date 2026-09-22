@@ -123,15 +123,15 @@ export const TiersPartiallyCovered: Story = {
 	play: async ({ canvas }) => {
 		const reviews = purposeCard(canvas, "Practice reviews");
 
-		await expect(previewRow(reviews, "Members who chose Only in-house")).toHaveTextContent(
+		await expect(previewRow(reviews, "In-house only")).toHaveTextContent(
 			"→ Stays in-house: Local Llama (self-hosted)",
 		);
-		await expect(
-			previewRow(reviews, "Members who chose Allow providers without content storage"),
-		).toHaveTextContent("→ Stays in-house: Local Llama (self-hosted)");
-		await expect(
-			previewRow(reviews, "Members who chose Allow storage for safety checks"),
-		).toHaveTextContent("→ Stays in-house: Local Llama (self-hosted)");
+		await expect(previewRow(reviews, "Provider, nothing kept")).toHaveTextContent(
+			"→ Stays in-house: Local Llama (self-hosted)",
+		);
+		await expect(previewRow(reviews, "Provider, kept for safety checks")).toHaveTextContent(
+			"→ Stays in-house: Local Llama (self-hosted)",
+		);
 		await expect(previewRow(reviews, UNCHOSEN_ROW)).toHaveTextContent(
 			"→ Not declared: My OpenAI key",
 		);
@@ -158,9 +158,9 @@ export const NothingCovered: Story = {
 	play: async ({ canvas }) => {
 		const reviews = purposeCard(canvas, "Practice reviews");
 		for (const term of [
-			"Members who chose Only in-house",
-			"Members who chose Allow providers without content storage",
-			"Members who chose Allow storage for safety checks",
+			"In-house only",
+			"Provider, nothing kept",
+			"Provider, kept for safety checks",
 		]) {
 			await expect(previewRow(reviews, term)).toHaveTextContent("→ nothing runs for them");
 		}
@@ -283,9 +283,9 @@ export const ProjectReviewsDisabled: Story = {
 		const card = purposeCard(canvas, "Practice reviews");
 		await expect(card.getByText("Practice reviews off")).toBeVisible();
 		for (const term of [
-			"Members who chose Only in-house",
-			"Members who chose Allow providers without content storage",
-			"Members who chose Allow storage for safety checks",
+			"In-house only",
+			"Provider, nothing kept",
+			"Provider, kept for safety checks",
 			UNCHOSEN_ROW,
 		]) {
 			await expect(previewRow(card, term)).toHaveTextContent(
@@ -293,9 +293,9 @@ export const ProjectReviewsDisabled: Story = {
 			);
 		}
 		// Heph is on but unbound here: nothing runs, and no switch is to blame.
-		await expect(
-			previewRow(purposeCard(canvas, "Heph"), "Members who chose Only in-house"),
-		).toHaveTextContent(/^→ nothing runs for them$/u);
+		await expect(previewRow(purposeCard(canvas, "Heph"), "In-house only")).toHaveTextContent(
+			/^→ nothing runs for them$/u,
+		);
 		await expect(card.getByRole("link", { name: "Open Review: When and where" })).toHaveAttribute(
 			"href",
 			"/w/acme/admin/practices/review?section=when-and-where",

@@ -12,9 +12,9 @@ import {
 	type WorkspaceOnboardingPageProps,
 } from "./WorkspaceOnboardingPage";
 
-const IN_HOUSE = /^Only in-house /u;
-const NOT_KEPT = /^Allow providers without content storage /u;
-const ANY = /^Allow storage for safety checks /u;
+const IN_HOUSE = /^In-house only /u;
+const NOT_KEPT = /^Provider, nothing kept /u;
+const ANY = /^Provider, kept for safety checks /u;
 const NO_AI = /^No AI /u;
 
 const slack = {
@@ -159,7 +159,7 @@ export const Default: Story = {
 		await expect(third.top).toBeGreaterThan(first.bottom);
 		// Facts are rows: each term sits beside its sentence, not above it.
 		const term = canvas.getByText("What AI does");
-		const detail = canvas.getByText(/Practice reviews about your work/u);
+		const detail = canvas.getByText(/Reviews your work against/u);
 		await expect(term.getBoundingClientRect().top).toBe(detail.getBoundingClientRect().top);
 		await expect(detail.getBoundingClientRect().left).toBeGreaterThan(
 			term.getBoundingClientRect().right,
@@ -201,10 +201,10 @@ export const NoAi: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
-			/No AI Allows No new practice reviews.*Consider.*Membership and existing feedback stay unchanged\.$/u,
+			/^No AI No practice reviews about you and no Heph\. Nothing new is sent to any AI Membership and past feedback stay Sends nothing$/u,
 		);
 		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toHaveAccessibleName(
-			/Only in-house Allows Runs only on systems your organisation operates.*Consider.*models and capacity/u,
+			/^In-house only Only systems your organisation runs\. Never leaves your organisation Only its models and capacity Stays in-house$/u,
 		);
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
@@ -309,9 +309,7 @@ export const OptionUncovered: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
 		// The cards carry no configuration: the consequence appears once the answer is selected.
-		await expect(inHouse).toHaveAccessibleName(
-			/models and capacity.*storage rules still apply\.$/u,
-		);
+		await expect(inHouse).toHaveAccessibleName(/Only its models and capacity Stays in-house$/u);
 		await expect(canvas.queryByText(/is set up within this answer yet/u)).toBeNull();
 		// A ceiling nobody has built up to is still a valid answer, so the card is not disabled.
 		await expect(inHouse).not.toHaveAttribute("aria-disabled");
@@ -414,7 +412,7 @@ export const ReturnVisit: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByRole("heading", { level: 1, name: "Your AI choice" })).toBeVisible();
 		await expect(
-			canvas.getByText("You chose Only in-house. Change it whenever you like."),
+			canvas.getByText("You chose In-house only. Change it whenever you like."),
 		).toBeVisible();
 		const save = canvas.getByRole("button", { name: "Save" });
 		await expectGenuinelyDisabled(save);
@@ -522,7 +520,7 @@ export const AnsweredElsewhere: Story = {
 		).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Connect Slack" })).toBeEnabled();
 		await expect(canvas.getByRole("button", { name: "Skip for now" })).toHaveAccessibleDescription(
-			"Skipping does not save an answer selected above. Your saved choice (Allow providers without content storage) stays in effect.",
+			"Skipping does not save an answer selected above. Your saved choice (Provider, nothing kept) stays in effect.",
 		);
 	},
 };

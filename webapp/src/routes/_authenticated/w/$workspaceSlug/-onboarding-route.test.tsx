@@ -44,8 +44,8 @@ const aiOptions = [
 	{ choice: "NOT_KEPT_ONLY", practiceReviewsReady: true, mentorReady: true },
 	{ choice: "ANY_DECLARED", practiceReviewsReady: true, mentorReady: true },
 ] satisfies WorkspaceOnboarding["aiOptions"];
-const IN_HOUSE = /^Only in-house /u;
-const NOT_KEPT = /^Allow providers without content storage /u;
+const IN_HOUSE = /^In-house only /u;
+const NOT_KEPT = /^Provider, nothing kept /u;
 const slack = {
 	connectionId: 9,
 	providerType: "SLACK",

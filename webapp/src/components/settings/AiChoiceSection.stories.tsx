@@ -6,9 +6,9 @@ import { expectGenuinelyDisabled } from "@/test/controls";
 
 import { AiChoiceSection } from "./AiChoiceSection";
 
-const IN_HOUSE = /^Only in-house /u;
-const NOT_KEPT = /^Allow providers without content storage /u;
-const ANY = /^Allow storage for safety checks /u;
+const IN_HOUSE = /^In-house only /u;
+const NOT_KEPT = /^Provider, nothing kept /u;
+const ANY = /^Provider, kept for safety checks /u;
 const NO_AI = /^No AI /u;
 
 const meta = {
