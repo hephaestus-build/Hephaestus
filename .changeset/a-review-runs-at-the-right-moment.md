@@ -12,3 +12,5 @@ Practice reviews now run once at each moment in the life of a pull or merge requ
 - A draft is reviewed only for the practices set to review drafts.
 - Feedback from a review that ends after the work was merged now reaches the developer's practice page
   and conversations. The setting for merged work now controls only comments on the merged work itself.
+- A lapse that a later review of the same work found fixed no longer counts toward a developer's
+  recurring habit.
