@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AdminWorkspaceLlmUsage, WorkspaceLlmUsageReport } from "@/api/types.gen";
 import { currentMonthUtc, formatMonthLabel } from "@/components/admin/usage/usage-utils";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules.
@@ -80,12 +81,14 @@ function mockUsageRoutes(options: {
 async function renderUsageRoute(url = "/admin/usage") {
 	renderRouteAt(url);
 	await screen.findByRole("heading", { name: "AI usage" }, ROUTE_RENDER_WAIT);
-	return screen.findByRole("button", { name: /Set budget for Acme/ }, ROUTE_RENDER_WAIT);
+	return screen.findByRole("button", { name: /Set budget for Acme/u }, ROUTE_RENDER_WAIT);
 }
 
 async function saveBudget(amount: string) {
 	const dialog = await screen.findByRole("dialog");
-	fireEvent.change(within(dialog).getByLabelText(/Monthly budget/i), { target: { value: amount } });
+	fireEvent.change(within(dialog).getByLabelText(/Monthly budget/iu), {
+		target: { value: amount },
+	});
 	fireEvent.click(within(dialog).getByRole("button", { name: "Save budget" }));
 }
 
@@ -104,27 +107,24 @@ describe("instance AI usage route", () => {
 		mockUsageRoutes({ budgetUsd: 50 });
 		await renderUsageRoute();
 
-		fireEvent.click(screen.getByRole("button", { name: /View usage details for Acme/ }));
+		fireEvent.click(screen.getByRole("button", { name: /View usage details for Acme/u }));
 		await screen.findByText("Acme has used 86% of its shared-model budget");
 
-		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/ }));
+		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/u }));
 		await saveBudget("200");
 
 		await screen.findByText("Budget saved. New calls resume within a minute.");
 		await waitFor(() =>
-			expect(screen.queryByText(/Acme has used \d+% of its shared-model budget/)).toBeNull(),
+			expect(screen.queryByText(/Acme has used \d+% of its shared-model budget/u)).toBeNull(),
 		);
 	});
 
 	it("says so out loud when a budget write fails after the dialog was dismissed", async () => {
-		let releaseBudgetPut: (() => void) | undefined;
-		const slowPut = new Promise<void>((resolve) => {
-			releaseBudgetPut = resolve;
-		});
+		const slowPut = deferred();
 		mockUsageRoutes({
 			budgetUsd: 50,
 			onPutBudget: async () => {
-				await slowPut;
+				await slowPut.promise;
 				return HttpResponse.json(
 					{ status: 500, title: "Internal Server Error", detail: "The budget service is down." },
 					{ status: 500, headers: { "Content-Type": "application/problem+json" } },
@@ -133,13 +133,13 @@ describe("instance AI usage route", () => {
 		});
 		await renderUsageRoute();
 
-		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/ }));
+		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/u }));
 		await saveBudget("200");
 
 		fireEvent.keyDown(await screen.findByRole("dialog"), { key: "Escape" });
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
-		releaseBudgetPut?.();
+		slowPut.resolve();
 
 		await screen.findByText("Couldn't save the budget");
 		screen.getByText("The budget service is down.");
@@ -161,7 +161,7 @@ describe("instance AI usage route", () => {
 		});
 		await renderUsageRoute();
 
-		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/ }));
+		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/u }));
 		await saveBudget("9999999");
 
 		const dialog = await screen.findByRole("dialog");

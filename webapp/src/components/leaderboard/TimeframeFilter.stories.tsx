@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, waitFor } from "storybook/test";
 
-import { STORY_NOW } from "@/components/common/story-clock";
 import { DEFAULT_SCHEDULE, formatDateRangeForApi, getDateRangeForPreset } from "@/lib/timeframe";
+import { STORY_NOW } from "@/stories/story-clock";
 
 import { Stateful } from "@/stories/stateful";
 
@@ -45,7 +45,7 @@ export const Default: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Timeframe" }));
 		await userEvent.click(await screen.findByRole("option", { name: "Last month" }));
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(canvas.getByRole("combobox", { name: "Timeframe" })).toHaveTextContent("Last month"),
 		);
 	},
@@ -54,7 +54,8 @@ export const Default: Story = {
 export const WithSchedule: Story = {
 	args: {
 		leaderboardSchedule: {
-			day: 1, // Monday
+			// Monday
+			day: 1,
 			hour: 9,
 			minute: 0,
 		},
@@ -64,7 +65,8 @@ export const WithSchedule: Story = {
 export const FridaySchedule: Story = {
 	args: {
 		leaderboardSchedule: {
-			day: 5, // Friday
+			// Friday
+			day: 5,
 			hour: 16,
 			minute: 30,
 		},
@@ -74,7 +76,8 @@ export const FridaySchedule: Story = {
 export const TuesdaySchedule: Story = {
 	args: {
 		leaderboardSchedule: {
-			day: 2, // Tuesday
+			// Tuesday
+			day: 2,
 			hour: 9,
 			minute: 0,
 		},

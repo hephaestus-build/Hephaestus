@@ -64,8 +64,8 @@ const dayRows: LlmUsageByDay[] = [
 	{
 		day: new Date("2026-07-22"),
 		events: 70,
-		instanceTotalCostUsd: 2.0,
-		ownProviderTotalCostUsd: 1.0,
+		instanceTotalCostUsd: 2,
+		ownProviderTotalCostUsd: 1,
 		unpricedEventCount: 0,
 	},
 ];
@@ -127,17 +127,14 @@ export const UsdOnly: Story = {
 	args: { fx: null },
 };
 
-export const ByDay: StoryObj<typeof LlmUsageByDayTable> = {
-	render: (args) => <LlmUsageByDayTable {...args} />,
-	args: { report: report(), fx: eur },
+export const ByDay: StoryObj = {
+	render: () => <LlmUsageByDayTable report={report()} fx={eur} />,
 };
 
-export const ByDayLoading: StoryObj<typeof LlmUsageByDayTable> = {
-	render: (args) => <LlmUsageByDayTable {...args} />,
-	args: { report: undefined, fx: eur },
+export const ByDayLoading: StoryObj = {
+	render: () => <LlmUsageByDayTable fx={eur} />,
 };
 
-export const ByDayEmpty: StoryObj<typeof LlmUsageByDayTable> = {
-	render: (args) => <LlmUsageByDayTable {...args} />,
-	args: { report: report({ byDay: [] }), fx: eur },
+export const ByDayEmpty: StoryObj = {
+	render: () => <LlmUsageByDayTable report={report({ byDay: [] })} fx={eur} />,
 };

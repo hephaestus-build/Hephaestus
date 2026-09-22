@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
+import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
-import { expectSettledVisible } from "@/test/overlay";
 import { ConfirmAccessDialog } from "./ConfirmAccessDialog";
 
 const gitlab = {
@@ -71,7 +71,7 @@ export const SeveralLinkedRegistrations: Story = {
 	args: { providers: [github, gitlab] },
 	play: async () => {
 		await screen.findByRole("dialog", { name: "Confirm access" });
-		await expect(screen.getAllByRole("button", { name: /^Continue with/ })).toHaveLength(2);
+		await expect(screen.getAllByRole("button", { name: /^Continue with/u })).toHaveLength(2);
 	},
 };
 
@@ -80,7 +80,7 @@ export const Loading: Story = {
 	args: { loading: true, providers: [] },
 	play: async () => {
 		await screen.findByText("Loading sign-in options…");
-		await expect(screen.queryByRole("button", { name: /^Continue with/ })).toBeNull();
+		await expect(screen.queryByRole("button", { name: /^Continue with/u })).toBeNull();
 	},
 };
 
@@ -103,7 +103,7 @@ export const NoLinkedProvider: Story = {
 	play: async () => {
 		const dialog = await screen.findByRole("dialog", { name: "Confirm access" });
 		await expect(dialog).toHaveTextContent("Contact your instance operator");
-		await expect(screen.queryByRole("button", { name: /^Continue with/ })).toBeNull();
+		await expect(screen.queryByRole("button", { name: /^Continue with/u })).toBeNull();
 	},
 };
 

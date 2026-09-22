@@ -1,5 +1,4 @@
 import type { LlmUsageByJobType, WorkspaceLlmUsageReport } from "@/api/types.gen";
-import { formatTokens, MoneyCell } from "@/components/admin/ai/job-utils";
 import { TableRowsSkeleton } from "@/components/admin/integrations/TableRowsSkeleton";
 import {
 	Table,
@@ -12,9 +11,10 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { formatCostUsd, formatRateUsd } from "@/lib/money";
+import { MoneyCell } from "./MoneyCell";
 
 import { type Fx, FxSpendLine } from "./fx";
-import { formatUsageDay, JOB_TYPE_LABELS } from "./usage-utils";
+import { formatTokens, formatUsageDay, JOB_TYPE_LABELS } from "./usage-utils";
 
 function sumBy<T>(rows: T[], pick: (row: T) => number): number {
 	return rows.reduce((total, row) => total + pick(row), 0);
@@ -57,7 +57,7 @@ export function LlmUsageByJobTypeTable({ report, fx }: LlmUsageByJobTypeTablePro
 					events: sumBy(rows, (row) => row.events),
 				};
 	return (
-		<Table containerClassName="rounded-md border">
+		<Table bordered>
 			<TableCaption className="sr-only">AI spend by run type</TableCaption>
 			<TableHeader>
 				<TableRow>
@@ -101,34 +101,34 @@ export function LlmUsageByJobTypeTable({ report, fx }: LlmUsageByJobTypeTablePro
 					{rows.map((row) => (
 						<TableRow key={row.jobType}>
 							<TableCell className="font-medium">{JOB_TYPE_LABELS[row.jobType]}</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								<MoneyCell>{formatCostUsd(row.instanceTotalCostUsd)}</MoneyCell>
 							</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								<MoneyCell>{formatCostUsd(row.ownProviderTotalCostUsd)}</MoneyCell>
 							</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								<AvgPerRun row={row} />
 							</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								{row.unpricedEventCount.toLocaleString()}
 							</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								{formatTokens(row.inputTokens)}
 							</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								{formatTokens(row.cacheReadTokens)}
 							</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								{formatTokens(row.cacheWriteTokens)}
 							</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								{formatTokens(row.outputTokens)}
 							</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								{row.totalCalls.toLocaleString()}
 							</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								{row.events.toLocaleString()}
 							</TableCell>
 						</TableRow>
@@ -139,34 +139,34 @@ export function LlmUsageByJobTypeTable({ report, fx }: LlmUsageByJobTypeTablePro
 				<TableFooter>
 					<TableRow>
 						<TableCell>Total</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							<MoneyCell>{formatCostUsd(totals.priced)}</MoneyCell>
 							<FxSpendLine usd={totals.priced} fx={fx} />
 						</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							<MoneyCell>{formatCostUsd(totals.ownProvider)}</MoneyCell>
 							<FxSpendLine usd={totals.ownProvider} fx={fx} />
 						</TableCell>
 						<TableCell className="text-right text-muted-foreground">—</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							{totals.unpriced.toLocaleString()}
 						</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							{formatTokens(totals.inputTokens)}
 						</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							{formatTokens(totals.cacheReadTokens)}
 						</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							{formatTokens(totals.cacheWriteTokens)}
 						</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							{formatTokens(totals.outputTokens)}
 						</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							{totals.calls.toLocaleString()}
 						</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							{totals.events.toLocaleString()}
 						</TableCell>
 					</TableRow>
@@ -219,7 +219,7 @@ export function LlmUsageByDayTable({ report, fx }: LlmUsageByDayTableProps) {
 					events: sumBy(rows, (row) => row.events),
 				};
 	return (
-		<Table containerClassName="rounded-md border">
+		<Table bordered>
 			<TableCaption className="sr-only">AI spend by day</TableCaption>
 			<TableHeader>
 				<TableRow>
@@ -245,16 +245,16 @@ export function LlmUsageByDayTable({ report, fx }: LlmUsageByDayTableProps) {
 					{rows.map((row) => (
 						<TableRow key={String(row.day)}>
 							<TableCell className="font-medium">{formatUsageDay(row.day)}</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								<MoneyCell>{formatCostUsd(row.instanceTotalCostUsd)}</MoneyCell>
 							</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								<MoneyCell>{formatCostUsd(row.ownProviderTotalCostUsd)}</MoneyCell>
 							</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								{row.unpricedEventCount.toLocaleString()}
 							</TableCell>
-							<TableCell className="text-right tabular-nums">
+							<TableCell numeric className="text-right">
 								{row.events.toLocaleString()}
 							</TableCell>
 						</TableRow>
@@ -265,18 +265,18 @@ export function LlmUsageByDayTable({ report, fx }: LlmUsageByDayTableProps) {
 				<TableFooter>
 					<TableRow>
 						<TableCell>Total</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							<MoneyCell>{formatCostUsd(totals.priced)}</MoneyCell>
 							<FxSpendLine usd={totals.priced} fx={fx} />
 						</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							<MoneyCell>{formatCostUsd(totals.ownProvider)}</MoneyCell>
 							<FxSpendLine usd={totals.ownProvider} fx={fx} />
 						</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							{totals.unpriced.toLocaleString()}
 						</TableCell>
-						<TableCell className="text-right tabular-nums">
+						<TableCell numeric className="text-right">
 							{totals.events.toLocaleString()}
 						</TableCell>
 					</TableRow>

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { LlmConnection, LlmModel } from "@/api/types.gen";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules.
@@ -70,12 +71,16 @@ function connection(id: number, displayName: string): LlmConnection {
 	};
 }
 
+async function confirmTurnOff(name: string) {
+	fireEvent.click(await screen.findByRole("switch", { name }, ROUTE_RENDER_WAIT));
+	const dialog = await screen.findByRole("alertdialog");
+	fireEvent.click(within(dialog).getByRole("button", { name: "Turn off connection" }));
+	await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+}
+
 describe("instance AI models route", () => {
 	it("keeps each connection's toggle pending independently when two run at once", async () => {
-		let releaseSlowToggle: (() => void) | undefined;
-		const slowToggle = new Promise<void>((resolve) => {
-			releaseSlowToggle = resolve;
-		});
+		const slowToggle = deferred();
 		let slowToggleCalls = 0;
 		const connections = [connection(1, "Slow provider"), connection(2, "Fast provider")];
 		const models = [model(11, 1, "Slow model"), model(12, 2, "Fast model")];
@@ -83,7 +88,7 @@ describe("instance AI models route", () => {
 		server.use(
 			http.patch("*/admin/llm/connections/1", async () => {
 				slowToggleCalls += 1;
-				await slowToggle;
+				await slowToggle.promise;
 				return HttpResponse.json({ ...connections[0], enabled: false });
 			}),
 			http.patch("*/admin/llm/connections/2", () =>
@@ -92,13 +97,6 @@ describe("instance AI models route", () => {
 		);
 
 		await renderModelsRoute();
-
-		const confirmTurnOff = async (name: string) => {
-			fireEvent.click(await screen.findByRole("switch", { name }, ROUTE_RENDER_WAIT));
-			const dialog = await screen.findByRole("alertdialog");
-			fireEvent.click(within(dialog).getByRole("button", { name: "Turn off connection" }));
-			await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
-		};
 
 		await confirmTurnOff("Slow provider");
 		await waitFor(() => expect(slowToggleCalls).toBe(1));
@@ -119,7 +117,7 @@ describe("instance AI models route", () => {
 			screen.getByRole<HTMLButtonElement>("button", { name: "Delete Fast provider" }).disabled,
 		).toBe(false);
 
-		releaseSlowToggle?.();
+		slowToggle.resolve();
 		await waitFor(() =>
 			expect(screen.getByRole("switch", { name: "Slow provider" }).getAttribute("aria-busy")).toBe(
 				"false",
@@ -130,10 +128,7 @@ describe("instance AI models route", () => {
 	it("lets the access dialog be dismissed while its save is still in flight", async () => {
 		// There is no request timeout, so a dialog that refuses to close while `isPending` traps focus
 		// with nothing left to release it.
-		let releaseSlowSharing: (() => void) | undefined;
-		const slowSharing = new Promise<void>((resolve) => {
-			releaseSlowSharing = resolve;
-		});
+		const slowSharing = deferred();
 		let sharingCalls = 0;
 		const connections = [connection(1, "Shared OpenAI")];
 		const sharedModel = model(7, 1, "GPT Test");
@@ -141,7 +136,7 @@ describe("instance AI models route", () => {
 		server.use(
 			http.put("*/admin/llm/models/7/sharing", async () => {
 				sharingCalls += 1;
-				await slowSharing;
+				await slowSharing.promise;
 				return HttpResponse.json(sharedModel);
 			}),
 		);
@@ -164,7 +159,7 @@ describe("instance AI models route", () => {
 				.disabled,
 		).toBe(true);
 
-		releaseSlowSharing?.();
+		slowSharing.resolve();
 		await waitFor(() =>
 			expect(
 				screen.getByRole<HTMLButtonElement>("button", { name: "Manage access for GPT Test" })

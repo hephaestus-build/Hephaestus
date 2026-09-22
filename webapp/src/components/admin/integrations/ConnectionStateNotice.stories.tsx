@@ -25,8 +25,8 @@ type Story = StoryObj<typeof meta>;
 export const Pending: Story = {
 	args: { connectionState: "PENDING" },
 	play: async ({ canvas }) => {
-		canvas.getByText(/finishing setup/i);
-		await expect(canvas.queryByText(/slack is pending/i)).not.toBeInTheDocument();
+		canvas.getByText(/finishing setup/iu);
+		await expect(canvas.queryByText(/slack is pending/iu)).not.toBeInTheDocument();
 	},
 };
 
@@ -34,8 +34,8 @@ export const Pending: Story = {
 export const Suspended: Story = {
 	args: { connectionState: "SUSPENDED" },
 	play: async ({ canvas }) => {
-		canvas.getByText(/syncing is paused/i);
-		canvas.getByText(/reconnect to resume/i);
+		canvas.getByText(/syncing is paused/iu);
+		canvas.getByText(/reconnect to resume/iu);
 	},
 };
 
@@ -43,8 +43,8 @@ export const Suspended: Story = {
 export const Uninstalled: Story = {
 	args: { connectionState: "UNINSTALLED" },
 	play: async ({ canvas }) => {
-		canvas.getByText(/the app was removed/i);
-		await expect(canvas.queryByText(/slack is uninstalled/i)).not.toBeInTheDocument();
+		canvas.getByText(/the app was removed/iu);
+		await expect(canvas.queryByText(/slack is uninstalled/iu)).not.toBeInTheDocument();
 	},
 };
 
@@ -52,7 +52,7 @@ export const Uninstalled: Story = {
 export const SuspendedOutline: Story = {
 	args: { connectionState: "SUSPENDED", displayName: "Outline" },
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline was suspended by the provider/i);
+		canvas.getByText(/outline was suspended by the provider/iu);
 	},
 };
 
@@ -63,8 +63,8 @@ export const SuspendedOutline: Story = {
 export const CredentialUnreadable: Story = {
 	args: { connectionState: "ACTIVE", credentialsUnreadableSince: new Date("2026-09-05T08:00:00Z") },
 	play: async ({ canvas }) => {
-		canvas.getByText(/the stored token can't be read/i);
-		await expect(canvas.getByText(/the connection's page says how to replace it/i)).toBeVisible();
+		canvas.getByText(/the stored token can’t be read/iu);
+		await expect(canvas.getByText(/the connection's page says how to replace it/iu)).toBeVisible();
 	},
 };
 
@@ -75,8 +75,8 @@ export const CredentialUnreadableWhileSuspended: Story = {
 		credentialsUnreadableSince: new Date("2026-09-05T08:00:00Z"),
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/the stored token can't be read/i);
-		await expect(canvas.getByText(/syncing is paused/i)).toBeVisible();
+		canvas.getByText(/the stored token can’t be read/iu);
+		await expect(canvas.getByText(/syncing is paused/iu)).toBeVisible();
 	},
 };
 

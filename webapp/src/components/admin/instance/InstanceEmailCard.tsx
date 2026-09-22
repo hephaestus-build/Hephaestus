@@ -4,7 +4,7 @@ import { type SubmitEvent, useId, useState } from "react";
 import { useSpinDelay } from "spin-delay";
 
 import type { EmailTestResponse } from "@/api/types.gen";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { hasText } from "@/lib/text";
 
 import { EMAIL_TEST_OUTCOME_DEFS } from "./email-test-outcome-defs";
 
@@ -40,7 +41,9 @@ export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEma
 
 	const submit = (event: SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (isBusy) return;
+		if (isBusy) {
+			return;
+		}
 		const trimmed = to.trim();
 		onSendTest(trimmed === "" ? undefined : trimmed);
 	};
@@ -88,10 +91,10 @@ export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEma
 						<div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 							<StatusBadge def={def} />
 							<span className="min-w-0 wrap-anywhere">
-								{result.outcome === "SENT" && result.to ? (
+								{result.outcome === "SENT" && hasText(result.to) ? (
 									<>
 										to <span className="font-medium text-foreground">{result.to}</span>
-										{result.messageId ? (
+										{hasText(result.messageId) ? (
 											<>
 												{" "}
 												— message id <code className="text-xs">{result.messageId}</code>

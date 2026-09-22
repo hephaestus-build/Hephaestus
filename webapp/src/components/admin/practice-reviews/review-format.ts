@@ -7,6 +7,8 @@ import { firstNonBlank } from "@/lib/text";
  * so the filter dropdown, the row badge and the detail header all read one entry.
  */
 export function subjectLabel(subject: ReviewSubject | undefined): string {
-	if (!subject) return "Unavailable developer";
+	if (!subject) {
+		return "Unavailable developer";
+	}
 	return firstNonBlank(subject.name, subject.login) ?? `#${subject.id}`;
 }

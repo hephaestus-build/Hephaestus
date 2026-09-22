@@ -47,7 +47,7 @@ describe("cn", () => {
 	});
 
 	it("lets caller classes override variant output", () => {
-		expect(cn("inline-flex h-9 px-3 bg-primary", "h-8 px-2", "h-12 bg-destructive")).toBe(
+		expect(cn("inline-flex h-9 bg-primary px-3", "h-8 px-2", "h-12 bg-destructive")).toBe(
 			"inline-flex px-2 h-12 bg-destructive",
 		);
 	});
@@ -55,7 +55,7 @@ describe("cn", () => {
 	it("reflects mutated conditional inputs after repeated calls", () => {
 		const classes = { "bg-primary": true, "bg-destructive": false };
 		const spacing = ["p-2"];
-		for (let iteration = 0; iteration < 10; iteration++) {
+		for (let iteration = 0; iteration < 10; iteration += 1) {
 			expect(cn("p-0", classes, spacing)).toBe("bg-primary p-2");
 		}
 		classes["bg-primary"] = false;

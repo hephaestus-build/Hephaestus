@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import type { PracticeGroupReviewRun } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
+import { daysBefore } from "@/stories/story-clock";
 import { ReviewRunTimeline } from "./ReviewRunTimeline";
 
 const runs: PracticeGroupReviewRun[] = [
@@ -51,7 +51,6 @@ const runs: PracticeGroupReviewRun[] = [
 ];
 
 const meta = {
-	title: "Profile/Review runs/Timeline",
 	component: ReviewRunTimeline,
 	tags: ["autodocs"],
 	parameters: { layout: "padded" },

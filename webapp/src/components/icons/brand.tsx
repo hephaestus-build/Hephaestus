@@ -11,13 +11,13 @@ type BrandIconProps = SVGProps<SVGSVGElement> & { size?: number | string };
  * A plain function component. Lucide's icons are `ForwardRefExoticComponent`s, so a slot that takes
  * either has to name both types rather than reusing Lucide's.
  */
-export type BrandIcon = {
+export interface BrandIcon {
 	(props: BrandIconProps): ReactElement;
 	displayName?: string;
-};
+}
 
 const make = (displayName: string, viewBox: string, path: string): BrandIcon => {
-	const Icon: BrandIcon = ({ size, width, height, ...props }: BrandIconProps) => {
+	function Icon({ size, width, height, ...props }: BrandIconProps): ReactElement {
 		const label = props["aria-label"] ?? displayName;
 		return (
 			<svg
@@ -33,7 +33,7 @@ const make = (displayName: string, viewBox: string, path: string): BrandIcon => 
 				<path d={path} />
 			</svg>
 		);
-	};
+	}
 	Icon.displayName = displayName;
 	return Icon;
 };

@@ -1,5 +1,6 @@
 import type { TrendSupport } from "@/api/types.gen";
 import type { TrendDirection } from "@/components/practice-vocabulary/practice-trend-defs";
+
 function reviewedWork(count: number): string {
 	return `${count} ${count === 1 ? "piece" : "pieces"} of reviewed work`;
 }
@@ -11,10 +12,13 @@ export function formatTrendProvenance(
 ): string {
 	const current = support.currentOpportunities;
 	const previous = support.previousOpportunities;
-	if (current + previous === 0) return "No reviewed work is available yet.";
+	if (current + previous === 0) {
+		return "No reviewed work is available yet.";
+	}
 
 	const span = support.calendarSpanDays;
-	const spanSentence = span ? ` Evidence spans ${span} ${span === 1 ? "day" : "days"}.` : "";
+	const spanSentence =
+		span !== undefined && span > 0 ? ` Evidence spans ${span} ${span === 1 ? "day" : "days"}.` : "";
 
 	if (direction === "INSUFFICIENT_EVIDENCE") {
 		const missing = support.opportunitiesUntilComparable;

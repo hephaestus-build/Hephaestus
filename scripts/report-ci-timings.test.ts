@@ -31,7 +31,8 @@ const jobs = {
 
 void test("separates admission, job queue and execution without treating parallel work as wall time", () => {
 	const result = summarizeCiTimings(run, jobs);
-	assert.equal(result.verdictSeconds, 115); // updated_at is not the verdict.
+	// updated_at is not the verdict.
+	assert.equal(result.verdictSeconds, 115);
 	assert.equal(result.beforeJobsCreatedSeconds, 10);
 	assert.equal(result.firstRunnerSeconds, 20);
 	assert.equal(result.jobStartDelaySeconds, 40);
@@ -55,11 +56,20 @@ void test("reports failures and retries explicitly rather than hiding them in su
 });
 
 void test("rejects incomplete, mixed-attempt and malformed API responses", () => {
-	assert.throws(() => summarizeCiTimings({ ...run, status: "in_progress" }, jobs), /not completed/);
-	assert.throws(() => summarizeCiTimings(run, { ...jobs, total_count: 4 }), /Incomplete/);
-	assert.throws(() => summarizeCiTimings({ ...run, run_attempt: 2 }, jobs), /this run and attempt/);
-	assert.throws(() => summarizeCiTimings({ ...run, created_at: "bad" }, jobs), /Invalid timestamp/);
-	assert.throws(() => summarizeCiTimings(run, { total_count: 0, jobs: [] }), /No executed/);
+	assert.throws(
+		() => summarizeCiTimings({ ...run, status: "in_progress" }, jobs),
+		/not completed/u,
+	);
+	assert.throws(() => summarizeCiTimings(run, { ...jobs, total_count: 4 }), /Incomplete/u);
+	assert.throws(
+		() => summarizeCiTimings({ ...run, run_attempt: 2 }, jobs),
+		/this run and attempt/u,
+	);
+	assert.throws(
+		() => summarizeCiTimings({ ...run, created_at: "bad" }, jobs),
+		/Invalid timestamp/u,
+	);
+	assert.throws(() => summarizeCiTimings(run, { total_count: 0, jobs: [] }), /No executed/u);
 	assert.throws(
 		() =>
 			summarizeCiTimings(run, {
@@ -68,16 +78,16 @@ void test("rejects incomplete, mixed-attempt and malformed API responses", () =>
 					entry.name === "CI Status Gate" ? { ...entry, conclusion: "skipped" } : entry,
 				),
 			}),
-		/Gate is missing/,
+		/Gate is missing/u,
 	);
-	assert.throws(() => summarizeCiTimings({ ...run, created_at: at(15) }, jobs), /out of order/);
+	assert.throws(() => summarizeCiTimings({ ...run, created_at: at(15) }, jobs), /out of order/u);
 	assert.throws(
 		() => summarizeCiTimings(run, { total_count: 1, jobs: [jobs.jobs[0]] }),
-		/Gate is missing/,
+		/Gate is missing/u,
 	);
 	assert.throws(
 		() =>
 			summarizeCiTimings(run, { ...jobs, jobs: [job("Build", 30, 20, 40), ...jobs.jobs.slice(1)] }),
-		/out of order/,
+		/out of order/u,
 	);
 });

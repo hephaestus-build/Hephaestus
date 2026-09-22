@@ -2,10 +2,10 @@ import type { DecideFeedbackProposalRequest } from "@/api/types.gen";
 
 export type ProposalRejectionReason = NonNullable<DecideFeedbackProposalRequest["rejectionReason"]>;
 
-export const PROPOSAL_REJECTION_REASONS: Array<{
+export const PROPOSAL_REJECTION_REASONS: {
 	value: ProposalRejectionReason;
 	label: string;
-}> = [
+}[] = [
 	{ value: "INCORRECT", label: "Incorrect" },
 	{ value: "MISSING_CONTEXT", label: "Missing important context" },
 	{ value: "UNHELPFUL", label: "Not useful to the recipient" },

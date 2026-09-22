@@ -72,22 +72,25 @@ void describe("the release evidence generator", () => {
 		// the release promotes that artefact, and a tag names whatever it points at today.
 		const upstream = images.filter(({ provenance }) => provenance === "upstream");
 		assert.equal(upstream.length, 4);
-		for (const image of upstream) assert.match(image.indexDigest, /^sha256:[a-f0-9]{64}$/);
+		for (const image of upstream) {
+			assert.match(image.indexDigest, /^sha256:[a-f0-9]{64}$/u);
+		}
 
 		const subjects = planEvidenceSubjects(images, platformDigest);
 		assert.equal(subjects.length, images.length * 2);
 		assert.deepEqual([...PLATFORMS], ["linux/amd64", "linux/arm64"]);
-		for (const platform of PLATFORMS)
+		for (const platform of PLATFORMS) {
 			assert.equal(
 				subjects.filter((subject) => subject.platform === platform).length,
 				images.length,
 			);
+		}
 	});
 
 	void test("refuses a subject whose platform digest the registry did not answer for", async () => {
 		const images = await evidenceImages();
-		assert.throws(() => planEvidenceSubjects(images, () => ""), /digest is malformed: <empty>/);
-		assert.throws(() => planEvidenceSubjects(images, () => "sha256:nope"), /digest is malformed/);
+		assert.throws(() => planEvidenceSubjects(images, () => ""), /digest is malformed: <empty>/u);
+		assert.throws(() => planEvidenceSubjects(images, () => "sha256:nope"), /digest is malformed/u);
 	});
 
 	void test("names each subject's documents the way the verifier reads them back", () => {
@@ -101,7 +104,7 @@ void test(
 	{ skip: process.platform === "win32" },
 	async (context) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "combined-evidence-"));
-		context.after(() => rm(directory, { recursive: true, force: true }));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
 		await writeFile(path.join(directory, "syft"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
 		await writeFile(
 			path.join(directory, "trivy"),
@@ -126,7 +129,7 @@ printf '%s' '{"Results":[{"Vulnerabilities":[{"VulnerabilityID":"CVE-example"}],
 					"--input-type=module",
 					"-e",
 					`
-import { captureSubject } from ${JSON.stringify(new URL("./generate-release-evidence.ts", import.meta.url).href)};
+import { captureSubject } from ${JSON.stringify(new URL("generate-release-evidence.ts", import.meta.url).href)};
 await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 `,
 				],
@@ -164,11 +167,11 @@ await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 			await readFile(`${prefix}.license.json`, "utf8"),
 			await readFile(`${prefix}.trivy.json`, "utf8"),
 		);
-		assert.match(await readFile(`${prefix}.license.json`, "utf8"), /CVE-example/);
-		assert.match(await readFile(`${prefix}.license.json`, "utf8"), /MIT/);
+		assert.match(await readFile(`${prefix}.license.json`, "utf8"), /CVE-example/u);
+		assert.match(await readFile(`${prefix}.license.json`, "utf8"), /MIT/u);
 		const failed = invoke("17");
 		assert.notEqual(failed.status, 0);
-		assert.match(failed.stderr, /trivy exited with code 17/);
+		assert.match(failed.stderr, /trivy exited with code 17/u);
 		assert.deepEqual(await readTimings(), [
 			{ tool: "syft", success: true },
 			{ tool: "trivy", success: false },
@@ -176,7 +179,7 @@ await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 		await writeFile(path.join(directory, "syft"), "#!/bin/sh\nexit 23\n", { mode: 0o755 });
 		const failedInventory = invoke("0");
 		assert.notEqual(failedInventory.status, 0);
-		assert.match(failedInventory.stderr, /syft exited with code 23/);
+		assert.match(failedInventory.stderr, /syft exited with code 23/u);
 		assert.deepEqual(await readTimings(), [{ tool: "syft", success: false }]);
 		assert.equal(await readFile(scanLog, "utf8"), "scan\nscan\n");
 		await writeFile(path.join(directory, "syft"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
@@ -184,7 +187,7 @@ await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 		await mkdir(`${prefix}.timings.json`);
 		const unavailableProfile = invoke("0");
 		assert.equal(unavailableProfile.status, 0, unavailableProfile.stderr);
-		assert.match(unavailableProfile.stderr, /Could not save advisory timings/);
+		assert.match(unavailableProfile.stderr, /Could not save advisory timings/u);
 		assert.notEqual(invoke("17").status, 0, "Profiling must not mask a scanner failure");
 		await rm(`${prefix}.trivy.json`);
 		await writeFile(path.join(directory, "trivy"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
@@ -217,16 +220,17 @@ void test("waits for in-flight capture after failure and never starts another ba
 	let settled = false;
 	const capture = captureSubjects(subjects, async () => {
 		captures += 1;
-		if (captures === 1) throw failure;
+		if (captures === 1) {
+			throw failure;
+		}
 		started.resolve(undefined);
 		await inFlight.promise;
 	});
-	const rejected = assert.rejects(capture, (error: unknown) => {
-		assert.ok(error instanceof AggregateError);
-		assert.deepEqual(error.errors, [failure]);
+	async function settle(): Promise<void> {
+		await assert.rejects(capture, { name: "AggregateError", errors: [failure] });
 		settled = true;
-		return true;
-	});
+	}
+	const rejected = settle();
 	await started.promise;
 	await Promise.resolve();
 	assert.equal(settled, false);

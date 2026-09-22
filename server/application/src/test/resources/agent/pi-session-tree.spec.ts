@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import test from "node:test";
 
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 
 import { forkSessions, reconnaissanceSeed } from "../../../main/resources/agent/pi-session-tree.ts";
+import { hasText } from "../../../main/resources/agent/pi-text.ts";
 
 function assistantMessage(text: string) {
 	return {
@@ -29,9 +30,9 @@ function assistantMessage(text: string) {
 }
 
 void test("forks the same persisted checkpoint into independent session branches", () => {
-	const root = mkdtempSync(join(tmpdir(), "pi-session-tree-"));
+	const root = mkdtempSync(path.join(tmpdir(), "pi-session-tree-"));
 	try {
-		const sessionDir = join(root, "sessions");
+		const sessionDir = path.join(root, "sessions");
 		const seed = SessionManager.create(root, sessionDir);
 		seed.appendMessage({
 			role: "user",
@@ -40,7 +41,7 @@ void test("forks the same persisted checkpoint into independent session branches
 		});
 		const checkpointEntryId = seed.appendMessage(assistantMessage("Evidence manifest"));
 		const seedSessionFile = seed.getSessionFile();
-		assert.ok(seedSessionFile);
+		assert.ok(hasText(seedSessionFile));
 
 		const forks = forkSessions({
 			seedSessionFile,
@@ -83,9 +84,9 @@ void test("forks the same persisted checkpoint into independent session branches
 });
 
 void test("a reconnaissance that ran out of budget is not a seed", () => {
-	const root = mkdtempSync(join(tmpdir(), "pi-session-tree-"));
+	const root = mkdtempSync(path.join(tmpdir(), "pi-session-tree-"));
 	try {
-		const sessionDir = join(root, "sessions");
+		const sessionDir = path.join(root, "sessions");
 		const recon = SessionManager.create(root, sessionDir);
 		recon.appendMessage({
 			role: "user",
@@ -96,11 +97,11 @@ void test("a reconnaissance that ran out of budget is not a seed", () => {
 		// never landed.
 		const checkpointEntryId = recon.appendMessage(assistantMessage("Reconnaissance map"));
 		const seedSessionFile = recon.getSessionFile();
-		assert.ok(seedSessionFile);
+		assert.ok(hasText(seedSessionFile));
 
 		assert.throws(
 			() => reconnaissanceSeed(recon, { expired: true }, 120_000),
-			/did not answer within 120s/,
+			/did not answer within 120s/u,
 		);
 		assert.deepEqual(reconnaissanceSeed(recon, { expired: false }, 120_000), {
 			seedSessionFile,
@@ -109,7 +110,7 @@ void test("a reconnaissance that ran out of budget is not a seed", () => {
 		assert.throws(
 			() =>
 				reconnaissanceSeed(SessionManager.create(root, sessionDir), { expired: false }, 120_000),
-			/no persistent checkpoint/,
+			/no persistent checkpoint/u,
 		);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -131,7 +132,7 @@ void test("rejects duplicate and empty keys before creating a fork", () => {
 				checkpointEntryId: "unused",
 				keys: ["group-a", "group-a"],
 			}),
-		/unique/,
+		/unique/u,
 	);
 	assert.throws(
 		() =>
@@ -140,6 +141,6 @@ void test("rejects duplicate and empty keys before creating a fork", () => {
 				checkpointEntryId: "unused",
 				keys: [""],
 			}),
-		/non-empty/,
+		/non-empty/u,
 	);
 });

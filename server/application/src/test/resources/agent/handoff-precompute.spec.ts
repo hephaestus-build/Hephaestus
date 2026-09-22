@@ -6,7 +6,7 @@ import readyAndTraceableHandoff from "../../../main/resources/practices/precompu
 
 void test("a testing checklist does not turn a traceable handoff into a test-absence claim", () => {
 	const result = readyAndTraceableHandoff(
-		fileURLToPath(new URL("./live-practice/", import.meta.url)),
+		fileURLToPath(new URL("live-practice/", import.meta.url)),
 		new Map(),
 		{
 			pr_number: 1,
@@ -21,5 +21,5 @@ void test("a testing checklist does not turn a traceable handoff into a test-abs
 
 	assert.equal(result.metrics.issueMentionSyntaxCandidateCount, 1);
 	assert.equal(result.directions.length, 1);
-	assert.match(result.directions[0] ?? "", /#42/);
+	assert.match(result.directions[0] ?? "", /#42/u);
 });

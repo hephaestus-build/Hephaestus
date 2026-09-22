@@ -2,7 +2,7 @@ import { Check, CircleAlert, CirclePlus } from "lucide-react";
 
 import type { CatalogPracticeSummary } from "@/api/types.gen";
 
-import type { StatusDef, StatusDefs } from "./status-def";
+import type { StatusDef, StatusDefs } from "@/components/common/status-def";
 
 export type CatalogAvailability = CatalogPracticeSummary["availability"];
 

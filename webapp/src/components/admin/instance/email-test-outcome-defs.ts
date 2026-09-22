@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import type { EmailTestResponse } from "@/api/types.gen";
-import type { StatusDefs } from "@/components/practice-vocabulary/status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type EmailTestOutcome = EmailTestResponse["outcome"];
 

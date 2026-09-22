@@ -27,8 +27,10 @@ const meta = {
 	tags: ["autodocs"],
 	args: { state: ready, isAppAdmin: false, researchAvailable: true },
 	render: (args) => {
-		const state = args.state;
-		if (state.status !== "ready") return <EmailPreferencesSection {...args} />;
+		const { state } = args;
+		if (state.status !== "ready") {
+			return <EmailPreferencesSection {...args} />;
+		}
 		return (
 			<Stateful initial={state.preferences}>
 				{(preferences, setPreferences) => (

@@ -1,4 +1,6 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
+import { isSet } from "./lib/env.ts";
+import { readJsonFileSync } from "./lib/json.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -7,17 +9,23 @@ function isJsonObject(value: unknown): value is JsonObject {
 }
 
 function object(value: unknown, label: string): JsonObject {
-	if (!isJsonObject(value)) throw new Error(`${label} must be an object`);
+	if (!isJsonObject(value)) {
+		throw new Error(`${label} must be an object`);
+	}
 	return value;
 }
 
 function array(value: unknown, label: string): unknown[] {
-	if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
+	if (!Array.isArray(value)) {
+		throw new TypeError(`${label} must be an array`);
+	}
 	return value;
 }
 
 function text(value: unknown, label: string): string {
-	if (typeof value !== "string" || value.length === 0) throw new Error(`${label} must be a string`);
+	if (typeof value !== "string" || value.length === 0) {
+		throw new Error(`${label} must be a string`);
+	}
 	return value;
 }
 
@@ -50,11 +58,189 @@ function canonicalRepository(repository: string): string {
 }
 
 /** The subject an SBOM triple must describe: one image, one platform, one digest. */
-export type ReleaseSbomSubject = {
+export interface ReleaseSbomSubject {
 	repository: string;
 	digest: string;
 	platform: string;
-};
+}
+
+/** The packages one SBOM rendering names, by purl where it has one and by name@version otherwise. */
+interface PackageInventory {
+	purls: Set<string>;
+	keys: Set<string>;
+}
+
+function spdxInventory(spdxInput: unknown, repository: string, digest: string): PackageInventory {
+	const spdx = object(spdxInput, "SPDX SBOM");
+	if (spdx.spdxVersion !== "SPDX-2.3" || spdx.dataLicense !== "CC0-1.0") {
+		throw new Error("invalid SPDX document metadata");
+	}
+	text(spdx.documentNamespace, "SPDX document namespace");
+	const purls = new Set<string>();
+	const keys = new Set<string>();
+	const containers: JsonObject[] = [];
+	for (const [index, value] of array(spdx.packages, "SPDX packages").entries()) {
+		const item = object(value, `SPDX package ${index}`);
+		if (item.primaryPackagePurpose === "CONTAINER") {
+			containers.push(item);
+		}
+		if (typeof item.name === "string" && typeof item.versionInfo === "string") {
+			keys.add(`${item.name}\u0000${item.versionInfo}`);
+		}
+		for (const ref of Array.isArray(item.externalRefs) ? item.externalRefs : []) {
+			const external = object(ref, "SPDX external reference");
+			if (external.referenceType === "purl" && typeof external.referenceLocator === "string") {
+				purls.add(external.referenceLocator);
+			}
+		}
+	}
+
+	// Package parity alone would accept an SPDX rendering of a *different* image that
+	// installs the same packages, so bind each document to the subject as well.
+	const [container, ...extraContainers] = containers;
+	if (container === undefined || extraContainers.length > 0) {
+		throw new Error("SPDX document must describe exactly one container");
+	}
+	if (
+		canonicalRepository(text(container.name, "SPDX container name")) !== repository ||
+		container.versionInfo !== digest
+	) {
+		throw new Error(`SPDX document is not bound to ${imageReference(repository, digest)}`);
+	}
+	return { purls, keys };
+}
+
+function cycloneDxInventory(
+	cycloneDxInput: unknown,
+	repository: string,
+	digest: string,
+): PackageInventory {
+	const cycloneDx = object(cycloneDxInput, "CycloneDX SBOM");
+	if (cycloneDx.bomFormat !== "CycloneDX") {
+		throw new Error("invalid CycloneDX format");
+	}
+	text(cycloneDx.specVersion, "CycloneDX spec version");
+	const subject = object(
+		object(cycloneDx.metadata, "CycloneDX metadata").component,
+		"CycloneDX metadata component",
+	);
+	if (
+		subject.type !== "container" ||
+		canonicalRepository(text(subject.name, "CycloneDX component name")) !== repository ||
+		subject.version !== digest
+	) {
+		throw new Error(`CycloneDX document is not bound to ${imageReference(repository, digest)}`);
+	}
+	const purls = new Set<string>();
+	const keys = new Set<string>();
+	for (const [index, value] of array(cycloneDx.components, "CycloneDX components").entries()) {
+		const component = object(value, `CycloneDX component ${index}`);
+		if (typeof component.name === "string" && typeof component.version === "string") {
+			keys.add(`${component.name}\u0000${component.version}`);
+		}
+		if (typeof component.purl === "string") {
+			purls.add(component.purl);
+		}
+	}
+	return { purls, keys };
+}
+
+/** The form a Syft `repoDigests` entry takes, which every binding is checked against. */
+function imageReference(repository: string, digest: string): string {
+	return `${repository}@${digest}`;
+}
+
+interface SyftBinding {
+	repository: string;
+	digest: string;
+	os: string;
+	architecture: string;
+}
+
+function assertSyftSource(syft: JsonObject, binding: SyftBinding): void {
+	const { repository, digest, os, architecture } = binding;
+	const reference = imageReference(repository, digest);
+	const source = object(syft.source, "Syft source");
+	const metadata = object(source.metadata, "Syft source metadata");
+	if (source.type !== "image") {
+		throw new Error("Syft source is not an image");
+	}
+	if (canonicalRepository(text(source.name, "Syft source name")) !== repository) {
+		throw new Error("Syft SBOM is bound to the wrong repository");
+	}
+	if (!manifestMediaTypes.has(text(metadata.mediaType, "Syft source media type"))) {
+		throw new Error("Syft SBOM does not describe a single-platform image manifest");
+	}
+	// Only a registry scan digests the manifest the registry serves. Pulled through a
+	// Docker daemon the same artifact is re-serialized as a schema-2 manifest whose
+	// digest is a local accident, so the release scans with `syft --from registry`.
+	if (metadata.manifestDigest !== digest) {
+		throw new Error("Syft SBOM is bound to the wrong manifest");
+	}
+	if (metadata.os !== os || metadata.architecture !== architecture) {
+		throw new Error("Syft SBOM is bound to the wrong platform");
+	}
+	// `manifestDigest` alone cannot tell a scan of `repository@<index digest>` — which
+	// resolves to this platform's manifest — from a scan of the platform digest the
+	// release records. `repoDigests` carries the reference Syft actually resolved.
+	const repoDigests = array(metadata.repoDigests, "Syft source repository digests").map(
+		(value, index) => canonicalRepository(text(value, `Syft repository digest ${index}`)),
+	);
+	if (!repoDigests.includes(reference)) {
+		throw new Error(`Syft SBOM was not resolved from ${reference}`);
+	}
+	if (!repoDigests.every((entry) => entry.endsWith(`@${digest}`))) {
+		throw new Error("Syft SBOM also resolves a digest the subject does not name");
+	}
+}
+
+function syftArtifactInventory(artifacts: readonly unknown[]): {
+	expectedPurls: Set<string>;
+	missingLicenses: JsonObject[];
+} {
+	const expectedPurls = new Set<string>();
+	const missingLicenses: JsonObject[] = [];
+	for (const [index, value] of artifacts.entries()) {
+		const artifact = object(value, `Syft artifact ${index}`);
+		text(artifact.type, `Syft artifact ${index}.type`);
+		packageKey(artifact, `Syft artifact ${index}`);
+		const artifactPurl = purl(artifact);
+		if (artifactPurl !== undefined) {
+			expectedPurls.add(artifactPurl);
+		}
+		if (array(artifact.locations, `Syft artifact ${index}.locations`).length === 0) {
+			throw new Error(`Syft artifact ${index} has no location evidence`);
+		}
+		if (array(artifact.licenses, `Syft artifact ${index}.licenses`).length === 0) {
+			missingLicenses.push({
+				name: text(artifact.name, "artifact.name"),
+				version: text(artifact.version, "artifact.version"),
+			});
+		}
+	}
+	return { expectedPurls, missingLicenses };
+}
+
+function assertDerivedInventoriesCover(
+	artifacts: readonly unknown[],
+	spdx: PackageInventory,
+	cycloneDx: PackageInventory,
+): void {
+	for (const value of artifacts) {
+		const artifactPurl = purl(value);
+		const key = packageKey(value, "Syft artifact");
+		if (!(artifactPurl === undefined ? spdx.keys.has(key) : spdx.purls.has(artifactPurl))) {
+			throw new Error(`SPDX output omitted ${key.replace("\u0000", "@")} from the Syft inventory`);
+		}
+		if (
+			!(artifactPurl === undefined ? cycloneDx.keys.has(key) : cycloneDx.purls.has(artifactPurl))
+		) {
+			throw new Error(
+				`CycloneDX output omitted ${key.replace("\u0000", "@")} from the Syft inventory`,
+			);
+		}
+	}
+}
 
 export function validateReleaseSbom(
 	syftInput: unknown,
@@ -63,119 +249,27 @@ export function validateReleaseSbom(
 	subject: ReleaseSbomSubject,
 ): JsonObject {
 	const { digest, platform } = subject;
-	if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new Error("subject digest is malformed");
+	if (!/^sha256:[a-f0-9]{64}$/u.test(digest)) {
+		throw new Error("subject digest is malformed");
+	}
 	const [os, architecture] = platform.split("/");
-	if (os !== "linux" || !architecture) throw new Error("platform must be linux/<architecture>");
+	if (os !== "linux" || !isSet(architecture)) {
+		throw new Error("platform must be linux/<architecture>");
+	}
 	const repository = canonicalRepository(text(subject.repository, "subject repository"));
-	const reference = `${repository}@${digest}`;
 
 	const syft = object(syftInput, "Syft SBOM");
-	const source = object(syft.source, "Syft source");
-	const metadata = object(source.metadata, "Syft source metadata");
-	if (source.type !== "image") throw new Error("Syft source is not an image");
-	if (canonicalRepository(text(source.name, "Syft source name")) !== repository)
-		throw new Error("Syft SBOM is bound to the wrong repository");
-	if (!manifestMediaTypes.has(text(metadata.mediaType, "Syft source media type")))
-		throw new Error("Syft SBOM does not describe a single-platform image manifest");
-	// Only a registry scan digests the manifest the registry serves. Pulled through a
-	// Docker daemon the same artifact is re-serialized as a schema-2 manifest whose
-	// digest is a local accident, so the release scans with `syft --from registry`.
-	if (metadata.manifestDigest !== digest)
-		throw new Error("Syft SBOM is bound to the wrong manifest");
-	if (metadata.os !== os || metadata.architecture !== architecture)
-		throw new Error("Syft SBOM is bound to the wrong platform");
-	// `manifestDigest` alone cannot tell a scan of `repository@<index digest>` — which
-	// resolves to this platform's manifest — from a scan of the platform digest the
-	// release records. `repoDigests` carries the reference Syft actually resolved.
-	const repoDigests = array(metadata.repoDigests, "Syft source repository digests").map(
-		(value, index) => canonicalRepository(text(value, `Syft repository digest ${index}`)),
-	);
-	if (!repoDigests.includes(reference))
-		throw new Error(`Syft SBOM was not resolved from ${reference}`);
-	if (!repoDigests.every((entry) => entry.endsWith(`@${digest}`)))
-		throw new Error("Syft SBOM also resolves a digest the subject does not name");
+	assertSyftSource(syft, { repository, digest, os, architecture });
 
 	const artifacts = array(syft.artifacts, "Syft artifacts");
-	if (artifacts.length === 0) throw new Error("Syft SBOM contains no packages");
-	const expectedPurls = new Set<string>();
-	const missingLicenses: JsonObject[] = [];
-	for (const [index, value] of artifacts.entries()) {
-		const artifact = object(value, `Syft artifact ${index}`);
-		text(artifact.type, `Syft artifact ${index}.type`);
-		packageKey(artifact, `Syft artifact ${index}`);
-		const artifactPurl = purl(artifact);
-		if (artifactPurl) expectedPurls.add(artifactPurl);
-		if (array(artifact.locations, `Syft artifact ${index}.locations`).length === 0)
-			throw new Error(`Syft artifact ${index} has no location evidence`);
-		if (array(artifact.licenses, `Syft artifact ${index}.licenses`).length === 0)
-			missingLicenses.push({
-				name: text(artifact.name, "artifact.name"),
-				version: text(artifact.version, "artifact.version"),
-			});
+	if (artifacts.length === 0) {
+		throw new Error("Syft SBOM contains no packages");
 	}
+	const { expectedPurls, missingLicenses } = syftArtifactInventory(artifacts);
 
-	const spdx = object(spdxInput, "SPDX SBOM");
-	if (spdx.spdxVersion !== "SPDX-2.3" || spdx.dataLicense !== "CC0-1.0")
-		throw new Error("invalid SPDX document metadata");
-	text(spdx.documentNamespace, "SPDX document namespace");
-	const spdxPurls = new Set<string>();
-	const spdxKeys = new Set<string>();
-	const spdxContainers: JsonObject[] = [];
-	for (const [index, value] of array(spdx.packages, "SPDX packages").entries()) {
-		const item = object(value, `SPDX package ${index}`);
-		if (item.primaryPackagePurpose === "CONTAINER") spdxContainers.push(item);
-		if (typeof item.name === "string" && typeof item.versionInfo === "string")
-			spdxKeys.add(`${item.name}\u0000${item.versionInfo}`);
-		for (const ref of Array.isArray(item.externalRefs) ? item.externalRefs : []) {
-			const external = object(ref, "SPDX external reference");
-			if (external.referenceType === "purl" && typeof external.referenceLocator === "string")
-				spdxPurls.add(external.referenceLocator);
-		}
-	}
-
-	// Package parity alone would accept an SPDX rendering of a *different* image that
-	// installs the same packages, so bind each document to the subject as well.
-	const [spdxContainer, ...spdxExtraContainers] = spdxContainers;
-	if (!spdxContainer || spdxExtraContainers.length > 0)
-		throw new Error("SPDX document must describe exactly one container");
-	if (
-		canonicalRepository(text(spdxContainer.name, "SPDX container name")) !== repository ||
-		spdxContainer.versionInfo !== digest
-	)
-		throw new Error(`SPDX document is not bound to ${reference}`);
-
-	const cycloneDx = object(cycloneDxInput, "CycloneDX SBOM");
-	if (cycloneDx.bomFormat !== "CycloneDX") throw new Error("invalid CycloneDX format");
-	text(cycloneDx.specVersion, "CycloneDX spec version");
-	const cycloneSubject = object(
-		object(cycloneDx.metadata, "CycloneDX metadata").component,
-		"CycloneDX metadata component",
-	);
-	if (
-		cycloneSubject.type !== "container" ||
-		canonicalRepository(text(cycloneSubject.name, "CycloneDX component name")) !== repository ||
-		cycloneSubject.version !== digest
-	)
-		throw new Error(`CycloneDX document is not bound to ${reference}`);
-	const cyclonePurls = new Set<string>();
-	const cycloneKeys = new Set<string>();
-	for (const [index, value] of array(cycloneDx.components, "CycloneDX components").entries()) {
-		const component = object(value, `CycloneDX component ${index}`);
-		if (typeof component.name === "string" && typeof component.version === "string")
-			cycloneKeys.add(`${component.name}\u0000${component.version}`);
-		if (typeof component.purl === "string") cyclonePurls.add(component.purl);
-	}
-
-	for (const value of artifacts) {
-		const artifactPurl = purl(value);
-		const key = packageKey(value, "Syft artifact");
-		if (!(artifactPurl ? spdxPurls.has(artifactPurl) : spdxKeys.has(key)))
-			throw new Error(`SPDX output omitted ${key.replace("\u0000", "@")} from the Syft inventory`);
-		if (!(artifactPurl ? cyclonePurls.has(artifactPurl) : cycloneKeys.has(key)))
-			throw new Error(
-				`CycloneDX output omitted ${key.replace("\u0000", "@")} from the Syft inventory`,
-			);
-	}
+	const spdx = spdxInventory(spdxInput, repository, digest);
+	const cycloneDx = cycloneDxInventory(cycloneDxInput, repository, digest);
+	assertDerivedInventoriesCover(artifacts, spdx, cycloneDx);
 
 	return {
 		schemaVersion: 1,
@@ -192,20 +286,20 @@ if (import.meta.main) {
 	const [syftPath, spdxPath, cycloneDxPath, repository, digest, platform, outputPath] =
 		process.argv.slice(2);
 	if (
-		!syftPath ||
-		!spdxPath ||
-		!cycloneDxPath ||
-		!repository ||
-		!digest ||
-		!platform ||
-		!outputPath
-	)
+		!isSet(syftPath) ||
+		!isSet(spdxPath) ||
+		!isSet(cycloneDxPath) ||
+		!isSet(repository) ||
+		!isSet(digest) ||
+		!isSet(platform) ||
+		!isSet(outputPath)
+	) {
 		throw new Error(
 			"usage: check-release-sbom <syft> <spdx> <cyclonedx> <repository> <digest> <platform> <output>",
 		);
-	const readJson = (path: string): unknown => JSON.parse(readFileSync(path, "utf8")) as unknown;
+	}
 	writeFileSync(
 		outputPath,
-		`${JSON.stringify(validateReleaseSbom(readJson(syftPath), readJson(spdxPath), readJson(cycloneDxPath), { repository, digest, platform }), null, 2)}\n`,
+		`${JSON.stringify(validateReleaseSbom(readJsonFileSync(syftPath), readJsonFileSync(spdxPath), readJsonFileSync(cycloneDxPath), { repository, digest, platform }), null, 2)}\n`,
 	);
 }

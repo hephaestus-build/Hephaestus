@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, retainSearchParams, useNavigate } from "@tanstack/react-router";
 import { LibraryBig, Plus } from "lucide-react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 
 import {
@@ -16,7 +17,7 @@ import {
 	adminUpdateCuratedPracticeStatusMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type {
-	CuratedCatalog as Catalog,
+	CuratedCatalog,
 	CuratedGroup,
 	CuratedPractice,
 	CuratedPracticeSummary,
@@ -36,19 +37,20 @@ import {
 	curatedPracticeLevel,
 	GUARDED_CURATED_LEVEL_KINDS,
 } from "@/components/admin/curated-catalog/curated-catalog-search";
-import { CuratedCatalog } from "@/components/admin/curated-catalog/CuratedCatalog";
+import { CuratedCatalogPage } from "@/components/admin/curated-catalog/CuratedCatalogPage";
 import { PracticeTreeSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { parseDetailStack } from "@/components/core/detail-drawer/detail-stack";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { DetailStackLink } from "@/components/core/detail-drawer/DetailStackLink";
-import { useDetailStack } from "@/components/core/detail-drawer/use-detail-stack";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { parseDetailStack } from "@/components/layout/detail-drawer/detail-stack";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
 
 import { CuratedGroupCreateLevel } from "./-CuratedGroupCreateLevel";
 import { CuratedGroupEditLevel } from "./-CuratedGroupEditLevel";
@@ -66,6 +68,33 @@ const PRACTICE_STATUS_KEY = ["adminWriteCuratedPracticeStatus"];
 const GROUP_STATUS_KEY = ["adminWriteCuratedGroupStatus"];
 const STRUCTURE_SCOPE = { id: "admin-curated-catalog-structure" };
 
+function detailKey(kind: "practice" | "group", slug: string) {
+	return kind === "practice"
+		? adminGetCuratedPracticeQueryKey({ path: { slug } })
+		: adminGetCuratedGroupQueryKey({ path: { slug } });
+}
+
+function structureError(error: unknown) {
+	toast.error(
+		problemStatusOf(error) === 412
+			? "The catalog order changed before this move was saved. We reloaded the latest order."
+			: "Couldn't save the catalog order",
+		{ description: problemDetailOf(error) },
+	);
+}
+
+/** Why offering a practice may not reach workspaces yet: its group decides. */
+function availabilityMessage(practice: CuratedPracticeSummary, groups: CuratedCatalog["groups"]) {
+	if (!hasText(practice.groupSlug)) {
+		return;
+	}
+	const parent = groups.find((group) => group.slug === practice.groupSlug);
+	if (!parent) {
+		return "Move the practice to an included group first";
+	}
+	return parent.status.offered ? undefined : "Practice will be included when its group is included";
+}
+
 function AdminCuratedCatalogPage() {
 	const navigate = useNavigate({ from: Route.fullPath });
 	const { detail, ...search } = Route.useSearch();
@@ -74,10 +103,6 @@ function AdminCuratedCatalogPage() {
 	const stackControls = useDetailStack(detailStack);
 	const catalogQuery = useQuery({ ...adminGetCuratedCatalogOptions() });
 
-	const detailKey = (kind: "practice" | "group", slug: string) =>
-		kind === "practice"
-			? adminGetCuratedPracticeQueryKey({ path: { slug } })
-			: adminGetCuratedGroupQueryKey({ path: { slug } });
 	const invalidateCatalog = () => {
 		void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 	};
@@ -103,7 +128,7 @@ function AdminCuratedCatalogPage() {
 		},
 	});
 	const onGroupStatusSettled = (slug: string, offered: boolean) => ({
-		onSuccess: (catalog: Catalog) => {
+		onSuccess: (catalog: CuratedCatalog) => {
 			queryClient.setQueryData(adminGetCuratedCatalogQueryKey(), catalog);
 			queryClient.removeQueries({ queryKey: detailKey("group", slug), exact: true });
 			toast.success(offered ? "Group included for workspaces" : "Group is no longer included");
@@ -127,20 +152,12 @@ function AdminCuratedCatalogPage() {
 		filedUnder(GROUP_STATUS_KEY, adminUpdateCuratedGroupStatusMutation()),
 	);
 	const invalidateStructure = invalidateCatalog;
-	const structureError = (error: unknown) => {
-		toast.error(
-			problemStatusOf(error) === 412
-				? "The catalog order changed before this move was saved. We reloaded the latest order."
-				: "Couldn't save the catalog order",
-			{ description: problemDetailOf(error) },
-		);
-	};
 	const reorderGroups = useMutation({
 		...adminReorderCuratedGroupsMutation(),
 		scope: STRUCTURE_SCOPE,
 		onMutate: async (variables) => {
 			await queryClient.cancelQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
-			const previous = queryClient.getQueryData<Catalog>(adminGetCuratedCatalogQueryKey());
+			const previous = queryClient.getQueryData<CuratedCatalog>(adminGetCuratedCatalogQueryKey());
 			if (previous) {
 				queryClient.setQueryData(
 					adminGetCuratedCatalogQueryKey(),
@@ -163,7 +180,7 @@ function AdminCuratedCatalogPage() {
 		scope: STRUCTURE_SCOPE,
 		onMutate: async (variables) => {
 			await queryClient.cancelQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
-			const previous = queryClient.getQueryData<Catalog>(adminGetCuratedCatalogQueryKey());
+			const previous = queryClient.getQueryData<CuratedCatalog>(adminGetCuratedCatalogQueryKey());
 			if (previous) {
 				const groupSlug = variables.body.groupSlug ?? null;
 				queryClient.setQueryData(
@@ -187,7 +204,7 @@ function AdminCuratedCatalogPage() {
 		scope: STRUCTURE_SCOPE,
 		onMutate: async (variables) => {
 			await queryClient.cancelQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
-			const previous = queryClient.getQueryData<Catalog>(adminGetCuratedCatalogQueryKey());
+			const previous = queryClient.getQueryData<CuratedCatalog>(adminGetCuratedCatalogQueryKey());
 			if (previous) {
 				queryClient.setQueryData(
 					adminGetCuratedCatalogQueryKey(),
@@ -240,12 +257,104 @@ function AdminCuratedCatalogPage() {
 	const writePending =
 		structurePending || pendingGroupSlugs.size > 0 || pendingPracticeSlugs.size > 0;
 
+	let body: ReactNode;
+	if (catalogQuery.isPending) {
+		body = <PracticeTreeSkeleton groups={3} practicesPerGroup={3} />;
+	} else if (catalogQuery.isError) {
+		body = (
+			<QueryErrorAlert
+				error={catalogQuery.error}
+				title="Couldn't load the practice catalog"
+				onRetry={() => {
+					void catalogQuery.refetch();
+				}}
+			/>
+		);
+	} else {
+		body = (
+			<CuratedCatalogPage
+				groups={catalogQuery.data.groups}
+				practices={catalogQuery.data.practices}
+				summary={catalogQuery.data.summary}
+				search={search}
+				customOrder={catalogQuery.data.customOrder}
+				pendingPracticeSlugs={pendingPracticeSlugs}
+				pendingGroupSlugs={pendingGroupSlugs}
+				writePending={writePending}
+				onSearchChange={(next: CuratedCatalogSearch) => {
+					void navigate({ search: (previous) => ({ ...previous, ...next }), replace: true });
+				}}
+				onPracticeStatusChange={(practice: CuratedPracticeSummary, offered) => {
+					updatePracticeStatus.mutate(
+						{
+							path: { slug: practice.slug },
+							headers: { "If-Match": `"${practice.status.etag}"` },
+							body: { status: offered ? "AVAILABLE" : "RETIRED" },
+						},
+						onPracticeStatusSettled(
+							practice.slug,
+							offered,
+							offered ? availabilityMessage(practice, catalogQuery.data.groups) : undefined,
+						),
+					);
+				}}
+				onGroupStatusChange={(group: CuratedGroup, offered) =>
+					updateGroupStatus.mutate(
+						{
+							path: { slug: group.slug },
+							headers: { "If-Match": `"${catalogQuery.data.etag}"` },
+							body: { status: offered ? "AVAILABLE" : "RETIRED" },
+						},
+						onGroupStatusSettled(group.slug, offered),
+					)
+				}
+				onReorderGroups={(orderedSlugs) =>
+					reorderGroups.mutate({
+						headers: { "If-Match": `"${catalogQuery.data.etag}"` },
+						body: { orderedSlugs },
+					})
+				}
+				onResetOrder={() =>
+					resetOrder.mutate({
+						headers: { "If-Match": `"${catalogQuery.data.etag}"` },
+					})
+				}
+				onPlacePractice={(practiceSlug, groupSlug, position) => {
+					const practice = catalogQuery.data.practices.find(
+						(candidate) => candidate.slug === practiceSlug,
+					);
+					if (!practice) {
+						return;
+					}
+					const optimistic = placeCuratedPractice(
+						catalogQuery.data,
+						practiceSlug,
+						groupSlug,
+						position,
+					);
+					if ((practice.groupSlug ?? null) === groupSlug) {
+						reorderPractices.mutate({
+							headers: { "If-Match": `"${catalogQuery.data.etag}"` },
+							body: { groupSlug, orderedSlugs: orderedPracticeSlugs(optimistic, groupSlug) },
+						});
+						return;
+					}
+					placePractice.mutate({
+						path: { slug: practiceSlug },
+						headers: { "If-Match": `"${catalogQuery.data.etag}"` },
+						body: { groupSlug: groupSlug ?? undefined, position },
+					});
+				}}
+			/>
+		);
+	}
+
 	return (
 		<PageLayout>
 			<PageHeader
 				icon={<LibraryBig />}
 				title="Practice catalog"
-				description="Choose which groups and practices workspace administrators can add. Catalog changes never rewrite existing workspace practices."
+				description="Choose which groups and practices workspace administrators can add. CuratedCatalog changes never rewrite existing workspace practices."
 				actions={
 					<div className="flex flex-wrap gap-2">
 						{writePending ? (
@@ -277,98 +386,7 @@ function AdminCuratedCatalogPage() {
 				}
 			/>
 
-			{catalogQuery.isPending ? (
-				<PracticeTreeSkeleton groups={3} practicesPerGroup={3} />
-			) : catalogQuery.isError ? (
-				<QueryErrorAlert
-					error={catalogQuery.error}
-					title="Couldn't load the practice catalog"
-					onRetry={() => void catalogQuery.refetch()}
-				/>
-			) : (
-				<CuratedCatalog
-					groups={catalogQuery.data.groups}
-					practices={catalogQuery.data.practices}
-					summary={catalogQuery.data.summary}
-					search={search}
-					customOrder={catalogQuery.data.customOrder}
-					pendingPracticeSlugs={pendingPracticeSlugs}
-					pendingGroupSlugs={pendingGroupSlugs}
-					writePending={writePending}
-					onSearchChange={(next: CuratedCatalogSearch) =>
-						void navigate({ search: (previous) => ({ ...previous, ...next }), replace: true })
-					}
-					onPracticeStatusChange={(practice: CuratedPracticeSummary, offered) => {
-						const parent = practice.groupSlug
-							? catalogQuery.data.groups.find((group) => group.slug === practice.groupSlug)
-							: undefined;
-						const availabilityMessage = practice.groupSlug
-							? parent
-								? parent.status.offered
-									? undefined
-									: "Practice will be included when its group is included"
-								: "Move the practice to an included group first"
-							: undefined;
-						updatePracticeStatus.mutate(
-							{
-								path: { slug: practice.slug },
-								headers: { "If-Match": `"${practice.status.etag}"` },
-								body: { status: offered ? "AVAILABLE" : "RETIRED" },
-							},
-							onPracticeStatusSettled(
-								practice.slug,
-								offered,
-								offered ? availabilityMessage : undefined,
-							),
-						);
-					}}
-					onGroupStatusChange={(group: CuratedGroup, offered) =>
-						updateGroupStatus.mutate(
-							{
-								path: { slug: group.slug },
-								headers: { "If-Match": `"${catalogQuery.data.etag}"` },
-								body: { status: offered ? "AVAILABLE" : "RETIRED" },
-							},
-							onGroupStatusSettled(group.slug, offered),
-						)
-					}
-					onReorderGroups={(orderedSlugs) =>
-						reorderGroups.mutate({
-							headers: { "If-Match": `"${catalogQuery.data.etag}"` },
-							body: { orderedSlugs },
-						})
-					}
-					onResetOrder={() =>
-						resetOrder.mutate({
-							headers: { "If-Match": `"${catalogQuery.data.etag}"` },
-						})
-					}
-					onPlacePractice={(practiceSlug, groupSlug, position) => {
-						const practice = catalogQuery.data.practices.find(
-							(candidate) => candidate.slug === practiceSlug,
-						);
-						if (!practice) return;
-						const optimistic = placeCuratedPractice(
-							catalogQuery.data,
-							practiceSlug,
-							groupSlug,
-							position,
-						);
-						if ((practice.groupSlug ?? null) === groupSlug) {
-							reorderPractices.mutate({
-								headers: { "If-Match": `"${catalogQuery.data.etag}"` },
-								body: { groupSlug, orderedSlugs: orderedPracticeSlugs(optimistic, groupSlug) },
-							});
-							return;
-						}
-						placePractice.mutate({
-							path: { slug: practiceSlug },
-							headers: { "If-Match": `"${catalogQuery.data.etag}"` },
-							body: { groupSlug: groupSlug ?? undefined, position },
-						});
-					}}
-				/>
-			)}
+			{body}
 
 			<DetailDrawerStack
 				stack={detailStack}

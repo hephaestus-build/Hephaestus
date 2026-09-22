@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { listAgentsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { AgentBinding } from "@/api/types.gen";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
@@ -84,16 +85,15 @@ function mockModelsRoute(bindings: () => AgentBinding[]) {
 }
 
 function deferredBindingsRefetch(bindings: () => AgentBinding[]) {
-	let release = () => {};
-	const pending = new Promise<void>((resolve) => {
-		release = resolve;
-	});
+	const pending = deferred();
 	return {
 		handler: http.get("*/workspaces/:workspaceSlug/agents", async () => {
-			await pending;
+			await pending.promise;
 			return HttpResponse.json(bindings());
 		}),
-		release,
+		release: () => {
+			pending.resolve();
+		},
 	};
 }
 
@@ -108,7 +108,9 @@ async function renderModelsRoute(bindings: () => AgentBinding[]) {
 function card(purposeLabel: string): HTMLElement {
 	const field = screen.getByLabelText(purposeLabel);
 	const cardElement = field.closest("[data-slot='card']");
-	if (!(cardElement instanceof HTMLElement)) throw new Error(`No card for ${purposeLabel}`);
+	if (!(cardElement instanceof HTMLElement)) {
+		throw new Error(`No card for ${purposeLabel}`);
+	}
 	return cardElement;
 }
 
@@ -117,15 +119,12 @@ const saveButton = (purposeLabel: string) =>
 
 describe("workspace AI models route", () => {
 	it("keeps each purpose's card pending independently when two saves run at once", async () => {
-		let releaseSlowSave: (() => void) | undefined;
-		const slowSave = new Promise<void>((resolve) => {
-			releaseSlowSave = resolve;
-		});
+		const slowSave = deferred();
 		let detectionSaves = 0;
 		server.use(
 			http.put("*/workspaces/:workspaceSlug/agents/PRACTICE_REVIEW", async () => {
 				detectionSaves += 1;
-				await slowSave;
+				await slowSave.promise;
 				return HttpResponse.json(binding("PRACTICE_REVIEW", 20));
 			}),
 			http.put("*/workspaces/:workspaceSlug/agents/MENTOR", () =>
@@ -142,7 +141,7 @@ describe("workspace AI models route", () => {
 		await waitFor(() => expect(saveButton("Heph model").disabled).toBe(false));
 		expect(saveButton("Practice reviews model").disabled).toBe(true);
 
-		releaseSlowSave?.();
+		slowSave.resolve();
 		await waitFor(() => expect(saveButton("Practice reviews model").disabled).toBe(false));
 		expect(detectionSaves).toBe(1);
 	});

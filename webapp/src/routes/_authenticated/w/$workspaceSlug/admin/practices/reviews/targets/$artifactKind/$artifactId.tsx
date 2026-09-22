@@ -41,9 +41,17 @@ function sectionState<T>(query: {
 	data?: { content?: T[]; page?: PageMetadata };
 	refetch: () => unknown;
 }): ReviewSectionState<T> {
-	if (query.isLoading) return { status: "loading" };
+	if (query.isLoading) {
+		return { status: "loading" };
+	}
 	if (query.isError) {
-		return { status: "error", error: query.error, onRetry: () => void query.refetch() };
+		return {
+			status: "error",
+			error: query.error,
+			onRetry: () => {
+				void query.refetch();
+			},
+		};
 	}
 	return {
 		status: "ready",

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -13,7 +13,7 @@ import {
 	readProfileRoles,
 } from "./check-env-roles.ts";
 
-const REPO_ROOT = resolve(import.meta.dirname, "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * The failure at `index`, asserting there is one. `assert.match` reads a string, and a run that
@@ -85,8 +85,8 @@ await test("a variable set on a container that disables the role reading it is a
 	);
 
 	assert.equal(failures.length, 2, failures.join("\n"));
-	assert.match(failureAt(failures, 0), /disables the webhook role that reads it/);
-	assert.match(failureAt(failures, 1), /no service running the webhook role receives it/);
+	assert.match(failureAt(failures, 0), /disables the webhook role that reads it/u);
+	assert.match(failureAt(failures, 1), /no service running the webhook role receives it/u);
 });
 
 await test("the role flag is read through its Compose default, not as raw text", () => {
@@ -100,7 +100,7 @@ await test("the role flag is read through its Compose default, not as raw text",
 	);
 
 	assert.equal(failures.length, 2, failures.join("\n"));
-	assert.match(failureAt(failures, 0), /disables the webhook role that reads it/);
+	assert.match(failureAt(failures, 0), /disables the webhook role that reads it/u);
 });
 
 await test("removing it from the wrong container without adding it to the right one still fails", () => {
@@ -116,8 +116,8 @@ await test("removing it from the wrong container without adding it to the right 
 	);
 
 	assert.equal(failures.length, 1, failures.join("\n"));
-	assert.match(failureAt(failures, 0), /HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES is offered by/);
-	assert.match(failureAt(failures, 0), /no service in the deployment forwards it/);
+	assert.match(failureAt(failures, 0), /HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES is offered by/u);
+	assert.match(failureAt(failures, 0), /no service in the deployment forwards it/u);
 });
 
 await test("a placeholder in a local-only document is a developer knob, not an unforwarded setting", () => {
@@ -189,7 +189,10 @@ services:
       <<: [*shared, *runtime]
 `);
 
-	assert.ok(services.get("webhook-server")?.env.has("HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES"));
+	assert.equal(
+		services.get("webhook-server")?.env.has("HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES"),
+		true,
+	);
 	assert.equal(
 		services.get("webhook-server")?.flags.get("HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED"),
 		"true",
@@ -218,7 +221,7 @@ await test("a compose file that yields no services is a failure, not a pass", ()
 	const { failures } = analyse(APPLICATION, [["compose.yaml", "name: hephaestus\n"]]);
 
 	assert.ok(
-		failures.some((f) => /parsed to zero services/.test(f)),
+		failures.some((f) => f.includes("parsed to zero services")),
 		failures.join("\n"),
 	);
 });
@@ -255,7 +258,7 @@ await test("a role a profile overlay switches off does not count as a reader", (
 	);
 
 	assert.equal(failures.length, 2, failures.join("\n"));
-	assert.match(failureAt(failures, 0), /disables the webhook role that reads it/);
+	assert.match(failureAt(failures, 0), /disables the webhook role that reads it/u);
 });
 
 await test("every role an overlay switches off is read, not just the first", () => {
@@ -298,12 +301,12 @@ hephaestus:
 });
 
 await test("readProfileRoles rejects malformed YAML", async () => {
-	const root = await mkdtemp(join(tmpdir(), "check-env-roles-"));
+	const root = await mkdtemp(path.join(tmpdir(), "check-env-roles-"));
 	try {
-		const resources = join(root, "server/application/src/main/resources");
+		const resources = path.join(root, "server/application/src/main/resources");
 		await mkdir(resources, { recursive: true });
 		await writeFile(
-			join(resources, "application-worker.yml"),
+			path.join(resources, "application-worker.yml"),
 			"hephaestus: {}\n---\nhephaestus: [",
 		);
 		await assert.rejects(readProfileRoles(root));
@@ -315,10 +318,12 @@ await test("readProfileRoles rejects malformed YAML", async () => {
 /** The lock digest, spelled as the shipped topology spells it. */
 const AGENT_DIGEST = `HEPHAESTUS_AGENT_IMAGE_REFERENCE: \${HEPHAESTUS_IMAGE_AGENT_PI:?verified release lock required}`;
 
+/** Environment lines indented under a service's `environment:` key. */
+const lines = (env: readonly string[]): string => env.map((line) => `      ${line}`).join("\n");
+
 /** Two containers of the one image every role boots from, each given its own environment lines. */
-const applicationPair = (server: readonly string[], receiver: readonly string[]): ComposeFile[] => {
-	const lines = (env: readonly string[]): string => env.map((line) => `      ${line}`).join("\n");
-	return compose(`  application-server:
+const applicationPair = (server: readonly string[], receiver: readonly string[]): ComposeFile[] =>
+	compose(`  application-server:
     image: "\${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
     environment:
       HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED: "false"
@@ -330,7 +335,6 @@ ${lines(server)}
       HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES: \${HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES:-1073741824}
 ${lines(receiver)}
 `);
-};
 
 await test("application containers that spell an ungated setting differently fail", () => {
 	const { failures, applicationContainers: found } = analyse(
@@ -341,8 +345,8 @@ await test("application containers that spell an ungated setting differently fai
 
 	assert.deepEqual(found, ["compose.yaml:application-server", "compose.yaml:webhook-server"]);
 	assert.equal(failures.length, 1, failures.join("\n"));
-	assert.match(failureAt(failures, 0), /disagree on HEPHAESTUS_AGENT_IMAGE_REFERENCE/);
-	assert.match(failureAt(failures, 0), /<nothing>/);
+	assert.match(failureAt(failures, 0), /disagree on HEPHAESTUS_AGENT_IMAGE_REFERENCE/u);
+	assert.match(failureAt(failures, 0), /<nothing>/u);
 });
 
 await test("an application container that omits a deployment-wide setting fails", () => {
@@ -351,11 +355,11 @@ await test("an application container that omits a deployment-wide setting fails"
 	assert.equal(failures.length, 1, failures.join("\n"));
 	assert.match(
 		failureAt(failures, 0),
-		/HEPHAESTUS_AGENT_IMAGE_REFERENCE binds hephaestus\.agent\.image\.reference/,
+		/HEPHAESTUS_AGENT_IMAGE_REFERENCE binds hephaestus\.agent\.image\.reference/u,
 	);
 	assert.match(
 		failureAt(failures, 0),
-		/run the application image without it:\n {4}compose\.yaml:webhook-server/,
+		/run the application image without it:\n {4}compose\.yaml:webhook-server/u,
 	);
 });
 
@@ -363,7 +367,7 @@ await test("a deployment-wide setting no application container is given fails", 
 	const { failures } = analyse(APPLICATION, applicationPair([], []));
 
 	assert.equal(failures.length, 1, failures.join("\n"));
-	assert.match(failureAt(failures, 0), /no container running the application image is given it/);
+	assert.match(failureAt(failures, 0), /no container running the application image is given it/u);
 });
 
 await test("application containers agreeing on an ungated setting pass", () => {
@@ -394,7 +398,7 @@ await test("a DEPLOYMENT_WIDE entry naming a path application.yml does not have 
 	const { failures } = analyse(withoutTheSetting, applicationPair([AGENT_DIGEST], [AGENT_DIGEST]));
 
 	assert.ok(
-		failures.some((f) => /DEPLOYMENT_WIDE declares "hephaestus\.agent\.image\.reference"/.test(f)),
+		failures.some((f) => f.includes('DEPLOYMENT_WIDE declares "hephaestus.agent.image.reference"')),
 		failures.join("\n"),
 	);
 });
@@ -420,7 +424,7 @@ ${RECEIVER}`),
 await test("a scope naming a path application.yml does not have is a failure", () => {
 	const { failures } = analyse("hephaestus:\n    webhook:\n        secret: x\n", compose(RECEIVER));
 
-	assert.ok(failures.some((f) => /hephaestus\.webhook\.stream.*does not have/s.test(f)));
+	assert.ok(failures.some((f) => /hephaestus\.webhook\.stream.*does not have/su.test(f)));
 });
 
 await test("the shipped topology delivers every role-scoped variable to a container that runs its role", async () => {
@@ -428,14 +432,14 @@ await test("the shipped topology delivers every role-scoped variable to a contai
 	const shipped = await Promise.all(
 		files.map(async (file): Promise<ComposeFile> => [
 			file,
-			await readFile(join(REPO_ROOT, file), "utf8"),
+			await readFile(path.join(REPO_ROOT, file), "utf8"),
 		]),
 	);
 	// With the profile overlays, exactly as the CLI runs it. Omitting them makes this pass on a
 	// topology the real gate fails, which is the whole defect class the gate is here for.
 	const { failures, applicationContainers } = analyse(
 		await readFile(
-			join(REPO_ROOT, "server/application/src/main/resources/application.yml"),
+			path.join(REPO_ROOT, "server/application/src/main/resources/application.yml"),
 			"utf8",
 		),
 		shipped,
@@ -467,8 +471,8 @@ await test("Docker settings are rejected on a container that disables the worker
 `),
 	);
 	assert.equal(failures.length, 2, failures.join("\n"));
-	assert.match(failureAt(failures, 0), /disables the worker role that reads it/);
-	assert.match(failureAt(failures, 1), /no service running the worker role receives it/);
+	assert.match(failureAt(failures, 0), /disables the worker role that reads it/u);
+	assert.match(failureAt(failures, 1), /no service running the worker role receives it/u);
 });
 
 await test("Docker settings must be forwarded to a worker rather than only documented", () => {
@@ -478,8 +482,8 @@ await test("Docker settings must be forwarded to a worker rather than only docum
 	);
 	const { failures } = analyse(application, compose(RECEIVER));
 	assert.equal(failures.length, 1, failures.join("\n"));
-	assert.match(failureAt(failures, 0), /SANDBOX_DOCKER_HOST is offered by/);
-	assert.match(failureAt(failures, 0), /no service in the deployment forwards it/);
+	assert.match(failureAt(failures, 0), /SANDBOX_DOCKER_HOST is offered by/u);
+	assert.match(failureAt(failures, 0), /no service in the deployment forwards it/u);
 });
 
 await test("production overlays retain environment forwarding checks", () => {

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type { ModelRuntime, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 
 import { errorText } from "./pi-error-text.ts";
+import { hasText } from "./pi-text.ts";
 
 export interface ProviderConfig {
 	apiProtocol?: string;
@@ -21,15 +22,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
+function positiveInteger(value: unknown): boolean {
+	return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
 function asProviderConfig(parsed: unknown): ProviderConfig | null {
-	if (!isRecord(parsed)) return null;
-	const positiveInteger = (value: unknown) =>
-		typeof value === "number" && Number.isInteger(value) && value > 0;
+	if (!isRecord(parsed)) {
+		return null;
+	}
 	if (
 		("contextWindow" in parsed && !positiveInteger(parsed.contextWindow)) ||
 		("maxOutputTokens" in parsed && !positiveInteger(parsed.maxOutputTokens))
-	)
+	) {
 		return null;
+	}
 	return {
 		apiProtocol: typeof parsed.apiProtocol === "string" ? parsed.apiProtocol : undefined,
 		modelId: typeof parsed.modelId === "string" ? parsed.modelId : undefined,
@@ -42,12 +48,14 @@ function asProviderConfig(parsed: unknown): ProviderConfig | null {
 
 export function loadProviderConfig(cwd = DEFAULT_WORKSPACE_ROOT): ProviderConfig | null {
 	const path = `${cwd}/${PROVIDER_CONFIG_FILENAME}`;
-	if (!existsSync(path)) return null;
+	if (!existsSync(path)) {
+		return null;
+	}
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
 		return asProviderConfig(parsed);
-	} catch (e) {
-		console.error(`[pi-provider] failed to parse ${path}: ${errorText(e)}`);
+	} catch (error) {
+		console.error(`[pi-provider] failed to parse ${path}: ${errorText(error)}`);
 		return null;
 	}
 }
@@ -58,8 +66,13 @@ export function registerHephaestusProvider(
 	env: Record<string, string | undefined> = process.env,
 ): boolean {
 	const baseUrl = env.LLM_PROXY_URL;
-	const hasToken = Boolean(env.LLM_PROXY_TOKEN);
-	if (!config?.apiProtocol || !config.modelId || !baseUrl || !hasToken) {
+	if (
+		config === null ||
+		!hasText(config.apiProtocol) ||
+		!hasText(config.modelId) ||
+		!hasText(baseUrl) ||
+		!hasText(env.LLM_PROXY_TOKEN)
+	) {
 		return false;
 	}
 
@@ -77,7 +90,7 @@ export function registerHephaestusProvider(
 		baseUrl,
 		apiKey: "$LLM_PROXY_TOKEN",
 		authHeader: true,
-		headers: env.TRACEPARENT ? { traceparent: env.TRACEPARENT } : undefined,
+		headers: hasText(env.TRACEPARENT) ? { traceparent: env.TRACEPARENT } : undefined,
 		api: config.apiProtocol,
 		models: [model],
 	});

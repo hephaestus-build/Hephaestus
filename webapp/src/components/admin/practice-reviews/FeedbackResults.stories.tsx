@@ -1,19 +1,20 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { FeedbackResults } from "./FeedbackResults";
-import { reviewFeedback } from "./story-mock-data";
+import { reviewFeedback } from "./fixtures";
 
 const [firstFeedback] = reviewFeedback;
-if (!firstFeedback) throw new Error("The review fixtures must contain a piece of feedback");
+if (!firstFeedback) {
+	throw new Error("The review fixtures must contain a piece of feedback");
+}
 
 /** Storybook resets a spy that appears in `args` between runs, so one instance is enough. */
 const clearFilters = fn();
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Delivery results",
 	component: FeedbackResults,
 	parameters: {
 		layout: "padded",
@@ -40,7 +41,7 @@ export const Default: Story = {
 		canvas.getByText("The developer has opted out of AI feedback.");
 		canvas.getByText("Found while reviewing past work, which is measured but never sent.");
 		canvas.getByText("Nearly the same as other feedback from the same review.");
-		await expect(canvas.queryAllByText(/Feedback for/)).toHaveLength(0);
+		await expect(canvas.queryAllByText(/Feedback for/u)).toHaveLength(0);
 	},
 };
 
@@ -59,11 +60,11 @@ export const LongFeedback: Story = {
 	parameters: { chromatic: { viewports: [320, 1440] } },
 	play: async ({ canvas }) => {
 		const title = await canvas.findByRole("link", {
-			name: /2 issues to tighten in this change, plus one thing worth keeping/,
+			name: /2 issues to tighten in this change, plus one thing worth keeping/u,
 		});
 		await expect(title).toHaveAccessibleName(expect.stringContaining("…"));
 		await expect(title).not.toHaveAccessibleName(expect.stringContaining("**"));
-		await expect(canvas.queryByText(/```/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/```/u)).not.toBeInTheDocument();
 		await expectNoPageOverflow();
 	},
 };

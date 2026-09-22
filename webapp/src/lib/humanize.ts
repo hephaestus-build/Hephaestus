@@ -6,8 +6,8 @@
  */
 export function humanizeToken(token: string): string {
 	const words = token
-		.replace(/_/g, " ")
-		.replace(/([a-z])([A-Z])/g, "$1 $2")
+		.replaceAll("_", " ")
+		.replaceAll(/(?<lower>[a-z])(?<upper>[A-Z])/gu, "$<lower> $<upper>")
 		.toLowerCase();
 	return words.charAt(0).toUpperCase() + words.slice(1);
 }

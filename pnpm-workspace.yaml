@@ -13,6 +13,9 @@ publicHoistPattern:
   - "@types/react-dom"
   - "@types/hast"
 minimumReleaseAge: 4320
+# Initial, explicitly requested adoption; keep the age policy for every other package/version.
+minimumReleaseAgeExclude:
+  - "@shadcn/lint@0.1.0"
 
 allowBuilds:
   '@google/genai': false
@@ -27,8 +30,8 @@ allowBuilds:
 
 # The tools vite-plus bundles, at the versions it bundles; `vp run sync:toolchain-pins` writes them.
 catalog:
-  oxfmt: 0.64.0
-  oxlint: 1.79.0
+  oxfmt: 0.67.0
+  oxlint: 1.82.0
   oxlint-tsgolint: 7.0.2001
   "@oxlint/plugins": 1.79.0
   vitest: 4.1.11
@@ -36,6 +39,7 @@ catalog:
   "@vitest/browser-playwright": 4.1.11
   "@vitest/coverage-v8": 4.1.11
   "@vitest/runner": 4.1.11
+  vite: npm:@voidzero-dev/vite-plus-core@0.3.2
 
 overrides:
   mermaid: 11.17.2
@@ -52,4 +56,3 @@ overrides:
   serialize-javascript: 7.1.1
   "shell-quote@<=1.8.4": 1.10.0
   "uuid@<11.1.1": 11.1.1
-

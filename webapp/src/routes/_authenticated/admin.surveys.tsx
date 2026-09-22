@@ -8,18 +8,21 @@ import {
 	GUARDED_SURVEY_LEVEL_KINDS,
 	SURVEY_LEVEL_KINDS,
 	surveyLevel,
-} from "@/components/admin/feedback/admin-surveys-search";
+} from "@/components/admin/product-feedback/admin-surveys-search";
 import {
 	AdminSurveysTable,
 	type AdminSurveysTableState,
-} from "@/components/admin/feedback/AdminSurveysTable";
+} from "@/components/admin/product-feedback/AdminSurveysTable";
 import { useNow } from "@/components/common/use-now";
-import { encodeDetailStack, parseDetailStack } from "@/components/core/detail-drawer/detail-stack";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { DetailStackLink } from "@/components/core/detail-drawer/DetailStackLink";
-import { useDetailStack } from "@/components/core/detail-drawer/use-detail-stack";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import {
+	encodeDetailStack,
+	parseDetailStack,
+} from "@/components/layout/detail-drawer/detail-stack";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { buttonVariants } from "@/components/ui/button";
 import { useClampedPage } from "@/hooks/use-clamped-page";
 import { instanceAdminHead } from "@/lib/page-title";
@@ -49,21 +52,31 @@ function AdminSurveysPage() {
 		...adminListProductSurveysOptions({ query: { page, size: PAGE_SIZE } }),
 		placeholderData: keepPreviousData,
 	});
-	const onPageChange = (next: number) =>
+	const onPageChange = (next: number) => {
 		void setSearch((previous) => ({ ...previous, page: pageParam(next) }));
+	};
 	useClampedPage(page, surveysQuery.data?.page?.totalPages, onPageChange);
 
-	const state: AdminSurveysTableState = surveysQuery.isPending
-		? { status: "loading" }
-		: surveysQuery.isError
-			? { status: "error", error: surveysQuery.error, onRetry: () => void surveysQuery.refetch() }
-			: {
-					status: "ready",
-					surveys: surveysQuery.data.content ?? [],
-					page,
-					totalPages: surveysQuery.data.page?.totalPages ?? 0,
-					onPageChange,
-				};
+	let state: AdminSurveysTableState;
+	if (surveysQuery.isPending) {
+		state = { status: "loading" };
+	} else if (surveysQuery.isError) {
+		state = {
+			status: "error",
+			error: surveysQuery.error,
+			onRetry: () => {
+				void surveysQuery.refetch();
+			},
+		};
+	} else {
+		state = {
+			status: "ready",
+			surveys: surveysQuery.data.content ?? [],
+			page,
+			totalPages: surveysQuery.data.page?.totalPages ?? 0,
+			onPageChange,
+		};
+	}
 
 	return (
 		<PageLayout>
@@ -101,7 +114,7 @@ function AdminSurveysPage() {
 								nested={level.nested}
 								// Replaces the composer in history: Back from the results should not reopen an
 								// empty composer for a survey that was just published.
-								onPublished={(surveyId) =>
+								onPublished={(surveyId) => {
 									void navigate({
 										search: (previous) => ({
 											...previous,
@@ -109,8 +122,8 @@ function AdminSurveysPage() {
 										}),
 										replace: true,
 										resetScroll: false,
-									})
-								}
+									});
+								}}
 							/>
 						);
 					}

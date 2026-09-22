@@ -5,7 +5,7 @@ import { maskOptionalRuntimePeerMetadata } from "./lib/optional-runtime-peer.ts"
 
 const runtime = ["b", "un"].join("");
 const peer = `${runtime}-types-no-globals`;
-const forbidden = new RegExp(`\\b${runtime}\\b`, "i");
+const forbidden = new RegExp(`\\b${runtime}\\b`, "iu");
 const metadata = `packages:
   unplugin@3.3.0:
     peerDependencies:

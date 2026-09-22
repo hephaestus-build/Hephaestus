@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { fn } from "storybook/test";
 
 import type { TeamInfo } from "@/api/types.gen";
 
@@ -48,7 +49,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	args: {
-		onToggleVisibility: () => {},
+		onToggleVisibility: fn(),
 		getCatalogLabels: () => [],
 		children: <div className="text-sm text-muted-foreground">Repositories/children slot</div>,
 	},
@@ -67,7 +68,7 @@ export const Hidden: Story = {
 			labels: [],
 		} satisfies TeamInfo,
 		memberCount: 5,
-		onToggleVisibility: () => {},
+		onToggleVisibility: fn(),
 		getCatalogLabels: () => [],
 	},
 };

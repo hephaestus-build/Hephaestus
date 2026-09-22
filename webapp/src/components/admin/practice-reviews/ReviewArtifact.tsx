@@ -13,6 +13,7 @@ import {
 	isKnownArtifactKind,
 	type KnownArtifactKind,
 } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 export type ReviewArtifactDisplay = ReviewArtifactData | ReviewRunTarget;
 
@@ -57,19 +58,25 @@ export function reviewArtifactIcon(artifact: ReviewArtifactDisplay): ArtifactGly
 
 export function reviewArtifactLabel(artifact: ReviewArtifactDisplay): string {
 	switch (artifact.type) {
-		case ARTIFACT_KIND.pullRequest:
-			if (artifact.provider === "GITLAB")
+		case ARTIFACT_KIND.pullRequest: {
+			if (artifact.provider === "GITLAB") {
 				return artifact.number == null ? "Merge request" : `MR !${artifact.number}`;
+			}
 			return artifact.number == null ? "Pull request" : `PR #${artifact.number}`;
-		case ARTIFACT_KIND.issue:
+		}
+		case ARTIFACT_KIND.issue: {
 			return artifact.number == null ? "Issue" : `Issue #${artifact.number}`;
-		case ARTIFACT_KIND.conversationThread:
-			return artifact.channelName ? `#${artifact.channelName}` : "Conversation";
-		case ARTIFACT_KIND.document:
+		}
+		case ARTIFACT_KIND.conversationThread: {
+			return hasText(artifact.channelName) ? `#${artifact.channelName}` : "Conversation";
+		}
+		case ARTIFACT_KIND.document: {
 			return "Document";
-		default:
+		}
+		default: {
 			// A kind this build has no copy for still names itself rather than rendering blank.
 			return artifactKindLabel(artifact.type);
+		}
 	}
 }
 
@@ -110,7 +117,7 @@ export function ReviewArtifactLabel({ artifact, className }: ReviewArtifactProps
 	}
 	const Icon = reviewArtifactIcon(artifact);
 	return (
-		<span className={cn("inline-flex min-w-0 max-w-full items-center gap-1.5", className)}>
+		<span className={cn("inline-flex max-w-full min-w-0 items-center gap-1.5", className)}>
 			<Icon className="size-3.5 shrink-0" aria-hidden />
 			<span className="min-w-0 break-words">{qualifiedLabel(artifact)}</span>
 		</span>
@@ -122,7 +129,7 @@ export function ReviewArtifactLabel({ artifact, className }: ReviewArtifactProps
  * not the link's name. A caller that wants the work's title renders it outside.
  */
 export function ReviewArtifactLink({ artifact, className }: ReviewArtifactProps) {
-	if (!artifact?.url) {
+	if (!hasText(artifact?.url)) {
 		return <ReviewArtifactLabel artifact={artifact} className={className} />;
 	}
 	const Icon = reviewArtifactIcon(artifact);
@@ -132,7 +139,7 @@ export function ReviewArtifactLink({ artifact, className }: ReviewArtifactProps)
 			target="_blank"
 			rel="noopener noreferrer"
 			className={cn(
-				"group relative inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm",
+				"group relative inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-sm",
 				className,
 			)}
 		>

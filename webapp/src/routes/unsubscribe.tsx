@@ -26,7 +26,7 @@ export const Route = createFileRoute("/unsubscribe")({
 
 function UnsubscribeRoute() {
 	const { token } = Route.useSearch();
-	return token ? (
+	return token !== undefined && token.length > 0 ? (
 		<UnsubscribeConfirmation key={token} token={token} />
 	) : (
 		<EmailUnsubscribePage state={{ status: "invalid" }} />
@@ -35,13 +35,23 @@ function UnsubscribeRoute() {
 
 function UnsubscribeConfirmation({ token }: { token: string }) {
 	const unsubscribe = useMutation(unsubscribeEmailMutation({ client: anonymousClient }));
-	if (unsubscribe.isSuccess) return <EmailUnsubscribePage state={{ status: "complete" }} />;
+	if (unsubscribe.isSuccess) {
+		return <EmailUnsubscribePage state={{ status: "complete" }} />;
+	}
+	let status: "confirm" | "pending" | "error" = "confirm";
+	if (unsubscribe.isPending) {
+		status = "pending";
+	} else if (unsubscribe.isError) {
+		status = "error";
+	}
 	return (
 		<EmailUnsubscribePage
 			state={{
-				status: unsubscribe.isPending ? "pending" : unsubscribe.isError ? "error" : "confirm",
+				status,
 				onConfirm: () => {
-					if (unsubscribe.isPending) return;
+					if (unsubscribe.isPending) {
+						return;
+					}
 					unsubscribe.mutate({ path: { token }, body: { "List-Unsubscribe": "One-Click" } });
 				},
 			}}

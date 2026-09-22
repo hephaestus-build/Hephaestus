@@ -1,6 +1,6 @@
 import { CircleCheckIcon, CirclePauseIcon } from "lucide-react";
 import type { PracticeReviewSettings } from "@/api/types.gen";
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type WorkspaceDeliveryStatus = PracticeReviewSettings["deliveryStatus"];
 

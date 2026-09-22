@@ -9,9 +9,9 @@ export interface PreviewLink {
 
 export function markdown(value: string): string {
 	return value
-		.replaceAll(/\s/g, " ")
+		.replaceAll(/\s/gu, " ")
 		.replaceAll("&", "&amp;")
-		.replaceAll(/[\\`*_[\]~|#!]/g, "\\$&")
+		.replaceAll(/[\\`*_[\]~|#!]/gu, String.raw`\$&`)
 		.replaceAll("<", "&lt;")
 		.replaceAll(">", "&gt;");
 }
@@ -19,8 +19,12 @@ export function markdown(value: string): string {
 export function compareLinks(left: PreviewLink, right: PreviewLink): number {
 	// Code-point order is stable across runner locales and metadata traversal order.
 	for (const key of ["group", "title", "url"] as const) {
-		if (left[key] < right[key]) return -1;
-		if (left[key] > right[key]) return 1;
+		if (left[key] < right[key]) {
+			return -1;
+		}
+		if (left[key] > right[key]) {
+			return 1;
+		}
 	}
 	return 0;
 }
@@ -47,8 +51,12 @@ export function renderPreviewComments(
 				throw new Error(`A preview link in ${group} exceeds GitHub's comment limit.`);
 			}
 			if (page.length + block.length + separator.length + link.length > budget) {
-				if (block !== heading) page += block;
-				if (page) pages.push(page.trimEnd());
+				if (block !== heading) {
+					page += block;
+				}
+				if (page) {
+					pages.push(page.trimEnd());
+				}
 				page = "";
 				block = heading + link;
 			} else {
@@ -57,7 +65,9 @@ export function renderPreviewComments(
 		}
 		page += `${block}\n\n`;
 	}
-	if (page || pages.length === 0) pages.push(page.trimEnd() || emptyMessage);
+	if (page || pages.length === 0) {
+		pages.push(page.trimEnd() || emptyMessage);
+	}
 	return pages.map((body, index) => {
 		const part =
 			pages.length > 1

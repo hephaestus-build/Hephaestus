@@ -29,7 +29,7 @@ void test("the shared reconnaissance gets a turn's worth of time, not a share of
 	// expires inside the pass rather than after the review is already over.
 	assert.equal(deriveReconBudget(deriveTimeouts(120_000).initialMs), 25_500);
 	for (const invalid of [0, -1, Number.NaN]) {
-		assert.throws(() => deriveReconBudget(invalid), /positive number/);
+		assert.throws(() => deriveReconBudget(invalid), /positive number/u);
 	}
 });
 
@@ -87,7 +87,7 @@ for (const invalid of [-1, Number.NaN]) {
 	void test(`rejects invalid initial elapsed time ${invalid}`, () => {
 		assert.throws(
 			() => deriveRetryWindow(deriveTimeouts(900_000), invalid, 900_000),
-			/initialElapsedMs must be a non-negative/,
+			/initialElapsedMs must be a non-negative/u,
 		);
 	});
 }
@@ -95,14 +95,14 @@ for (const invalid of [-1, Number.NaN]) {
 void test("rejects a stage timeout that cannot be spent", () => {
 	assert.throws(
 		() => deriveRetryWindow({ initialMs: 100, retryMs: -1, compositionMs: 0 }, 0, 100),
-		/retryMs must be a non-negative/,
+		/retryMs must be a non-negative/u,
 	);
 });
 
 void test("a small review never allocates more time than it owns", () => {
 	assert.deepEqual(deriveTimeouts(10_000), {
-		initialMs: 8_500,
-		retryMs: 1_500,
+		initialMs: 8500,
+		retryMs: 1500,
 		compositionMs: 0,
 	});
 });
@@ -117,9 +117,9 @@ void test("a composing review reserves time for intervention before detection st
 
 void test("composition and retry stay inside a small budget", () => {
 	assert.deepEqual(deriveTimeouts(10_000, true), {
-		initialMs: 7_225,
-		retryMs: 1_275,
-		compositionMs: 1_500,
+		initialMs: 7225,
+		retryMs: 1275,
+		compositionMs: 1500,
 	});
 });
 
@@ -136,7 +136,7 @@ void test("the next turn adapts to the remaining time and practice batches", () 
 
 for (const invalid of [0, -1, 1.5, Number.NaN]) {
 	void test(`rejects invalid remaining turn count ${invalid}`, () => {
-		assert.throws(() => deriveTurnTiming(1_000, invalid), /positive integer/);
+		assert.throws(() => deriveTurnTiming(1000, invalid), /positive integer/u);
 	});
 }
 
@@ -149,22 +149,22 @@ void test("a workstream budget is not capped below its fair share", () => {
 });
 
 void test("rejects invalid workstream capacity", () => {
-	assert.throws(() => deriveWorkstreamBudget(1_000, 0, 1), /activeSlots/);
-	assert.throws(() => deriveWorkstreamBudget(1_000, 1, 0), /remainingWorkstreams/);
+	assert.throws(() => deriveWorkstreamBudget(1000, 0, 1), /activeSlots/u);
+	assert.throws(() => deriveWorkstreamBudget(1000, 1, 0), /remainingWorkstreams/u);
 });
 
 void test("retry cannot consume composition time or exceed the remaining process budget", () => {
 	const timeouts = deriveTimeouts(900_000, true);
 	assert.equal(
-		deriveRetryWindow(timeouts, timeouts.initialMs, timeouts.compositionMs + 5_000),
-		5_000,
+		deriveRetryWindow(timeouts, timeouts.initialMs, timeouts.compositionMs + 5000),
+		5000,
 	);
 	assert.equal(deriveRetryWindow(timeouts, timeouts.initialMs, timeouts.compositionMs), 0);
 	assert.equal(deriveRetryWindow(timeouts, timeouts.initialMs, -1), 0);
 	for (const remaining of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
 		assert.throws(
 			() => deriveRetryWindow(timeouts, 0, remaining),
-			/remainingProcessMs must be finite/,
+			/remainingProcessMs must be finite/u,
 		);
 	}
 });
@@ -184,5 +184,5 @@ void test("composition uses only the time left after admission and session setup
 	assert.equal(deriveCompositionWindow(135_000, 10_000), 10_000);
 	assert.equal(deriveCompositionWindow(135_000, 0), 0);
 	assert.equal(deriveCompositionWindow(135_000, -1), 0);
-	assert.throws(() => deriveCompositionWindow(135_000, Number.NaN), /finite/);
+	assert.throws(() => deriveCompositionWindow(135_000, Number.NaN), /finite/u);
 });

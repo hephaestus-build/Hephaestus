@@ -13,7 +13,6 @@ const OPTIONS = [
 ] as const;
 
 const meta = {
-	title: "Common/Filter toggle",
 	component: FilterToggle,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

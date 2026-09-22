@@ -34,22 +34,31 @@ const page = await readFile(PAGE, "utf8");
 
 /** Every `##`…`####` section body, keyed by heading and ending where the next heading starts. */
 const SECTIONS = new Map<string, string>();
-const parts = page.split(/^#{2,4} (.+)$/m);
-for (let index = 1; index + 1 < parts.length; index += 2) {
-	const [title, body] = [parts[index], parts[index + 1]];
-	if (title !== undefined && body !== undefined) SECTIONS.set(title.trim(), body);
+const headings = [...page.matchAll(/^#{2,4} (?<title>.+)$/gmu)];
+for (const [index, heading] of headings.entries()) {
+	const title = heading.groups?.title;
+	if (title !== undefined) {
+		SECTIONS.set(
+			title.trim(),
+			page.slice(heading.index + heading[0].length, headings[index + 1]?.index),
+		);
+	}
 }
 
 function section(title: string): string {
 	const body = SECTIONS.get(title);
-	if (body === undefined) throw new Error(`${PAGE} has no "${title}" section`);
+	if (body === undefined) {
+		throw new Error(`${PAGE} has no "${title}" section`);
+	}
 	return body;
 }
 
 /** A table row's cells, and nothing for prose or for the `| --- |` separator. */
 function cells(line: string): string[] {
 	const row = line.trim();
-	if (!row.startsWith("|") || !row.endsWith("|") || /^[|\s:-]+$/.test(row)) return [];
+	if (!row.startsWith("|") || !row.endsWith("|") || /^[|\s:-]+$/u.test(row)) {
+		return [];
+	}
 	return row
 		.slice(1, -1)
 		.split("|")
@@ -61,20 +70,24 @@ function grants(title: string): Map<string, string> {
 	const granted = new Map<string, string>();
 	for (const line of section(title).split("\n")) {
 		const cell = cells(line);
-		const key = cell.length === 4 ? /\(`([a-z_]+)`\)$/.exec(cell[0] ?? "") : null;
-		if (key === null) continue;
+		const key = cell.length === 4 ? /\(`(?<key>[a-z_]+)`\)$/u.exec(cell[0] ?? "") : null;
+		if (key === null) {
+			continue;
+		}
 		const level = LEVELS.get(cell[2] ?? "");
 		assert.ok(level !== undefined, `${title} states an unknown level "${cell[2] ?? ""}"`);
-		granted.set(asString(key[1], "permission key"), level);
+		granted.set(asString(key.groups?.key, "permission key"), level);
 	}
 	assert.notEqual(granted.size, 0, `${title} lists no permission; the row shape changed`);
 	return granted;
 }
 
-const block = /```json\n([\s\S]*?)```/.exec(page);
-if (block === null) throw new Error(`${PAGE} carries no manifest template`);
+const block = /```json\n(?<template>[\s\S]*?)```/u.exec(page);
+if (block === null) {
+	throw new Error(`${PAGE} carries no manifest template`);
+}
 const manifest = asRecord(
-	parseJson(asString(block[1], "manifest template")),
+	parseJson(asString(block.groups?.template, "manifest template")),
 	`${PAGE} manifest template`,
 );
 const permissions = asRecord(manifest.default_permissions, "default_permissions");
@@ -94,9 +107,10 @@ void test("the manifest grants exactly the permissions the tables explain", () =
 });
 
 void test("the manifest subscribes to exactly the events the server consumes", async () => {
+	const source = await readFile(EVENT_TYPES, "utf8");
 	const handled = new Set(
-		[...(await readFile(EVENT_TYPES, "utf8")).matchAll(/^\s+[A-Z_\d]+\("([a-z_\d]+)"\)/gm)].flatMap(
-			([, value]) => (value === undefined ? [] : [value]),
+		[...source.matchAll(/^\s+[A-Z_\d]+\("(?<value>[a-z_\d]+)"\)/gmu)].flatMap(({ groups }) =>
+			groups?.value === undefined ? [] : [groups.value],
 		),
 	);
 	assert.notEqual(handled.size, 0, `${EVENT_TYPES} parsed to no event; the pattern is stale`);
@@ -113,17 +127,17 @@ void test("the event table lists exactly the manifest's subscriptions", () => {
 		.split("\n")
 		.flatMap((line) => {
 			const cell = cells(line);
-			const event = cell.length === 2 ? /^`([a-z_\d]+)`$/.exec(cell[0] ?? "") : null;
-			return event === null ? [] : [asString(event[1], "event name")];
+			const event = cell.length === 2 ? /^`(?<name>[a-z_\d]+)`$/u.exec(cell[0] ?? "") : null;
+			return event === null ? [] : [asString(event.groups?.name, "event name")];
 		});
 
 	assert.deepEqual(new Set(listed), new Set(events), "the event table and the manifest disagree");
 });
 
 void test("no event is both subscribed and deliberately not subscribed", () => {
-	const excluded = [...section("Deliberately not subscribed").matchAll(/`([a-z_\d]+)`/g)].flatMap(
-		([, name]) => (name === undefined ? [] : [name]),
-	);
+	const excluded = [
+		...section("Deliberately not subscribed").matchAll(/`(?<name>[a-z_\d]+)`/gu),
+	].flatMap(({ groups }) => (groups?.name === undefined ? [] : [groups.name]));
 	assert.notEqual(excluded.length, 0, "the exclusion table names no event; the pattern is stale");
 
 	assert.deepEqual(

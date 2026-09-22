@@ -11,7 +11,9 @@ type ScheduledWorkspace = Pick<Workspace, "leaderboardScheduleDay" | "leaderboar
 export function resolveLeaderboardSchedule(
 	workspace: ScheduledWorkspace | undefined,
 ): LeaderboardSchedule {
-	if (!workspace) return DEFAULT_SCHEDULE;
+	if (!workspace) {
+		return DEFAULT_SCHEDULE;
+	}
 
 	const scheduledTime = firstNonBlank(workspace.leaderboardScheduleTime) ?? "9:00";
 	const scheduledDay = workspace.leaderboardScheduleDay ?? 2;

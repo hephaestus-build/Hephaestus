@@ -3,8 +3,8 @@ import { useParams } from "@tanstack/react-router";
 
 import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceListItem } from "@/api/types.gen";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { toScmProviderType } from "@/lib/provider";
+import { toScmProviderType } from "@/lib/provider/provider-terms";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 /** Shared so an unloaded query keeps the same `workspaces` identity across renders. */
 const NO_WORKSPACES: WorkspaceListItem[] = [];

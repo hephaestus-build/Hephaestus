@@ -2,7 +2,7 @@ import { CircleDashedIcon, CircleHelpIcon, TrendingDownIcon, TrendingUpIcon } fr
 
 import type { PracticeTrend } from "@/api/types.gen";
 
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type TrendDirection = PracticeTrend["direction"];
 export const PRACTICE_TREND_DEFS: StatusDefs<TrendDirection> = {

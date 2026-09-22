@@ -4,7 +4,9 @@
  * keeps a real reason out of `[object Object]`.
  */
 export function errorText(e: unknown): string {
-	if (e instanceof Error) return e.message;
+	if (e instanceof Error) {
+		return e.message;
+	}
 	if (typeof e === "object" && e !== null && "message" in e && typeof e.message === "string") {
 		return e.message;
 	}

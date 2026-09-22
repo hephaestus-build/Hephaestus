@@ -80,21 +80,27 @@ export function addAssistantUsage(
 	ledger: UsageLedger,
 	msg: ReportedMessage | null | undefined,
 ): void {
-	if (msg?.role !== "assistant") return;
+	if (msg?.role !== "assistant") {
+		return;
+	}
 	// A turn that failed before the provider answered arrives without a usage block, and billing from
 	// it unchecked would throw rather than skip.
-	const usage = msg.usage;
-	if (!usage) return;
+	const { usage } = msg;
+	if (!usage) {
+		return;
+	}
 	// message_end fires once per message, so this is belt and braces — but a redelivered event would
 	// otherwise double a real bill, and over-billing is the one error direction this whole change exists
 	// to avoid creating. `responseId` is the per-response identifier every pi-ai provider sets; there is
 	// no `id` on an assistant message, which is what this guard used to read and why it never once fired.
 	if (msg.responseId != null) {
-		if (ledger.seenIds.has(msg.responseId)) return;
+		if (ledger.seenIds.has(msg.responseId)) {
+			return;
+		}
 		ledger.seenIds.add(msg.responseId);
 	}
-	ledger.assistantMessages++;
-	ledger.totalCalls++;
+	ledger.assistantMessages += 1;
+	ledger.totalCalls += 1;
 	ledger.model = msg.model ?? ledger.model;
 	ledger.inputTokens += usage.input || 0;
 	ledger.outputTokens += usage.output || 0;

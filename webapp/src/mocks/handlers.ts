@@ -26,7 +26,9 @@ import {
 const exportPolls = new Map<string, number>();
 
 /** Body of `PATCH /admin/users/:id` — the only field the admin table sends. */
-type AdminUserPatch = { appRole?: string };
+interface AdminUserPatch {
+	appRole?: string;
+}
 
 export const handlers = [
 	// --- current user -------------------------------------------------------
@@ -97,14 +99,16 @@ export const handlers = [
 		// Any id echoes a user back, so a story can PATCH a row the fixture list does not carry.
 		const [fallback] = adminUsers;
 		const existing = adminUsers.find((u) => String(u.id) === String(params.id)) ?? fallback;
-		if (!existing) return new HttpResponse(null, { status: 404 });
+		if (!existing) {
+			return new HttpResponse(null, { status: 404 });
+		}
 		return HttpResponse.json({ ...existing, appRole: body.appRole ?? existing.appRole });
 	}),
 
 	// --- impersonation -------------------------------------------------------
 	http.post("*/auth/impersonate", () => new HttpResponse(null, { status: 204 })),
 	// `:exit` is a literal colon-suffix on the path, not an MSW path param.
-	http.post("*/auth/impersonate\\:exit", () => new HttpResponse(null, { status: 204 })),
+	http.post(String.raw`*/auth/impersonate\:exit`, () => new HttpResponse(null, { status: 204 })),
 ];
 
 // ---------------------------------------------------------------------------

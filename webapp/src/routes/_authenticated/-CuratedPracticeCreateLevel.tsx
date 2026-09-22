@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 
 import {
@@ -14,7 +15,7 @@ import {
 } from "@/components/admin/curated-catalog/CuratedPracticeForm";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { DrawerBody } from "@/components/ui/drawer";
 import { problemDetailOf } from "@/lib/problem-detail";
 
@@ -38,38 +39,47 @@ export function CuratedPracticeCreateLevel({ nested, onDone }: CuratedPracticeCr
 			toast.error("Couldn't create the practice", { description: problemDetailOf(error) }),
 	});
 
+	let body: ReactNode;
+	if (catalogQuery.isPending || definitionOptionsQuery.isPending) {
+		body = (
+			<DrawerBody>
+				<PracticeDefinitionSkeleton />
+			</DrawerBody>
+		);
+	} else if (catalogQuery.isError || definitionOptionsQuery.isError) {
+		body = (
+			<DrawerBody>
+				<QueryErrorAlert
+					error={catalogQuery.error ?? definitionOptionsQuery.error}
+					title="Couldn't load the practice editor"
+					onRetry={() => {
+						void catalogQuery.refetch();
+						void definitionOptionsQuery.refetch();
+					}}
+				/>
+			</DrawerBody>
+		);
+	} else {
+		body = (
+			<CuratedPracticeForm
+				mode="create"
+				cancel={<LevelCancel />}
+				groups={catalogQuery.data.groups.map((group) => ({
+					slug: group.slug,
+					name: group.definition.name,
+				}))}
+				isPending={createPractice.isPending}
+				definitionOptions={definitionOptionsQuery.data}
+				onSubmit={({ slug, ...definition }: CuratedPracticeFormValue) =>
+					createPractice.mutate({ body: { slug, definition } })
+				}
+			/>
+		);
+	}
+
 	return (
 		<CuratedFormLevel kind="practice-new" nested={nested}>
-			{catalogQuery.isPending || definitionOptionsQuery.isPending ? (
-				<DrawerBody>
-					<PracticeDefinitionSkeleton />
-				</DrawerBody>
-			) : catalogQuery.isError || definitionOptionsQuery.isError ? (
-				<DrawerBody>
-					<QueryErrorAlert
-						error={catalogQuery.error ?? definitionOptionsQuery.error}
-						title="Couldn't load the practice editor"
-						onRetry={() => {
-							void catalogQuery.refetch();
-							void definitionOptionsQuery.refetch();
-						}}
-					/>
-				</DrawerBody>
-			) : (
-				<CuratedPracticeForm
-					mode="create"
-					cancel={<LevelCancel />}
-					groups={catalogQuery.data.groups.map((group) => ({
-						slug: group.slug,
-						name: group.definition.name,
-					}))}
-					isPending={createPractice.isPending}
-					definitionOptions={definitionOptionsQuery.data}
-					onSubmit={({ slug, ...definition }: CuratedPracticeFormValue) =>
-						createPractice.mutate({ body: { slug, definition } })
-					}
-				/>
-			)}
+			{body}
 		</CuratedFormLevel>
 	);
 }

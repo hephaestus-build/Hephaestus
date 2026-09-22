@@ -3,13 +3,13 @@ import { expect, fn, screen, within } from "storybook/test";
 
 import type { ListPracticeReviewFeedbackResponse, ReviewFeedback } from "@/api/types.gen";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import { FeedbackListPage } from "./FeedbackListPage";
+import { manyFeedback, reviewFeedback, selects, workspaceMembers } from "./fixtures";
 import { type FeedbackSearch, feedbackQuery, REVIEW_PAGE_SIZE } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
-import { manyFeedback, reviewFeedback, workspaceMembers } from "./story-mock-data";
 
 const PEOPLE: ReviewPeople = {
 	options: workspaceMembers
@@ -53,8 +53,6 @@ function feedbackPage(
 	search: FeedbackSearch,
 ): ListPracticeReviewFeedbackResponse {
 	const query = feedbackQuery(search, REVIEW_PAGE_SIZE);
-	const selects = (selected: string[] | undefined, actual: string | undefined) =>
-		!selected?.length || (actual !== undefined && selected.includes(actual));
 	const rows = candidates.filter(
 		(row) =>
 			(!query.from || row.createdAt >= new Date(query.from)) &&
@@ -77,7 +75,6 @@ function feedbackPage(
 }
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Delivery",
 	component: FeedbackListPage,
 	parameters: {
 		layout: "fullscreen",
@@ -141,10 +138,10 @@ export const Default: Story = {
 export const LongFeedbackReadsAsProse: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		const row = await canvas.findByRole("link", { name: /2 issues to tighten in this change/ });
+		const row = await canvas.findByRole("link", { name: /2 issues to tighten in this change/u });
 		await expect(row).toHaveAccessibleName(expect.stringContaining("…"));
 		await expect(row).not.toHaveAccessibleName(expect.stringContaining("```"));
-		await expect(canvas.queryByText(/```java/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/```java/u)).not.toBeInTheDocument();
 	},
 };
 
@@ -155,7 +152,7 @@ export const FilterToOneRecipient: Story = {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Recipient" }));
 		const listbox = await screen.findByRole("listbox");
 		await userEvent.click(
-			await within(listbox).findByRole("option", { name: /Katherine Johnson/ }),
+			await within(listbox).findByRole("option", { name: /Katherine Johnson/u }),
 		);
 		await canvas.findByRole("combobox", { name: "Recipient: Katherine Johnson" });
 		await canvas.findByText("3 pieces of feedback match your filters.");
@@ -171,8 +168,8 @@ export const WhyWithheldFacetOpen: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Why withheld" }));
 		const listbox = await screen.findByRole("listbox");
-		await within(listbox).findByRole("option", { name: /The work moved on/ });
-		within(listbox).getByRole("option", { name: /The developer's choice/ });
+		await within(listbox).findByRole("option", { name: /The work moved on/u });
+		within(listbox).getByRole("option", { name: /The developer's choice/u });
 	},
 };
 
@@ -184,7 +181,7 @@ export const FilterToOneWithholdingFamily: Story = {
 		const trigger = canvas.getByRole("combobox", { name: "Why withheld" });
 		await userEvent.click(trigger);
 		const listbox = await screen.findByRole("listbox", { name: "Why withheld options" });
-		await userEvent.click(await within(listbox).findByRole("option", { name: /Housekeeping/ }));
+		await userEvent.click(await within(listbox).findByRole("option", { name: /Housekeeping/u }));
 		// Closed again: these facets are multi-select and stay open after a choice, so the next facet
 		// would otherwise put a second listbox on screen.
 		await userEvent.click(trigger);
@@ -194,7 +191,7 @@ export const FilterToOneWithholdingFamily: Story = {
 		// A place nothing under that family went to, so the two filters intersect to nothing.
 		await userEvent.click(canvas.getByRole("combobox", { name: "Place" }));
 		const places = await screen.findByRole("listbox", { name: "Place options" });
-		await userEvent.click(await within(places).findByRole("option", { name: /In conversation/ }));
+		await userEvent.click(await within(places).findByRole("option", { name: /In conversation/u }));
 		await canvas.findByText("No feedback matches these filters");
 		await userEvent.click(canvas.getByRole("button", { name: "Clear all filters" }));
 		await canvas.findByText("11 pieces of feedback.");

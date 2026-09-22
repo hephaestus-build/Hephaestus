@@ -7,16 +7,15 @@ import {
 } from "lucide-react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
-import { useTheme } from "@/integrations/theme";
+import { useTheme } from "@/runtime/theme/ThemeContext";
 
 /** Every toast announces politely, `toast.error` included: sonner exposes no assertive path. */
-const Toaster = ({ ...props }: ToasterProps) => {
+function Toaster({ ...props }: ToasterProps) {
 	const { theme } = useTheme();
 
 	return (
 		<Sonner
 			theme={theme}
-			className="toaster group"
 			icons={{
 				success: <CircleCheckIcon className="size-4" />,
 				info: <InfoIcon className="size-4" />,
@@ -33,6 +32,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
 			{...props}
 		/>
 	);
-};
+}
 
 export { Toaster };

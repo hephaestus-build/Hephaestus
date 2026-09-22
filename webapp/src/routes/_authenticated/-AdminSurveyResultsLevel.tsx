@@ -15,11 +15,11 @@ import type { Survey } from "@/api/types.gen";
 import {
 	AdminSurveyEmailInvitations,
 	type SurveyEmailInvitationsState,
-} from "@/components/admin/feedback/AdminSurveyEmailInvitations";
+} from "@/components/admin/product-feedback/AdminSurveyEmailInvitations";
 import {
 	AdminSurveyResults,
 	type AdminSurveyResultsState,
-} from "@/components/admin/feedback/AdminSurveyResults";
+} from "@/components/admin/product-feedback/AdminSurveyResults";
 import { saveTextFile } from "@/lib/download";
 
 const RESPONSES_PAGE_SIZE = 20;
@@ -49,35 +49,48 @@ export function AdminSurveyResultsLevel({
 	const emailQuery = useQuery(adminPreviewSurveyEmailInvitationsOptions({ path }));
 	const queueEmails = useMutation({
 		...adminSendSurveyEmailInvitationsMutation(),
-		onSuccess: (summary) => {
+		onSuccess: async (summary) => {
 			queryClient.setQueryData(adminPreviewSurveyEmailInvitationsQueryKey({ path }), summary);
-			void queryClient.invalidateQueries({
+			await queryClient.invalidateQueries({
 				queryKey: adminPreviewSurveyEmailInvitationsQueryKey({ path }),
 			});
 			toast.success(
 				`${summary.queued} invitations queued in this batch. Relay acceptance appears separately.`,
 			);
 		},
-		onError: () => {
-			void queryClient.invalidateQueries({
+		onError: async () => {
+			await queryClient.invalidateQueries({
 				queryKey: adminPreviewSurveyEmailInvitationsQueryKey({ path }),
 			});
 			toast.error("Could not confirm the invitation request. Refresh counts before trying again.");
 		},
 	});
-	const emailState: SurveyEmailInvitationsState = emailQuery.isError
-		? { status: "error", error: emailQuery.error, onRetry: () => void emailQuery.refetch() }
-		: emailQuery.data
-			? {
-					status: "ready",
-					summary: emailQuery.data,
-					isPending: queueEmails.isPending,
-					onRefresh: () => void emailQuery.refetch(),
-					onQueue: (sendReminder) => {
-						if (!queueEmails.isPending) queueEmails.mutate({ path, body: { sendReminder } });
-					},
+	let emailState: SurveyEmailInvitationsState;
+	if (emailQuery.isError) {
+		emailState = {
+			status: "error",
+			error: emailQuery.error,
+			onRetry: () => {
+				void emailQuery.refetch();
+			},
+		};
+	} else if (emailQuery.data === undefined) {
+		emailState = { status: "loading" };
+	} else {
+		emailState = {
+			status: "ready",
+			summary: emailQuery.data,
+			isPending: queueEmails.isPending,
+			onRefresh: () => {
+				void emailQuery.refetch();
+			},
+			onQueue: (sendReminder) => {
+				if (!queueEmails.isPending) {
+					queueEmails.mutate({ path, body: { sendReminder } });
 				}
-			: { status: "loading" };
+			},
+		};
+	}
 	const surveyQuery = useQuery(adminGetProductSurveyOptions({ path }));
 	const summaryQuery = useQuery(adminGetProductSurveySummaryOptions({ path }));
 	const responsesQuery = useQuery({
@@ -90,34 +103,38 @@ export function AdminSurveyResultsLevel({
 	const exportResponses = useMutation({
 		mutationFn: async () => {
 			const { data, error } = await adminExportProductSurveyResponses({ path });
-			if (error || typeof data !== "string") throw new Error("Export failed");
+			if (error !== undefined || typeof data !== "string") {
+				throw new Error("Export failed");
+			}
 			saveTextFile(data, `survey-${surveyId}-responses.csv`, "text/csv;charset=utf-8;");
 		},
 		onError: () => toast.error("Couldn't export the responses. Please try again."),
 	});
 
-	const state: AdminSurveyResultsState =
-		surveyQuery.isPending || summaryQuery.isPending || responsesQuery.isPending
-			? { status: "loading" }
-			: surveyQuery.isError || summaryQuery.isError || responsesQuery.isError
-				? {
-						status: "error",
-						error: surveyQuery.error ?? summaryQuery.error ?? responsesQuery.error,
-						onRetry: () => {
-							void surveyQuery.refetch();
-							void summaryQuery.refetch();
-							void responsesQuery.refetch();
-						},
-					}
-				: {
-						status: "ready",
-						survey: surveyQuery.data,
-						summary: summaryQuery.data,
-						responses: responsesQuery.data.content ?? [],
-						page,
-						totalPages: responsesQuery.data.page?.totalPages ?? 0,
-						onPageChange: setPage,
-					};
+	let state: AdminSurveyResultsState;
+	if (surveyQuery.isPending || summaryQuery.isPending || responsesQuery.isPending) {
+		state = { status: "loading" };
+	} else if (surveyQuery.isError || summaryQuery.isError || responsesQuery.isError) {
+		state = {
+			status: "error",
+			error: surveyQuery.error ?? summaryQuery.error ?? responsesQuery.error,
+			onRetry: () => {
+				void surveyQuery.refetch();
+				void summaryQuery.refetch();
+				void responsesQuery.refetch();
+			},
+		};
+	} else {
+		state = {
+			status: "ready",
+			survey: surveyQuery.data,
+			summary: summaryQuery.data,
+			responses: responsesQuery.data.content ?? [],
+			page,
+			totalPages: responsesQuery.data.page?.totalPages ?? 0,
+			onPageChange: setPage,
+		};
+	}
 
 	return (
 		<AdminSurveyResults

@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
 	type DetailStackEntry,
 	detailStackSchema,
-} from "@/components/core/detail-drawer/detail-stack";
+} from "@/components/layout/detail-drawer/detail-stack";
 import { ARTIFACT_KIND_VALUES } from "@/lib/artifact-kinds";
 
 export const PRACTICE_SEARCH_PARAMS: ("focus" | "library")[] = ["focus", "library"];

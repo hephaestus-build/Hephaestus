@@ -63,8 +63,8 @@ export const LivePushUnavailable: Story = {
 		),
 	],
 	play: async ({ canvas }) => {
-		canvas.getByText(/live updates are unavailable/i);
-		canvas.getByText(/refreshing periodically/i);
+		canvas.getByText(/live updates are unavailable/iu);
+		canvas.getByText(/refreshing periodically/iu);
 	},
 };
 
@@ -78,8 +78,8 @@ export const Offline: Story = {
 		onlineManager.setOnline(false);
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/you're offline/i);
-		canvas.getByText(/snapshot/i);
+		canvas.getByText(/you’re offline/iu);
+		canvas.getByText(/snapshot/iu);
 		// Announced politely: the reader shouldn't be interrupted, but must not be left guessing.
 		canvas.getByRole("status");
 	},
@@ -101,7 +101,7 @@ export const OfflineOutranksLivePush: Story = {
 		),
 	],
 	play: async ({ canvas }) => {
-		canvas.getByText(/you're offline/i);
-		await expect(canvas.queryByText(/live updates are unavailable/i)).not.toBeInTheDocument();
+		canvas.getByText(/you’re offline/iu);
+		await expect(canvas.queryByText(/live updates are unavailable/iu)).not.toBeInTheDocument();
 	},
 };

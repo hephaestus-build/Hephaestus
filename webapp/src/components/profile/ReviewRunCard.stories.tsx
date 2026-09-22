@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn } from "storybook/test";
 import type { PracticeGroupReviewRun } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
+import { daysBefore } from "@/stories/story-clock";
 import { ReviewRunCard } from "./ReviewRunCard";
 
 const run: PracticeGroupReviewRun = {
@@ -41,7 +41,6 @@ const run: PracticeGroupReviewRun = {
 };
 
 const meta = {
-	title: "Profile/Review runs/Review run card",
 	component: ReviewRunCard,
 	tags: ["autodocs"],
 	parameters: { layout: "padded" },

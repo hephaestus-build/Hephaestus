@@ -12,7 +12,6 @@ import { TraceRefusalAlert } from "./TraceRefusalAlert";
  * re-worded prose can never cost a reader the way out.
  */
 const meta = {
-	title: "Practice trace/Refusal alert",
 	component: TraceRefusalAlert,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -71,7 +70,7 @@ export const NoFixExists: Story = {
 	},
 	play: async ({ canvas }) => {
 		const alert = within(canvas.getByRole("alert"));
-		await expect(alert.getByText(/the allowance refills/)).toBeVisible();
+		await expect(alert.getByText(/the allowance refills/u)).toBeVisible();
 		await expect(alert.queryByRole("link")).not.toBeInTheDocument();
 	},
 };

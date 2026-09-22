@@ -16,16 +16,18 @@ import { useNow } from "@/components/common/use-now";
 import { PracticeGroupStandingCard } from "@/components/profile/PracticeGroupStandingCard";
 import { ProfilePage } from "@/components/profile/ProfilePage";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { useAuth } from "@/integrations/auth/AuthContext";
 import {
 	type ActivityMonitorFilters,
 	DEFAULT_ACTIVITY_MONITOR_LIMIT,
 	MAX_ACTIVITY_MONITOR_LIMIT,
 } from "@/lib/activity-monitor";
+import { asDate } from "@/lib/dates";
 import { resolveLeaderboardSchedule } from "@/lib/leaderboard-schedule";
-import { toScmProviderType } from "@/lib/provider";
+import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useSearchState } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 import { formatDateRangeForApi, getDateRangeForPreset } from "@/lib/timeframe";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 const profileSearchSchema = z.object({
 	after: z.string().optional(),
@@ -40,18 +42,22 @@ const profileSearchSchema = z.object({
 });
 
 const parseRepositoryIds = (value?: string): number[] => {
-	if (!value) return [];
+	if (!hasText(value)) {
+		return [];
+	}
 
 	return value
 		.split(",")
 		.map((id) => id.trim())
-		.filter((id) => /^\d+$/.test(id))
-		.map((id) => Number(id))
+		.filter((id) => /^\d+$/u.test(id))
+		.map(Number)
 		.filter((id) => Number.isSafeInteger(id) && id > 0);
 };
 
 const serializeRepositoryIds = (repositoryIds: number[]) => {
-	if (repositoryIds.length === 0) return undefined;
+	if (repositoryIds.length === 0) {
+		return;
+	}
 	return repositoryIds.join(",");
 };
 
@@ -86,7 +92,7 @@ function UserProfile() {
 	const nowMs = useNow();
 
 	const getEffectiveDates = () => {
-		if (after) {
+		if (hasText(after)) {
 			return { after, before };
 		}
 		const range = getDateRangeForPreset(new Date(nowMs), "this-week", schedule);
@@ -94,13 +100,8 @@ function UserProfile() {
 	};
 	const effectiveDates = getEffectiveDates();
 
-	const parseDateParam = (value?: string) => {
-		if (!value) return undefined;
-		const parsed = new Date(value);
-		return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-	};
-	const parsedAfter = parseDateParam(effectiveDates.after);
-	const parsedBefore = parseDateParam(effectiveDates.before);
+	const parsedAfter = asDate(effectiveDates.after);
+	const parsedBefore = asDate(effectiveDates.before);
 	const selectedRepositoryIds = parseRepositoryIds(monitorRepositories);
 
 	const currUserIsDashboardUser = isCurrentUser(username);
@@ -129,16 +130,14 @@ function UserProfile() {
 		...listPracticeStandingsOptions({ path: { workspaceSlug } }),
 		enabled: Boolean(workspaceSlug) && showsPracticeStandings,
 	});
-	const practicesByGroup = (standingsQuery.data ?? []).reduce<Record<string, PracticeStanding[]>>(
-		(grouped, practice) => {
-			if (!practice.groupSlug) return grouped;
-			const forGroup = grouped[practice.groupSlug] ?? [];
+	const practicesByGroup: Record<string, PracticeStanding[]> = {};
+	for (const practice of standingsQuery.data ?? []) {
+		if (hasText(practice.groupSlug)) {
+			const forGroup = practicesByGroup[practice.groupSlug] ?? [];
 			forGroup.push(practice);
-			grouped[practice.groupSlug] = forGroup;
-			return grouped;
-		},
-		{},
-	);
+			practicesByGroup[practice.groupSlug] = forGroup;
+		}
+	}
 
 	const profileQuery = useQuery({
 		...getUserProfileOptions({
@@ -199,8 +198,12 @@ function UserProfile() {
 			activityMonitorData={activityMonitorQuery.data}
 			activityMonitorError={workspaceQuery.error ?? activityMonitorQuery.error}
 			onRetryActivityMonitor={() => {
-				if (workspaceQuery.isError) void workspaceQuery.refetch();
-				if (activityMonitorQuery.isError) void activityMonitorQuery.refetch();
+				if (workspaceQuery.isError) {
+					void workspaceQuery.refetch();
+				}
+				if (activityMonitorQuery.isError) {
+					void activityMonitorQuery.refetch();
+				}
 			}}
 			activityMonitorFilters={{
 				repositoryIds: selectedRepositoryIds,
@@ -214,7 +217,9 @@ function UserProfile() {
 				activityMonitorQuery.isPlaceholderData
 			}
 			error={profileQuery.error ?? undefined}
-			onRetry={() => void profileQuery.refetch()}
+			onRetry={() => {
+				void profileQuery.refetch();
+			}}
 			username={username}
 			currUserIsDashboardUser={currUserIsDashboardUser}
 			workspaceSlug={workspaceSlug}
@@ -237,9 +242,15 @@ function UserProfile() {
 							groupsQuery.error ?? groupStandingsQuery.error ?? standingsQuery.error ?? undefined
 						}
 						onRetry={() => {
-							if (groupsQuery.isError) void groupsQuery.refetch();
-							if (groupStandingsQuery.isError) void groupStandingsQuery.refetch();
-							if (standingsQuery.isError) void standingsQuery.refetch();
+							if (groupsQuery.isError) {
+								void groupsQuery.refetch();
+							}
+							if (groupStandingsQuery.isError) {
+								void groupStandingsQuery.refetch();
+							}
+							if (standingsQuery.isError) {
+								void standingsQuery.refetch();
+							}
 						}}
 						onOpenDetails={(group) => {
 							void navigate({

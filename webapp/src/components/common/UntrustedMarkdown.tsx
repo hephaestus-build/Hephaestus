@@ -3,7 +3,7 @@ import { Streamdown } from "streamdown";
 
 import { MarkdownCode } from "@/components/common/MarkdownCode";
 
-const HTTP_URL = /^https?:\/\//i;
+const HTTP_URL = /^https?:\/\//iu;
 
 /** A link the model wrote is only a link when it is one: anything else renders as its own text. */
 function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnchorElement>) {

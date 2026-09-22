@@ -41,7 +41,7 @@ export function EmailUnsubscribePage({ state }: { state: EmailUnsubscribeState }
 				{state.status === "error" && !showSpinner && (
 					<CardContent>
 						<p role="alert" className="text-sm text-destructive">
-							We couldn't confirm the result. You can safely try again.
+							We couldn&apos;t confirm the result. You can safely try again.
 						</p>
 					</CardContent>
 				)}
@@ -50,7 +50,9 @@ export function EmailUnsubscribePage({ state }: { state: EmailUnsubscribeState }
 						<Button
 							disabled={busy}
 							onClick={() => {
-								if (!busy && "onConfirm" in state) state.onConfirm();
+								if (!busy && "onConfirm" in state) {
+									state.onConfirm();
+								}
 							}}
 						>
 							{showSpinner && <Spinner />}

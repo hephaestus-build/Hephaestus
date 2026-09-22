@@ -7,7 +7,6 @@ const composedAt = new Date("2026-07-28T13:42:00Z");
 const deliveredAt = new Date("2026-07-28T13:43:00Z");
 
 const meta = {
-	title: "Shared/Practice vocabulary/Delivery trace",
 	component: DeliveryTrace,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 768] } },
 	tags: ["autodocs"],
@@ -29,7 +28,7 @@ export const Delivered: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("Composed");
 		canvas.getByText("Delivered");
-		canvas.getByText(/As a summary comment on the work/);
+		canvas.getByText(/As a summary comment on the work/u);
 	},
 };
 
@@ -95,7 +94,7 @@ export const DeliveredInConversation: Story = {
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText("Delivered in conversation");
-		canvas.getByText(/As a turn in the conversation/);
+		canvas.getByText(/As a turn in the conversation/u);
 	},
 };
 
@@ -145,10 +144,10 @@ export const ManyInlineNotes: Story = {
 		},
 	},
 	play: async ({ canvas, canvasElement }) => {
-		canvas.getByText(/As a summary comment on the work/);
+		canvas.getByText(/As a summary comment on the work/u);
 		// Counted over the whole trace rather than queried: a repeat would render inside the same
 		// paragraph and still satisfy a `getByText`.
-		const inlinePhrases = canvasElement.textContent.match(/As an inline note on the work/g) ?? [];
+		const inlinePhrases = canvasElement.textContent.match(/As an inline note on the work/gu) ?? [];
 		await expect(inlinePhrases).toHaveLength(1);
 	},
 };
@@ -165,7 +164,7 @@ export const ReplacedByNewer: Story = {
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText("Replaced by newer");
-		canvas.getByText(/delivered/);
+		canvas.getByText(/delivered/u);
 	},
 };
 

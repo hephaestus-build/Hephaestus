@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SurveyInvitation } from "@/api/types.gen";
-import { surveyInvitation } from "@/components/feedback/product-survey-fixtures";
+import { surveyInvitation } from "@/components/product-feedback/fixtures";
 import type { Wire } from "@/lib/dates";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { unauthenticatedUser } from "@/mocks/handlers";
@@ -84,7 +84,7 @@ describe("survey invitations in the app chrome", () => {
 		);
 		renderRouteAt(`/w/acme?survey=${unseen.id}`);
 		await screen.findByRole("heading", { name: "Could not load survey" }, ROUTE_RENDER_WAIT);
-		expect(screen.queryByText(/no longer offered/)).toBeNull();
+		expect(screen.queryByText(/no longer offered/u)).toBeNull();
 		server.use(
 			http.get("*/workspaces/acme/product-feedback/surveys", () => HttpResponse.json([unseen])),
 		);
@@ -124,9 +124,9 @@ describe("survey invitations in the app chrome", () => {
 			await screen.findByRole("button", { name: "Feedback, 1 survey waiting" }, ROUTE_RENDER_WAIT),
 		);
 
-		const item = await screen.findByRole("menuitem", { name: /Help improve practice feedback/ });
+		const item = await screen.findByRole("menuitem", { name: /Help improve practice feedback/u });
 		expect(item.textContent).toContain("4 questions · about 2 minutes");
-		expect(screen.queryByText(/New survey:/)).toBeNull();
+		expect(screen.queryByText(/New survey:/u)).toBeNull();
 		expect(acknowledgements).toStrictEqual([]);
 	});
 });

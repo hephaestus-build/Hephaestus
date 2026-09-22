@@ -34,9 +34,9 @@ import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAcc
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
 import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
-import { useAuth } from "@/integrations/auth/AuthContext";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/settings")({
 	component: RouteComponent,
@@ -54,8 +54,9 @@ function RouteComponent() {
 	// question afresh. The parent guard only runs on navigation, so without this the reader is left on
 	// a page whose controls have quietly gone and whose writes the server has started refusing.
 	useEffect(() => {
-		if (accountConsent?.completed === false)
+		if (accountConsent?.completed === false) {
 			void navigate({ to: "/consent", search: { returnTo: "/settings" }, replace: true });
+		}
 	}, [accountConsent?.completed, navigate]);
 
 	const {
@@ -71,7 +72,9 @@ function RouteComponent() {
 	const emailPreferencesQuery = useQuery(getNotificationPreferencesOptions());
 	const emailPreferencesMutation = useMutation({
 		...updateNotificationPreferencesMutation(),
-		onMutate: () => queryClient.cancelQueries({ queryKey: getNotificationPreferencesQueryKey() }),
+		onMutate: async () => {
+			await queryClient.cancelQueries({ queryKey: getNotificationPreferencesQueryKey() });
+		},
 		onSuccess: async (preferences) => {
 			await queryClient.cancelQueries({ queryKey: getNotificationPreferencesQueryKey() });
 			queryClient.setQueryData(getNotificationPreferencesQueryKey(), preferences);
@@ -85,29 +88,36 @@ function RouteComponent() {
 			);
 		},
 	});
+	const preferences = emailPreferencesQuery.data;
+	let emailPreferencesState: EmailPreferencesSectionProps["state"] = { status: "loading" };
+	if (emailPreferencesQuery.isError) {
+		emailPreferencesState = {
+			status: "error",
+			error: emailPreferencesQuery.error,
+			onRetry: () => {
+				void emailPreferencesQuery.refetch();
+			},
+		};
+	} else if (preferences !== undefined) {
+		emailPreferencesState = {
+			status: "ready",
+			preferences,
+			isPending: emailPreferencesMutation.isPending,
+			onChange: (choices) => {
+				if (emailPreferencesMutation.isPending) {
+					return;
+				}
+				emailPreferencesMutation.mutate({
+					headers: { "If-Match": preferences.etag },
+					body: choices,
+				});
+			},
+		};
+	}
 	const emailPreferencesProps: EmailPreferencesSectionProps = {
 		researchAvailable: hasText(accountConsent?.researchOrganization),
 		isAppAdmin,
-		state: emailPreferencesQuery.isError
-			? {
-					status: "error",
-					error: emailPreferencesQuery.error,
-					onRetry: () => void emailPreferencesQuery.refetch(),
-				}
-			: emailPreferencesQuery.data
-				? {
-						status: "ready",
-						preferences: emailPreferencesQuery.data,
-						isPending: emailPreferencesMutation.isPending,
-						onChange: (choices) => {
-							if (emailPreferencesMutation.isPending) return;
-							emailPreferencesMutation.mutate({
-								headers: { "If-Match": emailPreferencesQuery.data.etag },
-								body: choices,
-							});
-						},
-					}
-				: { status: "loading" },
+		state: emailPreferencesState,
 	};
 
 	const linkedIdentitiesQuery = useQuery({
@@ -152,7 +162,9 @@ function RouteComponent() {
 	// Spread-based helper: reads latest cache to avoid stale-closure race under rapid toggling
 	const updateSetting = (patch: Partial<UserSettings>) => {
 		const current = queryClient.getQueryData<UserSettings>(userSettingsQueryKey);
-		if (!current) return;
+		if (!current) {
+			return;
+		}
 		updateSettingsMutation.mutate({
 			body: { ...current, ...patch },
 		});
@@ -229,7 +241,7 @@ function RouteComponent() {
 			});
 			void queryClient.invalidateQueries({ queryKey: slackPreferencesQueryKey });
 			toast.success(
-				updatedWorkspace.channelMessagesAllowed
+				updatedWorkspace.channelMessagesAllowed === true
 					? "Slack channel-message use is on."
 					: "Slack channel-message use is off.",
 			);
@@ -280,7 +292,7 @@ function RouteComponent() {
 		isSlackLinked: Boolean(slackIdentity),
 		canConnectSlack: Boolean(slackProvider?.registrationId),
 		onConnectSlack: () => {
-			if (slackProvider?.registrationId) {
+			if (hasText(slackProvider?.registrationId)) {
 				linkAccount(slackProvider.registrationId, "/settings");
 			}
 		},
@@ -299,7 +311,9 @@ function RouteComponent() {
 			(slackAvailable && slackPreferencesQuery.isLoading),
 		isError: slackAvailable && slackPreferencesQuery.isError,
 		error: slackPreferencesQuery.error,
-		onRetry: () => void slackPreferencesQuery.refetch(),
+		onRetry: () => {
+			void slackPreferencesQuery.refetch();
+		},
 	};
 
 	return (
@@ -307,7 +321,9 @@ function RouteComponent() {
 			emailPreferencesProps={emailPreferencesProps}
 			isLoading={isLoading}
 			settingsError={settingsError}
-			onRetrySettings={() => void refetchSettings()}
+			onRetrySettings={() => {
+				void refetchSettings();
+			}}
 			practiceFeedbackProps={{
 				practiceFeedbackDeliveryEnabled: settings?.practiceFeedbackDeliveryEnabled ?? true,
 				onTogglePracticeFeedback: handlePracticeFeedbackToggle,
@@ -329,7 +345,9 @@ function RouteComponent() {
 				isLoading: consentQuery.isLoading || researchConsentMutation.isPending,
 				isError: consentQuery.isError,
 				error: consentQuery.error,
-				onRetry: () => void consentQuery.refetch(),
+				onRetry: () => {
+					void consentQuery.refetch();
+				},
 			}}
 			linkedAccountsProps={linkedAccountsProps}
 			showSlackPreferencesSection={slackAvailable}

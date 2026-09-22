@@ -9,7 +9,7 @@
 /** Archive members are `out/<name>`, and USTAR stores a member name in 100 bytes. */
 const MAX_MEMBER_BYTES = 100;
 const ARCHIVE_ROOT = "out/";
-const PORTABLE_NAME = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
+const PORTABLE_NAME = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/u;
 
 export function outputPath(outputDir: string, name: string): string {
 	const member = `${ARCHIVE_ROOT}${name}`;

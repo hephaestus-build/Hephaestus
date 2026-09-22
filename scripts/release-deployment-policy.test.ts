@@ -26,7 +26,9 @@ await test("the reconciler starts the stacks in dependency order", () => {
 			`${ordered.join(" ")} starts the webhook runtime before the migration that feeds it`,
 		);
 		// The edge comes last, so it never routes to a stack that is still starting.
-		if (ordered.includes("proxy")) assert.equal(ordered.at(-1), "proxy");
+		if (ordered.includes("proxy")) {
+			assert.equal(ordered.at(-1), "proxy");
+		}
 	}
 });
 
@@ -35,51 +37,51 @@ const upgrade = readFileSync(".github/workflows/release-upgrade.yml", "utf8");
 await test("release publication requires the seeded upgrade gate", () => {
 	assert.match(
 		release,
-		/publish-release:\n\s+needs: \[release, tag-images, upgrade-test, supported-host-smoke\]/,
+		/publish-release:\n\s+needs: \[release, tag-images, upgrade-test, supported-host-smoke\]/u,
 	);
-	assert.match(release, /previous-version: \$\{\{ needs\.release\.outputs\.previous_version \}\}/);
-	assert.match(upgrade, /INPUT_PREVIOUS_VERSION: \$\{\{ inputs\.previous-version \}\}/);
+	assert.match(release, /previous-version: \$\{\{ needs\.release\.outputs\.previous_version \}\}/u);
+	assert.match(upgrade, /INPUT_PREVIOUS_VERSION: \$\{\{ inputs\.previous-version \}\}/u);
 	assert.match(
 		release,
-		/candidate-application-image: .*@\$\{\{ needs\.tag-images\.outputs\.application-server-digest \}\}/,
+		/candidate-application-image: .*@\$\{\{ needs\.tag-images\.outputs\.application-server-digest \}\}/u,
 	);
 	assert.match(
 		release,
-		/postgres-image: .*@\$\{\{ needs\.tag-images\.outputs\.postgres-digest \}\}/,
+		/postgres-image: .*@\$\{\{ needs\.tag-images\.outputs\.postgres-digest \}\}/u,
 	);
-	assert.match(release, /candidate-source-sha: \$\{\{ needs\.release\.outputs\.sha \}\}/);
-	assert.match(upgrade, /schedule:/);
+	assert.match(release, /candidate-source-sha: \$\{\{ needs\.release\.outputs\.sha \}\}/u);
+	assert.match(upgrade, /schedule:/u);
 	assert.match(
 		upgrade,
-		/ref: \$\{\{ inputs\.candidate-source-sha \|\| inputs\.candidate-sha \|\| github\.sha \}\}/,
+		/ref: \$\{\{ inputs\.candidate-source-sha \|\| inputs\.candidate-sha \|\| github\.sha \}\}/u,
 	);
 	const upgradeGate =
-		release.match(/ {2}upgrade-test:[\s\S]*?\n {2}supported-host-smoke:/)?.[0] ?? "";
-	assert.doesNotMatch(upgradeGate, /secrets: inherit/);
+		/ {2}upgrade-test:[\s\S]*?\n {2}supported-host-smoke:/u.exec(release)?.[0] ?? "";
+	assert.doesNotMatch(upgradeGate, /secrets: inherit/u);
 });
 
 await test("release upgrade runs the server topology without optional infrastructure", () => {
-	assert.match(upgradeDrill, /"HEPHAESTUS_RUNTIME_WORKER_ENABLED=false"/);
-	assert.match(upgradeDrill, /"HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false"/);
-	assert.match(upgradeDrill, /"HEPHAESTUS_SYNC_NATS_ENABLED=false"/);
-	assert.doesNotMatch(upgradeDrill, /"NATS_ENABLED=false"/);
+	assert.match(upgradeDrill, /"HEPHAESTUS_RUNTIME_WORKER_ENABLED=false"/u);
+	assert.match(upgradeDrill, /"HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false"/u);
+	assert.match(upgradeDrill, /"HEPHAESTUS_SYNC_NATS_ENABLED=false"/u);
+	assert.doesNotMatch(upgradeDrill, /"NATS_ENABLED=false"/u);
 });
 
 await test("verification identity is the release's own: run context now, the map for history", () => {
 	const rescan = readFileSync(".github/workflows/rescan-release-images.yml", "utf8");
 	const prepareLock = readFileSync("scripts/prepare-release-lock.ts", "utf8");
 	const derivedIdentity =
-		/\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/\.github\/workflows\/release\.yml@refs\/heads\/main/;
+		/\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/\.github\/workflows\/release\.yml@refs\/heads\/main/u;
 
 	assert.match(release, derivedIdentity);
-	assert.match(rescan, /resolve-release-identity\.ts.*certificate-identity/);
-	assert.match(prepareLock, /releaseCertificateIdentity\(release, process\.env\)/);
-	assert.match(prepareLock, /releaseRepository\(release, process\.env\)/);
+	assert.match(rescan, /resolve-release-identity\.ts.*certificate-identity/u);
+	assert.match(prepareLock, /releaseCertificateIdentity\(release, process\.env\)/u);
+	assert.match(prepareLock, /releaseRepository\(release, process\.env\)/u);
 	for (const contents of [release, reconciler, rescan, prepareLock]) {
-		assert.doesNotMatch(contents, /certificate-identity[^\n]*\n?[^\n]*ls1intum\/Hephaestus/);
+		assert.doesNotMatch(contents, /certificate-identity[^\n]*\n?[^\n]*ls1intum\/Hephaestus/u);
 		assert.doesNotMatch(
 			contents,
-			/certificate-identity[^\n]*\n?[^\n]*hephaestus-build\/Hephaestus/,
+			/certificate-identity[^\n]*\n?[^\n]*hephaestus-build\/Hephaestus/u,
 		);
 	}
 	// The pull path derives the same identity from the release it is verifying, never from a
@@ -90,22 +92,24 @@ await test("verification identity is the release's own: run context now, the map
 await test("every promotion decision is taken by the script that owns it", () => {
 	// Each decision below is proven by its own spec; what no spec can see is the workflow that
 	// stops calling it, or a step reading a channel file the resolver did not write.
-	assert.match(promotion, /^ +run: node scripts\/resolve-promotion\.ts$/m);
-	for (const consumer of ["Sign the channel", "Publish the channel"])
+	assert.match(promotion, /^ +run: node scripts\/resolve-promotion\.ts$/mu);
+	for (const consumer of ["Sign the channel", "Publish the channel"]) {
 		assert.match(
 			promotion,
 			new RegExp(
 				`name: ${consumer}\\n(?: +.*\\n)*? +CHANNEL_FILE: \\$\\{\\{ steps\\.release\\.outputs\\.channel \\}\\}`,
+				"u",
 			),
 			`${consumer} must sign and publish the file the resolver wrote`,
 		);
+	}
 	// Rollback must support releases predating immutable tags; the signed lock binds their digests.
-	assert.doesNotMatch(resolver, /isImmutable/);
+	assert.doesNotMatch(resolver, /isImmutable/u);
 });
 
 function referenced(expression: string, pattern: RegExp): string[] {
-	return [...expression.matchAll(pattern)].flatMap(([, name]) =>
-		name === undefined ? [] : [name],
+	return [...expression.matchAll(pattern)].flatMap(({ groups }) =>
+		groups?.name === undefined ? [] : [groups.name],
 	);
 }
 
@@ -122,7 +126,9 @@ function postgresRebuildTriggers(): { paths: string[]; unconditional: string[] }
 	const step = asArray(detect.steps, "detect-changes.steps")
 		.map((value, index) => asRecord(value, `detect-changes.steps[${index}]`))
 		.find((candidate) => candidate.id === "filter");
-	if (step === undefined) throw new Error("detect-changes declares no `filter` step");
+	if (step === undefined) {
+		throw new Error("detect-changes declares no `filter` step");
+	}
 	// dorny/paths-filter takes its filters as YAML inside a string, so they parse in a second pass.
 	const filters = asRecord(
 		parseDocument(
@@ -137,12 +143,17 @@ function postgresRebuildTriggers(): { paths: string[]; unconditional: string[] }
 
 	const paths = new Set<string>();
 	const unconditional = new Set<string>();
-	for (const name of referenced(condition, /needs\.detect-changes\.outputs\.([\w-]+)/g)) {
+	for (const name of referenced(condition, /needs\.detect-changes\.outputs\.(?<name>[\w-]+)/gu)) {
 		const expression = asString(outputs[name], `detect-changes.outputs.${name}`);
-		const behind = referenced(expression, /steps\.filter\.outputs\.([\w-]+)/g);
-		if (behind.length === 0) unconditional.add(name);
-		for (const filter of behind)
-			for (const glob of asStringArray(filters[filter], `the ${filter} filter`)) paths.add(glob);
+		const behind = referenced(expression, /steps\.filter\.outputs\.(?<name>[\w-]+)/gu);
+		if (behind.length === 0) {
+			unconditional.add(name);
+		}
+		for (const filter of behind) {
+			for (const glob of asStringArray(filters[filter], `the ${filter} filter`)) {
+				paths.add(glob);
+			}
+		}
 	}
 	return { paths: [...paths], unconditional: [...unconditional].toSorted() };
 }
@@ -172,19 +183,19 @@ await test("derives the canonical signer identity and refuses missing CI identit
 		releaseSignerIdentity({}),
 		"https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main",
 	);
-	assert.throws(() => releaseSignerRepository({ CI: "true" }), /GITHUB_REPOSITORY/);
+	assert.throws(() => releaseSignerRepository({ CI: "true" }), /GITHUB_REPOSITORY/u);
 });
 
 await test("release publication requires native smoke tests for every supported host", () => {
 	const smokeGate =
-		release.match(/ {2}supported-host-smoke:[\s\S]*?\n {2}publish-release:/)?.[0] ?? "";
+		/ {2}supported-host-smoke:[\s\S]*?\n {2}publish-release:/u.exec(release)?.[0] ?? "";
 
-	assert.match(smokeGate, /architecture: amd64\n\s+runner: ubuntu-24\.04/);
-	assert.match(smokeGate, /architecture: arm64\n\s+runner: ubuntu-24\.04-arm/);
-	assert.match(smokeGate, /up -d --wait --wait-timeout 600/);
-	assert.match(smokeGate, /prepare-release-lock\.ts/);
-	assert.match(smokeGate, /contents: write/);
-	assert.match(release, /gh release upload "\$TAG_NAME" host-smoke\/\*\.json/);
+	assert.match(smokeGate, /architecture: amd64\n\s+runner: ubuntu-24\.04/u);
+	assert.match(smokeGate, /architecture: arm64\n\s+runner: ubuntu-24\.04-arm/u);
+	assert.match(smokeGate, /up -d --wait --wait-timeout 600/u);
+	assert.match(smokeGate, /prepare-release-lock\.ts/u);
+	assert.match(smokeGate, /contents: write/u);
+	assert.match(release, /gh release upload "\$TAG_NAME" host-smoke\/\*\.json/u);
 });
 
 await test("the release smoke reaches the installation by the name the installer answers with", () => {

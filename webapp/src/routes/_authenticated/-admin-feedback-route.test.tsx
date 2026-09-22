@@ -32,6 +32,12 @@ const resolvedNote = {
 	resolvedBy: { id: 1, displayName: "Ada Lovelace" },
 } satisfies Wire<FeedbackItem>;
 
+/** What each status filter lists; a request without one, or with any other, sees the open items. */
+const INBOX_BY_STATUS: Record<string, Wire<FeedbackItem>[]> = {
+	RESOLVED: [resolvedNote],
+	ALL: [bugReport, resolvedNote],
+};
+
 /** Answers by status and records which status each request asked for. */
 function mockInbox() {
 	const requested: (string | null)[] = [];
@@ -39,12 +45,7 @@ function mockInbox() {
 		http.get("*/admin/product-feedback", ({ request }) => {
 			const status = new URL(request.url).searchParams.get("status");
 			requested.push(status);
-			const content =
-				status === "RESOLVED"
-					? [resolvedNote]
-					: status === "ALL"
-						? [bugReport, resolvedNote]
-						: [bugReport];
+			const content = INBOX_BY_STATUS[status ?? ""] ?? [bugReport];
 			return HttpResponse.json({
 				content,
 				page: { totalPages: 1, totalElements: content.length },

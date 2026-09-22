@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { AgentJob } from "@/api/types.gen";
-import { reviewJob } from "@/components/admin/practice-reviews/story-mock-data";
+import { reviewJob } from "@/components/admin/practice-reviews/fixtures";
 import { server } from "@/mocks/server";
 
 import { useReviewRunController } from "./use-review-run-controller";
@@ -45,7 +45,7 @@ describe("review result-processing retry", () => {
 			await waitFor(() => expect(result.current.job?.deliveryStatus).toBe("PENDING"));
 			expect(result.current.feedback).toStrictEqual({ status: "pending" });
 			await waitFor(() => expect(result.current.job?.deliveryStatus).toBe("DELIVERED"), {
-				timeout: 7_000,
+				timeout: 7000,
 			});
 			await waitFor(() => {
 				expect(result.current.observations).toStrictEqual({ status: "ready", items: [], total: 1 });

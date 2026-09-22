@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
+import { reviewJob } from "./fixtures";
 import { ReviewRunNotices } from "./ReviewRunNotices";
-import { reviewJob } from "./story-mock-data";
 
 const completed = reviewJob("11111111-1111-1111-1111-111111111111");
 const failed = reviewJob("bbbbbbbb-8888-8888-8888-888888888888");
@@ -15,7 +15,6 @@ const failed = reviewJob("bbbbbbbb-8888-8888-8888-888888888888");
  * still has to read as English, because the server may add one this build has never heard of.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Review run notices",
 	component: ReviewRunNotices,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],
@@ -57,7 +56,7 @@ export const HeldForBudget: Story = {
 	args: { job: { ...completed, status: "QUEUED", holdReason: "BUDGET" } },
 	play: async ({ canvas }) => {
 		canvas.getByText("Over the AI budget");
-		canvas.getByText(/parked rather than failed/);
+		canvas.getByText(/parked rather than failed/u);
 	},
 };
 

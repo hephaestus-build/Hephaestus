@@ -7,6 +7,7 @@ import { getNotificationPreferencesQueryKey } from "@/api/@tanstack/react-query.
 import { currentUser } from "@/mocks/fixtures/auth";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 const preferences = {
@@ -62,10 +63,7 @@ describe("account email choices", () => {
 	});
 	it("sends the confirmed revision and keeps consent off until the server accepts it", async () => {
 		const user = userEvent.setup();
-		let release: (() => void) | undefined;
-		const response = new Promise<void>((resolve) => {
-			release = resolve;
-		});
+		const response = deferred();
 		let body: unknown;
 		let etag: string | null = null;
 		server.use(
@@ -73,7 +71,7 @@ describe("account email choices", () => {
 			http.put("*/user/notification-preferences", async ({ request }) => {
 				body = await request.json();
 				etag = request.headers.get("If-Match");
-				await response;
+				await response.promise;
 				return HttpResponse.json({ ...preferences, productSurveys: true, etag: '"0-1-0"' });
 			}),
 		);
@@ -100,7 +98,7 @@ describe("account email choices", () => {
 		expect(saving.getAttribute("role")).toBe("status");
 		expect(saving.querySelector("svg")).not.toBeNull();
 
-		release?.();
+		response.resolve();
 		await waitFor(() => expect(product.getAttribute("aria-checked")).toBe("true"));
 		await waitFor(() => expect(screen.queryByText("Saving email choices…")).toBeNull());
 		expect(product.getAttribute("aria-disabled")).not.toBe("true");
@@ -113,14 +111,8 @@ describe("account email choices", () => {
 
 	it("cancels stale reads before and during a save so confirmed consent and its revision stay current", async () => {
 		const user = userEvent.setup();
-		let releaseRead: (() => void) | undefined;
-		let releaseWrite: (() => void) | undefined;
-		const heldRead = new Promise<void>((resolve) => {
-			releaseRead = resolve;
-		});
-		const heldWrite = new Promise<void>((resolve) => {
-			releaseWrite = resolve;
-		});
+		const heldRead = deferred();
+		const heldWrite = deferred();
 		let reads = 0;
 		const revisions: (string | null)[] = [];
 		server.use(
@@ -129,12 +121,12 @@ describe("account email choices", () => {
 			}),
 			http.get("*/user/notification-preferences", async () => {
 				reads += 1;
-				await heldRead;
+				await heldRead.promise;
 				return HttpResponse.json(preferences);
 			}),
 			http.put("*/user/notification-preferences", async ({ request }) => {
 				revisions.push(request.headers.get("If-Match"));
-				await heldWrite;
+				await heldWrite.promise;
 				return HttpResponse.json({ ...preferences, productSurveys: true, etag: '"2"' });
 			}),
 		);
@@ -156,11 +148,11 @@ describe("account email choices", () => {
 				queryKey: getNotificationPreferencesQueryKey(),
 			});
 			await waitFor(() => expect(reads).toBe(2));
-			releaseWrite?.();
+			heldWrite.resolve();
 			await waitFor(() => expect(product.getAttribute("aria-checked")).toBe("true"));
 			await duringSave;
 			await act(async () => {
-				releaseRead?.();
+				heldRead.resolve();
 				await Promise.all([beforeSave, duringSave]);
 			});
 			expect(product.getAttribute("aria-checked")).toBe("true");
@@ -174,8 +166,8 @@ describe("account email choices", () => {
 			await waitFor(() => expect(revisions).toStrictEqual([preferences.etag, '"2"']));
 			await waitFor(() => expect(product.getAttribute("aria-checked")).toBe("false"));
 		} finally {
-			releaseRead?.();
-			releaseWrite?.();
+			heldRead.resolve();
+			heldWrite.resolve();
 		}
 	});
 
@@ -206,7 +198,7 @@ describe("account email choices", () => {
 				ROUTE_RENDER_WAIT,
 			);
 			expect(screen.queryByRole("region", { name: "Email notifications" })).toBeNull();
-			expect(screen.queryByText(/Email delivery is not configured/)).toBeNull();
+			expect(screen.queryByText(/Email delivery is not configured/u)).toBeNull();
 		},
 	);
 
@@ -245,7 +237,7 @@ describe("account email choices", () => {
 				ROUTE_RENDER_WAIT,
 			);
 			expect(screen.queryByRole("switch", { name: "Product survey invitations" })).toBeNull();
-			expect(screen.queryByText(/Email delivery is not configured/)).toBeNull();
+			expect(screen.queryByText(/Email delivery is not configured/u)).toBeNull();
 			await user.click(feedback);
 			await waitFor(() =>
 				expect(screen.queryByRole("region", { name: "Email notifications" })).toBeNull(),
@@ -310,9 +302,10 @@ describe("account email choices", () => {
 		const user = userEvent.setup();
 		let reads = 0;
 		server.use(
-			http.get("*/user/notification-preferences", () =>
-				HttpResponse.json({ ...preferences, etag: `"${++reads}"` }),
-			),
+			http.get("*/user/notification-preferences", () => {
+				reads += 1;
+				return HttpResponse.json({ ...preferences, etag: `"${reads}"` });
+			}),
 			http.put("*/user/notification-preferences", () =>
 				HttpResponse.json({ status: 412 }, { status: 412 }),
 			),
@@ -405,7 +398,7 @@ describe("account email choices", () => {
 					.getByRole("switch", { name: "Workspace connection alerts" })
 					.getAttribute("aria-disabled"),
 			).toBe("true");
-			await screen.findByText(/Changing these choices does not add or verify an address/);
+			await screen.findByText(/Changing these choices does not add or verify an address/u);
 		},
 	);
 });

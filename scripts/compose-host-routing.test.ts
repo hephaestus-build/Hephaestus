@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { isSet } from "./lib/env.ts";
 
 const STACKS = ["app", "core", "proxy"] as const;
 
 /** Every `traefik.http.routers.<name>.<key>=` value in a stack's Compose file. */
 function labels(stack: (typeof STACKS)[number], key: string): { router: string; value: string }[] {
 	const file = readFileSync(new URL(`../docker/compose.${stack}.yaml`, import.meta.url), "utf8");
-	const pattern = new RegExp(`traefik\\.http\\.routers\\.([a-z0-9-]+)\\.${key}=(.*?)"?$`, "gm");
+	const pattern = new RegExp(`traefik\\.http\\.routers\\.([a-z0-9-]+)\\.${key}=(.*?)"?$`, "gmu");
 	return [...file.matchAll(pattern)].flatMap(([, router, value]) =>
-		router && value ? [{ router: `${stack}/${router}`, value }] : [],
+		router !== undefined && isSet(value) ? [{ router: `${stack}/${router}`, value }] : [],
 	);
 }
 
@@ -23,11 +24,19 @@ const priorities = new Map(
 
 /** The index of the parenthesis that closes the one at index 0, or -1 if the rule opens with none. */
 function endOfLeadingGroup(rule: string): number {
-	if (!rule.startsWith("(")) return -1;
+	if (!rule.startsWith("(")) {
+		return -1;
+	}
 	let depth = 0;
-	for (let i = 0; i < rule.length; i++) {
-		if (rule[i] === "(") depth++;
-		else if (rule[i] === ")" && --depth === 0) return i;
+	for (let i = 0; i < rule.length; i += 1) {
+		if (rule[i] === "(") {
+			depth += 1;
+		} else if (rule[i] === ")") {
+			depth -= 1;
+			if (depth === 0) {
+				return i;
+			}
+		}
 	}
 	return -1;
 }
@@ -93,7 +102,7 @@ await test("what an operator is told to copy is one host per Host()", () => {
 		const text = readFileSync(new URL(path, import.meta.url), "utf8");
 		const occurrences = text
 			.split("\n")
-			.flatMap((line) => [...line.matchAll(/Host\([^()]*\)/g)].map(([host]) => ({ line, host })));
+			.flatMap((line) => [...line.matchAll(/Host\([^()]*\)/gu)].map(([host]) => ({ line, host })));
 
 		assert.notEqual(
 			occurrences.length,
@@ -101,10 +110,12 @@ await test("what an operator is told to copy is one host per Host()", () => {
 			`${path} documents no Host() at all; the pattern is stale`,
 		);
 		for (const { line, host } of occurrences) {
-			if (!line.includes("APP_HOST_MATCH=")) continue;
+			if (!line.includes("APP_HOST_MATCH=")) {
+				continue;
+			}
 			assert.doesNotMatch(
 				host,
-				/,/,
+				/,/u,
 				`${path} tells an operator to write a multi-host Host(): ${host}`,
 			);
 		}
@@ -119,14 +130,16 @@ await test("every https router sets HSTS itself, not through the edge", () => {
 	// set for itself, so each router that terminates a public request carries it.
 	for (const stack of ["app", "core"] as const) {
 		const file = readFileSync(new URL(`../docker/compose.${stack}.yaml`, import.meta.url), "utf8");
-		const routers = [...file.matchAll(/traefik\.http\.routers\.(https-[a-z-]+)\.rule=/g)].map(
-			([, name]) => name,
-		);
+		const routers = [
+			...file.matchAll(/traefik\.http\.routers\.(?<name>https-[a-z-]+)\.rule=/gu),
+		].map((match) => match.groups?.name);
 		assert.ok(routers.length > 0, `${stack} declares no https router`);
 		for (const router of routers) {
-			const attached = new RegExp(`routers\\.${router}\\.middlewares=([^"\n]*)`).exec(file)?.[1];
+			const attached = new RegExp(`routers\\.${router}\\.middlewares=([^"\n]*)`, "u").exec(
+				file,
+			)?.[1];
 			assert.ok(
-				attached?.includes("hsts"),
+				attached?.includes("hsts") === true,
 				`${stack}/${router} would serve without HSTS behind a proxy that is not ours`,
 			);
 		}
@@ -137,21 +150,21 @@ await test("capability-link pages suppress referrers before scripts or assets lo
 	const html = readFileSync(new URL("../webapp/index.html", import.meta.url), "utf8");
 	const policy = html.indexOf('<meta name="referrer" content="no-referrer" />');
 	assert.ok(
-		policy >= 0 && policy < html.search(/<(?:script|link)\b/),
+		policy !== -1 && policy < html.search(/<(?:script|link)\b/u),
 		"static referrer policy must precede assets, not wait for the SPA",
 	);
 	const nginx = readFileSync(
 		new URL("../webapp/docker/security-headers.conf", import.meta.url),
 		"utf8",
 	);
-	assert.match(nginx, /add_header Referrer-Policy "no-referrer" always;/);
+	assert.match(nginx, /add_header Referrer-Policy "no-referrer" always;/u);
 	for (const file of [
 		"../docker/compose.proxy.yaml",
 		"../docker/self-host/compose.single-host.yaml",
 	]) {
 		assert.match(
 			readFileSync(new URL(file, import.meta.url), "utf8"),
-			/traefik\.http\.middlewares\.security-headers\.headers\.referrerPolicy=no-referrer/,
+			/traefik\.http\.middlewares\.security-headers\.headers\.referrerPolicy=no-referrer/u,
 		);
 	}
 });

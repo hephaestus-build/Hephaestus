@@ -33,7 +33,8 @@ describe("anonymous email unsubscribe confirmation", () => {
 		expect(request?.headers.has("Authorization")).toBe(false);
 		expect(request?.headers.has("X-XSRF-TOKEN")).toBe(false);
 		expect(request?.headers.has("X-Impersonation-Allow-Writes")).toBe(false);
-		expect((await request?.formData())?.get("List-Unsubscribe")).toBe("One-Click");
+		const form = await request?.formData();
+		expect(form?.get("List-Unsubscribe")).toBe("One-Click");
 	});
 
 	it("requires a fresh confirmation when another unsubscribe link is opened", async () => {
@@ -41,16 +42,16 @@ describe("anonymous email unsubscribe confirmation", () => {
 		let writes = 0;
 		server.use(
 			http.post("*/notifications/unsubscribe/:token", () => {
-				writes++;
+				writes += 1;
 				return new HttpResponse(null, { status: 204 });
 			}),
 		);
 		const { router } = renderRouteAtWithRouter(`/unsubscribe?token=${token}`);
 		await user.click(await screen.findByRole("button", { name: "Unsubscribe" }, ROUTE_RENDER_WAIT));
 		await screen.findByRole("heading", { name: "Unsubscribe request processed" });
-		await act(() =>
-			router.navigate({ to: "/unsubscribe", search: { token: "another-capability" } }),
-		);
+		await act(async () => {
+			await router.navigate({ to: "/unsubscribe", search: { token: "another-capability" } });
+		});
 		await screen.findByRole("button", { name: "Unsubscribe" });
 		expect(writes).toBe(1);
 	});

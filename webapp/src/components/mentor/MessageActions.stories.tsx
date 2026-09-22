@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import { expect, fn, waitFor } from "storybook/test";
 
-import { STORY_NOW } from "@/components/common/story-clock";
+import { STORY_NOW } from "@/stories/story-clock";
 
 import { MessageActions } from "./MessageActions";
 
@@ -42,11 +42,6 @@ const meta = {
 			description: "Whether the message is in edit mode",
 			control: "boolean",
 		},
-		variant: {
-			description: "Layout variant for different contexts",
-			control: "select",
-			options: ["default", "artifact"],
-		},
 		onCopy: {
 			description: "Callback when copy action is triggered",
 			control: false,
@@ -66,15 +61,16 @@ const meta = {
 		messageRole: "assistant",
 		isLoading: false,
 		isInEditMode: false,
-		variant: "default",
 		onCopy: fn(),
 		onVote: fn(),
 		onEdit: fn(),
 	},
 	decorators: [
 		(Story) => (
-			<div className="max-w-md p-4 border rounded-lg group/message">
-				<div className="mb-2 text-sm text-muted-foreground">Hover to see actions</div>
+			<div className="group/message max-w-md rounded-lg border p-4">
+				<div className="mb-2 text-sm text-muted-foreground">
+					Hover or use the keyboard to explore message actions
+				</div>
 				<Story />
 			</div>
 		),
@@ -87,7 +83,22 @@ type Story = StoryObj<typeof meta>;
 /**
  * Default assistant message actions with copy and vote buttons.
  */
-export const AssistantMessage: Story = {};
+export const AssistantMessage: Story = {
+	play: async ({ canvas, userEvent }) => {
+		const copy = canvas.getByRole("button", { name: "Copy message" });
+		await userEvent.tab();
+		await expect(copy).toHaveFocus();
+		await waitFor(async () => expect(copy).toBeVisible());
+		await expect(canvas.getByRole("button", { name: "Good response" })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
+		await expect(canvas.getByRole("button", { name: "Bad response" })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
+	},
+};
 
 /**
  * User message actions with copy and edit buttons.
@@ -95,7 +106,8 @@ export const AssistantMessage: Story = {};
 export const UserMessage: Story = {
 	args: {
 		messageRole: "user",
-		onVote: undefined, // User messages don't have vote functionality
+		// User messages don't have vote functionality
+		onVote: undefined,
 	},
 };
 
@@ -110,6 +122,16 @@ export const AssistantUpvoted: Story = {
 			updatedAt: new Date(STORY_NOW),
 		},
 	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Good response" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		await expect(canvas.getByRole("button", { name: "Bad response" })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
+	},
 };
 
 /**
@@ -122,6 +144,16 @@ export const AssistantDownvoted: Story = {
 			isUpvoted: false,
 			updatedAt: new Date(STORY_NOW),
 		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Good response" })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
+		await expect(canvas.getByRole("button", { name: "Bad response" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
 	},
 };
 
@@ -176,20 +208,5 @@ And here's a list:
 3. Third item
 
 This comprehensive message shows how the MessageActions component handles longer content while maintaining clean, accessible interactions.`,
-	},
-};
-
-/**
- * MessageActions with artifact variant styling for better contrast in artifact contexts.
- */
-export const ArtifactVariant: Story = {
-	args: {
-		variant: "artifact",
-		messageRole: "assistant",
-	},
-	parameters: {
-		backgrounds: {
-			default: "light",
-		},
 	},
 };

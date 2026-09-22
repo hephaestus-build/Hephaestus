@@ -84,20 +84,28 @@ export function EmailPreferencesSection({
 	});
 	const busy = state.status === "ready" && (state.isPending || showSpinner);
 	const optOutOnly = state.status === "ready" && !state.preferences.deliveryConfigured;
-	const visibleChoices = choices.filter((choice) =>
-		optOutOnly
-			? state.preferences[choice.key]
-			: choice.key === "researchSurveys"
-				? researchAvailable || (state.status === "ready" && state.preferences.researchSurveys)
-				: (choice.key !== "productFeedback" && choice.key !== "surveySummaries") ||
-					isAppAdmin ||
-					(state.status === "ready" && state.preferences[choice.key]),
-	);
+	const visibleChoices = choices.filter((choice) => {
+		if (optOutOnly) {
+			return state.preferences[choice.key];
+		}
+		if (choice.key === "researchSurveys") {
+			return researchAvailable || (state.status === "ready" && state.preferences.researchSurveys);
+		}
+		return (
+			(choice.key !== "productFeedback" && choice.key !== "surveySummaries") ||
+			isAppAdmin ||
+			(state.status === "ready" && state.preferences[choice.key])
+		);
+	});
 
-	if (!hasEmailPreferences(state)) return null;
+	if (!hasEmailPreferences(state)) {
+		return null;
+	}
 
 	const change = (patch: Partial<EmailNotificationChoices>) => {
-		if (state.status !== "ready" || busy) return;
+		if (state.status !== "ready" || busy) {
+			return;
+		}
 		state.onChange({
 			productFeedback: state.preferences.productFeedback,
 			workspaceAlerts: state.preferences.workspaceAlerts,
@@ -130,7 +138,7 @@ export function EmailPreferencesSection({
 						: "Optional emails are off until you choose to receive them. You can turn each kind off at any time. Essential account emails, such as account-deletion confirmations, are separate."}
 				</p>
 			</div>
-			{state.status === "loading" ? (
+			{state.status === "loading" && (
 				<div className="space-y-5" aria-hidden>
 					{visibleChoices.map((choice) => (
 						<div key={choice.key} className="flex items-center gap-4">
@@ -138,17 +146,19 @@ export function EmailPreferencesSection({
 								<Skeleton className="h-4 w-48" />
 								<Skeleton className="h-10 w-full" />
 							</div>
-							<Skeleton className="h-5 w-8 rounded-full" />
+							<Skeleton className="h-5 w-8" />
 						</div>
 					))}
 				</div>
-			) : state.status === "error" ? (
+			)}
+			{state.status === "error" && (
 				<QueryErrorAlert
 					title="Could not load your email choices"
 					error={state.error}
 					onRetry={state.onRetry}
 				/>
-			) : (
+			)}
+			{state.status === "ready" && (
 				<>
 					{!optOutOnly &&
 						!isAppAdmin &&

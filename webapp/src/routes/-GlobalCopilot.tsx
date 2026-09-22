@@ -1,13 +1,13 @@
 import { useRouter } from "@tanstack/react-router";
-import { toast } from "sonner";
 import { Chat } from "@/components/mentor/Chat";
 import { Copilot } from "@/components/mentor/Copilot";
-import { defaultPartRenderers } from "@/components/mentor/renderers";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { useFeatureFlag } from "@/integrations/feature-flags";
+import { copyToClipboard } from "@/lib/clipboard";
+import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 
 export default function GlobalCopilot() {
 	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
@@ -21,7 +21,9 @@ export default function GlobalCopilot() {
 	const { features, isLoading: featuresLoading } = useWorkspaceFeatures(workspaceSlug);
 
 	const handleMessageSubmit = ({ text }: { text: string }) => {
-		if (!text.trim()) return;
+		if (!text.trim()) {
+			return;
+		}
 		mentorChat.sendMessage(text);
 	};
 
@@ -31,24 +33,20 @@ export default function GlobalCopilot() {
 
 	const handleMessageEdit = (messageId: string, content: string) => {
 		const messageIndex = mentorChat.messages.findIndex((message) => message.id === messageId);
-		if (messageIndex === -1) return;
+		if (messageIndex === -1) {
+			return;
+		}
 		mentorChat.setMessages(mentorChat.messages.slice(0, messageIndex));
 		mentorChat.sendMessage(content);
-	};
-
-	const handleCopy = (content: string) => {
-		navigator.clipboard.writeText(content).catch(() => {
-			toast.error("Couldn't copy that to the clipboard.");
-		});
 	};
 
 	if (
 		isLoading ||
 		featuresLoading ||
 		!isAuthenticated ||
-		!workspaceSlug ||
+		!hasText(workspaceSlug) ||
 		!hasMentorAccess ||
-		!features?.mentorEnabled
+		features?.mentorEnabled !== true
 	) {
 		return null;
 	}
@@ -77,15 +75,13 @@ export default function GlobalCopilot() {
 				attachments={[]}
 				onMessageSubmit={handleMessageSubmit}
 				onMessageEdit={handleMessageEdit}
-				onStop={() => void mentorChat.stop()}
-				onFileUpload={() => Promise.resolve([])}
-				onAttachmentsChange={() => {}}
-				onCopy={handleCopy}
+				onStop={() => {
+					void mentorChat.stop();
+				}}
+				onCopy={copyToClipboard}
 				onVote={handleVote}
 				inputPlaceholder="Ask me anything..."
-				disableAttachments
 				className="h-full max-h-none"
-				partRenderers={defaultPartRenderers}
 			/>
 		</Copilot>
 	);

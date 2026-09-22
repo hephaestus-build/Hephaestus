@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { realPracticeDefinition } from "./practice-catalog";
+
 const bundledCatalog = z
 	.object({
 		criteriaPreambles: z.record(z.string(), z.string()),
@@ -18,8 +20,6 @@ const bundledCatalog = z
 			),
 		),
 	);
-
-import { realPracticeDefinition } from "./practice-catalog";
 
 describe("bundled practice preview fixture", () => {
 	it("renders the actual document preamble and complete practice criteria", () => {

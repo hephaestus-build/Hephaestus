@@ -7,18 +7,18 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { getProviderTerms, type ProviderType } from "@/lib/provider";
+import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 
 interface ScoringExplanationDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	providerType?: ProviderType;
+	providerType: ProviderType;
 }
 
 export function ScoringExplanationDialog({
 	open,
 	onOpenChange,
-	providerType = "GITHUB",
+	providerType,
 }: ScoringExplanationDialogProps) {
 	const terms = getProviderTerms(providerType);
 
@@ -33,10 +33,10 @@ export function ScoringExplanationDialog({
 					<DialogDescription>How your contribution score is calculated</DialogDescription>
 				</DialogHeader>
 
-				<div className="text-sm text-provider-muted-foreground space-y-3">
+				<div className="space-y-3 text-sm text-provider-muted-foreground">
 					<p>
 						The score approximates your contribution activity by evaluating your review interactions
-						and the complexity of the {terms.pullRequests.toLowerCase()} you've reviewed.
+						and the complexity of the {terms.pullRequests.toLowerCase()} you’ve reviewed.
 						<span className="font-medium"> Change requests are valued highest</span>, followed by
 						approvals and comments. The score increases with the number of review interactions.
 					</p>
@@ -51,7 +51,7 @@ export function ScoringExplanationDialog({
 						.
 					</p>
 
-					<div className="bg-provider-muted rounded-md p-4 font-mono text-xs">
+					<div className="rounded-md bg-provider-muted p-4 font-mono text-xs">
 						<p className="font-medium">Score Calculation Formula</p>
 						<p className="mt-1">
 							score = (10 × interactionScore × complexityScore) / (interactionScore +
@@ -63,7 +63,7 @@ export function ScoringExplanationDialog({
 							interactionScore = approvalScore + changesRequestedScore + commentScore +
 							issueCommentScore
 						</p>
-						<ul className="list-disc ml-5 mt-1 space-y-0.5">
+						<ul className="mt-1 ml-5 list-disc space-y-0.5">
 							<li>approvalScore = 2.0 × codeReviewBonus (for each approval)</li>
 							<li>changesRequestedScore = 2.5 × codeReviewBonus (for each change request)</li>
 							<li>commentScore = 1.5 × codeReviewBonus (for each comment)</li>
@@ -73,7 +73,7 @@ export function ScoringExplanationDialog({
 						<p>
 							complexityScore = ((changedFiles × 3) + (commits × 0.5) + additions + deletions) / 10
 						</p>
-						<ul className="list-disc ml-5 mt-1 space-y-0.5">
+						<ul className="mt-1 ml-5 list-disc space-y-0.5">
 							<li>Simple: 1 point (complexityScore &lt; 10)</li>
 							<li>Medium: 3 points (complexityScore &lt; 50)</li>
 							<li>Large: 7 points (complexityScore &lt; 100)</li>
@@ -84,7 +84,7 @@ export function ScoringExplanationDialog({
 
 					<p>
 						The final score balances your interactions with the complexity of the work reviewed,
-						highlighting both your engagement and the difficulty of the tasks you've undertaken.
+						highlighting both your engagement and the difficulty of the tasks you’ve undertaken.
 						This score reflects your impact but does not directly measure time invested or work
 						quality.
 					</p>
