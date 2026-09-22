@@ -39,5 +39,15 @@ public enum FeedbackChannel {
     /** A turn in an ongoing mentor conversation with the recipient — the in-app mentor, or Slack. */
     IN_CHAT,
     /** Aggregated onto the recipient's own practice pages inside Hephaestus. Nobody replies to it. */
-    IN_APP,
+    IN_APP;
+
+    /**
+     * Whether feedback on this channel is pushed out of Hephaestus — a note on the work, public to everyone
+     * who reads the pull request and reversible only by deleting it. A practice page or a mentor turn is
+     * pulled: the developer reads it on request, and nobody else sees it. Human approval exists for what is
+     * pushed ({@link de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy#delivers}).
+     */
+    public boolean pushed() {
+        return this == IN_CONTEXT;
+    }
 }

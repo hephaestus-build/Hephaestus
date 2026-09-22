@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 @DisplayName("Feedback admission")
@@ -68,23 +69,58 @@ class PracticeAutonomyPolicyTest extends BaseUnitTest {
                     .isFalse();
         }
 
-        @Test
-        void theTierAppliesUniformlyToEveryChannel() {
-            for (FeedbackChannel channel : FeedbackChannel.values()) {
-                assertThat(PracticeAutonomyPolicy.delivers(
-                                ObservationOrigin.LIVE, PracticeAutonomy.HUMAN_APPROVAL, channel))
-                        .as("HUMAN_APPROVAL on channel %s", channel)
-                        .isFalse();
-                assertThat(PracticeAutonomyPolicy.delivers(ObservationOrigin.LIVE, PracticeAutonomy.AUTOMATIC, channel))
-                        .as("AUTOMATIC on channel %s", channel)
-                        .isTrue();
+        /**
+         * The rule, channel by autonomy: approval gates only the pushed channel. A note on the work is
+         * public and reversible only by deleting it; a practice page or a chat turn is read by the subject
+         * on request, so every practice that admits review at all delivers there.
+         */
+        @ParameterizedTest
+        @CsvSource({
+            "OFF, IN_CONTEXT, false",
+            "OFF, IN_APP, false",
+            "OFF, IN_CHAT, false",
+            "HUMAN_APPROVAL, IN_CONTEXT, false",
+            "HUMAN_APPROVAL, IN_APP, true",
+            "HUMAN_APPROVAL, IN_CHAT, true",
+            "AUTOMATIC, IN_CONTEXT, true",
+            "AUTOMATIC, IN_APP, true",
+            "AUTOMATIC, IN_CHAT, true",
+        })
+        void approvalGatesOnlyThePushedChannel(PracticeAutonomy autonomy, FeedbackChannel channel, boolean delivers) {
+            assertThat(autonomy.delivers(channel)).isEqualTo(delivers);
+            for (ObservationOrigin origin :
+                    new ObservationOrigin[] {ObservationOrigin.LIVE, ObservationOrigin.MANUAL}) {
+                assertThat(PracticeAutonomyPolicy.delivers(origin, autonomy, channel))
+                        .as("%s at %s on %s", origin, autonomy, channel)
+                        .isEqualTo(delivers);
             }
         }
 
         @Test
-        void shouldFailClosedWhenAutonomyCannotBeResolved() {
-            assertThat(PracticeAutonomyPolicy.delivers(ObservationOrigin.LIVE, null, FeedbackChannel.IN_CONTEXT))
+        void onlyTheInContextChannelIsPushed() {
+            assertThat(FeedbackChannel.IN_CONTEXT.pushed()).isTrue();
+            assertThat(FeedbackChannel.IN_APP.pushed()).isFalse();
+            assertThat(FeedbackChannel.IN_CHAT.pushed()).isFalse();
+        }
+
+        @Test
+        void theOriginRuleStillBoundsThePullLanes() {
+            // A backfill may reach the practice page under HUMAN_APPROVAL, and never the chat.
+            assertThat(PracticeAutonomyPolicy.delivers(
+                            ObservationOrigin.BACKFILL, PracticeAutonomy.HUMAN_APPROVAL, FeedbackChannel.IN_APP))
+                    .isTrue();
+            assertThat(PracticeAutonomyPolicy.delivers(
+                            ObservationOrigin.BACKFILL, PracticeAutonomy.HUMAN_APPROVAL, FeedbackChannel.IN_CHAT))
                     .isFalse();
+        }
+
+        @Test
+        void shouldFailClosedWhenAutonomyCannotBeResolved() {
+            for (FeedbackChannel channel : FeedbackChannel.values()) {
+                assertThat(PracticeAutonomyPolicy.delivers(ObservationOrigin.LIVE, null, channel))
+                        .as("unresolved autonomy on %s", channel)
+                        .isFalse();
+            }
             assertThat(PracticeAutonomyPolicy.delivers(ObservationOrigin.BACKFILL, null, FeedbackChannel.IN_CONTEXT))
                     .isFalse();
         }

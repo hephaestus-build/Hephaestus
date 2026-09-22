@@ -13,3 +13,8 @@ event subscriptions added under the app's Permissions & events, and the Checks a
 read permissions if the app predates them; GitLab group webhooks registered by an earlier release
 need Pipeline events enabled, or the hook deleted so it is registered again. Until then the head's
 check state arrives only with the scheduled sync.
+
+A practice set to "Review before sending" now still writes the developer's own practice pages and
+Heph; only feedback posted on the work waits for approval. A page and a mentor turn are read by the
+developer on request and seen by nobody else, so nothing leaves the instance without a person
+saying yes.

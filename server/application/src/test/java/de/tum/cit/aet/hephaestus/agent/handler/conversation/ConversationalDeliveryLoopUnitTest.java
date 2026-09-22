@@ -422,9 +422,10 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
     }
 
     static Stream<Arguments> autonomyRoutingCases() {
+        // A chat turn is read on request, so approval gates only what is pushed: HUMAN_APPROVAL delivers here.
         return Stream.of(
                 arguments(PracticeAutonomy.OFF, ConversationRoutingDecision.PRACTICE_REQUIRES_APPROVAL),
-                arguments(PracticeAutonomy.HUMAN_APPROVAL, ConversationRoutingDecision.PRACTICE_REQUIRES_APPROVAL),
+                arguments(PracticeAutonomy.HUMAN_APPROVAL, ConversationRoutingDecision.ADMIT),
                 arguments(PracticeAutonomy.AUTOMATIC, ConversationRoutingDecision.ADMIT));
     }
 
@@ -432,8 +433,10 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
     void autonomyIsAppliedBeforeReviewerDeferral() {
         Observation observation = problem(null, null);
 
-        assertThat(router().route(observation, PracticeAutonomy.HUMAN_APPROVAL, WS, RoutingContext.reviewer()))
+        assertThat(router().route(observation, PracticeAutonomy.OFF, WS, RoutingContext.reviewer()))
                 .isEqualTo(ConversationRoutingDecision.PRACTICE_REQUIRES_APPROVAL);
+        assertThat(router().route(observation, PracticeAutonomy.HUMAN_APPROVAL, WS, RoutingContext.reviewer()))
+                .isEqualTo(ConversationRoutingDecision.REVIEWER_DEFERRED);
     }
 
     @Test

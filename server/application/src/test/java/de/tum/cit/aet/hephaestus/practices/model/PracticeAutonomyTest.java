@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Arrays;
 import org.junit.jupiter.api.DisplayName;
@@ -36,9 +37,15 @@ class PracticeAutonomyTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldRequireApprovalAtHumanApprovalAutonomy() {
+        void shouldRequireApprovalAtHumanApprovalAutonomyForThePushedChannelOnly() {
             assertThat(PracticeAutonomy.HUMAN_APPROVAL.deliversWithoutApproval())
                     .isFalse();
+            assertThat(PracticeAutonomy.HUMAN_APPROVAL.delivers(FeedbackChannel.IN_CONTEXT))
+                    .isFalse();
+            assertThat(PracticeAutonomy.HUMAN_APPROVAL.delivers(FeedbackChannel.IN_APP))
+                    .isTrue();
+            assertThat(PracticeAutonomy.HUMAN_APPROVAL.delivers(FeedbackChannel.IN_CHAT))
+                    .isTrue();
         }
     }
 

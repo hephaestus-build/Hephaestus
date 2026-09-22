@@ -1872,7 +1872,7 @@ export const updateGroup = <ThrowOnError extends boolean = false>(options: Optio
 /**
  * Set how much autonomy the system has over one group
  *
- * Applies to every practice in the group that holds no autonomy of its own; practices that set their own are left alone. OFF stops their reviews entirely. HUMAN_APPROVAL runs them and records every observation, and holds feedback for an authorized reviewer. AUTOMATIC sends feedback without asking. Send a null autonomy to clear the group's own setting so it follows the workspace default.
+ * Applies to every practice in the group that holds no autonomy of its own; practices that set their own are left alone. OFF stops their reviews entirely. HUMAN_APPROVAL runs them and records every observation, holds feedback on the work for an authorized reviewer, and still writes the developer's practice pages and the mentor, which are read on request. AUTOMATIC sends feedback on the work without asking. Send a null autonomy to clear the group's own setting so it follows the workspace default.
  */
 export const setGroupAutonomy = <ThrowOnError extends boolean = false>(options: Options<SetGroupAutonomyData, ThrowOnError>): RequestResult<SetGroupAutonomyResponses, SetGroupAutonomyErrors, ThrowOnError> => (options.client ?? client).patch<SetGroupAutonomyResponses, SetGroupAutonomyErrors, ThrowOnError>({
   responseTransformer: setGroupAutonomyResponseTransformer,
@@ -2404,7 +2404,7 @@ export const updatePractice = <ThrowOnError extends boolean = false>(options: Op
 /**
  * Set how much autonomy the system has over one practice
  *
- * OFF stops the review entirely. HUMAN_APPROVAL runs it and records every observation and holds feedback for an authorized reviewer. AUTOMATIC sends feedback without asking, as far as this workspace's reach allows. Send a null autonomy to clear the practice's own setting so it follows its group, and through the group the workspace default.
+ * OFF stops the review entirely. HUMAN_APPROVAL runs it and records every observation, holds feedback on the work for an authorized reviewer, and still writes the developer's practice pages and the mentor, which are read on request. AUTOMATIC sends feedback on the work without asking, as far as this workspace's reach allows. Send a null autonomy to clear the practice's own setting so it follows its group, and through the group the workspace default.
  */
 export const setAutonomy = <ThrowOnError extends boolean = false>(options: Options<SetAutonomyData, ThrowOnError>): RequestResult<SetAutonomyResponses, SetAutonomyErrors, ThrowOnError> => (options.client ?? client).patch<SetAutonomyResponses, SetAutonomyErrors, ThrowOnError>({
   responseTransformer: setAutonomyResponseTransformer,
