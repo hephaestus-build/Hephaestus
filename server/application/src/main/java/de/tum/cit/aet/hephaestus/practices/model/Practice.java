@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.model;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -130,6 +132,16 @@ public class Practice {
     /** Catalog comparison fingerprint captured when the workspace copy is created. */
     @Column(name = "source_curated_fingerprint", length = 96)
     private @Nullable String sourceCuratedFingerprint;
+
+    /** Complete source definition at adoption; never changed by workspace edits. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "adopted_base", columnDefinition = "jsonb")
+    @ToString.Exclude
+    private @Nullable PracticeDefinition adoptedBase;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "adopted_base_source", length = 32)
+    private @Nullable AdoptedBaseSource adoptedBaseSource;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "current_revision_id", foreignKey = @ForeignKey(name = "fk_practice_current_revision"))

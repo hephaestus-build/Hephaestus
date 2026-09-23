@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.curated;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
@@ -67,6 +68,15 @@ public class CuratedPracticeOverride {
     @Column(name = "based_on_digest", length = 128)
     private @Nullable String acceptedBundledDigest;
 
+    /** Bundled definition on which this customization was based. Null for instance-authored entries. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "adopted_base", columnDefinition = "jsonb")
+    private @Nullable PracticeDefinition adoptedBase;
+
+    @Column(name = "adopted_base_source", length = 32)
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    private @Nullable AdoptedBaseSource adoptedBaseSource;
+
     @Column(name = "retired_at")
     private @Nullable Instant retiredAt;
 
@@ -130,7 +140,32 @@ public class CuratedPracticeOverride {
         this.whatGoodLooksLike = null;
         this.groupSlug = null;
         this.acceptedBundledDigest = null;
+        this.adoptedBase = null;
+        this.adoptedBaseSource = null;
         this.updatedAt = Objects.requireNonNull(now, "now");
+    }
+
+    public void adoptBundledBase(PracticeDefinition bundled) {
+        this.adoptedBase = bundled;
+        this.adoptedBaseSource = AdoptedBaseSource.EXACT_ADOPTION;
+        this.acceptedBundledDigest = CuratedDefinitionDigest.of(slug, bundled);
+    }
+
+    public void backfillBase(@Nullable PracticeDefinition bundled) {
+        if (adoptedBase != null || acceptedBundledDigest == null) {
+            return;
+        }
+        PracticeDefinition current = definition();
+        if (current == null) {
+            return;
+        }
+        if (bundled != null && CuratedDefinitionDigest.of(slug, bundled).equals(acceptedBundledDigest)) {
+            adoptedBase = bundled;
+            adoptedBaseSource = AdoptedBaseSource.BUNDLED_DIGEST_MATCH;
+        } else {
+            adoptedBase = current;
+            adoptedBaseSource = AdoptedBaseSource.CURRENT_DEFINITION;
+        }
     }
 
     public void acknowledge(@Nullable String shippedDigest, Instant now) {

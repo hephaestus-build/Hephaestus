@@ -76,7 +76,14 @@ public class CuratedCatalogService {
         }
         CuratedPracticeOverride override =
                 practiceOverrides.findBySlug(slug).orElseGet(() -> new CuratedPracticeOverride(slug, clock.instant()));
-        override.write(definition, CuratedCatalogModel.digestOf(entry.shipped(), slug), clock.instant());
+        PracticeDefinition shipped = entry.shipped();
+        boolean newDefinition = override.definition() == null;
+        if (newDefinition && shipped != null) {
+            override.adoptBundledBase(shipped);
+        } else {
+            override.backfillBase(shipped);
+        }
+        override.write(definition, override.getAcceptedBundledDigest(), clock.instant());
         practiceOverrides.save(override);
         return recordPractice(slug, entry);
     }
@@ -129,6 +136,9 @@ public class CuratedCatalogService {
         }
         practiceOverrides.findBySlug(slug).ifPresent(override -> {
             override.acknowledge(CuratedCatalogModel.digestOf(entry.shipped(), slug), clock.instant());
+            if (entry.shipped() != null) {
+                override.adoptBundledBase(entry.shipped());
+            }
             practiceOverrides.save(override);
         });
         return recordPractice(slug, entry);

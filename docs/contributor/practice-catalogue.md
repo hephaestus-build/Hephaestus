@@ -201,6 +201,26 @@ carries it, so digesting it too would only give a rename two places to be record
 and **What good looks like** are guidance and do not affect review-rule drift. A group comparison
 covers name, description, icon, and color; position is excluded.
 
+## Adopted definition bases
+
+Each new workspace adoption stores the complete instance definition it copied, including guidance,
+review policy and bindings, beside the source slug and review-rule fingerprint. Workspace edits and
+new revisions do not change that base. An instance customization likewise stores the complete
+bundled definition on which it was based. An uncustomized instance entry has no saved base: it still
+follows the bundle. Acknowledging a newer bundle updates the instance base; editing the customization
+does not.
+
+Older copies cannot recover a definition that was never saved. On upgrade, a workspace copy uses the
+current bundled definition only when its saved review-rule fingerprint matches; otherwise it uses its
+current definition. An older instance customization uses the current bundle only when its saved
+catalog digest matches; otherwise it uses its current definition. Each saved base records which route
+was used (`EXACT_ADOPTION`, `BUNDLED_DIGEST_MATCH`, `BUNDLED_FINGERPRINT_MATCH`, or
+`CURRENT_DEFINITION`). Neither historical match proves identical content: the review-rule fingerprint
+excludes guidance, and the catalog digest uses binding inputs that omit `subject` until [#2160](https://github.com/hephaestus-build/Hephaestus/issues/2160) fixes
+them. A future release proposal must show the source to the admin and must not present a reconstructed
+base as an exact historical copy. This data foundation does not change a workspace definition or
+offer an update by itself.
+
 ## Turning a practice down
 
 Autonomy is a workspace decision, not a catalog one: a practice's `autonomy` and the workspace's review

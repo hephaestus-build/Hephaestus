@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790187096652-1" author="hephaestus">
+        <addColumn tableName="curated_practice_override">
+            <column name="adopted_base" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790187096652-2" author="hephaestus">
+        <addColumn tableName="practice">
+            <column name="adopted_base" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790187096652-3" author="hephaestus">
+        <addColumn tableName="curated_practice_override">
+            <column name="adopted_base_source" type="VARCHAR(32)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790187096652-4" author="hephaestus">
+        <addColumn tableName="practice">
+            <column name="adopted_base_source" type="VARCHAR(32)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790187096652-5" author="hephaestus">
+        <sql>ALTER TABLE practice ADD CONSTRAINT chk_practice_adopted_base_pair CHECK ((adopted_base IS NULL) = (adopted_base_source IS NULL))</sql>
+        <rollback>ALTER TABLE practice DROP CONSTRAINT chk_practice_adopted_base_pair</rollback>
+    </changeSet>
+    <changeSet id="1790187096652-6" author="hephaestus">
+        <sql>ALTER TABLE curated_practice_override ADD CONSTRAINT chk_curated_practice_override_adopted_base_pair CHECK ((adopted_base IS NULL) = (adopted_base_source IS NULL))</sql>
+        <rollback>ALTER TABLE curated_practice_override DROP CONSTRAINT chk_curated_practice_override_adopted_base_pair</rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
@@ -193,6 +195,8 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .findByWorkspaceIdAndSlug(workspace.getId(), PRACTICE)
                 .orElseThrow();
         assertThat(practice.getSourceCuratedSlug()).isEqualTo(PRACTICE);
+        assertThat(practice.getAdoptedBase()).isEqualTo(PracticeDefinition.from(practice));
+        assertThat(practice.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.EXACT_ADOPTION);
         assertThat(practice.getSourceCuratedFingerprint()).matches("v3:[0-9a-f]{64}");
         assertThat(practice.getAutonomy()).isEqualTo(PracticeAutonomy.HUMAN_APPROVAL);
         assertThat(groupRepository.findByWorkspaceIdAndSlug(workspace.getId(), GROUP))

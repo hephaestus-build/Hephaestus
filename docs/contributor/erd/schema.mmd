@@ -306,6 +306,8 @@ erDiagram
         TIMESTAMPTZ updated_at "NOT NULL"
         BIGINT version "NOT NULL"
         JSONB automated_review_policy
+        JSONB adopted_base
+        VARCHAR(32) adopted_base_source
     }
 
     DeliveryPolicyEvaluation {
@@ -922,6 +924,8 @@ erDiagram
         VARCHAR(96) source_curated_fingerprint
         JSONB automated_review_policy "NOT NULL"
         VARCHAR(16) autonomy
+        JSONB adopted_base
+        VARCHAR(32) adopted_base_source
     }
 
     PracticeCatalogInstallation {

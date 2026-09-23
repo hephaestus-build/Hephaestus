@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.curated;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeCatalogInstallation;
 import de.tum.cit.aet.hephaestus.practices.PracticeCatalogInstallationRepository;
@@ -15,7 +16,9 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import java.time.Clock;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,12 +37,18 @@ public class CatalogProvenanceBackfill {
     private final PracticeRevisionRepository revisionRepository;
     private final PracticeRevisionService revisionService;
     private final CuratedCatalogService curatedCatalogService;
+    private final BundledPracticeCatalogLoader bundledCatalogLoader;
+    private final CuratedPracticeOverrideRepository practiceOverrideRepository;
     private final TransactionOperations transactionOperations;
     private final Clock clock;
 
     public Stamped run() {
         alignVersionedEvidence();
         fingerprintMigratedRevisions();
+        Map<String, PracticeDefinition> bundled = bundledCatalogLoader.catalog().practices().stream()
+                .collect(Collectors.toMap(
+                        BundledPracticeCatalog.BundledEntry::slug, BundledPracticeCatalog.BundledEntry::definition));
+        backfillAdoptedBases(bundled);
         List<Long> pending = installationRepository.findWorkspaceIdsAwaitingProvenanceLink();
         if (pending.isEmpty()) {
             return new Stamped(0, 0);
@@ -49,7 +58,7 @@ public class CatalogProvenanceBackfill {
         int completed = 0;
         for (Long workspaceId : pending) {
             try {
-                total = total.plus(transactionOperations.execute(ignored -> stamp(workspaceId, catalog)));
+                total = total.plus(transactionOperations.execute(ignored -> stamp(workspaceId, catalog, bundled)));
                 completed++;
             } catch (RuntimeException exception) {
                 log.error("Could not stamp catalog provenance: workspaceId={}", workspaceId, exception);
@@ -61,6 +70,47 @@ public class CatalogProvenanceBackfill {
                 total.practices(),
                 total.groups());
         return total;
+    }
+
+    private void backfillAdoptedBases(Map<String, PracticeDefinition> bundled) {
+        for (Long practiceId : practiceRepository.findIdsMissingAdoptedBase()) {
+            try {
+                transactionOperations.executeWithoutResult(ignored -> {
+                    Practice practice = practiceRepository.findById(practiceId).orElseThrow();
+                    if (practice.getAdoptedBase() != null) {
+                        return;
+                    }
+                    setRecoveredBase(practice, bundled);
+                    practiceRepository.save(practice);
+                });
+            } catch (RuntimeException exception) {
+                log.error("Could not backfill adopted base: practiceId={}", practiceId, exception);
+            }
+        }
+        for (String slug : practiceOverrideRepository.findSlugsMissingAdoptedBase()) {
+            try {
+                transactionOperations.executeWithoutResult(ignored -> {
+                    CuratedPracticeOverride override =
+                            practiceOverrideRepository.findBySlug(slug).orElseThrow();
+                    override.backfillBase(bundled.get(slug));
+                    practiceOverrideRepository.save(override);
+                });
+            } catch (RuntimeException exception) {
+                log.error("Could not backfill instance base: slug={}", slug, exception);
+            }
+        }
+    }
+
+    private void setRecoveredBase(Practice practice, Map<String, PracticeDefinition> bundled) {
+        String slug = Objects.requireNonNull(practice.getSourceCuratedSlug());
+        PracticeDefinition candidate = bundled.get(slug);
+        if (candidate != null && candidate.provenanceFingerprint(slug).equals(practice.getSourceCuratedFingerprint())) {
+            practice.setAdoptedBase(candidate);
+            practice.setAdoptedBaseSource(AdoptedBaseSource.BUNDLED_FINGERPRINT_MATCH);
+        } else {
+            practice.setAdoptedBase(PracticeDefinition.from(practice));
+            practice.setAdoptedBaseSource(AdoptedBaseSource.CURRENT_DEFINITION);
+        }
     }
 
     private void alignVersionedEvidence() {
@@ -114,14 +164,14 @@ public class CatalogProvenanceBackfill {
         }
     }
 
-    private Stamped stamp(Long workspaceId, EffectiveCatalog catalog) {
+    private Stamped stamp(Long workspaceId, EffectiveCatalog catalog, Map<String, PracticeDefinition> bundled) {
         PracticeCatalogInstallation installation =
                 installationRepository.findByWorkspaceIdForUpdate(workspaceId).orElse(null);
         if (installation == null || installation.getProvenanceLinkedAt() != null) {
             return new Stamped(0, 0);
         }
         int groups = stampGroups(workspaceId, catalog);
-        int practices = stampPractices(workspaceId, catalog);
+        int practices = stampPractices(workspaceId, catalog, bundled);
         installation.markProvenanceLinked(clock.instant());
         installationRepository.save(installation);
         return new Stamped(practices, groups);
@@ -134,7 +184,7 @@ public class CatalogProvenanceBackfill {
         }
     }
 
-    private int stampPractices(Long workspaceId, EffectiveCatalog catalog) {
+    private int stampPractices(Long workspaceId, EffectiveCatalog catalog, Map<String, PracticeDefinition> bundled) {
         int stamped = 0;
         for (Practice practice : practiceRepository.findAllForCatalog(workspaceId)) {
             if (practice.getSourceCuratedSlug() != null || practice.getCurrentRevision() == null) {
@@ -153,6 +203,7 @@ public class CatalogProvenanceBackfill {
             }
             practice.setSourceCuratedSlug(practice.getSlug());
             practice.setSourceCuratedFingerprint(fingerprint);
+            setRecoveredBase(practice, bundled);
             practiceRepository.save(practice);
             stamped++;
         }

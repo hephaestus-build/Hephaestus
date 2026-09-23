@@ -223,6 +223,10 @@ public class PracticeService {
         practice.setWorkspace(workspace);
         practice.setSourceCuratedSlug(sourceCuratedSlug);
         practice.setSourceCuratedFingerprint(sourceCuratedFingerprint);
+        if (sourceCuratedSlug != null) {
+            practice.setAdoptedBase(definition);
+            practice.setAdoptedBaseSource(AdoptedBaseSource.EXACT_ADOPTION);
+        }
         practice.setGroup(group);
         practice.setDisplayOrder(
                 practiceRepository.findMaxDisplayOrder(ctx.id(), group == null ? null : group.getId()) + 1);
