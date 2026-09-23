@@ -9,6 +9,8 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -41,6 +43,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceTeamRepositorySettings;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceTeamRepositorySettingsRepository;
+import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +58,9 @@ import org.springframework.data.domain.PageRequest;
 import tools.jackson.databind.ObjectMapper;
 
 class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private EntityManager entityManager;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -93,6 +99,9 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PullRequestRepository pullRequestRepository;
+
+    @Autowired
+    private IssueRepository issueRepository;
 
     private Workspace workspace;
     private Practice practice;
@@ -133,6 +142,115 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 1));
         practice.setCurrentRevision(revision);
         return practiceRepository.save(practice);
+    }
+
+    @Test
+    void shouldAdvanceAgainAfterReturningToAnEarlierIssueSnapshot() {
+        Issue issue = persistIssue();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        UUID returned = UUID.randomUUID();
+
+        assertThat(issueRepository.advanceReviewSnapshot(issue.getId(), first, "snapshot-a"))
+                .isOne();
+        assertThat(issueRepository.advanceReviewSnapshot(issue.getId(), UUID.randomUUID(), "snapshot-a"))
+                .isZero();
+        assertThat(issueRepository.advanceReviewSnapshot(issue.getId(), second, "snapshot-b"))
+                .isOne();
+        assertThat(issueRepository.advanceReviewSnapshot(issue.getId(), returned, "snapshot-a"))
+                .isOne();
+        entityManager.clear();
+        assertThat(issueRepository.findById(issue.getId()).orElseThrow().getReviewSnapshotId())
+                .isEqualTo(returned);
+    }
+
+    @Test
+    void shouldSupersedeASharedIssueInEveryWorkspaceButLeaveOtherWorkCurrent() {
+        Issue issue = persistIssue();
+        Issue unrelated = persistIssue();
+        Workspace other = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("other-issue-workspace"));
+        Practice otherPractice = new Practice();
+        otherPractice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
+        otherPractice.setWorkspace(other);
+        otherPractice.setSlug("other-issue-practice");
+        otherPractice.setName("Other issue practice");
+        otherPractice.setCriteria("Other criterion");
+        otherPractice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        otherPractice = practiceRepository.save(otherPractice);
+        AgentJob otherJob = new AgentJob();
+        otherJob.setWorkspace(other);
+        otherJob.setJobType(AgentJobType.ISSUE_REVIEW);
+        otherJob.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
+        otherJob = agentJobRepository.save(otherJob);
+        UUID currentId = insertIssueObservation(issue.getId(), workspace.getId(), practice.getId(), agentJob.getId());
+        UUID otherId = insertIssueObservation(issue.getId(), other.getId(), otherPractice.getId(), otherJob.getId());
+        UUID unrelatedId =
+                insertIssueObservation(unrelated.getId(), other.getId(), otherPractice.getId(), otherJob.getId());
+
+        assertThat(observationRepository.supersedeIssueObservations(issue.getId(), Instant.now()))
+                .isEqualTo(2);
+
+        assertThat(observationRepository.findById(currentId).orElseThrow().getSupersededAt())
+                .isNotNull();
+        assertThat(observationRepository.findById(otherId).orElseThrow().getSupersededAt())
+                .isNotNull();
+        assertThat(observationRepository.findById(unrelatedId).orElseThrow().getSupersededAt())
+                .isNull();
+        assertThat(observationRepository.findRecentByDeveloperAndWorkspace(
+                        aboutUser.getId(), workspace.getId(), Instant.EPOCH, true, PageRequest.of(0, 10)))
+                .isEmpty();
+        assertThat(observationRepository.findSummaryByDeveloperAndWorkspace(aboutUser.getId(), workspace.getId()))
+                .isEmpty();
+    }
+
+    private UUID insertIssueObservation(long issueId, long workspaceId, long practiceId, UUID jobId) {
+        UUID id = UUID.randomUUID();
+        assertThat(observationRepository.insertIfAbsent(
+                        id,
+                        "issue-" + id,
+                        jobId,
+                        workspaceId,
+                        practiceId,
+                        null,
+                        "scm.issue",
+                        issueId,
+                        aboutUser.getId(),
+                        "Issue observation",
+                        "ASSESSED",
+                        "PRESENT",
+                        "GOOD",
+                        null,
+                        null,
+                        null,
+                        null,
+                        Instant.now(),
+                        "LIVE"))
+                .isOne();
+        return id;
+    }
+
+    private Issue persistIssue() {
+        Repository repository = new Repository();
+        repository.setNativeId(UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE);
+        repository.setProvider(aboutUser.getProvider());
+        repository.setName("issue-repo");
+        repository.setNameWithOwner("owner/issue-repo-" + UUID.randomUUID());
+        repository.setHtmlUrl("https://github.com/" + repository.getNameWithOwner());
+        repository.setDefaultBranch("main");
+        repository.setCreatedAt(Instant.now());
+        repository.setUpdatedAt(Instant.now());
+        repository.setPushedAt(Instant.now());
+        repository = repositoryRepository.save(repository);
+        Issue issue = new Issue();
+        issue.setNativeId(UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE);
+        issue.setProvider(aboutUser.getProvider());
+        issue.setRepository(repository);
+        issue.setNumber(1);
+        issue.setTitle("Issue under review");
+        issue.setState(Issue.State.OPEN);
+        issue.setCreatedAt(Instant.now());
+        issue.setUpdatedAt(Instant.now());
+        return issueRepository.save(issue);
     }
 
     @Test

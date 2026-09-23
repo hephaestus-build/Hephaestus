@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 public record IssueReviewSubmissionRequest(
@@ -18,7 +19,9 @@ public record IssueReviewSubmissionRequest(
         @Nullable String url,
         @Nullable Instant updatedAt,
         @Nullable SignalName triggerSignal,
-        @Nullable ObservationOrigin observationOrigin)
+        @Nullable ObservationOrigin observationOrigin,
+        @Nullable Long actorUserId,
+        @Nullable UUID reviewSnapshotId)
         implements JobSubmissionRequest {
     public IssueReviewSubmissionRequest {
         Objects.requireNonNull(repositoryFullName, "repositoryFullName must not be null");
@@ -65,6 +68,36 @@ public record IssueReviewSubmissionRequest(
                 url,
                 updatedAt,
                 triggerSignal,
+                null,
+                null,
+                null);
+    }
+
+    public IssueReviewSubmissionRequest(
+            long issueId,
+            int issueNumber,
+            long repositoryId,
+            String repositoryFullName,
+            String title,
+            String body,
+            String state,
+            @Nullable String url,
+            @Nullable Instant updatedAt,
+            @Nullable SignalName triggerSignal,
+            @Nullable ObservationOrigin observationOrigin) {
+        this(
+                issueId,
+                issueNumber,
+                repositoryId,
+                repositoryFullName,
+                title,
+                body,
+                state,
+                url,
+                updatedAt,
+                triggerSignal,
+                observationOrigin,
+                null,
                 null);
     }
 }

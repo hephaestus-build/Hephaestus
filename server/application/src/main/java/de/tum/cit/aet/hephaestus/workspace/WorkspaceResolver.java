@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -33,7 +35,8 @@ public class WorkspaceResolver {
     }
 
     /**
-     * Resolves the workspace for a repository by monitor mapping or account login fallback.
+     * Resolves the first workspace for callers that can use only one workspace. Issue event
+     * processing uses {@link #resolveAllForRepository(String)} instead.
      *
      * <p>The workspace comes back initialized, not as a proxy. The monitor's association is lazy, so
      * handing back {@code monitor.getWorkspace()} used to return something that reads fine inside the
@@ -46,22 +49,29 @@ public class WorkspaceResolver {
      */
     @Transactional(readOnly = true)
     public Optional<Workspace> resolveForRepository(@Nullable String nameWithOwner) {
+        return resolveAll(nameWithOwner).stream().findFirst();
+    }
+
+    /** A shared repository can have one monitor in each of several workspaces. */
+    @Transactional(readOnly = true)
+    public List<Workspace> resolveAllForRepository(@Nullable String nameWithOwner) {
+        return resolveAll(nameWithOwner);
+    }
+
+    private List<Workspace> resolveAll(@Nullable String nameWithOwner) {
         if (nameWithOwner == null) {
-            return Optional.empty();
+            return List.of();
         }
-
-        // Step 1: Authoritative — explicit monitor configuration
-        var monitor = repositoryToMonitorRepository.findWithWorkspaceByNameWithOwner(nameWithOwner);
-        if (monitor.isPresent()) {
-            return Optional.ofNullable(monitor.get().getWorkspace());
+        var monitors = repositoryToMonitorRepository.findAllWithWorkspaceByNameWithOwner(nameWithOwner);
+        if (!monitors.isEmpty()) {
+            return monitors.stream()
+                    .map(monitor -> Objects.requireNonNull(monitor.getWorkspace()))
+                    .toList();
         }
-
-        // Step 2: Heuristic — infer from repository owner login
         String owner = nameWithOwner.contains("/") ? nameWithOwner.substring(0, nameWithOwner.indexOf("/")) : null;
-        if (owner != null && !owner.isEmpty()) {
-            return workspaceRepository.findByAccountLoginIgnoreCase(owner);
-        }
-
-        return Optional.empty();
+        return owner == null || owner.isEmpty()
+                ? List.of()
+                : workspaceRepository.findByAccountLoginIgnoreCase(owner).stream()
+                        .toList();
     }
 }

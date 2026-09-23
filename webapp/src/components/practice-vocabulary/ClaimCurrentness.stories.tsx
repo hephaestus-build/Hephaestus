@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { ClaimCurrentnessAlert } from "./ReviewBadges";
+import { ClaimCurrentnessAlert } from "./ClaimCurrentness";
 
 const meta = {
 	component: ClaimCurrentnessAlert,
@@ -15,9 +15,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Stale: Story = {
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByText("This was judged against an older version of the practice"),
-		).toBeVisible();
+		await expect(canvas.getByText("This observation is no longer current")).toBeVisible();
 	},
 };
 

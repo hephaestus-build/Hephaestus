@@ -193,7 +193,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         }
         if (!changedFields.isEmpty()) {
             eventPublisher.publishEvent(new ScmDomainEvent.IssueUpdated(
-                    ScmEventPayload.IssueData.from(issue), changedFields, EventContext.from(context)));
+                    ScmEventPayload.IssueData.from(issue), changedFields, actorContext(event, context)));
         }
         for (GitLabWebhookLabel labelDto : addedLabels) {
             Label label = findOrCreateLabel(labelDto, Objects.requireNonNull(context.repository()));
@@ -398,7 +398,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         if (issue != null) {
             ScmEventPayload.IssueData issueData = ScmEventPayload.IssueData.from(issue);
             eventPublisher.publishEvent(
-                    new ScmDomainEvent.IssueUpdated(issueData, Set.of("state"), EventContext.from(context)));
+                    new ScmDomainEvent.IssueUpdated(issueData, Set.of("state"), actorContext(event, context)));
             eventPublisher.publishEvent(new ScmDomainEvent.IssueReopened(issueData, EventContext.from(context)));
             log.debug("Reopened issue: issueId={}", issue.getId());
         }
@@ -406,6 +406,13 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
     }
 
     // Private helpers
+
+    private EventContext actorContext(GitLabIssueEventDTO event, ProcessingContext context) {
+        User actor = event.user() != null && context.providerId() != null
+                ? findOrCreateUser(event.user(), context.providerId())
+                : null;
+        return EventContext.from(context.withActorUserId(actor != null ? actor.getId() : null));
+    }
 
     /**
      * Resolves the issue author from a webhook event.

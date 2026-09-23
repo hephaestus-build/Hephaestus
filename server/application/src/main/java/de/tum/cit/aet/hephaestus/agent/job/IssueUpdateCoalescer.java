@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.time.Duration;
 import java.time.Instant;
@@ -99,13 +98,12 @@ public class IssueUpdateCoalescer {
             pending.forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.ARTIFACT_GONE));
             return;
         }
-        // A repository can be re-keyed to a different workspace inside the quiet period (ADR 0024 §
-        // re-keying); resolving ownership again is what keeps the review this settles under the
-        // workspace that recorded it, rather than under whoever monitors the repository now.
-        Workspace owner = workspaceResolver
-                .resolveForRepository(issue.getRepository().getNameWithOwner())
-                .orElse(null);
-        if (owner == null || !Objects.equals(owner.getId(), workspaceId)) {
+        // Recheck this workspace's monitor after the quiet period: a repository can move or be
+        // shared by several workspaces (ADR 0024 § re-keying).
+        boolean stillMonitored =
+                workspaceResolver.resolveAllForRepository(issue.getRepository().getNameWithOwner()).stream()
+                        .anyMatch(workspace -> Objects.equals(workspace.getId(), workspaceId));
+        if (!stillMonitored) {
             pending.forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.OUT_OF_REVIEW_SCOPE));
             return;
         }

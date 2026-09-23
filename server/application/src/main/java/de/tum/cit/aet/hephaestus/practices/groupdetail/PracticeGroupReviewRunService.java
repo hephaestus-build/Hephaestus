@@ -104,7 +104,7 @@ public class PracticeGroupReviewRunService {
         List<Observation> found = observationRepository.findPracticeGroupReviewRunObservations(
                 jobIds, developerId, workspaceId, groupSlug);
         Set<UUID> visible =
-                visibilityPolicy.permitsAll(workspaceId, found, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+                visibilityPolicy.permitsHistory(workspaceId, found, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         List<Observation> observations =
                 found.stream().filter(row -> visible.contains(row.getId())).toList();
         Map<UUID, List<Observation>> observationsByJob =

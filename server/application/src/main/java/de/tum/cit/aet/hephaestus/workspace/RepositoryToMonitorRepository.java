@@ -26,12 +26,10 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
     /** Resolves which workspace a repository belongs to during sync, by full name (owner/name). */
     Optional<RepositoryToMonitor> findByNameWithOwner(String nameWithOwner);
 
-    /**
-     * The same lookup, but with the workspace fetched eagerly rather than as a lazy proxy — needed by
-     * {@link WorkspaceResolver}, whose callers read the workspace outside the loading session.
-     */
-    @Query("SELECT m FROM RepositoryToMonitor m JOIN FETCH m.workspace WHERE m.nameWithOwner = :nameWithOwner")
-    Optional<RepositoryToMonitor> findWithWorkspaceByNameWithOwner(@Param("nameWithOwner") String nameWithOwner);
+    /** Every workspace monitoring this repository, with workspace data ready for callers. */
+    @Query(
+            "SELECT m FROM RepositoryToMonitor m JOIN FETCH m.workspace WHERE m.nameWithOwner = :nameWithOwner ORDER BY m.workspace.id")
+    List<RepositoryToMonitor> findAllWithWorkspaceByNameWithOwner(@Param("nameWithOwner") String nameWithOwner);
 
     /**
      * Finds every monitor tracking the repository with the given provider-stable id — across all

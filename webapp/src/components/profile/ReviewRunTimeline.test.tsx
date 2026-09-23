@@ -6,6 +6,7 @@ import { ReviewRunTimeline, type ReviewRunTimelineProps } from "./ReviewRunTimel
 
 const baseObservation = {
 	observationId: "00000000-0000-0000-0000-000000000102",
+	claimCurrentness: "CURRENT",
 	feedbackId: "00000000-0000-0000-0000-000000000103",
 	feedbackUsefulness: "HELPFUL",
 	feedbackResolution: "ADDRESSED",
@@ -89,6 +90,7 @@ describe("ReviewRunTimeline", () => {
 			observations: Array.from({ length: 5 }, (_, index) => ({
 				...baseObservation,
 				observationId: `00000000-0000-0000-0000-00000000010${index}`,
+				claimCurrentness: "CURRENT",
 				practiceSlug: `practice-${index}`,
 				practiceName: `Practice ${index + 1}`,
 				title: `Observation ${index + 1}`,

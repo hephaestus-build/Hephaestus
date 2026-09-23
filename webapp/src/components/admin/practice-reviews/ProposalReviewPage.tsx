@@ -3,6 +3,7 @@ import { CheckIcon, CircleXIcon, ScanSearchIcon } from "lucide-react";
 import { useId, useState } from "react";
 import type { GetPracticeReviewFeedbackResponse, Practice } from "@/api/types.gen";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { ClaimCurrentnessBadge } from "@/components/practice-vocabulary/ClaimCurrentness";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
@@ -35,7 +36,7 @@ import {
 } from "./proposal-rejection-vocabulary";
 import { subjectLabel } from "./review-format";
 import { ReviewArtifactLink } from "./ReviewArtifact";
-import { ClaimCurrentnessBadge, ObservationResultBadge } from "./ReviewBadges";
+import { ObservationResultBadge } from "./ReviewBadges";
 import { ReviewBreadcrumbs } from "./ReviewBreadcrumbs";
 import { ReviewDetailHeader, ReviewFact, ReviewFactGrid } from "./ReviewDetailHeader";
 import { ReviewPackage } from "./ReviewPackage";

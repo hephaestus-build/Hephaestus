@@ -116,6 +116,7 @@ erDiagram
         TIMESTAMPTZ state_changed_at "NOT NULL"
         TIMESTAMPTZ last_attempted_at
         BIGINT requested_by_user_id FK
+        BIGINT actor_user_id FK
     }
 
     AuthEvent {
@@ -594,6 +595,8 @@ erDiagram
         TIMESTAMPTZ deleted_at
         VARCHAR(40) head_check_sha
         VARCHAR(16) head_check_state
+        UUID review_snapshot_id
+        VARCHAR(128) review_snapshot_digest
     }
 
     IssueAssignee {
@@ -821,6 +824,7 @@ erDiagram
         VARCHAR(16) origin "NOT NULL"
         BIGINT workspace_id FK "NOT NULL"
         VARCHAR(16) assessment_status "NOT NULL"
+        TIMESTAMPTZ superseded_at
     }
 
     Organization {
@@ -1588,7 +1592,8 @@ erDiagram
     Workspace ||--o{ ActivityEvent : has
     Workspace ||--o{ AgentJob : has
     Workspace ||--o{ ArtifactSignal : has
-    User ||--o{ ArtifactSignal : has
+    User ||--o{ ArtifactSignal : actor_user_id
+    User ||--o{ ArtifactSignal : requested_by_user_id
     Account ||--o{ AuthEvent : account_id
     Account ||--o{ AuthEvent : acting_account_id
     IdentityProvider ||--o{ AuthEvent : references

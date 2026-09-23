@@ -22,7 +22,6 @@ import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.util.Collections;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,10 +58,8 @@ public class IssueAgentJobEventListener {
      * mirror still records it, but every practice bound to the occasion would read byte-identical
      * evidence and reach the conclusion it already published.
      */
-    private static final Set<String> REVIEWABLE_ISSUE_FIELDS =
-            Set.of("title", "body", "state", "stateReason", "issueType", "milestone", "relationships");
-
     private final AgentJobService agentJobService;
+
     private final IssueRepository issueRepository;
     private final PracticeReviewDetectionGate practiceReviewDetectionGate;
     private final WorkspaceResolver workspaceResolver;
@@ -98,17 +95,21 @@ public class IssueAgentJobEventListener {
     public void onIssueUpdated(ScmDomainEvent.IssueUpdated event) {
         if (event.issue().isPullRequest()
                 || event.issue().state() == Issue.State.CLOSED
-                || Collections.disjoint(event.changedFields(), REVIEWABLE_ISSUE_FIELDS)) {
+                || Collections.disjoint(event.changedFields(), ScmSignals.REVIEWABLE_ISSUE_FIELDS)) {
             return;
         }
-        SignalKey key = signalKeyFor(event.issue(), TriggerEventNames.ISSUE_UPDATED);
-        if (key == null) {
-            return;
-        }
-        if (event.context().isSync()) {
-            signalRecorder.record(key, event.context().occurredAt(), DiscoveredVia.SYNC);
-        } else {
-            signalRecorder.defer(key, event.context().occurredAt());
+        for (Workspace workspace : workspaceResolver.resolveAllForRepository(
+                event.issue().repository().nameWithOwner())) {
+            SignalKey key = signalKeyFor(event.issue(), TriggerEventNames.ISSUE_UPDATED, workspace.getId());
+            if (key == null) {
+                continue;
+            }
+            if (event.context().isSync()) {
+                signalRecorder.record(key, event.context().occurredAt(), DiscoveredVia.SYNC);
+            } else {
+                signalRecorder.defer(
+                        key, event.context().occurredAt(), event.context().actorUserId());
+            }
         }
     }
 
@@ -141,8 +142,16 @@ public class IssueAgentJobEventListener {
      */
     private void dispatchIssueEvent(
             ScmEventPayload.IssueData issueData, EventContext context, String triggerEventName) {
+        for (Workspace workspace :
+                workspaceResolver.resolveAllForRepository(issueData.repository().nameWithOwner())) {
+            dispatchIssueEventInWorkspace(issueData, context, triggerEventName, workspace);
+        }
+    }
+
+    private void dispatchIssueEventInWorkspace(
+            ScmEventPayload.IssueData issueData, EventContext context, String triggerEventName, Workspace workspace) {
         try {
-            SignalKey key = signalKeyFor(issueData, triggerEventName);
+            SignalKey key = signalKeyFor(issueData, triggerEventName, workspace.getId());
             if (key == null) {
                 return;
             }
@@ -180,7 +189,7 @@ public class IssueAgentJobEventListener {
                 return;
             }
 
-            switch (practiceReviewDetectionGate.evaluateIssue(issue, key.signalName(), TriggerMode.AUTO)) {
+            switch (practiceReviewDetectionGate.evaluateIssue(issue, workspace, key.signalName(), TriggerMode.AUTO)) {
                 case GateDecision.Skip skip -> {
                     log.debug(
                             "Issue agent job skipped by practice gate: issueId={}, event={}, reason={}",
@@ -196,22 +205,14 @@ public class IssueAgentJobEventListener {
         }
     }
 
-    private @Nullable SignalKey signalKeyFor(ScmEventPayload.IssueData issueData, String triggerEventName) {
-        Workspace workspace = workspaceResolver
-                .resolveForRepository(issueData.repository().nameWithOwner())
-                .orElse(null);
-        if (workspace == null) {
-            log.debug(
-                    "No workspace owns this repository, nothing to record: repoName={}",
-                    issueData.repository().nameWithOwner());
-            return null;
-        }
+    private @Nullable SignalKey signalKeyFor(
+            ScmEventPayload.IssueData issueData, String triggerEventName, long workspaceId) {
         SignalName signal = ScmSignals.forTriggerEvent(triggerEventName).orElse(null);
         if (signal == null) {
             log.debug("No signal declared for trigger event, nothing to record: event={}", triggerEventName);
             return null;
         }
-        return ScmSignals.issueKey(workspace.getId(), signal, issueData).orElse(null);
+        return ScmSignals.issueKey(workspaceId, signal, issueData).orElse(null);
     }
 
     private void submitJob(Issue issue, GateDecision.Detect detect, SignalKey signalKey) {
@@ -225,7 +226,10 @@ public class IssueAgentJobEventListener {
                 issue.getState() != null ? issue.getState().name() : "OPEN",
                 issue.getHtmlUrl(),
                 issue.getUpdatedAt(),
-                signalKey.signalName());
+                signalKey.signalName(),
+                null,
+                null,
+                issue.getReviewSnapshotId());
         agentJobService
                 .submit(detect.workspace().getId(), AgentJobType.ISSUE_REVIEW, request, signalKey, detect)
                 .ifPresent(job -> log.info(

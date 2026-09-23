@@ -29,6 +29,7 @@ import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -55,6 +56,15 @@ import org.jspecify.annotations.Nullable;
 @NoArgsConstructor
 @ToString(callSuper = true)
 public class Issue extends BaseGitServiceEntity {
+
+    /** Changes on every reviewable issue transition, even when content returns to an earlier state. */
+    @Nullable
+    @Column(name = "review_snapshot_id")
+    private UUID reviewSnapshotId;
+
+    @Nullable
+    @Column(name = "review_snapshot_digest", length = 128)
+    private String reviewSnapshotDigest;
 
     public ReviewSubject reviewSubject() {
         return author == null

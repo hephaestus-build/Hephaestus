@@ -55,6 +55,37 @@ import org.mockito.Mock;
 
 class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
 
+    @Test
+    void shouldRefuseIssueFeedbackWhenTheReviewedSnapshotChangedBeforeEgress() {
+        AgentJob job = pullRequestJob();
+        job.setArtifactKind(ArtifactKind.of("scm.issue"));
+        var metadata = tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+        metadata.put("issue_id", PULL_REQUEST_ID);
+        metadata.put("issue_number", 17);
+        metadata.put("repository_id", REPOSITORY_ID);
+        metadata.put("repository_full_name", "owner/repo");
+        metadata.put("review_snapshot_id", UUID.randomUUID().toString());
+        job.setMetadata(metadata);
+        PullRequest work = openPullRequest();
+        Issue issue = new Issue();
+        issue.setId(work.getId());
+        issue.setNumber(work.getNumber());
+        issue.setRepository(work.getRepository());
+        issue.setAuthor(work.getAuthor());
+        issue.setState(Issue.State.OPEN);
+        issue.setReviewSnapshotId(UUID.randomUUID());
+        when(issueRepository.findByIdWithAuthorAndRepository(PULL_REQUEST_ID)).thenReturn(Optional.of(issue));
+        when(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, "owner/repo"))
+                .thenReturn(true);
+        when(coverageService.assess(any(), eq("owner/repo"), eq(null), any(), eq(false)))
+                .thenReturn(coverage(true));
+        when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(AUTHOR_ID)).thenReturn(true);
+
+        var decision = policy().evaluateIssue(job, DeliveryPolicyStage.EGRESS, null, java.util.Set.of());
+
+        assertThat(decision.refusal()).isEqualTo(FeedbackSuppressionReason.ISSUE_SNAPSHOT_CHANGED);
+    }
+
     private static final long WORKSPACE_ID = 3L;
     private static final long PULL_REQUEST_ID = 41L;
     private static final long REPOSITORY_ID = 42L;
@@ -155,8 +186,11 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
             metadata.put("issue_number", 17);
             metadata.put("repository_id", REPOSITORY_ID);
             metadata.put("repository_full_name", "owner/repo");
+            UUID snapshot = UUID.randomUUID();
+            metadata.put("review_snapshot_id", snapshot.toString());
             job.setMetadata(metadata);
             Issue issue = new Issue();
+            issue.setReviewSnapshotId(snapshot);
             issue.setId(work.getId());
             issue.setNumber(work.getNumber());
             issue.setAuthor(work.getAuthor());
@@ -526,8 +560,11 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
             metadata.put("issue_number", 17);
             metadata.put("repository_id", REPOSITORY_ID);
             metadata.put("repository_full_name", "owner/repo");
+            UUID snapshot = UUID.randomUUID();
+            metadata.put("review_snapshot_id", snapshot.toString());
             job.setMetadata(metadata);
             Issue issue = new Issue();
+            issue.setReviewSnapshotId(snapshot);
             issue.setId(artifact.getId());
             issue.setNumber(artifact.getNumber());
             issue.setAuthor(artifact.getAuthor());

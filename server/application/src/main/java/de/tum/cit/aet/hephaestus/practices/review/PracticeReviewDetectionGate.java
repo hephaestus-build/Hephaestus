@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.PracticeReviewReadiness;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.util.List;
+import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -62,12 +63,29 @@ public class PracticeReviewDetectionGate {
     }
 
     public GateDecision evaluateIssue(
-            @NonNull Issue issue, @NonNull SignalName signal, @NonNull TriggerMode triggerMode) {
-        return evaluateReviewable(issue, false, signal, triggerMode, false, issue.reviewSubject());
+            @NonNull Issue issue,
+            @NonNull Workspace workspace,
+            @NonNull SignalName signal,
+            @NonNull TriggerMode triggerMode) {
+        return evaluateReviewableInWorkspace(
+                issue, workspace, false, signal, triggerMode, false, issue.reviewSubject());
     }
 
-    public GateDecision evaluateIssueAdministrative(Issue issue, SignalName signal) {
-        return evaluateReviewable(issue, false, signal, TriggerMode.MANUAL, true, issue.reviewSubject());
+    public GateDecision evaluateIssue(
+            @NonNull Issue issue, long workspaceId, @NonNull SignalName signal, @NonNull TriggerMode triggerMode) {
+        String repository =
+                issue.getRepository() != null ? issue.getRepository().getNameWithOwner() : null;
+        return workspaceResolver.resolveAllForRepository(repository).stream()
+                .filter(workspace -> Objects.equals(workspace.getId(), workspaceId))
+                .findFirst()
+                .<GateDecision>map(workspace -> evaluateIssue(issue, workspace, signal, triggerMode))
+                .orElseGet(() -> new GateDecision.Skip(
+                        "workspace no longer monitors this issue", SignalStateReason.OUT_OF_REVIEW_SCOPE));
+    }
+
+    public GateDecision evaluateIssueAdministrative(Issue issue, Workspace workspace, SignalName signal) {
+        return evaluateReviewableInWorkspace(
+                issue, workspace, false, signal, TriggerMode.MANUAL, true, issue.reviewSubject());
     }
 
     public GateDecision evaluateSignal(
@@ -105,6 +123,21 @@ public class PracticeReviewDetectionGate {
                     nameWithOwner);
             return new GateDecision.Skip("no workspace");
         }
+
+        return evaluateReviewableInWorkspace(
+                reviewable, workspace, draft, signal, triggerMode, allowOutsideCoverage, subject);
+    }
+
+    private GateDecision evaluateReviewableInWorkspace(
+            Issue reviewable,
+            Workspace workspace,
+            boolean draft,
+            SignalName signal,
+            TriggerMode triggerMode,
+            boolean allowOutsideCoverage,
+            ReviewSubject subject) {
+        String nameWithOwner =
+                reviewable.getRepository() != null ? reviewable.getRepository().getNameWithOwner() : null;
 
         GateDecision.@Nullable Skip scopeSkip = null;
         String targetBranch = reviewable instanceof PullRequest pr ? pr.getBaseRefName() : null;

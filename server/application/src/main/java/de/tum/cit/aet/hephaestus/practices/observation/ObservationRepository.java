@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
@@ -32,6 +33,25 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Repository
 public interface ObservationRepository extends JpaRepository<Observation, UUID> {
+    /** Lock the issue while publishing so a later mirror transition must retire these rows. */
+    @Query(value = """
+        SELECT i.review_snapshot_id FROM issue i
+        JOIN agent_job j ON j.id = :jobId AND j.workspace_id = :workspaceId
+        WHERE i.id = :issueId AND i.issue_type = 'ISSUE'
+        FOR UPDATE OF i
+        """, nativeQuery = true)
+    Optional<UUID> lockIssueSnapshotForReview(
+            @Param("workspaceId") long workspaceId, @Param("jobId") UUID jobId, @Param("issueId") long issueId);
+
+    @WorkspaceAgnostic("A shared issue changes for every workspace that reviewed it; the artifact id is global")
+    @Transactional
+    @Modifying
+    @Query(value = """
+        UPDATE observation SET superseded_at = :at
+        WHERE artifact_kind = 'scm.issue' AND artifact_id = :issueId
+          AND superseded_at IS NULL
+        """, nativeQuery = true)
+    int supersedeIssueObservations(@Param("issueId") long issueId, @Param("at") Instant at);
     /**
      * Excludes observations about artifacts in repositories hidden from contributions in this workspace.
      * Requires the observation alias {@code f}. Native SQL crosses integration and workspace tables
@@ -472,6 +492,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
             """ + HIDDEN_REPOSITORY_GUARD + """
+              AND f.superseded_at IS NULL
               AND f.origin <> 'BACKFILL'
               AND f.agent_job_id = (
                   SELECT f2.agent_job_id FROM observation f2
@@ -560,6 +581,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
             """ + HIDDEN_REPOSITORY_GUARD + """
+              AND f.superseded_at IS NULL
               AND f.observed_at >= :since
               AND (:verdictsOnly = FALSE OR f.presence IN ('PRESENT', 'ABSENT'))
               AND f.agent_job_id = (
@@ -594,6 +616,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
             """ + HIDDEN_REPOSITORY_GUARD + """
+              AND f.superseded_at IS NULL
               AND f.observed_at >= :since
               AND f.severity IS NOT NULL
               AND f.origin <> 'BACKFILL'
@@ -626,6 +649,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
             """ + HIDDEN_REPOSITORY_GUARD + """
+              AND f.superseded_at IS NULL
               AND f.observed_at >= :since
               AND f.origin <> 'BACKFILL'
               AND f.agent_job_id = (
@@ -698,6 +722,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                    o.practice_revision_id AS "practiceRevisionId",
                    evaluated_revision.review_rule_fingerprint AS "practiceRevisionFingerprint",
                    current_revision.review_rule_fingerprint AS "currentPracticeRevisionFingerprint",
+                   o.superseded_at AS "supersededAt",
                    o.observed_at AS "observedAt"
             FROM observation o
             JOIN practice p ON p.id = o.practice_id
@@ -794,6 +819,9 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
 
         @Nullable
         String getCurrentPracticeRevisionFingerprint();
+
+        @Nullable
+        Instant getSupersededAt();
 
         Instant getObservedAt();
     }
