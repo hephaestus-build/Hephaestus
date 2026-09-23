@@ -165,8 +165,7 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
                         mapper.readValue(rows.getString("bindings"), new TypeReference<List<PracticeBinding>>() {});
                 PracticeAutomatedReviewPolicy policy = mapper.readValue(
                         rows.getString("automated_review_policy"), PracticeAutomatedReviewPolicy.class);
-                // Released migrations preserve their historical contract. An operator explicitly reviews
-                // and repins the definition before this runtime can use it for a new review.
+                // Historical definitions remain editable; capture requires an explicitly updated contract.
                 assertThat(policy.sourceContractVersion().value()).isEqualTo("1.0.0");
                 PracticeDefinition historical = new PracticeDefinition(
                         rows.getString("name"),
@@ -177,9 +176,7 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
                         null,
                         null,
                         rows.getString("area_slug"));
-                assertThatThrownBy(() -> validator.validate(historical))
-                        .isInstanceOf(IllegalArgumentException.class)
-                        .hasMessageContaining("Unsupported source contract version");
+                validator.validate(historical);
                 var repinnedPolicy = new PracticeAutomatedReviewPolicy(
                         sources.current().version(),
                         policy.automatedReview(),

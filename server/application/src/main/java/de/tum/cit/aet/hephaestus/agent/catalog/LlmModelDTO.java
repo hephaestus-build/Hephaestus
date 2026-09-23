@@ -35,8 +35,11 @@ public record LlmModelDTO(
         @Nullable @Schema(description = "Maximum output tokens")
         Integer maxOutputTokens,
 
-        @NonNull @Schema(description = "Whether the model supports a reasoning mode")
-        Boolean supportsReasoning,
+        @Nullable
+        @Schema(
+                description =
+                        "Reasoning effort requested of the model; null sends none, the provider's default applies")
+        ReasoningEffort reasoningEffort,
 
         @NonNull @Schema(description = "Share with all workspaces (PUBLIC) or only selected ones (GRANTED)")
         ModelVisibility visibility,
@@ -64,7 +67,7 @@ public record LlmModelDTO(
                 model.getUpstreamModelId(),
                 model.getContextWindow(),
                 model.getMaxOutputTokens(),
-                model.isSupportsReasoning(),
+                model.getReasoningEffort(),
                 model.getVisibility(),
                 grantedWorkspaceIds,
                 model.isEnabled(),

@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryN
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GraphQlConnectionOverflowDetector;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.EmbeddedCommentsDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.EmbeddedProjectItemsDTO;
@@ -41,6 +42,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.dto.GitHubI
 import de.tum.cit.aet.hephaestus.integration.scm.github.project.GitHubProjectItemSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.EmbeddedReviewThreadsDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.EmbeddedReviewsDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubReviewThreadDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.PullRequestWithReviewThreads;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewSyncService;
@@ -801,6 +803,71 @@ public class GitHubPullRequestSyncService {
 
     private record PageSyncResult(
             int prsSynced, int reviewsSynced, int reviewCommentsSynced, int commentsSynced, int projectItemsSynced) {}
+
+    private static final String SINGLE_PR_DOCUMENT = "GetPullRequestByNumber";
+
+    /**
+     * Reads one pull request again after a webhook stored the event's own view of it, so what only
+     * GraphQL carries — the closing references, the head's check rollup, the review decision and
+     * merge state — is current within seconds rather than at the next scheduled sync. Best effort:
+     * a failure is logged and the webhook's upsert stands.
+     *
+     * @return whether the pull request was read and processed
+     */
+    public boolean refreshPullRequest(@Nullable Long scopeId, Repository repository, int number) {
+        String nameWithOwner = repository.getNameWithOwner();
+        String safeNameWithOwner = Objects.requireNonNullElse(sanitizeForLog(nameWithOwner), "<unknown>");
+        Optional<RepositoryOwnerAndName> parsedName = GitHubRepositoryNameParser.parse(nameWithOwner);
+        if (parsedName.isEmpty() || scopeId == null) {
+            log.debug("Skipped pull request refresh: reason=noScopeOrName, repoName={}", safeNameWithOwner);
+            return false;
+        }
+        try {
+            HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
+            ClientGraphQlResponse response = client.documentName(SINGLE_PR_DOCUMENT)
+                    .variable("owner", parsedName.get().owner())
+                    .variable("name", parsedName.get().name())
+                    .variable("number", number)
+                    .execute()
+                    .block(syncProperties.extendedGraphqlTimeout());
+            if (response == null || !response.isValid()) {
+                log.warn(
+                        "Pull request refresh got an invalid response: repoName={}, prNumber={}, errors={}",
+                        safeNameWithOwner,
+                        number,
+                        response != null ? response.getErrors() : "null");
+                return false;
+            }
+            graphQlClientProvider.trackRateLimit(scopeId, response);
+            GHPullRequest graphQlPullRequest =
+                    response.field("repository.pullRequest").toEntity(GHPullRequest.class);
+            GitHubPullRequestDTO dto = GitHubPullRequestDTO.fromPullRequest(graphQlPullRequest);
+            if (dto == null) {
+                log.debug(
+                        "Skipped pull request refresh: reason=notFound, repoName={}, prNumber={}",
+                        safeNameWithOwner,
+                        number);
+                return false;
+            }
+            Long repositoryId = repository.getId();
+            Boolean processed = transactionTemplate.execute(status -> {
+                Repository repo = repositoryRepository.findById(repositoryId).orElse(null);
+                if (repo == null) {
+                    return false;
+                }
+                org.hibernate.Hibernate.initialize(repo.getProvider());
+                return pullRequestProcessor.process(dto, ProcessingContext.forSync(scopeId, repo)) != null;
+            });
+            return Boolean.TRUE.equals(processed);
+        } catch (RuntimeException e) {
+            log.warn(
+                    "Pull request refresh failed, the webhook's view stands: repoName={}, prNumber={}, error={}",
+                    safeNameWithOwner,
+                    number,
+                    e.getMessage());
+            return false;
+        }
+    }
 
     /**
      * Processes a page of pull requests with their embedded conversation comments, reviews,

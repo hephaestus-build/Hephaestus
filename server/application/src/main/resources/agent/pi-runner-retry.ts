@@ -1,12 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
 
-/**
- * Repeating a request whose answer the caller cannot afford to lose, with a doubling wait between
- * attempts. Which failures are worth repeating is the caller's to say; why the admission is one of
- * them is at that call site.
- */
-
-/** The wait before attempt n: `baseMs`, then doubling, so a short outage is ridden out without a long stall. */
 export function retryDelayMs(attempt: number, baseMs = 1000): number {
 	if (!Number.isInteger(attempt) || attempt < 1) {
 		throw new Error(`attempt must be a positive integer, got: ${attempt}`);
@@ -17,13 +10,16 @@ export function retryDelayMs(attempt: number, baseMs = 1000): number {
 	return baseMs * 2 ** (attempt - 1);
 }
 
-/**
- * Whether an HTTP answer is one a later attempt could answer differently. A 5xx or a 429 is the
- * server saying not now; every other status is the server having decided, and asking again only puts
- * the same question.
- */
+/** Retry throttling and server errors, not client errors. */
 export function isRetryableStatus(status: number): boolean {
 	return status >= 500 || status === 429;
+}
+
+/** Admission timeouts are not retried because the server may still be verifying the request. */
+export function isTimeoutAbort(error: unknown): boolean {
+	return (
+		typeof error === "object" && error !== null && "name" in error && error.name === "TimeoutError"
+	);
 }
 
 export interface RetryPolicy {
@@ -32,13 +28,7 @@ export interface RetryPolicy {
 	readonly sleep?: (ms: number) => Promise<void>;
 }
 
-/**
- * Runs `call` until it returns without throwing, or until the attempts are spent.
- *
- * @param isWorthRetrying decides from the thrown value whether another attempt could answer
- *   differently; an answer that has already been decided is not worth asking for twice
- * @param onRetry reports each attempt that is about to be repeated, so a run says why it took longer
- */
+/** Retry only failures accepted by isWorthRetrying, up to the configured attempt limit. */
 export async function retrying<T>(
 	call: () => Promise<T>,
 	isWorthRetrying: (error: unknown) => boolean,
@@ -61,6 +51,5 @@ export async function retrying<T>(
 			await sleep(delayMs);
 		}
 	}
-	// The last attempt is outside the loop: nothing follows it, so its failure is simply the caller's.
 	return call();
 }

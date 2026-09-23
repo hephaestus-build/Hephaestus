@@ -135,8 +135,13 @@ public class IssueUpdateCoalescer {
     }
 
     static boolean isDue(List<ArtifactSignal> pending, Instant now) {
-        Instant quietBefore = now.minus(QUIET_PERIOD);
-        Instant deadline = now.minus(MAX_WAIT);
+        return isDue(pending, now, QUIET_PERIOD, MAX_WAIT);
+    }
+
+    /** Due once the whole group has been quiet for {@code quiet}, or its oldest member has waited {@code maxWait}. */
+    static boolean isDue(List<ArtifactSignal> pending, Instant now, Duration quiet, Duration maxWait) {
+        Instant quietBefore = now.minus(quiet);
+        Instant deadline = now.minus(maxWait);
         return pending.stream().allMatch(signal -> !signal.getStateChangedAt().isAfter(quietBefore))
                 || pending.stream()
                         .anyMatch(signal -> !signal.getStateChangedAt().isAfter(deadline));

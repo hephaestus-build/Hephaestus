@@ -17,4 +17,4 @@ public record ResolvedLlmModel(
         String upstreamModelId,
         @Nullable Integer contextWindow,
         @Nullable Integer maxOutputTokens,
-        boolean supportsReasoning) {}
+        @Nullable ReasoningEffort reasoningEffort) {}

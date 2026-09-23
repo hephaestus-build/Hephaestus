@@ -7,10 +7,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
@@ -30,6 +32,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -61,6 +64,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     private final PullRequestRepository pullRequestRepository;
     private final PullRequestReviewRepository reviewRepository;
     private final MilestoneRepository milestoneRepository;
+    private final IssueRepository issueRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     public GitLabMergeRequestProcessor(
@@ -68,6 +72,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             PullRequestRepository pullRequestRepository,
             PullRequestReviewRepository reviewRepository,
             MilestoneRepository milestoneRepository,
+            IssueRepository issueRepository,
             UserRepository userRepository,
             LabelRepository labelRepository,
             RepositoryRepository repositoryRepository,
@@ -86,7 +91,47 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         this.pullRequestRepository = pullRequestRepository;
         this.reviewRepository = reviewRepository;
         this.milestoneRepository = milestoneRepository;
+        this.issueRepository = issueRepository;
         this.eventPublisher = eventPublisher;
+    }
+
+    /**
+     * Whether the sync has to read what the merge request closes: on first sight, and whenever the
+     * merge request moved since the stored record — the link set changes only with the merge request.
+     */
+    @Transactional(readOnly = true)
+    public boolean closingIssuesStale(Repository repository, int iid, @Nullable String updatedAt) {
+        Instant seen = parseGitLabTimestamp(updatedAt);
+        return pullRequestRepository
+                .findByRepositoryIdAndNumber(repository.getId(), iid)
+                .map(stored -> seen == null || !seen.equals(stored.getUpdatedAt()))
+                .orElse(true);
+    }
+
+    /**
+     * Replaces what the record says a merge request closes with GitLab's current statement, read from
+     * the closes-issues route after a webhook: the sync compares {@code updatedAt} against the value
+     * that webhook stored, so it would not read the links for this change.
+     */
+    @Transactional
+    public void replaceClosingIssues(Repository repository, int iid, List<Integer> closingIssueNumbers) {
+        pullRequestRepository
+                .findByRepositoryIdAndNumber(repository.getId(), iid)
+                .ifPresent(pr -> {
+                    if (pr.replaceClosingIssues(resolveLocalIssues(repository, closingIssueNumbers))) {
+                        pullRequestRepository.save(pr);
+                    }
+                });
+    }
+
+    private Set<Issue> resolveLocalIssues(Repository repository, List<Integer> numbers) {
+        Set<Issue> issues = new HashSet<>();
+        for (Integer number : numbers) {
+            issueRepository
+                    .findByRepositoryIdAndNumber(repository.getId(), number)
+                    .ifPresent(issues::add);
+        }
+        return issues;
     }
 
     // Sync Data Records
@@ -148,7 +193,15 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             @Nullable List<SyncUserData> syncReviewers,
             @Nullable List<SyncUserData> syncApprovers,
             @Nullable List<SyncUserData> syncParticipants,
-            @Nullable Integer milestoneIid) {}
+            @Nullable Integer milestoneIid,
+            /** GitLab's own {@code PipelineStatusEnum} name for the head pipeline; null when the MR has none. */
+            @Nullable String headPipelineStatus,
+            @Nullable String headPipelineSha,
+            /**
+             * The iids of the issues GitLab records the MR as closing, from the REST closes-issues route;
+             * null when this sync did not read them, which leaves the stored set alone.
+             */
+            @Nullable List<Integer> closingIssueNumbers) {}
 
     // Webhook Processing
 
@@ -189,6 +242,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         // Also determines isNew and captures old draft state for transition detection.
         boolean isNew = true;
         Boolean wasDraft = null;
+        String previousHead = null;
         if (attrs.iid() != null) {
             Optional<PullRequest> existingOpt = pullRequestRepository.findByRepositoryIdAndNumber(
                     Objects.requireNonNull(context.repository()).getId(), attrs.iid());
@@ -196,6 +250,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 isNew = false;
                 PullRequest existing = existingOpt.get();
                 wasDraft = existing.isDraft();
+                previousHead = existing.getHeadRefOid();
                 Instant eventUpdatedAt = parseGitLabTimestamp(attrs.updatedAt());
                 if (existing.getUpdatedAt() != null
                         && eventUpdatedAt != null
@@ -252,15 +307,20 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             pr = pullRequestRepository.save(pr);
         }
 
-        // Detect draft transitions and emit lifecycle events.
-        // For new non-draft MRs, PullRequestReady is emitted so the practice review gate
-        // can trigger immediately (matching GitHub's behavior for non-draft PR creation).
+        // Detect draft transitions and pushes. A new merge request is Created only, as a GitHub pull
+        // request opened ready is: raising Ready as well would review the same head twice.
         var prData = ScmEventPayload.PullRequestData.from(pr);
         var eventCtx = EventContext.from(context);
-        if (isNew && !attrs.draft()) {
-            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReady(prData, eventCtx));
-            log.debug("New non-draft merge request ready: prId={}", pr.getId());
-        } else if (!isNew && wasDraft != null) {
+        // GitLab names the previous head only when the update pushed commits, and not always then, so a
+        // moved head counts too; a sync that stored the new head first still leaves oldrev to say so.
+        boolean pushed = !isNew
+                && headRefOid != null
+                && (attrs.oldrev() != null || (previousHead != null && !previousHead.equals(headRefOid)));
+        if (pushed) {
+            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestSynchronized(prData, eventCtx));
+            log.debug("Merge request received new commits: prId={}, iid={}", pr.getId(), attrs.iid());
+        }
+        if (!isNew && wasDraft != null) {
             if (wasDraft && !attrs.draft()) {
                 eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReady(prData, eventCtx));
                 log.info("Merge request marked ready: prId={}, iid={}", pr.getId(), attrs.iid());
@@ -636,6 +696,15 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         boolean changed = updateSyncLabels(data.syncLabels(), pr.getLabels(), repository);
         changed |= updateSyncAssignees(data.syncAssignees(), pr.getAssignees(), providerId);
         changed |= updateSyncReviewers(data.syncReviewers(), pr.getRequestedReviewers(), providerId);
+        // The head pipeline is read on every sync: a head with none has no checks, for that head.
+        if (data.diffHeadSha() != null || data.headPipelineSha() != null) {
+            String checkedSha = data.headPipelineSha() != null ? data.headPipelineSha() : data.diffHeadSha();
+            changed |= pr.observeHeadChecks(
+                    Objects.requireNonNull(checkedSha), mapPipelineStatus(data.headPipelineStatus()), true);
+        }
+        if (data.closingIssueNumbers() != null) {
+            changed |= pr.replaceClosingIssues(resolveLocalIssues(repository, data.closingIssueNumbers()));
+        }
         if (changed) {
             pr = pullRequestRepository.save(pr);
         }
@@ -874,6 +943,23 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
+     * GitLab's pipeline status as one {@link CheckState}: a pipeline that has not finished is pending
+     * whatever stage it is in, a skipped one and no pipeline at all say nothing about the head.
+     */
+    public static CheckState mapPipelineStatus(@Nullable String status) {
+        if (status == null) {
+            return CheckState.NONE;
+        }
+        return switch (status.toUpperCase(Locale.ROOT)) {
+            case "SUCCESS" -> CheckState.SUCCESS;
+            case "FAILED" -> CheckState.FAILURE;
+            case "CANCELED", "CANCELING" -> CheckState.CANCELLED;
+            case "SKIPPED" -> CheckState.NONE;
+            default -> CheckState.PENDING;
+        };
+    }
+
+    /**
      * Generates a deterministic native ID for a GitLab approval review.
      * <p>
      * Layout: {@code [mrNativeId (31 bits)][userNativeId (32 bits)]}, with bit 63 cleared
@@ -883,7 +969,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
      * and user native IDs fit in 32 bits. When either exceeds its safe range,
      * collisions become possible due to bit truncation, and a warning is logged.
      */
-    static long generateApprovalNativeId(long mrNativeId, long userNativeId) {
+    public static long generateApprovalNativeId(long mrNativeId, long userNativeId) {
         if (mrNativeId > Integer.MAX_VALUE || userNativeId > Integer.MAX_VALUE) {
             log.warn(
                     "Native IDs exceed safe range, review nativeId may collide: mrNativeId={}, userNativeId={}",

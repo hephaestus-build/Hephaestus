@@ -6,6 +6,7 @@ import {
 	evidenceSourceDef,
 } from "@/components/practice-vocabulary/evidence-source-defs";
 import { Badge } from "@/components/ui/badge";
+import { hasText } from "@/lib/text";
 import { type EvidenceLocation, evidenceLineRangeLabel, splitPath } from "./evidence";
 
 const SECRET_SCANNER = "secret-diff-scanner";
@@ -35,7 +36,7 @@ export function EvidenceFileBlock({
 		<figure className="min-w-0 overflow-hidden rounded-md border">
 			<figcaption
 				className={cn(
-					"flex min-w-0 items-center gap-2 bg-code-header px-2.5 py-1.5",
+					"flex min-w-0 flex-wrap items-center gap-2 bg-code-header px-2.5 py-1.5",
 					isOpen && hasSnippet && "border-b",
 				)}
 			>
@@ -72,6 +73,11 @@ export function EvidenceFileBlock({
 							className={cn("size-3.5 transition-transform", isOpen && "rotate-180")}
 						/>
 					</button>
+				)}
+				{hasText(location.revision) && (
+					<p className="min-w-0 basis-full text-xs break-all text-muted-foreground">
+						Commit <code>{location.revision}</code>
+					</p>
 				)}
 			</figcaption>
 			{location.redacted && (

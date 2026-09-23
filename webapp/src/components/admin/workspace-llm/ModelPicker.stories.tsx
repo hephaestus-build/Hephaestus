@@ -15,7 +15,7 @@ const mockModels: AvailableLlmModel[] = [
 		pricingMode: "PRICED",
 		per1mInputUsd: 3,
 		per1mOutputUsd: 15,
-		supportsReasoning: true,
+		reasoningEffort: "MEDIUM",
 	},
 	{
 		id: 2,
@@ -23,7 +23,6 @@ const mockModels: AvailableLlmModel[] = [
 		displayName: "Local Llama (self-hosted)",
 		connectionDisplayName: "On-prem GPU",
 		pricingMode: "NO_CHARGE",
-		supportsReasoning: false,
 	},
 	{
 		id: 10,
@@ -31,7 +30,7 @@ const mockModels: AvailableLlmModel[] = [
 		displayName: "My OpenAI key",
 		connectionDisplayName: "My provider",
 		pricingMode: "UNPRICED",
-		supportsReasoning: true,
+		reasoningEffort: "MEDIUM",
 	},
 ];
 

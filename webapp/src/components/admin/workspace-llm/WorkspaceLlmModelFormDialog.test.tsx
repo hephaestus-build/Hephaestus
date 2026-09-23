@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { WorkspaceLlmModel } from "@/api/types.gen";
@@ -33,6 +34,66 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
 	});
 
+	it("sends no reasoning effort for a new model left at the provider default", () => {
+		const onCreate = vi.fn<WorkspaceLlmModelFormDialogProps["onCreate"]>();
+		render(
+			<WorkspaceLlmModelFormDialog
+				open
+				onOpenChange={vi.fn()}
+				editing={null}
+				isSubmitting={false}
+				onCreate={onCreate}
+				onUpdate={vi.fn()}
+			/>,
+		);
+		expect(screen.getByRole("combobox", { name: "Reasoning effort" }).textContent).toContain(
+			"Provider default",
+		);
+		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPU coder" } });
+		fireEvent.change(screen.getByLabelText("Upstream model id"), {
+			target: { value: "gpu-coder" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Add inactive model" }));
+		expect(onCreate.mock.calls[0]?.[0].reasoningEffort).toBeUndefined();
+	});
+
+	it("keeps a model's effort on save and clears it when set back to the provider default", async () => {
+		const onUpdate = vi.fn<WorkspaceLlmModelFormDialogProps["onUpdate"]>();
+		const editing: WorkspaceLlmModel = {
+			id: 3,
+			slug: "gpt-5-high",
+			displayName: "GPT-5 high",
+			upstreamModelId: "gpt-5",
+			connectionId: 1,
+			connectionDisplayName: "OpenAI",
+			enabled: false,
+			reasoningEffort: "HIGH",
+			pricingMode: "UNPRICED",
+			currency: "USD",
+			createdAt: new Date("2026-07-01T00:00:00Z"),
+		};
+		render(
+			<WorkspaceLlmModelFormDialog
+				open
+				onOpenChange={vi.fn()}
+				editing={editing}
+				isSubmitting={false}
+				onCreate={vi.fn()}
+				onUpdate={onUpdate}
+			/>,
+		);
+		const select = screen.getByRole("combobox", { name: "Reasoning effort" });
+		expect(select.textContent).toContain("High");
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onUpdate.mock.calls[0]?.[1]).toMatchObject({ reasoningEffort: "HIGH" });
+
+		await userEvent.click(select);
+		await userEvent.click(await screen.findByRole("option", { name: "Provider default" }));
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onUpdate.mock.calls[1]?.[1]).toMatchObject({ clearReasoningEffort: true });
+		expect(onUpdate.mock.calls[1]?.[1]).not.toHaveProperty("reasoningEffort");
+	});
+
 	it("keeps the upstream model identity immutable", () => {
 		const onUpdate = vi.fn<WorkspaceLlmModelFormDialogProps["onUpdate"]>();
 		const editing: WorkspaceLlmModel = {
@@ -43,7 +104,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 			connectionId: 1,
 			connectionDisplayName: "OpenAI",
 			enabled: false,
-			supportsReasoning: true,
+			reasoningEffort: "MEDIUM",
 			pricingMode: "UNPRICED",
 			currency: "USD",
 			createdAt: new Date("2026-07-01T00:00:00Z"),
@@ -73,7 +134,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 			connectionId: 1,
 			connectionDisplayName: "OpenAI",
 			enabled: true,
-			supportsReasoning: true,
+			reasoningEffort: "MEDIUM",
 			pricingMode: "PRICED",
 			per1mInputUsd: 1,
 			per1mOutputUsd: 2,

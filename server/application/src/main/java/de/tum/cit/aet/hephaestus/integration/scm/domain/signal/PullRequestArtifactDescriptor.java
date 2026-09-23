@@ -39,10 +39,11 @@ public class PullRequestArtifactDescriptor implements ArtifactDescriptor {
                     ScmSignals.PULL_REQUEST_READY,
                     "Marked ready for review",
                     Set.of(GITHUB_PULL_REQUEST, GITLAB_MERGE_REQUEST)),
-            // GitHub only: GitLab's webhook path derives no "new commits" transition, so a practice watching
-            // this signal is silent on GitLab. Naming the provenance is what makes that visible instead of
-            // indistinguishable from a workspace where nobody pushes.
-            declareRecommended(ScmSignals.PULL_REQUEST_SYNCHRONIZED, "New commits pushed", Set.of(GITHUB_PULL_REQUEST)),
+            // GitHub names the push; GitLab raises it from a merge-request update that moved the head.
+            declareRecommended(
+                    ScmSignals.PULL_REQUEST_SYNCHRONIZED,
+                    "New commits pushed",
+                    Set.of(GITHUB_PULL_REQUEST, GITLAB_MERGE_REQUEST)),
             // GitHub has a dedicated review event; GitLab splits the same fact across an approval on the
             // merge request and a review note.
             declare(
@@ -75,7 +76,7 @@ public class PullRequestArtifactDescriptor implements ArtifactDescriptor {
 
     @Override
     public Set<ActorRole> roles() {
-        return Set.of(ActorRole.AUTHOR, ActorRole.ASSIGNEE, ActorRole.REVIEWER);
+        return Set.of(ActorRole.AUTHOR, ActorRole.ASSIGNEE, ActorRole.REVIEWER, ActorRole.MERGER);
     }
 
     @Override

@@ -22,28 +22,29 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
     private static final Set<String> STAGED_INPUT_PATHS = new LinkedHashSet<>(java.util.List.of(
             // Pull request
             SandboxLayout.CONTEXT_PREFIX + "metadata.json",
-            SandboxLayout.CONTEXT_PREFIX + "commits.json",
+            PullRequestContentSource.DESCRIPTION_FILE,
             SandboxLayout.CONTEXT_PREFIX + "comments.json",
-            SandboxLayout.CONTEXT_PREFIX + "diff.patch",
-            SandboxLayout.CONTEXT_PREFIX + "diff_stat.txt",
-            SandboxLayout.CONTEXT_PREFIX + "diff_summary.md",
-            SandboxLayout.CONTEXT_PREFIX + "context-map.md",
+            PullRequestContentSource.CHANGE_FILE,
+            PullRequestContentSource.COMMITS_FILE,
             SandboxLayout.CONTEXT_PREFIX + ReviewThreadContentSource.FILE_NAME,
             SandboxLayout.CONTEXT_PREFIX + GeneralReviewCommentContentSource.FILE_NAME,
             LinkedWorkItemContentSource.OUTPUT_FILE,
-            // Issue
-            SandboxLayout.CONTEXT_PREFIX + "issue_summary.md",
+            LinkedWorkItemContentSource.ITEMS_PREFIX + "<n>.md",
             // Conversation thread
             ConversationThreadContentSource.OUTPUT_KEY,
             // Document
-            DocumentContentSource.OUTPUT_KEY,
+            DocumentContentSource.BODY_KEY,
+            DocumentContentSource.METADATA_KEY,
             // Workspace-wide, staged for every review whose artifact kind the source applies to
             WorkspaceInventoryContentSource.OUTPUT_FILE,
             OutlineDocumentContentSource.REVIEW_INDEX_KEY,
-            OutlineDocumentContentSource.UNRESOLVED_REFERENCES_KEY,
             ReviewHistoryContentSource.OBSERVATIONS_FILE,
             ReviewHistoryContentSource.FEEDBACK_FILE,
             SandboxLayout.MANIFEST_PATH));
+
+    /** What pi-change.ts derives in the container from the checkout; the prompt must send the model there. */
+    private static final Set<String> DERIVED_CHANGE_PATHS =
+            Set.of("work/change/diff.patch", "work/change/diff_stat.txt", "work/change/files.json");
 
     /** Directories and templated paths the prompt names as prefixes rather than as concrete files. */
     private static final Set<String> STAGED_INPUT_PREFIXES = Set.of(
@@ -52,16 +53,21 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
             OutlineDocumentContentSource.REVIEW_PREFIX);
 
     @Test
-    void citationAndCandidateInstructionsDistinguishSourceTextFromPresentation() throws IOException {
+    @DisplayName("the prompt states the observation contract the runtime and the server enforce")
+    void promptStatesTheObservationContract() throws IOException {
         String prompt = resolvedDocumentedPrompt();
         assertThat(prompt)
-                .contains(
-                        "remove those display",
-                        "underlying file text",
-                        "quote `    render()`",
-                        "TEXT_MENTION",
-                        "not a provider-reported relationship or author adoption");
-        assertThat(prompt).doesNotContain("issues this PR closes or links", "the evidence — quote from here");
+                .contains("| ASSESSED | PRESENT | GOOD | POSITIVE | null |")
+                .contains("| ASSESSED | ABSENT | GOOD | NEGATIVE | required |")
+                .contains("| ASSESSED | PRESENT | BAD | NEGATIVE | required |")
+                .contains("| ASSESSED | ABSENT | BAD | POSITIVE | null |")
+                .contains("| NOT_APPLICABLE | null | null | none | null |")
+                .contains("| UNDETERMINED | null | null | none | null |")
+                .contains("`evidence.inapplicability`", "`evidence.search`", "`evidence.undecidability`")
+                .contains("a mention alone does not establish guidance supplied or adopted by the author");
+        assertThat(prompt)
+                .contains("a positive outcome is as ordinary as a negative one")
+                .doesNotContain("Report all justified negative observations", "genuinely exemplary");
     }
 
     @Test
@@ -73,6 +79,11 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                 .as("the workspace section must describe each known collector output")
                 .allSatisfy(path ->
                         assertThat(prompt).as("prompt mentions %s", path).contains(path));
+        assertThat(DERIVED_CHANGE_PATHS)
+                .as("the workspace section must describe each file of the derived change view")
+                .allSatisfy(path ->
+                        assertThat(prompt).as("prompt mentions %s", path).contains(path));
+        assertThat(prompt).doesNotContain("inputs/context/diff", "context-map", "diff_summary");
     }
 
     @Test
@@ -101,45 +112,6 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                         .isTrue());
     }
 
-    @Test
-    void shouldScopeChangedLineRequirementsToCodeObservations() throws IOException {
-        String prompt = resolvedDocumentedPrompt();
-        String rules = prompt.substring(prompt.indexOf("## Rules"), prompt.indexOf("## Context"));
-        assertThat(rules)
-                .contains("Changed-code observations", "Non-diff citations", "bounded search of the relevant")
-                .contains("description corpus", "conversation and documentation practices")
-                .doesNotContain("Before any negative observation, confirm the evidence is from changed lines")
-                .doesNotContain("Evidence snippets must be copied character-for-character from `+` or `-` lines");
-    }
-
-    @Test
-    void shouldDistinguishDirectInspectionFromReportedCoverage() throws IOException {
-        String prompt = resolvedDocumentedPrompt();
-        assertThat(prompt)
-                .contains("Attribute inspection and reported coverage separately")
-                .contains("cite and attribute those facts to that record")
-                .contains("A report of a check is not evidence that you personally executed it")
-                .contains("distinguish the supplied records you searched from the broader corpus");
-    }
-
-    @Test
-    void shouldKeepOutcomeRationaleSeverityAndOccasionCoherent() throws IOException {
-        String prompt = resolvedDocumentedPrompt();
-        assertThat(prompt)
-                .contains("derive the outcome from the matrix", "appropriate omission or no material deficiency")
-                .contains("diagnostic probes are not observations")
-                .contains("including stored history", "not whether that judgment was", "current captured sources")
-                .contains("do not flip assessment to BAD", "No fault found does not establish positive absence")
-                .contains("practice's severity criteria to the evidenced consequence")
-                .contains(
-                        "Use NOT_APPLICABLE with evidence.inapplicability",
-                        "Use UNDETERMINED with evidence.undecidability")
-                .contains("No changed test file does not establish", "existing tests or manual checks were omitted")
-                .contains("citation's artifactPath", "optional changed-code location")
-                .doesNotContain("COHERENCE RULE", "confident BAD", "the two honest states", "in `reasoning`")
-                .doesNotContain("the marked state is ahead of the work", "keyed off the countable fact");
-    }
-
     private static String resolvedDocumentedPrompt() throws IOException {
         Path candidate = Path.of("src/main/resources/agent/pi-orchestrator.md");
         Path resolved = Files.exists(candidate)
@@ -162,14 +134,14 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                         .map(result -> result.group())
                         .toList())
                 .as("remaining notation must be a documented content placeholder, not an unresolved task path")
-                .allMatch(Set.of("<collection>", "<doc>", "<n>", "<slug>", "<verb>")::contains);
+                .allMatch(Set.of("<collection>", "<doc>", "<n>", "<sha>", "<slug>", "<verb>")::contains);
         return resolvedPrompt;
     }
 
     private static String documentedWorkspaceSection() throws IOException {
         String resolvedPrompt = resolvedDocumentedPrompt();
         int workspaceStart = resolvedPrompt.indexOf("## Workspace");
-        int workspaceEnd = resolvedPrompt.indexOf("## Rules", workspaceStart);
+        int workspaceEnd = resolvedPrompt.indexOf("## Tools", workspaceStart);
         assertThat(workspaceStart).isNotNegative();
         assertThat(workspaceEnd).isGreaterThan(workspaceStart);
         return resolvedPrompt.substring(workspaceStart, workspaceEnd);

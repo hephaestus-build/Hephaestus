@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabPullRequestReviewThreadProcessor;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Objects;
@@ -195,8 +196,10 @@ public class GitLabPullRequestReviewCommentProcessor {
         String path = resolvePath(data);
         comment.setPath(path);
 
-        // Line numbers — preserve nullability semantics on the int/int columns (0 == "not present")
-        comment.setLine(data.newLine() != null ? data.newLine() : 0);
+        // Line numbers — preserve nullability semantics on the int/int columns (0 == "not present").
+        // A note on a removed line has only old_line; that is its line, on the LEFT side below.
+        Integer line = GitLabPullRequestReviewThreadProcessor.anchoredLine(data.newLine(), data.oldLine());
+        comment.setLine(line != null ? line : 0);
         comment.setOriginalLine(data.oldLine() != null ? data.oldLine() : 0);
 
         // Side: RIGHT if comment anchored on new side (new_line set), LEFT if only old_line present.

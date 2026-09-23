@@ -111,6 +111,12 @@ public interface PracticeRepository extends JpaRepository<Practice, Long> {
             + "AND p.sourceCuratedFingerprint LIKE 'v1:%'")
     List<Long> findSourceAlignedV1PracticeIds();
 
+    @Query(
+            value =
+                    "SELECT id FROM practice WHERE automated_review_policy ->> 'sourceContractVersion' = :version ORDER BY id",
+            nativeQuery = true)
+    List<Long> findIdsBySourceContractVersion(@Param("version") String version);
+
     /**
      * Every practice of a workspace in the order the admin catalogue shows them, groups first. No autonomy
      * predicate: filtering to an autonomy means filtering to an <em>effective</em> autonomy, which is not a column

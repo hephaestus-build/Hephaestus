@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { assert, describe, expect, it, vi } from "vitest";
 
 import type { LlmModel } from "@/api/types.gen";
@@ -44,7 +45,7 @@ describe("AdminLlmModelFormDialog", () => {
 		expect(saved.sharing).toStrictEqual({ visibility: "GRANTED", workspaceIds: [] });
 	});
 
-	it("keeps the upstream model identity immutable", () => {
+	it("keeps model identity and effort, and can reset effort to the provider default", async () => {
 		const onSave = vi.fn<AdminLlmModelFormDialogProps["onSave"]>();
 		const editing: LlmModel = {
 			id: 1,
@@ -54,7 +55,7 @@ describe("AdminLlmModelFormDialog", () => {
 			connectionId: 1,
 			connectionDisplayName: "OpenAI",
 			enabled: false,
-			supportsReasoning: true,
+			reasoningEffort: "MEDIUM",
 			visibility: "PUBLIC",
 			grantedWorkspaceIds: [],
 			createdAt: new Date("2026-07-01T00:00:00Z"),
@@ -75,6 +76,17 @@ describe("AdminLlmModelFormDialog", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onSave.mock.calls[0]?.[0].metadata).not.toHaveProperty("upstreamModelId");
 		expect(onSave.mock.calls[0]?.[0]).not.toHaveProperty("sharing");
+		expect(onSave.mock.calls[0]?.[0].metadata).toMatchObject({ reasoningEffort: "MEDIUM" });
+
+		const effort = screen.getByRole("combobox", {
+			name: "Reasoning effort",
+			description: /Supported levels and defaults depend on the model and provider/u,
+		});
+		await userEvent.click(effort);
+		await userEvent.click(await screen.findByRole("option", { name: "Provider default" }));
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onSave.mock.calls[1]?.[0].metadata).toMatchObject({ clearReasoningEffort: true });
+		expect(onSave.mock.calls[1]?.[0].metadata).not.toHaveProperty("reasoningEffort");
 	});
 
 	it("refuses an all-zero price, which the free option is for", () => {
@@ -151,7 +163,7 @@ describe("AdminLlmModelFormDialog", () => {
 			connectionId: 1,
 			connectionDisplayName: "OpenAI",
 			enabled: true,
-			supportsReasoning: true,
+			reasoningEffort: "MEDIUM",
 			visibility: "GRANTED",
 			grantedWorkspaceIds: [],
 			currentPrice: {

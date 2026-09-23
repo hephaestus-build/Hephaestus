@@ -4832,9 +4832,10 @@ paths:
       description: "Applies to every practice in the group that holds no autonomy\
         \ of its own; practices that set their own are left alone. OFF stops their\
         \ reviews entirely. HUMAN_APPROVAL runs them and records every observation,\
-        \ and holds feedback for an authorized reviewer. AUTOMATIC sends feedback\
-        \ without asking. Send a null autonomy to clear the group's own setting so\
-        \ it follows the workspace default."
+        \ holds feedback on the work for an authorized reviewer, and still writes\
+        \ the developer's practice pages and the mentor, which are read on request.\
+        \ AUTOMATIC sends feedback on the work without asking. Send a null autonomy\
+        \ to clear the group's own setting so it follows the workspace default."
       operationId: setGroupAutonomy
       parameters:
       - description: Workspace slug
@@ -5930,6 +5931,7 @@ paths:
             enum:
             - VOLUME_CAPPED
             - COMPOSER_DEDUPED
+            - COMPOSER_WITHHELD
             - REACTED_DISPUTED
             - REACTED_NOT_APPLICABLE
             - CONVERSATION_EXPIRED
@@ -6665,10 +6667,12 @@ paths:
   /workspaces/{workspaceSlug}/practices/{practiceSlug}/autonomy:
     patch:
       description: "OFF stops the review entirely. HUMAN_APPROVAL runs it and records\
-        \ every observation and holds feedback for an authorized reviewer. AUTOMATIC\
-        \ sends feedback without asking, as far as this workspace's reach allows.\
-        \ Send a null autonomy to clear the practice's own setting so it follows its\
-        \ group, and through the group the workspace default."
+        \ every observation, holds feedback on the work for an authorized reviewer,\
+        \ and still writes the developer's practice pages and the mentor, which are\
+        \ read on request. AUTOMATIC sends feedback on the work without asking, as\
+        \ far as this workspace's reach allows. Send a null autonomy to clear the\
+        \ practice's own setting so it follows its group, and through the group the\
+        \ workspace default."
       operationId: setAutonomy
       parameters:
       - description: Workspace slug
@@ -8454,22 +8458,30 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort requested of the model; null sends none,\
+            \ the provider's default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         scope:
           type: string
           description: SHARED (instance catalog) or WORKSPACE (your own provider)
           enum:
           - SHARED
           - WORKSPACE
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
       required:
       - connectionDisplayName
       - displayName
       - id
       - pricingMode
       - scope
-      - supportsReasoning
     BackfillSummary:
       type: object
       description: Connection-level backfill rollup
@@ -9235,7 +9247,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
           minLength: 1
           pattern: openai-completions|openai-responses
         authMode:
@@ -9288,14 +9300,23 @@ components:
           format: int32
           description: Maximum output tokens
           minimum: 1
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort to request; null sends none, so the provider's\
+            \ own default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
           maxLength: 63
           minLength: 0
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
         upstreamModelId:
           type: string
           description: Upstream provider model id
@@ -9576,7 +9597,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
           minLength: 1
           pattern: openai-completions|openai-responses
         authMode:
@@ -9660,14 +9681,23 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort to request; null sends none, so the provider's\
+            \ own default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
           maxLength: 63
           minLength: 0
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
         upstreamModelId:
           type: string
           description: Upstream provider model id
@@ -10093,6 +10123,7 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -10218,6 +10249,8 @@ components:
           type: string
         quoteRedacted:
           type: boolean
+        revision:
+          type: string
         side:
           type: string
           enum:
@@ -11081,7 +11114,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
         authMode:
           type: string
           description: Credential shape
@@ -11169,12 +11202,21 @@ components:
           type: integer
           format: int32
           description: Maximum output tokens
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort requested of the model; null sends none,\
+            \ the provider's default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         slug:
           type: string
           description: Unique slug within the connection
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
         updatedAt:
           type: string
           format: date-time
@@ -11197,7 +11239,6 @@ components:
       - grantedWorkspaceIds
       - id
       - slug
-      - supportsReasoning
       - upstreamModelId
       - visibility
     LlmModelPrice:
@@ -12269,6 +12310,7 @@ components:
           - AUTHOR
           - ASSIGNEE
           - REVIEWER
+          - MERGER
       required:
       - needs
       - signals
@@ -12279,7 +12321,7 @@ components:
         sourceContractVersion:
           type: string
           description: Source contract these options describe
-          example: 1.0.0
+          example: 1.2.0
         workTypes:
           type: array
           items:
@@ -13089,6 +13131,7 @@ components:
             enum:
             - VOLUME_CAPPED
             - COMPOSER_DEDUPED
+            - COMPOSER_WITHHELD
             - REACTED_DISPUTED
             - REACTED_NOT_APPLICABLE
             - CONVERSATION_EXPIRED
@@ -14101,6 +14144,7 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -14272,6 +14316,7 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -14412,6 +14457,7 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -16028,6 +16074,10 @@ components:
       description: Update a model's metadata (all fields optional; pricing and sharing
         are separate)
       properties:
+        clearReasoningEffort:
+          type: boolean
+          description: "True clears the reasoning effort, so the provider's own default\
+            \ applies"
         contextWindow:
           type: integer
           format: int32
@@ -16046,9 +16096,18 @@ components:
           format: int32
           description: Maximum output tokens
           minimum: 1
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
+        reasoningEffort:
+          type: string
+          description: Reasoning effort to request; null keeps the current one (see
+            clearReasoningEffort)
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
     UpdateLlmModelSharingRequest:
       type: object
       description: "Share with: all workspaces, or a selected set"
@@ -16416,6 +16475,10 @@ components:
       type: object
       description: Update a model on your AI provider (all fields optional)
       properties:
+        clearReasoningEffort:
+          type: boolean
+          description: "True clears the reasoning effort, so the provider's own default\
+            \ applies"
         contextWindow:
           type: integer
           format: int32
@@ -16464,9 +16527,18 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
+        reasoningEffort:
+          type: string
+          description: Reasoning effort to request; null keeps the current one (see
+            clearReasoningEffort)
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
     UpdateWorkspaceNotificationsRequest:
       type: object
       description: Request to update leaderboard notification settings
@@ -16813,7 +16885,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
         authMode:
           type: string
           description: Credential shape
@@ -16920,12 +16992,21 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort requested of the model; null sends none,\
+            \ the provider's default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         slug:
           type: string
           description: Unique slug within the workspace
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
         updatedAt:
           type: string
           format: date-time
@@ -16943,7 +17024,6 @@ components:
       - id
       - pricingMode
       - slug
-      - supportsReasoning
       - upstreamModelId
     WorkspaceLlmProbeResult:
       type: object

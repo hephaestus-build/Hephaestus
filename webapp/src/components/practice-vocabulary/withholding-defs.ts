@@ -57,6 +57,7 @@ const REASON_FAMILY: Record<WithholdingReason, WithholdingFamily> = {
 	REACTED_DISPUTED: "DEVELOPER_CHOICE",
 	REACTED_NOT_APPLICABLE: "DEVELOPER_CHOICE",
 	COMPOSER_DEDUPED: "HOUSEKEEPING",
+	COMPOSER_WITHHELD: "HOUSEKEEPING",
 	EMPTY_AFTER_SANITIZE: "HOUSEKEEPING",
 	CONVERSATION_EXPIRED: "HOUSEKEEPING",
 };
@@ -88,6 +89,7 @@ export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 	REACTED_DISPUTED: "The developer disputed feedback like this before.",
 	REACTED_NOT_APPLICABLE: "The developer marked feedback like this not applicable before.",
 	COMPOSER_DEDUPED: "Nearly the same as other feedback from the same review.",
+	COMPOSER_WITHHELD: "The review decided, with a reason, not to put this on the work.",
 	EMPTY_AFTER_SANITIZE: "Nothing was left to send once the text had been cleaned up.",
 	CONVERSATION_EXPIRED: "It waited for a conversation that never happened, then aged out.",
 };

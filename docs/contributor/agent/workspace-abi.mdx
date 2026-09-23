@@ -10,35 +10,39 @@ a separate workspace contract.
 
 ## Layout
 
-The workspace is partitioned by **lifecycle, expressed as location** (ADR 0020): read-only
-vs writable is decided by *where* a file lives, not by convention. Three top-level regions —
-`inputs/` (read-only), `work/` (agent + precompute scratch; never collected), and `out/`
-(the only directory collected back to the server).
+The workspace has three data regions: read-only `inputs/`, writable `work/` scratch, and
+collected `out/` results. The server stages captured records, the pinned repository and commit
+metadata under `inputs/`, then validates returned results. The container derives the patch, change
+statistics and precompute hints under `work/`. Mount isolation is defined under
+[Path conventions](#path-conventions).
 
 ```text
 /workspace/
-├── inputs/                          # READ-ONLY (enforced by directory ownership, not a path guard).
+├── inputs/                          # READ-ONLY (the /workspace volume is mounted read-only, not a path guard).
 │   ├── manifest.json                #   Versioned source, capture-state, and artifact index.
 │   ├── sources/                     #   Integration-namespaced source materialisations (ADR 0020).
-│   │   └── scm/repo/                #   Pinned, read-only SCM tree without Git metadata or history.
-│   ├── context/                     #   System-written, AI-readable. Populated by the ContentSource SPI.
-│   │                                #   Files: metadata.json, commits.json, comments.json, diff.patch, diff_summary.md,
-│   │                                #   diff_stat.txt, linked_work_items.json, review_threads.json,
-│   │                                #   general_comments.json, project_inventory.json, context-map.md,
-│   │                                #   issue_summary.md, conversation_thread.json, document.md,
+│   │   └── scm/repo/                #   Pinned, read-only SCM checkout and sanitized Git history.
+│   ├── context/                     #   Stored records as JSON, populated by the ContentSource SPI.
+│   │                                #   Files: metadata.json, description.md, change.json, commits.json, comments.json, linked_work_items.json,
+│   │                                #   review_threads.json, general_comments.json, project_inventory.json,
+│   │                                #   conversation_thread.json, document.json + document.md,
 │   │                                #   outline/index.json + outline/{collection}/{doc}.md — whichever
 │   │                                #   of them apply to the artifact kind under review.
 │   ├── history/                     #   What earlier reviews recorded and already said, about the
 │   │                                #   person whose work this is: observations.json, feedback.json.
 │   │                                #   ALWAYS present, empty on a first-ever review.
-│   └── practices/                   #   Practice catalog (index.json, {slug}.md, all-criteria.md).
+│   └── practices/                   #   Practice catalog (index.json, {slug}.md).
 ├── work/                            # AGENT + PRECOMPUTE SCRATCH. Never collected back into SQL.
+│   ├── change/                      #   The change view pi-change.ts derives from the checkout with git:
+│   │                                #   diff.patch ([L<n>]-annotated), diff_stat.txt, files.json.
+│   ├── notes/review.md              #   What the review has recorded, appended by the runner; read back after compaction.
 │   ├── precompute/                  #   Per-practice precompute scripts (TypeScript, run on Node).
 │   ├── precompute-out/              #   Precompute runtime output (logs, structured hints).
 │   ├── analysis/practices/          #   Per-practice analysis output (holds the .gitkeep marker).
 │   └── composition/                 #   observations.json — the admitted observations feedback is composed from.
 ├── out/                             # THE ONLY collected directory — result.json, review-state.json,
-│                                    #   usage.json, runner-debug.json, watchdog-killed.json
+│                                    #   usage.json, runner-debug.json, practice-coverage.json,
+│                                    #   feedback.json, watchdog-killed.json
 ├── task.json                        # TaskEnvelope<…> — runtime contract between handler and runner.
 ├── .pi/                             # Pi SDK agent dir — $PI_CODING_AGENT_DIR resolves here.
 │   ├── AGENTS.md                    #   Orchestrator instructions
@@ -48,50 +52,69 @@ vs writable is decided by *where* a file lives, not by convention. Three top-lev
 ├── pi-provider.ts                   # Provider/model helper imported by both runners.
 ├── pi-error-text.ts                 # Shared error-message helper.
 ├── pi-task-paths.ts                 # Task path validation and resolution.
+├── pi-change.ts                     # Derives work/change/ from the checkout; runs first, and its failure is the review's.
 ├── pi-precompute.sh                 # Bounded, best-effort precompute bootstrap.
 ├── pi-precompute.ts                 # Precompute launcher using task-declared paths.
 ├── pi-observation-normalize.ts      # Normalises sandbox observations before out/ is written.
 ├── pi-runner-usage.ts               # Token-usage accounting sidecar.
-├── pi-runner-timings.ts             # Attempt-timing sidecar.
+├── pi-review-brief.ts               # The first turn's brief: the captured records and the change view, line-numbered.
+├── pi-review-turns.ts               # Practices as turns per catalog group; the budget's fair shares.
 ├── pi-runner-composition.ts         # Feedback-composition contract and coherence rules.
 ├── feedback-composer.md             # Composition-stage prompt; digested with the prompt scaffolding.
-├── node_modules -> /opt/pi-sdk/…    # Symlink created at container start, not staged.
+├── node_modules -> /opt/pi-sdk/…    # Symlink baked into the agent image, not staged.
 └── .run-pi.ts                       # Runner script entry point.
 ```
 
-The mentor runner stages `pi-provider.ts`, `pi-error-text.ts` and `pi-mentor-protocol.ts` instead. Everything
-here runs on Node; see
+The mentor uses a separate `context/target/`, `context/user/`, and `scratch/` layout. Both runners
+execute on Node; see
 [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md).
-
-The mentor interactive sandbox has its own `context/target/`, `context/user/`, and `scratch/` layout and is not
-covered by this ABI.
 
 ## Path conventions
 
-- **`inputs/`** — the entire read-only region. Read-only-ness is a **filesystem** property, not a path
-  guard: the server pre-creates only the `work/` ancestors as the sandbox uid and lets the container
-  runtime auto-create the `inputs/` directories as root, so the unprivileged agent cannot write there.
-  There is no runtime allowlist of `inputs/`. The one allowlist that does exist is server-side and narrower
-  — it validates the paths an *adapter* may inject before the container exists, and covers
-  `inputs/context/` and the mentor's `.sessions/` only.
-- **`inputs/context/`** — system-written, AI-readable source materializations of the artifact under
-  review. A source with nothing to report still writes its file, holding an empty list: "the record was
-  read and held nothing" is a fact a review may reason from, and "the file is not there" is not.
-- **`inputs/history/`** — the same, for what came before this event rather than for this event. Present on
-  every review, because a review of one event is only a partial practice review and cannot be made whole by
-  reading that event harder. Never reported COMPLETE: it is a bounded window over a growing record.
+- **`inputs/`** — the entire read-only region. Read-only-ness is a **mount** property, not a path
+  guard: a workspace initializer container downloads the attempt's workspace tar from the sandbox
+  gateway onto the attempt's `/workspace` volume, and the runtime container then mounts that volume
+  read-only. `work/`, `out/`, the Pi session directories `.pi` and `.sessions` are separate writable volumes of the same
+  attempt, removed with it. There is no runtime allowlist of `inputs/`; the server validates every
+  path it packs into the tar before the container exists.
+- **`inputs/context/`** — captured records of the artifact under review, including metadata,
+  descriptions, comments, threads and commit metadata. The manifest records capture limits.
+  `change.json` pins the reviewed range (`base_sha`, `head_sha`) and is the artifact a citation of the
+  change names; the change itself is read from the checkout. `linked_work_items/<n>.md` is each linked
+  issue as text, title first, for quoting. `description.md` is the description as its
+  author wrote it, for quoting; `metadata.json` carries the same text escaped, for programs. Every
+  projection is pretty-printed, one field per line, so a line citation into it is possible. A source with nothing to report still
+  writes its file, holding an empty list: "the record was read and held nothing" is a fact a review may
+  reason from, and "the file is not there" is not.
+- **`inputs/history/`** — earlier observations and feedback, present on every review. Never reported
+  `COMPLETE`: it is a bounded window over a growing record.
 - **`inputs/manifest.json`** — the source and artifact index, and the authoritative statement of what a run
   staged. **Every source the source contract says applies to the artifact kind is captured and staged, on
   every review** — practice bindings decide which practices may run, never which files the agent can see. A
   source listed as anything other than `AVAILABLE` says why in a typed reason code (`NO_PROVIDER`,
   `GOVERNANCE_NOT_EFFECTIVE`, `COLLECTION_ERROR`, …); none of those reasons is "no practice asked for it".
   It indexes context files but is not itself a source artifact.
-- **`inputs/sources/scm/repo/`** — a read-only repository tree materialised at the manifest's
-  immutable commit identity. It intentionally excludes `.git`, history, submodules, and symlink
-  targets; `inputs/manifest.json` records whether the resulting source is complete or partial.
+- **`inputs/sources/scm/repo/`** — a read-only checkout at the manifest's immutable commit
+  identity, with the Git history reachable from that commit, the mirrored remote-tracking branches
+  and tags, and the list of captured refs in `inputs/sources/scm/repo/.git/hephaestus-captured-refs`. Upstream remote
+  configuration, credentials, hooks, and unreachable objects are not exported. A symbolic link is
+  checked out as a regular file holding its target path, never followed; a submodule is not
+  hydrated, and its presence makes the capture `PARTIAL` with `SUBMODULE_EXCLUDED` recorded in
+  `inputs/manifest.json`. Only the `inputs/sources/scm/repo/.git/HEAD` and captured-refs witnesses carry manifest digests;
+  the checkout itself is transferred by traversal.
+- **`work/change/`** — what `pi-change.ts` derives from `inputs/sources/scm/repo/` with `git` before
+  the precompute scripts and the model run: `git diff` from `base_sha` to `head_sha` with renames
+  detected and every hunk line prefixed `[L<n>]` and a space (the coordinate a change citation names),
+  `git diff --stat` and the changed files with their status letters. The commits of the range are not
+  derived here: they are staged as `inputs/context/commits.json`, so a quote of a commit message cites
+  an artifact admission can verify. Absent when no change was captured (an issue review). A precompute script
+  receives this directory as its fifth argument and reads it through `lib/change.ts`.
 - **`work/`** — agent + precompute scratch. The Pi agent may write here; the server never
   collects it.
-- **`out/`** — the *only* directory the sandbox collects after the run.
+- **`out/`** — the *only* directory the sandbox collects after the run. `runner-debug.json` carries the
+  per-turn trace — calls, tool calls by name, observations stored and refused with the refusal reasons,
+  compactions, provider retries — which the server keeps in the job output, so friction in production
+  is read from the job record rather than from a transcript.
 - **`node_modules`** — a symlink to `/opt/pi-sdk/node_modules`, so the runner's bare-specifier
   import of `@earendil-works/pi-coding-agent` resolves. The runner, precompute scripts, and SDK native
   bindings execute on Node.
@@ -100,30 +123,79 @@ covered by this ABI.
   — internal control surfaces. AI-readable as configured by the orchestrator, but
   *not* part of the public agent ABI; subject to change without a `schemaVersion` bump.
 
-## Private execution capture
+## Pull request records
 
-With `PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED=true`, the practice runner persists native Pi
-session trees in `out/trace/sessions/` instead of `.sessions/`, including composition and retry
-sessions. Pi's `before_provider_request` extension hook records the final provider-specific request
-body in `out/trace/requests/`, addressed by SHA-256; it does not rewrite that body. Native session
-JSONL retains messages, tool calls, tool results and branch/compaction structure. The separate
-`events-*.jsonl` journal records observed event times and session associations rather than inferring
-timings from the transcript.
+What each `inputs/context/` file of a pull request review carries, field by field. A key listed as
+*when present* is absent — never `null` — when the provider recorded nothing. Comment and review lists run oldest
+first. Their bound is `EvidenceLimits.MAX_ITEMS_PER_SOURCE` (10,000); when it is reached, the newest
+entries are kept and the capture is reported `PARTIAL`. Commit records have the separate bound below.
 
-`capture.json` reports capture limits, dropped records and unfinished sessions. A nonzero exit,
-missing native session or truncated journal cannot claim complete capture. This is not a packet
-capture or a claim that all provider-internal processing is visible. Scratch files under `work/`
-are not independently archived; their contents are visible only when present in captured tool
-results or requests. Abrupt cancellation may prevent output collection entirely.
+**`metadata.json`** — the pull request as the provider holds it. `pr_number`, `pr_url`,
+`repository_full_name`, `source_branch`, `target_branch`, `commit_sha`, `title`, `body`, `state`,
+`is_draft`, `is_merged`, `additions`, `deletions`, `changed_files`, `labels` (names, sorted) and
+`assignees` (logins, sorted) are always written. `is_merged` is stated apart from `state` because a
+webhook-synced pull request closed by its merge is stored `CLOSED` with `merged_at` set. When present:
+`created_at`, `closed_at`, `merged_at` (ISO instants), `author`, `merged_by`, `milestone` (its title),
+and `merge_state_status` and `review_decision`, which only the GraphQL sync fills, and `head_checks`
+— `SUCCESS`, `FAILURE`, `PENDING`, `CANCELLED` or `NONE`, what the provider's checks said about the
+head (GitHub's status check rollup, GitLab's head pipeline), written only when the state was observed
+for the head under review and left out for a head no sync or check event has reported on. `author_bot: true`
+is written when the adapter classified the author as automation (GitHub's bot type, GitLab's
+`group_<id>_bot_<hash>` / `project_<id>_bot_<hash>` token identities); absent means a person. The
+same rule gives every `author` below its `bot: true`, so a reader never guesses from a login.
 
-The server retains staged input bytes and collected output bytes in the existing Context Fabric
-content-addressed store, with immutable manifests per job attempt. The image field is the declared image reference, not a
-resolved registry digest or a promise of deterministic replay. Archive state distinguishes
-`INPUTS_CAPTURED` from `OUTPUTS_CAPTURED`; neither means the review succeeded or the native capture
-is complete. An empty attempt list means no retained capture, never an empty complete transcript.
-Workspace-admin archive endpoints check job membership before allowing access to an individual
-blob, and responses disable caching. See [operator guidance](/admin/observability#private-execution-archives)
-for privacy and retention.
+**`commits.json`** — `commits`: the commits of `base_sha..head_sha`, oldest first, the newest 500 of
+them when there are more. Written whenever the checkout was prepared, and staged rather than derived
+in the container because a quote of a commit message is verified against the artifact it cites, and
+admission verifies only what the server staged. Each entry: `sha`, `parents` (shas), `author` and
+`committer` (names, never addresses), `authoredAt` and `committedAt` (ISO instants), `message` (the
+whole message, subject and body) and `files`, each with `path`, `status` (`A`, `M`, `D`, `R`, `C`, as
+`git diff --name-status` prints it), `additions`, `deletions` and, for a rename or copy, `oldPath`.
+
+**`comments.json`** — the line-anchored review comments people wrote, as a list; a comment carrying the
+`<!-- hephaestus` marker is the tool's own earlier note and is left out at the query. Each entry:
+`id` (the stored id), `path`, `body`; when present, `thread` (the `id` of an entry in
+`review_threads.json`), `in_reply_to` (the `id` of the comment it answers), `line` (absent for a
+file-level comment), `side` (`LEFT` for a line of the base, `RIGHT` for a line of the head; absent
+when the provider does not say), `outdated` (only when `true`), `created_at`, `author` and `bot` (only
+when `true`). `general_comments.json` entries carry `bot` the same way beside their `author`.
+
+**`review_threads.json`** — `threads`, `reviewDecisions` and `truncated`. A thread: `id` (what a
+comment's `thread` names), `state` (`RESOLVED` or `UNRESOLVED`); when present, `path`, `line`,
+`resolvedBy`, `resolvedAt`, `outdated` and `createdAt`. `resolvedAt` is the moment the provider
+recorded: GitLab can supply it on the discussion; GitHub's
+GraphQL thread carries no such moment, so on GitHub it is the time of the resolved webhook event and
+is absent for a resolution only the sync saw. A thread holding a Hephaestus note is left out. A decision is
+a submitted review that decided something: `state` (`APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`,
+`DISMISSED`), and when present `author`, `bot` (only when `true`), `submittedAt`, `body` (what the
+reviewer wrote with it) and `dismissed` (only when `true`). Unsubmitted and unmapped reviews are never listed, and neither is a
+`COMMENTED` review with no body — GitHub's container for a batch of inline comments, or the row
+GitLab's sync makes per discussion and author — because its substance is already in `comments.json`.
+The window is the same 10,000 bound as every other list, so an approval on a busy merge request is
+never pushed out by discussion rows.
+
+**`linked_work_items.json`** and **`linked_work_items/<n>.md`** — the issues this repository stores
+that the provider records the pull request as closing (GitHub's closing references, GitLab's
+closes-issues), and the ones named by every `#N` the title, the description (HTML comments removed),
+the branch name and the full commit messages of the change mention. Each item says `how`: `closes`
+when the provider records the link — made by a keyword, in the provider's UI or through a
+cross-project reference — and `mentions` when only the text names it. A `#N` that continues another
+name — `owner/repo#12`, `v1.2#3`, `GH-12` — is not this repository's issue and is not looked up.
+`unresolvedReferences[]` lists the mentioned numbers this repository does not hold. An item's `subIssuesTotal` and `subIssuesCompleted` come with
+`subIssuesSource`: `provider` when the provider synced the rollup (GitHub), `children` when the record
+counted the issues this repository stores as the item's children, closed ones as completed (GitLab,
+whose sync links a child to its parent and never totals them). All three are absent when there is
+neither a provider count nor a child.
+
+## History records
+
+**`inputs/history/observations.json`** — `since`, `limit`, `perPracticeLimit` and `observations`: the
+newest `limit` (50) verdicts recorded about this person in the last 90 days, at most `perPracticeLimit`
+(3) of any one practice, newest first. Each entry carries `practiceSlug`, `summary`, `assessmentStatus`,
+`outcome`, `presence`, `assessment`, `severity`, `observedAt` and the `artifact` it was filed against —
+not the recurrence key, which nothing in the sandbox resolves, and not the evidence rationale, a
+paragraph per entry written for the developer. The two bounds keep the file a few kilobytes: fifty
+entries with their rationales overran the model's read cap on a heavily reviewed contributor.
 
 ## Task envelope
 
@@ -136,7 +208,7 @@ All seven `paths` fields are required:
 
 | Field | Location |
 |-------|----------|
-| `contextRoot` | Captured context directory, including `metadata.json` and `diff.patch` when applicable |
+| `contextRoot` | Captured context directory, including `metadata.json` and `change.json` when applicable |
 | `repositoryRoot` | Captured repository directory |
 | `manifest` | Source and artifact manifest file |
 | `practiceIndex` | Practice index file; practice documents share its directory |
@@ -163,12 +235,10 @@ Output must be an uncompressed tar containing regular files beneath `out/` and z
 entries. Links, sparse files, devices, PAX/GNU extension records, invalid checksums, unsafe or
 duplicate normalized paths, truncation, and nonzero data after the end markers are rejected.
 
-**A writer keeps every name inside USTAR.** The daemon encodes a member name over 100 bytes, or any
-name outside ASCII, as a PAX extension record, and reading those records is what would let a sparse
-entry expand past the size its header declares — so the reader refuses them and a name it cannot hold
-fails the whole review. `out/` counts towards the 100 bytes, leaving 96 for the path beneath it. The
-runner routes every file it writes through `outputPath` in `pi-runner-output.ts`, which rejects an
-unusable name where the file is still identifiable.
+`gateway-run.ts` packages output with `tar --format=ustar`; packaging failure fails the review.
+The runner's `outputPath` accepts portable ASCII names and limits the complete `out/<name>` path to
+100 bytes. This producer restriction avoids extension records, which the reader rejects to prevent
+sparse-file expansion beyond declared sizes.
 
 Limits are 50 MiB for the entire archive, including headers, end markers and padding; 50 MiB of file
 contents in total; 10 MiB per file; and 10,000 entries, including directories. Rejected transfers are
@@ -190,20 +260,13 @@ worker filesystem.
 `137` is a container SIGKILL from the runtime, not a runner code. The server treats `0` as success,
 `42` as drift, and `75` and `76` as attempts to repeat; every other non-zero code is a generic failure.
 
-A sandbox reaches the server at the address the app server held when the container started, so a
-server that came back somewhere else — a deploy, a restart that moved the container — is unreachable
-for the rest of that run, whatever the runner's own retries do. The server answers `75` by queueing
-the work for another attempt with a rotated token and the usual backoff, keeping the finished
-attempt's transcript on the row; past the retry cap it terminalizes like any other non-zero exit. A
-job whose observations did reach the server — the admission committed and only its answer was lost —
-is never repeated: a second payload against a digest the job already carries is refused. That decision
-is taken under the row lock the admission itself takes, and governs every requeue, including the one a
-classified infrastructure failure asks for.
+The gateway address is fixed for an attempt. If it becomes unreachable, runner retries cannot follow
+a relocated worker. Exit `75` requeues the job with a new token and backoff unless an admission already
+committed; the admission digest is checked under the job-row lock before requeueing. A lost admission
+response therefore cannot repeat an admitted review. The retry cap still applies.
 
-`76` says the same thing about the other end of the run. A review that reached no practice because
-every model call went unanswered measured nothing, so there is nothing to record about the work and
-nothing a second attempt would repeat; the runner counts the calls the provider never answered and
-names them in the transcript, and the server queues the work again on the same terms as `75`.
+Exit `76` uses the same retry policy when no practice was reached and every model call went
+unanswered. It records a provider failure, not an observation about the reviewed work.
 
 ## Versioning policy
 
@@ -216,7 +279,7 @@ The server creates the envelope and stages the runner and its sidecars from its 
 each attempt. They evolve together; there is no cross-version envelope compatibility layer.
 
 The agent image's `hephaestus.agent.runtime-contract` label versions its runtime dependencies and
-launch contract separately. Its value is `2`, independent of the envelope schema version. See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md)
+launch contract separately. Its value is `3`, independent of the envelope schema version. See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md)
 for the image contract.
 
 ## Precompute validation and limits
@@ -232,10 +295,48 @@ not a substitute for this outer deadline. Ordinary child processes are killed wh
 including after success. Failed precompute remains best-effort: the practice review continues without
 its hints.
 
-The bootstrap clears the inherited environment, retains the Node filesystem permission grants and
+The bootstrap clears the inherited environment, runs Node under filesystem permission grants scoped to
+the workspace, the precompute library and its own stage and output directories, and
 applies a **10 MiB per-file limit** in its subshell, including the diagnostic log. On failure, at most
 8 KiB of diagnostics is passed onward. The subsequent review does not inherit that file limit.
 These are safeguards against broken scripts, not hostile-code isolation: a per-file limit is not a
 cumulative disk quota, Node child-process permission is not a security boundary, and a deliberately
 detached process can escape process-group cleanup. Container resource limits and teardown remain the
-outer boundary. Runtime contract v3's workspace budgets and gateway transport are separate work.
+outer boundary.
+
+## Practice review tools
+
+One review is one session, and its tool set is fixed when the runner creates it, in `pi-runner.ts`:
+the native Pi tools `read`, `grep`, `find`, `ls`, `write`, `edit` and `bash`, plus `report_observation`
+for the measuring turns and, when composition was requested, `report_feedback` and `report_summary` for
+the composition turn. The two feedback tools store nothing until the server has admitted the recorded
+observations. `report_observation` and `report_feedback` take a list — several observations or units in
+one call, each stored or refused on its own with the reason — and accept that list as a JSON string as
+well as an array, because a smaller model sends the string form often and, offered the array alone,
+re-sends the same string against the SDK's schema error indefinitely. A string with a closing brace too
+many or too few is repaired where the repair is unambiguous and checked field by field afterwards; one
+that does not parse is refused with the parse error. A turn that calls the recording tool many times
+without recording anything is ended. A citation's quote is optional: by
+coordinates alone, the runner records the cited lines and echoes them back. A quote given with a diff
+marker, a `[L<n>]` prefix, a non-breaking space read as a space, or a JSON string's text read without
+its escapes is recorded as the artifact's own bytes, because admission verifies those bytes; a quote
+whose lines were miscounted is recorded at the lines where the text is, when it occurs once; a refused
+citation is answered with what the cited lines really hold. The
+mentor runner exposes no native tool at all: its context arrives through `fetch_context`, and it links
+evidence with `link_observation`.
+
+The image provides Bash, Git, ripgrep, fd-find, and standard shell utilities. `PI_OFFLINE=1`
+disables tool downloads. Use `work/` or `$TMPDIR` for scratch files; scratch files are not
+captured evidence. Native search honors ignore rules; use explicit paths and
+`rg --hidden --no-ignore` when those exclusions are inappropriate. Use streaming shell commands for
+lines too large for the read tool.
+
+The runner rewrites `out/` from its in-memory state and removes unexpected files before packaging.
+Output remains untrusted; server-side admission verifies its observations and citations.
+
+The root filesystem and captured inputs are mounted read-only; scratch directories are separate
+writable mounts. The practice runner starts Node without permission flags, because a subprocess
+would bypass them anyway; the mount and container isolation are the boundary. The
+[sandbox threat model](/admin/threat-model#boundary-2-llm-agent-sandbox) owns the isolation
+requirements. Deployment connectivity is covered in
+[practice-review operations](/admin/practice-review-operations).

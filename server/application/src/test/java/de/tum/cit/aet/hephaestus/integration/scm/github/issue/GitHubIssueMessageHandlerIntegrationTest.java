@@ -267,6 +267,37 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
+        void shouldRecountTheParentsRollupWhenAChildClosesAndReopens() throws Exception {
+            // The closed payload carries the child's own summary, never the parent's: the parent is
+            // recounted from the children this repository stores.
+            handler.handleEvent(loadPayload("issues.opened"));
+            Issue child = issueRepository
+                    .findByRepositoryIdAndNumber(testRepository.getId(), 20)
+                    .orElseThrow();
+            Issue parent = new Issue();
+            parent.setNativeId(3_578_400_000L);
+            parent.setNumber(19);
+            parent.setTitle("Epic");
+            parent.setState(Issue.State.OPEN);
+            parent.setRepository(testRepository);
+            parent.setProvider(child.getProvider());
+            parent = issueRepository.save(parent);
+            child.setParentIssue(parent);
+            issueRepository.save(child);
+
+            handler.handleEvent(loadPayload("issues.closed"));
+            Issue afterClose = issueRepository.findById(parent.getId()).orElseThrow();
+            assertThat(afterClose.getSubIssuesTotal()).isEqualTo(1);
+            assertThat(afterClose.getSubIssuesCompleted()).isEqualTo(1);
+            assertThat(afterClose.getSubIssuesPercentCompleted()).isEqualTo(100);
+
+            handler.handleEvent(loadPayload("issues.reopened"));
+            Issue afterReopen = issueRepository.findById(parent.getId()).orElseThrow();
+            assertThat(afterReopen.getSubIssuesTotal()).isEqualTo(1);
+            assertThat(afterReopen.getSubIssuesCompleted()).isEqualTo(0);
+        }
+
+        @Test
         void shouldHandleReopenedEvent() throws Exception {
             // Given - create and close issue
             handler.handleEvent(loadPayload("issues.opened"));

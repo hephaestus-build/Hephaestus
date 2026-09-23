@@ -35,8 +35,7 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
     @Test
     void shouldExcludeOtherOwnersAndLegacyNetworksWhenListingNetworks() {
-        var properties =
-                new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "docker", "course");
+        var properties = new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "course");
         var manager = new SandboxNetworkManager(networkOps, properties);
         String id = UUID.randomUUID().toString();
         var own = new DockerOperations.NetworkInfo("own", "hephaestus-sandbox-course--" + id);
@@ -51,7 +50,7 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         DockerSandboxProperties properties = new DockerSandboxProperties(
-                "unix:///var/run/docker.sock", false, null, null, "app-server-id", "docker", "default");
+                "unix:///var/run/docker.sock", false, null, null, "app-server-id", "default");
         manager = new SandboxNetworkManager(networkOps, properties);
     }
 
@@ -153,7 +152,7 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
         @ValueSource(strings = "   ")
         void shouldFallBackToHostnameWhenContainerIdIsMissingOrBlank(@Nullable String containerId) {
             DockerSandboxProperties propsNoId = new DockerSandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, null, containerId, "docker", "default");
+                    "unix:///var/run/docker.sock", false, null, null, containerId, "default");
             SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, () -> "hostname-container-id");
 
             when(networkOps.connectToNetwork(NETWORK_ID, "hostname-container-id"))
@@ -167,8 +166,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
         @Test
         void shouldReturnNullWhenNoContainerId() {
-            DockerSandboxProperties propsNoId = new DockerSandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
+            DockerSandboxProperties propsNoId =
+                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default");
             SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, () -> null);
 
             String ip = mgr.connectAppServer(NETWORK_ID);
@@ -178,8 +177,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
         @Test
         void shouldReturnNullWhenHostnameBlank() {
-            DockerSandboxProperties propsNoId = new DockerSandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
+            DockerSandboxProperties propsNoId =
+                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default");
             SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, () -> "  ");
 
             String ip = mgr.connectAppServer(NETWORK_ID);
@@ -190,8 +189,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
         @Test
         void shouldCacheContainerId() {
             var callCount = new AtomicInteger(0);
-            DockerSandboxProperties propsNoId = new DockerSandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
+            DockerSandboxProperties propsNoId =
+                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default");
             SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, () -> {
                 callCount.incrementAndGet();
                 return "cached-id";
@@ -219,8 +218,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
         @Test
         void shouldNoOpWhenNoContainerId() {
-            DockerSandboxProperties propsNoId = new DockerSandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, null, null, "docker", "default");
+            DockerSandboxProperties propsNoId =
+                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default");
             SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, () -> null);
 
             // Should not throw — silently skips disconnect

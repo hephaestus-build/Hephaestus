@@ -421,7 +421,7 @@ for ((taskName, command) in
                 "--reference-url=hibernate:spring:de.tum.cit.aet.hephaestus?dialect=org.hibernate.dialect.PostgreSQLDialect&hibernate.physical_naming_strategy=org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy&hibernate.implicit_naming_strategy=org.springframework.boot.hibernate.SpringImplicitNamingStrategy",
                 // Hibernate cannot emit unmapped tables, partitions, or scalar-id foreign keys. The
                 // pending contractions are listed in docs/contributor/database-migration.mdx.
-                "--exclude-objects=table:shedlock,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,table:consent_notice,column:notice_sha256,table:product_survey_submission,foreignkey:sfk_.*",
+                "--exclude-objects=table:shedlock,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,table:consent_notice,column:notice_sha256,table:product_survey_submission,column:supports_reasoning,foreignkey:sfk_.*",
             )
         }
     }

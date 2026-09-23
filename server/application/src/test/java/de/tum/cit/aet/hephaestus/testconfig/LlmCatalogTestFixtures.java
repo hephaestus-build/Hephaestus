@@ -71,7 +71,7 @@ public final class LlmCatalogTestFixtures {
                 "test-model",
                 null,
                 null,
-                false,
+                null,
                 FundingSource.INSTANCE,
                 1L,
                 1L,

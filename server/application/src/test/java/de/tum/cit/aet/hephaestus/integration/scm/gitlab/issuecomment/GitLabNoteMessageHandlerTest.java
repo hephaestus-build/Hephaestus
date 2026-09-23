@@ -26,7 +26,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabN
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO.EmbeddedMergeRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO.NoteAttributes;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiffNoteWebhookProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.Message;
 import java.io.IOException;
@@ -38,6 +40,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.TransactionStatus;
@@ -71,6 +75,12 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
     private NatsMessageDeserializer deserializer;
 
     @Mock
+    private GitLabUserService userService;
+
+    @Mock
+    private GitLabReviewReconciler reviewReconciler;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private TransactionTemplate transactionTemplate;
@@ -96,6 +106,8 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
                 contextResolver,
                 pullRequestRepository,
                 userRepository,
+                userService,
+                reviewReconciler,
                 deserializer,
                 transactionTemplate,
                 eventPublisher);
@@ -183,6 +195,47 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
 
             verify(issueCommentProcessor, never()).processIssueNote(any(), any());
             verify(contextResolver, never()).resolve(any(), any(), any());
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"approved this merge request", "unapproved this merge request", "requested changes"})
+        void shouldRecordAReviewDecisionSystemNoteOnAMergeRequest(String body) throws IOException {
+            GitLabNoteEventDTO event = createMergeRequestSystemNote(body);
+            Repository repository = setupRepository();
+            User author = new User();
+            author.setNativeId(18024L);
+            author.setLogin("ga84xah");
+            PullRequest mergeRequest = new PullRequest();
+            mergeRequest.setNativeId(334047L);
+            mergeRequest.setProvider(repository.getProvider());
+            when(userService.findOrCreateUser(any(GitLabWebhookUser.class), eq(1L)))
+                    .thenReturn(author);
+            when(pullRequestRepository.findByRepositoryIdAndNumber(repository.getId(), 2))
+                    .thenReturn(Optional.of(mergeRequest));
+
+            handler.onMessage(mockMessage(event));
+
+            // The same rows at the same times as the discussion sync makes, and the note's own GID so a
+            // later sync finds them; live, so an approval note is the approval itself.
+            verify(reviewReconciler)
+                    .recordSystemNote(
+                            eq(mergeRequest),
+                            eq(author),
+                            eq(new GitLabReviewReconciler.SystemNote(
+                                    body, Instant.parse("2026-01-31T18:03:37Z"), "gid://gitlab/Note/4406174", true)),
+                            eq(repository.getProvider()),
+                            any());
+            verify(issueCommentProcessor, never()).processMergeRequestNote(any(), any());
+        }
+
+        @Test
+        void shouldStillSkipASystemNoteThatIsNotAReviewDecision() throws IOException {
+            GitLabNoteEventDTO event = createMergeRequestNoteEvent("create", true, false, null);
+
+            handler.onMessage(mockMessage(event));
+
+            verify(reviewReconciler, never()).recordSystemNote(any(), any(), any(), any(), any());
+            verify(issueCommentProcessor, never()).processMergeRequestNote(any(), any());
         }
 
         @Test
@@ -418,6 +471,24 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
     private GitLabNoteEventDTO createMergeRequestNoteEvent(
             String action, boolean system, boolean internal, @Nullable Object position) {
         NoteAttributes attrs = createNoteAttributes("MergeRequest", action, system, internal, position);
+        return new GitLabNoteEventDTO(
+                "note", "note", createUser(), createProject(), attrs, null, createEmbeddedMergeRequest());
+    }
+
+    private GitLabNoteEventDTO createMergeRequestSystemNote(String body) {
+        NoteAttributes attrs = new NoteAttributes(
+                4406174L,
+                body,
+                "MergeRequest",
+                true,
+                false,
+                null,
+                "create",
+                "https://gitlab.lrz.de/hephaestustest/demo-repository/-/merge_requests/2#note_4406174",
+                "2026-01-31 19:03:37 +0100",
+                "2026-01-31 19:03:37 +0100",
+                "abc123def456",
+                null);
         return new GitLabNoteEventDTO(
                 "note", "note", createUser(), createProject(), attrs, null, createEmbeddedMergeRequest());
     }

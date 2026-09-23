@@ -76,7 +76,7 @@ admins. Each person also has an hourly allowance, so a burst of requests is refu
 sentence — the work was reviewed too recently, no AI model is set up, the practices that watch it are
 turned off, and so on.
 
-**From a GitLab merge request.** After you push new commits, start a comment with:
+**From a GitLab merge request.** Start a comment with:
 
 ```text
 /hephaestus review
@@ -94,13 +94,14 @@ There is no equivalent command on GitHub pull requests. Use **Review this now** 
 that received a comment. Opening one shows what each practice made of it — including the practices that
 stayed quiet, and why. This is the place to look when you expected feedback and got none.
 
-Two answers there surprise people:
+These states have different meanings:
 
 - **Turned off** means your workspace switched that practice off; it is not measured at all.
 - **Reviewed**, with nothing delivered, is a normal and deliberate outcome. A practice can be set to
-  wait for a workspace admin to approve each piece of feedback, so it still runs and still records
-  what it found without posting a comment. Your workspace admins can see the result even when you
-  were told nothing.
+  wait for a workspace admin to approve each comment on your work, so it still runs and still records
+  what it found without posting one. Feedback on your practice pages and in Heph does not need that
+  comment approval; each channel still has its own delivery rules. Your workspace admins can see
+  review results even when no comment was posted on the work.
 - **Insufficient evidence** means the work gave the practice a real subject, but the available evidence
   could not support a conclusion. **No review occasion** means the work had no subject for that practice.
   If required evidence was unavailable, stale, partial, redacted, or failed to collect, the practice is

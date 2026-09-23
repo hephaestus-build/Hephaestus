@@ -284,6 +284,7 @@ class BotCommandProcessorTest extends BaseUnitTest {
         pr.setHeadRefOid("abc123");
         pr.setHeadRefName("feature/branch");
         pr.setBaseRefName("main");
+        pr.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         pr.setRepository(repo);
         return pr;
     }

@@ -120,6 +120,28 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
     }
 
     @Test
+    @DisplayName("a review of a draft materialises only the practices that review drafts, as the gate admitted")
+    void shouldSelectOnlyDraftPracticesWhenTheWorkWasADraft() {
+        Practice onDrafts = practice("handoff", ScmSignals.PULL_REQUEST_OPENED);
+        onDrafts.setBindings(List.of(new PracticeBinding(
+                List.of(ScmSignals.PULL_REQUEST_OPENED),
+                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                true,
+                ActorRole.AUTHOR)));
+        when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.PULL_REQUEST))
+                .thenReturn(List.of(onDrafts, practice("describe", ScmSignals.PULL_REQUEST_OPENED)));
+        AgentJob job = job(ScmSignals.PULL_REQUEST_OPENED);
+        org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, job.getMetadata())
+                .put(PracticeCatalogInjector.DRAFT_METADATA_KEY, true);
+        Map<String, byte[]> files = new HashMap<>();
+
+        injector.inject(files, job, ArtifactKinds.PULL_REQUEST);
+
+        assertThat(files).containsKey(md("handoff"));
+        assertThat(files).doesNotContainKey(md("describe"));
+    }
+
+    @Test
     void shouldSelectOnlyReviewerPracticesWhenSubmittedReviewNamesReviewer() {
         Practice author = practice("author-engagement", ScmSignals.PULL_REQUEST_REVIEWED);
         Practice reviewer = practice("review-comment-quality", ScmSignals.PULL_REQUEST_REVIEWED);
@@ -223,7 +245,7 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("inject writes index.json, the per-slug + bundled criteria, and skips blank precompute scripts")
+    @DisplayName("inject writes index.json and the per-slug criteria, and skips blank precompute scripts")
     void injectWritesCatalogArtifactsAndSkipsBlankPrecompute() {
         Practice withScript = practice("authoring", ScmSignals.PULL_REQUEST_OPENED);
         withScript.setPrecomputeScript("export default () => ({});");
@@ -242,11 +264,10 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
         // is what the run staged, and inputs/manifest.json is where that is stated, once.
         assertThat(index).contains("readsSources").contains("scm.pull-request.diff");
         assertThat(index).doesNotContain("allowedSources");
-        // Per-slug criteria + the all-criteria bundle are present.
-        assertThat(files).containsKey(md("authoring")).containsKey(md("retrospective"));
-        String bundle =
-                new String(files.get(SandboxLayout.PRACTICES_PREFIX + "all-criteria.md"), StandardCharsets.UTF_8);
-        assertThat(bundle).contains("# authoring").contains("# retrospective");
+        assertThat(files)
+                .containsKey(md("authoring"))
+                .containsKey(md("retrospective"))
+                .doesNotContainKey(SandboxLayout.PRACTICES_PREFIX + "all-criteria.md");
         // Only the populated precompute script is written; the blank one is skipped.
         assertThat(files).containsKey(SandboxLayout.PRECOMPUTE_PREFIX + "practices/authoring.ts");
         assertThat(files).doesNotContainKey(SandboxLayout.PRECOMPUTE_PREFIX + "practices/retrospective.ts");

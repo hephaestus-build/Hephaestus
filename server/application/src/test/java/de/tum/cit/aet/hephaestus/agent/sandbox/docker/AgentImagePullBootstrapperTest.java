@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -91,7 +90,7 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
             assertThat(registry.find("agent.image.pull.failure").counter()).isNull();
         } else {
             assertThat(registry.get("agent.image.pull.failure").counter().count())
-                    .isEqualTo(expectedFailureCount);
+                    .isEqualTo((double) expectedFailureCount);
         }
     }
 
@@ -132,7 +131,7 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
     void shouldOnlyProbePresenceWhenPolicyIsNever() {
         bootstrapperWith(ImagePullPolicy.NEVER, new SimpleMeterRegistry()).pullOnStartup();
 
-        verify(imageOps).imageIsPresent(any());
+        verify(imageOps).imageIsPresent(IMAGE);
         verify(imageOps).imageLabels(IMAGE);
         verifyNoMoreInteractions(imageOps);
     }

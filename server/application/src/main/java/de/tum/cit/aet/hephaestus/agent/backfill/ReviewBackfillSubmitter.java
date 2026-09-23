@@ -113,6 +113,7 @@ public class ReviewBackfillSubmitter {
                                 pr.getHeadRefName(),
                                 pr.getHeadRefOid(),
                                 pr.getBaseRefName(),
+                                pr.getBaseRefOid(),
                                 key.get().signalName(),
                                 SignalOrigins.observationOriginOf(run.getDiscoveredVia())),
                         key.get(),

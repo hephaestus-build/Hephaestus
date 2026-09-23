@@ -42,8 +42,8 @@ class PullRequestReviewSubmissionRequestTest extends BaseUnitTest {
 
         @Test
         void shouldAcceptValidInput() {
-            var request =
-                    new PullRequestReviewSubmissionRequest(samplePullRequestData(), "feature/x", "abc123", "main");
+            var request = new PullRequestReviewSubmissionRequest(
+                    samplePullRequestData(), "feature/x", "abc123", "main", "base");
 
             assertThat(request.pullRequest()).isNotNull();
             assertThat(request.headRefName()).isEqualTo("feature/x");
@@ -53,27 +53,39 @@ class PullRequestReviewSubmissionRequestTest extends BaseUnitTest {
 
         @Test
         void shouldRejectBlankHeadRefName() {
-            assertThatThrownBy(
-                            () -> new PullRequestReviewSubmissionRequest(samplePullRequestData(), "  ", "sha", "main"))
+            assertThatThrownBy(() -> new PullRequestReviewSubmissionRequest(
+                            samplePullRequestData(), "  ", "sha", "main", "base"))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("headRefName");
         }
 
         @Test
         void shouldRejectBlankHeadRefOid() {
-            assertThatThrownBy(() ->
-                            new PullRequestReviewSubmissionRequest(samplePullRequestData(), "branch", " ", "main"))
+            assertThatThrownBy(() -> new PullRequestReviewSubmissionRequest(
+                            samplePullRequestData(), "branch", " ", "main", "base"))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("headRefOid");
         }
 
         @Test
         void shouldRejectBlankBaseRefName() {
-            assertThatThrownBy(() ->
-                            new PullRequestReviewSubmissionRequest(samplePullRequestData(), "branch", "sha", "  "))
+            assertThatThrownBy(() -> new PullRequestReviewSubmissionRequest(
+                            samplePullRequestData(), "branch", "sha", "  ", "base"))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("baseRefName");
         }
+    }
+
+    @Test
+    void shouldRejectBlankPinnedBaseButAcceptAnAbsentOne() {
+        assertThatThrownBy(() ->
+                        new PullRequestReviewSubmissionRequest(samplePullRequestData(), "branch", "head", "main", " "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("baseRefOid");
+        // A GitLab webhook pins no base; preparation resolves the target branch instead.
+        assertThat(new PullRequestReviewSubmissionRequest(samplePullRequestData(), "branch", "head", "main", null)
+                        .baseRefOid())
+                .isNull();
     }
 
     @Nested
@@ -82,7 +94,7 @@ class PullRequestReviewSubmissionRequestTest extends BaseUnitTest {
         @Test
         void aLifecycleEventPutsTheRunInTheUnbiasedPopulation() {
             var request = new PullRequestReviewSubmissionRequest(
-                    samplePullRequestData(), "branch", "sha", "main", ScmSignals.PULL_REQUEST_READY);
+                    samplePullRequestData(), "branch", "sha", "main", "base", ScmSignals.PULL_REQUEST_READY);
 
             assertThat(request.observationOrigin()).isEqualTo(ObservationOrigin.LIVE);
         }
@@ -92,7 +104,8 @@ class PullRequestReviewSubmissionRequestTest extends BaseUnitTest {
             // The bot command and the dev trigger both submit without a trigger event: a person asked.
             // Reviews people ask for are drawn from work they were already unsure of, so folding them into
             // the event-driven series would read that selection as a change in behaviour.
-            var request = new PullRequestReviewSubmissionRequest(samplePullRequestData(), "branch", "sha", "main");
+            var request =
+                    new PullRequestReviewSubmissionRequest(samplePullRequestData(), "branch", "sha", "main", "base");
 
             assertThat(request.observationOrigin()).isEqualTo(ObservationOrigin.MANUAL);
         }

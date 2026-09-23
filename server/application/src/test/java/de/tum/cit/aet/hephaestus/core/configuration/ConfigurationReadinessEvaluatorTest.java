@@ -164,7 +164,8 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
 
         worker.put("hephaestus.agent.image.reference", "ghcr.io/example/agent@sha256:" + "a".repeat(64));
         worker.put("hephaestus.agent.image.require-digest", false);
-        assertStatus(evaluateReadiness(worker, true), "agent.image-contract", ConfigurationStatus.ACTION_REQUIRED);
+        facts = evaluateReadiness(worker, true);
+        assertStatus(facts, "agent.image-contract", ConfigurationStatus.ACTION_REQUIRED);
     }
 
     @Test

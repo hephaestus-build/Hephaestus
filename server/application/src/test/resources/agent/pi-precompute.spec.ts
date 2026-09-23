@@ -14,22 +14,27 @@ import path from "node:path";
 import { mock, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { hasText } from "../../../main/resources/agent/pi-text.ts";
-
-const imageRoot = fileURLToPath(
-	new URL("../../../../../../docker/agents/precompute", import.meta.url),
-);
+const repositoryRoot = fileURLToPath(new URL("../../../../../../", import.meta.url));
+const imageRoot = path.join(repositoryRoot, "docker/agents/precompute");
 
 const scenarioRoot = process.env.PRECOMPUTE_SCENARIO_ROOT;
-if (hasText(scenarioRoot)) {
+if (scenarioRoot !== undefined && scenarioRoot !== "") {
 	mock.module("node:child_process", {
 		namedExports: {
 			spawnSync(command: string, args: string[]) {
 				assert.equal(command, process.execPath);
-				// Substitute only the image installation prefix; execute the real runner and permissions.
+				// Use local dependencies but execute the real runner with its permission restrictions.
+				const toolchain = [
+					path.join(repositoryRoot, "docker/agents/node_modules"),
+					path.join(repositoryRoot, "docker/node_modules"),
+					realpathSync(path.join(repositoryRoot, "node_modules")),
+				].map((allowed) => `--allow-fs-read=${allowed}`);
+				const index = args.indexOf("--permission") + 1;
 				return spawnSync(
 					command,
-					args.map((arg) => arg.replace("/opt/precompute", imageRoot)),
+					args
+						.map((arg) => arg.replace("/opt/precompute", imageRoot))
+						.toSpliced(index, 0, ...toolchain),
 					{ stdio: "inherit" },
 				);
 			},
@@ -39,30 +44,28 @@ if (hasText(scenarioRoot)) {
 	await import("../../../main/resources/agent/pi-precompute.ts");
 } else {
 	void test("precompute stages only regular scripts and executes the image runner with task-declared locations", () => {
-		// The staged scripts are loaded as modules, and Node's permission model admits a module load
-		// only when the granted path and the loaded path are the same resolved path — unlike an ordinary
-		// read, which an unresolved grant satisfies. macOS reaches the temporary directory through a
-		// symlink, so an unresolved root fails every script's import while the rest of the scenario
-		// looks like it ran.
+		// Node module-load grants require resolved paths; macOS temporary directories can be symlinks.
 		const root = realpathSync(mkdtempSync(path.join(tmpdir(), "task-precompute-#")));
 		try {
 			const context = "areas/changed work";
 			const scripts = "catalog/scripts";
 			mkdirSync(path.join(root, context), { recursive: true });
 			mkdirSync(path.join(root, scripts), { recursive: true });
+			// The change view pi-change.ts derived before this step; the runner reads the diff from it.
+			mkdirSync(path.join(root, "work/change"), { recursive: true });
 			writeFileSync(
-				path.join(root, context, "diff.patch"),
+				path.join(root, "work/change/diff.patch"),
 				"diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -0,0 +1 @@\n[L1] +line\n",
 			);
 			writeFileSync(
 				path.join(root, scripts, "example.ts"),
 				`import { readFileSync } from "node:fs";
 import { parseDiff } from "../lib/diff-parser.ts";
-export default (repo, diff, metadata, context) => ({
+export default (repo, diff, metadata, context, change) => ({
  hints: [], directions: [], metrics: {
   files: diff.size,
   addedLine: Number(diff.get("a").addedLines.get(1) === "line"),
-  parsed: parseDiff(readFileSync(context + "/diff.patch", "utf8")).size,
+  parsed: parseDiff(readFileSync(change + "/diff.patch", "utf8")).size,
   context: Number(readFileSync(context + "/marker", "utf8")),
   repo: Number(readFileSync(repo + "/marker", "utf8")),
   metadata: metadata.marker

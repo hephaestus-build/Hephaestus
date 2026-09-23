@@ -104,9 +104,9 @@ public class WorkspaceInventoryContentSource implements EvidenceSource {
             return captured;
         }
         try {
-            JsonNode counts = objectMapper.readTree(inventory).path("counts");
-            boolean empty = counts.path("issuesListed").asInt() == 0
-                    && counts.path("pullRequestsListed").asInt() == 0;
+            JsonNode listed = objectMapper.readTree(inventory);
+            boolean empty = listed.path("issues").isEmpty()
+                    && listed.path("pullRequests").isEmpty();
             return new EvidenceContribution(
                     captured.files(),
                     captured.completeness(),
@@ -157,29 +157,26 @@ public class WorkspaceInventoryContentSource implements EvidenceSource {
         if (focalNumber != null) {
             focal.put("number", focalNumber);
         }
-        root.put(
-                "note",
-                "Whole-project index of issues and pull requests (titles + state, not full bodies). Use it for "
-                        + "cross-artifact judgement: overlap/duplication, whether work is already tracked or in flight, "
-                        + "and scope. Open the focal artifact and linked_work_items.json for depth.");
+
+        ObjectNode labels = root.putObject("labelScheme");
+        labels.put("issuesTotal", issueRepository.countIssuesByRepositoryId(repositoryId));
+        labels.put("issuesLabelled", issueRepository.countLabelledIssuesByRepositoryId(repositoryId));
+        ArrayNode inUse = labels.putArray("labelsInUse");
+        for (String name : issueRepository.findLabelNamesInUseByRepositoryId(repositoryId)) {
+            inUse.add(name);
+        }
 
         ArrayNode issuesArr = root.putArray("issues");
-        int issuesEmitted =
-                emit(issuesArr, issues, focalType.equals(ArtifactKinds.ISSUE.value()) ? focalNumber : null, false);
+        int issuesEmitted = emit(issuesArr, issues, false);
         ArrayNode prsArr = root.putArray("pullRequests");
-        int prsEmitted = emit(
-                prsArr, pullRequests, focalType.equals(ArtifactKinds.PULL_REQUEST.value()) ? focalNumber : null, true);
-
-        ObjectNode counts = root.putObject("counts");
-        counts.put("issuesListed", issuesEmitted);
-        counts.put("pullRequestsListed", prsEmitted);
+        int prsEmitted = emit(prsArr, pullRequests, true);
         // Conservative upper bound: a listing of exactly MAX_PER_TYPE rows reports truncated=true even
         // when it happens to be exhaustive (page size == count). This only ever over-claims non-exhaustive,
         // never the dangerous direction (the contract is that absence-of-match must not prove uniqueness).
         boolean truncated = issues.size() >= MAX_PER_TYPE || pullRequests.size() >= MAX_PER_TYPE;
         root.put("truncated", truncated);
 
-        files.put(OUTPUT_FILE, objectMapper.writeValueAsBytes(root));
+        files.put(OUTPUT_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
         log.info(
                 "Project inventory: {} issue(s) + {} PR(s), truncated={}, repoId={}",
                 issuesEmitted,
@@ -190,8 +187,8 @@ public class WorkspaceInventoryContentSource implements EvidenceSource {
 
     /**
      * Conversation-review path: no single repository to scope to, so the inventory is aggregated across
-     * every repository the job's workspace monitors. There is no focal artifact (a conversation is about a
-     * person, not an issue/PR), so nothing is excluded from the listing.
+     * every repository the job's workspace monitors. There is no focal artifact: a conversation is about a
+     * person, not an issue or a pull request.
      */
     private void contributeWorkspaceWide(AgentJob job, Map<String, byte[]> files) {
         if (job.getWorkspace() == null) {
@@ -235,24 +232,15 @@ public class WorkspaceInventoryContentSource implements EvidenceSource {
         }
         ObjectNode focal = root.putObject("focal");
         focal.put("type", ArtifactKinds.CONVERSATION_THREAD.value());
-        root.put(
-                "note",
-                "Whole-workspace index of issues and pull requests across every monitored repository (titles + "
-                        + "state, not full bodies) — a conversation thread is not anchored to one repository. Use it for "
-                        + "cross-artifact judgement: what work is already tracked or in flight for the topic being discussed.");
 
         ArrayNode issuesArr = root.putArray("issues");
-        int issuesEmitted = emit(issuesArr, issues, null, false);
+        int issuesEmitted = emit(issuesArr, issues, false);
         ArrayNode prsArr = root.putArray("pullRequests");
-        int prsEmitted = emit(prsArr, pullRequests, null, true);
-
-        ObjectNode counts = root.putObject("counts");
-        counts.put("issuesListed", issuesEmitted);
-        counts.put("pullRequestsListed", prsEmitted);
+        int prsEmitted = emit(prsArr, pullRequests, true);
         boolean truncated = perTypeTruncated || repoCapHit;
         root.put("truncated", truncated);
 
-        files.put(OUTPUT_FILE, objectMapper.writeValueAsBytes(root));
+        files.put(OUTPUT_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
         log.info(
                 "Workspace-wide project inventory: {} issue(s) + {} PR(s) across {} repo(s), truncated={}, workspaceId={}",
                 issuesEmitted,
@@ -262,13 +250,10 @@ public class WorkspaceInventoryContentSource implements EvidenceSource {
                 workspaceId);
     }
 
-    /** Append each artifact (focal one excluded) as a compact node; returns how many were emitted. */
-    private int emit(ArrayNode out, List<? extends Issue> items, @Nullable Integer focalNumber, boolean isPullRequest) {
+    /** Append each artifact as a compact node; returns how many were emitted. */
+    private int emit(ArrayNode out, List<? extends Issue> items, boolean isPullRequest) {
         int emitted = 0;
         for (Issue item : items) {
-            if (focalNumber != null && item.getNumber() == focalNumber) {
-                continue; // the artifact under review is already fully materialised elsewhere
-            }
             ObjectNode node = objectMapper.createObjectNode();
             node.put("number", item.getNumber());
             node.put("title", item.getTitle());
