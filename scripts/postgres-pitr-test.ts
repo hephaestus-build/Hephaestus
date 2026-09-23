@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -8,14 +9,33 @@ const { values } = parseArgs({ options: { "target-image": { type: "string" } } }
 const id = `pgbackrest-pitr-${randomUUID().slice(0, 8)}`;
 const image = values["target-image"] ?? `${id}:18`;
 const container = `${id}-db`;
-const volumes = [`${id}-data`, `${id}-socket`, `${id}-repo`] as const;
-const [data, socket, repo] = volumes;
+const objectStore = `${id}-s3`;
+const network = `${id}-network`;
+const volumes = [`${id}-data`, `${id}-socket`, `${id}-objects`] as const;
+const [data, socket, objects] = volumes;
 const config = path.join(import.meta.dirname, "..", "docker", "self-host", "pgbackrest.conf");
-const repositoryEnvironment = [
+const certificates = mkdtempSync(path.join(tmpdir(), `${id}-certs-`));
+const minioImage =
+	"quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e";
+const repositoryEnvironment = (restored: boolean): string[] => [
 	"-e",
-	"PGBACKREST_REPO1_TYPE=posix",
+	"PGBACKREST_REPO1_TYPE=s3",
 	"-e",
-	"PGBACKREST_REPO1_PATH=/repo",
+	"PGBACKREST_REPO1_S3_BUCKET=hephaestus",
+	"-e",
+	"PGBACKREST_REPO1_S3_ENDPOINT=minio",
+	"-e",
+	"PGBACKREST_REPO1_S3_REGION=us-east-1",
+	"-e",
+	"PGBACKREST_REPO1_S3_URI_STYLE=path",
+	"-e",
+	"PGBACKREST_REPO1_STORAGE_PORT=9000",
+	"-e",
+	"PGBACKREST_REPO1_STORAGE_CA_FILE=/etc/pgbackrest/minio.crt",
+	"-e",
+	`PGBACKREST_REPO1_S3_KEY=${restored ? "restore-reader" : "backup-writer"}`,
+	"-e",
+	`PGBACKREST_REPO1_S3_KEY_SECRET=${restored ? "local-reader-secret" : "local-writer-secret"}`,
 	"-e",
 	"PGBACKREST_REPO1_CIPHER_PASS=local-test-only-passphrase-1234567890",
 ];
@@ -28,7 +48,7 @@ function run(command: string, args: string[], input?: Buffer): string {
 		timeout: 6 * 60 * 1000,
 	});
 	if (result.status !== 0) {
-		throw new Error(`${command} ${args.join(" ")} failed:\n${result.stdout}${result.stderr}`);
+		throw new Error(`${command} failed:\n${result.stdout}${result.stderr}`);
 	}
 	return result.stdout.trim();
 }
@@ -39,6 +59,135 @@ function docker(...args: string[]): string {
 
 function pause(seconds: number): void {
 	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, seconds * 1000);
+}
+
+function waitForObjectStore(): void {
+	for (let attempt = 0; attempt < 60; attempt += 1) {
+		if (
+			spawnSync("docker", [
+				"exec",
+				objectStore,
+				"curl",
+				"-kfsS",
+				"https://localhost:9000/minio/health/live",
+			]).status === 0
+		) {
+			return;
+		}
+		pause(1);
+	}
+	throw new Error(`S3 test service did not become ready:\n${docker("logs", objectStore)}`);
+}
+
+function startObjectStore(): void {
+	writeFileSync(
+		path.join(certificates, "restore-policy.json"),
+		JSON.stringify({
+			Version: "2012-10-17",
+			Statement: [
+				{
+					Effect: "Allow",
+					Action: ["s3:ListBucket", "s3:GetBucketLocation"],
+					Resource: ["arn:aws:s3:::hephaestus"],
+				},
+				{
+					Effect: "Allow",
+					Action: ["s3:GetObject"],
+					Resource: ["arn:aws:s3:::hephaestus/*"],
+				},
+			],
+		}),
+	);
+	run("openssl", [
+		"req",
+		"-x509",
+		"-newkey",
+		"rsa:2048",
+		"-nodes",
+		"-days",
+		"1",
+		"-subj",
+		"/CN=minio",
+		"-addext",
+		"subjectAltName=DNS:minio",
+		"-keyout",
+		path.join(certificates, "private.key"),
+		"-out",
+		path.join(certificates, "public.crt"),
+	]);
+	docker("network", "create", network);
+	docker(
+		"run",
+		"-d",
+		"--name",
+		objectStore,
+		"--network",
+		network,
+		"--network-alias",
+		"minio",
+		"-e",
+		"MINIO_ROOT_USER=backup-writer",
+		"-e",
+		"MINIO_ROOT_PASSWORD=local-writer-secret",
+		"-v",
+		`${objects}:/data`,
+		"-v",
+		`${certificates}:/root/.minio/certs:ro`,
+		minioImage,
+		"server",
+		"/data",
+	);
+	waitForObjectStore();
+	docker(
+		"exec",
+		objectStore,
+		"mc",
+		"alias",
+		"set",
+		"--insecure",
+		"local",
+		"https://localhost:9000",
+		"backup-writer",
+		"local-writer-secret",
+	);
+	docker("exec", objectStore, "mc", "mb", "--insecure", "local/hephaestus");
+	docker(
+		"exec",
+		objectStore,
+		"mc",
+		"admin",
+		"user",
+		"add",
+		"--insecure",
+		"local",
+		"restore-reader",
+		"local-reader-secret",
+	);
+	docker(
+		"exec",
+		objectStore,
+		"mc",
+		"admin",
+		"policy",
+		"create",
+		"--insecure",
+		"local",
+		"restore-reader",
+		"/root/.minio/certs/restore-policy.json",
+	);
+	docker(
+		"exec",
+		objectStore,
+		"mc",
+		"admin",
+		"policy",
+		"attach",
+		"--insecure",
+		"local",
+		"restore-reader",
+		"--user",
+		"restore-reader",
+	);
 }
 
 function sql(query: string): string {
@@ -94,6 +243,8 @@ function start(restored = false): number {
 		"-d",
 		"--name",
 		container,
+		"--network",
+		network,
 		"-p",
 		"127.0.0.1::5432",
 		"-e",
@@ -102,15 +253,15 @@ function start(restored = false): number {
 		"POSTGRES_USER=root",
 		"-e",
 		"POSTGRES_PASSWORD=root",
-		...repositoryEnvironment,
+		...repositoryEnvironment(restored),
 		"-v",
 		`${data}:/var/lib/postgresql`,
 		"-v",
 		`${socket}:/var/run/postgresql`,
 		"-v",
-		`${repo}:/repo${restored ? ":ro" : ""}`,
-		"-v",
 		`${config}:/etc/pgbackrest/pgbackrest.conf:ro`,
+		"-v",
+		`${path.join(certificates, "public.crt")}:/etc/pgbackrest/minio.crt:ro`,
 		image,
 		"postgres",
 		"-c",
@@ -129,21 +280,23 @@ function start(restored = false): number {
 	return Number(mapping.slice(mapping.lastIndexOf(":") + 1));
 }
 
-function sidecar(dataMode: "ro" | "rw", repositoryMode: "ro" | "rw", ...args: string[]): string {
+function sidecar(dataMode: "ro" | "rw", restored: boolean, ...args: string[]): string {
 	return docker(
 		"run",
 		"--rm",
+		"--network",
+		network,
 		"--user",
 		"postgres",
-		...repositoryEnvironment,
+		...repositoryEnvironment(restored),
 		"-v",
 		`${data}:/var/lib/postgresql:${dataMode}`,
 		"-v",
 		`${socket}:/var/run/postgresql`,
 		"-v",
-		`${repo}:/repo:${repositoryMode}`,
-		"-v",
 		`${config}:/etc/pgbackrest/pgbackrest.conf:ro`,
+		"-v",
+		`${path.join(certificates, "public.crt")}:/etc/pgbackrest/minio.crt:ro`,
 		"--entrypoint",
 		"pgbackrest",
 		image,
@@ -161,17 +314,7 @@ try {
 	for (const volume of volumes) {
 		docker("volume", "create", volume);
 	}
-	docker(
-		"run",
-		"--rm",
-		"-v",
-		`${repo}:/repo`,
-		"--entrypoint",
-		"chown",
-		image,
-		"postgres:postgres",
-		"/repo",
-	);
+	startObjectStore();
 	const sourcePort = start();
 	run("node", [
 		"scripts/run-gradlew.ts",
@@ -189,8 +332,47 @@ try {
 	sql(
 		"CREATE TABLE restore_probe(value text PRIMARY KEY); INSERT INTO restore_probe VALUES ('before')",
 	);
-	sidecar("ro", "rw", "--type=full", "backup");
-	sidecar("ro", "ro", "verify");
+	sidecar("ro", false, "--type=full", "backup");
+	sidecar("ro", true, "verify");
+	docker(
+		"exec",
+		objectStore,
+		"mc",
+		"alias",
+		"set",
+		"--insecure",
+		"reader",
+		"https://localhost:9000",
+		"restore-reader",
+		"local-reader-secret",
+	);
+	if (
+		spawnSync("docker", [
+			"exec",
+			objectStore,
+			"mc",
+			"cp",
+			"--insecure",
+			"/etc/hosts",
+			"reader/hephaestus/forbidden-write",
+		]).status === 0
+	) {
+		throw new Error("restore identity was able to write to the backup bucket");
+	}
+	docker("stop", objectStore);
+	let outageFailed = false;
+	try {
+		sidecar("ro", false, "--io-timeout=5", "--type=diff", "backup");
+	} catch {
+		outageFailed = true;
+	} finally {
+		docker("start", objectStore);
+		waitForObjectStore();
+	}
+	if (!outageFailed) {
+		throw new Error("backup did not fail when the off-host repository was unavailable");
+	}
+	sidecar("ro", true, "verify");
 	sql("INSERT INTO restore_probe VALUES ('middle')");
 	archiveCurrentWal();
 	pause(2);
@@ -202,7 +384,7 @@ try {
 	docker("volume", "rm", data);
 	docker("volume", "create", data);
 	const restoreStartedAt = performance.now();
-	sidecar("rw", "ro", "--type=time", `--target=${target}`, "--target-action=promote", "restore");
+	sidecar("rw", true, "--type=time", `--target=${target}`, "--target-action=promote", "restore");
 	start(true);
 	const restoreSeconds = ((performance.now() - restoreStartedAt) / 1000).toFixed(1);
 	if (sql("SELECT string_agg(value, ',' ORDER BY value) FROM restore_probe") !== "before,middle") {
@@ -230,13 +412,16 @@ try {
 		throw new Error("restored workspace did not pause feedback delivery and mentor");
 	}
 	console.log(
-		`PITR passed: encrypted repository verified; restored target ${target} in ${restoreSeconds}s; pre-target WAL present; post-target row absent; application data locked down`,
+		`PITR passed: encrypted S3 repository verified; read-only restore and backup outage proved; restored target ${target} in ${restoreSeconds}s; pre-target WAL present; post-target row absent; application data locked down`,
 	);
 } finally {
 	spawnSync("docker", ["rm", "-f", container]);
+	spawnSync("docker", ["rm", "-f", objectStore]);
 	for (const volume of volumes) {
 		spawnSync("docker", ["volume", "rm", "-f", volume]);
 	}
+	spawnSync("docker", ["network", "rm", network]);
+	rmSync(certificates, { recursive: true, force: true });
 	if (values["target-image"] === undefined) {
 		spawnSync("docker", ["rmi", "-f", image]);
 	}
