@@ -24,7 +24,6 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,7 +57,7 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("deferred-event-" + UUID.randomUUID()));
-        when(fixture.resolver().resolveForRepository("owner/repo")).thenReturn(Optional.of(workspace));
+        when(fixture.resolver().resolveAllForRepository("owner/repo")).thenReturn(List.of(workspace));
     }
 
     @Test
