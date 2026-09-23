@@ -144,10 +144,11 @@ agent. There is no publisher and no invalidation trigger because every folder is
 transactionally consistent job input at job start. Consider an incremental publisher only when p95
 render time per job exceeds 60 seconds.
 
-The initial workspace is one required tar request. Runtime capability discovery advertises one
-per-job byte budget. Optional, permitted areas or repositories may use subsequent additive tar
-responses through the same endpoint and authorization check; every response counts toward that
-cumulative budget. This is one workspace-download capability, not a second transport or an
+The initial workspace is one required logical tar download. A dropped download retries that same
+tar from byte zero; a retry does not spend the additive byte budget. Runtime capability discovery
+advertises one per-job byte budget. Optional, permitted areas or repositories may use subsequent
+additive tar responses through the same endpoint and authorization check; each additive response
+counts toward that cumulative budget. This is one workspace-download capability, not a second transport or an
 unbounded sequence. Version 1.0 has no tool catalogue, MCP data plane, context-as-Git repository, or
 mount of worker or host context storage. Hints and provenance are never verdicts, and mentor conversation is not
 practice evidence.
@@ -173,7 +174,7 @@ connection to a sandbox. `gitProxyUrl` remains absent and no Git server is intro
 support is a credential lookup behind the same proxy, not a second proxy topology; the Squid sidecar
 proposal in [#1108](https://github.com/hephaestus-build/Hephaestus/issues/1108) is withdrawn.
 
-Protocol v3 provides attempt-scoped credentials, byte-budget discovery, one workspace download,
+Protocol v3 provides attempt-scoped credentials, byte-budget discovery, one logical workspace download,
 result-archive upload, and interactive frames. A successful upload or duplicate `409` acknowledges
 transport, not observation admission; an overlapping upload returns retryable `503`.
 [ADR 0034](0034-signed-release-image-lock.md) owns the lockstep image upgrade.

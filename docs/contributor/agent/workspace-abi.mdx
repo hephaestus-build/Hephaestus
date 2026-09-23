@@ -16,6 +16,11 @@ metadata under `inputs/`, then validates returned results. The container derives
 statistics and precompute hints under `work/`. Mount isolation is defined under
 [Path conventions](#path-conventions).
 
+The initializer reads the gateway's advertised archive size and downloads the tar to a temporary file
+under `/workspace`. It checks the byte count before extraction. A dropped or short transfer is retried
+from byte zero; an archive above the advertised size is refused. The gateway serves the same staged
+tar file for each retry while the attempt is active.
+
 ```text
 /workspace/
 ├── inputs/                          # READ-ONLY (the /workspace volume is mounted read-only, not a path guard).

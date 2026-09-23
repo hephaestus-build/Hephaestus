@@ -56,7 +56,6 @@ public class SandboxGatewaySessions {
         private final Path inputTar;
         private final String outputRoot;
         private final long inputBytes;
-        private boolean downloaded;
         private boolean closed;
         private boolean uploading;
         private @Nullable GatewayInteractiveChannel interactive;
@@ -101,12 +100,8 @@ public class SandboxGatewaySessions {
             if (closed) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
             }
-            if (downloaded) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Workspace budget already consumed");
-            }
-            var stream = Files.newInputStream(inputTar);
-            downloaded = true;
-            return stream;
+            // A dropped transfer can restart from byte zero from the same staged archive.
+            return Files.newInputStream(inputTar);
         }
 
         public void upload(InputStream input) throws IOException {

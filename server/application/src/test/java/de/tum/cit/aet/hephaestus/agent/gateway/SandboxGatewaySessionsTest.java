@@ -29,7 +29,7 @@ class SandboxGatewaySessionsTest {
     private final SandboxGatewaySessions sessions = new SandboxGatewaySessions();
 
     @Test
-    void shouldBindDownloadsToTheRegisteredCredentialAndEnforceCumulativeBudget() throws Exception {
+    void shouldBindDownloadsToTheRegisteredCredentialAndAllowWholeFileRetry() throws Exception {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "exact bytes");
         try (var session = sessions.register("attempt-credential", archive, "out")) {
             assertThatThrownBy(() -> sessions.require(session.id(), "Bearer different-attempt"))
@@ -39,12 +39,12 @@ class SandboxGatewaySessionsTest {
             assertThat(session.inputBytes()).isEqualTo(Files.size(archive));
             try (var downloaded =
                     sessions.require(session.id(), "Bearer attempt-credential").download()) {
-                assertThat(downloaded.readAllBytes()).isEqualTo(Files.readAllBytes(archive));
+                assertThat(downloaded.readNBytes(3)).isEqualTo("exa".getBytes(StandardCharsets.UTF_8));
             }
-            assertThatThrownBy(session::download)
-                    .isInstanceOfSatisfying(
-                            ResponseStatusException.class,
-                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+            try (var retry =
+                    sessions.require(session.id(), "Bearer attempt-credential").download()) {
+                assertThat(retry.readAllBytes()).isEqualTo(Files.readAllBytes(archive));
+            }
         }
         assertThat(archive).doesNotExist();
     }
