@@ -175,8 +175,13 @@ support is a credential lookup behind the same proxy, not a second proxy topolog
 proposal in [#1108](https://github.com/hephaestus-build/Hephaestus/issues/1108) is withdrawn.
 
 Protocol v3 provides attempt-scoped credentials, byte-budget discovery, one logical workspace download,
-result-archive upload, and interactive frames. A successful upload or duplicate `409` acknowledges
-transport, not observation admission; an overlapping upload returns retryable `503`.
+result-archive upload, and interactive frames. The upload carries an
+[RFC 9530 `Content-Digest`](https://www.rfc-editor.org/rfc/rfc9530#section-2) with SHA-256 over the
+complete tar. A successful upload acknowledges transport, not observation admission. Both success
+and duplicate `409` return the admitted archive's strong
+[RFC 9110 `ETag`](https://www.rfc-editor.org/rfc/rfc9110#section-8.8.3). The runner treats either as
+convergence only when that tag matches the bytes it sent. A different result or a conflict from a
+non-owning worker is not success. An overlapping upload returns retryable `503`.
 [ADR 0034](0034-signed-release-image-lock.md) owns the lockstep image upgrade.
 
 ### Evidence admission and deletion

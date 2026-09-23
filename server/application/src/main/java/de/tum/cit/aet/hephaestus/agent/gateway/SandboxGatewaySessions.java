@@ -8,7 +8,11 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -60,6 +64,7 @@ public class SandboxGatewaySessions {
         private boolean uploading;
         private @Nullable GatewayInteractiveChannel interactive;
         private @Nullable Map<String, byte[]> result;
+        private byte @Nullable [] resultDigest;
 
         private Session(UUID id, String token, Path inputTar, String outputRoot) throws IOException {
             this.id = id;
@@ -104,13 +109,13 @@ public class SandboxGatewaySessions {
             return Files.newInputStream(inputTar);
         }
 
-        public void upload(InputStream input) throws IOException {
+        public record UploadResult(boolean admitted, String etag) {}
+
+        public UploadResult upload(InputStream input, String contentDigest) throws IOException {
+            byte[] expectedDigest = parseDigest(contentDigest);
             synchronized (this) {
                 if (closed) {
                     throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-                }
-                if (result != null) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Result already uploaded");
                 }
                 if (uploading) {
                     throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Result upload in progress");
@@ -118,17 +123,57 @@ public class SandboxGatewaySessions {
                 uploading = true;
             }
             try {
-                var files = Map.copyOf(new SandboxOutputArchive().read(input, outputRoot));
+                var digest = sha256();
+                var files =
+                        Map.copyOf(new SandboxOutputArchive().read(new DigestInputStream(input, digest), outputRoot));
+                byte[] actualDigest = digest.digest();
+                if (!MessageDigest.isEqual(expectedDigest, actualDigest)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Result digest does not match its body");
+                }
                 synchronized (this) {
                     if (closed) {
                         throw new ResponseStatusException(HttpStatus.NOT_FOUND);
                     }
+                    if (resultDigest != null) {
+                        return new UploadResult(false, etag(resultDigest));
+                    }
                     result = files;
+                    resultDigest = actualDigest;
+                    return new UploadResult(true, etag(actualDigest));
                 }
             } finally {
                 synchronized (this) {
                     uploading = false;
                 }
+            }
+        }
+
+        private static String etag(byte[] digest) {
+            return '"' + HexFormat.of().formatHex(digest) + '"';
+        }
+
+        private static byte[] parseDigest(String contentDigest) {
+            if (!contentDigest.startsWith("sha-256=:") || !contentDigest.endsWith(":")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A SHA-256 Content-Digest is required");
+            }
+            try {
+                byte[] digest = Base64.getDecoder().decode(contentDigest.substring(9, contentDigest.length() - 1));
+                if (digest.length == 32
+                        && contentDigest.equals(
+                                "sha-256=:" + Base64.getEncoder().encodeToString(digest) + ":")) {
+                    return digest;
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Invalid base64 is the same invalid request as an unsupported digest.
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid SHA-256 Content-Digest");
+        }
+
+        private static MessageDigest sha256() {
+            try {
+                return MessageDigest.getInstance("SHA-256");
+            } catch (NoSuchAlgorithmException exception) {
+                throw new IllegalStateException("JVM does not provide SHA-256", exception);
             }
         }
 

@@ -29,6 +29,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -176,9 +179,20 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         Map<String, String> environment = runtimeContainer.get().environment();
         String runtimeUrl = Objects.requireNonNull(environment.get("SANDBOX_RUNTIME_URL"));
         UUID sessionId = UUID.fromString(runtimeUrl.substring(runtimeUrl.lastIndexOf('/') + 1));
-        gatewaySessions
-                .require(sessionId, "Bearer " + environment.get("LLM_PROXY_TOKEN"))
-                .upload(new ByteArrayInputStream(resultTar(files)));
+        byte[] archive = resultTar(files);
+        try {
+            gatewaySessions
+                    .require(sessionId, "Bearer " + environment.get("LLM_PROXY_TOKEN"))
+                    .upload(
+                            new ByteArrayInputStream(archive),
+                            "sha-256=:"
+                                    + Base64.getEncoder()
+                                            .encodeToString(MessageDigest.getInstance("SHA-256")
+                                                    .digest(archive))
+                                    + ":");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private static byte[] resultTar(Map<String, byte[]> files) throws IOException {

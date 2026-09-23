@@ -21,7 +21,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -107,7 +109,13 @@ class DockerGatewayTransportTest extends BaseUnitTest {
                 }
                 return new SandboxContainerManager.WaitOutcome(initializerExit, false);
             }
-            session.upload(new ByteArrayInputStream(resultTar()));
+            byte[] result = resultTar();
+            session.upload(
+                    new ByteArrayInputStream(result),
+                    "sha-256=:"
+                            + Base64.getEncoder()
+                                    .encodeToString(
+                                            MessageDigest.getInstance("SHA-256").digest(result)) + ":");
             return new SandboxContainerManager.WaitOutcome(0, false);
         });
     }

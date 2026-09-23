@@ -46,9 +46,15 @@ public class SandboxWorkspaceController {
 
     @GetMapping("/workspace")
     public void workspace(
-            @PathVariable UUID id, @RequestHeader("Authorization") String authorization, HttpServletResponse response)
+            @PathVariable UUID id,
+            @RequestHeader("Authorization") String authorization,
+            HttpServletRequest request,
+            HttpServletResponse response)
             throws IOException {
         var session = sessions.require(id, authorization);
+        if (request.getQueryString() != null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
         try (var input = session.download()) {
             response.setContentType("application/x-tar");
             response.setContentLengthLong(session.inputBytes());
@@ -61,11 +67,13 @@ public class SandboxWorkspaceController {
     public void result(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authorization,
+            @RequestHeader("Content-Digest") String contentDigest,
             HttpServletRequest request,
             HttpServletResponse response) {
         try {
-            sessions.require(id, authorization).upload(request.getInputStream());
-            response.setStatus(HttpStatus.NO_CONTENT.value());
+            var upload = sessions.require(id, authorization).upload(request.getInputStream(), contentDigest);
+            response.setHeader("ETag", upload.etag());
+            response.setStatus(upload.admitted() ? HttpStatus.NO_CONTENT.value() : HttpStatus.CONFLICT.value());
         } catch (IOException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid result archive", exception);
         }

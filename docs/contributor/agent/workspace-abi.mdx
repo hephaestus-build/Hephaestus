@@ -20,6 +20,12 @@ The initializer reads the gateway's advertised archive size and downloads the ta
 under `/workspace`. It checks the byte count before extraction. A dropped or short transfer is retried
 from byte zero; an archive above the advertised size is refused. The gateway serves the same staged
 tar file for each retry while the attempt is active.
+No optional area or repository is advertised yet, so the gateway refuses a workspace query.
+
+For result upload, the runner sends `Content-Digest: sha-256=:<base64>:` over the complete tar.
+The gateway checks it against the received bytes before it keeps the first complete result. Both
+the first success and a repeat `409` return the first result's strong `ETag`; the runner accepts
+either only when the tag matches its archive. Other `409` responses are failures, not acknowledgements.
 
 ```text
 /workspace/

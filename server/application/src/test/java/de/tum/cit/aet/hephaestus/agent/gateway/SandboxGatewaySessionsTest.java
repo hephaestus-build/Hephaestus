@@ -10,6 +10,9 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.Base64;
+import java.util.HexFormat;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -92,13 +95,14 @@ class SandboxGatewaySessionsTest {
     void shouldKeepTheFirstCompleteResultAndRejectDuplicateUploads() throws Exception {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
         try (var session = sessions.register("token", archive, "out")) {
-            session.upload(new ByteArrayInputStream(resultTar()));
+            byte[] result = resultTar();
+            String expectedEtag = etag(result);
+            upload(session, result);
 
             assertThat(session.result().get("observations.json")).isEqualTo("{}".getBytes(StandardCharsets.UTF_8));
-            assertThatThrownBy(() -> session.upload(new ByteArrayInputStream(resultTar())))
-                    .isInstanceOfSatisfying(
-                            ResponseStatusException.class,
-                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+            var duplicate = upload(session, result);
+            assertThat(duplicate.admitted()).isFalse();
+            assertThat(duplicate.etag()).isEqualTo(expectedEtag);
             assertThat(session.result().get("observations.json")).isEqualTo("{}".getBytes(StandardCharsets.UTF_8));
         }
     }
@@ -107,13 +111,31 @@ class SandboxGatewaySessionsTest {
     void shouldNotAcceptAnInvalidArchiveAsACompletedResult() throws Exception {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
         try (var session = sessions.register("token", archive, "out")) {
-            assertThatThrownBy(() -> session.upload(new ByteArrayInputStream(new byte[0])))
-                    .isInstanceOf(java.io.IOException.class);
+            assertThatThrownBy(() -> upload(session, new byte[0])).isInstanceOf(java.io.IOException.class);
             assertThatThrownBy(session::result).isInstanceOf(IllegalStateException.class);
 
-            session.upload(new ByteArrayInputStream(resultTar()));
+            upload(session, resultTar());
 
             assertThat(session.result()).containsOnlyKeys("observations.json");
+        }
+    }
+
+    @Test
+    void shouldRejectADifferentSecondResultAndAFalseContentDigest() throws Exception {
+        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
+        try (var session = sessions.register("token", archive, "out")) {
+            byte[] first = resultTar();
+            assertThatThrownBy(() -> session.upload(new ByteArrayInputStream(first), contentDigest(new byte[0])))
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+            String admittedEtag = upload(session, first).etag();
+
+            byte[] second = resultTar("{ }".getBytes(StandardCharsets.UTF_8));
+            var conflict = upload(session, second);
+            assertThat(conflict.admitted()).isFalse();
+            assertThat(conflict.etag()).isEqualTo(admittedEtag).isNotEqualTo(etag(second));
+            assertThat(session.result().get("observations.json")).isEqualTo("{}".getBytes(StandardCharsets.UTF_8));
         }
     }
 
@@ -125,24 +147,26 @@ class SandboxGatewaySessionsTest {
         try (var session = sessions.register("token", archive, "out");
                 var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var first = executor.submit(() -> {
-                session.upload(new InputStream() {
-                    @Override
-                    public int read() throws IOException {
-                        reading.countDown();
-                        try {
-                            if (!disconnect.await(5, TimeUnit.SECONDS)) throw new IOException("Read timed out");
-                        } catch (InterruptedException exception) {
-                            Thread.currentThread().interrupt();
-                            throw new IOException(exception);
-                        }
-                        throw new IOException("Connection lost");
-                    }
-                });
+                session.upload(
+                        new InputStream() {
+                            @Override
+                            public int read() throws IOException {
+                                reading.countDown();
+                                try {
+                                    if (!disconnect.await(5, TimeUnit.SECONDS)) throw new IOException("Read timed out");
+                                } catch (InterruptedException exception) {
+                                    Thread.currentThread().interrupt();
+                                    throw new IOException(exception);
+                                }
+                                throw new IOException("Connection lost");
+                            }
+                        },
+                        contentDigest(resultTar()));
                 return null;
             });
             try {
                 assertThat(reading.await(5, TimeUnit.SECONDS)).isTrue();
-                assertThatThrownBy(() -> session.upload(new ByteArrayInputStream(resultTar())))
+                assertThatThrownBy(() -> upload(session, resultTar()))
                         .isInstanceOfSatisfying(
                                 ResponseStatusException.class,
                                 e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
@@ -152,21 +176,42 @@ class SandboxGatewaySessionsTest {
             }
             assertThatThrownBy(() -> first.get(5, TimeUnit.SECONDS)).hasRootCauseMessage("Connection lost");
 
-            session.upload(new ByteArrayInputStream(resultTar()));
+            upload(session, resultTar());
 
             assertThat(session.result()).containsOnlyKeys("observations.json");
         }
     }
 
     private static byte[] resultTar() throws Exception {
+        return resultTar("{}".getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static byte[] resultTar(byte[] content) throws Exception {
         var bytes = new ByteArrayOutputStream();
         try (var tar = new TarArchiveOutputStream(bytes)) {
             var entry = new TarArchiveEntry("out/observations.json");
-            entry.setSize(2);
+            entry.setSize(content.length);
             tar.putArchiveEntry(entry);
-            tar.write("{}".getBytes(StandardCharsets.UTF_8));
+            tar.write(content);
             tar.closeArchiveEntry();
         }
         return bytes.toByteArray();
+    }
+
+    private static SandboxGatewaySessions.Session.UploadResult upload(
+            SandboxGatewaySessions.Session session, byte[] bytes) throws Exception {
+        return session.upload(new ByteArrayInputStream(bytes), contentDigest(bytes));
+    }
+
+    private static String contentDigest(byte[] bytes) throws Exception {
+        return "sha-256=:"
+                + Base64.getEncoder()
+                        .encodeToString(MessageDigest.getInstance("SHA-256").digest(bytes)) + ":";
+    }
+
+    private static String etag(byte[] bytes) throws Exception {
+        return '"'
+                + HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
+                + '"';
     }
 }

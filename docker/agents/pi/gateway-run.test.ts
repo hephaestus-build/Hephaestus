@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -9,10 +10,35 @@ import test from "node:test";
 import { upload } from "./gateway-run.ts";
 
 for (const scenario of [
-	{ name: "retries an unfinished upload", responses: [503, 204], refused: false },
-	{ name: "accepts an already committed result", responses: [409], refused: false },
-	{ name: "does not retry a refused archive", responses: [422], refused: true },
-	{ name: "retries a disconnected response", responses: [null, 204], refused: false },
+	{ name: "retries an unfinished upload", responses: [503, 204] },
+	{
+		name: "accepts an already committed result",
+		responses: [409],
+		converged: true,
+	},
+	{
+		name: "rejects a non-owning worker conflict",
+		responses: [409],
+		expectedError: "Result upload was not confirmed: 409",
+	},
+	{
+		name: "rejects a different admitted result",
+		responses: [409],
+		expectedError: "Result upload was not confirmed: 409",
+		wrongDigest: true,
+	},
+	{
+		name: "rejects an unconfirmed successful upload",
+		responses: [204],
+		expectedError: "Result upload was not confirmed: 204",
+		wrongDigest: true,
+	},
+	{
+		name: "does not retry a refused archive",
+		responses: [422],
+		expectedError: "Result upload refused: 422",
+	},
+	{ name: "retries a disconnected response", responses: [null, 204] },
 ]) {
 	void test(scenario.name, async (context) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "gateway-upload-"));
@@ -20,6 +46,7 @@ for (const scenario of [
 			method: string | undefined;
 			authorization: string | undefined;
 			contentType: string | undefined;
+			contentDigest: string | string[] | undefined;
 			length: string | undefined;
 			body: Buffer;
 		}[] = [];
@@ -34,6 +61,7 @@ for (const scenario of [
 					method: request.method,
 					authorization: request.headers.authorization,
 					contentType: request.headers["content-type"],
+					contentDigest: request.headers["content-digest"],
 					length: request.headers["content-length"],
 					body: Buffer.concat(chunks),
 				});
@@ -41,6 +69,17 @@ for (const scenario of [
 					request.socket.destroy();
 				} else {
 					response.statusCode = status ?? 500;
+					if (
+						status === 204 ||
+						(status === 409 && ("converged" in scenario || "wrongDigest" in scenario))
+					) {
+						response.setHeader(
+							"ETag",
+							`"${createHash("sha256")
+								.update("wrongDigest" in scenario ? "other" : Buffer.concat(chunks))
+								.digest("hex")}"`,
+						);
+					}
 					response.end();
 				}
 			});
@@ -57,8 +96,8 @@ for (const scenario of [
 			const endpoint = new URL(`http://127.0.0.1:${address.port}/result`);
 			context.diagnostic(endpoint.href);
 			const uploaded = upload(endpoint, "test-credential", archive);
-			if (scenario.refused) {
-				await assert.rejects(uploaded, /Result upload refused: 422/u);
+			if ("expectedError" in scenario) {
+				await assert.rejects(uploaded, { message: scenario.expectedError });
 			} else {
 				await uploaded;
 			}
@@ -67,6 +106,10 @@ for (const scenario of [
 				assert.equal(request.method, "POST");
 				assert.equal(request.authorization, "Bearer test-credential");
 				assert.equal(request.contentType, "application/x-tar");
+				assert.equal(
+					request.contentDigest,
+					`sha-256=:${createHash("sha256").update(bytes).digest("base64")}:`,
+				);
 				assert.equal(request.length, String(bytes.length));
 				assert.deepEqual(request.body, bytes);
 			}
