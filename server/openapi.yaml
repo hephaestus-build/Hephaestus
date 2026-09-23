@@ -9929,6 +9929,15 @@ components:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
           description: Evidence requirements; omit to use the recommended requirements
             for the selected work type
+        bindingChanges:
+          type: array
+          description: Explicit intent to change the gate or the person judged
+          items:
+            type: string
+            enum:
+            - APPLIES_WHEN
+            - SUBJECT
+          uniqueItems: true
         bindings:
           type: array
           description: The one occasion this practice is reviewed on; the kind of
@@ -13224,6 +13233,15 @@ components:
             A review somebody asks for by hand is not among them — see manualReviewSignal.
           items:
             $ref: "#/components/schemas/PracticeSignalOption"
+        subjectRoles:
+          type: array
+          items:
+            type: string
+            enum:
+            - AUTHOR
+            - ASSIGNEE
+            - REVIEWER
+            - MERGER
         supportedAutomatedReviewModes:
           type: array
           items:
@@ -13239,6 +13257,7 @@ components:
       - recommendedNeeds
       - recommendedPolicy
       - signals
+      - subjectRoles
       - supportedAutomatedReviewModes
     ProbeLlmConnectionRequest:
       type: object
@@ -16214,6 +16233,15 @@ components:
           description: "Replacement review settings; omit to preserve them, or to\
             \ take the recommended ones when the bindings move the practice to a different\
             \ kind of work"
+        bindingChanges:
+          type: array
+          description: Explicit intent to change the gate or the person judged
+          items:
+            type: string
+            enum:
+            - APPLIES_WHEN
+            - SUBJECT
+          uniqueItems: true
         bindings:
           type: array
           description: Replacement occasion and its evidence; omit to leave it unchanged

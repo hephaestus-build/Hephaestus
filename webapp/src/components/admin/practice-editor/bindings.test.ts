@@ -78,6 +78,17 @@ describe("normalizeBinding", () => {
 		]);
 	});
 
+	it("keeps the gate and the person judged", () => {
+		const gate = {
+			absentSays: "the change has no Swift code",
+			anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+		};
+		expect(normalizeBinding(binding({ appliesWhen: gate, subject: "REVIEWER" }))).toMatchObject({
+			appliesWhen: gate,
+			subject: "REVIEWER",
+		});
+	});
+
 	it("omits onDrafts entirely when it is false, matching a binding that never mentions drafts", () => {
 		expect(normalizeBinding(binding({ onDrafts: false }))).not.toHaveProperty("onDrafts");
 		expect(normalizeBinding(binding({ onDrafts: true })).onDrafts).toBe(true);

@@ -108,7 +108,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .jsonPath("$.initialAutonomy")
                 .isEqualTo("HUMAN_APPROVAL")
                 .jsonPath("$.sourceReviewRuleFingerprint")
-                .value(value -> assertThat((String) value).matches("v3:[0-9a-f]{64}"))
+                .value(value -> assertThat((String) value).matches("v4:[0-9a-f]{64}"))
                 .jsonPath("$.definition.automatedReviewValidation.status")
                 .isEqualTo("AUTHOR_DECLARED");
     }
@@ -193,7 +193,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .findByWorkspaceIdAndSlug(workspace.getId(), PRACTICE)
                 .orElseThrow();
         assertThat(practice.getSourceCuratedSlug()).isEqualTo(PRACTICE);
-        assertThat(practice.getSourceCuratedFingerprint()).matches("v3:[0-9a-f]{64}");
+        assertThat(practice.getSourceCuratedFingerprint()).matches("v4:[0-9a-f]{64}");
         assertThat(practice.getAutonomy()).isEqualTo(PracticeAutonomy.HUMAN_APPROVAL);
         assertThat(groupRepository.findByWorkspaceIdAndSlug(workspace.getId(), GROUP))
                 .isPresent();
@@ -201,7 +201,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .get()
                 .extracting(revision -> revision.getReviewRuleFingerprint())
                 .asString()
-                .matches("v3:[0-9a-f]{64}");
+                .matches("v4:[0-9a-f]{64}");
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT count(*) FROM config_audit_event WHERE workspace_id = ? AND entity_type IN ('PRACTICE_GROUP', 'PRACTICE_DEFINITION', 'PRACTICE_USAGE')",
                         Long.class,

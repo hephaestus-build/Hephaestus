@@ -134,7 +134,9 @@ public class CuratedCatalogAdminController {
             @Parameter(required = true) @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) @Nullable
                     String ifMatch,
             @Valid @RequestBody CuratedPracticeRequestDTO request) {
-        return ok(service.writePractice(slug, precondition(ifMatch), definition(request)), CuratedPracticeDTO::from);
+        return ok(
+                service.writePractice(slug, precondition(ifMatch), definition(request), request.bindingChanges()),
+                CuratedPracticeDTO::from);
     }
 
     @PatchMapping("/practices/{slug}/status")

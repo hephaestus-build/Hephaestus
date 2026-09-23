@@ -1274,6 +1274,10 @@ export type CuratedPracticeRequest = {
    */
   automatedReviewPolicy?: PracticeAutomatedReviewPolicy;
   /**
+   * Explicit intent to change the gate or the person judged
+   */
+  bindingChanges?: Array<'APPLIES_WHEN' | 'SUBJECT'>;
+  /**
    * The one occasion this practice is reviewed on; the kind of work is read off the signals
    */
   bindings: [
@@ -3454,6 +3458,7 @@ export type PracticeWorkTypeDefinitionOptions = {
    * The occasions a practice on this work type can be bound to. A review somebody asks for by hand is not among them — see manualReviewSignal.
    */
   signals: Array<PracticeSignalOption>;
+  subjectRoles: Array<'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER'>;
   supportedAutomatedReviewModes: Array<'LANGUAGE_MODEL' | 'NONE'>;
 };
 
@@ -5406,6 +5411,10 @@ export type UpdatePracticeRequest = {
    * Replacement review settings; omit to preserve them, or to take the recommended ones when the bindings move the practice to a different kind of work
    */
   automatedReviewPolicy?: PracticeAutomatedReviewPolicy;
+  /**
+   * Explicit intent to change the gate or the person judged
+   */
+  bindingChanges?: Array<'APPLIES_WHEN' | 'SUBJECT'>;
   /**
    * Replacement occasion and its evidence; omit to leave it unchanged
    */

@@ -73,6 +73,18 @@ class ReviewRuleFingerprintTest extends BaseUnitTest {
         assertThat(fingerprintOf(bindingWithSubject(manifests))).isNotEqualTo(fingerprintOf(bindingWithSubject(tests)));
     }
 
+    @Test
+    void shouldChangeWhenThePersonJudgedChanges() {
+        PracticeBinding author = binding(ScmSignals.PULL_REQUEST_OPENED, required(DIFF));
+        PracticeBinding reviewer = new PracticeBinding(
+                author.signals(),
+                author.needs(),
+                author.onDrafts(),
+                de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.REVIEWER);
+        assertThat(fingerprintOf(reviewer)).isNotEqualTo(fingerprintOf(author));
+        assertThat(fingerprintOf(reviewer)).startsWith("v4:");
+    }
+
     private static String fingerprintOf(PracticeBinding binding) {
         return ReviewRuleFingerprint.of(
                 "describe-the-change",

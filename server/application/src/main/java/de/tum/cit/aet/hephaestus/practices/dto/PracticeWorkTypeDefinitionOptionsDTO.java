@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.dto;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewMode;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
@@ -36,4 +37,5 @@ public record PracticeWorkTypeDefinitionOptionsDTO(
         List<PracticeEvidenceRequirement> recommendedNeeds,
 
         @NonNull List<PracticeAutomatedReviewMode> supportedAutomatedReviewModes,
-        @NonNull List<PracticeEvidenceSourceOptionDTO> allowedSources) {}
+        @NonNull List<PracticeEvidenceSourceOptionDTO> allowedSources,
+        @NonNull List<ActorRole> subjectRoles) {}

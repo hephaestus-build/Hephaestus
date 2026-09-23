@@ -48,7 +48,7 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 
 			<Accordion aria-label="Practice review details">
 				<AccordionItem value="review-mechanics">
-					<AccordionTrigger>What it reads</AccordionTrigger>
+					<AccordionTrigger>Review scope and evidence</AccordionTrigger>
 					<AccordionContent className="pt-2">
 						<PracticeEvidenceSummary
 							policy={definition.automatedReviewPolicy}
