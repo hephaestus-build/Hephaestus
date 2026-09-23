@@ -199,6 +199,19 @@ public class DockerSandboxAdapter implements SandboxManager {
                     labels);
             Map<String, String> environment = buildEnvironment(spec, appServerIp);
             environment.put("SANDBOX_RUNTIME_URL", attempt.runtimeUrl(appServerIp));
+            Instant workDeadline = startTime.plus(spec.resourceLimits().maxRuntime());
+            String declaredDeadline = spec.environment().get("SANDBOX_WORK_DEADLINE_MS");
+            if (declaredDeadline != null) {
+                Instant requestedDeadline = Instant.ofEpochMilli(Long.parseLong(declaredDeadline));
+                if (requestedDeadline.isBefore(workDeadline)) {
+                    workDeadline = requestedDeadline;
+                }
+            }
+            environment.put("SANDBOX_WORK_DEADLINE_MS", Long.toString(workDeadline.toEpochMilli()));
+            environment.put(
+                    "SANDBOX_UPLOAD_DEADLINE_MS",
+                    Long.toString(
+                            workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE).toEpochMilli()));
 
             var secProfile = spec.securityProfile() != null ? spec.securityProfile() : SecurityProfile.DEFAULT;
             DockerOperations.ContainerSpec template = new DockerOperations.ContainerSpec(
@@ -211,7 +224,11 @@ public class DockerSandboxAdapter implements SandboxManager {
                     labels,
                     securityPolicy.buildHostConfig(secProfile, spec.resourceLimits(), spec.networkPolicy()),
                     extraHosts);
-            var initialized = attempt.initialize(template, remaining(startTime, spec), initializerId -> {
+            Duration initializeTimeout = Duration.between(Instant.now(), workDeadline);
+            if (initializeTimeout.isNegative() || initializeTimeout.isZero()) {
+                throw new SandboxException("Sandbox execution deadline exceeded before initialization");
+            }
+            var initialized = attempt.initialize(template, initializeTimeout, initializerId -> {
                 activeContainers.put(jobId, initializerId);
                 checkCancelled(cancelled, jobId);
             });
@@ -230,6 +247,15 @@ public class DockerSandboxAdapter implements SandboxManager {
                 logTranscriptTail(initialized.transcript());
                 throw new SandboxException("Sandbox workspace initialization failed");
             }
+            if (!Instant.now().isBefore(workDeadline)) {
+                executionsTimedOut.increment();
+                return new SandboxResult(
+                        SandboxLayout.EXIT_WORK_TIMEOUT,
+                        Map.of(),
+                        initialized.transcript(),
+                        true,
+                        Duration.between(startTime, Instant.now()));
+            }
             var command = new ArrayList<>(List.of("node", "/opt/pi-sdk/gateway-run.ts"));
             command.addAll(spec.command());
             DockerOperations.ContainerSpec containerSpec = attempt.runtime(template, command);
@@ -245,7 +271,10 @@ public class DockerSandboxAdapter implements SandboxManager {
             containerManager.startContainer(containerId);
             log.info("Container started");
 
-            Duration timeout = remaining(startTime, spec);
+            Duration timeout = Duration.between(Instant.now(), workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE));
+            if (timeout.isNegative() || timeout.isZero()) {
+                throw new SandboxException("Sandbox result upload deadline exceeded");
+            }
             SandboxContainerManager.WaitOutcome waitOutcome = containerManager.waitForCompletion(containerId, timeout);
 
             // A cancellation-induced container exit must remain cancellation, not a normal result.
@@ -255,7 +284,10 @@ public class DockerSandboxAdapter implements SandboxManager {
             try {
                 outputFiles = attempt.session().result();
             } catch (RuntimeException exception) {
-                if (!waitOutcome.timedOut() && waitOutcome.exitCode() != SandboxLayout.EXIT_ENVELOPE_MISMATCH) {
+                if (!waitOutcome.timedOut()
+                        && waitOutcome.exitCode() != SandboxLayout.EXIT_WORK_TIMEOUT
+                        && waitOutcome.exitCode() != SandboxLayout.EXIT_UPLOAD_FAILED
+                        && waitOutcome.exitCode() != SandboxLayout.EXIT_ENVELOPE_MISMATCH) {
                     throw exception;
                 }
                 outputFiles = Map.of();
@@ -263,7 +295,8 @@ public class DockerSandboxAdapter implements SandboxManager {
 
             String logs = containerManager.getLogs(containerId, WHOLE_TRANSCRIPT);
 
-            if (waitOutcome.timedOut()) {
+            boolean timedOut = waitOutcome.timedOut() || waitOutcome.exitCode() == SandboxLayout.EXIT_WORK_TIMEOUT;
+            if (timedOut) {
                 executionsTimedOut.increment();
             } else {
                 executionsSuccess.increment();
@@ -273,11 +306,11 @@ public class DockerSandboxAdapter implements SandboxManager {
             log.info(
                     "Sandbox execution complete: exitCode={}, timedOut={}, outputFiles={}, duration={}",
                     waitOutcome.exitCode(),
-                    waitOutcome.timedOut(),
+                    timedOut,
                     outputFiles.size(),
                     duration);
 
-            return new SandboxResult(waitOutcome.exitCode(), outputFiles, logs, waitOutcome.timedOut(), duration);
+            return new SandboxResult(waitOutcome.exitCode(), outputFiles, logs, timedOut, duration);
         } catch (SandboxCancelledException e) {
             executionsCancelled.increment();
             log.info("Sandbox execution cancelled");
@@ -314,14 +347,6 @@ public class DockerSandboxAdapter implements SandboxManager {
             MDC.remove(MDC_JOB_ID);
             MDC.remove(MDC_CONTAINER_ID);
         }
-    }
-
-    private static Duration remaining(Instant startTime, SandboxSpec spec) {
-        Duration remaining = spec.resourceLimits().maxRuntime().minus(Duration.between(startTime, Instant.now()));
-        if (remaining.isNegative() || remaining.isZero()) {
-            throw new SandboxException("Sandbox execution deadline exceeded");
-        }
-        return remaining;
     }
 
     @Override

@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-Practice reviews can recover when a sandbox workspace download stops early. Result upload retries no longer mistake a conflicting result or a non-owning worker for a successful upload.
+Practice reviews can recover when a sandbox workspace download stops early. A stopped review can upload its result for ten minutes after its work deadline, and upload retries no longer mistake a conflict for success.

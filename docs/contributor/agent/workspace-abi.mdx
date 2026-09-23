@@ -29,6 +29,9 @@ either only when the tag matches its archive. Other `409` responses are failures
 An authenticated upload sent to a worker that does not own the running attempt receives `409`
 without an `ETag`. The batch runtime URL contains the job ID; a token for another job cannot
 produce this ownership response for that URL.
+The runner stops its child at the work deadline, then retries the complete result archive with
+bounded exponential delay until the ten-minute upload deadline. The attempt token expires at that
+upload deadline. A terminal upload failure has exit code `43`; it is not a successful review.
 
 ```text
 /workspace/
@@ -268,11 +271,13 @@ worker filesystem.
 | 2    | Fatal runner error — an unhandled rejection or uncaught exception. Debug and usage files are persisted first |
 | 3    | Watchdog hard-kill (budget + grace exceeded); writes `out/watchdog-killed.json` first |
 | 42   | Task-envelope contract drift: malformed envelope, unsupported version or kind, or invalid paths |
+| 43   | Result archive upload did not complete before the upload deadline or was refused |
 | 75   | The review finished, but the call admitting its observations never reached the server |
 | 76   | No practice was reached, and every model call the run made went unanswered |
+| 124  | The work deadline stopped the runner child; result upload was still attempted |
 
 `137` is a container SIGKILL from the runtime, not a runner code. The server treats `0` as success,
-`42` as drift, and `75` and `76` as attempts to repeat; every other non-zero code is a generic failure.
+`42` as drift, `124` as a timeout, and `75` and `76` as attempts to repeat; every other non-zero code is a generic failure.
 
 The gateway address is fixed for an attempt. If it becomes unreachable, runner retries cannot follow
 a relocated worker. Exit `75` requeues the job with a new token and backoff unless an admission already

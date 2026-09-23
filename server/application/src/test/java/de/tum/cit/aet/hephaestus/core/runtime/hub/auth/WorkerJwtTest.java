@@ -70,6 +70,14 @@ class WorkerJwtTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldExpireJobTokenAtDeclaredUploadDeadline() {
+        Instant deadline = Instant.now().plusSeconds(600).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        JobJwt jwt = (JobJwt) verifier.verify(issuer.issueForJobUntil(UUID.randomUUID(), 42L, 0, deadline));
+
+        assertThat(jwt.expiresAt()).isEqualTo(deadline);
+    }
+
+    @Test
     void expiredJobTokenRejected() {
         WorkerSigningKey active = keyRing.active();
         Instant past = Instant.now().minusSeconds(120);

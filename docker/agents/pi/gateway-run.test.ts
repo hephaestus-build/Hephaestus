@@ -122,3 +122,34 @@ for (const scenario of [
 		}
 	});
 }
+
+void test("stops retries at the upload deadline", async () => {
+	const directory = await mkdtemp(path.join(tmpdir(), "gateway-deadline-"));
+	const server = createServer((_request, response) => {
+		response.statusCode = 503;
+		response.end();
+	});
+	try {
+		const archive = path.join(directory, "result.tar");
+		await writeFile(archive, "test archive");
+		server.listen(0, "127.0.0.1");
+		await once(server, "listening");
+		const address = server.address();
+		assert.ok(address !== null && typeof address !== "string");
+		await assert.rejects(
+			upload(
+				new URL(`http://127.0.0.1:${address.port}/result`),
+				"token",
+				archive,
+				Date.now() + 150,
+			),
+			{ message: "Result upload deadline expired" },
+		);
+	} finally {
+		const closed = once(server, "close");
+		server.close();
+		server.closeAllConnections();
+		await closed;
+		await rm(directory, { recursive: true, force: true });
+	}
+});

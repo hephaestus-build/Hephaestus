@@ -193,7 +193,7 @@ class DockerSandboxLiveTest {
             SandboxSpec spec = new SandboxSpec(
                     jobId,
                     AGENT_IMAGE,
-                    List.of("sh", "-c", "sleep 300"),
+                    List.of("sh", "-c", "printf partial > /workspace/out/partial.txt; sleep 300"),
                     Map.of(),
                     new NetworkPolicy(true, null, "live-gateway-token"),
                     new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofSeconds(3)),
@@ -204,8 +204,8 @@ class DockerSandboxLiveTest {
             SandboxResult result = sandboxAdapter.execute(spec);
 
             assertThat(result.timedOut()).isTrue();
-            // Exit code should be 137 (SIGKILL) or 143 (SIGTERM)
-            assertThat(result.exitCode()).isIn(137, 143);
+            assertThat(result.exitCode()).isEqualTo(124);
+            assertThat(result.outputFiles()).containsEntry("partial.txt", "partial".getBytes(StandardCharsets.UTF_8));
         }
     }
 
