@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.dto;
 
+import de.tum.cit.aet.hephaestus.practices.BindingChange;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
@@ -66,4 +67,7 @@ public record UpdatePracticeRequestDTO(
         BindPracticeGroupRequestDTO group,
 
         @Schema(description = "Optional fields to clear before applying supplied values") @Nullable
-        Set<ClearablePracticeField> clear) {}
+        Set<ClearablePracticeField> clear,
+
+        @Schema(description = "Explicit intent to change the gate or the person judged") @Nullable
+        Set<BindingChange> bindingChanges) {}

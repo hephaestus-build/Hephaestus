@@ -5,10 +5,12 @@ import { useRef, useState } from "react";
 import type {
 	PracticeAutomatedReviewPolicy,
 	PracticeBinding,
+	UpdatePracticeRequest,
 	PracticeDefinitionOptions,
 	PracticeEvidenceOutcome,
 	PracticeWorkTypeDefinitionOptions,
 } from "@/api/types.gen";
+import { parseGate } from "@/components/admin/practice-editor/binding-scope";
 import {
 	artifactKindOfBindings,
 	type BindingsProblem,
@@ -69,6 +71,8 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { artifactKindLabel } from "@/lib/artifact-kinds";
 import { hasText } from "@/lib/text";
 
+type BindingChange = NonNullable<UpdatePracticeRequest["bindingChanges"]>[number];
+
 const NO_GROUP = "__none__";
 
 export interface PracticeDefinitionGroupOption {
@@ -85,6 +89,7 @@ export interface PracticeDefinitionValue {
 	 * work is read off its signals; it is not carried separately.
 	 */
 	bindings: [PracticeBinding];
+	bindingChanges?: BindingChange[];
 	criteria: string;
 	whyItMatters?: string;
 	whatGoodLooksLike?: string;
@@ -136,6 +141,8 @@ interface FormState {
 	 */
 	artifactKind: string;
 	bindings: [PracticeBinding];
+	bindingChanges: BindingChange[];
+	gateText: string;
 	criteria: string;
 	whyItMatters: string;
 	whatGoodLooksLike: string;
@@ -146,6 +153,7 @@ interface FormState {
 /** Everything a work type owns, stashed so switching away and back does not discard the work. */
 interface WorkTypeDraft {
 	bindings: [PracticeBinding];
+	gateText: string;
 	precomputeScript: string;
 	automatedReviewPolicy: PracticeAutomatedReviewPolicy;
 }
@@ -165,6 +173,8 @@ function blankState(fallback: PracticeWorkTypeDefinitionOptions | undefined): Fo
 		groupSlug: NO_GROUP,
 		artifactKind: fallback?.artifactKind ?? "",
 		bindings: [fallback ? recommendedBinding(fallback) : EMPTY_BINDING],
+		bindingChanges: [],
+		gateText: "",
 		criteria: "",
 		whyItMatters: "",
 		whatGoodLooksLike: "",
@@ -183,6 +193,10 @@ function stateOf(
 		groupSlug: initialData.groupSlug ?? NO_GROUP,
 		artifactKind: artifactKindOfBindings(initialData.bindings) ?? fallback?.artifactKind ?? "",
 		bindings: [normalizeBinding(soleBinding(initialData.bindings))],
+		bindingChanges: [],
+		gateText: initialData.bindings[0].appliesWhen
+			? JSON.stringify(initialData.bindings[0].appliesWhen, null, 2)
+			: "",
 		criteria: initialData.criteria,
 		whyItMatters: initialData.whyItMatters ?? "",
 		whatGoodLooksLike: initialData.whatGoodLooksLike ?? "",
@@ -194,6 +208,7 @@ function stateOf(
 function draftOf(form: FormState): WorkTypeDraft {
 	return {
 		bindings: form.bindings,
+		gateText: form.gateText,
 		precomputeScript: form.precomputeScript,
 		automatedReviewPolicy: form.automatedReviewPolicy,
 	};
@@ -219,6 +234,8 @@ interface FormErrors {
 	criteria?: string;
 	policy?: string;
 	bindings?: BindingsProblem;
+	gate?: string;
+	subject?: string;
 	/**
 	 * One list, in the order the fields appear, so the summary reads down the form and the first
 	 * entry is also the field to focus. The summary and the focus target both come from it, so they
@@ -240,6 +257,12 @@ function formErrors(
 	const slugInvalid = mode === "create" && !isValidSlug(form.slug);
 	const policy = practicePolicyError(form.automatedReviewPolicy);
 	const bindings = bindingsProblem(form.bindings[0], form.automatedReviewPolicy, selectedWorkType);
+	const gateError = parseGate(form.gateText).error;
+	const subjectError =
+		selectedWorkType &&
+		!selectedWorkType.subjectRoles.includes(form.bindings[0].subject ?? "AUTHOR")
+			? "Choose a person this kind of work can identify."
+			: undefined;
 	const summary = [
 		nameTooShort && {
 			fieldId: "practice-name",
@@ -254,6 +277,8 @@ function formErrors(
 			message: policy,
 		},
 		bindings && { fieldId: bindings.focusId, message: bindings.message },
+		hasText(subjectError) && { fieldId: "practice-subject", message: subjectError },
+		hasText(gateError) && { fieldId: "practice-gate", message: gateError },
 		slugInvalid && {
 			fieldId: "practice-slug",
 			message: "The identifier must be lowercase letters, numbers and hyphens.",
@@ -267,6 +292,8 @@ function formErrors(
 		criteria: criteriaTooShort ? "Criteria must be at least 3 characters" : undefined,
 		policy,
 		bindings,
+		gate: gateError,
+		subject: subjectError,
 		summary,
 	};
 }
@@ -359,8 +386,23 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		supportedAutomatedReviewModes,
 	);
 	const occasionMode = occasionModeOf(form.automatedReviewPolicy, canRunMentoring);
+	const subjectRole = form.bindings[0].subject ?? "AUTHOR";
+	const subjectRoles =
+		selectedWorkType?.subjectRoles.includes(subjectRole) === true
+			? selectedWorkType.subjectRoles
+			: [subjectRole, ...(selectedWorkType?.subjectRoles ?? [])];
+	const subjectItems = subjectRoles.map((role) => ({
+		value: role,
+		label:
+			selectedWorkType?.subjectRoles.includes(role) === true
+				? role.toLowerCase()
+				: `${role.toLowerCase()} (not available for this work)`,
+	}));
 	const unsavedChanges = useUnsavedChanges({
-		isDirty: !deepEqual(form, initialState(definitionOptions, initialData)),
+		isDirty: !deepEqual(
+			{ ...form, bindingChanges: [] },
+			initialState(definitionOptions, initialData),
+		),
 		disabled: formDisabled,
 	});
 
@@ -388,11 +430,18 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 			const automatedReviewPolicy =
 				draft?.automatedReviewPolicy ??
 				recommendedPolicyWithCurrentSupport(next.recommendedPolicy, previous.automatedReviewPolicy);
-			const binding = draft?.bindings[0] ?? recommendedBinding(next);
+			const binding = draft?.bindings[0] ?? {
+				...recommendedBinding(next),
+				subject: previous.bindings[0].subject,
+				appliesWhen: previous.bindings[0].appliesWhen,
+			};
 			return {
 				...previous,
 				artifactKind: next.artifactKind,
 				automatedReviewPolicy,
+				gateText:
+					draft?.gateText ??
+					(binding.appliesWhen ? JSON.stringify(binding.appliesWhen, null, 2) : ""),
 				bindings: [
 					automatedReviewPolicy.automatedReview.mode === "NONE"
 						? withoutEvidence(binding)
@@ -444,6 +493,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 			slug: form.slug,
 			name: form.name.trim(),
 			bindings: [normalizeBinding(form.bindings[0])],
+			bindingChanges: form.bindingChanges.length > 0 ? form.bindingChanges : undefined,
 			criteria: form.criteria.trim(),
 			...(form.groupSlug === NO_GROUP ? {} : { groupSlug: form.groupSlug }),
 			...(form.whyItMatters.trim() ? { whyItMatters: form.whyItMatters.trim() } : {}),
@@ -689,6 +739,95 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									This practice reviews {artifactKindLabel(artifactKind)}, which this instance no
 									longer offers. Choose a kind of work above to say when it is reviewed.
 								</p>
+							)}
+							{selectedWorkType && (
+								<div className="space-y-4">
+									<FieldGroup>
+										<Field
+											orientation="responsive"
+											data-invalid={hasText(shownErrors.subject) ? "true" : undefined}
+										>
+											<FieldLabel htmlFor="practice-subject">
+												Person this practice judges
+											</FieldLabel>
+											<Select
+												items={subjectItems}
+												value={subjectRole}
+												onValueChange={(value) =>
+													setForm((previous) => ({
+														...previous,
+														bindingChanges: [
+															...new Set([...previous.bindingChanges, "SUBJECT" as const]),
+														],
+														bindings: [
+															{
+																...previous.bindings[0],
+																subject:
+																	selectedWorkType.subjectRoles.find((role) => role === value) ??
+																	previous.bindings[0].subject,
+															},
+														],
+													}))
+												}
+											>
+												<SelectTrigger
+													id="practice-subject"
+													aria-invalid={hasText(shownErrors.subject)}
+													aria-describedby={
+														hasText(shownErrors.subject) ? "practice-subject-error" : undefined
+													}
+													className="w-full @md/field-group:w-56"
+												>
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent aria-label="Person this practice judges">
+													{subjectItems.map((item) => (
+														<SelectItem key={item.value} value={item.value}>
+															{item.label}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+											{hasText(shownErrors.subject) && (
+												<FieldError id="practice-subject-error">{shownErrors.subject}</FieldError>
+											)}
+										</Field>
+									</FieldGroup>
+									<Field>
+										<FieldLabel htmlFor="practice-gate">Only review when</FieldLabel>
+										<FieldDescription>
+											Leave empty to review all work. To change or clear a gate, edit this JSON
+											field.
+										</FieldDescription>
+										<Textarea
+											id="practice-gate"
+											aria-invalid={hasText(errors.gate)}
+											aria-describedby={hasText(errors.gate) ? "practice-gate-error" : undefined}
+											value={form.gateText}
+											onChange={(event) => {
+												const gateText = event.target.value;
+												const parsed = parseGate(gateText);
+												setForm((previous) => ({
+													...previous,
+													gateText,
+													bindingChanges: [
+														...new Set([...previous.bindingChanges, "APPLIES_WHEN" as const]),
+													],
+													bindings: hasText(parsed.error)
+														? previous.bindings
+														: [{ ...previous.bindings[0], appliesWhen: parsed.value }],
+												}));
+											}}
+											rows={7}
+											placeholder={
+												'{"absentSays":"the change adds no Swift code","anyOf":[{"changedPathMatches":["**/*.swift"]}]}'
+											}
+										/>
+										{hasText(errors.gate) && (
+											<FieldError id="practice-gate-error">{errors.gate}</FieldError>
+										)}
+									</Field>
+								</div>
 							)}
 						</section>
 

@@ -23,7 +23,7 @@ const meta = {
 			status: "AUTHOR_DECLARED",
 			sourceContractVersion: "1.2.0",
 			policyDigest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			reviewRuleFingerprint: `v2:${"0".repeat(64)}`,
+			reviewRuleFingerprint: `v4:${"0".repeat(64)}`,
 		},
 	},
 	parameters: { layout: "padded" },

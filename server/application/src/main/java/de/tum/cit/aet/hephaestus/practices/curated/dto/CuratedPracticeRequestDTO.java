@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.curated.dto;
 
+import de.tum.cit.aet.hephaestus.practices.BindingChange;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
@@ -9,6 +10,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -54,7 +56,10 @@ public record CuratedPracticeRequestDTO(
         String whatGoodLooksLike,
 
         @Size(max = 64, message = "Group slug must be at most 64 characters") @Nullable
-        String groupSlug) {
+        String groupSlug,
+
+        @Schema(description = "Explicit intent to change the gate or the person judged") @Nullable
+        Set<BindingChange> bindingChanges) {
     public PracticeDefinition definition(PracticeAutomatedReviewPolicy resolvedEvidence) {
         return new PracticeDefinition(
                 name,

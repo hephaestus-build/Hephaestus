@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.practices.BindingChange;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
@@ -14,6 +15,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -60,13 +62,17 @@ public class CuratedCatalogService {
 
     @Transactional
     public CatalogEntry<PracticeDefinition> writePractice(
-            String slug, @Nullable EntityTagPrecondition precondition, PracticeDefinition definition) {
+            String slug,
+            @Nullable EntityTagPrecondition precondition,
+            PracticeDefinition definition,
+            @Nullable Set<BindingChange> bindingChanges) {
         lockCatalog();
         EffectiveCatalog before = loadCatalog();
         CuratedCatalogModel.validatePracticeGroup(before, definition);
         definitionValidator.validate(definition);
         CatalogEntry<PracticeDefinition> entry =
                 CuratedCatalogModel.requireEntry(before.practice(slug), CATALOG_PRACTICE, slug, precondition);
+        BindingChange.requireExplicit(entry.effective().bindings(), definition.bindings(), bindingChanges);
         if (entry.overridden() != null && definition.equals(entry.shipped())) {
             clearPracticeDefinition(slug);
             return recordPractice(slug, entry);

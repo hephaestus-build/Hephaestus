@@ -29,6 +29,27 @@ Separate the fields in the editor:
 - **What good looks like** gives a realistic example. If an example introduces a requirement, also
   state that requirement in **What to look for**; explanatory guidance does not change review rules.
 
+**Person this practice judges** is the relation to the reviewed work, not the person who wrote the
+criteria. A practice about a reviewer's comments must select **reviewer**; leaving **author** selected
+would attribute that conduct to the pull-request author. The available relations depend on the kind of
+work.
+
+**Only review when** is an optional mechanical gate, separate from the review criteria. An empty gate
+means the practice applies to all work of the selected kind. To gate a practice to changed Swift files,
+enter:
+
+```json
+{
+  "absentSays": "the change has no Swift code",
+  "anyOf": [{ "changedPathMatches": ["**/*.swift"] }]
+}
+```
+
+`anyOf` is a list of alternatives. Each clause uses exactly one of `changedPathMatches`, `diffContains`,
+or `evidenceHasItems`. The explanation in `absentSays` appears when complete evidence proves that none
+of the alternatives is present. Clear the field only when the practice must apply to all work. Saving a
+name or wording change leaves both the gate and the person judged unchanged.
+
 ## Write the review criteria
 
 Use these questions as a drafting outline, not as mandatory headings or a word-count target.
