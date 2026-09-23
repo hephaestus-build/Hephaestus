@@ -13,8 +13,13 @@ services:
   # A plain `up` on a clone must not boot application code, broker consumers or public ingress.
   application-server:
     profiles: [restore-release-only]
+    entrypoint: [/bin/false]
+  application-worker:
+    profiles: [restore-release-only]
+    entrypoint: [/bin/false]
   webhook-server:
     profiles: [restore-release-only]
+    entrypoint: [/bin/false]
   webapp:
     profiles: [restore-release-only]
   reverse-proxy:

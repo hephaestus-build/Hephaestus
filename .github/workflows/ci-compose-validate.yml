@@ -68,6 +68,7 @@ jobs:
           ' <<< "$combined" >/dev/null
           unset BACKUP_S3_KEY BACKUP_S3_KEY_SECRET
           restored=$(docker compose -f compose.yaml -f compose.restore.yaml --profile restore config --format json)
+          guarded=$(docker compose -f compose.yaml -f compose.restore.yaml --profile restore-release-only config --format json)
           [ "$(docker compose -f compose.yaml -f compose.restore.yaml config --services)" = postgres ] || {
             echo "::error::plain restore-clone up would start more than PostgreSQL"
             exit 1
@@ -79,6 +80,11 @@ jobs:
             .services["pgbackrest-restore"].environment.PGBACKREST_REPO1_S3_KEY == "restore" and
             (.services["pgbackrest-restore"].volumes | any(.target == "/var/lib/postgresql" and .read_only != true))
           ' <<< "$restored" >/dev/null
+          jq -e '
+            .services["application-server"].entrypoint == ["/bin/false"] and
+            .services["application-worker"].entrypoint == ["/bin/false"] and
+            .services["webhook-server"].entrypoint == ["/bin/false"]
+          ' <<< "$guarded" >/dev/null
           export BACKUP_S3_KEY=test
           if docker compose -f compose.yaml -f compose.backup.yaml config --quiet 2>/dev/null; then
             echo "::error::backup overlay accepted a missing S3 secret"

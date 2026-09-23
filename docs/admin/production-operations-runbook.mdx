@@ -181,10 +181,12 @@ preserve them for gap analysis, not automatic replay after PITR.
    Disable workspace mentors before permitting interactive access; `mentorEnabled` alone is never a boundary.
    Arrange admin authentication under isolation before the drill; stop if it is unavailable.
 4. Review effective Compose configuration privately (it contains secrets); verify the variables reach
-   the containers. Boot only infrastructure and then the isolated application server for migration/admin
-   access, not a separate worker or public receiver. The self-host server includes an in-process worker:
-   keeping `application-worker` stopped is not enough; verify `AGENT_ENABLED=false` on the server too.
-   Read back/engage Silent Mode before permitting review execution. Record provider-readiness failures
+   the containers. Boot only infrastructure and run the
+   [restore-clone lockdown](./backup-restore#automated-off-host-backup-self-host-compose) against the
+   recovered database before any application role. The restore overlay refuses direct server, worker
+   and webhook starts; an operator-owned isolated override is needed to inspect application health.
+   Keep `AGENT_ENABLED=false` on the server too: it includes an in-process worker. Read back Silent Mode
+   and workspace delivery pause before permitting review execution. Record provider-readiness failures
    caused by isolation without restoring live write access.
 5. For releases predating Silent Mode, the environment, mentor/Slack shutdown, credential withholding
    and network barrier above are mandatory throughout. They permit restore inspection, **not** a full

@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -19,9 +20,10 @@ const repositoryEnvironment = [
 	"PGBACKREST_REPO1_CIPHER_PASS=local-test-only-passphrase-1234567890",
 ];
 
-function run(command: string, args: string[]): string {
+function run(command: string, args: string[], input?: Buffer): string {
 	const result = spawnSync(command, args, {
 		encoding: "utf8",
+		input,
 		maxBuffer: 64 * 1024 * 1024,
 		timeout: 6 * 60 * 1000,
 	});
@@ -86,40 +88,48 @@ function archiveCurrentWal(): void {
 	throw new Error(`WAL segment ${segment} was not archived within 60 seconds`);
 }
 
-function start(): void {
+function start(restored = false): number {
 	docker(
 		"run",
 		"-d",
 		"--name",
 		container,
+		"-p",
+		"127.0.0.1::5432",
 		"-e",
 		"POSTGRES_DB=hephaestus",
 		"-e",
 		"POSTGRES_USER=root",
 		"-e",
-		"POSTGRES_PASSWORD=test",
+		"POSTGRES_PASSWORD=root",
 		...repositoryEnvironment,
 		"-v",
 		`${data}:/var/lib/postgresql`,
 		"-v",
 		`${socket}:/var/run/postgresql`,
 		"-v",
-		`${repo}:/repo`,
+		`${repo}:/repo${restored ? ":ro" : ""}`,
 		"-v",
 		`${config}:/etc/pgbackrest/pgbackrest.conf:ro`,
 		image,
 		"postgres",
 		"-c",
-		"archive_mode=on",
-		"-c",
-		"archive_timeout=60s",
-		"-c",
-		"archive_command=pgbackrest --stanza=hephaestus archive-push %p",
+		`archive_mode=${restored ? "off" : "on"}`,
+		...(restored
+			? []
+			: [
+					"-c",
+					"archive_timeout=60s",
+					"-c",
+					"archive_command=pgbackrest --stanza=hephaestus archive-push %p",
+				]),
 	);
 	waitForDatabase();
+	const mapping = docker("port", container, "5432/tcp");
+	return Number(mapping.slice(mapping.lastIndexOf(":") + 1));
 }
 
-function sidecar(dataMode: "ro" | "rw", ...args: string[]): string {
+function sidecar(dataMode: "ro" | "rw", repositoryMode: "ro" | "rw", ...args: string[]): string {
 	return docker(
 		"run",
 		"--rm",
@@ -131,7 +141,7 @@ function sidecar(dataMode: "ro" | "rw", ...args: string[]): string {
 		"-v",
 		`${socket}:/var/run/postgresql`,
 		"-v",
-		`${repo}:/repo`,
+		`${repo}:/repo:${repositoryMode}`,
 		"-v",
 		`${config}:/etc/pgbackrest/pgbackrest.conf:ro`,
 		"--entrypoint",
@@ -162,14 +172,25 @@ try {
 		"postgres:postgres",
 		"/repo",
 	);
-	start();
+	const sourcePort = start();
+	run("node", [
+		"scripts/run-gradlew.ts",
+		":application:liquibaseUpdate",
+		...(process.env.CI === "true" ? ["-PpackagedServer=true"] : []),
+		`-PpostgresPort=${sourcePort}`,
+		"--quiet",
+	]);
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "stanza-create");
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "check");
+	sql("UPDATE instance_settings SET silent_mode_engaged = FALSE WHERE id = 1");
+	sql(
+		"INSERT INTO workspace(account_login, account_type, display_name, is_publicly_viewable, slug, status, mentor_enabled) VALUES ('restore-probe', 'USER', 'Restore probe', FALSE, 'restore-probe', 'ACTIVE', TRUE)",
+	);
 	sql(
 		"CREATE TABLE restore_probe(value text PRIMARY KEY); INSERT INTO restore_probe VALUES ('before')",
 	);
-	sidecar("ro", "--type=full", "backup");
-	sidecar("ro", "verify");
+	sidecar("ro", "rw", "--type=full", "backup");
+	sidecar("ro", "ro", "verify");
 	sql("INSERT INTO restore_probe VALUES ('middle')");
 	archiveCurrentWal();
 	pause(2);
@@ -181,14 +202,35 @@ try {
 	docker("volume", "rm", data);
 	docker("volume", "create", data);
 	const restoreStartedAt = performance.now();
-	sidecar("rw", "--type=time", `--target=${target}`, "--target-action=promote", "restore");
-	start();
+	sidecar("rw", "ro", "--type=time", `--target=${target}`, "--target-action=promote", "restore");
+	start(true);
 	const restoreSeconds = ((performance.now() - restoreStartedAt) / 1000).toFixed(1);
 	if (sql("SELECT string_agg(value, ',' ORDER BY value) FROM restore_probe") !== "before,middle") {
 		throw new Error("PITR did not replay pre-target WAL and exclude the post-target write");
 	}
+	if (Number(sql("SELECT count(*) FROM databasechangelog")) < 1) {
+		throw new Error("restored database has no application migration history");
+	}
+	const lockdown = readFileSync(
+		path.join(import.meta.dirname, "..", "docker", "self-host", "restore-clone-lockdown.sql"),
+	);
+	run(
+		"docker",
+		["exec", "-i", container, "psql", "-U", "root", "-d", "hephaestus", "-v", "ON_ERROR_STOP=1"],
+		lockdown,
+	);
+	if (sql("SELECT silent_mode_engaged FROM instance_settings WHERE id = 1") !== "t") {
+		throw new Error("restored instance did not engage Silent Mode");
+	}
+	if (
+		sql(
+			"SELECT practice_delivery_status || ':' || mentor_enabled FROM workspace WHERE slug = 'restore-probe'",
+		) !== "PAUSED:false"
+	) {
+		throw new Error("restored workspace did not pause feedback delivery and mentor");
+	}
 	console.log(
-		`PITR passed: encrypted repository verified; restored target ${target} in ${restoreSeconds}s; pre-target WAL present; post-target row absent`,
+		`PITR passed: encrypted repository verified; restored target ${target} in ${restoreSeconds}s; pre-target WAL present; post-target row absent; application data locked down`,
 	);
 } finally {
 	spawnSync("docker", ["rm", "-f", container]);
