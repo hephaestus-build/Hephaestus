@@ -33,7 +33,7 @@ person-erasure request follows the separate account or operator path.
 | GitHub/GitLab/Slack delivery destination | Posted feedback; source-provider export | Not silently crawled or rewritten | Best-effort correction/removal through the operator path | The provider controls its copy and audit history. |
 | Application metrics | Aggregate operational counts without account, workspace, export or source labels | Not applicable | No subject-level series exists | Backend retention is deployment-specific; operators must record it. |
 | Container logs and support bundles | Operational output; logging policy excludes raw request bodies and secrets, but operators must assess exported bundles | No selective deletion | No selective deletion | Shipped container logs rotate by size; support-bundle retention is deployment-specific. |
-| PostgreSQL and filesystem backups | A copy of the backed-up personal-data corpus | No selective deletion inside a backup | Expiry of the backup copy | The application does not configure off-host backups. Operators who add them must document and enforce their retention; see [backup and restore](../backup-restore.mdx). |
+| PostgreSQL and filesystem backups | A copy of the backed-up personal-data corpus | No selective deletion inside a backup | Expiry of the backup copy | The optional encrypted off-host PostgreSQL backup overlay retains full backup chains by count, not by a legal time limit. Operators must document and enforce destination retention, including copies of `.env` and broker evidence; see [backup and restore](../backup-restore.mdx). |
 
 ## Operator verification
 

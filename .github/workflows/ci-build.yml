@@ -163,6 +163,8 @@ jobs:
 
       - name: Run the PostgreSQL backup-restore drill
         run: node scripts/postgres-backup-restore-test.ts --target-image hephaestus-postgres:ci
+      - name: Prove encrypted WAL point-in-time restore
+        run: node scripts/postgres-pitr-test.ts --target-image hephaestus-postgres:ci
       - name: Upload test results
         if: always()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0

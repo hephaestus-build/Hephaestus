@@ -138,6 +138,17 @@ one snapshot, not an arbitrary point in time. Use **pgBackRest** for scheduled b
 ([backup tooling decision](https://github.com/hephaestus-build/Hephaestus/issues/1370)). Require off-host
 backup freshness alerts and a verified restore before unattended delivery.
 
+The self-host Compose implementation and its schedule are in [Backup & restore](./backup-restore#automated-off-host-backup-self-host-compose).
+The shared redacted backup status required by [Readiness](https://github.com/hephaestus-build/Hephaestus/issues/1547),
+[Operations](https://github.com/hephaestus-build/Hephaestus/issues/1387), and
+[System Information](https://github.com/hephaestus-build/Hephaestus/issues/1548) does not exist yet.
+Those consumers must show **unknown**, not infer health from a configured timer or a passing
+`pgbackrest verify`. Until the status publisher and [operator alert service](https://github.com/hephaestus-build/Hephaestus/issues/1369)
+exist, the operator must monitor failed systemd units, WAL archive lag and disk space, pgBackRest
+`info`/`verify`, and the last actual drill record. A passing backup is not a restore result or release
+gate. [Telemetry alerts](https://github.com/hephaestus-build/Hephaestus/issues/1639) must cover stale
+backup/WAL, failed attempts, and an expired or failed restore rehearsal.
+
 Set explicit RPO/RTO, backup schedule, retention, owner, off-host destination and restore-test cadence.
 Monitor last successful backup/WAL archive and restore drill. Test loss of the primary host and backup
 failure alerts. For PITR, validate the base
@@ -145,7 +156,14 @@ backup and continuous WAL coverage to the selected timestamp/timeline. Include e
 exact replay is required. Preserve the active **and prior** credential-encryption keys and their versions
 if the backup overlaps a [key rotation](./credential-key-rotation); disable rotation during recovery.
 Take broker-supported snapshots or a cold copy of the stopped JetStream store
-for incident forensics; never treat a live filesystem copy as a consistent broker backup.
+for incident forensics; never treat a live filesystem copy as a consistent broker backup. With an
+authenticated CLI on the isolated broker network, use
+[`nats stream backup --check STREAM /restricted/incident/STREAM`](https://github.com/nats-io/natscli/blob/main/cli/backup_command.go)
+for **each** stream and record the start/end time, stream sequence, consumer ACK positions, CLI
+version, and checksum of every snapshot. The snapshot includes message payloads and, by default,
+consumers: encrypt and move it off-host under the same access and expiry policy as the database.
+Per-stream snapshots are not atomic with each other, PostgreSQL, or external provider writes;
+preserve them for gap analysis, not automatic replay after PITR.
 
 ### Pre-boot isolation — mandatory for every restore
 
