@@ -43,7 +43,7 @@ export const Complete: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("Pull request details")).not.toBeInTheDocument();
 		await expect(canvas.queryByText(/hasDescription/u)).not.toBeInTheDocument();
-		await userEvent.click(canvas.getByRole("button", { name: "What it reads" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Review scope and evidence" }));
 		await expect(canvas.getByText("Pull request details")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "What it measures first" }));
 		await expect(canvas.getByText(/hasDescription/u)).toBeVisible();
@@ -58,6 +58,29 @@ export const WithoutOptionalGuidance: Story = {
 			whatGoodLooksLike: undefined,
 			precomputeScript: undefined,
 		},
+	},
+};
+
+export const ScopedReviewer: Story = {
+	args: {
+		definition: {
+			...definition,
+			bindings: [
+				{
+					...mockPullRequestBinding,
+					subject: "REVIEWER",
+					appliesWhen: {
+						absentSays: "the change has no Swift code",
+						anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+					},
+				},
+			],
+		},
+	},
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Review scope and evidence" }));
+		await expect(canvas.getByText("reviewer")).toBeVisible();
+		await expect(canvas.getByText("Changed path matches **/*.swift")).toBeVisible();
 	},
 };
 
@@ -137,7 +160,7 @@ export const RationaleOnly: Story = {
 export const UnknownWorkType: Story = {
 	args: { options: { ...mockPracticeDefinitionOptions, workTypes: [] } },
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "What it reads" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Review scope and evidence" }));
 		await expect(await canvas.findByRole("button", { name: "How it decides" })).toBeVisible();
 	},
 };

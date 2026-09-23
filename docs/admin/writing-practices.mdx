@@ -50,6 +50,15 @@ or `evidenceHasItems`. The explanation in `absentSays` appears when complete evi
 of the alternatives is present. Clear the field only when the practice must apply to all work. Saving a
 name or wording change leaves both the gate and the person judged unchanged.
 
+### Check practices saved before this fix
+
+An earlier editor could remove the gate or change the person judged during an unrelated save. An
+upgrade cannot tell a deliberate API edit from that earlier error, so it does not restore values
+automatically. Check practices that were edited before the fix, especially practices copied from the
+catalog. Compare **Only review when** and **Person this practice judges** with the original practice
+definition or the instance catalog. If either value is wrong, set it explicitly and save. The catalog
+preview now shows both values when you inspect a practice before you add it to a workspace.
+
 ## Write the review criteria
 
 Use these questions as a drafting outline, not as mandatory headings or a word-count target.

@@ -52,6 +52,26 @@ export const OneOccasion: Story = {
 	args: { bindings: [mockPullRequestBinding] },
 };
 
+export const ScopedReviewer: Story = {
+	args: {
+		bindings: [
+			{
+				...mockPullRequestBinding,
+				subject: "REVIEWER",
+				appliesWhen: {
+					absentSays: "the change has no Swift code",
+					anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+				},
+			},
+		],
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("reviewer")).toBeVisible();
+		await expect(canvas.getByText("Changed path matches **/*.swift")).toBeVisible();
+		await expect(canvas.getByText("Otherwise skip: the change has no Swift code")).toBeVisible();
+	},
+};
+
 export const NoOccasion: Story = {
 	args: { bindings: [] },
 };

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.curated;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
@@ -75,11 +76,6 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
     }
 
     /**
-     * The loader runs every shipped practice through {@link PracticeDefinitionValidator}, so a second
-     * {@code on} entry would fail the boot rather than reach a workspace. Asserted on the composed
-     * definitions as well, because a bare-string entry expands into a binding without looking like one.
-     */
-    /**
      * The declarations that stop us spending a model call on a question the staged evidence already
      * answers. Pinned by slug because the value of each is measured — on the corpus these were written
      * against, they account for the great majority of every {@code NOT_APPLICABLE} ever recorded — and a
@@ -108,6 +104,18 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                         "uses-adaptive-colors-for-every-appearance",
                         "avoids-insecure-defaults-and-over-broad-permissions",
                         "validates-and-escapes-untrusted-input");
+    }
+
+    @Test
+    void shouldJudgeReviewersForReviewerPractices() {
+        assertThat(loader.catalog().practices().stream()
+                        .filter(practice ->
+                                practice.definition().bindings().getFirst().subject() == ActorRole.REVIEWER)
+                        .map(practice -> practice.slug()))
+                .containsExactlyInAnyOrder(
+                        "leaves-useful-specific-review-comments",
+                        "reviews-respectfully-asks-rather-than-demands",
+                        "reviews-substantively-with-understanding");
     }
 
     /**
