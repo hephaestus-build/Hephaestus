@@ -10,11 +10,12 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceLimits;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
@@ -140,13 +141,6 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         });
     }
 
-    private PullRequest mergedPr() {
-        PullRequest pr = new PullRequest();
-        pr.setMerged(true);
-        pr.setState(Issue.State.MERGED);
-        return pr;
-    }
-
     @Test
     void contribute_noPrId_reportsCollectionError() {
         ObjectNode metadata = objectMapper.createObjectNode();
@@ -160,14 +154,15 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
 
     @Test
     void contribute_noThreadsNoReviews_writesCanonicalEmptyState() throws Exception {
-        when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(mergedPr()));
-        Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(request(metadataWithPr()), files);
+        var captured = provider.capture(request(metadataWithPr()), provider.sourceKinds());
 
-        JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
+        JsonNode out = objectMapper.readTree(captured.files().get(FILE_KEY));
+        assertThat(out.propertyNames()).containsExactlyInAnyOrder("threads", "reviewDecisions", "truncated");
         assertThat(out.get("threads")).isEmpty();
         assertThat(out.get("reviewDecisions")).isEmpty();
-        assertThat(out.get("mergeState").asString()).isEqualTo("MERGED");
+        assertThat(out.get("truncated").asBoolean()).isFalse();
+        assertThat(captured.contentStates()).containsValue(SourceContentState.EMPTY);
+        assertThat(captured.completeness()).containsValue(SourceCompleteness.COMPLETE);
     }
 
     @Test
@@ -177,15 +172,14 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
                         PullRequestReview.State.CHANGES_REQUESTED,
                         "reviewer-a",
                         Instant.parse("2025-06-01T10:00:00Z"))));
-        when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(mergedPr()));
 
         Map<String, byte[]> files = new HashMap<>();
         provider.contribute(request(metadataWithPr()), files);
 
         assertThat(files).containsKey(FILE_KEY);
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        assertThat(out.get("mergeState").asString()).isEqualTo("MERGED");
         JsonNode decision = out.get("reviewDecisions").get(0);
+        assertThat(decision.propertyNames()).containsExactlyInAnyOrder("state", "author", "submittedAt");
         assertThat(decision.get("state").asString()).isEqualTo("CHANGES_REQUESTED");
         assertThat(decision.get("author").asString()).isEqualTo("reviewer-a");
         // submittedAt is emitted raw so the agent (not this connector) can compute supersession.
@@ -201,13 +195,11 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
                                 "reviewer-a",
                                 Instant.parse("2025-06-01T10:00:00Z")),
                         review(PullRequestReview.State.APPROVED, "reviewer-a", Instant.parse("2025-06-01T12:00:00Z"))));
-        when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(mergedPr()));
 
         Map<String, byte[]> files = new HashMap<>();
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        // Both decisions are emitted losslessly with timestamps; supersession is the agent's to compute.
         JsonNode decisions = out.get("reviewDecisions");
         assertThat(decisions).hasSize(2);
         assertThat(decisions.get(0).get("submittedAt").asString()).isEqualTo("2025-06-01T10:00:00Z");
@@ -237,7 +229,6 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         }
         when(reviewRepository.findRecentByPullRequestIdWithAuthor(any(), any(), any()))
                 .thenReturn(newestFirst);
-        when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(mergedPr()));
 
         Map<String, byte[]> files = new HashMap<>();
         provider.contribute(request(metadataWithPr()), files);
@@ -245,13 +236,70 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
         JsonNode decisions = out.get("reviewDecisions");
         assertThat(decisions).hasSize(ReviewThreadContentSource.MAX_DECISIONS);
-        // The latest APPROVE is retained (it is the first row newest-first).
-        assertThat(decisions.get(0).get("state").asString()).isEqualTo("APPROVED");
-        assertThat(decisions.get(0).get("submittedAt").asString()).isEqualTo("2025-06-30T23:59:00Z");
+        JsonNode last = decisions.get(decisions.size() - 1);
+        assertThat(last.get("state").asString()).isEqualTo("APPROVED");
+        assertThat(last.get("submittedAt").asString()).isEqualTo("2025-06-30T23:59:00Z");
+        assertThat(out.get("truncated").asBoolean()).isTrue();
     }
 
     @Test
-    void contribute_hephaestusOwnThread_excludedFromCountAndEmit() throws Exception {
+    void shouldMarkADecisionBotWhenTheAdapterStoredItsAuthorAsOne() throws Exception {
+        User token = user("project_7_bot_a1b2");
+        token.setType(User.Type.BOT);
+        PullRequestReview automated = new PullRequestReview();
+        automated.setState(PullRequestReview.State.APPROVED);
+        automated.setAuthor(token);
+        automated.setSubmittedAt(Instant.parse("2025-06-01T10:00:00Z"));
+        when(reviewRepository.findRecentByPullRequestIdWithAuthor(any(), any(), any()))
+                .thenReturn(List.of(
+                        review(PullRequestReview.State.APPROVED, "reviewer-a", Instant.parse("2025-06-01T11:00:00Z")),
+                        automated));
+
+        Map<String, byte[]> files = new HashMap<>();
+        provider.contribute(request(metadataWithPr()), files);
+
+        JsonNode decisions = objectMapper.readTree(files.get(FILE_KEY)).get("reviewDecisions");
+        assertThat(decisions.get(0).get("bot").asBoolean()).isTrue();
+        assertThat(decisions.get(1).has("bot")).isFalse();
+    }
+
+    @Test
+    void shouldBoundDecisionsByTheMemoryLimitSoBusyMergeRequestsKeepTheirApprovals() {
+        // COMMENTED discussion rows must not crowd approval decisions out of the capture.
+        assertThat(ReviewThreadContentSource.MAX_DECISIONS).isEqualTo(EvidenceLimits.MAX_ITEMS_PER_SOURCE);
+    }
+
+    @Test
+    void shouldLeaveOutACommentedReviewWithNoBodyAndKeepOneThatSaysSomething() throws Exception {
+        PullRequestReview batch =
+                review(PullRequestReview.State.COMMENTED, "reviewer-a", Instant.parse("2025-06-01T10:00:00Z"));
+        batch.setBody("");
+        PullRequestReview synthetic =
+                review(PullRequestReview.State.COMMENTED, "reviewer-b", Instant.parse("2025-06-01T11:00:00Z"));
+        PullRequestReview worded =
+                review(PullRequestReview.State.COMMENTED, "reviewer-c", Instant.parse("2025-06-01T12:00:00Z"));
+        worded.setBody("Looks right overall; two questions inline.");
+        PullRequestReview approval =
+                review(PullRequestReview.State.APPROVED, "reviewer-a", Instant.parse("2025-06-01T13:00:00Z"));
+        approval.setBody("LGTM, thanks for the tests.");
+        when(reviewRepository.findRecentByPullRequestIdWithAuthor(any(), any(), any()))
+                .thenReturn(List.of(approval, worded, synthetic, batch));
+
+        Map<String, byte[]> files = new HashMap<>();
+        provider.contribute(request(metadataWithPr()), files);
+
+        JsonNode decisions = objectMapper.readTree(files.get(FILE_KEY)).get("reviewDecisions");
+        // The inline batch and the synthetic per-discussion row decided nothing and their comments are in
+        // comments.json; the worded comment and the approval stay, with what the reviewer wrote.
+        assertThat(decisions).hasSize(2);
+        assertThat(decisions.get(0).get("author").asString()).isEqualTo("reviewer-c");
+        assertThat(decisions.get(0).get("body").asString()).isEqualTo("Looks right overall; two questions inline.");
+        assertThat(decisions.get(1).get("state").asString()).isEqualTo("APPROVED");
+        assertThat(decisions.get(1).get("body").asString()).isEqualTo("LGTM, thanks for the tests.");
+    }
+
+    @Test
+    void contribute_hephaestusOwnThread_excludedFromThreads() throws Exception {
         // A thread whose comments are Hephaestus's own posted note (marker-bearing) must NOT count as a
         // reviewer thread — the rootComment FK is null in sync, so the comment set is the signal.
         PullRequestReviewThread botThread = thread(PullRequestReviewThread.State.UNRESOLVED, "src/Foo.swift", 10, null);
@@ -267,9 +315,8 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        // Only the human reviewer thread is counted; the Hephaestus note is dropped entirely. Assert by
+        // Only the human reviewer thread is listed; the Hephaestus note is dropped entirely. Assert by
         // CONTENT, not position, so the test does not encode an incidental ordering over the comment Set.
-        assertThat(out.get("unresolvedCount").asInt()).isEqualTo(1);
         assertThat(out.get("threads")).hasSize(1);
         List<String> paths = new ArrayList<>();
         out.get("threads").forEach(node -> paths.add(node.get("path").asString()));
@@ -277,7 +324,7 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void contribute_unresolvedThread_countedAndEmitted() throws Exception {
+    void contribute_unresolvedAndResolvedThreads_emittedAsRawRows() throws Exception {
         stubThreads(List.of(
                 thread(PullRequestReviewThread.State.UNRESOLVED, "src/Foo.swift", 12, null),
                 thread(PullRequestReviewThread.State.RESOLVED, "src/Bar.swift", 5, user("reviewer-b"))));
@@ -286,11 +333,35 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        assertThat(out.get("unresolvedCount").asInt()).isEqualTo(1);
         assertThat(out.get("threads")).hasSize(2);
+        JsonNode unresolved = out.get("threads").get(0);
+        assertThat(unresolved.propertyNames()).containsExactlyInAnyOrder("id", "path", "line", "state");
+        assertThat(unresolved.get("id").asLong()).isEqualTo(1L);
+        assertThat(unresolved.get("path").asString()).isEqualTo("src/Foo.swift");
+        assertThat(unresolved.get("line").asInt()).isEqualTo(12);
+        assertThat(unresolved.get("state").asString()).isEqualTo("UNRESOLVED");
         JsonNode resolved = out.get("threads").get(1);
         assertThat(resolved.get("state").asString()).isEqualTo("RESOLVED");
         assertThat(resolved.get("resolvedBy").asString()).isEqualTo("reviewer-b");
+        assertThat(out.has("unresolvedCount")).isFalse();
+    }
+
+    @Test
+    void shouldDateAThreadWhenTheProviderRecordedWhenItWasOpenedAndResolved() throws Exception {
+        PullRequestReviewThread dated =
+                thread(PullRequestReviewThread.State.RESOLVED, "src/Foo.swift", 12, user("reviewer-b"));
+        dated.setCreatedAt(Instant.parse("2025-06-01T10:00:00Z"));
+        dated.setResolvedAt(Instant.parse("2025-06-02T08:00:00Z"));
+        stubThreads(List.of(dated, thread(PullRequestReviewThread.State.UNRESOLVED, "src/Bar.swift", 5, null)));
+
+        Map<String, byte[]> files = new HashMap<>();
+        provider.contribute(request(metadataWithPr()), files);
+
+        JsonNode threads = objectMapper.readTree(files.get(FILE_KEY)).get("threads");
+        assertThat(threads.get(0).get("createdAt").asString()).isEqualTo("2025-06-01T10:00:00Z");
+        assertThat(threads.get(0).get("resolvedAt").asString()).isEqualTo("2025-06-02T08:00:00Z");
+        assertThat(threads.get(1).has("createdAt")).isFalse();
+        assertThat(threads.get(1).has("resolvedAt")).isFalse();
     }
 
     @Test
@@ -304,7 +375,6 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
                                 "drafting-reviewer",
                                 Instant.parse("2025-05-01T12:00:00Z")),
                         review(PullRequestReview.State.APPROVED, "reviewer-a", Instant.parse("2025-06-01T12:00:00Z"))));
-        when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(mergedPr()));
 
         Map<String, byte[]> files = new HashMap<>();
         provider.contribute(request(metadataWithPr()), files);
@@ -338,46 +408,12 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         }
         stubThreads(many);
 
-        Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(request(metadataWithPr()), files);
+        var captured = provider.capture(request(metadataWithPr()), provider.sourceKinds());
 
-        JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
+        JsonNode out = objectMapper.readTree(captured.files().get(FILE_KEY));
         assertThat(out.get("threads")).hasSize(ReviewThreadContentSource.MAX_THREADS);
-        assertThat(out.get("unresolvedCount").asInt()).isEqualTo(ReviewThreadContentSource.MAX_THREADS);
         assertThat(out.get("truncated").asBoolean()).isTrue();
-    }
-
-    @Test
-    void contribute_prStateMissing_mergeStateUnknown() throws Exception {
-        // A mirrored row with neither merge flag nor state degrades to UNKNOWN, never throws.
-        when(reviewRepository.findRecentByPullRequestIdWithAuthor(any(), any(), any()))
-                .thenReturn(List.of(
-                        review(PullRequestReview.State.APPROVED, "reviewer-a", Instant.parse("2025-06-01T12:00:00Z"))));
-
-        Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(request(metadataWithPr()), files);
-
-        JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        assertThat(out.get("mergeState").asString()).isEqualTo("UNKNOWN");
-    }
-
-    @Test
-    void contribute_openUnmergedPr_mergeStateOpen() throws Exception {
-        when(reviewRepository.findRecentByPullRequestIdWithAuthor(any(), any(), any()))
-                .thenReturn(List.of(review(
-                        PullRequestReview.State.CHANGES_REQUESTED,
-                        "reviewer-a",
-                        Instant.parse("2025-06-01T10:00:00Z"))));
-        PullRequest openPr = new PullRequest();
-        openPr.setMerged(false);
-        openPr.setState(Issue.State.OPEN);
-        when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(openPr));
-
-        Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(request(metadataWithPr()), files);
-
-        JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        assertThat(out.get("mergeState").asString()).isEqualTo("OPEN");
+        assertThat(captured.completeness()).containsValue(SourceCompleteness.PARTIAL);
     }
 
     @Test

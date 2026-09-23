@@ -256,7 +256,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 null,
                 null,
                 null);
-        return new PullRequestReviewSubmissionRequest(pullRequest, "feature/budget", "abc123", "main");
+        return new PullRequestReviewSubmissionRequest(pullRequest, "feature/budget", "abc123", "main", "def456");
     }
 
     private LlmModel instanceModel(String slug) {

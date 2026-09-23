@@ -40,7 +40,6 @@ function model(id: number, connectionId: number, displayName: string) {
 		enabled: true,
 		visibility: "PUBLIC" as const,
 		grantedWorkspaceIds: [],
-		supportsReasoning: false,
 		createdAt: new Date("2026-07-01T00:00:00Z"),
 	};
 }

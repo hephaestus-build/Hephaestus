@@ -301,10 +301,19 @@ export const AdvancedDisclosure: Story = {
 		const reviews = row(purposeCard(canvas, "Practice reviews"), "In-house");
 		await openAdvanced(reviews);
 		await expect(reviews.getByLabelText(/^Max concurrent runs/u)).toHaveValue(3);
+		await expect(reviews.queryByRole("switch", { name: /^Internet access/u })).toBeNull();
 		const mentor = row(purposeCard(canvas, "Heph"), "In-house");
 		await openAdvanced(mentor);
 		await expect(mentor.queryByLabelText(/^Max concurrent runs/u)).toBeNull();
 		await expect(mentor.getByLabelText(/^Timeout \(seconds\)/u)).toHaveValue(10_800);
+	},
+};
+
+export const HephAdvancedOffersInternetAccess: Story = {
+	play: async ({ canvas }) => {
+		const mentor = row(purposeCard(canvas, "Heph"), "In-house");
+		await openAdvanced(mentor);
+		await expect(mentor.getByRole("switch", { name: /^Internet access/u })).not.toBeChecked();
 	},
 };
 

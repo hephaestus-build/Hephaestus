@@ -11,31 +11,17 @@ import {
 	groupCitationsBySource,
 } from "@/components/practice-vocabulary/evidence-source-defs";
 import { Badge } from "@/components/ui/badge";
+import { hasText } from "@/lib/text";
 
 export interface ObservationEvidenceProps {
 	evidence: ObservationEvidenceData | null | undefined;
-	/**
-	 * Which tool read the sources. Only one is not the reviewing model — the secret scanner — and it
-	 * is the only thing that ever withholds a quote, so naming it turns a blank passage into an
-	 * explanation. Taken as a prop rather than read off `evidence.detector` inside the citation loop
-	 * because it is a fact about the whole observation, not about one passage.
-	 */
+	/** Identifies the secret scanner when a quote was redacted. */
 	detector?: string;
 }
 
 const SECRET_SCANNER = "secret-diff-scanner";
 
-/**
- * The source is named once per group, in words: the wire contract id means nothing to a reader who
- * has never seen the source catalog.
- *
- * <p>Line numbers are shown only for the source kinds whose locator is `code`. The server verifies a
- * diff citation against the annotated unified diff, so its range names a real span of a real file.
- * Everywhere else the range is an offset into the serialised context artifact the quote was pulled
- * from — a line of `conversation_thread.json`, not a message of the thread — asserted by the model
- * and checked only for the quote appearing somewhere in the file. Printing it would dress a
- * coordinate into a file the reader cannot open as a location in the work.
- */
+/** Non-code coordinates refer to serialized input, not a location a reader can open in the source. */
 export function ObservationEvidence({ evidence, detector }: ObservationEvidenceProps) {
 	const citations = evidence?.citations ?? [];
 	if (citations.length === 0) {
@@ -122,21 +108,23 @@ function CitationHeader({
 	citation: EvidenceCitation;
 	locator: EvidenceSourceGroup["def"]["locator"];
 }) {
-	if (locator === "code") {
-		return (
-			<div className="flex flex-wrap items-center gap-2 border-b bg-muted/50 px-3 py-2">
-				<code className="min-w-0 text-xs break-all">{codeCitationLocator(citation)}</code>
-				{citation.side && (
-					<Badge variant="outline" className="shrink-0">
-						{DIFF_SIDE_LABELS[citation.side]}
-					</Badge>
-				)}
-			</div>
-		);
-	}
 	return (
-		<div className="border-b bg-muted/50 px-3 py-2">
-			<p className="text-xs break-words text-muted-foreground">{citation.path}</p>
+		<div className="flex flex-wrap items-center gap-2 border-b bg-muted/50 px-3 py-2">
+			{locator === "code" ? (
+				<code className="min-w-0 text-xs break-all">{codeCitationLocator(citation)}</code>
+			) : (
+				<p className="min-w-0 text-xs break-words text-muted-foreground">{citation.path}</p>
+			)}
+			{locator === "code" && citation.side && (
+				<Badge variant="outline" className="shrink-0">
+					{DIFF_SIDE_LABELS[citation.side]}
+				</Badge>
+			)}
+			{hasText(citation.revision) && (
+				<p className="min-w-0 basis-full text-xs break-all text-muted-foreground">
+					Commit <code>{citation.revision}</code>
+				</p>
+			)}
 		</div>
 	);
 }
@@ -162,6 +150,7 @@ function citationKey(citation: EvidenceCitation): string {
 		citation.sourceKind,
 		citation.artifactPath,
 		citation.path,
+		citation.revision,
 		citation.side,
 		citation.startLine,
 		citation.endLine,

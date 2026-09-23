@@ -55,7 +55,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
                 7L,
                 8L,
                 1L,
-                new ProxyRouting.BilledAttempt(source, id, 0, BigDecimal.ZERO));
+                new ProxyRouting.BilledAttempt(source, id, 0, BigDecimal.ZERO, "worker-1"));
     }
 
     @Test

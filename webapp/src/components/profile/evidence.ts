@@ -6,6 +6,7 @@ export interface EvidenceLocation {
 	endLine: number;
 	sourceKind: string;
 	side?: "OLD" | "NEW";
+	revision?: string;
 	snippet?: string;
 	redacted: boolean;
 }
@@ -16,6 +17,7 @@ export function toEvidenceLocations(evidence: ObservationDetail["evidence"]): Ev
 		endLine: citation.endLine,
 		sourceKind: citation.sourceKind,
 		side: citation.side,
+		revision: citation.revision,
 		snippet: citation.quote,
 		redacted: citation.quoteRedacted,
 	}));

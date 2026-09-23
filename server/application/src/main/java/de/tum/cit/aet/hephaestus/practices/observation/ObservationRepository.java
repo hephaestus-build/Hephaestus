@@ -907,9 +907,9 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * One person's own measurements of one practice inside a window — the evidence a process-level
      * message about that practice stands on.
      *
-     * <p>Deliberately NOT deduped to each artifact's latest run: whether a problem recurred across
-     * separate pieces of work is the question, and a re-review of the same pull request is the same
-     * occurrence, which the caller collapses by artifact rather than by run.
+     * <p>Every run, newest first: whether a problem recurred across separate pieces of work is the
+     * question, and a re-review of the same pull request is the same occurrence, which the caller
+     * collapses to that artifact's latest run.
      */
     @EntityGraph(attributePaths = {"practice.currentRevision", "practiceRevision"})
     @Query("""

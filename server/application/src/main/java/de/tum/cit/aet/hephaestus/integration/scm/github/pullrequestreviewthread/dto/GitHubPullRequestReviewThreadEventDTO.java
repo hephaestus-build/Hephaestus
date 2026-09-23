@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubWebhookEven
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
+import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
@@ -18,6 +19,8 @@ public record GitHubPullRequestReviewThreadEventDTO(
         @JsonProperty("action") String action,
         @JsonProperty("thread") GitHubThreadDTO thread,
         @JsonProperty("pull_request") GitHubPullRequestDTO pullRequest,
+        /** When the event happened: the resolution's own time, which the GraphQL thread never carries. */
+        @JsonProperty("updated_at") @Nullable Instant updatedAt,
         @JsonProperty("repository") GitHubRepositoryRefDTO repository,
         @JsonProperty("sender") GitHubUserDTO sender)
         implements GitHubWebhookEvent {

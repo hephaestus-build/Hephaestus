@@ -193,6 +193,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                 null, // issueType
                 null, // repository
                 null // pullRequest
+                ,
+                null // subIssuesSummary
                 );
     }
 
@@ -227,6 +229,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -264,6 +268,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             // Verify the fallback works
@@ -303,6 +309,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             // Verify fallback returns null
@@ -417,6 +425,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -450,6 +460,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -485,6 +497,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -530,6 +544,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -581,6 +597,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -637,6 +655,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -699,6 +719,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             processor.process(dto, createContext());
@@ -817,7 +839,9 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null,
-                    null);
+                    null,
+                    null // subIssuesSummary
+                    );
         }
 
         @Test
@@ -875,6 +899,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -937,6 +963,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -979,6 +1007,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.processClosed(dto, createContext());
@@ -1035,6 +1065,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.processReopened(dto, createContext());
@@ -1072,6 +1104,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.processClosed(dto, createContext());
@@ -1137,6 +1171,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
             processor.process(issueDto, createContext());
 
@@ -1217,7 +1253,9 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     basic.milestone(),
                     typeDto,
                     basic.repository(),
-                    basic.pullRequest());
+                    basic.pullRequest(),
+                    null // subIssuesSummary
+                    );
 
             Issue result = processor.processTyped(typed, typeDto, FIXTURE_ORG_LOGIN, createContext());
             assertNotNull(result);
@@ -1336,6 +1374,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             // When/Then - should not throw
@@ -1416,6 +1456,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(nullIdDto, createContext());
@@ -1448,6 +1490,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -1481,6 +1525,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -1514,6 +1560,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -1547,6 +1595,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());
@@ -1580,6 +1630,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null // pullRequest
+                    ,
+                    null // subIssuesSummary
                     );
 
             Issue result = processor.process(dto, createContext());

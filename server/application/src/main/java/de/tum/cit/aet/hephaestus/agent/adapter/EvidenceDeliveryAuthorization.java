@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
+import de.tum.cit.aet.hephaestus.agent.handler.CitationVerification;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
@@ -51,6 +52,20 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
     @Override
     public Set<UUID> permitsAll(
             long workspaceId, Collection<Observation> observations, SourceUsePurpose requestedPurpose) {
+        return permitsBatch(workspaceId, observations, requestedPurpose, false);
+    }
+
+    @Override
+    public Set<UUID> permitsForNewDelivery(
+            long workspaceId, Collection<Observation> observations, SourceUsePurpose requestedPurpose) {
+        return permitsBatch(workspaceId, observations, requestedPurpose, true);
+    }
+
+    private Set<UUID> permitsBatch(
+            long workspaceId,
+            Collection<Observation> observations,
+            SourceUsePurpose requestedPurpose,
+            boolean newDelivery) {
         List<Citable> citable = new ArrayList<>();
         Set<UUID> jobIds = new HashSet<>();
         for (Observation observation : observations) {
@@ -69,16 +84,20 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
         // A run outside this workspace has no row and a run that recorded no evidence has a null value.
         // Dropping both here is what makes an absent key mean "not permitted", which is the answer the
         // empty Optional carries on the single-row path.
-        Map<UUID, String> contractVersions = new HashMap<>();
+        Map<UUID, AgentJobRepository.EvidenceContractVersionRow> contractVersions = new HashMap<>();
         for (var row : jobRepository.findEvidenceContractVersions(workspaceId, jobIds)) {
             if (row.getContractVersion() != null) {
-                contractVersions.put(row.getId(), row.getContractVersion());
+                contractVersions.put(row.getId(), row);
             }
         }
         Set<UUID> permitted = new HashSet<>();
         for (Citable entry : citable) {
-            String contractVersion = contractVersions.get(entry.jobId());
-            if (contractVersion != null && permits(contractVersion, entry.citations(), requestedPurpose)) {
+            var row = contractVersions.get(entry.jobId());
+            if (row == null || row.getContractVersion() == null) continue;
+            if (newDelivery && !CitationVerification.isVerified(entry.jobId(), row.getAttempt(), entry.citations())) {
+                continue;
+            }
+            if (permits(row.getContractVersion(), entry.citations(), requestedPurpose)) {
                 permitted.add(entry.observationId());
             }
         }

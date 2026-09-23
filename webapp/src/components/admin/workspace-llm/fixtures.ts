@@ -11,7 +11,7 @@ export const mockAvailableModels: AvailableLlmModel[] = [
 		pricingMode: "PRICED",
 		per1mInputUsd: 3,
 		per1mOutputUsd: 15,
-		supportsReasoning: true,
+		reasoningEffort: "MEDIUM",
 	},
 	{
 		dataHandlingTier: "IN_HOUSE",
@@ -20,7 +20,6 @@ export const mockAvailableModels: AvailableLlmModel[] = [
 		displayName: "Local Llama (self-hosted)",
 		connectionDisplayName: "On-prem GPU",
 		pricingMode: "NO_CHARGE",
-		supportsReasoning: false,
 	},
 	{
 		dataHandlingTier: "UNDECLARED",
@@ -29,7 +28,7 @@ export const mockAvailableModels: AvailableLlmModel[] = [
 		displayName: "My OpenAI key",
 		connectionDisplayName: "My provider",
 		pricingMode: "UNPRICED",
-		supportsReasoning: true,
+		reasoningEffort: "MEDIUM",
 	},
 ];
 

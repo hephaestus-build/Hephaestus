@@ -125,6 +125,36 @@ const INTENTIONALLY_MISSING_PATHS = [
 		reason: "a per-run directory created inside the agent workspace",
 	},
 	{
+		document: "docs/contributor/agent/workspace-abi.mdx",
+		value: "description.md",
+		reason: "a captured artifact written into the agent workspace",
+	},
+	{
+		document: "docs/contributor/practice-review-runtime.mdx",
+		value: "work/notes/review.md",
+		reason: "the review's notes file, created inside the agent workspace",
+	},
+	{
+		document: "docs/contributor/practice-review-runtime.mdx",
+		value: "work/composition/observations.json",
+		reason: "the admitted observations, written inside the agent workspace for the composer",
+	},
+	{
+		document: "docs/contributor/agent/workspace-abi.mdx",
+		value: "inputs/context/commits.json",
+		reason: "the staged commit record, written into the agent workspace",
+	},
+	{
+		document: "docs/contributor/agent/workspace-abi.mdx",
+		value: "inputs/history/observations.json",
+		reason: "the staged history record, written into the agent workspace",
+	},
+	{
+		document: "docs/contributor/practice-catalogue.md",
+		value: "work/precompute-out/summary.md",
+		reason: "the precompute summary, written inside the agent workspace for the brief",
+	},
+	{
 		document: "MIGRATION.md",
 		value: "docker/.env",
 		reason: "a deployment-local secrets file that must stay untracked",
@@ -177,6 +207,16 @@ const INTENTIONALLY_MISSING_PATHS = [
 	{
 		document: "docs/contributor/artifact-source-contract.mdx",
 		value: "inputs/manifest.json",
+		reason: "a path inside the staged agent workspace, not the repository checkout",
+	},
+	{
+		document: "docs/contributor/artifact-source-contract.mdx",
+		value: "inputs/context/change.json",
+		reason: "a path inside the staged agent workspace, not the repository checkout",
+	},
+	{
+		document: "docs/contributor/practice-review-pipeline.mdx",
+		value: "inputs/context/change.json",
 		reason: "a path inside the staged agent workspace, not the repository checkout",
 	},
 	{

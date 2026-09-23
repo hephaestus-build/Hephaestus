@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
@@ -22,6 +23,7 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class ConfigSnapshotTest extends BaseUnitTest {
 
@@ -58,7 +60,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
                         "claude-sonnet-4-20250514",
                         200000,
                         8192,
-                        false));
+                        null));
         when(resolver.connectionRef(binding))
                 .thenReturn(new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 7L, null, null));
     }
@@ -84,6 +86,36 @@ class ConfigSnapshotTest extends BaseUnitTest {
             assertThat(snapshot.timeoutSeconds()).isEqualTo(600);
             assertThat(snapshot.allowInternet()).isFalse();
         }
+    }
+
+    @Test
+    void shouldFreezeTheModelsReasoningEffortAndReadItBack() {
+        WorkspaceAgentBinding binding = createBinding();
+        when(resolver.resolve(binding))
+                .thenReturn(new ResolvedLlmModel(
+                        "https://api.openai.com", "openai-completions", "gpt-5", null, null, ReasoningEffort.XHIGH));
+        when(resolver.connectionRef(binding))
+                .thenReturn(new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 7L, null, null));
+
+        ConfigSnapshot snapshot = ConfigSnapshot.from(binding, resolver);
+        ConfigSnapshot roundTripped = ConfigSnapshot.fromJson(snapshot.toJson(OBJECT_MAPPER), OBJECT_MAPPER);
+
+        assertThat(snapshot.reasoningEffort()).isEqualTo(ReasoningEffort.XHIGH);
+        assertThat(roundTripped.reasoningEffort()).isEqualTo(ReasoningEffort.XHIGH);
+    }
+
+    @Test
+    void shouldLeaveAV5SnapshotOfANonReasoningModelWithoutAnEffort() {
+        ObjectNode node = OBJECT_MAPPER.createObjectNode();
+        node.put("schemaVersion", 5);
+        node.put("apiProtocol", "openai-completions");
+        node.put("baseUrl", "https://api.openai.com");
+        node.put("upstreamModelId", "gpt-4.1");
+        node.put("supportsReasoning", false);
+        node.put("timeoutSeconds", 600);
+
+        assertThat(ConfigSnapshot.fromJson(node, OBJECT_MAPPER).reasoningEffort())
+                .isNull();
     }
 
     @Nested
@@ -225,7 +257,8 @@ class ConfigSnapshotTest extends BaseUnitTest {
             assertThat(snapshot.modelVersion()).isEqualTo("2025-05-01");
             assertThat(snapshot.contextWindow()).isEqualTo(128000);
             assertThat(snapshot.maxOutputTokens()).isEqualTo(4096);
-            assertThat(snapshot.supportsReasoning()).isTrue();
+            // A v4 snapshot of a reasoning model ran at Pi's default thinking level, which sends medium.
+            assertThat(snapshot.reasoningEffort()).isEqualTo(ReasoningEffort.MEDIUM);
             assertThat(snapshot.timeoutSeconds()).isEqualTo(900);
             assertThat(snapshot.allowInternet()).isTrue();
         }
@@ -293,7 +326,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
                     null,
                     null,
                     null,
-                    false,
+                    null,
                     null,
                     null,
                     null,

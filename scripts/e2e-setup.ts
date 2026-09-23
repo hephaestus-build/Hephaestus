@@ -120,7 +120,7 @@ export function loadConfig(env: Record<string, string | undefined>, args: string
 		"provider must be github or gitlab",
 	);
 	const protocol = oneOf(
-		get("--llm-protocol", "E2E_LLM_PROTOCOL", "openai-completions"),
+		get("--llm-protocol", "E2E_LLM_PROTOCOL", "openai-responses"),
 		["openai-completions", "openai-responses"],
 		"E2E_LLM_PROTOCOL is invalid",
 	);
@@ -467,7 +467,8 @@ async function bindAgents(api: Api, config: Config, modelId: number): Promise<vo
 			enabled: true,
 			timeoutSeconds: 1200,
 			maxConcurrentJobs: 1,
-			allowInternet: true,
+			// A practice review runs on the internal network; only Heph may reach the internet.
+			allowInternet: purpose === "MENTOR",
 		});
 	}
 	const agents = array(

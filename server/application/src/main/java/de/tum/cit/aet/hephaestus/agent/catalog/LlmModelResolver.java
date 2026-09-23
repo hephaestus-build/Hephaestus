@@ -37,7 +37,7 @@ public class LlmModelResolver {
                     instance.getUpstreamModelId(),
                     instance.getContextWindow(),
                     instance.getMaxOutputTokens(),
-                    instance.isSupportsReasoning());
+                    instance.getReasoningEffort());
         }
         WorkspaceLlmModel byo = config.getWorkspaceModel();
         if (byo != null) {
@@ -51,7 +51,7 @@ public class LlmModelResolver {
                     byo.getUpstreamModelId(),
                     byo.getContextWindow(),
                     byo.getMaxOutputTokens(),
-                    byo.isSupportsReasoning());
+                    byo.getReasoningEffort());
         }
         throw new IllegalStateException("The agent config must bind an available OpenAI-compatible model");
     }

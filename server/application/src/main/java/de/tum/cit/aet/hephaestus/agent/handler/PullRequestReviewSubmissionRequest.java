@@ -21,6 +21,7 @@ public record PullRequestReviewSubmissionRequest(
         String headRefName,
         String headRefOid,
         String baseRefName,
+        @Nullable String baseRefOid,
         @Nullable SignalName triggerSignal,
         @Nullable ObservationOrigin observationOrigin,
         @Nullable Long reviewId,
@@ -32,6 +33,9 @@ public record PullRequestReviewSubmissionRequest(
         Objects.requireNonNull(headRefName, "headRefName must not be null");
         Objects.requireNonNull(headRefOid, "headRefOid must not be null");
         Objects.requireNonNull(baseRefName, "baseRefName must not be null");
+        if (baseRefOid != null && baseRefOid.isBlank()) {
+            throw new IllegalArgumentException("baseRefOid must not be blank");
+        }
         if (headRefName.isBlank()) {
             throw new IllegalArgumentException("headRefName must not be blank");
         }
@@ -54,8 +58,9 @@ public record PullRequestReviewSubmissionRequest(
             String headRefName,
             String headRefOid,
             String baseRefName,
+            @Nullable String baseRefOid,
             @Nullable SignalName triggerSignal) {
-        this(pullRequest, headRefName, headRefOid, baseRefName, triggerSignal, null, null, null);
+        this(pullRequest, headRefName, headRefOid, baseRefName, baseRefOid, triggerSignal, null, null, null);
     }
 
     public PullRequestReviewSubmissionRequest(
@@ -63,37 +68,55 @@ public record PullRequestReviewSubmissionRequest(
             String headRefName,
             String headRefOid,
             String baseRefName,
+            @Nullable String baseRefOid,
             @Nullable SignalName triggerSignal,
             @Nullable ObservationOrigin observationOrigin) {
-        this(pullRequest, headRefName, headRefOid, baseRefName, triggerSignal, observationOrigin, null, null);
+        this(
+                pullRequest,
+                headRefName,
+                headRefOid,
+                baseRefName,
+                baseRefOid,
+                triggerSignal,
+                observationOrigin,
+                null,
+                null);
     }
 
     /** For callers with no signal behind the run; the job then runs the full focus-active practice set. */
     public PullRequestReviewSubmissionRequest(
-            ScmEventPayload.PullRequestData pullRequest, String headRefName, String headRefOid, String baseRefName) {
-        this(pullRequest, headRefName, headRefOid, baseRefName, null, null, null, null);
+            ScmEventPayload.PullRequestData pullRequest,
+            String headRefName,
+            String headRefOid,
+            String baseRefName,
+            @Nullable String baseRefOid) {
+        this(pullRequest, headRefName, headRefOid, baseRefName, baseRefOid, null, null, null, null);
     }
 
     /** The same request filed under a named population; {@code null} falls back to the origin rule above. */
     public PullRequestReviewSubmissionRequest withOrigin(@Nullable ObservationOrigin origin) {
         return new PullRequestReviewSubmissionRequest(
-                pullRequest, headRefName, headRefOid, baseRefName, triggerSignal, origin, reviewId, aboutUserId);
+                pullRequest,
+                headRefName,
+                headRefOid,
+                baseRefName,
+                baseRefOid,
+                triggerSignal,
+                origin,
+                reviewId,
+                aboutUserId);
     }
 
-    public static PullRequestReviewSubmissionRequest forSubmittedReview(
-            ScmEventPayload.PullRequestData pullRequest,
-            String headRefName,
-            String headRefOid,
-            String baseRefName,
-            SignalName triggerSignal,
-            ScmEventPayload.ReviewData review) {
+    /** The same request about one submitted review: the review is the subject and its author the developer. */
+    public PullRequestReviewSubmissionRequest forSubmittedReview(ScmEventPayload.ReviewData review) {
         return new PullRequestReviewSubmissionRequest(
                 pullRequest,
                 headRefName,
                 headRefOid,
                 baseRefName,
+                baseRefOid,
                 triggerSignal,
-                null,
+                observationOrigin,
                 review.id(),
                 Objects.requireNonNull(review.authorId(), "submitted review must have an author"));
     }

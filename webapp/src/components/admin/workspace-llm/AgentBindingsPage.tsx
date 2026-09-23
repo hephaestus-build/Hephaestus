@@ -477,6 +477,8 @@ function BindingRow({
 	);
 	const [allowInternet, setAllowInternet] = useState(binding?.allowInternet ?? false);
 	const [showAdvanced, setShowAdvanced] = useState(false);
+	// A practice review always runs on an internal network; the server rejects the flag for it.
+	const internetConfigurable = purpose === "MENTOR";
 	const [submitAttempt, setSubmitAttempt] = useState(0);
 
 	const showErrors = submitAttempt > 0;
@@ -523,7 +525,7 @@ function BindingRow({
 			workspaceModelId: selection.scope === "WORKSPACE" ? selection.id : undefined,
 			timeoutSeconds: timeout.value,
 			maxConcurrentJobs: concurrency.value,
-			allowInternet,
+			allowInternet: internetConfigurable && allowInternet,
 			enabled,
 		});
 	};
@@ -670,15 +672,17 @@ function BindingRow({
 										)}
 									</Field>
 								)}
-								<Field orientation="horizontal">
-									<FieldLabel htmlFor={`${rowId}-internet`}>Internet access{forRow}</FieldLabel>
-									<Switch
-										id={`${rowId}-internet`}
-										checked={allowInternet}
-										onCheckedChange={setAllowInternet}
-										disabled={pending}
-									/>
-								</Field>
+								{internetConfigurable && (
+									<Field orientation="horizontal">
+										<FieldLabel htmlFor={`${rowId}-internet`}>Internet access{forRow}</FieldLabel>
+										<Switch
+											id={`${rowId}-internet`}
+											checked={allowInternet}
+											onCheckedChange={setAllowInternet}
+											disabled={pending}
+										/>
+									</Field>
+								)}
 							</FieldGroup>
 						</FieldSet>
 					</CollapsibleContent>

@@ -67,6 +67,38 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
     }
 
     @Nested
+    class SubmittedObservations {
+
+        @Test
+        void shouldValidateASubmittedArrayWithoutRereadingItAsText() {
+            ArrayNode submitted = objectMapper.createArrayNode();
+            submitted.add(validFindingNode());
+            submitted.add("not an observation");
+
+            var result = parser.parseObservations(submitted);
+
+            assertThat(result.validObservations())
+                    .singleElement()
+                    .satisfies(observation ->
+                            assertThat(observation.practiceSlug()).isEqualTo("pr-description-quality"));
+            assertThat(result.discarded()).singleElement().satisfies(discarded -> {
+                assertThat(discarded.index()).isEqualTo(1);
+                assertThat(discarded.reason()).isEqualTo("entry is not a JSON object");
+            });
+        }
+
+        @Test
+        void shouldDiscardEverythingWhenNothingWasSubmitted() {
+            assertThat(parser.parseObservations(objectMapper.createArrayNode()).validObservations())
+                    .isEmpty();
+            assertThat(parser.parseObservations(null).discarded())
+                    .singleElement()
+                    .extracting(PracticeDetectionResultParser.DiscardedEntry::reason)
+                    .isEqualTo("missing or non-array 'observations' field");
+        }
+    }
+
+    @Nested
     class StructuralValidation {
 
         @Test

@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import java.time.Instant;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -33,8 +34,13 @@ public class GitHubPullRequestReviewThreadProcessor {
         this.eventPublisher = eventPublisher;
     }
 
+    /**
+     * @param resolvedAt when the event says the thread was resolved — the only source of that moment
+     *     on GitHub, whose GraphQL thread carries none
+     */
     @Transactional
-    public boolean resolve(Long threadId, @Nullable User resolvedBy, @NonNull ProcessingContext context) {
+    public boolean resolve(
+            Long threadId, @Nullable User resolvedBy, Instant resolvedAt, @NonNull ProcessingContext context) {
         if (threadId == null) {
             log.debug("Skipped thread resolve: reason=nullThreadId");
             return false;
@@ -44,6 +50,7 @@ public class GitHubPullRequestReviewThreadProcessor {
                 .findByNativeIdAndProviderId(threadId, Objects.requireNonNull(context.providerId()))
                 .map(thread -> {
                     thread.setState(PullRequestReviewThread.State.RESOLVED);
+                    thread.setResolvedAt(resolvedAt);
                     if (resolvedBy != null) {
                         thread.setResolvedBy(resolvedBy);
                     }
@@ -75,6 +82,7 @@ public class GitHubPullRequestReviewThreadProcessor {
                 .map(thread -> {
                     thread.setState(PullRequestReviewThread.State.UNRESOLVED);
                     thread.setResolvedBy(null);
+                    thread.setResolvedAt(null);
                     thread = threadRepository.save(thread);
                     ScmEventPayload.ReviewThreadData.from(thread)
                             .ifPresent(threadData -> eventPublisher.publishEvent(

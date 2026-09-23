@@ -27,7 +27,7 @@ const mockModel: LlmModel = {
 	connectionId: 1,
 	connectionDisplayName: "OpenAI production",
 	enabled: true,
-	supportsReasoning: true,
+	reasoningEffort: "MEDIUM",
 	visibility: "GRANTED",
 	grantedWorkspaceIds: [1],
 	currentPrice: {
@@ -176,6 +176,28 @@ export const EditLegacyUndeclared: Story = {
 		await userEvent.click(within(dialog).getByRole("button", { name: "Leave undeclared" }));
 		await userEvent.click(within(dialog).getByRole("button", { name: /save changes/iu }));
 		await expect(args.onSave).toHaveBeenCalledOnce();
+	},
+};
+
+export const ReasoningEffortProviderDefault: Story = {
+	args: { editing: { ...mockModel, reasoningEffort: undefined } },
+	play: async () => {
+		const dialog = await screen.findByRole("dialog");
+		await userEvent.click(within(dialog).getByRole("button", { name: "Limits and capabilities" }));
+		await expect(
+			await within(dialog).findByRole("combobox", { name: "Reasoning effort" }),
+		).toHaveTextContent("Provider default");
+	},
+};
+
+export const ReasoningEffortExtraHigh: Story = {
+	args: { editing: { ...mockModel, reasoningEffort: "XHIGH" } },
+	play: async () => {
+		const dialog = await screen.findByRole("dialog");
+		await userEvent.click(within(dialog).getByRole("button", { name: "Limits and capabilities" }));
+		await expect(
+			await within(dialog).findByRole("combobox", { name: "Reasoning effort" }),
+		).toHaveTextContent("Extra high");
 	},
 };
 

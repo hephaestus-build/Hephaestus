@@ -39,5 +39,13 @@ public enum FeedbackChannel {
     /** A turn in an ongoing mentor conversation with the recipient — the in-app mentor, or Slack. */
     IN_CHAT,
     /** Aggregated onto the recipient's own practice pages inside Hephaestus. Nobody replies to it. */
-    IN_APP,
+    IN_APP;
+
+    /**
+     * Whether delivery publishes outside Hephaestus and requires approval under
+     * {@link de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy#HUMAN_APPROVAL}.
+     */
+    public boolean pushed() {
+        return this == IN_CONTEXT;
+    }
 }

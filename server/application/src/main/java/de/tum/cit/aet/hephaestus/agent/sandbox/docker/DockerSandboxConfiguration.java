@@ -5,6 +5,7 @@ import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
@@ -62,7 +63,7 @@ public class DockerSandboxConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(DockerSandboxConfiguration.class);
 
-    /** RPC connections per container: create/start, logs, and a copy-out lease held while it is read. */
+    /** RPC connections per container: create/start, logs and the wait. */
     private static final int RPC_CONNECTIONS_PER_CONTAINER = 3;
 
     private static final Duration HTTP_CONNECTION_TIMEOUT = Duration.ofSeconds(5);
@@ -84,7 +85,7 @@ public class DockerSandboxConfiguration {
      */
     static final Duration HTTP_STREAMING_RESPONSE_TIMEOUT = ResourceLimits.MAX_RUNTIME.plusMinutes(10);
 
-    /** Calls whose response body is the stream. One wait per container, and nothing else. */
+    /** Calls whose response body is the stream: the wait on every container. */
     @Bean(name = "dockerStreamingClient", destroyMethod = "close")
     public DockerClient dockerStreamingClient(SandboxProperties properties, DockerSandboxProperties dockerProperties) {
         return buildClient(
@@ -124,7 +125,8 @@ public class DockerSandboxConfiguration {
 
         DockerClient client = DockerClientImpl.getInstance(config, new ResponseOwnedDockerHttpClient(httpClient));
         log.info(
-                "Docker sandbox client configured: kind={}, host={}, tlsVerify={}, responseTimeout={}, maxConnections={}",
+                "Docker sandbox client configured: kind={}, host={}, tlsVerify={}, responseTimeout={},"
+                        + " maxConnections={}",
                 kind,
                 properties.host(),
                 properties.tlsVerify(),
@@ -152,17 +154,13 @@ public class DockerSandboxConfiguration {
     }
 
     @Bean
-    public SandboxWorkspaceManager sandboxWorkspaceManager(DockerClientOperations ops, SandboxProperties properties) {
-        return new SandboxWorkspaceManager(
-                ops,
-                SandboxWorkspaceManager.MAX_OUTPUT_BYTES,
-                SandboxWorkspaceManager.MAX_SINGLE_FILE_BYTES,
-                properties.maxDirectoryBytes(),
-                properties.maxDirectoryEntries());
+    public SandboxWorkspaceManager sandboxWorkspaceManager() {
+        return new SandboxWorkspaceManager();
     }
 
     /**
-     * Dedicated platform thread pool for Docker blocking wait operations.
+     * Dedicated platform thread pool for Docker blocking wait operations, one thread per sandbox that
+     * may run at once.
      *
      * <p>docker-java's Apache HttpClient5 has {@code synchronized} blocks that pin virtual threads in
      * Java 21, causing cascading failures. A dedicated bounded pool of platform threads avoids this.
@@ -205,14 +203,23 @@ public class DockerSandboxConfiguration {
             SandboxContainerManager containerManager,
             ContainerSecurityPolicy securityPolicy,
             SandboxGatewayProperties gatewayProperties,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            SandboxGatewaySessions gatewaySessions,
+            DockerClientOperations volumeOperations) {
         return new DockerSandboxAdapter(
                 networkManager,
                 workspaceManager,
                 containerManager,
                 securityPolicy,
                 gatewayProperties.port(),
-                meterRegistry);
+                meterRegistry,
+                gatewaySessions,
+                volumeOperations);
+    }
+
+    @Bean
+    public SandboxVolumeManager sandboxVolumeManager(DockerClientOperations ops, DockerSandboxProperties properties) {
+        return new SandboxVolumeManager(ops, properties);
     }
 
     @Bean
@@ -220,9 +227,11 @@ public class DockerSandboxConfiguration {
             AgentJobRepository jobRepository,
             SandboxContainerManager containerManager,
             SandboxNetworkManager networkManager,
+            SandboxVolumeManager volumeManager,
             MeterRegistry meterRegistry,
             Clock clock) {
-        return new SandboxReconciler(jobRepository, containerManager, networkManager, meterRegistry, clock);
+        return new SandboxReconciler(
+                jobRepository, containerManager, networkManager, volumeManager, meterRegistry, clock);
     }
 
     @Bean
@@ -270,7 +279,9 @@ public class DockerSandboxConfiguration {
             ExecutorService dockerWaitExecutor,
             DockerSandboxProperties dockerProperties,
             SandboxGatewayProperties gatewayProperties,
-            MentorProxyCredentialRegistry mentorProxyCredentialRegistry) {
+            MentorProxyCredentialRegistry mentorProxyCredentialRegistry,
+            SandboxGatewaySessions gatewaySessions,
+            DockerClientOperations volumeOperations) {
         return new DockerInteractiveSandboxAdapter(
                 interactiveProperties,
                 networkManager,
@@ -283,7 +294,9 @@ public class DockerSandboxConfiguration {
                 dockerWaitExecutor,
                 dockerProperties,
                 gatewayProperties.port(),
-                mentorProxyCredentialRegistry);
+                mentorProxyCredentialRegistry,
+                gatewaySessions,
+                volumeOperations);
     }
 
     /**

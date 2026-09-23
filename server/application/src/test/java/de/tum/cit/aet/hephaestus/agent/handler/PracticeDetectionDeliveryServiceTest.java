@@ -9,18 +9,22 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.HistoricalGitEvidence;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
@@ -37,9 +41,12 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeDetectionCompletedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,6 +81,17 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
     @org.mockito.Mock
     private de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy memberAiPolicy;
 
+    /** The pinned change: {@code BASE..HEAD}, in a checkout whose HEAD tree is {@code TREE}. */
+    private static final String BASE = "a".repeat(40);
+
+    private static final String HEAD = "b".repeat(40);
+    private static final String TREE = "c".repeat(40);
+    private static final String HEAD_DIGEST = "d".repeat(64);
+    private static final String REFS_DIGEST = "f".repeat(64);
+    private static final String BLOB_DIGEST = "e".repeat(64);
+    private static final String HEAD_PATH = SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD";
+    private static final String REFS_PATH = SandboxLayout.REPO_MOUNT_RELATIVE + ".git/hephaestus-captured-refs";
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock
@@ -95,15 +113,27 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
     private ApplicationEventPublisher eventPublisher;
 
     @Mock
-    private ContentAddressedStore cas;
+    private JobEvidenceFiles cas;
 
     @Mock
     private de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry sourceCatalogs;
+
+    @Mock
+    private HistoricalGitEvidence historicalGit;
 
     @Captor
     private ArgumentCaptor<PracticeDetectionCompletedEvent> eventCaptor;
 
     private PracticeDetectionDeliveryService service;
+
+    /** A regular file the attempt's checkout holds at one revision. */
+    private record Blob(String revision, String path) {}
+
+    /** What the checkout can be quoted from: the numbered lines of each blob, as the verifier reads them. */
+    private final Map<Blob, Map<Integer, String>> checkout = new HashMap<>();
+
+    /** The paths the pinned change touches, as the checkout's own history reports them. */
+    private Set<String> changedPaths = Set.of("src/Auth.java");
 
     private Practice testPractice;
     private AgentJob testJob;
@@ -120,6 +150,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 objectMapper,
                 cas,
                 sourceCatalogs,
+                historicalGit,
                 memberAiPolicy);
 
         lenient().when(sourceCatalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(true);
@@ -143,26 +174,19 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         metadata.put("repository_full_name", "owner/repo");
         metadata.put("pr_number", 42);
         testJob.setMetadata(metadata);
-        ObjectNode snapshot = objectMapper.createObjectNode();
-        var sources =
-                snapshot.putObject("manifest").put("contractVersion", "1.1.0").putArray("sources");
-        var source = sources.addObject().put("kind", "scm.pull-request.diff");
-        source.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
-        source.putArray("artifacts")
-                .addObject()
-                .put("path", "inputs/context/diff.patch")
-                .put("sha256", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-        var coreSource = sources.addObject().put("kind", "scm.pull-request.core");
-        coreSource.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
-        coreSource
-                .putArray("artifacts")
-                .addObject()
-                .put("path", "inputs/context/pull_request.json")
-                .put("sha256", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
-        snapshot.putArray("practices")
-                .addObject()
-                .put("slug", "pr-description-quality")
-                .put("revisionId", 11L);
+        ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(objectMapper);
+        EvidenceSnapshotFixtures.artifact(
+                EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", BASE + ":" + HEAD),
+                PullRequestContentSource.CHANGE_FILE,
+                "a".repeat(64));
+        ObjectNode tree = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.repository.tree", HEAD + ":" + TREE);
+        EvidenceSnapshotFixtures.artifact(tree, HEAD_PATH, HEAD_DIGEST);
+        EvidenceSnapshotFixtures.artifact(tree, REFS_PATH, REFS_DIGEST);
+        EvidenceSnapshotFixtures.artifact(
+                EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.core", null),
+                "inputs/context/pull_request.json",
+                "b".repeat(64));
+        EvidenceSnapshotFixtures.admittedPractice(snapshot, "pr-description-quality", 11L);
         testJob.setEvidenceSnapshot(snapshot);
 
         PracticeRevision revision = org.mockito.Mockito.mock(PracticeRevision.class);
@@ -173,12 +197,24 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         // Bindings decide what this practice may assert an ABSENCE over; every source that applies to the
         // artifact is staged for citation regardless.
         lenient().when(revision.getBindings()).thenReturn(testPractice.getBindings());
-        lenient().when(practiceRevisionRepository.findById(11L)).thenReturn(Optional.of(revision));
         lenient()
-                .when(cas.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-                .thenReturn(Optional.of(
-                        "diff --git a/src/Auth.java b/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n[L10] + insecure();\n"
-                                .getBytes(StandardCharsets.UTF_8)));
+                .when(practiceRevisionRepository.findByIdAndWorkspaceId(11L, 1L))
+                .thenReturn(Optional.of(revision));
+
+        captured(HEAD, "src/Auth.java", 10, "insecure();", "allowAll();");
+        lenient()
+                .when(historicalGit.changedPaths(testJob, HEAD_DIGEST, REFS_DIGEST, BASE, HEAD))
+                .thenAnswer(invocation -> changedPaths);
+        lenient()
+                .when(historicalGit.verifyAll(eq(testJob), eq(HEAD_DIGEST), eq(REFS_DIGEST), eq(HEAD), any()))
+                .thenAnswer(invocation -> {
+                    List<HistoricalGitEvidence.Citation> submitted = invocation.getArgument(4);
+                    Map<HistoricalGitEvidence.Citation, JobEvidenceFiles.QuoteMatch> verified = new LinkedHashMap<>();
+                    for (HistoricalGitEvidence.Citation citation : submitted) {
+                        verified.put(citation, quoteMatch(citation));
+                    }
+                    return verified;
+                });
 
         lenient()
                 .when(reviewTargets.findPullRequest(456L))
@@ -207,6 +243,28 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 .thenReturn(1);
     }
 
+    /** Puts {@code lines} into the checkout at {@code path} in {@code revision}, the first at {@code firstLine}. */
+    private void captured(String revision, String path, int firstLine, String... lines) {
+        Map<Integer, String> numbered = checkout.computeIfAbsent(new Blob(revision, path), blob -> new HashMap<>());
+        for (int i = 0; i < lines.length; i++) {
+            numbered.put(firstLine + i, lines[i]);
+        }
+    }
+
+    /** What the verifier answers for one citation: the blob is absent, or its lines do or do not read as quoted. */
+    private JobEvidenceFiles.QuoteMatch quoteMatch(HistoricalGitEvidence.Citation citation) {
+        Map<Integer, String> lines = checkout.get(new Blob(citation.revision(), citation.path()));
+        if (lines == null) return JobEvidenceFiles.QuoteMatch.absent();
+        StringBuilder text = new StringBuilder();
+        for (int line = citation.startLine(); line <= citation.endLine(); line++) {
+            String content = lines.get(line);
+            if (content == null) return new JobEvidenceFiles.QuoteMatch(false, BLOB_DIGEST);
+            if (line > citation.startLine()) text.append('\n');
+            text.append(content);
+        }
+        return new JobEvidenceFiles.QuoteMatch(text.toString().equals(citation.quote()), BLOB_DIGEST);
+    }
+
     private ValidatedObservation validObservation(String slug, @Nullable Presence presence) {
         Assessment assessment =
                 switch (presence) {
@@ -218,12 +276,12 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         evidence.putArray("citations")
                 .addObject()
                 .put("sourceKind", "scm.pull-request.diff")
-                .put("artifactPath", "inputs/context/diff.patch")
+                .put("artifactPath", PullRequestContentSource.CHANGE_FILE)
                 .put("path", "src/Auth.java")
                 .put("side", "NEW")
                 .put("startLine", 10)
                 .put("endLine", 10)
-                .put("quote", "+ insecure();");
+                .put("quote", "insecure();");
         // An ABSENT observation asserts a universal, so delivery requires it to say where it looked.
         if (presence == Presence.ABSENT) {
             ObjectNode search = evidence.putObject("search");
@@ -250,45 +308,25 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 null);
     }
 
-    @ParameterizedTest
-    @ValueSource(
-            strings = {
-                "  Trivio:  # TODO: Adjust Name",
-                "+  Trivio:  # TODO: Adjust Name",
-                "  Trivio:  # TODO: Adjust Name\n",
-                "  Trivio:  # TODO: Adjust Name\r\n",
-                "  Trivio:  # TODO: Adjust Name\r\n\r\n"
-            })
-    void shouldAdmitExactIndentedQuoteWithServerLineSemantics(String quote) {
-        when(cas.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-                .thenReturn(Optional.of(("--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,2 +10,2 @@\n"
-                                + "[L10] +  Trivio:  # TODO: Adjust Name\n[L11] +\n")
-                        .getBytes(StandardCharsets.UTF_8)));
-        var observation = validObservation("pr-description-quality", Presence.PRESENT);
-        ((ObjectNode) evidenceOf(observation).withArray("citations").get(0))
-                .put("quote", quote)
-                .put("endLine", 9 + quote.lines().count());
-        assertThat(service.deliver(testJob, List.of(observation)).inserted()).isEqualTo(1);
-        assertThat(evidenceOf(observation)
-                        .path("citations")
-                        .get(0)
-                        .path("quote")
-                        .asString())
-                .isEqualTo(quote);
+    private static ObjectNode firstCitation(ValidatedObservation observation) {
+        return (ObjectNode) evidenceOf(observation).withArray("citations").get(0);
+    }
+
+    /** The persisted first citation of the one observation {@code result} recorded. */
+    private static JsonNode storedCitation(PracticeDetectionDeliveryService.RecordedObservations result) {
+        return java.util.Objects.requireNonNull(result.recorded().getFirst().evidence())
+                .path("citations")
+                .get(0);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"Trivio:  # TODO: Adjust Name", "[L10] +  Trivio:  # TODO: Adjust Name", " \t\n"})
-    void shouldRejectMissingIndentationDisplayCoordinatesAndBlankQuotes(String quote) {
-        lenient()
-                .when(cas.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-                .thenReturn(Optional.of(("--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10 @@\n"
-                                + "[L10] +  Trivio:  # TODO: Adjust Name\n")
-                        .getBytes(StandardCharsets.UTF_8)));
+    @ValueSource(strings = {"", " \t\n"})
+    void shouldRejectABlankQuote(String quote) {
         var observation = validObservation("pr-description-quality", Presence.PRESENT);
-        ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("quote", quote);
-        assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
-                .isInstanceOf(JobDeliveryException.class);
+        firstCitation(observation).put("quote", quote);
+        assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessageContaining("code citation");
         verifyNoInteractions(observationRepository);
     }
 
@@ -296,54 +334,25 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
     @ValueSource(longs = {2147483648L, 4294967306L, Long.MAX_VALUE})
     void shouldRejectCoordinatesThatWouldOverflowAnInteger(long line) {
         var observation = validObservation("pr-description-quality", Presence.PRESENT);
-        var citation =
-                (ObjectNode) evidenceOf(observation).withArray("citations").get(0);
+        var citation = firstCitation(observation);
         citation.put("startLine", line).put("endLine", line);
-        assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+        assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                 .isInstanceOf(JobDeliveryException.class)
-                .hasMessageContaining("invalid evidence citation");
+                .hasMessageContaining("code citation");
         citation.put("startLine", 10);
-        assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+        assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                 .isInstanceOf(JobDeliveryException.class)
                 .hasMessageContaining("invalid evidence citation");
-        verifyNoInteractions(observationRepository);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"OLD", "NEW"})
-    void shouldReadAnnotatedHeaderLikeTextAsSourceContent(String side) {
-        when(cas.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-                .thenReturn(Optional.of(("--- a/src/Auth.java\n+++ b/src/Auth.java\n"
-                                + "[L10] --- SQL comment\n[L10] +++ value\u2028tail\u2029end\n")
-                        .getBytes(StandardCharsets.UTF_8)));
-        var observation = validObservation("pr-description-quality", Presence.PRESENT);
-        ((ObjectNode) evidenceOf(observation).withArray("citations").get(0))
-                .put("side", side)
-                .put("quote", side.equals("OLD") ? "-- SQL comment" : "++ value\u2028tail\u2029end");
-        assertThat(service.deliver(testJob, List.of(observation)).inserted()).isEqualTo(1);
-    }
-
-    @Test
-    void shouldRefuseAnEmptyAnnotatedPayloadWithoutThrowingAParserError() {
-        when(cas.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-                .thenReturn(Optional.of(
-                        "--- a/src/Auth.java\n+++ b/src/Auth.java\n[L10] +x\n[L11] ".getBytes(StandardCharsets.UTF_8)));
-        var observation = validObservation("pr-description-quality", Presence.PRESENT);
-        ((ObjectNode) evidenceOf(observation).withArray("citations").get(0))
-                .put("quote", "x\n\n")
-                .put("endLine", 11);
-        assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
-                .isInstanceOf(JobDeliveryException.class)
-                .hasMessageContaining("does not match");
         verifyNoInteractions(observationRepository);
     }
 
     @Test
     void shouldAdmitContextualAssessmentWithoutParsingPolarityFromCriteria() {
-        PracticeRevision revision = practiceRevisionRepository.findById(11L).orElseThrow();
+        PracticeRevision revision =
+                practiceRevisionRepository.findByIdAndWorkspaceId(11L, 1L).orElseThrow();
         var observation = validObservation("pr-description-quality", Presence.PRESENT);
-        service.deliver(testJob, List.of(observation));
-        verify(revision, org.mockito.Mockito.never()).getCriteria();
+        publishVerified(testJob, List.of(observation));
+        verify(revision, never()).getCriteria();
         verify(observationRepository)
                 .insertIfAbsent(
                         any(),
@@ -381,13 +390,13 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 null,
                 evidence,
                 "The captured evidence does not settle the criterion.");
-        assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+        assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                 .isInstanceOf(JobDeliveryException.class)
                 .hasMessageContaining("open question");
         evidence.putObject("undecidability")
                 .put("openQuestion", "Does the criterion include this compatibility-only change?")
                 .put("wouldSettleIt", "Clarification of the practice's scope.");
-        assertThat(service.deliver(testJob, List.of(observation)).hasNegative()).isFalse();
+        assertThat(publishVerified(testJob, List.of(observation)).hasNegative()).isFalse();
     }
 
     private static JsonNode evidenceOf(ValidatedObservation observation) {
@@ -409,14 +418,303 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         lenient().when(revision.getPractice()).thenReturn(practice);
         lenient().when(revision.getAutomatedReviewPolicy()).thenReturn(practice.getAutomatedReviewPolicy());
         lenient().when(revision.getBindings()).thenReturn(practice.getBindings());
-        lenient().when(practiceRevisionRepository.findById(revisionId)).thenReturn(Optional.of(revision));
+        lenient()
+                .when(practiceRevisionRepository.findByIdAndWorkspaceId(revisionId, 1L))
+                .thenReturn(Optional.of(revision));
+    }
+
+    /** A second admitted practice, so one observation can be withheld while another is delivered. */
+    private Practice admitSecondPractice() {
+        Practice second = new Practice();
+        ReflectionTestUtils.setField(second, "id", 20L);
+        second.setSlug("pr-scope");
+        second.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
+        second.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
+        admit(second, 21L);
+        return second;
+    }
+
+    private PracticeDetectionDeliveryService.RecordedObservations publishVerified(
+            AgentJob job, List<PracticeDetectionResultParser.ValidatedObservation> submitted) {
+        return service.publish(job, service.prepare(job, submitted));
+    }
+
+    @Test
+    void shouldRejectPreparedObservationsWhenSourceAuthorizationChangesBeforePublication() {
+        var prepared = service.prepare(testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT)));
+        when(sourceCatalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(false);
+        assertThatThrownBy(() -> service.publish(testJob, prepared)).isInstanceOf(JobDeliveryException.class);
+        verifyNoInteractions(observationRepository);
+    }
+
+    @Test
+    void shouldRefusePublicationWhenTheJobChangedSincePreparation() {
+        var prepared = service.prepare(testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT)));
+        testJob.setRetryCount(1);
+        assertThatThrownBy(() -> service.publish(testJob, prepared))
+                .isInstanceOf(ObservationAdmissionService.StaleAttemptException.class);
+        verifyNoInteractions(observationRepository);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldAdmitRepositoryTextAgainstTheCapturedRepositoryIdentity(boolean historical) {
+        String revision = historical ? BASE : HEAD;
+        captured(revision, "deleted.java", 3, "old source");
+        var observation = validObservation("pr-description-quality", Presence.PRESENT);
+        ObjectNode citation = firstCitation(observation);
+        citation.put("sourceKind", "scm.repository.tree")
+                .put("artifactPath", HEAD_PATH)
+                .put("path", "deleted.java")
+                .put("revision", revision)
+                .put("quote", "old source")
+                .put("startLine", 3)
+                .put("endLine", 3);
+        citation.remove("side");
+        if (!historical) citation.remove("revision");
+        var requested = new HistoricalGitEvidence.Citation(revision, "deleted.java", "old source", 3, 3);
+
+        var result = publishVerified(testJob, List.of(observation));
+
+        JsonNode stored = storedCitation(result);
+        assertThat(stored.path("verification").path("artifactSha256").asString())
+                .isEqualTo(BLOB_DIGEST);
+        assertThat(stored.path("revision").asString()).isEqualTo(revision);
+        verify(historicalGit).verifyAll(testJob, HEAD_DIGEST, REFS_DIGEST, HEAD, List.of(requested));
+        verify(historicalGit, never()).changedPaths(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldWithholdOnlyTheCitationWhosePathIsAbsentAtItsRevision() {
+        captured(HEAD, "kept.java", 3, "old source");
+        admitSecondPractice();
+        var present = validObservation("pr-description-quality", Presence.PRESENT);
+        var missing = validObservation("pr-scope", Presence.PRESENT);
+        for (var pair : List.of(Map.entry(present, "kept.java"), Map.entry(missing, "gone.java"))) {
+            ObjectNode citation = firstCitation(pair.getKey());
+            citation.put("sourceKind", "scm.repository.tree")
+                    .put("artifactPath", HEAD_PATH)
+                    .put("path", pair.getValue())
+                    .put("quote", "old source")
+                    .put("startLine", 3)
+                    .put("endLine", 3);
+            citation.remove("side");
+        }
+
+        var result = publishVerified(testJob, List.of(present, missing));
+
+        assertThat(result.recorded())
+                .extracting(ValidatedObservation::practiceSlug)
+                .containsExactly("pr-description-quality");
+    }
+
+    /**
+     * A quote from the change is a quote from one of its two revisions at a path the change touches:
+     * the side names the revision, the checkout's own history names the paths, and the verifier reads
+     * the blob the same way it reads any other repository citation.
+     */
+    @Nested
+    class ChangeCitations {
+
+        @Test
+        @DisplayName("the NEW side is verified at the head of the pinned range, which the citation then records")
+        void verifiesTheNewSideAtTheHead() {
+            var observation = validObservation("pr-description-quality", Presence.PRESENT);
+
+            var result = publishVerified(testJob, List.of(observation));
+
+            JsonNode stored = storedCitation(result);
+            assertThat(stored.path("revision").asString()).isEqualTo(HEAD);
+            assertThat(stored.path("side").asString()).isEqualTo("NEW");
+            assertThat(stored.path("verification").path("artifactSha256").asString())
+                    .isEqualTo(BLOB_DIGEST);
+            assertThat(stored.path("verification").path("quoteSha256").asString())
+                    .isEqualTo(CitationVerification.quoteDigest("insecure();"));
+            verify(historicalGit).changedPaths(testJob, HEAD_DIGEST, REFS_DIGEST, BASE, HEAD);
+            verify(historicalGit)
+                    .verifyAll(
+                            testJob,
+                            HEAD_DIGEST,
+                            REFS_DIGEST,
+                            HEAD,
+                            List.of(new HistoricalGitEvidence.Citation(HEAD, "src/Auth.java", "insecure();", 10, 10)));
+        }
+
+        @Test
+        @DisplayName("the OLD side is verified at the base of the pinned range")
+        void verifiesTheOldSideAtTheBase() {
+            captured(BASE, "src/Auth.java", 8, "requireAdmin();");
+            var observation = validObservation("pr-description-quality", Presence.PRESENT);
+            firstCitation(observation)
+                    .put("side", "OLD")
+                    .put("startLine", 8)
+                    .put("endLine", 8)
+                    .put("quote", "requireAdmin();");
+
+            var result = publishVerified(testJob, List.of(observation));
+
+            assertThat(storedCitation(result).path("revision").asString()).isEqualTo(BASE);
+            verify(historicalGit)
+                    .verifyAll(
+                            testJob,
+                            HEAD_DIGEST,
+                            REFS_DIGEST,
+                            HEAD,
+                            List.of(new HistoricalGitEvidence.Citation(
+                                    BASE, "src/Auth.java", "requireAdmin();", 8, 8)));
+        }
+
+        @Test
+        @DisplayName("a quote spanning two lines of the change verifies as one")
+        void verifiesAQuoteSpanningTwoLines() {
+            var observation = validObservation("pr-description-quality", Presence.PRESENT);
+            firstCitation(observation).put("endLine", 11).put("quote", "insecure();\nallowAll();");
+
+            assertThat(publishVerified(testJob, List.of(observation)).inserted())
+                    .isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("a path the change does not touch is withheld as unverified, not fatal")
+        void withholdsAPathTheChangeDoesNotTouch() {
+            captured(HEAD, "src/Other.java", 10, "insecure();");
+            admitSecondPractice();
+            var inChange = validObservation("pr-description-quality", Presence.PRESENT);
+            var outsideChange = validObservation("pr-scope", Presence.PRESENT);
+            firstCitation(outsideChange).put("path", "src/Other.java");
+
+            var result = publishVerified(testJob, List.of(inChange, outsideChange));
+
+            assertThat(result.recorded())
+                    .extracting(ValidatedObservation::practiceSlug)
+                    .containsExactly("pr-description-quality");
+            JsonNode failures =
+                    java.util.Objects.requireNonNull(testJob.getMetadata()).path("citation_verification_failures");
+            assertThat(failures).hasSize(1);
+            assertThat(failures.get(0).path("observationIndex").asInt()).isEqualTo(1);
+            assertThat(failures.get(0).path("reasonCode").asString()).isEqualTo("QUOTE_LOCATION_MISMATCH");
+        }
+
+        @Test
+        @DisplayName("a quote that is not at the cited lines of the cited revision is withheld")
+        void withholdsAQuoteThatDoesNotMatchTheRevision() {
+            var wrongLine = validObservation("pr-description-quality", Presence.PRESENT);
+            firstCitation(wrongLine).put("startLine", 11).put("endLine", 11);
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(wrongLine)))
+                    .isInstanceOf(ObservationsRefusedException.class)
+                    .hasMessageContaining("Quote does not match the cited revision and lines");
+
+            var wrongText = validObservation("pr-description-quality", Presence.PRESENT);
+            firstCitation(wrongText).put("quote", "fabricated quote");
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(wrongText)))
+                    .isInstanceOf(ObservationsRefusedException.class)
+                    .hasMessageContaining("Quote does not match the cited revision and lines");
+
+            var beyondTheFile = validObservation("pr-description-quality", Presence.PRESENT);
+            firstCitation(beyondTheFile).put("endLine", 12).put("quote", "insecure();\nallowAll();\n");
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(beyondTheFile)))
+                    .isInstanceOf(ObservationsRefusedException.class)
+                    .hasMessageContaining("Quote does not match the cited revision and lines");
+            verifyNoInteractions(observationRepository);
+        }
+
+        @Test
+        @DisplayName("a two-line quote whose second line is altered is withheld")
+        void withholdsATwoLineQuoteWhoseSecondLineIsAltered() {
+            var observation = validObservation("pr-description-quality", Presence.PRESENT);
+            firstCitation(observation).put("endLine", 11).put("quote", "insecure();\nallowSome();");
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(ObservationsRefusedException.class)
+                    .hasMessageContaining("Quote does not match the cited revision and lines");
+            verifyNoInteractions(observationRepository);
+        }
+
+        @Test
+        @DisplayName("a renamed file is quoted under its new name at the head")
+        void verifiesTheNewPathOfARenamedFile() {
+            changedPaths = Set.of("src/Old.java", "src/New.java");
+            captured(HEAD, "src/New.java", 10, "insecure();");
+            var observation = validObservation("pr-description-quality", Presence.PRESENT);
+            firstCitation(observation).put("path", "src/New.java");
+
+            assertThat(publishVerified(testJob, List.of(observation)).inserted())
+                    .isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName(
+                "the old name of a renamed file no longer exists at the head, so a NEW-side quote of it is withheld")
+        void withholdsTheOldPathOfARenamedFileOnTheNewSide() {
+            changedPaths = Set.of("src/Old.java", "src/New.java");
+            captured(HEAD, "src/New.java", 10, "insecure();");
+            var observation = validObservation("pr-description-quality", Presence.PRESENT);
+            firstCitation(observation).put("path", "src/Old.java");
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(ObservationsRefusedException.class)
+                    .hasMessageContaining("Cited path does not exist at the cited revision");
+            verifyNoInteractions(observationRepository);
+        }
+
+        @Test
+        @DisplayName("a change citation names a side, never a revision")
+        void rejectsARevisionOnAChangeCitation() {
+            var observation = validObservation("pr-description-quality", Presence.PRESENT);
+            firstCitation(observation).put("revision", HEAD);
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("Invalid change citation");
+            verifyNoInteractions(observationRepository, historicalGit);
+        }
+
+        @Test
+        void rejectsAChangeCitationWithoutASide() {
+            var observation = validObservation("pr-description-quality", Presence.PRESENT);
+            firstCitation(observation).remove("side");
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("Invalid change citation");
+            verifyNoInteractions(observationRepository, historicalGit);
+        }
+
+        @Test
+        @DisplayName("a change citation names the pinned change, not some other artifact")
+        void rejectsAChangeCitationOfAnotherArtifact() {
+            var observation = validObservation("pr-description-quality", Presence.PRESENT);
+            firstCitation(observation).put("artifactPath", "inputs/context/pull_request.json");
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("code citation");
+            verifyNoInteractions(observationRepository, historicalGit);
+        }
+
+        @Test
+        @DisplayName("a change can only be quoted from a checkout the run captured")
+        void rejectsAChangeCitationWithoutACapturedCheckout() {
+            ObjectNode snapshot = (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot());
+            EvidenceSnapshotFixtures.unavailable((ObjectNode)
+                    snapshot.withObject("manifest").withArray("sources").get(1));
+
+            assertThatThrownBy(() -> publishVerified(
+                            testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("scm.repository.tree");
+            verifyNoInteractions(observationRepository, historicalGit);
+        }
     }
 
     @Test
     void shouldNotAdmitObservationsAfterDeveloperChoosesNoAi() {
         when(memberAiPolicy.allowsResult(testJob)).thenReturn(false);
         assertThatThrownBy(() ->
-                        service.deliver(testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
+                        service.prepare(testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
                 .isInstanceOfSatisfying(
                         ObservationsRefusedException.class,
                         refused -> assertThat(refused.reasonCode()).isEqualTo("member_ai_declined"))
@@ -432,33 +730,64 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
             ((ObjectNode) evidenceOf(observation)).remove("citations");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("no source-bound evidence citation");
             verifyNoInteractions(observationRepository);
         }
 
         @Test
-        void rejectsDiffCitationWithoutSide() {
+        @DisplayName("a side selects a revision of the change; no other source has one")
+        void rejectsNonCodeCitationWithSide() {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
-            ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).remove("side");
-
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("invalid evidence citation");
-            verifyNoInteractions(observationRepository);
-        }
-
-        @Test
-        void rejectsNonDiffCitationWithSide() {
-            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
-            ObjectNode citation =
-                    (ObjectNode) evidenceOf(observation).withArray("citations").get(0);
+            ObjectNode citation = firstCitation(observation);
             citation.put("sourceKind", "scm.pull-request.core");
             citation.put("artifactPath", "inputs/context/pull_request.json");
             citation.put("path", "pull_request.json");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("Only repository citations may select a revision or a side");
+            verifyNoInteractions(observationRepository, historicalGit);
+        }
+
+        @Test
+        @DisplayName("a revision selects a commit of the checkout; no other source has one")
+        void rejectsNonCodeCitationWithRevision() {
+            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
+            ObjectNode citation = firstCitation(observation);
+            citation.put("sourceKind", "scm.pull-request.core");
+            citation.put("artifactPath", "inputs/context/pull_request.json");
+            citation.put("path", "pull_request.json");
+            citation.put("revision", HEAD);
+            citation.remove("side");
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("Only repository citations may select a revision or a side");
+            verifyNoInteractions(observationRepository, historicalGit);
+        }
+
+        @Test
+        @DisplayName("a quote is always required; there is no digest-only citation")
+        void rejectsACitationWithoutAQuote() {
+            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
+            ObjectNode citation = firstCitation(observation);
+            citation.remove("quote");
+            citation.put("quoteSha256", "cc8c484344d4e1f933f0020a76f6dc3f6fa1462dfc7c1ac7b42cae840404141f");
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("code citation");
+            verifyNoInteractions(observationRepository, historicalGit);
+
+            ObjectNode nonCode = firstCitation(observation);
+            nonCode.put("sourceKind", "scm.pull-request.core");
+            nonCode.put("artifactPath", "inputs/context/pull_request.json");
+            nonCode.put("path", "pull_request.json");
+            nonCode.remove("side");
+
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("invalid evidence citation");
             verifyNoInteractions(observationRepository);
@@ -468,12 +797,13 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @DisplayName("a citation to a source this run did not stage is refused")
         void rejectsSourcesTheRunNeverStaged() {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
-            ObjectNode citation =
-                    (ObjectNode) evidenceOf(observation).withArray("citations").get(0);
-            citation.put("sourceKind", "scm.repository.tree");
+            ObjectNode citation = firstCitation(observation);
+            citation.put("sourceKind", "scm.pull-request.comments");
+            citation.put("artifactPath", "inputs/context/comments.json");
+            citation.put("path", "comments.json");
             citation.remove("side");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("misattributed evidence source");
             verifyNoInteractions(observationRepository);
@@ -487,29 +817,36 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("a citation to a staged source the practice's bindings did not name is accepted")
         void acceptsAStagedSourceOutsideThePracticeDeclaration() {
-            var inventory = ((ObjectNode) testJob.getEvidenceSnapshot().path("manifest"))
-                    .withArray("sources")
-                    .addObject()
-                    .put("kind", "workspace.project-inventory");
-            inventory.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
+            var inventory = EvidenceSnapshotFixtures.availableSource(
+                    (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                    "workspace.project-inventory",
+                    null);
             inventory
-                    .putArray("artifacts")
+                    .withArray("artifacts")
                     .addObject()
                     .put("path", "inputs/context/project_inventory.json")
+                    .put("mediaType", "application/json")
+                    .put("bytes", 0)
                     .put("sha256", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
-            when(cas.get("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"))
-                    .thenReturn(Optional.of("{\"issues\":[{\"number\":7,\"title\":\"Same migration\"}]}"
-                            .getBytes(StandardCharsets.UTF_8)));
+            when(cas.containsUtf8AtLines(
+                            testJob,
+                            "inputs/context/project_inventory.json",
+                            "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                            "\"title\":\"Same migration\"",
+                            1,
+                            1))
+                    .thenReturn(Optional.of(true));
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
-            ObjectNode citation =
-                    (ObjectNode) evidenceOf(observation).withArray("citations").get(0);
+            ObjectNode citation = firstCitation(observation);
             citation.put("sourceKind", "workspace.project-inventory");
             citation.put("artifactPath", "inputs/context/project_inventory.json");
             citation.put("path", "project_inventory.json");
+            citation.put("startLine", 1);
+            citation.put("endLine", 1);
             citation.put("quote", "\"title\":\"Same migration\"");
             citation.remove("side");
 
-            assertThat(service.deliver(testJob, List.of(observation)).inserted())
+            assertThat(publishVerified(testJob, List.of(observation)).inserted())
                     .isEqualTo(1);
         }
 
@@ -518,7 +855,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             when(sourceCatalogs.isSourceUsePermitted(any(), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
                     .thenReturn(false);
 
-            assertThatThrownBy(() -> service.deliver(
+            assertThatThrownBy(() -> publishVerified(
                             testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("authorization was withdrawn");
@@ -531,7 +868,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             when(sourceCatalogs.isSourceUsePermitted(any(), eq(new SourceKind("scm.pull-request.core")), any()))
                     .thenReturn(false);
 
-            assertThatThrownBy(() -> service.deliver(
+            assertThatThrownBy(() -> publishVerified(
                             testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("scm.pull-request.core");
@@ -539,60 +876,43 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void rejectsAQuoteThatIsNotInTheCitedArtifact() {
-            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
-            ((ObjectNode) ((ObjectNode) evidenceOf(observation))
-                            .withArray("citations")
-                            .get(0))
-                    .put("quote", "fabricated quote");
-
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("does not match the cited diff location");
-            verifyNoInteractions(observationRepository);
-        }
-
-        @Test
         @DisplayName("only the claim whose quote does not verify is withheld; the other is delivered")
         void withholdsOnlyTheObservationWhoseQuoteDoesNotVerify() {
-            Practice second = new Practice();
-            ReflectionTestUtils.setField(second, "id", 20L);
-            second.setSlug("pr-scope");
-            second.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
-            second.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
-            admit(second, 21L);
+            admitSecondPractice();
 
             ValidatedObservation sound = validObservation("pr-description-quality", Presence.PRESENT);
             ValidatedObservation misquoted = validObservation("pr-scope", Presence.PRESENT);
-            ((ObjectNode) evidenceOf(misquoted).withArray("citations").get(0)).put("quote", "+ insecure();,");
+            firstCitation(misquoted).put("quote", "insecure();,");
 
-            var result = service.deliver(testJob, List.of(sound, misquoted));
+            var result = publishVerified(testJob, List.of(sound, misquoted));
 
-            assertThat(result.delivered())
+            assertThat(result.recorded())
                     .as("the claim that verified is the one persisted, and it is the only one")
                     .extracting(ValidatedObservation::practiceSlug)
                     .containsExactly("pr-description-quality");
             assertThat(result.inserted()).isEqualTo(1);
+            JsonNode failures =
+                    java.util.Objects.requireNonNull(testJob.getMetadata()).path("citation_verification_failures");
+            assertThat(failures).hasSize(1);
+            assertThat(failures.get(0).path("observationIndex").asInt()).isEqualTo(1);
+            assertThat(failures.get(0).path("citationIndex").asInt()).isEqualTo(0);
+            assertThat(failures.get(0).path("reasonCode").asString()).isEqualTo("QUOTE_LOCATION_MISMATCH");
         }
 
         @Test
         @DisplayName("a citation to an unstaged source still fails the whole delivery, even beside a sound claim")
         void anEvidenceFailureThatIsNotAQuoteMismatchStillFailsEverything() {
-            Practice second = new Practice();
-            ReflectionTestUtils.setField(second, "id", 20L);
-            second.setSlug("pr-scope");
-            second.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
-            second.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
-            admit(second, 21L);
+            admitSecondPractice();
 
             ValidatedObservation sound = validObservation("pr-description-quality", Presence.PRESENT);
             ValidatedObservation unstaged = validObservation("pr-scope", Presence.PRESENT);
-            ObjectNode citation =
-                    (ObjectNode) evidenceOf(unstaged).withArray("citations").get(0);
-            citation.put("sourceKind", "scm.repository.tree");
+            ObjectNode citation = firstCitation(unstaged);
+            citation.put("sourceKind", "scm.pull-request.comments");
+            citation.put("artifactPath", "inputs/context/comments.json");
+            citation.put("path", "comments.json");
             citation.remove("side");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(sound, unstaged)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(sound, unstaged)))
                     .as("an unstaged source impugns the run, not just the claim that cited it")
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("misattributed evidence source");
@@ -603,136 +923,37 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @DisplayName("a batch in which no quote verifies is refused rather than retried as an unavailable server")
         void shouldRefuseObservationsWhenNoQuotedEvidenceVerifies() {
             ValidatedObservation misquoted = validObservation("pr-description-quality", Presence.PRESENT);
-            ((ObjectNode) evidenceOf(misquoted).withArray("citations").get(0)).put("quote", "fabricated quote");
+            firstCitation(misquoted).put("quote", "fabricated quote");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(misquoted)))
-                    .isInstanceOfSatisfying(
-                            ObservationsRefusedException.class,
-                            refusal -> assertThat(refusal.reasonCode()).isEqualTo("no_valid_observations"))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(misquoted)))
+                    .isInstanceOfSatisfying(ObservationsRefusedException.class, refusal -> {
+                        assertThat(refusal.reasonCode()).isEqualTo("no_valid_observations");
+                        JsonNode failures = refusal.verificationFailures();
+                        assertThat(failures).hasSize(1);
+                        assertThat(failures.get(0).path("observationIndex").asInt())
+                                .isZero();
+                        assertThat(failures.get(0).path("citationIndex").asInt())
+                                .isZero();
+                        assertThat(failures.get(0).path("reasonCode").asString())
+                                .isEqualTo("QUOTE_LOCATION_MISMATCH");
+                    })
                     .hasMessageContaining("No observation survived the evidence check");
             verifyNoInteractions(observationRepository);
         }
 
         @Test
-        void acceptsASecretScannerCitationWithoutPersistingTheSecret() {
-            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
-            ObjectNode evidence = (ObjectNode) evidenceOf(observation);
-            evidence.put("detector", "secret-diff-scanner");
-            ObjectNode citation = (ObjectNode) evidence.withArray("citations").get(0);
-            citation.remove("quote");
-            citation.put("quoteSha256", "cbbe06955840924d2ccb449029560ae1eb92f5ec9866804f1a34be23b61dc488");
-
-            assertThat(service.deliver(testJob, List.of(observation)).inserted())
-                    .isEqualTo(1);
-            ArgumentCaptor<String> persistedEvidence = ArgumentCaptor.forClass(String.class);
-            verify(observationRepository)
-                    .insertIfAbsent(
-                            any(),
-                            anyString(),
-                            any(),
-                            anyLong(),
-                            anyLong(),
-                            any(),
-                            anyString(),
-                            anyLong(),
-                            anyLong(),
-                            any(),
-                            anyString(),
-                            any(),
-                            any(),
-                            any(),
-                            persistedEvidence.capture(),
-                            any(),
-                            anyString(),
-                            any(),
-                            anyString());
-            assertThat(persistedEvidence.getValue()).doesNotContain("quoteSha256", "cbbe06955840924d");
-        }
-
-        @Test
-        void rejectsAFabricatedSecretScannerDigest() {
-            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
-            ObjectNode evidence = (ObjectNode) evidenceOf(observation);
-            evidence.put("detector", "secret-diff-scanner");
-            ObjectNode citation = (ObjectNode) evidence.withArray("citations").get(0);
-            citation.remove("quote");
-            citation.put("quoteSha256", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
-
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("does not match the cited diff location");
-            verifyNoInteractions(observationRepository);
-        }
-
-        @Test
-        void rejectsARealQuoteAtTheWrongDiffLine() {
-            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
-            ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("startLine", 11);
-            ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("endLine", 11);
-
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("does not match the cited diff location");
-            verifyNoInteractions(observationRepository);
-        }
-
-        @Test
-        void rejectsARealQuoteInTheWrongDiffFile() {
-            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
-            ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("path", "src/Other.java");
-
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("does not match the cited diff location");
-            verifyNoInteractions(observationRepository);
-        }
-
-        @Test
-        void rejectsARealQuoteWithAnInvalidDiffRange() {
-            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
-            ((ObjectNode) evidenceOf(observation).withArray("citations").get(0)).put("endLine", 11);
-
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("does not match the cited diff location");
-            verifyNoInteractions(observationRepository);
-        }
-
-        @Test
-        void acceptsRemovedLineEvidenceOnTheOldSide() {
-            when(cas.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-                    .thenReturn(Optional.of(("diff --git a/src/Auth.java b/src/Auth.java\n" + "--- a/src/Auth.java\n"
-                                    + "+++ b/src/Auth.java\n"
-                                    + "@@ -8 +8 @@\n"
-                                    + "[L8] - requireAdmin();\n"
-                                    + "[L8] + allowAll();\n")
-                            .getBytes(StandardCharsets.UTF_8)));
-            ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
-            ObjectNode citation =
-                    (ObjectNode) evidenceOf(observation).withArray("citations").get(0);
-            citation.put("side", "OLD");
-            citation.put("startLine", 8);
-            citation.put("endLine", 8);
-            citation.put("quote", "- requireAdmin();");
-
-            assertThat(service.deliver(testJob, List.of(observation)).inserted())
-                    .isEqualTo(1);
-        }
-
-        @Test
+        @DisplayName("a change whose capture failed cannot be quoted, however the checkout looks")
         void rejectsACitationToAnUnavailableSource() {
-            ((ObjectNode) testJob.getEvidenceSnapshot()
-                            .path("manifest")
-                            .path("sources")
-                            .get(0)
-                            .path("state"))
-                    .put("availability", "UNAVAILABLE");
+            EvidenceSnapshotFixtures.unavailable((ObjectNode) testJob.getEvidenceSnapshot()
+                    .path("manifest")
+                    .path("sources")
+                    .get(0));
 
-            assertThatThrownBy(() -> service.deliver(
+            assertThatThrownBy(() -> publishVerified(
                             testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
                     .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("misattributed evidence source");
-            verifyNoInteractions(observationRepository);
+                    .hasMessageContaining("no pinned base and head");
+            verifyNoInteractions(observationRepository, historicalGit);
         }
     }
 
@@ -749,7 +970,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.ABSENT);
             ((ObjectNode) evidenceOf(observation)).remove("search");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("must record where it searched");
             verifyNoInteractions(observationRepository);
@@ -762,7 +983,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 ValidatedObservation observation = validObservation("pr-description-quality", Presence.ABSENT);
                 ((ObjectNode) evidenceOf(observation).get("search")).remove(field);
 
-                assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+                assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                         .as("an ABSENT observation missing search.%s", field)
                         .isInstanceOf(JobDeliveryException.class)
                         .hasMessageContaining("must record where it searched");
@@ -777,9 +998,9 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             // cannot have been searched, and the claim of having searched it is unfalsifiable otherwise.
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.ABSENT);
             ObjectNode search = (ObjectNode) evidenceOf(observation).get("search");
-            search.putArray("consulted").add("scm.repository.tree");
+            search.putArray("consulted").add("scm.pull-request.comments");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("claims a source this run did not stage");
             verifyNoInteractions(observationRepository);
@@ -790,7 +1011,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void acceptsAnAbsentWithARecordedSearch() {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.ABSENT);
 
-            var result = service.deliver(testJob, List.of(observation));
+            var result = publishVerified(testJob, List.of(observation));
 
             assertThat(result.inserted()).isEqualTo(1);
         }
@@ -804,7 +1025,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             // has not closed and therefore cannot assert. The default bindings here are all REQUIRED.
             ValidatedObservation observation = cleanStrength("pr-description-quality");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("declares no EXHAUSTIVE evidence source");
             verifyNoInteractions(observationRepository);
@@ -819,7 +1040,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             exhaustiveOverTheDiff(testPractice);
             ValidatedObservation observation = cleanStrength("pr-description-quality");
 
-            var result = service.deliver(testJob, List.of(observation));
+            var result = publishVerified(testJob, List.of(observation));
 
             assertThat(result.inserted()).isEqualTo(1);
         }
@@ -835,7 +1056,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     .putArray("consulted")
                     .add("scm.pull-request.core");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("did not search the sources its practice asserts absence over");
             verifyNoInteractions(observationRepository);
@@ -869,7 +1090,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                             binding.subject()))
                     .toList();
             practice.setBindings(bindings);
-            PracticeRevision revision = practiceRevisionRepository.findById(11L).orElseThrow();
+            PracticeRevision revision =
+                    practiceRevisionRepository.findByIdAndWorkspaceId(11L, 1L).orElseThrow();
             lenient().when(revision.getBindings()).thenReturn(bindings);
         }
 
@@ -880,7 +1102,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", null);
             ((ObjectNode) evidenceOf(observation)).remove("inapplicability");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("must name what the practice looks for")
                     // Direct the model to uncertainty rather than an invented justification.
@@ -895,7 +1117,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 ValidatedObservation observation = validObservation("pr-description-quality", null);
                 ((ObjectNode) evidenceOf(observation).get("inapplicability")).remove(field);
 
-                assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+                assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                         .as("a NOT_APPLICABLE observation missing inapplicability.%s", field)
                         .isInstanceOf(JobDeliveryException.class)
                         .hasMessageContaining("must name what the practice looks for");
@@ -908,9 +1130,9 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void rejectsAnInapplicabilityOutsideTheBoundary() {
             ValidatedObservation observation = validObservation("pr-description-quality", null);
             ObjectNode inapplicability = (ObjectNode) evidenceOf(observation).get("inapplicability");
-            inapplicability.putArray("consulted").add("scm.repository.tree");
+            inapplicability.putArray("consulted").add("scm.pull-request.comments");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("claims a source this run did not stage");
             verifyNoInteractions(observationRepository);
@@ -928,7 +1150,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                         .as("%s carries no stated inapplicability", presence)
                         .isNull();
 
-                assertThatCode(() -> service.deliver(testJob, List.of(observation)))
+                assertThatCode(() -> publishVerified(testJob, List.of(observation)))
                         .as("%s is delivered without a stated inapplicability", presence)
                         .doesNotThrowAnyException();
             }
@@ -946,7 +1168,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                         .as("%s carries no search", presence)
                         .isNull();
 
-                assertThatCode(() -> service.deliver(testJob, List.of(observation)))
+                assertThatCode(() -> publishVerified(testJob, List.of(observation)))
                         .as("%s is delivered without a recorded search", presence)
                         .doesNotThrowAnyException();
             }
@@ -958,7 +1180,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             stageHistory("we raised this in the last review");
             ValidatedObservation observation = historyCiting("we raised this in the last review");
 
-            var result = service.deliver(testJob, List.of(observation));
+            var result = publishVerified(testJob, List.of(observation));
 
             assertThat(result.inserted()).isEqualTo(1);
         }
@@ -969,7 +1191,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             stageHistory("we raised this in the last review");
             ValidatedObservation observation = historyCiting("we raised this three times before");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of(observation)))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("quote");
             verifyNoInteractions(observationRepository);
@@ -978,25 +1200,31 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         private static final String HISTORY_SHA = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 
         private void stageHistory(String body) {
-            var source = ((ObjectNode) testJob.getEvidenceSnapshot().path("manifest"))
-                    .withArray("sources")
-                    .addObject()
-                    .put("kind", "hephaestus.observation-history");
-            source.putObject("state").put("availability", "AVAILABLE").put("content", "NON_EMPTY");
-            source.putArray("artifacts")
-                    .addObject()
-                    .put("path", "inputs/history/observations.json")
-                    .put("sha256", HISTORY_SHA);
-            when(cas.get(HISTORY_SHA)).thenReturn(Optional.of(body.getBytes(StandardCharsets.UTF_8)));
+            EvidenceSnapshotFixtures.artifact(
+                    EvidenceSnapshotFixtures.availableSource(
+                            (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                            "hephaestus.observation-history",
+                            null),
+                    "inputs/history/observations.json",
+                    HISTORY_SHA);
+            when(cas.containsUtf8AtLines(
+                            eq(testJob),
+                            eq("inputs/history/observations.json"),
+                            eq(HISTORY_SHA),
+                            anyString(),
+                            org.mockito.ArgumentMatchers.anyInt(),
+                            org.mockito.ArgumentMatchers.anyInt()))
+                    .thenAnswer(invocation -> Optional.of(body.contains(invocation.getArgument(3, String.class))));
         }
 
         private ValidatedObservation historyCiting(String quote) {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
-            ObjectNode citation =
-                    (ObjectNode) evidenceOf(observation).withArray("citations").get(0);
+            ObjectNode citation = firstCitation(observation);
             citation.put("sourceKind", "hephaestus.observation-history");
             citation.put("artifactPath", "inputs/history/observations.json");
             citation.put("path", "inputs/history/observations.json");
+            citation.put("startLine", 1);
+            citation.put("endLine", 1);
             citation.remove("side");
             citation.put("quote", quote);
             return observation;
@@ -1010,7 +1238,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void persistsValidObservation() {
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(1);
             assertThat(result.discardedDuplicate()).isZero();
@@ -1041,7 +1269,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
             // The recurrence_key written to the row MUST equal the fingerprint the result map returns —
             // they are the single supersession identity, so any drift between them silently breaks re-review.
-            var keys = result.delivered().get(0).keys();
+            var keys = result.recorded().get(0).keys();
             assertThat(keys).isNotNull();
             assertThat(fingerprintCaptor.getValue())
                     .as("persisted recurrence_key matches the returned findingFingerprint")
@@ -1065,7 +1293,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void unknownSlug() {
             var observations = List.of(validObservation("unknown-practice", Presence.PRESENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("not admitted");
             verifyNoInteractions(observationRepository);
@@ -1083,8 +1311,18 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             metadata.put("review_id", 77L);
             metadata.put("about_user_id", 999L);
             metadata.put("subject_role", "REVIEWER");
+            Practice reviewing = new Practice();
+            ReflectionTestUtils.setField(reviewing, "id", 30L);
+            reviewing.setSlug("reviews-with-care");
+            reviewing.setBindings(List.of(new de.tum.cit.aet.hephaestus.practices.PracticeBinding(
+                    List.of(PracticeTestEvidence.defaultSignal(ArtifactKinds.PULL_REQUEST)),
+                    PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                    false,
+                    de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.REVIEWER)));
+            reviewing.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
+            admit(reviewing, 31L);
 
-            service.deliver(testJob, List.of());
+            publishVerified(testJob, List.of(validObservation("reviews-with-care", Presence.PRESENT)));
 
             verify(eventPublisher).publishEvent(eventCaptor.capture());
             assertThat(eventCaptor.getValue().developerId()).isEqualTo(999L);
@@ -1099,7 +1337,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             metadata.put("about_user_id", 999L);
             metadata.put("subject_role", "REVIEWER");
 
-            assertThatThrownBy(() -> service.deliver(testJob, List.of()))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of()))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("no longer matches");
             verifyNoInteractions(observationRepository, eventPublisher);
@@ -1111,7 +1349,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             when(reviewTargets.findPullRequest(456L)).thenReturn(Optional.empty());
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("Pull request not found");
         }
@@ -1123,7 +1361,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     .thenReturn(Optional.of(new ReviewTargetQuery.Target(123L, "owner/repo", 42, null, false)));
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("no author");
         }
@@ -1135,7 +1373,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             metadata.put("repository_id", 999L);
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("does not match the live target");
             verifyNoInteractions(observationRepository, eventPublisher);
@@ -1166,7 +1404,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             testJob.setMetadata(null);
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("Missing job metadata");
         }
@@ -1176,7 +1414,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             testJob.setMetadata(objectMapper.createObjectNode());
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("Missing pull_request_id");
         }
@@ -1192,7 +1430,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 observations.add(validObservation("pr-description-quality", Presence.ABSENT));
             }
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(7);
             assertThat(result.discardedDuplicate()).isZero();
@@ -1205,7 +1443,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 observations.add(validObservation("pr-description-quality", Presence.PRESENT));
             }
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(10);
             assertThat(result.discardedDuplicate()).isZero();
@@ -1226,7 +1464,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 observations.add(validObservation("error-handling", Presence.ABSENT));
             }
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(10);
         }
@@ -1240,7 +1478,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void notApplicablePersisted() {
             var observations = List.of(validObservation("pr-description-quality", null));
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(1);
             assertThat(result.hasNegative()).isFalse();
@@ -1253,7 +1491,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 observations.add(validObservation("pr-description-quality", null));
             }
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(10);
         }
@@ -1263,7 +1501,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
     class SeverityCoherence {
 
         private String capturedSeverityFor(ValidatedObservation observation) {
-            service.deliver(testJob, List.of(observation));
+            publishVerified(testJob, List.of(observation));
             ArgumentCaptor<String> severityCaptor = ArgumentCaptor.forClass(String.class);
             verify(observationRepository)
                     .insertIfAbsent(
@@ -1342,7 +1580,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isZero();
             assertThat(result.discardedDuplicate()).isEqualTo(1);
@@ -1352,7 +1590,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         void keyFormat() {
             var observations = List.of(validObservation("pr-description-quality", Presence.PRESENT));
 
-            service.deliver(testJob, observations);
+            publishVerified(testJob, observations);
 
             ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
             verify(observationRepository)
@@ -1398,7 +1636,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     validObservation("pr-description-quality", Presence.PRESENT),
                     validObservation("error-handling", Presence.ABSENT));
 
-            service.deliver(testJob, observations);
+            publishVerified(testJob, observations);
 
             verify(eventPublisher).publishEvent(eventCaptor.capture());
             PracticeDetectionCompletedEvent event = eventCaptor.getValue();
@@ -1428,7 +1666,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             testJob.setMetadata(meta);
 
             var observations = List.of(validObservation("pr-description-quality", Presence.ABSENT));
-            var result = service.deliver(testJob, observations);
+            var result = publishVerified(testJob, observations);
 
             assertThat(result.inserted()).isEqualTo(1);
             verify(observationRepository)
@@ -1465,7 +1703,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
             var observations = List.of(validObservation("pr-description-quality", Presence.ABSENT));
 
-            assertThatThrownBy(() -> service.deliver(testJob, observations))
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("No delivery route for artifact kind: kind=wiki.page");
         }

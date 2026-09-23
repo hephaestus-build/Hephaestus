@@ -80,7 +80,7 @@ public class PiRuntimeFactory {
         env.put("AGENT_BUDGET_MS", Long.toString(agentTimeoutMs));
 
         env.put("HOME", "/home/agent");
-        env.put("XDG_CONFIG_HOME", "/home/agent/.config");
+        env.put("XDG_CONFIG_HOME", "/home/agent/.local/config");
         env.put("TMPDIR", PiRunnerProfile.AGENT_TMPDIR);
         env.put("PI_CODING_AGENT_DIR", SandboxLayout.PI_AGENT_DIR);
 
@@ -96,13 +96,7 @@ public class PiRuntimeFactory {
         }
         // Every directory the runner may write exists before Node starts; PiRunnerProfile says why.
         String command = "mkdir -p " + String.join(" ", PiRunnerProfile.WRITABLE_DIRECTORIES)
-                + " /home/agent/.config && "
-                +
-                // The runner imports the Pi SDK by bare specifier, which resolves from <workspace>/node_modules,
-                // so the SDK the image exposes at /opt/pi-sdk must be symlinked into place.
-                "ln -sf /opt/pi-sdk/node_modules "
-                + workspaceRoot
-                + "/node_modules && "
+                + " /home/agent/.local/config && "
                 + precomputeStep
                 + runtimeEnvFragment
                 + "node "
@@ -157,11 +151,7 @@ public class PiRuntimeFactory {
         compaction.put("enabled", true);
         compaction.put("reserveTokens", 16384);
         settings.put("compaction", compaction);
-        // A provider that answers "overloaded" is answered by waiting. The SDK's own default gives up
-        // after 2+4+8 seconds, which ended whole practice lanes here while the review still had most of
-        // its budget left, and a lane that dies takes its practice out of the review's coverage. Five
-        // attempts four seconds apart, doubling, ride out just over two minutes of provider trouble,
-        // and a review that spends that on every turn still ends inside its own watchdog.
+        // Retry transient provider failures; the review deadline still bounds the session.
         Map<String, Object> retry = new LinkedHashMap<>();
         retry.put("enabled", true);
         retry.put("maxRetries", RETRY_MAX_ATTEMPTS);
@@ -182,7 +172,11 @@ public class PiRuntimeFactory {
         Map<String, Object> provider = new LinkedHashMap<>();
         provider.put("apiProtocol", spec.apiProtocol());
         provider.put("modelId", spec.upstreamModelId());
-        provider.put("supportsReasoning", spec.supportsReasoning());
+        // The Pi runner maps the effort onto a thinking level and the provider's wire value; absent,
+        // the runner sends none and the provider's own default applies.
+        if (spec.reasoningEffort() != null) {
+            provider.put("reasoningEffort", spec.reasoningEffort().name());
+        }
         if (spec.contextWindow() != null) {
             provider.put("contextWindow", spec.contextWindow());
         }

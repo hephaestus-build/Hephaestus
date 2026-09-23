@@ -89,7 +89,7 @@ class AgentJobDTOTest extends BaseUnitTest {
                 null,
                 null,
                 null,
-                false,
+                null,
                 scope,
                 scope != null ? 42L : null,
                 null,

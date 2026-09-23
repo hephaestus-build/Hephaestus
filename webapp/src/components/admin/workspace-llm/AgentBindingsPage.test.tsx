@@ -11,7 +11,6 @@ const inHouseModel: AvailableLlmModel = {
 	scope: "SHARED",
 	displayName: "GPT Test",
 	connectionDisplayName: "Shared OpenAI",
-	supportsReasoning: false,
 	pricingMode: "NO_CHARGE",
 };
 
@@ -21,7 +20,6 @@ const cloudModel: AvailableLlmModel = {
 	scope: "SHARED",
 	displayName: "GPT Other",
 	connectionDisplayName: "Shared OpenAI",
-	supportsReasoning: false,
 	pricingMode: "NO_CHARGE",
 };
 

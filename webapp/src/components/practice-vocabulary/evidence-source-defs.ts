@@ -21,29 +21,14 @@ import type { EvidenceCitation } from "@/api/types.gen";
 
 import type { StatusDef } from "@/components/common/status-def";
 
-/**
- * Where a citation's line numbers point, which decides whether a surface may show them.
- *
- * <p>`code` — a real span of a real file, verified by the server against the annotated unified diff.
- *
- * <p>`object` — an offset inside the serialised context artifact the quote was pulled from: a line
- * of `conversation_thread.json`, not a position in the Slack thread. The schema demands a number
- * ≥ 1 so one is always present, but nothing verifies it points at the quote, so these citations
- * render their `path` as a name and no numbers.
- */
+/** Code coordinates name source lines; object coordinates belong to serialized context, not the source UI. */
 export type EvidenceLocator = "code" | "object";
 
 export interface EvidenceSourceDef extends StatusDef {
 	locator: EvidenceLocator;
 }
 
-/**
- * The registered inputs a review may quote from, in operator-facing words.
- *
- * <p>Not a total `StatusDefs` over a union, because `sourceKind` is a `string` on the wire: an
- * unknown kind has to fall back rather than fail a lookup. {@link evidenceSourceDef} is the only
- * way in, so a surface cannot forget the fallback.
- */
+/** sourceKind is an open wire string; use evidenceSourceDef for its unknown-kind fallback. */
 const EVIDENCE_SOURCE_DEFS: Record<string, EvidenceSourceDef> = {
 	"scm.pull-request.core": {
 		label: "The pull request itself",
@@ -67,10 +52,11 @@ const EVIDENCE_SOURCE_DEFS: Record<string, EvidenceSourceDef> = {
 		locator: "object",
 	},
 	"scm.repository.tree": {
-		label: "Files in the repository",
+		label: "Files and history in the repository",
 		icon: FolderTreeIcon,
 		badgeVariant: "outline",
-		description: "Files that were not changed, read for context around the work.",
+		description:
+			"Files at the reviewed commit or another commit in the captured repository history, read for context around the work.",
 		locator: "code",
 	},
 	"scm.issue.core": {
@@ -178,13 +164,7 @@ export const DIFF_SIDE_LABELS = {
 	NEW: "after",
 } satisfies Record<NonNullable<EvidenceCitation["side"]>, string>;
 
-/**
- * A place in a file, as the coordinate a developer would paste: `path:12–18`.
- *
- * <p>`endLine` is optional because the two callers disagree: a citation always carries one (the
- * server defaults it to `startLine`), while an inline placement's anchor may have none. Either way
- * a single line prints as one number rather than `12–12`.
- */
+/** Format path:line-range; placement anchors may omit endLine, unlike citations. */
 export function codeCitationLocator(span: {
 	path: string;
 	startLine: number;

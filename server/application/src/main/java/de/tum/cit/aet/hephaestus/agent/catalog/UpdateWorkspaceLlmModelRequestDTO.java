@@ -27,8 +27,12 @@ public record UpdateWorkspaceLlmModelRequestDTO(
         @Nullable @Min(1) @Schema(description = "Maximum output tokens")
         Integer maxOutputTokens,
 
-        @Nullable @Schema(description = "Whether the model supports a reasoning mode")
-        Boolean supportsReasoning,
+        @Nullable
+        @Schema(description = "Reasoning effort to request; null keeps the current one (see clearReasoningEffort)")
+        ReasoningEffort reasoningEffort,
+
+        @Nullable @Schema(description = "True clears the reasoning effort, so the provider's own default applies")
+        Boolean clearReasoningEffort,
 
         @Nullable
         @Schema(description = "Who operates the systems the work is sent to; omit to leave the model undeclared")

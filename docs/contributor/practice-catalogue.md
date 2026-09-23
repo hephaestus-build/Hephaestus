@@ -258,9 +258,32 @@ standard as an experiment or a convention as a proven outcome.
    editor completion and CI validation, and Git history is the bundled version history. Declare the one
    occasion as `on` — a bare signal name is shorthand for a binding on that signal reading the
    artifact kind's default evidence. Reference any precompute script explicitly; a script must be named
-   after the practice slug, and an unreferenced one fails validation.
+   after the practice slug, and an unreferenced one fails validation. What a script is and what the
+   library owns is in [Precompute scripts](#precompute-scripts) below.
 6. Add or update focused automated-review tests, including required-source skipping and valid-empty evidence.
 7. Review the admin presentation and a representative piece of delivered feedback.
+
+### Precompute scripts
+
+A precompute script extracts candidates inside the review container. It receives the parsed diff,
+artifact metadata, captured context and derived change directory (`work/change/`). Its output is
+hints, metrics and directions, not observations.
+
+- **Practice-specific predicates belong in the script.** Shared readers and scanning mechanics live
+  in `docker/agents/precompute/lib/`. Keep the predicates consistent with the practice criteria.
+- **A candidate is not a judgment.** A matched line or review thread directs inspection; the model
+  must check its context against the criteria. The purity test rejects observation vocabulary in
+  scripts, but does not establish that their output is complete or correct.
+- **Missing and empty differ.** Context readers return `null` when a capture file is absent and `[]`
+  when a captured list is empty. Scripts must preserve that distinction.
+- **Line scanning has limits.** Declaration placement uses syntax tables, not a full language parser.
+  Unsupported languages and unavailable files produce `unknown` placement. Directions must identify
+  relevant limits, such as constructs that span several lines.
+
+The runner renders a bounded `work/precompute-out/summary.md` for the review brief. It includes
+practice directions, candidate locations and record rows. When rows do not fit, it retains pointers
+to the full per-practice JSON. A summary is an entry point to the evidence, not proof that the model
+inspected every candidate.
 
 ### Review the effective definition
 
@@ -281,10 +304,14 @@ script, shared review instructions and developer guidance. Check these seams exp
   their expectation.
 
 Keep the cases and evaluation evidence with the relevant test or benchmark, and explain the change
-in the pull request. Do not add keyword-count or heading-presence tests as a proxy for semantic
-quality. Schema and fixture tests prove loading and faithful presentation; evidence-based case review
-and model evaluation are separate checks. Changing shared preambles affects every entry that uses
-them, so inspect all affected work types and preserve the existing workspace-adoption boundary.
+in the pull request. Every bundled practice is written in the decision-procedure shape of
+[Writing effective practices](/admin/writing-practices#write-the-criteria-as-a-decision-procedure),
+and `CatalogCriteriaShapeTest` checks that shape (the sections, their order, the size bound). That
+test checks structure, not semantic quality. Schema and fixture tests prove loading and faithful presentation; evidence-based case review
+and model evaluation are separate checks. The shared preambles are one artifact-framing paragraph
+each; the grounding rules live once, in the shared review instructions. Changing a preamble affects
+every entry that uses it, so inspect all affected work types and preserve the existing
+workspace-adoption boundary.
 
 Create workspace-specific practices through the admin UI or API so validation, ordering, revisions,
 and audit behavior remain intact.

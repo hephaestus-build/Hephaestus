@@ -70,8 +70,16 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
 
     @Test
     void refusesAPracticeWhoseTierDoesNotAdmitTheLane() {
-        assertThat(route(problems(2, ObservationOrigin.LIVE), PracticeAutonomy.HUMAN_APPROVAL, ActorRole.AUTHOR, null))
+        assertThat(route(problems(2, ObservationOrigin.LIVE), PracticeAutonomy.OFF, ActorRole.AUTHOR, null))
                 .isEqualTo(InAppRoutingDecision.PRACTICE_REQUIRES_APPROVAL);
+    }
+
+    @Test
+    void admitsAHumanApprovalPracticeBecauseThePracticePageIsReadOnRequest() {
+        // Approval gates what is pushed onto the work; the developer's own page is pulled, so the default
+        // autonomy delivers here like AUTOMATIC does.
+        assertThat(route(problems(2, ObservationOrigin.LIVE), PracticeAutonomy.HUMAN_APPROVAL, ActorRole.AUTHOR, null))
+                .isEqualTo(InAppRoutingDecision.ADMIT);
     }
 
     /** The day-one bound: a sweep over a year of finished work does not become a wall of feedback. */

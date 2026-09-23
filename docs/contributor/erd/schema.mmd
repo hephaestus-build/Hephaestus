@@ -511,6 +511,7 @@ erDiagram
         TEXT parent_shas
         VARCHAR(32) status_check_rollup_state
         VARCHAR(255) on_behalf_of_login
+        TIMESTAMPTZ git_details_captured_at
     }
 
     IdentityLink {
@@ -597,6 +598,8 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
         VARCHAR(40) merge_commit_sha
         TIMESTAMPTZ deleted_at
+        VARCHAR(40) head_check_sha
+        VARCHAR(16) head_check_state
     }
 
     IssueAssignee {
@@ -699,6 +702,7 @@ erDiagram
         TIMESTAMPTZ updated_at
         VARCHAR(200) data_handling_note
         VARCHAR(24) operated_by
+        VARCHAR(16) reasoning_effort
     }
 
     LlmModelPrice {
@@ -1117,6 +1121,11 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
     }
 
+    PullRequestClosingIssue {
+        BIGINT pull_request_id PK,FK
+        BIGINT issue_id PK,FK
+    }
+
     PullRequestRequestedReviewer {
         BIGINT pull_request_id PK,FK
         BIGINT user_id PK,FK
@@ -1186,6 +1195,7 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
         VARCHAR(64) commit_sha
         VARCHAR(64) original_commit_sha
+        TIMESTAMPTZ resolved_at
     }
 
     Reaction {
@@ -1530,6 +1540,7 @@ erDiagram
         TIMESTAMPTZ updated_at
         VARCHAR(200) data_handling_note
         VARCHAR(24) operated_by
+        VARCHAR(16) reasoning_effort
     }
 
     WorkspaceMemberOnboarding {
@@ -1780,6 +1791,8 @@ erDiagram
     Workspace }o--o{ LlmModelWorkspaceGrant : has
     RepositoryToMonitor }o--o{ PracticeReviewRepositoryTarget : reviewed
     Workspace }o--o{ PracticeReviewRepositoryTarget : reviewed
+    Issue }o--o{ PullRequestClosingIssue : has
+    Issue }o--o{ PullRequestClosingIssue : references
     Issue }o--o{ PullRequestRequestedReviewer : reviewed
     User }o--o{ PullRequestRequestedReviewer : reviewed
     Repository }o--o{ RepositoryCollaborator : has

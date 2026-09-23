@@ -12,11 +12,11 @@ class LlmModelTokenBoundsTest extends BaseUnitTest {
 
     private static final List<IntFunction<Object>> REQUESTS = List.of(
             value -> new CreateLlmModelRequestDTO(null, "Model", "model", value, value, null, null, null, null),
-            value -> new UpdateLlmModelRequestDTO(null, value, value, null, null, null, null),
+            value -> new UpdateLlmModelRequestDTO(null, value, value, null, null, null, null, null),
             value -> new CreateWorkspaceLlmModelRequestDTO(
                     null, "Model", "model", value, value, null, null, null, null, null, null, null, null, null, null),
             value -> new UpdateWorkspaceLlmModelRequestDTO(
-                    null, value, value, null, null, null, null, null, null, null, null, null, null));
+                    null, value, value, null, null, null, null, null, null, null, null, null, null, null));
 
     @Test
     void shouldRequirePositiveTokenBoundsForEveryModelRequest() {

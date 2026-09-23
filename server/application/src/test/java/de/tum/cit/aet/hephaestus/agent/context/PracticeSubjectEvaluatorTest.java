@@ -21,9 +21,10 @@ import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -37,20 +38,12 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
 
     private static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
     private static final SourceKind THREADS = new SourceKind("scm.review-threads");
+    private static final String CHANGE_PATH = "inputs/context/change.json";
     private static final String THREADS_PATH = "inputs/context/review_threads.json";
 
-    private static final String TWO_FILE_DIFF = """
-        diff --git a/src/App.java b/src/App.java
-        --- a/src/App.java
-        +++ b/src/App.java
-        @@ -1,2 +1,3 @@
-        [L1] +int answer = 42;
-        diff --git a/docs/readme.md b/docs/readme.md
-        --- a/docs/readme.md
-        +++ b/docs/readme.md
-        @@ -1,1 +1,2 @@
-        [L1] +a line
-        """;
+    /** Two files, neither a dependency manifest nor a test. */
+    private static final ReviewChange TWO_FILE_CHANGE =
+            change(Set.of("src/App.java", "docs/readme.md"), "+int answer = 42;\n+a line\n");
 
     private final JsonMapper mapper = JsonMapper.builder().build();
     private final PracticeSubjectEvaluator evaluator = new PracticeSubjectEvaluator(mapper);
@@ -70,7 +63,7 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
             PracticeSubjectCheck check = evaluate(
                     dependencySubject(),
                     manifestWith(availableDiff(SourceCompleteness.PARTIAL, SourceContentState.NON_EMPTY)),
-                    stagedDiff(TWO_FILE_DIFF));
+                    TWO_FILE_CHANGE);
 
             assertThat(check.absent()).isFalse();
             assertThat(check.clauses())
@@ -84,40 +77,32 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
                     dependencySubject(),
                     manifestWith(new SourceCapture(
                             DIFF, new SourceCaptureState.Unavailable(SourceAbsenceReason.NO_PROVIDER), List.of())),
-                    Map.of());
+                    TWO_FILE_CHANGE);
 
             assertThat(check.absent()).isFalse();
         }
 
         /**
-         * The manifest says the diff is there and whole, and staging does not hold it. The two disagree,
-         * and a disagreement is not evidence that a dependency manifest was not touched.
+         * The manifest says the diff is there and whole, and no change was prepared to read. The two
+         * disagree, and a disagreement is not evidence that a dependency manifest was not touched.
          */
         @Test
-        void shouldRunThePracticeWhenTheStagedBytesAreMissing() {
-            PracticeSubjectCheck check = evaluate(
-                    dependencySubject(),
-                    manifestWith(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
-                    Map.of());
-
-            assertThat(check.absent()).isFalse();
-        }
-
-        /**
-         * A header shape this parser does not know. Skipping it and reporting on the rest would let an
-         * unreadable path turn into "there is no manifest here"; abandoning the whole answer cannot.
-         */
-        @Test
-        void shouldRunThePracticeWhenADiffHeaderCannotBeParsed() {
-            String unreadable = "diff --git \"a/od\\303\\251.txt\" \"b/od\\303\\251.txt\"\n@@ -1 +1 @@\n+x\n";
+        void shouldRunThePracticeWhenNoChangeWasPrepared() {
+            PracticeSubject subject = new PracticeSubject(
+                    "the change touches no dependency manifest and adds no test",
+                    List.of(
+                            PracticeSubjectClause.changedPathMatches(List.of("**/pom.xml")),
+                            PracticeSubjectClause.diffContains(List.of("@Test"))));
 
             PracticeSubjectCheck check = evaluate(
-                    dependencySubject(),
+                    subject,
                     manifestWith(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
-                    stagedDiff(unreadable));
+                    null);
 
             assertThat(check.absent()).isFalse();
-            assertThat(check.clauses().getFirst().finding()).isEqualTo(SubjectFinding.UNDECIDABLE);
+            assertThat(check.clauses())
+                    .extracting(clause -> clause.finding())
+                    .containsExactly(SubjectFinding.UNDECIDABLE, SubjectFinding.UNDECIDABLE);
         }
 
         @Test
@@ -125,7 +110,20 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
             PracticeSubjectCheck check = evaluate(
                     threadSubject(),
                     manifestWith(availableThreads(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
-                    Map.of(THREADS_PATH, "{not json".getBytes(StandardCharsets.UTF_8)));
+                    Map.of(THREADS_PATH, "{not json".getBytes(StandardCharsets.UTF_8)),
+                    null);
+
+            assertThat(check.absent()).isFalse();
+        }
+
+        /** The manifest says the threads are there and whole, and staging does not hold them. */
+        @Test
+        void shouldRunThePracticeWhenTheStagedEvidenceBytesAreMissing() {
+            PracticeSubjectCheck check = evaluate(
+                    threadSubject(),
+                    manifestWith(availableThreads(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
+                    Map.of(),
+                    null);
 
             assertThat(check.absent()).isFalse();
         }
@@ -148,7 +146,7 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
                     manifestWith(
                             availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY),
                             availableThreads(SourceCompleteness.PARTIAL, SourceContentState.NON_EMPTY)),
-                    stagedDiff(TWO_FILE_DIFF));
+                    TWO_FILE_CHANGE);
 
             assertThat(check.clauses())
                     .extracting(clause -> clause.finding())
@@ -165,7 +163,7 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
             PracticeSubjectCheck check = evaluate(
                     dependencySubject(),
                     manifestWith(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
-                    stagedDiff(TWO_FILE_DIFF));
+                    TWO_FILE_CHANGE);
 
             assertThat(check.absent()).isTrue();
             assertThat(check.describedAs()).isEqualTo("the change touches no dependency manifest or lockfile");
@@ -175,12 +173,10 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
 
         @Test
         void shouldAskThePracticeWhenAChangedPathMatches() {
-            String diff = TWO_FILE_DIFF + "diff --git a/pom.xml b/pom.xml\n@@ -1 +1 @@\n[L1] +<dependency/>\n";
-
             PracticeSubjectCheck check = evaluate(
                     dependencySubject(),
                     manifestWith(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
-                    stagedDiff(diff));
+                    change(Set.of("src/App.java", "docs/readme.md", "pom.xml"), "+<dependency/>\n"));
 
             assertThat(check.absent()).isFalse();
             assertThat(check.clauses().getFirst().finding()).isEqualTo(SubjectFinding.FOUND);
@@ -188,17 +184,15 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
 
         /**
          * The old path of a rename counts. A pull request that renames the last test file away is exactly
-         * the change the test-suite practice exists to look at.
+         * the change the test-suite practice exists to look at, and the change lists both of its names.
          */
         @Test
         void shouldReadBothSidesOfARename() {
-            String renamed = "diff --git a/src/CalculatorTest.java b/src/Calculator.java\n@@ -1 +1 @@\n[L1] +x\n";
-
             PracticeSubjectCheck check = evaluate(
                     new PracticeSubject(
                             "no test file", List.of(PracticeSubjectClause.changedPathMatches(List.of("**/*Test*")))),
                     manifestWith(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
-                    stagedDiff(renamed));
+                    change(Set.of("src/CalculatorTest.java", "src/Calculator.java"), "+x\n"));
 
             assertThat(check.absent()).isFalse();
         }
@@ -206,8 +200,6 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
         /** Removing the last test in a source file leaves no test-named path, only a removed marker. */
         @Test
         void shouldFindATestMarkerOnTheRemovedSideOfAHunk() {
-            String removal =
-                    "diff --git a/src/lib.rs b/src/lib.rs\n@@ -1,4 +1,1 @@\n[L2] -#[test]\n[L3] -fn works() {}\n";
             PracticeSubject subject = new PracticeSubject(
                     "the change touches no test file and neither adds nor removes a test declaration",
                     List.of(
@@ -217,12 +209,37 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
             PracticeSubjectCheck check = evaluate(
                     subject,
                     manifestWith(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
-                    stagedDiff(removal));
+                    change(
+                            Set.of("src/lib.rs"),
+                            "diff --git a/src/lib.rs b/src/lib.rs\n@@ -1,4 +1,1 @@\n-#[test]\n-fn works() {}\n"));
 
             assertThat(check.absent()).isFalse();
             assertThat(check.clauses())
                     .extracting(clause -> clause.finding())
                     .containsExactly(SubjectFinding.NOT_FOUND, SubjectFinding.FOUND);
+        }
+
+        /** The change is read only when a clause asks about it, and only the aspect the clause names. */
+        @Test
+        void shouldReadOnlyTheAspectAClauseNames() {
+            ReviewChange pathsOnly = new ReviewChange() {
+                @Override
+                public Set<String> changedPaths() {
+                    return Set.of("pom.xml");
+                }
+
+                @Override
+                public String text() {
+                    throw new AssertionError("a path clause must not read the diff text");
+                }
+            };
+
+            PracticeSubjectCheck check = evaluate(
+                    dependencySubject(),
+                    manifestWith(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
+                    pathsOnly);
+
+            assertThat(check.clauses().getFirst().finding()).isEqualTo(SubjectFinding.FOUND);
         }
 
         @Test
@@ -232,8 +249,9 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
                     manifestWith(availableThreads(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
                     Map.of(
                             THREADS_PATH,
-                            "{\"threads\":[],\"unresolvedCount\":0,\"reviewDecisions\":[{\"state\":\"APPROVED\"}]}"
-                                    .getBytes(StandardCharsets.UTF_8)));
+                            "{\"threads\":[],\"reviewDecisions\":[{\"state\":\"APPROVED\"}],\"truncated\":false}"
+                                    .getBytes(StandardCharsets.UTF_8)),
+                    null);
 
             assertThat(check.absent()).isTrue();
         }
@@ -246,18 +264,42 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
                     Map.of(
                             THREADS_PATH,
                             "{\"threads\":[{\"path\":\"a.java\",\"state\":\"UNRESOLVED\"}]}"
-                                    .getBytes(StandardCharsets.UTF_8)));
+                                    .getBytes(StandardCharsets.UTF_8)),
+                    null);
 
             assertThat(check.absent()).isFalse();
         }
 
-        /** A source captured whole and holding nothing settles its clause without reading a file. */
+        /** A source captured whole and holding nothing settles its clause without reading anything. */
         @Test
         void shouldWithholdThePracticeWhenTheWholeSourceCapturedEmpty() {
             PracticeSubjectCheck check = evaluate(
                     threadSubject(),
                     manifestWith(availableThreads(SourceCompleteness.COMPLETE, SourceContentState.EMPTY)),
-                    Map.of());
+                    Map.of(),
+                    null);
+
+            assertThat(check.absent()).isTrue();
+        }
+
+        @Test
+        void shouldWithholdThePracticeWhenTheWholeChangeCapturedEmptyWithoutReadingIt() {
+            ReviewChange unreadable = new ReviewChange() {
+                @Override
+                public Set<String> changedPaths() {
+                    throw new AssertionError("an empty change is settled by the manifest alone");
+                }
+
+                @Override
+                public String text() {
+                    throw new AssertionError("an empty change is settled by the manifest alone");
+                }
+            };
+
+            PracticeSubjectCheck check = evaluate(
+                    dependencySubject(),
+                    manifestWith(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.EMPTY)),
+                    unreadable);
 
             assertThat(check.absent()).isTrue();
         }
@@ -267,7 +309,8 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
             ArtifactSourceManifest manifest =
                     manifestWith(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY));
 
-            assertThat(evaluator.evaluate(null, manifest, Map.of())).isNull();
+            assertThat(evaluator.evaluate(null, manifest, Map.of(), TWO_FILE_CHANGE))
+                    .isNull();
         }
     }
 
@@ -336,10 +379,32 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
     }
 
     private PracticeSubjectCheck evaluate(
-            PracticeSubject subject, ArtifactSourceManifest manifest, Map<String, byte[]> staged) {
-        PracticeSubjectCheck check = evaluator.evaluate(subject, manifest, staged);
+            PracticeSubject subject, ArtifactSourceManifest manifest, @Nullable ReviewChange change) {
+        return evaluate(subject, manifest, Map.of(), change);
+    }
+
+    private PracticeSubjectCheck evaluate(
+            PracticeSubject subject,
+            ArtifactSourceManifest manifest,
+            Map<String, byte[]> staged,
+            @Nullable ReviewChange change) {
+        PracticeSubjectCheck check = evaluator.evaluate(subject, manifest, staged, change);
         assertThat(check).isNotNull();
         return check;
+    }
+
+    private static ReviewChange change(Set<String> paths, String text) {
+        return new ReviewChange() {
+            @Override
+            public Set<String> changedPaths() {
+                return paths;
+            }
+
+            @Override
+            public String text() {
+                return text;
+            }
+        };
     }
 
     private static PracticeSubject dependencySubject() {
@@ -354,17 +419,11 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
                 List.of(PracticeSubjectClause.evidenceHasItems(SubjectEvidenceCollection.SCM_REVIEW_THREADS)));
     }
 
-    private static Map<String, byte[]> stagedDiff(String diff) {
-        Map<String, byte[]> staged = new LinkedHashMap<>();
-        staged.put(PracticeSubjectEvaluator.DIFF_PATH, diff.getBytes(StandardCharsets.UTF_8));
-        return staged;
-    }
-
     private static SourceCapture availableDiff(SourceCompleteness completeness, SourceContentState content) {
         return new SourceCapture(
                 DIFF,
                 new SourceCaptureState.Available(content, completeness, facts(), List.of()),
-                List.of(new SourceArtifact(PracticeSubjectEvaluator.DIFF_PATH, "text/x-diff", sha(), 1)));
+                List.of(new SourceArtifact(CHANGE_PATH, "application/json", sha(), 1)));
     }
 
     private static SourceCapture availableThreads(SourceCompleteness completeness, SourceContentState content) {
@@ -384,7 +443,7 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
 
     private static ArtifactSourceManifest manifestWith(SourceCapture... captures) {
         return new ArtifactSourceManifest(
-                new SourceContractVersion("1.1.0"),
+                new SourceContractVersion("1.2.0"),
                 "0".repeat(64),
                 "scm.pull_request",
                 Instant.EPOCH,

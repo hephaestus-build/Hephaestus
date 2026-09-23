@@ -443,13 +443,13 @@ export type AvailableLlmModel = {
    */
   pricingMode: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
+   * Reasoning effort requested of the model; null sends none, the provider's default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * SHARED (instance catalog) or WORKSPACE (your own provider)
    */
   scope: 'SHARED' | 'WORKSPACE';
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning: boolean;
 };
 
 /**
@@ -922,13 +922,13 @@ export type CreateLlmModelRequest = {
    */
   operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
+   * Reasoning effort to request; null sends none, so the provider's own default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * Optional internal slug; generated from displayName when omitted
    */
   slug?: string;
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning?: boolean;
   /**
    * Upstream provider model id
    */
@@ -1189,13 +1189,13 @@ export type CreateWorkspaceLlmModelRequest = {
    */
   pricingMode?: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
+   * Reasoning effort to request; null sends none, so the provider's own default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * Optional internal slug; generated from displayName when omitted
    */
   slug?: string;
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning?: boolean;
   /**
    * Upstream provider model id
    */
@@ -1384,7 +1384,7 @@ export type DeliveryPolicyTrace = {
   admittedRevision: number;
   allowed: boolean;
   checks: Array<DeliveryPolicyTraceCheck>;
-  decisiveReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  decisiveReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
   evaluatedAt: Date;
   evaluatedRevision?: number;
   facts: DeliveryPolicyFactsSnapshot;
@@ -1438,6 +1438,7 @@ export type EvidenceCitation = {
   path: string;
   quote?: string;
   quoteRedacted: boolean;
+  revision?: string;
   side?: 'OLD' | 'NEW';
   sourceKind: string;
   startLine: number;
@@ -2165,13 +2166,13 @@ export type LlmModel = {
    */
   operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
+   * Reasoning effort requested of the model; null sends none, the provider's default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * Unique slug within the connection
    */
   slug: string;
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning: boolean;
   /**
    * Last update timestamp
    */
@@ -2923,7 +2924,7 @@ export type PracticeBinding = {
   /**
    * Whose conduct this review judges; omit for AUTHOR
    */
-  subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER';
+  subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
 };
 
 /**
@@ -3478,7 +3479,7 @@ export type PracticeTraceEntry = {
   /**
    * Why prepared feedback was withheld. Non-empty with observations present means we measured and deliberately said nothing.
    */
-  withheldReasons: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
+  withheldReasons: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
 };
 
 export type PracticeTrend = {
@@ -4143,7 +4144,7 @@ export type ReviewBoundFeedback = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
 };
 
 /**
@@ -4225,7 +4226,7 @@ export type ReviewFeedback = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
 };
 
 /**
@@ -4299,7 +4300,7 @@ export type ReviewFeedbackDetail = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
   /**
    * Cross-run continuity key tying successive deliveries together
    */
@@ -5353,6 +5354,10 @@ export type UpdateLlmModelPriceRequest = {
  */
 export type UpdateLlmModelRequest = {
   /**
+   * True clears the reasoning effort, so the provider's own default applies
+   */
+  clearReasoningEffort?: boolean;
+  /**
    * Context window in tokens
    */
   contextWindow?: number;
@@ -5377,9 +5382,9 @@ export type UpdateLlmModelRequest = {
    */
   operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
-   * Whether the model supports a reasoning mode
+   * Reasoning effort to request; null keeps the current one (see clearReasoningEffort)
    */
-  supportsReasoning?: boolean;
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
 };
 
 /**
@@ -5678,6 +5683,10 @@ export type UpdateWorkspaceLlmConnectionRequest = {
  */
 export type UpdateWorkspaceLlmModelRequest = {
   /**
+   * True clears the reasoning effort, so the provider's own default applies
+   */
+  clearReasoningEffort?: boolean;
+  /**
    * Context window in tokens
    */
   contextWindow?: number;
@@ -5726,9 +5735,9 @@ export type UpdateWorkspaceLlmModelRequest = {
    */
   pricingMode?: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
-   * Whether the model supports a reasoning mode
+   * Reasoning effort to request; null keeps the current one (see clearReasoningEffort)
    */
-  supportsReasoning?: boolean;
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
 };
 
 /**
@@ -6170,13 +6179,13 @@ export type WorkspaceLlmModel = {
    */
   pricingMode: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
+   * Reasoning effort requested of the model; null sends none, the provider's default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * Unique slug within the workspace
    */
   slug: string;
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning: boolean;
   /**
    * Last update timestamp
    */
@@ -6838,7 +6847,7 @@ export type ReviewFeedbackDetailWritable = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
   /**
    * Cross-run continuity key tying successive deliveries together
    */
@@ -11893,7 +11902,7 @@ export type ListPracticeReviewFeedbackData = {
     page?: number;
     size?: number;
     deliveryState?: Array<'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED'>;
-    suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
+    suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
     channel?: Array<'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP'>;
     agentJobId?: string;
     /**

@@ -1,6 +1,6 @@
 {
-  "contractVersion": "1.1.0",
-  "catalogDigest": "08f44fa6cda932a526da91d75bd7262d0c6e24c0d15866026fb01ce7454ba688",
+  "contractVersion": "1.2.0",
+  "catalogDigest": "51d5881fa473f13dd31b75fe8c6784db97a51fc5c9cb7f90935674bbdd36938a",
   "artifactKind": "scm.pull_request",
   "capturedAt": "2026-01-01T00:00:00Z",
   "sources": [
@@ -12,7 +12,7 @@
       },
       "artifacts": [
         {
-          "path": "inputs/context/diff.patch"
+          "path": "inputs/context/change.json"
         }
       ]
     },
@@ -25,9 +25,6 @@
       "artifacts": [
         {
           "path": "inputs/context/metadata.json"
-        },
-        {
-          "path": "inputs/context/diff_summary.md"
         }
       ]
     },

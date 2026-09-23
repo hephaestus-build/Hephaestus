@@ -20,7 +20,7 @@ describe("OpenAI-compatible endpoint presets", () => {
 	it.each([
 		[true, API_PROTOCOLS.OPENAI_RESPONSES],
 		[false, API_PROTOCOLS.OPENAI_COMPLETIONS],
-		[undefined, API_PROTOCOLS.OPENAI_COMPLETIONS],
+		[undefined, API_PROTOCOLS.OPENAI_RESPONSES],
 	])("defaults useResponsesApi=%s to the matching wire API", (useResponsesApi, protocol) => {
 		expect(defaultProtocolFor(useResponsesApi)).toBe(protocol);
 	});

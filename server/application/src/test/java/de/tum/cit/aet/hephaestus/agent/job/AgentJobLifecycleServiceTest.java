@@ -15,10 +15,8 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
-import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
@@ -38,7 +36,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.transaction.TransactionStatus;
@@ -59,9 +56,6 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
 
     @Mock
     private SandboxManager sandboxManager;
-
-    @Mock
-    private ObservationAdmissionService observationAdmission;
 
     @Mock
     private LlmUsageRecorder usageRecorder;
@@ -87,8 +81,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
                 usageRecorder,
                 objectMapper,
                 feedbackDispatchRepository,
-                new AgentJobTelemetry(new SimpleMeterRegistry(), io.micrometer.tracing.Tracer.NOOP),
-                observationAdmission);
+                new AgentJobTelemetry(new SimpleMeterRegistry(), io.micrometer.tracing.Tracer.NOOP));
 
         workspace = new Workspace();
         workspace.setId(1L);
@@ -122,7 +115,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
                         null,
                         null,
                         null,
-                        false,
+                        null,
                         FundingSource.INSTANCE,
                         1L,
                         1L,
@@ -420,29 +413,21 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
             assertThat(result.getId()).isEqualTo(jobId);
         }
 
-        @ParameterizedTest
-        @ValueSource(booleans = {false, true})
-        void shouldRevertToFailedEvenWhenRecordingARefusalFails(boolean refusalRecordingFails) {
+        @Test
+        void shouldRevertToFailedOnDeliveryException() {
             when(agentJobRepository.findByIdAndWorkspaceId(jobId, WORKSPACE_ID)).thenReturn(Optional.of(completedJob));
             when(agentJobRepository.transitionDeliveryStatus(eq(jobId), eq(DeliveryStatus.PENDING), any()))
                     .thenReturn(1);
             when(agentJobRepository.findById(jobId)).thenReturn(Optional.of(completedJob));
 
-            String reason = refusalRecordingFails ? "The developer chose No AI." : "GitHub API rate limited";
-            var failure = refusalRecordingFails
-                    ? new ObservationsRefusedException("member_ai_declined", reason)
-                    : new RuntimeException(reason);
-            if (refusalRecordingFails) {
-                doThrow(new IllegalStateException("Refusal storage unavailable"))
-                        .when(observationAdmission)
-                        .recordRefusal(jobId, "member_ai_declined", reason);
-            }
-            doThrow(failure).when(handler).deliver(completedJob);
+            doThrow(new RuntimeException("GitHub API rate limited"))
+                    .when(handler)
+                    .deliver(completedJob);
 
             assertThatThrownBy(() -> service.retryDelivery(WORKSPACE_ID, jobId))
                     .isInstanceOf(AgentJobStateConflictException.class)
                     .hasMessageContaining("Delivery retry failed")
-                    .hasMessageContaining(reason);
+                    .hasMessageContaining("GitHub API rate limited");
 
             verify(agentJobRepository)
                     .updateDeliveryStatus(

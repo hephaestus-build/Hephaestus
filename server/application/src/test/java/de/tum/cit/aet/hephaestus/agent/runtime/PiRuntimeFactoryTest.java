@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeRunnerProfile;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -33,7 +34,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
 
     private PiPlanSpec spec(String apiProtocol, String modelId, boolean allowInternet) {
         return new PiPlanSpec(
-                apiProtocol, modelId, 200000, 8192, false, "job-token-123", allowInternet, 600, PRACTICE, Map.of(), "");
+                apiProtocol, modelId, 200000, 8192, null, "job-token-123", allowInternet, 600, PRACTICE, Map.of(), "");
     }
 
     private PiPlanSpec spec(PiRunnerProfile profile) {
@@ -42,7 +43,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
                 "gpt-5.4-mini",
                 null,
                 null,
-                false,
+                null,
                 "job-token-123",
                 false,
                 600,
@@ -138,7 +139,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
                     "gpt-x",
                     null,
                     null,
-                    false,
+                    null,
                     "job-token-123",
                     true,
                     600,
@@ -198,7 +199,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
                     "gpt-oss-120b",
                     131072,
                     4096,
-                    true,
+                    ReasoningEffort.MEDIUM,
                     "job-token-123",
                     false,
                     600,
@@ -212,9 +213,18 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
             assertThat(root.path("modelId").asString()).isEqualTo("gpt-oss-120b");
             assertThat(root.path("contextWindow").asInt()).isEqualTo(131072);
             assertThat(root.path("maxOutputTokens").asInt()).isEqualTo(4096);
-            assertThat(root.path("supportsReasoning").asBoolean()).isTrue();
+            assertThat(root.path("reasoningEffort").asString()).isEqualTo("MEDIUM");
             assertThat(root.has("cacheControlFormat")).isFalse();
             assertThat(new String(json, StandardCharsets.UTF_8)).doesNotContain("job-token-123");
+        }
+
+        @Test
+        void sendsNoReasoningEffortWhenTheProviderDefaultApplies() throws Exception {
+            byte[] json = factory.buildProviderConfigJson(spec("openai-completions", "gpt-5", false));
+            JsonNode root = objectMapper.readTree(new String(json, StandardCharsets.UTF_8));
+
+            assertThat(root.has("reasoningEffort")).isFalse();
+            assertThat(root.has("supportsReasoning")).isFalse();
         }
 
         @Test
@@ -243,7 +253,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
                     "gpt-x",
                     null,
                     null,
-                    false,
+                    null,
                     "job-token-123",
                     false,
                     timeoutSeconds,
@@ -298,7 +308,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
     class CommandAssembly {
 
         @Test
-        @DisplayName("Practice profile contributes bounded permission flags and no per-process env")
+        @DisplayName("Practice profile permits native tools without granting subprocesses to mentor")
         void runtimeFlagsForPractice() {
             String body = factory.build(spec("openai-completions", "gpt-x", false))
                     .command()
@@ -308,7 +318,8 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
 
             assertThat(body.substring(nodeIdx, scriptIdx))
                     .contains("--max-old-space-size=256")
-                    .contains("--permission");
+                    .doesNotContain("--permission", "--allow-child-process", "--allow-fs-");
+            assertThat(MENTOR.runtimeFlags()).doesNotContain("--allow-child-process");
             int lastAmp = body.lastIndexOf("&&", nodeIdx);
             int sliceStart = lastAmp >= 0 ? lastAmp + 2 : 0;
             assertThat(body.substring(sliceStart, nodeIdx)).isBlank();
@@ -319,27 +330,25 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
          * create first accepts its own {@code mkdir} and denies every write inside it.
          */
         @Test
-        void shouldCreateEveryDirectoryTheRunnerIsGrantedBeforeNodeStarts() {
-            for (PiRunnerProfile profile : List.of(PRACTICE, MENTOR)) {
-                String body = factory.build(spec(profile)).command().get(2);
-                // The precompute step runs its own `node` first, with a grant of its own.
-                int runner = body.lastIndexOf("node ");
-                int mkdir = body.indexOf("mkdir -p ");
-                assertThat(mkdir).isNotNegative();
-                assertThat(runner).isGreaterThan(mkdir);
+        void shouldCreateEveryDirectoryTheMentorIsGrantedBeforeNodeStarts() {
+            PiRunnerProfile profile = MENTOR;
+            String body = factory.build(spec(profile)).command().get(2);
+            int runner = body.lastIndexOf("node ");
+            int mkdir = body.indexOf("mkdir -p ");
+            assertThat(mkdir).isNotNegative();
+            assertThat(runner).isGreaterThan(mkdir);
 
-                String staging = body.substring(mkdir, runner);
-                List<String> granted = Pattern.compile("--allow-fs-write=(\\S+)")
-                        .matcher(body.substring(runner))
-                        .results()
-                        .map(match -> match.group(1))
-                        .toList();
-                assertThat(granted).isNotEmpty();
-                for (String directory : granted) {
-                    assertThat(staging)
-                            .as("%s creates %s before node starts", profile.runnerScript(), directory)
-                            .contains(" " + directory + " ");
-                }
+            String staging = body.substring(mkdir, runner);
+            List<String> granted = Pattern.compile("--allow-fs-write=(\\S+)")
+                    .matcher(body.substring(runner))
+                    .results()
+                    .map(match -> match.group(1))
+                    .toList();
+            assertThat(granted).isNotEmpty();
+            for (String directory : granted) {
+                assertThat(staging)
+                        .as("%s creates %s before node starts", profile.runnerScript(), directory)
+                        .contains(" " + directory + " ");
             }
         }
 
@@ -375,7 +384,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
                     "gpt-x",
                     null,
                     null,
-                    false,
+                    null,
                     "job-token-123",
                     true,
                     600,

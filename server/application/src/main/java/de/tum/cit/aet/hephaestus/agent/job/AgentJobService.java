@@ -136,6 +136,7 @@ public class AgentJobService {
                 pr.getHeadRefName(),
                 pr.getHeadRefOid(),
                 pr.getBaseRefName(),
+                pr.getBaseRefOid(),
                 triggerSignal,
                 ObservationOrigin.MANUAL);
     }

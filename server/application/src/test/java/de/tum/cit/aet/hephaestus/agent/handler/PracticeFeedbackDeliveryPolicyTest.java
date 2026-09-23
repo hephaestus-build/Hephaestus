@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewPersonMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -347,6 +348,33 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
     }
 
     @Test
+    @DisplayName("merged work gets no comment on the work, and its feedback still reaches the developer's own page")
+    void shouldKeepMergedFeedbackOnTheDevelopersOwnSurfaces() {
+        AgentJob job = pullRequestJob();
+        PullRequest pullRequest = openPullRequest();
+        pullRequest.setState(Issue.State.MERGED);
+        stubPullRequestEvaluation(pullRequest, coverage(true));
+        when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(AUTHOR_ID)).thenReturn(true);
+        Practice practice = new Practice();
+        practice.setSlug("merge-retrospective");
+        practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
+        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, java.util.Set.of("merge-retrospective")))
+                .thenReturn(java.util.List.of(practice));
+
+        assertThat(policy().evaluatePullRequest(job).allowed()).isFalse();
+        assertThat(recordedRefusal()).isEqualTo(FeedbackSuppressionReason.ARTIFACT_MERGED);
+        assertThat(policy().evaluateForRecipient(
+                                job,
+                                DeliveryPolicyStage.EGRESS,
+                                UUID.randomUUID(),
+                                DeliveryPolicySurface.IN_APP,
+                                AUTHOR_ID,
+                                java.util.Set.of("merge-retrospective"))
+                        .allowed())
+                .isTrue();
+    }
+
+    @Test
     void reviewerFeedbackUsesTheReviewerForCoverageAndConsent() {
         AgentJob job = pullRequestJob();
         var metadata = org.junit.jupiter.api.Assertions.assertInstanceOf(
@@ -452,6 +480,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         pullRequest.setNumber(17);
         pullRequest.setState(Issue.State.OPEN);
         pullRequest.setBaseRefName("main");
+        pullRequest.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         Repository repository = new Repository();
         repository.setId(REPOSITORY_ID);
         repository.setNameWithOwner("owner/repo");

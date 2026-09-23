@@ -1,11 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -24,11 +22,8 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
-import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
@@ -37,7 +32,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -57,8 +51,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -66,12 +58,6 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
-    @Autowired
-    private ObservationAdmissionService observationAdmission;
-
-    @Autowired
-    private FeedbackDispatchRepository feedbackDispatches;
-
     @Autowired
     private AgentJobRepository jobs;
 
@@ -125,11 +111,11 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
         var metrics = new SimpleMeterRegistry();
         // Hold dispatched sandbox work outside this test: admission, locks and RUNNING rows are real.
         executor = new AgentJobExecutor(
-                mock(de.tum.cit.aet.hephaestus.agent.job.ExecutionArchiveService.class),
                 properties,
                 jobs,
                 policy,
                 mock(JobTypeHandlerRegistry.class),
+                mock(JobEvidenceFiles.class),
                 mock(PracticePiAdapter.class),
                 mock(WorkerJwtIssuer.class),
                 mock(SandboxManager.class),
@@ -143,8 +129,7 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 Optional.empty(),
-                Optional.empty(),
-                observationAdmission);
+                Optional.empty());
     }
 
     @Test
@@ -236,81 +221,6 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .get()
                 .extracting(WorkspaceAgentBinding::getId)
                 .isEqualTo(inHouse.getId());
-    }
-
-    @ParameterizedTest
-    @EnumSource(
-            value = AgentJobType.class,
-            names = {"CONVERSATION_REVIEW", "DOCUMENT_REVIEW"})
-    void shouldKeepTheConsentRefusalAfterDirectAdapterDeliveryRetry(AgentJobType type) {
-        var job = completedDirectJob(type, DeliveryStatus.FAILED);
-        var handler = mock(JobTypeHandler.class);
-        doThrow(new ObservationsRefusedException("member_ai_declined", "The developer chose No AI."))
-                .when(handler)
-                .deliver(any());
-
-        assertThatThrownBy(() -> lifecycle(type, handler).retryDelivery(workspace.getId(), job.getId()))
-                .isInstanceOf(AgentJobStateConflictException.class);
-
-        assertStoredRefusal(job, DeliveryStatus.FAILED);
-    }
-
-    @ParameterizedTest
-    @EnumSource(
-            value = AgentJobType.class,
-            names = {"CONVERSATION_REVIEW", "DOCUMENT_REVIEW"})
-    void shouldKeepTheConsentRefusalAfterDirectAdapterDeliveryRecovery(AgentJobType type) {
-        var job = completedDirectJob(type, DeliveryStatus.PENDING);
-        var handler = mock(JobTypeHandler.class);
-        when(handler.findExistingDelivery(job)).thenReturn(ExistingDeliveryLookup.absent());
-        doThrow(new ObservationsRefusedException("member_ai_declined", "The developer chose No AI."))
-                .when(handler)
-                .deliver(job);
-
-        assertThat(lifecycle(type, handler).recoverStuckDelivery(job, (short) 1))
-                .isFalse();
-
-        assertStoredRefusal(job, DeliveryStatus.PENDING);
-    }
-
-    private AgentJob completedDirectJob(AgentJobType type, DeliveryStatus deliveryStatus) {
-        var job = queued(binding(DataHandlingTier.IN_HOUSE));
-        job.setJobType(type);
-        job.setStatus(AgentJobStatus.COMPLETED);
-        job.setDeliveryStatus(deliveryStatus);
-        return jobs.saveAndFlush(job);
-    }
-
-    private AgentJobLifecycleService lifecycle(AgentJobType type, JobTypeHandler handler) {
-        var handlers = mock(JobTypeHandlerRegistry.class);
-        when(handlers.getHandler(type)).thenReturn(handler);
-        return new AgentJobLifecycleService(
-                jobs,
-                handlers,
-                transactions,
-                mock(SandboxManager.class),
-                Optional.empty(),
-                mock(LlmUsageRecorder.class),
-                mapper,
-                feedbackDispatches,
-                new AgentJobTelemetry(new SimpleMeterRegistry(), io.micrometer.tracing.Tracer.NOOP),
-                observationAdmission);
-    }
-
-    private void assertStoredRefusal(AgentJob job, DeliveryStatus deliveryStatus) {
-        var stored = jobs.findByIdAndWorkspaceId(job.getId(), workspace.getId()).orElseThrow();
-        assertThat(stored.getStatus()).isEqualTo(AgentJobStatus.COMPLETED);
-        assertThat(stored.getDeliveryStatus()).isEqualTo(deliveryStatus);
-        var metadata = Objects.requireNonNull(stored.getMetadata());
-        assertThat(metadata.path("dataHandlingTier").asString()).isEqualTo("IN_HOUSE");
-        assertThat(metadata.path(ObservationAdmissionService.REFUSAL_METADATA_KEY)
-                        .path("reasonCode")
-                        .asString())
-                .isEqualTo("member_ai_declined");
-        assertThat(metadata.path(ObservationAdmissionService.REFUSAL_METADATA_KEY)
-                        .path("reason")
-                        .asString())
-                .isEqualTo("The developer chose No AI.");
     }
 
     private WorkspaceAgentBinding binding(DataHandlingTier tier) {

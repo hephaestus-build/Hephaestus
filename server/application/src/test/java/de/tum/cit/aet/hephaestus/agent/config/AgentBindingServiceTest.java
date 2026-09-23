@@ -69,7 +69,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         Workspace w = workspace();
         when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
         when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
-                        1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED))
+                        1L, AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.empty());
         LlmModel model = new LlmModel();
         model.setId(99L);
@@ -79,10 +79,10 @@ class AgentBindingServiceTest extends BaseUnitTest {
 
         var request = new AgentBindingRequestDTO(99L, null, 300, 2, true, true);
         WorkspaceAgentBinding saved =
-                service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED, request);
+                service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED, request);
 
         assertThat(saved.getWorkspace()).isSameAs(w);
-        assertThat(saved.getPurpose()).isEqualTo(AgentPurpose.PRACTICE_REVIEW);
+        assertThat(saved.getPurpose()).isEqualTo(AgentPurpose.MENTOR);
         var instanceModel = saved.getInstanceModel();
         assertThat(instanceModel).isNotNull();
         assertThat(instanceModel.getId()).isEqualTo(99L);
@@ -98,7 +98,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         ArgumentCaptor<ConfigAuditEntry> entry = ArgumentCaptor.forClass(ConfigAuditEntry.class);
         verify(configAudit).record(entry.capture());
         assertThat(entry.getValue().entityType()).isEqualTo(ConfigAuditEntityType.AGENT_BINDING);
-        assertThat(entry.getValue().entityId()).isEqualTo(AgentPurpose.PRACTICE_REVIEW.name());
+        assertThat(entry.getValue().entityId()).isEqualTo(AgentPurpose.MENTOR.name());
         assertThat(entry.getValue().workspaceId()).isEqualTo(1L);
         assertThat(entry.getValue().action()).isEqualTo(ConfigAuditAction.UPDATED);
         assertThat(entry.getValue().before()).hasFieldOrPropertyWithValue("instanceModelId", null);
@@ -106,6 +106,27 @@ class AgentBindingServiceTest extends BaseUnitTest {
                 .hasFieldOrPropertyWithValue("instanceModelId", 99L)
                 .hasFieldOrPropertyWithValue("workspaceModelId", null)
                 .hasFieldOrPropertyWithValue("enabled", true);
+    }
+
+    @Test
+    void upsertRejectsInternetAccessForPracticeReviews() {
+        Workspace w = workspace();
+        when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED))
+                .thenReturn(Optional.empty());
+        LlmModel model = new LlmModel();
+        model.setId(99L);
+        when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
+        when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
+
+        // PracticePiAdapter enforces an internal network regardless of stored configuration.
+        var request = new AgentBindingRequestDTO(99L, null, null, null, true, true);
+        assertThatThrownBy(() -> service.upsertBinding(
+                        context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("internal network");
+        verify(bindingRepository, never()).save(any());
     }
 
     @Test

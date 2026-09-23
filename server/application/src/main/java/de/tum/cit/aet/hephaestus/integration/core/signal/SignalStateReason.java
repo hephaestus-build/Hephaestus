@@ -108,7 +108,8 @@ public enum SignalStateReason {
             case REQUESTER_QUOTA_EXHAUSTED ->
                 "You have asked for as many reviews as an hour allows; the allowance refills.";
             case CONCURRENT_DUPLICATE -> "Another submission for the same work carries this review.";
-            case COALESCED -> "A newer issue snapshot replaced this review occasion before submission.";
+            case COALESCED ->
+                "A newer artifact revision or lifecycle state replaced this review occasion before submission.";
             case OUT_OF_REVIEW_SCOPE ->
                 "This artifact is outside the branches and repositories this workspace reviews.";
             case STALE_ROLLOUT_REVISION ->

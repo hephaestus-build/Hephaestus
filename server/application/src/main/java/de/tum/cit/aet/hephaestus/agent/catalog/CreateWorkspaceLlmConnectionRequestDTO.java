@@ -25,7 +25,7 @@ public record CreateWorkspaceLlmConnectionRequestDTO(
         @Pattern(
                 regexp = "openai-completions|openai-responses",
                 message = "apiProtocol must be one of openai-completions, openai-responses")
-        @Schema(description = "Wire protocol", example = "openai-completions")
+        @Schema(description = "Wire protocol", example = "openai-responses")
         String apiProtocol,
 
         @Nullable @Schema(description = "Credential shape (default BEARER)")

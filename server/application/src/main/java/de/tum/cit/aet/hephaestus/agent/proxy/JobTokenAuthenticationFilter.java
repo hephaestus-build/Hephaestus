@@ -45,16 +45,19 @@ public class JobTokenAuthenticationFilter extends OncePerRequestFilter {
     private final WorkerJwtVerifier jwtVerifier;
     private final MentorProxyCredentialRegistry mentorRegistry;
     private final ObjectMapper objectMapper;
+    private final String workerId;
 
     JobTokenAuthenticationFilter(
             AgentJobRepository agentJobRepository,
             WorkerJwtVerifier jwtVerifier,
             MentorProxyCredentialRegistry mentorRegistry,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            String workerId) {
         this.agentJobRepository = agentJobRepository;
         this.jwtVerifier = jwtVerifier;
         this.mentorRegistry = mentorRegistry;
         this.objectMapper = objectMapper;
+        this.workerId = workerId;
     }
 
     @Override
@@ -110,7 +113,8 @@ public class JobTokenAuthenticationFilter extends OncePerRequestFilter {
             return Optional.empty();
         }
         AgentJob job = optionalJob.get();
-        if (job.getStatus() != AgentJobStatus.RUNNING
+        if (!workerId.equals(job.getWorkerId())
+                || job.getStatus() != AgentJobStatus.RUNNING
                 || !job.getWorkspace().getId().equals(jwt.workspaceId())
                 || job.getRetryCount() != jwt.attempt()) {
             return Optional.empty();
@@ -135,7 +139,11 @@ public class JobTokenAuthenticationFilter extends OncePerRequestFilter {
                 snapshot.modelId(),
                 job.getWorkspace().getId(),
                 new ProxyRouting.BilledAttempt(
-                        LlmUsageSourceType.AGENT_JOB, job.getId(), job.getRetryCount(), spentSoFarUsd(job, snapshot))));
+                        LlmUsageSourceType.AGENT_JOB,
+                        job.getId(),
+                        job.getRetryCount(),
+                        spentSoFarUsd(job, snapshot),
+                        job.getWorkerId())));
     }
 
     /**

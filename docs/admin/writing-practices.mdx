@@ -84,22 +84,32 @@ not an observation about the developer. With qualified evidence, use UNDETERMINE
 question that remains unresolved. Inability to find a quotation does not itself prove absence.
 A previous observation records an earlier judgment; it is not independent proof that judgment was right.
 
-## Example criteria to adapt
+## Write the criteria as a decision procedure
 
-> Review author-provided verification guidance when the actual change introduces a material behavior
-> or appearance that a reviewer needs to check. Ordinary prose edits and empty changes do not by
-> themselves require runtime instructions. Read the captured change and relevant source context, then
-> inspect the description, explicitly adopted linked
-> requirements and relevant authored tests or previews; only use attachments whose contents were
-> inspected. Identify the changed behavior and the guidance that addresses it. For a usable route,
-> establish an entry point, action and observable expected result, with prerequisites needed to reach
-> it. A static preview can demonstrate appearance but does not establish persistence or external
-> integration. Name an existing misleading instruction as present and assess it in context; name a
-> genuinely missing necessary step as absent after the bounded search. Request the smallest useful
-> correction and explain its consequence. Do not claim to have executed the route.
+The bundled catalog uses the following order. It is also a useful template for custom practices;
+the questions above remain the basis for deciding what belongs in each section.
 
-This is an illustrative draft, not an automatically qualified catalog entry. Tailor its evidence
-requirements and consequences to the work your workspace can actually capture.
+1. **BEHAVIOR FOCUS** — name the observable behavior.
+2. **The standard** — define what doing that behavior well means.
+3. **Occasion** — identify work where the expectation does not apply.
+4. **Sources** — state which captured sources can support each claim and their limits.
+5. **Judge** — define the assessed cells, NOT_APPLICABLE and UNDETERMINED. Make the conditions
+   distinct, and state the order of checks where it matters.
+6. **Severity** — tie negative outcomes to consequences.
+7. **Grounding** — state the evidence needed to support each claim.
+8. **Defer** — identify expectations owned by other practices.
+
+Keep each requirement in one place. Use the matrix terms consistently. The bundled catalog has an
+8,000-character limit; meeting that limit does not establish that the criteria are clear or correct.
+
+The review recording tool reads excluded assessed cells from the Judge section. For example,
+`- PRESENT/GOOD and ABSENT/GOOD: no ordinary case.` excludes those two cells. Use that wording only
+when neither cell can apply to the named behavior. Do not copy exclusions from another practice
+without checking their meaning.
+
+To see the template in use, open **State how to verify the change** in the practice editor.
+Adapt its structure, not its applicability rules: each practice needs evidence and consequences
+that match its own expectation and the sources your workspace can capture.
 
 ## Challenge the draft before adopting it
 

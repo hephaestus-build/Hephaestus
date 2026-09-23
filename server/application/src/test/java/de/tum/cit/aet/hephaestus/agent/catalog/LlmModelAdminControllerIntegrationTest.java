@@ -59,6 +59,49 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
+    void shouldStoreAReasoningEffortAndRefuseOneOutsideTheScale() {
+        LlmConnection connection = seedConnection();
+        LlmModelDTO created = createModel(connection.getId(), "gpt-5-effort");
+
+        webTestClient
+                .patch()
+                .uri("/admin/llm/models/{id}", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"reasoningEffort\":\"XHIGH\"}")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.reasoningEffort")
+                .isEqualTo("XHIGH");
+
+        webTestClient
+                .patch()
+                .uri("/admin/llm/models/{id}", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"reasoningEffort\":\"EXTREME\"}")
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+
+        webTestClient
+                .patch()
+                .uri("/admin/llm/models/{id}", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"clearReasoningEffort\":true}")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.reasoningEffort")
+                .doesNotExist();
+    }
+
+    @Test
     void appAdminCanCreateGetListUpdateAndDeleteAModel() {
         LlmConnection connection = seedConnection();
         LlmModelDTO created = createModel(connection.getId(), "gpt-5-eu");
@@ -89,7 +132,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .jsonPath("$.length()")
                 .isEqualTo(1);
 
-        var updateRequest = new UpdateLlmModelRequestDTO("Renamed Model", null, null, null, null, null, null);
+        var updateRequest = new UpdateLlmModelRequestDTO("Renamed Model", null, null, null, null, null, null, null);
         webTestClient
                 .patch()
                 .uri("/admin/llm/models/{id}", created.id())
@@ -177,7 +220,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .uri("/admin/llm/models/{id}", created.id())
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateLlmModelRequestDTO(null, null, null, null, null, null, null))
+                .bodyValue(new UpdateLlmModelRequestDTO(null, null, null, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -234,7 +277,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateLlmModelRequestDTO(
-                        null, null, null, null, LlmDataOperator.OWN_ORGANISATION, null, true))
+                        null, null, null, null, null, LlmDataOperator.OWN_ORGANISATION, null, true))
                 .exchange()
                 .expectStatus()
                 .isOk()

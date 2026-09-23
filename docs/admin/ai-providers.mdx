@@ -59,7 +59,7 @@ required.
 | --- | --- | --- |
 | **Display name** | yes | Free text, ≤ 128 characters. The only field you can rename later. |
 | **Base URL** | yes | The provider's OpenAI-compatible root, ≤ 2048 characters — e.g. `https://api.openai.com/v1`, or `https://<resource>.openai.azure.com/openai/v1` for Azure. Must be HTTPS, must carry no credentials, query string or fragment. **Immutable after create.** |
-| **API shape** | yes | `openai-completions` (Chat Completions) or `openai-responses` (Responses API). In the form this is the *"Use the Responses API instead of Chat Completions"* checkbox. **Immutable after create.** |
+| **API shape** | yes | `openai-responses` (Responses API) or `openai-completions` (Chat Completions). In the form this is the *"Use the Responses API"* checkbox, ticked for a new connection. Prefer the Responses API: a review or the mentor calls tools across many turns, and the Responses API can preserve reasoning between tool calls for models and providers that support it. OpenAI, the Vercel AI Gateway, OpenRouter and vLLM offer this API, but support depends on the model and deployment. Clear the checkbox for an endpoint that supports only Chat Completions. **Immutable after create.** |
 | **Authentication** | no | `BEARER` → `Authorization: Bearer <key>`, or `API_KEY` → `api-key: <key>`. Defaults to `BEARER`; Azure needs `API_KEY`. **Immutable after create.** |
 | **API key** | no | Write-only. Encrypted at rest, never returned — a saved connection reports only `hasApiKey` and the last four characters. Leave it blank on edit to keep the stored key; tick **Remove stored API key** to delete it. Genuinely optional: a self-hosted vLLM or Ollama gateway may need no credential at all. |
 | **Slug** | no | Internal identifier, ≤ 63 characters. Derived from the display name when you omit it. **Immutable after create.** |
@@ -151,6 +151,21 @@ is never "Hephaestus is broken":
 A workspace admin sees a deliberately narrower result: *Connected. N models available.* or the same
 failure message, but never the provider's model ids.
 
+### Reasoning effort
+
+A model's **Reasoning effort** is how hard a reasoning model is asked to think on every call a review
+or the mentor makes with it: **None**, **Minimal**, **Low**, **Medium**, **High**, **Extra high** or
+**Max**, OpenAI's scale, sent as `reasoning_effort` on chat completions and `reasoning.effort` on the
+responses API. **Provider default** sends no effort value, so the provider's default for that model
+applies. Defaults and supported levels differ by model; check the provider's model documentation. **None** asks a reasoning model not to reason; a model that does not reason at
+all belongs at **Provider default**, because a provider may reject the parameter. Not every model takes
+every level, and a level the model refuses fails the call rather than being rounded. The same field
+exists on a workspace's own models. Higher efforts spend more output tokens; the reasoning share is
+recorded with each job's usage and priced as output, never twice.
+
+A model that was marked as supporting reasoning before this field existed keeps what it was sent:
+**Medium**.
+
 ## 4. Pricing a model
 
 **Hephaestus never infers a price.** OpenAI-compatible responses report token *counts*, not your
@@ -240,7 +255,7 @@ reviews. Work through
 [the triage list](./practice-review#when-a-workspace-goes-quiet) when that
 happens.
 
-A workspace admin choosing a model sees only its display name, connection name, reasoning support
+A workspace admin choosing a model sees only its display name, connection name, reasoning effort
 and price framing — never an upstream model id, base URL or credential.
 
 ## 6. Errors you can hit

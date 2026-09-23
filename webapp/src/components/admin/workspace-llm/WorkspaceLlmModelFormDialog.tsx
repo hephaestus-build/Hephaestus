@@ -26,6 +26,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
+import { reasoningEffortOf, reasoningEffortUpdateOf } from "@/lib/reasoning-effort";
 
 export interface WorkspaceLlmModelFormDialogProps {
 	open: boolean;
@@ -98,7 +99,6 @@ function WorkspaceLlmModelFormDialogContent({
 			displayName: fields.displayName.trim(),
 			contextWindow: fields.contextWindow.trim() ? Number(fields.contextWindow) : undefined,
 			maxOutputTokens: fields.maxOutputTokens.trim() ? Number(fields.maxOutputTokens) : undefined,
-			supportsReasoning: fields.supportsReasoning,
 			...dataHandlingBodyOf(fields),
 			enabled: isEdit ? fields.enabled : false,
 			pricingMode: price.pricingMode,
@@ -110,11 +110,15 @@ function WorkspaceLlmModelFormDialogContent({
 		};
 
 		if (isEdit) {
-			onUpdate(editing.id, shared satisfies UpdateWorkspaceLlmModelRequest);
+			onUpdate(editing.id, {
+				...shared,
+				...reasoningEffortUpdateOf(fields.reasoningEffort),
+			} satisfies UpdateWorkspaceLlmModelRequest);
 			return;
 		}
 		onCreate({
 			...shared,
+			reasoningEffort: reasoningEffortOf(fields.reasoningEffort),
 			upstreamModelId: fields.upstreamModelId.trim(),
 		} satisfies CreateWorkspaceLlmModelRequest);
 	};

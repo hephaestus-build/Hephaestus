@@ -22,6 +22,7 @@ import {
 import { Field, FieldDescription, FieldLegend, FieldSet } from "@/components/ui/field";
 import type { AdminLlmModelSaveBody } from "@/lib/admin-llm-model-save";
 import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
+import { reasoningEffortOf, reasoningEffortUpdateOf } from "@/lib/reasoning-effort";
 
 import {
 	dataHandlingBodyOf,
@@ -112,13 +113,16 @@ function AdminLlmModelFormDialogContent({
 			displayName: fields.displayName.trim(),
 			contextWindow: fields.contextWindow.trim() ? Number(fields.contextWindow) : undefined,
 			maxOutputTokens: fields.maxOutputTokens.trim() ? Number(fields.maxOutputTokens) : undefined,
-			supportsReasoning: fields.supportsReasoning,
 			...dataHandlingBodyOf(fields),
 			enabled: fields.enabled,
 		};
 		const metadata: CreateLlmModelRequest | UpdateLlmModelRequest = isEdit
-			? metadataShared
-			: { ...metadataShared, upstreamModelId: fields.upstreamModelId.trim() };
+			? { ...metadataShared, ...reasoningEffortUpdateOf(fields.reasoningEffort) }
+			: {
+					...metadataShared,
+					reasoningEffort: reasoningEffortOf(fields.reasoningEffort),
+					upstreamModelId: fields.upstreamModelId.trim(),
+				};
 
 		const priceBody: UpdateLlmModelPriceRequest = {
 			pricingMode: price.pricingMode,

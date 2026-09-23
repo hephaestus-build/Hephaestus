@@ -25,7 +25,6 @@ export interface ProjectInventory {
 	focal?: { type?: string; number?: number };
 	issues?: InventoryItem[];
 	pullRequests?: InventoryItem[];
-	counts?: { issuesListed?: number; pullRequestsListed?: number };
 	truncated?: boolean;
 }
 
@@ -83,7 +82,6 @@ export function parseProjectInventory(value: unknown): ProjectInventory | null {
 		return null;
 	}
 	const focal = isJsonObject(value.focal) ? value.focal : undefined;
-	const counts = isJsonObject(value.counts) ? value.counts : undefined;
 	return {
 		repository: optionalString(value.repository),
 		focal: focal && {
@@ -92,10 +90,6 @@ export function parseProjectInventory(value: unknown): ProjectInventory | null {
 		},
 		issues: parseInventoryItems(value.issues),
 		pullRequests: parseInventoryItems(value.pullRequests),
-		counts: counts && {
-			issuesListed: optionalNumber(counts.issuesListed),
-			pullRequestsListed: optionalNumber(counts.pullRequestsListed),
-		},
 		truncated: optionalBoolean(value.truncated),
 	};
 }
@@ -104,4 +98,14 @@ export async function readProjectInventory(
 	contextDir: string | undefined,
 ): Promise<ProjectInventory | null> {
 	return parseProjectInventory(await readContextJson(contextDir, "project_inventory.json"));
+}
+
+/** The inventory's issues by number, for a `#N` lookup; empty when no inventory was captured. */
+export function inventoryIssues(inventory: ProjectInventory | null): Map<number, InventoryItem> {
+	return new Map((inventory?.issues ?? []).map((issue) => [issue.number, issue]));
+}
+
+/** Whether an inventory state is the provider's "open" — `OPEN` on GitHub, `OPENED` on GitLab. */
+export function isOpenState(state: string | undefined): boolean {
+	return state !== undefined && /^open(?:ed)?$/iu.test(state);
 }

@@ -16,7 +16,7 @@ public enum ConversationRoutingDecision {
     ALREADY_DELIVERED_IN_CONTEXT,
     /** Reviewer-targeted - deferred (ADR 0021). */
     REVIEWER_DEFERRED,
-    /** The practice's autonomy (OFF or HUMAN_APPROVAL) does not admit the conversation channel. */
+    /** The practice's autonomy is OFF: a chat turn is read on request, so approval never gates it. */
     PRACTICE_REQUIRES_APPROVAL,
     /**
      * From a backfill campaign - coaching on a decision made months ago would present retrospective
