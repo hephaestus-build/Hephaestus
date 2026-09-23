@@ -127,6 +127,31 @@
 					"type": "string",
 					"minLength": 1,
 					"maxLength": 2000
+				},
+				"deliveryBehavior": {
+					"description": "How negative feedback from this practice is placed or deduplicated.",
+					"$ref": "#/$defs/deliveryBehavior"
+				}
+			}
+		},
+		"deliveryBehavior": {
+			"description": "Declared feedback placement and co-occurrence choices for a practice.",
+			"type": "object",
+			"required": ["summaryOnly"],
+			"additionalProperties": false,
+			"properties": {
+				"summaryOnly": {
+					"description": "Show feedback in the summary instead of on a changed line.",
+					"type": "boolean"
+				},
+				"overlapGroup": {
+					"description": "On issues, show only the first negative practice in this group.",
+					"type": "string",
+					"pattern": "\\S"
+				},
+				"redundantToSlug": {
+					"description": "When both practices are negative, show feedback from this preferred practice instead.",
+					"$ref": "#/$defs/slug"
 				}
 			}
 		},

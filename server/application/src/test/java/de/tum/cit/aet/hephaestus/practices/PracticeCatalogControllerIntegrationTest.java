@@ -179,6 +179,38 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
     @Test
     @WithAdminUser
+    void workspaceAdminCanOpenTheReleaseInbox() {
+        ensureAdminMembership(workspace);
+
+        webTestClient
+                .get()
+                .uri(BASE_URI + "/releases", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .json("[]");
+    }
+
+    @Test
+    @WithMentorUser
+    void workspaceMentorCannotOpenTheReleaseInbox() {
+        User member = persistUser("mentor");
+        ensureWorkspaceMembership(workspace, member, WorkspaceMembership.WorkspaceRole.MEMBER);
+
+        webTestClient
+                .get()
+                .uri(BASE_URI + "/releases", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    @WithAdminUser
     void workspaceAdminCanReadEvidenceAuthoringOptions() {
         ensureAdminMembership(workspace);
 

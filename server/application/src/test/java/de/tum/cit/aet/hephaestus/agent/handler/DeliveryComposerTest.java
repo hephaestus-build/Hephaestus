@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.Val
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.WithheldObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -138,6 +139,21 @@ class DeliveryComposerTest extends BaseUnitTest {
                 severity,
                 buildEvidence(locations, snippets),
                 reasoning);
+    }
+
+    private static ValidatedObservation withBehavior(
+            ValidatedObservation observation, PracticeDeliveryBehavior behavior) {
+        return new ValidatedObservation(
+                observation.practiceSlug(),
+                observation.summary(),
+                observation.assessmentStatus(),
+                observation.presence(),
+                observation.assessment(),
+                observation.severity(),
+                observation.evidence(),
+                observation.evidenceRationale(),
+                observation.keys(),
+                behavior);
     }
 
     private static String humanizeTitle(String slug) {
@@ -691,6 +707,26 @@ class DeliveryComposerTest extends BaseUnitTest {
     }
 
     @Test
+    void customPracticeCanDeclareSummaryOnlyDelivery() {
+        ValidatedObservation observation = negativeObservation(
+                "team-authored-practice",
+                "Avoid this pattern",
+                Severity.MINOR,
+                List.of(new LocationSpec("src/Example.java", 7)),
+                null,
+                "The pattern makes this change hard to maintain.");
+
+        DeliveryContent inline = DeliveryComposer.compose(List.of(observation));
+        assertThat(inline).isNotNull();
+        assertThat(inline.diffNotes()).hasSize(1);
+        DeliveryContent summaryOnly = DeliveryComposer.compose(
+                List.of(withBehavior(observation, new PracticeDeliveryBehavior(true, null, null))));
+        assertThat(summaryOnly).isNotNull();
+        assertThat(summaryOnly.diffNotes()).isEmpty();
+        assertThat(summaryOnly.mrNote()).contains("Avoid this pattern");
+    }
+
+    @Test
     void shouldKeepMinorObservationSummariesOnTheDiff() {
         List<ValidatedObservation> observations = List.of(negativeObservation(
                 "code-hygiene",
@@ -1027,20 +1063,24 @@ class DeliveryComposerTest extends BaseUnitTest {
     @Test
     void compose_epicIssue_collapsesOverlappingStructureObservations() {
         var observations = List.of(
-                negativeObservation(
-                        "issue-scoped-to-single-concern",
-                        "Bundles concerns",
-                        Severity.MAJOR,
-                        null,
-                        null,
-                        "This epic mixes capture and export concerns."),
-                negativeObservation(
-                        "issue-has-checkable-outcome",
-                        "No checkable outcome",
-                        Severity.MINOR,
-                        null,
-                        null,
-                        "No acceptance criteria are stated."),
+                withBehavior(
+                        negativeObservation(
+                                "issue-scoped-to-single-concern",
+                                "Bundles concerns",
+                                Severity.MAJOR,
+                                null,
+                                null,
+                                "This epic mixes capture and export concerns."),
+                        new PracticeDeliveryBehavior(false, "issue-structure", null)),
+                withBehavior(
+                        negativeObservation(
+                                "issue-has-checkable-outcome",
+                                "No checkable outcome",
+                                Severity.MINOR,
+                                null,
+                                null,
+                                "No acceptance criteria are stated."),
+                        new PracticeDeliveryBehavior(false, "issue-structure", null)),
                 negativeObservation(
                         "breaks-large-work-into-trackable-subtasks",
                         "No subtasks",
@@ -1096,13 +1136,15 @@ class DeliveryComposerTest extends BaseUnitTest {
     @Test
     void compose_coOccurringNoTestsFact_deliveredOnceNotAsTwoMajors() {
         var observations = List.of(
-                negativeObservation(
-                        "ready-and-traceable-handoff",
-                        "Definition of Done claims all tests pass",
-                        Severity.MAJOR,
-                        List.of(new LocationSpec("README.md", 3)),
-                        null,
-                        "The DoD checklist ticks 'all tests pass' but no test files changed."),
+                withBehavior(
+                        negativeObservation(
+                                "ready-and-traceable-handoff",
+                                "Definition of Done claims all tests pass",
+                                Severity.MAJOR,
+                                List.of(new LocationSpec("README.md", 3)),
+                                null,
+                                "The DoD checklist ticks 'all tests pass' but no test files changed."),
+                        new PracticeDeliveryBehavior(false, null, "ships-tests-with-the-change")),
                 negativeObservation(
                         "ships-tests-with-the-change",
                         "Production logic ships without a test",
@@ -1545,14 +1587,16 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void compose_withheld_reportsCoOccurrenceDedupAsComposerDeduped() {
-        ValidatedObservation redundant = negativeObservation(
-                        "ready-and-traceable-handoff",
-                        "DoD checkbox claims tests pass",
-                        Severity.MAJOR,
-                        List.of(),
-                        null,
-                        "The DoD claims all tests pass but no tests changed.")
-                .withKeys(new ObservationKeys("occ-rk-redundant", "rk-redundant"));
+        ValidatedObservation redundant = withBehavior(
+                negativeObservation(
+                                "ready-and-traceable-handoff",
+                                "DoD checkbox claims tests pass",
+                                Severity.MAJOR,
+                                List.of(),
+                                null,
+                                "The DoD claims all tests pass but no tests changed.")
+                        .withKeys(new ObservationKeys("occ-rk-redundant", "rk-redundant")),
+                new PracticeDeliveryBehavior(false, null, "ships-tests-with-the-change"));
         ValidatedObservation preferred = negativeObservation(
                         "ships-tests-with-the-change",
                         "No tests shipped with the change",
@@ -1591,22 +1635,26 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void compose_withheld_epicStructureDedupOnIssue_reportsComposerDeduped() {
-        ValidatedObservation scoped = negativeObservation(
-                        "issue-scoped-to-single-concern",
-                        "Issue bundles several concerns",
-                        Severity.MAJOR,
-                        List.of(),
-                        null,
-                        "The issue mixes several concerns.")
-                .withKeys(new ObservationKeys("occ-rk-scoped", "rk-scoped"));
-        ValidatedObservation checkable = negativeObservation(
-                        "issue-has-checkable-outcome",
-                        "No checkable outcome",
-                        Severity.MINOR,
-                        List.of(),
-                        null,
-                        "The issue has no checkable outcome.")
-                .withKeys(new ObservationKeys("occ-rk-checkable", "rk-checkable"));
+        ValidatedObservation scoped = withBehavior(
+                negativeObservation(
+                                "issue-scoped-to-single-concern",
+                                "Issue bundles several concerns",
+                                Severity.MAJOR,
+                                List.of(),
+                                null,
+                                "The issue mixes several concerns.")
+                        .withKeys(new ObservationKeys("occ-rk-scoped", "rk-scoped")),
+                new PracticeDeliveryBehavior(false, "issue-structure", null));
+        ValidatedObservation checkable = withBehavior(
+                negativeObservation(
+                                "issue-has-checkable-outcome",
+                                "No checkable outcome",
+                                Severity.MINOR,
+                                List.of(),
+                                null,
+                                "The issue has no checkable outcome.")
+                        .withKeys(new ObservationKeys("occ-rk-checkable", "rk-checkable")),
+                new PracticeDeliveryBehavior(false, "issue-structure", null));
 
         DeliveryContent result = DeliveryComposer.compose(List.of(scoped, checkable), ArtifactKinds.ISSUE);
 

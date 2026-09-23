@@ -89,6 +89,7 @@ export function buildAutonomyFixture({
 				criteria: `## ${spec.name}\n\nWhat a review looks for.`,
 				artifactKind: spec.artifactKind ?? "scm.pull_request",
 				whyItMatters: spec.whyItMatters,
+				deliveryBehavior: { summaryOnly: false },
 				automatedReviewPolicy:
 					spec.reviewable === false
 						? {

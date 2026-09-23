@@ -19,6 +19,7 @@ const definition: CuratedPracticeDefinition = {
 	artifactKind: "scm.pull_request",
 	bindings: [mockPullRequestBinding],
 	criteria: "Confirm the pull request explains both the change and its motivation.",
+	deliveryBehavior: { summaryOnly: false },
 	automatedReviewPolicy: mockPullRequestPolicy,
 	automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 	precomputeScript: "export default { hasDescription: pullRequest.body.length > 0 };",

@@ -9,11 +9,17 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.practices.BindingChange;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionField;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionMerge;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
+import de.tum.cit.aet.hephaestus.practices.PracticeReleaseChoice;
+import de.tum.cit.aet.hephaestus.practices.PracticeReleasePrecondition;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeReleaseProposalDTO;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +48,13 @@ public class CuratedCatalogService {
         return loadCatalog();
     }
 
+    /** Keeps the offered definition stable until a workspace's release decision commits. */
+    @Transactional
+    public EffectiveCatalog catalogForDecision() {
+        lockCatalog();
+        return loadCatalog();
+    }
+
     private EffectiveCatalog loadCatalog() {
         return CuratedCatalogModel.compose(loader.catalog(), groupOverrides.findAll(), practiceOverrides.findAll());
     }
@@ -53,6 +66,69 @@ public class CuratedCatalogService {
 
     private CatalogEntry<PracticeDefinition> loadPractice(String slug) {
         return loadCatalog().practice(slug).orElseThrow(() -> new EntityNotFoundException(CATALOG_PRACTICE, slug));
+    }
+
+    @Transactional(readOnly = true)
+    public PracticeReleaseProposalDTO practiceRelease(String slug) {
+        return requirePracticeRelease(loadPractice(slug));
+    }
+
+    @Transactional
+    public CatalogEntry<PracticeDefinition> acceptPracticeRelease(
+            String slug,
+            @Nullable EntityTagPrecondition precondition,
+            Map<PracticeDefinitionField, PracticeReleaseChoice> choices) {
+        lockCatalog();
+        CatalogEntry<PracticeDefinition> before = loadPractice(slug);
+        PracticeReleaseProposalDTO proposal = requirePracticeRelease(before);
+        PracticeReleasePrecondition.requireCurrent(precondition, proposal);
+        PracticeDefinition merged =
+                PracticeDefinitionMerge.apply(proposal.base(), proposal.current(), proposal.offered(), choices);
+        CuratedCatalogModel.validatePracticeGroup(loadCatalog(), merged);
+        definitionValidator.validate(merged);
+        if (merged.equals(proposal.offered())) {
+            clearPracticeDefinition(slug);
+        } else {
+            CuratedPracticeOverride override =
+                    practiceOverrides.findBySlug(slug).orElseThrow();
+            override.acceptBundledRelease(merged, proposal.offered(), clock.instant());
+            practiceOverrides.save(override);
+        }
+        return recordPractice(slug, before);
+    }
+
+    @Transactional
+    public CatalogEntry<PracticeDefinition> declinePracticeRelease(
+            String slug, @Nullable EntityTagPrecondition precondition) {
+        lockCatalog();
+        CatalogEntry<PracticeDefinition> before = loadPractice(slug);
+        PracticeReleaseProposalDTO proposal = requirePracticeRelease(before);
+        PracticeReleasePrecondition.requireCurrent(precondition, proposal);
+        CuratedPracticeOverride override = practiceOverrides.findBySlug(slug).orElseThrow();
+        override.acknowledge(CuratedDefinitionDigest.of(slug, proposal.offered()), clock.instant());
+        practiceOverrides.save(override);
+        return recordPractice(slug, before);
+    }
+
+    private PracticeReleaseProposalDTO requirePracticeRelease(CatalogEntry<PracticeDefinition> entry) {
+        CuratedPracticeOverride override =
+                practiceOverrides.findBySlug(entry.slug()).orElse(null);
+        PracticeDefinition shipped = entry.shipped();
+        PracticeDefinition base = override == null ? null : override.getAdoptedBase();
+        if (override == null
+                || shipped == null
+                || base == null
+                || base.equals(shipped)
+                || CuratedDefinitionDigest.of(entry.slug(), shipped).equals(entry.acceptedBundledDigest())) {
+            throw new EntityNotFoundException("Practice release", entry.slug());
+        }
+        return PracticeReleaseProposalDTO.of(
+                entry.slug(),
+                base,
+                entry.effective(),
+                shipped,
+                Objects.requireNonNull(override.getAdoptedBaseSource()),
+                null);
     }
 
     @Transactional(readOnly = true)
@@ -140,11 +216,12 @@ public class CuratedCatalogService {
         if (entry.overridden() == null) {
             return entry;
         }
+        if (entry.shipped() != null) {
+            throw new CuratedCatalogConflictException(
+                    "Review changed bundled practices through the practice release instead.");
+        }
         practiceOverrides.findBySlug(slug).ifPresent(override -> {
             override.acknowledge(CuratedCatalogModel.digestOf(entry.shipped(), slug), clock.instant());
-            if (entry.shipped() != null) {
-                override.adoptBundledBase(entry.shipped());
-            }
             practiceOverrides.save(override);
         });
         return recordPractice(slug, entry);

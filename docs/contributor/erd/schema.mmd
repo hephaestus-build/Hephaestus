@@ -308,6 +308,7 @@ erDiagram
         JSONB automated_review_policy
         JSONB adopted_base
         VARCHAR(32) adopted_base_source
+        JSONB delivery_behavior
     }
 
     DeliveryPolicyEvaluation {
@@ -926,6 +927,8 @@ erDiagram
         VARCHAR(16) autonomy
         JSONB adopted_base
         VARCHAR(32) adopted_base_source
+        VARCHAR(96) declined_offered_digest
+        JSONB delivery_behavior "NOT NULL"
     }
 
     PracticeCatalogInstallation {
@@ -982,6 +985,7 @@ erDiagram
         VARCHAR(32) group_color
         VARCHAR(96) review_rule_fingerprint
         JSONB automated_review_policy
+        JSONB delivery_behavior "NOT NULL"
     }
 
     ProductFeedback {

@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -52,6 +53,10 @@ public class CuratedPracticeOverride {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "automated_review_policy", columnDefinition = "jsonb")
     private @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "delivery_behavior", columnDefinition = "jsonb")
+    private @Nullable PracticeDeliveryBehavior deliveryBehavior;
 
     @Column(name = "why_it_matters", columnDefinition = "TEXT")
     private @Nullable String whyItMatters;
@@ -112,7 +117,8 @@ public class CuratedPracticeOverride {
                 automatedReviewPolicy,
                 whyItMatters,
                 whatGoodLooksLike,
-                groupSlug);
+                groupSlug,
+                deliveryBehavior == null ? PracticeDeliveryBehavior.DEFAULT : deliveryBehavior);
     }
 
     public void write(PracticeDefinition definition, @Nullable String acceptedBundledDigest, Instant now) {
@@ -122,6 +128,7 @@ public class CuratedPracticeOverride {
         this.criteria = definition.criteria();
         this.precomputeScript = definition.precomputeScript();
         this.automatedReviewPolicy = definition.automatedReviewPolicy();
+        this.deliveryBehavior = definition.deliveryBehavior();
         this.whyItMatters = definition.whyItMatters();
         this.whatGoodLooksLike = definition.whatGoodLooksLike();
         this.groupSlug = definition.groupSlug();
@@ -136,6 +143,7 @@ public class CuratedPracticeOverride {
         this.criteria = null;
         this.precomputeScript = null;
         this.automatedReviewPolicy = null;
+        this.deliveryBehavior = null;
         this.whyItMatters = null;
         this.whatGoodLooksLike = null;
         this.groupSlug = null;
@@ -149,6 +157,11 @@ public class CuratedPracticeOverride {
         this.adoptedBase = bundled;
         this.adoptedBaseSource = AdoptedBaseSource.EXACT_ADOPTION;
         this.acceptedBundledDigest = CuratedDefinitionDigest.of(slug, bundled);
+    }
+
+    public void acceptBundledRelease(PracticeDefinition merged, PracticeDefinition bundled, Instant now) {
+        write(merged, CuratedDefinitionDigest.of(slug, bundled), now);
+        adoptBundledBase(bundled);
     }
 
     public void backfillBase(@Nullable PracticeDefinition bundled) {

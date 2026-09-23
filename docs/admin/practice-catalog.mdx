@@ -1,7 +1,7 @@
 ---
 id: practice-catalog
 title: Practice Catalog
-description: Curate the practices an instance offers, adopt them into a workspace, and read the badges that say when a workspace copy and the catalog have drifted apart.
+description: Curate the practices an instance offers, adopt them into a workspace, and review later changes before they apply.
 ---
 
 A practice is a habit Hephaestus reviews work against. Where a practice lives decides who owns it and
@@ -13,7 +13,7 @@ its evidence boundary and test its judgments against realistic cases.
 ```mermaid
 flowchart LR
     accTitle: The three places a practice definition lives
-    accDescr: Hephaestus ships bundled defaults. An instance administrator customizes them into the instance catalog, which decides what workspaces may adopt. A workspace administrator adopts a practice as an independent copy that later catalog changes never rewrite.
+    accDescr: Hephaestus ships bundled defaults. An instance administrator customizes them into the instance catalog, which decides what workspaces may adopt. A workspace administrator adopts an independent copy and reviews later updates before applying them.
     Bundled[Bundled defaults<br/>shipped with Hephaestus] -->|upgrade, unless customized| Catalog[Instance catalog<br/>what workspaces may adopt]
     Catalog -->|adoption, by an administrator| Copy[Workspace practice<br/>an independent copy]
     Copy -->|never flows back| Catalog
@@ -22,7 +22,7 @@ flowchart LR
 | Scope | Owner | Changing it affects |
 |---|---|---|
 | Bundled defaults | Hephaestus releases | Every instance that has not customized the entry |
-| Instance catalog | Instance administrator | What workspaces may adopt **next** — never a copy already adopted |
+| Instance catalog | Instance administrator | What workspaces may adopt next, and what updates existing adopters can review |
 | Workspace practice | Workspace administrator | Reviews in that one workspace |
 
 The arrow only ever points right. A release can update an instance entry nobody customized, and an
@@ -45,7 +45,24 @@ a separate decision you make later, on the **Review** screen.
 :::
 
 What you get is a copy. Edit it, move it, rename it, delete it — none of that touches the catalog, and
-nothing in the catalog reaches back into it.
+nothing in the catalog changes it without your approval.
+
+### Review a later update
+
+Open **Workspace administration → Practice setup → Review updates**. Each practice you adopted has
+its own proposal when the instance catalog changes. The comparison shows the version you adopted,
+your current version, and the offered version, one changed field at a time. A **Conflict** means
+both sides changed that field. A **Local edit** means only your workspace changed it; it stays as it
+is. Choose **Current** or **Offered** for every field the catalog changed, then accept. Your choice
+creates a new practice revision for this workspace only. Earlier observations keep the revision
+that judged them. A change to review rules starts a new recurrence chain; guidance-only changes do
+not.
+
+You can decline an offered version. It does not change the practice or create a revision, and the
+same version is not offered again. A later different version can be reviewed. If the original
+adopted content was not stored by an older release, **Comparison base** says whether Hephaestus
+found a matching bundled version or used your current definition. Review that comparison with
+extra care; it cannot recover content that was never stored.
 
 ### Adopt a whole group
 
@@ -72,15 +89,15 @@ practice's slug in your workspace, so you cannot end up with two copies of the s
 ## Read the badges
 
 A badge says how your copy stands against the entry it came from. All of them are informational:
-**a copy never tracks the catalog**, edited or not, so nothing here ever changes on its own.
+**a copy never changes on its own**, edited or not.
 
 **In a workspace**, comparing your copy against the catalog:
 
 | Badge | Meaning | What to do |
 |---|---|---|
-| **Same as the catalog** | Your copy still matches the entry it came from | Nothing. It stays that way — the catalog never edits your copy |
-| **Edited here** | You changed the review rules | Nothing, unless you meant to track the catalog |
-| **Catalog changed, yours did not** | The catalog moved on after you adopted. Nothing applies that change to your copy — bring across what you want by editing it | Read the catalog entry and copy anything you want by hand |
+| **Same as the catalog** | Your copy matches the catalog | Nothing |
+| **Edited here** | Your definition differs from the version you adopted and from the catalog | Check **Review updates** for any later catalog proposal |
+| **Catalog update available** | Your copy still equals its adopted base, but the catalog moved on | Open **Review updates** and choose fields to accept or decline |
 | **No longer in the catalog** | The source was excluded or removed | Nothing. Your copy keeps working |
 
 **On the instance**, comparing the catalog against the bundled defaults:
@@ -92,12 +109,11 @@ A badge says how your copy stands against the entry it came from. All of them ar
 | **No Hephaestus default** | You created it here |
 | **Removed from Hephaestus defaults** | A release dropped it; your customization still applies |
 
-An update never replaces a customization silently. Open the entry to see the complete bundled
-definition and whether applying it would change review rules, guidance, or group appearance.
-
-Drift compares only what changes review rules: slug, name, bindings, criteria, precompute script,
-the automated-review policy, and group. **Why it matters** and **What good looks like** are guidance —
-editing them never raises a drift badge.
+An update never replaces a customization silently. Open the entry to compare its bundled base,
+your current definition, and the new bundled version. Choose fields to accept, or decline this
+version. If you accept only some fields, the others stay as you wrote them. **Use Hephaestus version**
+still discards the entire customization; it is not the update review action. The comparison includes
+guidance and declared feedback-delivery behavior, not only review criteria.
 
 ## How reliable a practice is
 

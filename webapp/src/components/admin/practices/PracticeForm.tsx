@@ -69,6 +69,7 @@ function asDefinitionValue(practice: Practice): PracticeDefinitionValue {
 			: {}),
 		...(hasText(practice.precomputeScript) ? { precomputeScript: practice.precomputeScript } : {}),
 		automatedReviewPolicy: practice.automatedReviewPolicy,
+		deliveryBehavior: practice.deliveryBehavior,
 	};
 }
 
@@ -107,6 +108,7 @@ export function PracticeForm(props: PracticeFormProps) {
 				whatGoodLooksLike: definition.whatGoodLooksLike,
 				precomputeScript: definition.precomputeScript,
 				automatedReviewPolicy: definition.automatedReviewPolicy,
+				deliveryBehavior: definition.deliveryBehavior,
 				clear: clear.length > 0 ? clear : undefined,
 			},
 			groupSlug ?? null,

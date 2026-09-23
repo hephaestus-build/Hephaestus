@@ -21,7 +21,7 @@ The effective catalog combines three scopes, and definitions only ever flow one 
 ```mermaid
 flowchart LR
     accTitle: The three scopes a practice definition passes through
-    accDescr: Bundled defaults in the repository upgrade the instance catalog unless an administrator customized the entry. The instance catalog decides what workspaces may adopt. Adoption produces an independent workspace copy that no later change rewrites.
+    accDescr: Bundled defaults in the repository upgrade the instance catalog unless an administrator customized the entry. The instance catalog decides what workspaces may adopt. Adoption produces an independent workspace copy that a later release only changes with its administrator's approval.
     Bundled[Bundled defaults<br/>default-catalog.json] -->|release upgrade,<br/>unless customized| Instance[Instance catalog<br/>bundled + sparse overrides]
     Instance -->|adoption,<br/>by an administrator| Workspace[Workspace practice<br/>independent copy]
 ```
@@ -119,7 +119,7 @@ such as whether a developer understood a trade-off discussed privately with a me
 **Human review needed** and name that missing context.
 
 The instance tables store only decisions that differ from the bundled catalog: a customized
-definition, inclusion policy, accepted bundled digest, or position. No override row means the
+definition and its complete adopted base, inclusion policy, accepted bundled digest, or position. No override row means the
 bundled definition and order apply. See
 [ADR 0028](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0028-source-synced-practice-catalog.md)
 for the architectural decision.
@@ -172,10 +172,12 @@ Each effective entry is resolved from the running bundled definition and any ins
 | Uncustomized default removed             | entry disappears               | —                                    |
 | Customized default removed               | saved customization            | **Removed from Hephaestus defaults** |
 
-An update never replaces a customization silently. Administrators can inspect the complete bundled
-definition and whether applying it changes review rules, guidance, or group appearance. Applying an
-update removes only the definition customization; inclusion policy and custom order remain. Keeping
-the saved version records the bundled digest that was reviewed.
+An update never replaces a customization silently. A customized entry compares its complete
+bundled base, current definition, and offered bundled definition. The administrator chooses current
+or offered for every upstream-changed field, including conflicting edits. Accepting advances the
+base to the offered version; declining acknowledges only that offered digest. A later different
+bundle is offered again. An entry with no customization continues to follow the bundle. Reset is a
+separate action that discards the whole customization; inclusion and custom order remain independent.
 
 Git versions bundled defaults. Content-derived ETags reject concurrent writes based on stale content,
 and the configuration audit records definition and inclusion changes. There is no separate catalog
@@ -191,15 +193,17 @@ comparison fingerprint captured at installation. The workspace UI derives drift 
 3. the current effective instance definition.
 
 The ordinary matching state has no badge. Exceptions say **Customized for this workspace**,
-**Instance catalog changed**, or **Not in the current instance catalog**. Drift is informational and
-never rewrites the workspace.
+**Instance catalog changed**, or **Not in the current instance catalog**. Drift never rewrites the
+workspace. A changed effective instance practice produces a proposal for each workspace that
+adopted it. Each workspace accepts or declines for itself, and no AI-authored change bypasses this
+path. Acceptance creates a new revision and advances the base; declining changes neither the
+definition nor its revision and suppresses that exact offered digest until the offer changes.
 
-A practice comparison covers the inputs that affect review behavior: slug, name, bindings (their
-signals, draft handling, and evidence needs with stances), criteria, precompute script, the
-automated-review policy, and group. The artifact kind is not compared separately — every signal name
-carries it, so digesting it too would only give a rename two places to be recorded. **Why it matters**
-and **What good looks like** are guidance and do not affect review-rule drift. A group comparison
-covers name, description, icon, and color; position is excluded.
+A release comparison covers every definition field, including guidance and delivery behavior.
+The artifact kind is not compared separately — every signal name carries it, so it is derived from
+bindings. The review-rule fingerprint has a narrower role: it tracks review-judgment inputs, not
+guidance or delivery presentation. A group comparison covers name, description, icon, and color;
+position is excluded.
 
 ## Adopted definition bases
 
@@ -216,10 +220,21 @@ current definition. An older instance customization uses the current bundle only
 catalog digest matches; otherwise it uses its current definition. Each saved base records which route
 was used (`EXACT_ADOPTION`, `BUNDLED_DIGEST_MATCH`, `BUNDLED_FINGERPRINT_MATCH`, or
 `CURRENT_DEFINITION`). Neither historical match proves identical content: the review-rule fingerprint
-excludes guidance, and the catalog digest uses binding inputs that omit `subject` until [#2160](https://github.com/hephaestus-build/Hephaestus/issues/2160) fixes
-them. A future release proposal must show the source to the admin and must not present a reconstructed
-base as an exact historical copy. This data foundation does not change a workspace definition or
-offer an update by itself.
+excludes guidance, and older catalog digests predate the binding subject field added in
+[#2160](https://github.com/hephaestus-build/Hephaestus/issues/2160). Release proposals carry the
+base source so an administrator can judge an approximate comparison rather than mistake it for
+the original adopted content.
+
+## Declared feedback delivery
+
+The definition stores whether negative feedback stays in the summary, which issue observations
+overlap, and which other practice takes priority when both produce feedback. A workspace-authored
+practice can use these fields. They are stored in revisions, shown in release proposals, and read
+from the revision that judged each observation. They do not depend on practice slugs in delivery
+code. The review-rule fingerprint excludes these delivery fields because they do not change the
+review judgment. A change to that fingerprint starts a new recurrence chain; accepting a
+guidance-only or delivery-only change keeps the current chain. Earlier observations retain their
+original revision and are never rewritten.
 
 ## Turning a practice down
 

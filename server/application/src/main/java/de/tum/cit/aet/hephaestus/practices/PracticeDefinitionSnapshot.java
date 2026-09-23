@@ -20,7 +20,9 @@ record PracticeDefinitionSnapshot(
         @Nullable String groupSlug,
         @Nullable String sourceCuratedSlug,
         @Nullable String sourceCuratedFingerprint,
-        @Nullable AdoptedBaseSource adoptedBaseSource)
+        @Nullable AdoptedBaseSource adoptedBaseSource,
+        PracticeDeliveryBehavior deliveryBehavior,
+        @Nullable String declinedOfferedDigest)
         implements ConfigAuditSnapshot {
     static PracticeDefinitionSnapshot of(Practice practice, @Nullable Integer criteriaRevision) {
         return new PracticeDefinitionSnapshot(
@@ -39,6 +41,8 @@ record PracticeDefinitionSnapshot(
                 practice.getGroup() == null ? null : practice.getGroup().getSlug(),
                 practice.getSourceCuratedSlug(),
                 practice.getSourceCuratedFingerprint(),
-                practice.getAdoptedBaseSource());
+                practice.getAdoptedBaseSource(),
+                practice.getDeliveryBehavior(),
+                practice.getDeclinedOfferedDigest());
     }
 }

@@ -21,8 +21,10 @@ import de.tum.cit.aet.hephaestus.practices.curated.dto.CuratedPracticeDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CuratedPracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CuratedPracticeSummaryDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.UpdateCuratedStatusRequestDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.AcceptPracticeReleaseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PlacePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDefinitionOptionsDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeReleaseProposalDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.ReorderPracticeGroupsRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.ReorderPracticesRequestDTO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -95,6 +97,40 @@ public class CuratedCatalogAdminController {
             content = @Content(schema = @Schema(implementation = CuratedPracticeDTO.class)))
     public ResponseEntity<CuratedPracticeDTO> getPractice(@PathVariable String slug) {
         return ok(service.practice(slug), CuratedPracticeDTO::from);
+    }
+
+    @GetMapping("/practices/{slug}/release")
+    @Operation(
+            summary = "Compare a bundled practice update with the instance version",
+            operationId = "adminGetPracticeRelease")
+    public ResponseEntity<PracticeReleaseProposalDTO> getPracticeRelease(@PathVariable String slug) {
+        PracticeReleaseProposalDTO proposal = service.practiceRelease(slug);
+        return ResponseEntity.ok().eTag(etag(proposal.etag())).body(proposal);
+    }
+
+    @PutMapping("/practices/{slug}/release")
+    @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "CURATED_PRACTICE")
+    @Operation(
+            summary = "Accept selected fields from a bundled practice update",
+            operationId = "adminAcceptPracticeRelease")
+    public ResponseEntity<CuratedPracticeDTO> acceptPracticeRelease(
+            @PathVariable String slug,
+            @Parameter(required = true) @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) @Nullable
+                    String ifMatch,
+            @Valid @RequestBody AcceptPracticeReleaseRequestDTO request) {
+        return ok(
+                service.acceptPracticeRelease(slug, precondition(ifMatch), request.choices()),
+                CuratedPracticeDTO::from);
+    }
+
+    @DeleteMapping("/practices/{slug}/release")
+    @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "CURATED_PRACTICE")
+    @Operation(summary = "Decline this bundled practice update", operationId = "adminDeclinePracticeRelease")
+    public ResponseEntity<CuratedPracticeDTO> declinePracticeRelease(
+            @PathVariable String slug,
+            @Parameter(required = true) @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) @Nullable
+                    String ifMatch) {
+        return ok(service.declinePracticeRelease(slug, precondition(ifMatch)), CuratedPracticeDTO::from);
     }
 
     @PostMapping("/practices")
@@ -196,7 +232,8 @@ public class CuratedCatalogAdminController {
     @PutMapping("/practices/{slug}/override/acknowledgement")
     @Operation(
             summary = "Keep the saved practice customization",
-            description = "Records that the Hephaestus update was reviewed and keeps the saved definition.",
+            description =
+                    "Acknowledges that a saved custom practice is no longer shipped. Changed bundled practices use the release endpoint.",
             operationId = "adminKeepCuratedPractice")
     @ApiResponse(
             responseCode = "200",

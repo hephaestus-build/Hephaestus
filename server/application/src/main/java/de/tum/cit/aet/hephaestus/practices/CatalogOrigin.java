@@ -8,21 +8,32 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import org.jspecify.annotations.Nullable;
 
-/** Derives workspace drift from current, source, and effective catalog fingerprints. */
+/** Summarizes provenance for the badge; the release proposal carries the complete comparison. */
 public final class CatalogOrigin {
 
     private CatalogOrigin() {}
 
     public static @Nullable CatalogOriginDTO of(Practice practice, EffectiveCatalog catalog) {
-        if (practice.getSourceCuratedSlug() == null || practice.getCurrentRevision() == null) {
+        if (practice.getSourceCuratedSlug() == null) {
             return null;
         }
         CatalogEntry<PracticeDefinition> entry =
                 catalog.practice(practice.getSourceCuratedSlug()).orElse(null);
         boolean sourceOffered = entry != null && catalog.isEffectivelyOffered(entry);
+        if (practice.getAdoptedBase() != null && entry != null) {
+            PracticeDefinition current = PracticeDefinition.from(practice);
+            CatalogLink link = current.equals(entry.effective())
+                    ? CatalogLink.IN_SYNC
+                    : current.equals(practice.getAdoptedBase())
+                            ? CatalogLink.UPDATE_AVAILABLE
+                            : CatalogLink.LOCALLY_EDITED;
+            return new CatalogOriginDTO(practice.getSourceCuratedSlug(), link, sourceOffered);
+        }
         return describe(
                 practice.getSourceCuratedSlug(),
-                practice.getCurrentRevision().getReviewRuleFingerprint(),
+                practice.getCurrentRevision() == null
+                        ? null
+                        : practice.getCurrentRevision().getReviewRuleFingerprint(),
                 practice.getSourceCuratedFingerprint(),
                 entry == null ? null : entry.effective().provenanceFingerprint(entry.slug()),
                 sourceOffered);

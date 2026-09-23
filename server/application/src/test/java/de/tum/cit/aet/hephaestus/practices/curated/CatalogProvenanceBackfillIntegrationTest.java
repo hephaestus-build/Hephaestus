@@ -8,11 +8,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionField;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
+import de.tum.cit.aet.hephaestus.practices.PracticeReleaseChoice;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -224,8 +227,13 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
         assertThat(saved.getAdoptedBase()).isEqualTo(edited);
         assertThat(saved.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.CURRENT_DEFINITION);
 
-        var entry = catalogService.practice(SHIPPED_SLUG);
-        catalogService.keepPractice(SHIPPED_SLUG, EntityTagPrecondition.parse('"' + entry.etag() + '"'));
+        var proposal = catalogService.practiceRelease(SHIPPED_SLUG);
+        catalogService.acceptPracticeRelease(
+                SHIPPED_SLUG,
+                EntityTagPrecondition.parse('"' + proposal.etag() + '"'),
+                Map.of(
+                        PracticeDefinitionField.CRITERIA, PracticeReleaseChoice.CURRENT,
+                        PracticeDefinitionField.DELIVERY_BEHAVIOR, PracticeReleaseChoice.OFFERED));
         CuratedPracticeOverride kept =
                 overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
         assertThat(kept.getAdoptedBase()).isEqualTo(bundled);
@@ -245,7 +253,8 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
         catalogService.writePractice(
                 SHIPPED_SLUG,
                 EntityTagPrecondition.parse('"' + entry.etag() + '"'),
-                withCriteria(bundled, "New instance criteria"));
+                withCriteria(bundled, "New instance criteria"),
+                null);
 
         CuratedPracticeOverride saved =
                 overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
@@ -259,7 +268,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
         PracticeDefinition bundled = shipped();
         var entry = catalogService.practice(SHIPPED_SLUG);
         PracticeDefinition first = withCriteria(bundled, "First instance criteria");
-        catalogService.writePractice(SHIPPED_SLUG, EntityTagPrecondition.parse('"' + entry.etag() + '"'), first);
+        catalogService.writePractice(SHIPPED_SLUG, EntityTagPrecondition.parse('"' + entry.etag() + '"'), first, null);
         var firstOverride = overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
         assertThat(firstOverride.getAdoptedBase()).isEqualTo(bundled);
         assertThat(firstOverride.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.EXACT_ADOPTION);
@@ -270,7 +279,8 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
         catalogService.writePractice(
                 SHIPPED_SLUG,
                 EntityTagPrecondition.parse('"' + changed.etag() + '"'),
-                withCriteria(bundled, "Second instance criteria"));
+                withCriteria(bundled, "Second instance criteria"),
+                null);
 
         assertThat(overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow().getAdoptedBase())
                 .isEqualTo(bundled);
@@ -314,10 +324,10 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                 ignored -> jdbcTemplate.update("""
                 INSERT INTO practice_revision (
                     practice_id, revision_number, slug, name, applies_to, bindings, criteria,
-                    automated_review_policy, why_it_matters, group_slug, review_rule_fingerprint, created_at
+                    automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
                 )
                 SELECT id, 0, slug, name, applies_to, bindings, criteria,
-                       NULL, 'Reviewers need context', ?, NULL, now()
+                       NULL, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, NULL, now()
                 FROM practice WHERE workspace_id = ?
                 """, shipped().groupSlug(), matching.getId()));
 
@@ -355,9 +365,9 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                     """
                 INSERT INTO practice (
                     workspace_id, practice_group_id, slug, name, applies_to, display_order, bindings,
-                    criteria, automated_review_policy, why_it_matters, source_curated_slug,
+                    criteria, automated_review_policy, delivery_behavior, why_it_matters, source_curated_slug,
                     source_curated_fingerprint, autonomy, created_at
-                ) VALUES (?, ?, ?, ?, ?, 0, ?::jsonb, ?, ?::jsonb, 'Reviewers need context', ?, ?, 'AUTOMATIC', now())
+                ) VALUES (?, ?, ?, ?, ?, 0, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, 'AUTOMATIC', now())
                 RETURNING id
                 """,
                     Long.class,
@@ -375,8 +385,8 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                     """
                 INSERT INTO practice_revision (
                     practice_id, revision_number, slug, name, applies_to, bindings, criteria,
-                    automated_review_policy, why_it_matters, group_slug, review_rule_fingerprint, created_at
-                ) VALUES (?, 1, ?, ?, ?, ?::jsonb, ?, ?::jsonb, 'Reviewers need context', ?, ?, now())
+                    automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
+                ) VALUES (?, 1, ?, ?, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, now())
                 RETURNING id
                 """,
                     Long.class,
@@ -394,8 +404,8 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                         """
                     INSERT INTO practice_revision (
                         practice_id, revision_number, slug, name, applies_to, bindings, criteria,
-                        automated_review_policy, why_it_matters, group_slug, review_rule_fingerprint, created_at
-                    ) VALUES (?, 2, ?, ?, ?, ?::jsonb, ?, ?::jsonb, 'Reviewers need context', ?, NULL, now())
+                        automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
+                    ) VALUES (?, 2, ?, ?, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, NULL, now())
                     RETURNING id
                     """,
                         Long.class,

@@ -28,4 +28,44 @@
         <sql>ALTER TABLE curated_practice_override ADD CONSTRAINT chk_curated_practice_override_adopted_base_pair CHECK ((adopted_base IS NULL) = (adopted_base_source IS NULL))</sql>
         <rollback>ALTER TABLE curated_practice_override DROP CONSTRAINT chk_curated_practice_override_adopted_base_pair</rollback>
     </changeSet>
+    <changeSet id="1790187096652-7" author="hephaestus">
+        <addColumn tableName="practice">
+            <column name="declined_offered_digest" type="VARCHAR(96)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790187096652-8" author="hephaestus">
+        <addColumn tableName="curated_practice_override">
+            <column name="delivery_behavior" type="JSONB"/>
+        </addColumn>
+        <sql>UPDATE curated_practice_override SET delivery_behavior = CASE
+            WHEN slug IN ('describe-what-and-why', 'commits-are-atomic-and-cohesive', 'commit-subjects-explain-each-change') THEN '{"summaryOnly":true}'::jsonb
+            WHEN slug IN ('issue-scoped-to-single-concern', 'issue-has-checkable-outcome') THEN '{"summaryOnly":false,"overlapGroup":"issue-structure"}'::jsonb
+            WHEN slug = 'ready-and-traceable-handoff' THEN '{"summaryOnly":false,"redundantToSlug":"ships-tests-with-the-change"}'::jsonb
+            WHEN slug = 'merge-confirms-the-linked-issue-outcome' THEN '{"summaryOnly":false,"redundantToSlug":"honours-linked-issue-acceptance-criteria"}'::jsonb
+            ELSE '{"summaryOnly":false}'::jsonb END WHERE name IS NOT NULL</sql>
+    </changeSet>
+    <changeSet id="1790187096652-9" author="hephaestus">
+        <addColumn tableName="practice">
+            <column name="delivery_behavior" type="JSONB"/>
+        </addColumn>
+        <sql>UPDATE practice SET delivery_behavior = CASE
+            WHEN slug IN ('describe-what-and-why', 'commits-are-atomic-and-cohesive', 'commit-subjects-explain-each-change') THEN '{"summaryOnly":true}'::jsonb
+            WHEN slug IN ('issue-scoped-to-single-concern', 'issue-has-checkable-outcome') THEN '{"summaryOnly":false,"overlapGroup":"issue-structure"}'::jsonb
+            WHEN slug = 'ready-and-traceable-handoff' THEN '{"summaryOnly":false,"redundantToSlug":"ships-tests-with-the-change"}'::jsonb
+            WHEN slug = 'merge-confirms-the-linked-issue-outcome' THEN '{"summaryOnly":false,"redundantToSlug":"honours-linked-issue-acceptance-criteria"}'::jsonb
+            ELSE '{"summaryOnly":false}'::jsonb END</sql>
+        <addNotNullConstraint tableName="practice" columnName="delivery_behavior" columnDataType="JSONB"/>
+    </changeSet>
+    <changeSet id="1790187096652-10" author="hephaestus">
+        <addColumn tableName="practice_revision">
+            <column name="delivery_behavior" type="JSONB"/>
+        </addColumn>
+        <sql>UPDATE practice_revision SET delivery_behavior = CASE
+            WHEN slug IN ('describe-what-and-why', 'commits-are-atomic-and-cohesive', 'commit-subjects-explain-each-change') THEN '{"summaryOnly":true}'::jsonb
+            WHEN slug IN ('issue-scoped-to-single-concern', 'issue-has-checkable-outcome') THEN '{"summaryOnly":false,"overlapGroup":"issue-structure"}'::jsonb
+            WHEN slug = 'ready-and-traceable-handoff' THEN '{"summaryOnly":false,"redundantToSlug":"ships-tests-with-the-change"}'::jsonb
+            WHEN slug = 'merge-confirms-the-linked-issue-outcome' THEN '{"summaryOnly":false,"redundantToSlug":"honours-linked-issue-acceptance-criteria"}'::jsonb
+            ELSE '{"summaryOnly":false}'::jsonb END</sql>
+        <addNotNullConstraint tableName="practice_revision" columnName="delivery_behavior" columnDataType="JSONB"/>
+    </changeSet>
 </databaseChangeLog>

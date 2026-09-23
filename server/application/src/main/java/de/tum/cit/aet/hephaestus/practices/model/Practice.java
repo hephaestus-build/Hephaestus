@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -143,6 +144,10 @@ public class Practice {
     @Column(name = "adopted_base_source", length = 32)
     private @Nullable AdoptedBaseSource adoptedBaseSource;
 
+    /** Offered definition last declined by this workspace; a different offer is shown again. */
+    @Column(name = "declined_offered_digest", length = 96)
+    private @Nullable String declinedOfferedDigest;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "current_revision_id", foreignKey = @ForeignKey(name = "fk_practice_current_revision"))
     @ToString.Exclude
@@ -201,6 +206,10 @@ public class Practice {
     @Column(name = "automated_review_policy", columnDefinition = "jsonb", nullable = false)
     @ToString.Exclude
     private PracticeAutomatedReviewPolicy automatedReviewPolicy;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "delivery_behavior", columnDefinition = "jsonb", nullable = false)
+    private PracticeDeliveryBehavior deliveryBehavior = PracticeDeliveryBehavior.DEFAULT;
 
     /**
      * This practice's own answer to how much autonomy the system has over it, or {@code null} to inherit its

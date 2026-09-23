@@ -19,7 +19,7 @@ type Story = StoryObj<typeof meta>;
 export const MatchesCatalog: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByRole("button", { name: "Same as the catalog" }).focus();
-		const tooltip = await within(document.body).findByText(/the catalog never edits your copy/u);
+		const tooltip = await within(document.body).findByText(/will not edit your copy/u);
 		await waitFor(async () => expect(tooltip).toBeVisible());
 	},
 };

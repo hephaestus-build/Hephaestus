@@ -32,6 +32,7 @@ function practice(
 		name: "Review Swift",
 		bindings: [binding, ...extraBindings],
 		criteria: "Check the work carefully.",
+		deliveryBehavior: { summaryOnly: false },
 		automatedReviewPolicy: mockPullRequestPolicy,
 		automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 		autonomy: { effective: "AUTOMATIC", inherited: false, source: "PRACTICE" },
@@ -63,6 +64,28 @@ async function renderPractice(
 }
 
 describe("workspace practice scope", () => {
+	it("sends declared feedback delivery choices from the shared editor", async () => {
+		const onSubmit =
+			vi.fn<(slug: string, request: UpdatePracticeRequest, group: string | null) => void>();
+		await renderPractice(mockPullRequestBinding, onSubmit);
+		const user = userEvent.setup();
+		await user.click(screen.getByRole("button", { name: /Technical settings/u }));
+		await user.click(screen.getByRole("switch", { name: /Show this practice in the summary/u }));
+		await user.type(
+			screen.getByRole("textbox", { name: "Preferred practice slug" }),
+			"preferred-practice",
+		);
+		await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+		expect(onSubmit).toHaveBeenCalledWith(
+			"review-swift",
+			expect.objectContaining({
+				deliveryBehavior: { summaryOnly: true, redundantToSlug: "preferred-practice" },
+			}),
+			null,
+		);
+	});
+
 	it.each([
 		["gate", { ...mockPullRequestBinding, appliesWhen: gate }],
 		["reviewer", { ...mockPullRequestBinding, subject: "REVIEWER" as const }],

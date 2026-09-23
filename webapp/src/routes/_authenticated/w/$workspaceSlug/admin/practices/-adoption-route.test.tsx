@@ -30,6 +30,7 @@ const preview: CatalogPracticePreview = {
 		name: "Describe what changed and why",
 		artifactKind: "scm.pull_request",
 		bindings: [mockPullRequestBinding],
+		deliveryBehavior: { summaryOnly: false },
 		automatedReviewPolicy: mockPullRequestPolicy,
 		automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 		criteria: "Explain the change and why it is needed.",
@@ -94,6 +95,7 @@ describe("catalog adoption over practice setup", () => {
 			),
 			http.get("*/workspaces/:workspaceSlug/practice-groups", () => HttpResponse.json([])),
 			http.get("*/workspaces/:workspaceSlug/practices", () => HttpResponse.json([])),
+			http.get("*/workspaces/:workspaceSlug/practices/releases", () => HttpResponse.json([])),
 			http.get("*/workspaces/:workspaceSlug/members/me", () =>
 				HttpResponse.json({ role: "ADMIN", userId: 1, userLogin: "ada", userName: "Ada" }),
 			),
