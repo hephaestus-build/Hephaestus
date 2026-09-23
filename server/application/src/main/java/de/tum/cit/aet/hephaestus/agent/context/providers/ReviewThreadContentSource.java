@@ -220,7 +220,6 @@ public class ReviewThreadContentSource implements EvidenceSource {
 
     private ObjectNode toThread(PullRequestReviewThread t) {
         ObjectNode node = objectMapper.createObjectNode();
-        // The stored id, the value a comment in comments.json names as its `thread`.
         if (t.getId() != null) {
             node.put("id", t.getId());
         }
@@ -256,7 +255,6 @@ public class ReviewThreadContentSource implements EvidenceSource {
         String author = login(review.getAuthor());
         if (author != null) {
             node.put("author", author);
-            // The provider's own classification, as the adapter stored it; absent means a person.
             if (review.getAuthor() != null && review.getAuthor().getType() == User.Type.BOT) {
                 node.put("bot", true);
             }
@@ -266,7 +264,6 @@ public class ReviewThreadContentSource implements EvidenceSource {
         if (review.getSubmittedAt() != null) {
             node.put("submittedAt", review.getSubmittedAt().toString());
         }
-        // What the reviewer wrote with the decision: the approval's or request's summary.
         if (!isBlank(review.getBody())) {
             node.put("body", review.getBody());
         }

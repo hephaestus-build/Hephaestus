@@ -1,10 +1,4 @@
-/**
- * Read-only helpers for the review record the server projects beside a change: the linked issues,
- * the inline and general comments, the review threads and decisions. Each reader returns what the
- * file carries in the shape the server wrote it, best effort. A file the capture did not write is
- * `null`, never an empty list: "no comments file was captured" and "no comment by others" are two
- * different facts, and a script says which one it found.
- */
+/** Missing captures return null, distinct from captured records with no items. */
 
 import type { ChangeCommit } from "./change.ts";
 import { readContextJson } from "./context.ts";
@@ -263,11 +257,7 @@ function sameThread(a: ReviewComment, b: ReviewComment): boolean {
 		: a.path === b.path && a.line === b.line;
 }
 
-/**
- * One row per inline comment by someone other than the author, with the same thread's later
- * comments split by who wrote them. A thread is the record's `thread` id where both sides carry
- * one, and the same path and line otherwise.
- */
+/** Group replies by thread ID, falling back to path and line when the IDs are absent. */
 export function reviewerCommentRows(
 	inline: readonly ReviewComment[],
 	threads: readonly ReviewThread[],

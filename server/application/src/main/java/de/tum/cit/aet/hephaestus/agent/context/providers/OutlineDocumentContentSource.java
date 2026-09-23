@@ -75,11 +75,8 @@ public class OutlineDocumentContentSource implements EvidenceSource {
     static final String REVIEW_PREFIX = OUTPUT_PREFIX + "outline/";
 
     /**
-     * Review-path index of the documents staged below {@link #REVIEW_PREFIX}: each one's path, where it
-     * lives in the wiki, who wrote it and when, and how it was selected — linked from the work, or found
-     * by a search over the work's text. Also names the links that resolved to no mirrored document.
-     * Written on every review, even with no documents: a directory that is not there and one that is
-     * there and empty are different findings, and only the second says the documentation was searched.
+     * Index of staged documents and unresolved links below {@link #REVIEW_PREFIX}. Written
+     * even when empty, so an empty search result is distinct from an absent capture.
      */
     static final String REVIEW_INDEX_KEY = REVIEW_PREFIX + "index.json";
 

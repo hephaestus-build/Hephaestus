@@ -13,19 +13,13 @@ import org.springframework.validation.annotation.Validated;
  *
  * <p>Binds to the {@code hephaestus.practice-review} prefix in application configuration.
  *
- * @param deliverToMerged     whether to deliver feedback to already-merged PRs
+ * @param deliverToMerged     whether to post feedback on already-merged PRs; other channels are unaffected
  * @param cooldownMinutes     minimum minutes between reviews for the same PR. 0 disables cooldown.
  * @param maxRequestsPerRequesterPerHour
- *                            how many reviews one person may ask for by hand, per workspace, per hour.
- *                            The only limit here keyed on a person rather than on a piece of work, and
- *                            therefore the only one that catches somebody asking for one review each of
- *                            twenty colleagues' merge requests. 0 disables it.
+ *                            manual review requests per person, workspace and hour. 0 disables the limit.
  * @param reactionSuppression avoid redelivering an observation the developer disputed or marked not applicable.
  *                            Off by default; responses apply to the exact observations bound to feedback.
- * @param samplingTemperature the sampling temperature every model call of a practice review is made
- *                            with, or null for the model's own default. A review is a classification
- *                            against fixed criteria, and the same work should land in the same cell
- *                            on every run; a low temperature is what buys that consistency.
+ * @param samplingTemperature requested model sampling temperature, or null for the provider default.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.practice-review")

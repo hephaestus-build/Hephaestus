@@ -336,7 +336,6 @@ class DeliveryComposerTest extends BaseUnitTest {
         assertThat(note)
                 .contains("**Still open from your earlier changes**")
                 .contains("- The description says what changed but not why.");
-        // The habit is named once, in the compact list, after the lapse that is new to this developer.
         assertThat(note).containsOnlyOnce("The description says what changed but not why.");
         assertThat(note.indexOf("Still open")).isGreaterThan(note.indexOf("The new parser"));
     }
@@ -374,7 +373,6 @@ class DeliveryComposerTest extends BaseUnitTest {
         }
         String note = note(DeliveryComposer.composeAdmitted(
                 observations, ArtifactKinds.PULL_REQUEST, Map.of(), List.of(), null, Set.of("describe-what-and-why")));
-        // Three fresh minors fit the cap exactly once the habit is set aside; nothing is "not shown".
         assertThat(note).doesNotContain("not shown").contains("- No why in the description.");
     }
 
@@ -1849,9 +1847,6 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void compose_withholdUnit_deliversNothingForThePracticeAndRecordsTheDecision() {
-        // The composer decided, with a reason, that the work is not the surface for this practice: no
-        // inline note, no summary line, and the observation is withheld under the composer's own reason
-        // rather than rendered as a bare headline no note claimed.
         ValidatedObservation withheld = untestedBranchObservation().withKeys(new ObservationKeys("occ-w", "rk-w"));
 
         DeliveryContent result = DeliveryComposer.composeAdmitted(
@@ -1894,7 +1889,6 @@ class DeliveryComposerTest extends BaseUnitTest {
             assertThat(w.occurrenceKey()).isEqualTo("occ-w");
             assertThat(w.reason()).isEqualTo(FeedbackSuppressionReason.COMPOSER_WITHHELD);
         });
-        // A withheld practice is a decision, not a hidden suggestion: the count of what the cap hid is 0.
         assertThat(result.mrNote()).doesNotContain("not shown");
     }
 

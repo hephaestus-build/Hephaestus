@@ -122,8 +122,9 @@ void test("the brief as a whole stays under its total bound", () => {
 			totalChars: 2000,
 		});
 		assert.match(brief, /metadata\.json`\n```json\n\[L1\] x+\n```/u);
-		assert.match(brief, /comments\.json`\n```json\n\[L1\] y+\n```/u);
-		assert.match(brief, /Too large[\s\S]*review_threads\.json/u);
+		assert.ok(brief.length <= 2000, `Rendered ${brief.length} characters`);
+		assert.doesNotMatch(brief, /comments\.json`\n```json/u);
+		assert.match(brief, /Too large[\s\S]*comments\.json[\s\S]*review_threads\.json/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -142,6 +143,39 @@ void test("nothing captured is an empty brief", () => {
 	const root = workspace({});
 	try {
 		assert.equal(buildBrief(root, paths), "");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+for (const [name, content] of [
+	["line coordinates", "x\n".repeat(500)],
+	["fence escaping", "`".repeat(1000)],
+] as const) {
+	void test(`the file bound includes ${name}`, () => {
+		const root = workspace({ "inputs/context/document.md": content });
+		try {
+			const brief = buildBrief(root, paths, {
+				filePerChars: 2000,
+				diffChars: 2000,
+				totalChars: 4000,
+			});
+			assert.ok(brief.length <= 4000);
+			assert.doesNotMatch(brief, /### `inputs\/context\/document\.md`/u);
+			assert.match(brief, /Too large[\s\S]*`inputs\/context\/document\.md` \(1 KB\)/u);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+}
+
+void test("an oversized capture index gives a complete fallback instruction within the bound", () => {
+	const root = workspace({ "inputs/context/document.md": "x".repeat(1000) });
+	try {
+		const brief = buildBrief(root, paths, { filePerChars: 100, diffChars: 100, totalChars: 128 });
+		assert.ok(brief.length <= 128);
+		assert.match(brief, /capture index exceeds the brief limit/u);
+		assert.match(brief, /Read the capture manifest and context files/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

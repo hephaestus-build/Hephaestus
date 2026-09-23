@@ -112,13 +112,7 @@ export const mockDocumentBinding = {
 	needs: [{ sourceKind: "docs.document.core", stance: "REQUIRED" }],
 } satisfies PracticeBinding;
 
-/**
- * Sources several work types share, declared once so a story cannot show a practice reading "Earlier
- * observations about this person" on a pull request and something differently worded on an issue.
- *
- * The wire ids are the server's; the operator-facing strings are `displayName`, `description` and
- * `selectionScope`, all copied verbatim from `contracts/artifact-source/1.2.0/catalog.json`.
- */
+/** Shared source options must match contracts/artifact-source/1.2.0/catalog.json; practice.test.ts checks them. */
 const relatedWorkSource = {
 	sourceKind: "workspace.project-inventory",
 	displayName: "Related workspace work",

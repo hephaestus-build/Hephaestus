@@ -17,8 +17,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 /**
- * Uses earlier negative observations to shorten repeated feedback on the work. The window and
- * threshold match the practice page ({@link InAppFeedbackRouter}).
+ * Shortens repeated feedback using earlier negative observations within the practice page's
+ * history window ({@link InAppFeedbackRouter#PATTERN_WINDOW_DAYS}).
  */
 @Component
 class RecurringLapses {

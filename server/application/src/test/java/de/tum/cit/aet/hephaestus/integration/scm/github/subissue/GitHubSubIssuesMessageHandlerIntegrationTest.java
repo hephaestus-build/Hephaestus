@@ -139,7 +139,6 @@ class GitHubSubIssuesMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         handler.handleEvent(event);
 
-        // The child is linked to its parent and the parent carries GitHub's rollup from the payload.
         Issue parent = issueRepository
                 .findByRepositoryIdAndNumber(
                         testRepository.getId(), event.parentIssue().number())

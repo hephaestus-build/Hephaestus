@@ -15,12 +15,7 @@ import { hasText } from "@/lib/text";
 
 export interface ObservationEvidenceProps {
 	evidence: ObservationEvidenceData | null | undefined;
-	/**
-	 * Which tool read the sources. Only one is not the reviewing model — the secret scanner — and it
-	 * is the only thing that ever withholds a quote, so naming it turns a blank passage into an
-	 * explanation. Taken as a prop rather than read off `evidence.detector` inside the citation loop
-	 * because it is a fact about the whole observation, not about one passage.
-	 */
+	/** Identifies the secret scanner when a quote was redacted. */
 	detector?: string;
 }
 

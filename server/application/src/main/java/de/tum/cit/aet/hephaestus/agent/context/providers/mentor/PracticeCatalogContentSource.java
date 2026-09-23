@@ -90,11 +90,8 @@ public class PracticeCatalogContentSource implements ContentSource {
                 .findById(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId.toString()));
 
-        // Only the practices this workspace may actually raise in a conversation: an OFF practice is not
-        // reviewed at all, so putting it in the mentor's catalogue would hand the mentor a subject it is not
-        // allowed to raise. A HUMAN_APPROVAL practice is in — the chat lane is read on request, so approval
-        // gates only what is pushed onto the work. Autonomy is the effective one, resolved through the
-        // practice -> group -> workspace chain.
+        // Resolve effective autonomy through the practice, group and workspace. OFF practices
+        // are excluded; HUMAN_APPROVAL allows the on-demand conversation channel.
         WorkspaceReviewDefaults defaults = WorkspaceReviewDefaults.of(workspace);
         List<Practice> practices = practiceRepository.findByWorkspaceId(workspaceId).stream()
                 .filter(p -> PracticeAutonomyPolicy.delivers(

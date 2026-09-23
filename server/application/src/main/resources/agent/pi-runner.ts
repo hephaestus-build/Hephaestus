@@ -73,11 +73,7 @@ import { stopSession } from "./pi-session-lifecycle.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 import { hasText, isBlank } from "./pi-text.ts";
 
-// One review is one session. The server captured the inputs; pi-change.ts derived the change view;
-// this runner puts the brief in front of the model, walks the practices as turns of that one session,
-// verifies every quote it is handed, carries the recorded observations to admission, and composes the
-// feedback in the same context that measured it. Files under work/ are the durable memory: what was
-// recorded survives compaction and is repeated at the top of every turn.
+// One session measures and composes. Persisted work/ notes survive context compaction.
 
 function parseJson(text: string): unknown {
 	return JSON.parse(text);
@@ -102,15 +98,7 @@ function listOrEmpty<T>(items: T[] | undefined): T[] {
 	return items ?? [];
 }
 
-/**
- * A list a tool was handed, as the array or as that array serialised into a string. A smaller model
- * sends the string form often, and when the schema offered the array alone it re-sent the same string
- * against the SDK's "must be array" a hundred times, since a schema refusal never reaches the runner.
- * So the string is accepted; one whose only fault is a closing brace too many or too few — the
- * common slip in a long single line — is repaired where the repair is unambiguous, and everything it
- * contains is still checked field by field afterwards; one that does not parse is answered with the
- * parse error, never with an empty list a session would read as success.
- */
+/** Accept array, single-item and serialized-list forms; validate each parsed item separately. */
 function submittedList(value: unknown): { items: unknown[] } | { error: string } {
 	if (typeof value === "string") {
 		try {
@@ -132,15 +120,7 @@ function listOrItem(value: unknown): unknown[] {
 	return isRecord(value) ? [value] : [];
 }
 
-/**
- * The text with its closing brackets balanced, as far as the shape of a JSON list decides it. A closer
- * that closes nothing, or closes the wrong thing, is dropped. A `}` at an item's depth followed by
- * `, "key":` was one brace too many on a nested object — the key belongs to the item — and is dropped.
- * A `, {` inside an object is an item starting where an object was never closed — an object's members
- * are keys, never a bare object — and the closers owed down to the list are inserted before the
- * comma. A closer still owed at the end is appended. Strings are stepped over, so a brace inside a
- * quote is never touched. Any other fault is left for the parser to name.
- */
+/** Repair missing or unmatched closers without changing quoted strings; JSON.parse rejects other faults. */
 function repairedClosers(text: string): string {
 	const owed: string[] = [];
 	let out = "";
@@ -328,13 +308,7 @@ if (!hasText(AGENT_DIR)) {
 const PRACTICES_PER_TURN = hasText(process.env.PI_PRACTICE_BATCH_SIZE)
 	? Number(process.env.PI_PRACTICE_BATCH_SIZE)
 	: 6;
-/**
- * Refused submissions a practice is allowed before the runner stops accepting any for it. A model
- * that keeps re-sending the same refused quote spends the whole budget on one practice; after this
- * many, that practice is reported as not reached and the turn is asked to move on. Eight leaves room
- * for a session that corrects one thing at a time — a wrong source, a wrong path, a wrong line, a
- * wrong quote — and still bounds the one that never corrects anything.
- */
+/** Per-practice refusal cap; an exhausted practice remains NOT_REACHED. */
 const MAX_REFUSALS_PER_PRACTICE = 8;
 const WINDOWS = deriveWindows(AGENT_BUDGET_MS, existsSync(INPUT_PATHS.compositionRequest));
 
@@ -364,11 +338,7 @@ setTimeout(() => {
 
 mkdirSync(OUTPUT, { recursive: true });
 
-/**
- * Which evidence sources this invocation actually staged, and which source each staged artifact came out
- * of. Both answers gate every citation the model makes, so a manifest this runner cannot read is not a
- * degraded review — it is a review that cannot tell whether it had the bytes it is quoting.
- */
+/** Citation ownership comes from the captured manifest; fail closed when it is unreadable. */
 function readManifest(): {
 	availableSourceKinds: Set<string>;
 	artifactSources: Map<string, string>;
@@ -395,11 +365,7 @@ function readManifest(): {
 	return { availableSourceKinds, artifactSources };
 }
 
-/**
- * The practices this run may report on. Read once here rather than re-read on each use: the fan-out and
- * the retry scaffold used to parse this file again on every call, and a second read is a second answer
- * waiting to happen.
- */
+/** Snapshot the eligible practices once for the whole review. */
 function readPracticeIndex(): PracticeIndexEntry[] {
 	const index = parseJson(readFileSync(INPUT_PATHS.practiceIndex, "utf8"));
 	if (!Array.isArray(index)) {
@@ -466,11 +432,6 @@ const usageTotals: UsageTotals = {
 	costUsd: 0,
 	totalCalls: 0,
 };
-/**
- * One turn of the session as the trace records it: what it cost, what it called, what it recorded and
- * what was refused and why. With this in the job's output, friction is visible on the server without a
- * transcript: a histogram of refusal reasons over a week says what to fix next.
- */
 interface TurnTrace {
 	label: string;
 	durationMs: number;
@@ -651,9 +612,7 @@ const observationSchema = {
 			type: "string",
 			minLength: 1,
 			maxLength: MAX_SUMMARY_CHARS,
-			// The bound is in the words, since the schema's rules are not shown: on the cohort a fifth
-			// of all refusals were a summary a clause too long, re-sent unchanged until the practice
-			// ran out of tries.
+			// documentedShape removes schema bounds, so include this limit in the model-facing description.
 			description:
 				`A short phrase of at most ${MAX_SUMMARY_CHARS} characters identifying the specific behavior whose presence and contextual desirability you assess, such as 'Debug print left in the request handler'. ` +
 				"Never a single word and never the practice's own name; the reasons go in evidenceRationale.",
@@ -804,9 +763,7 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 		availableSourceKinds,
 	);
 	validateInapplicabilityScope(observation, availableSourceKinds);
-	// Admission refuses a review whose observations decide nothing and never touched the change; an
-	// observation that decides nothing therefore shows it read the change — by a citation of it, or
-	// by naming it among the sources its warrant consulted — unless one already recorded did.
+	// Inapplicability must be grounded in the change unless another observation already consulted it.
 	if (
 		observation.assessmentStatus !== "ASSESSED" &&
 		availableSourceKinds.has(DIFF_SOURCE) &&
@@ -819,9 +776,7 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 		);
 	}
 	for (const citation of observation.evidence.citations) {
-		// A repository citation is read from the checkout — the working tree at HEAD, or the blob at the
-		// named revision through its .git — so the session gets its correction here, by the same rule
-		// admission applies. A quote of the change is read from the diff this container derived.
+		// Match admission: repository quotes use Git blobs; change quotes use the derived diff.
 		const content = citedContent(citation);
 		const resolved = resolveCited(citation, content);
 		if ("mismatch" in resolved) {
@@ -847,11 +802,7 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 	return { observation, notes };
 }
 
-/**
- * A change citation that names no side is tried on NEW first, then OLD, and records the side its
- * text was found on; a side that was named is the only one tried. Admission requires the side, so
- * one is recorded either way.
- */
+/** Infer an omitted diff side by exact quote match, preferring NEW; never override a supplied side. */
 function resolveOnEitherSide(
 	citation: NormalizedCitation,
 	content: string,
@@ -974,19 +925,11 @@ let measurementClosed = false;
 /** Calls of the recording tools one turn may make before recording anything; past it, the turn ends. */
 const MAX_RECORDING_ATTEMPTS_PER_TURN = 24;
 
-/**
- * How often one call may be repeated in a turn — the same tool with the same arguments — before the
- * runner speaks up, and before it ends the turn. A small model at a low temperature can answer the
- * same tool result with the same call for as long as its share lasts; the result will not change.
- */
+/** Per-turn thresholds for nudging and aborting identical tool calls. */
 const REPEATED_CALL_NUDGE = 3;
 const REPEATED_CALL_ABORT = 6;
 
-/**
- * The calls the recording tools answered with a refusal of their own. Each of those is already in the
- * transcript with its reasons, per item, so the error line for the call's end is not repeated; the
- * set names the calls the SDK's error events may skip.
- */
+/** Avoid logging SDK error events again when the tool already logged its refusal. */
 const answeredRefusals = new Set<string>();
 
 /** A refusal the tool itself is answering: logged where it was decided, and once. */
@@ -1038,10 +981,6 @@ function slugOf(raw: unknown): string {
 	return isRecord(raw) && typeof raw.practiceSlug === "string" ? raw.practiceSlug : "unknown";
 }
 
-/**
- * Records one submitted observation, or says why not. A refusal is counted against its practice, so
- * a session that keeps resubmitting the same refused quote runs out of tries, not out of budget.
- */
 function record(raw: unknown): Recorded {
 	const slug = slugOf(raw);
 	// An item with no slug is answered with what it lacks, never with the bound of a practice named
@@ -1154,13 +1093,8 @@ const RULE_KEYWORDS = new Set([
 ]);
 
 /**
- * The schema as the session reads it, with the shape and the documentation and none of the rules.
- * The SDK validates a call against its schema before the tool runs, and that check is all or
- * nothing: one summary a few characters long in one of six observations and the whole call is
- * refused, the other five with it, after a generation that took minutes. The tool's contract is per
- * item — each observation is stored or refused with its own reason — so every rule the schema
- * stated is applied by normalizeAndValidateObservation, one observation at a time, and the
- * vocabulary an enum listed is kept in the description.
+ * Pi validates a whole tool call before execution. Keep shape hints here, but validate each item in
+ * normalizeAndValidateObservation so one invalid item does not discard the rest of the batch.
  */
 function documentedShape(schema: unknown): unknown {
 	if (Array.isArray(schema)) {
@@ -1170,9 +1104,7 @@ function documentedShape(schema: unknown): unknown {
 		return schema;
 	}
 	const out: Record<string, unknown> = {};
-	// A scalar type is coerced by the SDK before the check ("12" is 12), so it stays; an object or a
-	// list type is refused outright when the session writes "none" or a string where the object goes,
-	// and with it every other item of the call. The properties and items still show the shape.
+	// Pi coerces scalar types; remove container types to permit serialized lists and per-item errors.
 	const structural = schema.type === "object" || schema.type === "array";
 	const noted = (note: string) => {
 		const description = typeof out.description === "string" ? out.description : "";
@@ -1350,18 +1282,9 @@ const PERSIST_DISCIPLINE =
 	`Record the outcome the evidence supports, positive or negative or not applicable; there is no quota ` +
 	`and no next step to write. Use tools only from this point onward; no planning prose.`;
 
-/**
- * The review is finished and only the call carrying it home did not arrive. The server keeps the
- * work queued for another attempt when it sees this, so the measurement is repeated against a
- * server the next sandbox can reach rather than recorded as a review that produced nothing.
- */
+/** Tells the server to retry a review whose admission endpoint was unreachable. */
 const SERVER_UNREACHABLE_EXIT = 75;
-/**
- * No practice was reached, and every model call this run made failed. That is the same kind of fact
- * as an unreachable server — nothing about the reviewed work was measured, and nothing was learned
- * that a second attempt would repeat — so the server queues the review again rather than recording it
- * as one that found nothing.
- */
+/** Tells the server to retry a review that recorded nothing after provider failures. */
 const PROVIDER_UNREACHABLE_EXIT = 76;
 
 function readTaskEnvelope(): TaskEnvelope {
@@ -1556,13 +1479,7 @@ function buildSummaryTool() {
 	});
 }
 
-/**
- * One unit of feedback as report_feedback receives it.
- *
- * <p>Written out rather than derived from the tool's JSON schema, because that schema is assembled at
- * runtime from the lanes and placements this particular run may write for. {@link validateUnit} is what
- * holds an incoming unit to this shape; nothing here is true until it has run.
- */
+/** Runtime lane and placement choices require per-unit validation in readFeedbackUnit/validateUnit. */
 interface FeedbackUnit extends ComposedFeedbackUnit {
 	channel: Channel;
 	practiceSlug: string;
@@ -1619,12 +1536,8 @@ const composedFeedback: ComposedFeedback = {
 };
 
 /**
- * The observations after Java admitted them, which is a different shape from the ones measured: the
- * server assigns the id every feedback unit references and decides which citations can carry a note.
- *
- * <p>Kept apart from reviewState.observations rather than spliced over it. The composer tool captures
- * this array when the session is built and reads it when the model calls, long after admission has
- * filled it.
+ * Admission assigns observation IDs and anchor eligibility. Populate this captured array in place
+ * because the composer tool is created before admission.
  */
 const admittedObservations: AdmittedObservation[] = [];
 
@@ -1737,10 +1650,7 @@ function persistComposedFeedback(): void {
 				`supersedes '${unit.supersedesThreadKey}', which this envelope does not list as staged`,
 		);
 	}
-	// The units that deliver something come first: the server reads the first thirty units of the
-	// file and ignores the rest, and a WITHHOLD is a recorded decision it does not deliver. A composer
-	// that withholds on every lane of every practice must not push the two notes on the work past the
-	// cut — on the cohort, one did.
+	// The server reads at most 30 units. Keep deliverable feedback ahead of WITHHOLD records.
 	const units = composedFeedback.units.toSorted(
 		(a, b) => Number(a.action === "WITHHOLD") - Number(b.action === "WITHHOLD"),
 	);
@@ -1799,8 +1709,7 @@ function buildFeedbackTool(
 		if (delivers && usedPerChannel[unit.channel] >= bounds.maxUnits) {
 			return skipped(`${unit.channel} cap of ${bounds.maxUnits} reached; skipped.`);
 		}
-		// Staying quiet is a decision only where there was something to say: a WITHHOLD on a practice
-		// with no NEGATIVE observation records nothing, and one composer wrote eighty-four of them.
+		// WITHHOLD requires a NEGATIVE observation; otherwise there is nothing to withhold.
 		if (
 			!delivers &&
 			!observations.some(
@@ -1816,9 +1725,7 @@ function buildFeedbackTool(
 		if (rejection !== null) {
 			return skipped(rejection);
 		}
-		// The pattern bar the composer prompt states, enforced from what the runner can count: a card
-		// on the practice pages rests on the same practice being NEGATIVE on several separate pieces of
-		// work, this one and the person's history. One occurrence is a note on the work, never a card.
+		// IN_APP pattern feedback requires NEGATIVE observations on distinct pieces of work.
 		if (unit.channel === "IN_APP" && delivers) {
 			const pieces = negativePiecesOfWork(unit.practiceSlug, observations);
 			if (pieces < request.minDistinctArtifacts) {
@@ -1848,9 +1755,7 @@ function buildFeedbackTool(
 			"call; each is stored or skipped on its own, with the reason, and a skipped unit can be sent " +
 			"again corrected without re-sending the stored ones. This is an intervention, not a " +
 			"measurement: it takes no presence, assessment, severity or confidence, and no citation you typed yourself.",
-		// The shape and the vocabulary, and no rule: the SDK's check against this schema is all or
-		// nothing, and one over-long body must not discard the other units in the call. Every rule the
-		// schema would state is applied per unit by readFeedbackUnit and validateUnit, with its reason.
+		// See documentedShape: validate feedback per unit, not per tool call.
 		parameters: {
 			type: "object",
 			required: ["units"],
@@ -1985,7 +1890,6 @@ function buildFeedbackTool(
 				),
 			},
 		},
-		// Nothing here waits on anything; Pi takes the result as a promise either way.
 		execute: async (toolCallId, params): Promise<AgentToolResult<ReportFeedbackDetails>> => {
 			if (!compositionAdmitted) {
 				return {
@@ -2030,11 +1934,7 @@ function buildFeedbackTool(
 	});
 }
 
-/**
- * The longest text each field of a unit may carry: the bounds `ComposedFeedbackUnit` holds the parsed
- * unit to on the server, which drops a longer one without a word to the session. Applied here, where
- * the session can shorten the field and send the unit again.
- */
+/** Match ComposedFeedbackUnit bounds so the model can correct a unit before server admission. */
 const FEEDBACK_TEXT_BOUNDS = {
 	title: 255,
 	body: 8000,
@@ -2069,10 +1969,7 @@ const NOTE_FIELDS = [
 	"alreadySaid",
 ] as const;
 
-/**
- * A word of a closed vocabulary as the session wrote it: case and the `_`/`-` spelling are not what the
- * vocabulary is about, so `in_app` is IN_APP; a word outside it is answered with the whole list.
- */
+/** Accept case and hyphen variants; reject values outside the declared vocabulary. */
 function vocabularyWord<T extends string>(
 	value: unknown,
 	vocabulary: readonly T[],
@@ -2086,10 +1983,7 @@ function vocabularyWord<T extends string>(
 	return match ?? `${field} must be one of ${vocabulary.join(", ")} (received '${value}')`;
 }
 
-/**
- * A text field within its bound, trimmed, or the reason it is not. Absent when it was not sent: the
- * lane rules in {@link validateUnit} say which lane needs which field.
- */
+/** Enforce text length here; validateUnit handles lane-specific required fields. */
 function boundedText(
 	value: unknown,
 	field: keyof typeof FEEDBACK_TEXT_BOUNDS,
@@ -2113,15 +2007,7 @@ function boundedText(
 	return { text };
 }
 
-/**
- * Read one item of a report_feedback call as a unit, or say why it is not one.
- *
- * <p>The schema the SDK checks the call against carries the shape and the vocabulary and no rule, so
- * that one wrong unit does not discard the others in the call; this is where every rule the schema
- * would have stated is applied, one unit at a time, with the reason the session needs to correct it.
- * The schema is assembled per run anyway — the lanes and placements it offers depend on what this run
- * may write for — so the SDK could not hand back a typed argument even if it were asked to.
- */
+/** Validate one feedback item; the outer tool schema intentionally permits partial batch success. */
 function readFeedbackUnit(value: unknown, practiceSlugs: readonly string[]): FeedbackUnit | string {
 	if (!isRecord(value)) {
 		return `each item of units is one unit object with channel, practiceSlug, basedOn and action (received ${typeof value}); skipped.`;
@@ -2243,10 +2129,7 @@ function listOrSingle(value: unknown): unknown[] {
 }
 
 // Enforce snapshot-dependent constraints here for fast model correction; Java rechecks them.
-/**
- * How many distinct pieces of work carry a NEGATIVE observation for a practice: this one, when a
- * current admitted observation says so, plus every other artifact the staged history records one on.
- */
+/** Count distinct artifacts with NEGATIVE observations, including this review. */
 function negativePiecesOfWork(
 	practiceSlug: string,
 	current: readonly AdmittedObservation[],
@@ -2432,14 +2315,7 @@ function normalizeQuotedText(value: string): string {
 		.toLowerCase();
 }
 
-/**
- * An admitted observation as the composition turn shows it: the verdict, the words, and the
- * citations by coordinates. The admission record carries each citation twice — under `evidence` as
- * measured and as the indexed list — with its quoted lines and its verification digests, and on a
- * review of 38 observations that was 80k tokens of prompt, more than the window has beside the
- * measurement. The composer must not copy a quoted line, the server renders them, and the full
- * record is on disk for the citation it wants to read.
- */
+/** Omit duplicated quotes and verification digests; the full admission record remains on disk. */
 function composerView(observation: AdmittedObservation): Record<string, unknown> {
 	const { evidence, citations, ...rest } = observation;
 	const { citations: _measured, ...branches } = isRecord(evidence) ? evidence : {};
@@ -2517,23 +2393,14 @@ function causeText(error: unknown): string {
 	return error instanceof Error && error.cause !== undefined ? ` (${errorText(error.cause)})` : "";
 }
 
-/**
- * What a blip costs. The proxy address is the app server's IP as it was when this container started,
- * so a server that came back somewhere else is not something waiting can reach — and a deployment
- * outlasts any wait that fits here anyway, its healthcheck allowing itself 90s to come up. These
- * attempts buy the failures that clear in place: a reset connection, a socket refused while the
- * process is coming back. An attempt that is merely slow is not repeated — it is the server working.
- */
+/** Retry transport failures, not slow admission or explicit refusals. */
 const ADMISSION_ATTEMPTS = 4;
 
 // Admission verifies every cited blob against the Git object, in a container the server starts, so
 // one attempt may take minutes; the cap only bounds a server that went silent without closing.
 const ADMISSION_ATTEMPT_TIMEOUT_MS = 10 * 60_000;
 
-/**
- * What the server said about an answer it refused, as text a reader can act on. A body that cannot be
- * read is not worth failing over twice: the status alone still says a refusal happened.
- */
+/** Preserve an HTTP refusal even when its body is unreadable. */
 async function answerText(response: Response): Promise<string> {
 	try {
 		const body = await response.text();
@@ -2595,9 +2462,7 @@ async function postAdmission(): Promise<unknown> {
 }
 
 async function admitObservations() {
-	// The measurement is finished by the time this runs and exists nowhere else, so the one call that
-	// carries it out of the sandbox is worth repeating when it did not arrive. Repeating it is safe:
-	// the payload is frozen once the measurement is closed, and the server replays an identical one.
+	// Admission retries are idempotent: measurement is frozen and the server replays identical payloads.
 	const admitted: unknown = await retrying(
 		postAdmission,
 		(error) => error instanceof AdmissionUnreachableError,
@@ -2628,19 +2493,11 @@ async function admitObservations() {
 	);
 }
 
-/**
- * One tool call of a turn, as the loop guards read it before the tool runs. Three things end a turn
- * early here, each after telling the session once: a composer reading instead of writing, a call
- * repeated with the same arguments, and recording calls that record nothing.
- */
 function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measuring: boolean): void {
 	turn.toolCalls[toolName] = (turn.toolCalls[toolName] ?? 0) + 1;
 	if (!activeSession) {
 		return;
 	}
-	// A composer that has made this many calls without one recording call is reading its way
-	// through the practice files instead of writing: on the cohort a composition read 37 criteria
-	// one by one, compacted its own instructions away twice, and wrote nothing.
 	const calls = Object.values(turn.toolCalls).reduce((sum, count) => sum + count, 0);
 	if (
 		!measuring &&
@@ -2672,10 +2529,7 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 		);
 		void abortSession(activeSession);
 	}
-	// A call the SDK refuses on its schema never reaches the tool, so the refusal cap cannot end a
-	// session that re-sends it; this bound does. A turn that has recorded nothing after this many
-	// attempts at its recording tools is spending its share on the same mistake — one composition
-	// called report_summary 452 times against one refusal.
+	// SDK schema refusals bypass tool execution and its per-practice cap; count attempts here too.
 	if (RECORDING_TOOLS.has(toolName)) {
 		turn.recordingCalls += 1;
 		if (turn.recordingCalls >= MAX_RECORDING_ATTEMPTS_PER_TURN && turn.stored === 0) {
@@ -2725,9 +2579,7 @@ function closeTurnTrace(trace: TurnTrace): void {
 }
 
 function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
-	// Racing `elapsed` says the wait is over, not why: the caller asks this to tell an answer from a
-	// budget that ran out. A function rather than a field, because a timer sets it: a field read after
-	// an early check would be narrowed to its first value.
+	// Read timer state through a function so TypeScript does not retain a pre-await narrowing.
 	let expired = false;
 	const { promise: elapsed, resolve: release } = Promise.withResolvers<undefined>();
 	const timer = setTimeout(() => {
@@ -2747,11 +2599,7 @@ async function steer(session: AgentSession, message: string): Promise<void> {
 	}
 }
 
-/**
- * Timers request cancellation; the returned promise settles once the session is idle again. The SDK
- * refuses a prompt while the aborted call is still ending, so a turn that aborts waits for this
- * before the next turn is sent — otherwise every later turn fails as "already processing".
- */
+/** Abort and wait for idle; Pi refuses a new prompt while the previous run is still active. */
 async function abortSession(session: AgentSession): Promise<void> {
 	session.clearQueue();
 	// A compaction in flight is a model call of its own that `abort()` leaves running, and the
@@ -2767,11 +2615,7 @@ async function abortSession(session: AgentSession): Promise<void> {
 /** How long an aborted turn waits for the session to go idle before the next turn is sent. */
 const ABORT_SETTLE_MS = 30_000;
 
-/**
- * Waits up to `maxMs` for the session to go idle; true once it is. A prompt sent to a busy session
- * is refused outright, so a turn that cannot wait its predecessor out is skipped rather than lost
- * together with every turn after it.
- */
+/** Return false if the previous operation does not become idle within maxMs. */
 async function settleSession(
 	session: AgentSession,
 	label: string,
@@ -2879,10 +2723,7 @@ function negativePractices(observations: readonly AdmittedObservation[]): string
 	].toSorted();
 }
 
-/**
- * The composition's finishing prompt. The first prompt may have been ended by the loop guard: the
- * session settles first, and the guard's memory starts over so the second prompt gets its own six.
- */
+/** Retry undecided composition once, with a fresh loop guard and the original deadline. */
 async function askComposerOnceMore(
 	session: AgentSession,
 	negatives: readonly string[],
@@ -2929,10 +2770,7 @@ async function main() {
 	// pi-agent-sandbox.ts has the rationale for running untrusted; both Pi runners in this image
 	// share it.
 	const settingsManager = SettingsManager.create(CWD, AGENT_DIR, SANDBOX_SETTINGS_MANAGER_OPTIONS);
-	// The only instructions the session carries beyond its turns are the orchestrator the server
-	// staged in the agent dir, handed over by name below; the SDK's own discovery is turned off
-	// (pi-agent-sandbox.ts) and is not the channel a run's instructions arrive on. A run without
-	// this file does not start.
+	// Disable instruction discovery; load only the server-staged orchestrator (see pi-agent-sandbox.ts).
 	const orchestratorPath = `${AGENT_DIR}/AGENTS.md`;
 	const orchestrator = readFileSync(orchestratorPath, "utf8");
 	const loader = new DefaultResourceLoader({
@@ -2962,8 +2800,6 @@ async function main() {
 	if (!model) {
 		throw new Error(`Hephaestus model was not registered: ${providerConfig.modelId}`);
 	}
-	// The window is logged because everything downstream is measured against it: a workspace that
-	// declares it wrong says so in the first lines of every transcript.
 	console.error(
 		`[pi-runner] registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} ` +
 			`model=${providerConfig.modelId} contextWindow=${model.contextWindow}`,
@@ -2994,10 +2830,7 @@ async function main() {
 					noteToolCall(currentTurn, event.toolName, event.args, measuring);
 				}
 			}
-			// A call that ended in an error is the one thing the tool lines above cannot show: a schema the
-			// SDK refused before the tool ran, a call cut off by the output limit, a command that failed.
-			// Without this line a transcript shows a session that called a tool and then did the same
-			// thing again, and nobody can say why.
+			// SDK validation errors do not reach the tool, so log them from the session event.
 			if (
 				event.type === "tool_execution_end" &&
 				event.isError &&
@@ -3032,9 +2865,7 @@ async function main() {
 			}
 			if (event.type === "auto_retry_end" && !event.success) {
 				const finalError = event.finalError ?? "no error given";
-				// A call the provider never answered, after the SDK spent its whole budget on it. Only the
-				// measuring turns count: composition can fail without costing a practice, and what this
-				// number decides is whether a review that recorded nothing was cut off or had nothing to record.
+				// Only measurement failures can make a review eligible for provider retry.
 				if (measuring) {
 					providerFailures += 1;
 				}
@@ -3050,14 +2881,8 @@ async function main() {
 				const { stopReason } = event.message;
 				const types = listOrEmpty(event.message.content).map((c) => c.type);
 				const toolCalls = types.filter((t) => t === "toolCall").length;
-				// A turn that ended in an error or ran out of room said why, and without it the
-				// transcript shows a session that simply stopped answering — the one thing a reader
-				// cannot diagnose afterwards.
 				const { rawStopReason } = event.message;
-				// A call the provider answered with an error the SDK does not retry — no deployment for
-				// the model, a rejected key, a gateway fault — is as much a provider failure as one it gave
-				// up retrying: nothing about the work was read. Counted so a review that recorded nothing
-				// is queued again rather than recorded as a review that found nothing.
+				// Non-retryable provider errors also require a retry outcome if no practice was recorded.
 				if (stopReason === "error" && measuring) {
 					providerFailures += 1;
 				}
@@ -3089,7 +2914,6 @@ async function main() {
 	let softTimeoutFired = false;
 	const startMs = Date.now();
 	if (Date.now() >= measureEnd) {
-		// Setting up took the whole budget: a session would only be aborted at its first turn.
 		console.error(`[pi-runner] FAILED: the review budget was spent before the session could start`);
 		hardAborted = true;
 	}
@@ -3252,8 +3076,6 @@ async function main() {
 		process.exit(1);
 	}
 
-	// Measurement is closed: what was recorded goes to the server for admission, and the same session
-	// then composes from what came back, with every quote it read still in its context.
 	measurementClosed = true;
 	await admitObservations();
 	persistComposedFeedback();
@@ -3275,8 +3097,6 @@ async function main() {
 				void abortSession(session);
 			});
 			const trace = openTurnTrace("composition");
-			// The composer has what it needs in its prompt; one that is still reading when most of the
-			// budget is gone is told so, as a measuring turn is at its share.
 			const softTimer = setTimeout(
 				() => {
 					trace.softTimeoutFired = true;
@@ -3295,11 +3115,7 @@ async function main() {
 					throw new Error("the composition budget ran out while the session was compacted");
 				}
 				await Promise.race([session.prompt(compositionText), deadline.elapsed]);
-				// A NEGATIVE practice the composition neither wrote a unit for nor withheld reaches the
-				// developer as a bare observation headline with no next step. Asked once more, in the
-				// same session, like the measurement's finishing turn, naming only what is undecided: on
-				// the cohort, one composition in five ended with nothing at all, and most of the rest
-				// left one or two practices without a decision.
+				// Ask once more for undecided negatives; otherwise they have no composed next step.
 				const undecided = negativePractices(admittedObservations).filter(
 					(slug) => !composedFeedback.units.some((unit) => unit.practiceSlug === slug),
 				);
@@ -3357,9 +3173,7 @@ async function run(): Promise<void> {
 			`[pi-runner] FATAL: ${errorText(error)}\n${error instanceof Error ? error.stack : ""}`,
 		);
 		finalizeOutputQuietly();
-		// A server this container never reached is not a defect in the review, and the attempts above
-		// have already ridden out the failures that clear in place. Saying so distinctly is what lets
-		// the server try the same work again instead of ending it.
+		// Preserve the retryable exit code for admission transport failures.
 		process.exit(error instanceof AdmissionUnreachableError ? SERVER_UNREACHABLE_EXIT : 2);
 	}
 }

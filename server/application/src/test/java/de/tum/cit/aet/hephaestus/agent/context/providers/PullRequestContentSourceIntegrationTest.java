@@ -30,10 +30,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 
 /**
- * The two queries {@code PullRequestContentSource} projects from, against a real schema: the unit test
- * mocks them, so only Postgres can prove that the comment query drops Hephaestus's own notes and that
- * every association the projection reads is initialised before the session closes — the projection is
- * written outside a transaction.
+ * Checks comment filtering and eager associations used by {@code PullRequestContentSource}
+ * after the repository transaction ends.
  */
 class PullRequestContentSourceIntegrationTest extends BaseIntegrationTest {
 

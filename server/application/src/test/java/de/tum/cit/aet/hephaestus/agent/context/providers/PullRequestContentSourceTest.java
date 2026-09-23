@@ -215,8 +215,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(metadataJson.get("title").asString()).isEqualTo("Fix authentication bug");
             assertThat(metadataJson.get("author").asString()).isEqualTo("testuser");
             assertThat(metadataJson.get("additions").asInt()).isEqualTo(10);
-            // The dated moments a review places the merge against; a moment the provider never
-            // recorded is left out rather than written as null.
             assertThat(metadataJson.get("created_at").asString()).isEqualTo("2026-04-09T12:39:13Z");
             assertThat(metadataJson.get("merged_at").asString()).isEqualTo("2026-04-09T14:47:18Z");
             assertThat(metadataJson.has("closed_at")).isFalse();
@@ -226,7 +224,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         void shouldWriteTheRecordsStateBesideItsPeopleAndLabelsWhenThePullRequestCarriesThem() throws Exception {
             PullRequest pr = new PullRequest();
             pr.setTitle("Fix authentication bug");
-            // A webhook-synced record: closed by the merge, with the merge flag the state alone does not carry.
             pr.setState(Issue.State.CLOSED);
             pr.setMerged(true);
             pr.setLabels(Set.of(label("security"), label("backend")));
@@ -288,7 +285,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     .get("inputs/context/metadata.json"));
             assertThat(fresh.get("head_checks").asString()).isEqualTo("FAILURE");
 
-            // A state observed for an earlier head is not the current one: left out rather than stated.
             when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(stale));
             JsonNode outdated = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
                     .files()
@@ -308,7 +304,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(metadataJson.has("author_bot")).isFalse();
             assertThat(metadataJson.get("labels")).isEmpty();
             assertThat(metadataJson.get("assignees")).isEmpty();
-            // Absent rather than null: a webhook-only record never learned these.
             assertThat(metadataJson.has("milestone")).isFalse();
             assertThat(metadataJson.has("merge_state_status")).isFalse();
             assertThat(metadataJson.has("review_decision")).isFalse();
@@ -349,7 +344,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(comments).hasSize(3);
             assertThat(comments.get(0).get("created_at").asString()).isEqualTo("2025-06-01T12:00:00Z");
             assertThat(comments.get(0).get("author").asString()).isEqualTo("reviewer");
-            // A person's comment carries no `bot`; the adapter's BOT classification is projected as one.
             assertThat(comments.get(0).has("bot")).isFalse();
             assertThat(comments.get(1).get("author").asString()).isEqualTo("project_7_bot_a1b2");
             assertThat(comments.get(1).get("bot").asBoolean()).isTrue();
@@ -398,7 +392,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             JsonNode second = comments.get(1);
             assertThat(second.get("in_reply_to").asLong()).isEqualTo(1L);
             assertThat(second.get("thread").asLong()).isEqualTo(70L);
-            // UNKNOWN says nothing about the side and a current comment is not marked outdated: both absent.
             assertThat(second.has("side")).isFalse();
             assertThat(second.has("outdated")).isFalse();
         }
@@ -410,7 +403,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
             provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
 
-            // The marker every note the tool posts on a line carries; the query leaves those out.
             verify(reviewCommentRepository)
                     .findRecentHumanByPullRequestIdWithAuthor(eq(456L), eq("<!-- hephaestus"), any());
         }
@@ -523,14 +515,12 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(readme.get("status").asString()).isEqualTo("M");
             assertThat(readme.get("additions").asInt()).isEqualTo(2);
             JsonNode two = commits.get(1);
-            // The whole message, subject and body, as one quotable string; the committer beside the author.
             assertThat(two.get("message").asString()).isEqualTo("feat: move a to b\n\nCloses #7");
             assertThat(two.get("committer").asString()).isEqualTo("Bot");
             assertThat(two.get("committedAt").asString()).isEqualTo("2026-04-09T11:30:00Z");
             JsonNode renamed = two.get("files").get(0);
             assertThat(renamed.get("status").asString()).isEqualTo("R");
             assertThat(renamed.get("oldPath").asString()).isEqualTo("a.txt");
-            // No address anywhere in the record.
             assertThat(new String(captured.files().get(PullRequestContentSource.COMMITS_FILE), StandardCharsets.UTF_8))
                     .doesNotContain("@example.com");
         }

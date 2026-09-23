@@ -118,9 +118,7 @@ class DeliveryComposer {
                 .sorted(Comparator.comparingInt(f -> severity(f).ordinal()))
                 .toList();
 
-        // A practice the composer withheld from the work, with a reason, is a decision: nothing of it
-        // reaches a line or the summary, and it is recorded as withheld rather than rendered as a bare
-        // headline no note claimed. A practice the composer also wrote a note for keeps that note.
+        // WITHHOLD suppresses the summary unless another unit supplies a note for the practice.
         {
             Set<String> withheldSlugs = withheldInContext(composed);
             List<ValidatedObservation> before = negatives;
@@ -142,9 +140,7 @@ class DeliveryComposer {
             dedupDropped.addAll(identityDiff(before, negatives));
         }
 
-        // A habit the developer already heard about on earlier work is named, not re-explained: the full
-        // explanation lives on the practice page, and repeating it on every change teaches people to stop
-        // reading. A blocking lapse is still explained in full whatever its history.
+        // Shorten recurring non-blocking lapses; blocking lapses retain the full explanation.
         List<ValidatedObservation> recurring = negatives.stream()
                 .filter(f -> recurringSlugs.contains(f.practiceSlug()))
                 .filter(f -> f.severity() != Severity.CRITICAL && f.severity() != Severity.MAJOR)

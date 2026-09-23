@@ -31,10 +31,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Reviews the head a burst of pushes settles on, once. A push is deferred on arrival; when the pull
- * request has been quiet for {@link #QUIET_PERIOD} (or the first push has waited {@link #MAX_WAIT}) the
- * newest head is reviewed and the heads it overtook are {@code COALESCED}. The workspace cooldown makes the
- * group wait rather than refusing it, so the head a student settles on is never the one left unreviewed.
+ * Coalesces pushes at the newest head after {@link #QUIET_PERIOD}, or {@link #MAX_WAIT}
+ * from the first push. The workspace cooldown defers the group instead of refusing it.
  */
 @Component
 @ConditionalOnServerRole

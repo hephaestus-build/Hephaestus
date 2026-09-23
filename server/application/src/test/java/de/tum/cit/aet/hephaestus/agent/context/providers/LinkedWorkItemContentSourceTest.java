@@ -202,7 +202,6 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
                             "subIssuesCompleted",
                             "subIssuesSource");
             assertThat(item.get("number").asInt()).isEqualTo(42);
-            // Named in the text, not recorded by the provider as closed by this change.
             assertThat(item.get("how").asString()).isEqualTo("mentions");
             assertThat(item.get("title").asString()).isEqualTo("Add token refresh");
             assertThat(item.get("state").asString()).isEqualTo("OPEN");
@@ -297,8 +296,6 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
 
             var captured = provider.capture(request(sampleMetadata()), Set.of(KIND));
 
-            // The body as written, title first, then the dates as one quotable line, so a line of it can
-            // be cited by number; nothing for a reference this repository does not resolve.
             assertThat(captured.files())
                     .containsOnlyKeys(
                             LinkedWorkItemContentSource.OUTPUT_FILE,
@@ -357,8 +354,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
 
         @Test
         void shouldIgnoreAReferenceInsideAnHtmlComment() throws Exception {
-            // A merge request template's commented example, kept verbatim by most authors of one cohort:
-            // not rendered, so not the author's reference.
+            // Template examples inside HTML comments are not author references.
             pullRequestWithBody(
                     "<!-- MR title format: #<IssueNumber>: <Short description> — Example: #12: Add login -->\n"
                             + "Closes #7");

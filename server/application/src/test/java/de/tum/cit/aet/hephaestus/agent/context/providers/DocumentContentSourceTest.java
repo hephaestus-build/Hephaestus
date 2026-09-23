@@ -87,7 +87,6 @@ class DocumentContentSourceTest extends BaseUnitTest {
         assertThat(files).containsOnlyKeys(DocumentContentSource.BODY_KEY, DocumentContentSource.METADATA_KEY);
         assertThat(DocumentContentSource.BODY_KEY).isEqualTo("inputs/context/document.md");
         assertThat(DocumentContentSource.METADATA_KEY).isEqualTo("inputs/context/document.json");
-        // Byte for byte: no banner, no front matter, nothing the author did not write.
         assertThat(new String(files.get(DocumentContentSource.BODY_KEY), StandardCharsets.UTF_8))
                 .isEqualTo(body);
 

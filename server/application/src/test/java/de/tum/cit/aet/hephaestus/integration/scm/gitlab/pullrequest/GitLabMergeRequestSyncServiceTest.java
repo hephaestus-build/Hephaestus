@@ -9,9 +9,7 @@ class GitLabMergeRequestSyncServiceTest extends BaseUnitTest {
 
     @Test
     void shouldReadDiscussionsOfAnApprovedOrSettledMergeRequestWithNoUserNotes() {
-        // The approval's time lives in a system note, which userNotesCount does not count: an approved
-        // merge request with no user notes must still have its discussions read, or the approval keeps
-        // the merge time and "approved before merging" is true of every merge.
+        // userNotesCount excludes approval system notes, so zero user notes must not skip discussions.
         assertThat(GitLabMergeRequestSyncService.readsDiscussions(0, true, "opened"))
                 .isTrue();
         assertThat(GitLabMergeRequestSyncService.readsDiscussions(0, false, "merged"))

@@ -14,7 +14,7 @@ import {
 	writeChangeView,
 } from "../../../main/resources/agent/pi-change.ts";
 
-/** The form a GitLab project ships under `.gitlab/merge_request_templates/`, as one cohort did. */
+/** A project template under .gitlab/merge_request_templates/. */
 const TEMPLATE = `<!-- MR title format: #<IssueNumber>: <Short, imperative description> — Example: #12: Add login screen -->
 
 ## Description

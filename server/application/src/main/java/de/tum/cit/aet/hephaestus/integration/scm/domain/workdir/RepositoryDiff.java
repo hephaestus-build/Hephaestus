@@ -21,13 +21,8 @@ import org.eclipse.jgit.util.io.DisabledOutputStream;
 import org.jspecify.annotations.Nullable;
 
 /**
- * What a review's change is, read from Git objects: its base, the paths it touches and its text.
- *
- * <p>The review container derives every view of the change it shows the model from the checkout it
- * receives; the server reads the change only to plan a review (which practices have a subject in it)
- * and to verify what came back (a cited path is one the change touches). Both readings use the same
- * rename detection as {@code git diff -M50%}, so a path renamed by the change is known under both
- * names.
+ * Reads the review base, changed paths and diff from Git for planning and citation verification.
+ * Rename detection matches {@code git diff -M50%} used by the container.
  */
 public final class RepositoryDiff {
 

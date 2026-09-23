@@ -114,7 +114,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
 
-        // PracticePiAdapter runs every review on an internal network, so a stored true would be a lie.
+        // PracticePiAdapter enforces an internal network regardless of stored configuration.
         var request = new AgentBindingRequestDTO(99L, null, null, null, true, true);
         assertThatThrownBy(() -> service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, request))
                 .isInstanceOf(IllegalArgumentException.class)

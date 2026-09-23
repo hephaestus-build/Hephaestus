@@ -41,14 +41,12 @@ belongs to one contract:
 | Run provenance and evaluation joins                              | [Evaluation provenance](./evaluation-provenance.md)           |
 | An exact enum meaning after you know the stage                    | [Practice review glossary](./practice-review-glossary.mdx)    |
 
-Return here when a change crosses two stages. That boundary is usually where an apparently harmless
-shortcut can turn a capture failure into a claim about someone's work, or a delivery choice into a missing
-measurement.
+Use this page for changes across stages. Capture failures must not become observations, and delivery
+choices must not erase observations.
 
 ## Where a review can stop
 
-**Each stage owns exactly one refusal vocabulary, and they are not interchangeable.** Answering a question
-from one stage in another stage's words is the failure this table exists to prevent.
+**Each stage has its own refusal vocabulary.**
 
 | Stage       | Refusal vocabulary                                                           | Lands in                                                                   | Means                            |
 | ----------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------- |
@@ -57,13 +55,9 @@ from one stage in another stage's words is the failure this table exists to prev
 | Observation | `AssessmentStatus.UNDETERMINED`                                                      | `observation.assessment_status`                                                     | We looked and could not tell     |
 | Delivery    | `FeedbackSuppressionReason`                                                  | `feedback.suppression_reason`                                              | We know, and chose to stay quiet |
 
-The four are not ranked and do not substitute for one another. "We could not look" is deliberately not
-representable as a `Presence` value, because a `Presence` is a claim about the developer's work and a
-missing source is a fact about the instrument — which is exactly what lets the whole `observation` table be
-read as behaviour. In the other direction, "we chose to stay quiet" must never be recorded as an absent
-observation: requiring human approval is a release decision, and the measurement still happened.
-When you add a reason code, the first question is which of these four columns it belongs in. If the honest
-answer is "two of them", the reason is really two reasons.
+A missing source is not a claim about behavior and must not become a `Presence` value. A delivery refusal
+or pending approval does not erase the observation. Add each reason to the stage that owns the decision;
+use separate reasons when more than one stage stops.
 
 ## Occasion
 
@@ -184,9 +178,10 @@ earlier observations and feedback.
 `scm.pull_request.synchronized` is coalesced the same way. GitHub names a push; GitLab raises it when a
 merge-request update carries `oldrev` or moves the stored head, since GitLab omits `oldrev` on some
 pushes. `AgentJobEventListener` defers a live push, and `PullRequestPushCoalescer` reviews the head a burst
-settles on after ten quiet minutes (at most an hour after the first push), marking the heads it overtook
-`SUPPRESSED / COALESCED`. The workspace cooldown delays that settlement instead of refusing it, so the newest
-head is never the one dropped. A push overtaken by a merge or a close is left to that occasion.
+settles on. A group becomes due after ten quiet minutes or one hour from its first push. The workspace
+cooldown can delay settlement beyond that hour; it does not discard the push. Scheduler timing, admission
+and queue capacity also affect when a review starts. Superseded heads become `SUPPRESSED / COALESCED`.
+A push overtaken by a merge or a close is left to that occasion.
 
 ## Capture
 
@@ -197,19 +192,15 @@ unavailable, redacted, errored — with a typed reason) and how a practice's sta
 a readiness decision is the whole subject of the
 [artifact-source contract](./artifact-source-contract.mdx), which is versioned and validated at startup.
 
-Capture projects; it does not interpret. A source reaches the sandbox as the stored record shaped into
-JSON, or as a checkout — never as a summary, a count, an excerpt or a diff computed on the server. The
-change a pull request review is about is captured as its pinned `base_sha` and `head_sha`
-(`inputs/context/change.json`) beside the checkout, and the container derives the patch, its statistics,
-the changed files and the commits from that checkout with `git` before the model runs
-(`pi-change.ts`, under `work/change/`). Practice-specific extraction lives in the practices' precompute
-scripts, which run in the same container on the same files. The server reads the change only to
-decide which practices have their declared subject in it (readiness) and to verify what comes back
-(admission) — see the [workspace ABI](./agent/workspace-abi.mdx) for the layout.
+Capture stages source records, not practice judgments. A pull-request capture pins `base_sha` and
+`head_sha` in `inputs/context/change.json` beside the checkout. The sandbox derives the patch, statistics
+and changed-file list with `git` under `work/change/`. Commit messages and file changes are staged
+as captured input so admission can verify their citations. Practice-specific precompute
+scripts run on these inputs inside the sandbox. The server also reads the change to evaluate declared
+practice subjects and verify citations. The [workspace ABI](./agent/workspace-abi.mdx) owns the file layout.
 
-Do not restate that contract here. The one fact this page owns is where the readiness verdict lands:
-`agent_job.review_readiness`, its own `jsonb` column, split out from `evidence_snapshot` because a snapshot
-carries one entry per staged file and a TOASTed `jsonb` has no partial read.
+Readiness is stored in `agent_job.review_readiness`, separately from `evidence_snapshot`, so status reads
+need not load the full artifact manifest.
 
 ## Observation
 
@@ -234,12 +225,10 @@ Identity is assigned at persistence, not in the sandbox: an occurrence key dedup
 (`insertIfAbsent`, `ON CONFLICT DO NOTHING`), and a recurrence key groups the evidence location across runs.
 Different behaviors can share a location; this key does not establish that a concern persisted or resolved.
 
-**An observation carries `evidenceRationale` and no advice.** `evidenceRationale` is the measurement's own
-justification — *"the change adds a tax-exempt branch, and no test file in this diff calls `total`"* —
-and it is the only prose the observation carries anywhere. The measurement emits no next step: there is no
-`guidance` field on the tool, on the parsed observation, or on the ledger. Advice is a property of a
-*delivery* (ADR 0021, ADR 0022), and the stage that decides deliveries is the subject of the next
-section.
+**Observations describe the work; feedback contains advice.** An observation carries a concise `summary`
+and an `evidenceRationale` that explains the assessment, for example: “The change adds a tax-exempt branch,
+and no changed test calls `total`.” It has no `guidance` field. Composition decides whether and how to give
+advice from admitted observations.
 
 ### Recorded-result coverage
 
@@ -249,38 +238,18 @@ a practice without one is counted as unevaluated and may be retried. This does n
 all relevant behaviors were reviewed, or that a practice without a result was never inspected.
 
 The current runner cannot complete successfully with zero recorded observations. A supported
-`NOT_APPLICABLE` observation can record that no occasion exists; missing required sources remain
+`NOT_APPLICABLE` observation can record that no practice subject applies to the captured work; missing required sources remain
 readiness failures, and no verdict may be invented to satisfy execution coverage. Report this
 protocol limitation separately from source completeness, judgment quality and delivery.
 
 ## Measurement and intervention
 
-Everything above this line is the system taking a reading. Everything below it is the system deciding
-to say something to a person. Those are separate turns in one agent session. An authenticated server callback admits the observations
-between them, so composition retains context but can use only the persisted projection. Keeping that boundary
-is why one fact can read three different ways.
+Measurement and composition are separate phases in one model session. An authenticated callback admits
+observations between them; composition can reference only the persisted projection.
 
-**A measurement is falsifiable.** *"This change adds a tax-exempt branch, and nothing in the change
-tests it"* is either true or false, and you check it by opening the file. It says nothing about what
-anybody should do, and it remains unedited for as long as it is retained, so later readings can
-be compared with it.
-
-**An intervention must stay grounded, but grounding alone does not make it useful.** *"Write the assertion
-that distinguishes the new branch before you write the branch"* can be supported by the observation and
-still be badly timed, repetitive, or irrelevant to the recipient. Composition therefore considers the
-audience, surface, history, and current conversation as well as the evidence.
-
-The line the code draws, stated once so it fits in a prompt: **if you can check it by reading the
-artifact, it is measurement; if you can only check it by watching what the person does next, it is
-intervention.**
-
-They are separated because the good version of each ruins the other. A measurement authored as advice
-starts bending toward whatever makes good advice — the observation you can write a nice tip about gets
-reported, the one you cannot gets quietly dropped. It also bends toward *fault*, because a next step
-presupposes something to step away from: the three answers that assert nothing is wrong (a strength, a
-practice with no subject here, a question the evidence left open) are the ones that suffer for it. And advice written at the moment of measurement can
-only ever be about the one thing just measured: it cannot know that this is the third time, it cannot
-know the developer was already told, and it cannot decide to stay quiet.
+An observation states a claim that can be checked against the captured work. Feedback proposes an action
+for a recipient and considers the surface, history and conversation. Keeping these phases separate allows
+an observation to remain recorded even when advice would be repetitive, poorly timed or unnecessary.
 
 ```mermaid
 flowchart TB
@@ -312,9 +281,8 @@ flowchart TB
     quiet --> compositionResult["Composition output only:<br/>retained until job payload stripping"]
 ```
 
-Note where the arrows converge. **The model proposes; the server admits.** Origin, effective autonomy,
-channel-specific routing, placement checks, and per-lane caps still apply after composition. Giving the
-model more context is not a reason to relax these gates; it gives them more proposals to assess.
+**The model proposes; the server admits.** Origin, effective autonomy, routing, placement checks and
+per-channel limits still apply after composition.
 
 ### Composition inputs and outputs
 
@@ -358,12 +326,10 @@ both placements. Per-lane limits are supplied in composition configuration, not 
 
 ### What the composer is not allowed to do
 
-The tool schema and server admission refuse the same four things. Validation exists on both sides of the
-sandbox boundary because a guard the constrained party can skip is advice, not a boundary. An invalid unit
-is dropped and logged without failing the completed measurement.
+Recording-tool validation and server admission enforce these constraints independently. An invalid
+feedback unit is dropped and logged without invalidating admitted observations.
 
-- **No verdict fields.** `report_feedback` takes no presence, assessment, severity or confidence. An
-  intervention that could carry a verdict would eventually be read back as one.
+- **No verdict fields.** `report_feedback` takes no presence, assessment, severity or confidence.
 - **No model-authored path or line number.** `placement.kind: "DIFF"` names an admitted
   `{ observationId, citationIndex }`, and the server resolves the file, side, and line from that
   observation's citation. `placement.kind: "ARTIFACT"` carries no coordinates and stays in the summary.
@@ -407,13 +373,12 @@ alongside them, and the ordered list of gates every delivery walks in
 [the delivery policy check order](./practice-review-glossary.mdx#the-delivery-policy-check-order). Read
 those before changing anything here, and do not restate them.
 
-One fact belongs to this stage rather than to that vocabulary: **`PracticeAutonomyPolicy` is a second,
-narrower predicate, and each channel's router applies it itself.** It admits a unit only when the
-observation's immutable `ObservationOrigin` entitles it to that channel *and* the effective autonomy is
-`AUTOMATIC`. That is why a backfilled observation can never reach the artifact or a mentor turn whatever
-anybody configures: the entitlement is a property of how the measurement was obtained, not of what the
-workspace currently permits. The two halves answer different questions — origin asks what a provenance may
-*ever* be said on, and `DeliveryPolicyResolver` asks whether today is the day.
+Each channel router applies `PracticeAutonomyPolicy`: the observation's `ObservationOrigin` must permit
+the channel, and effective autonomy must permit delivery there. `HUMAN_APPROVAL` requires approval for
+pushed comments on the work, but allows on-demand practice pages and chat; `OFF` blocks all channels.
+Backfill origin permits only the practice-page channel, regardless of autonomy. That permission is a
+ceiling: `InAppFeedbackRouter` holds a pattern supported only by backfilled observations. Other delivery
+gates still apply.
 
 ## Runtime and extension points
 
@@ -428,8 +393,7 @@ roles, transaction boundaries, extension ownership, and change guidance are docu
 it is what the **Review activity** screen renders for every member. It is derived, never stored:
 `PracticeTraceDeriver` walks an ordered precedence list to a single `PracticeTraceOutcome`.
 
-The trace separates two axes on purpose, and reading it wrongly is the fastest way to misdiagnose a quiet
-workspace:
+The trace separates measurement from delivery:
 
 - **`outcome` is about the measurement**, and is one of these values: `REVIEWED`, `RUNNING`,
   `PENDING`, `SKIPPED`, `NOT_REACHED`, `NOT_ASSESSABLE`, `TURNED_OFF`, `NOT_OCCASIONED`, `DORMANT`,

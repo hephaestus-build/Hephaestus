@@ -69,11 +69,7 @@ class PracticeAutonomyPolicyTest extends BaseUnitTest {
                     .isFalse();
         }
 
-        /**
-         * The rule, channel by autonomy: approval gates only the pushed channel. A note on the work is
-         * public and reversible only by deleting it; a practice page or a chat turn is read by the subject
-         * on request, so every practice that admits review at all delivers there.
-         */
+        /** HUMAN_APPROVAL gates pushed feedback, not on-demand practice pages or chat. */
         @ParameterizedTest
         @CsvSource({
             "OFF, IN_CONTEXT, false",

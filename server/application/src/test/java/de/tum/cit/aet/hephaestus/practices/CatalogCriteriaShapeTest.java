@@ -14,11 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Every bundled practice is written as the decision procedure the authoring guide describes
- * (docs/admin/writing-practices.mdx, "Write the criteria as a decision procedure"): the same sections,
- * in the same order, under one size. The model reads a practice once beside the others of its group,
- * so the shape is what lets a small model apply it the same way every time; the measured difference
- * between a contract and a procedure is in the guide.
+ * Checks the criteria sections and size limits defined in docs/admin/writing-practices.mdx.
  */
 class CatalogCriteriaShapeTest extends BaseUnitTest {
 

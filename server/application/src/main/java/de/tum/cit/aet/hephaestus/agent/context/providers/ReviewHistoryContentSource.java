@@ -70,10 +70,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     private static final int MAX_OBSERVATIONS = 50;
 
     /**
-     * Of the newest {@link #MAX_OBSERVATIONS}, how many one practice may take. A record about one person is
-     * mostly the same few practices recurring, and fifty entries of them at a kilobyte each is a file the
-     * reviewing model's read cap cuts short of its end; three per practice keeps the recent pattern of each
-     * and the file whole.
+     * Caps each practice so repeated observations cannot crowd other practices out of the history.
      */
     static final int MAX_OBSERVATIONS_PER_PRACTICE = 3;
 
@@ -263,7 +260,6 @@ public class ReviewHistoryContentSource implements EvidenceSource {
      */
     private ObjectNode preparedPayload(long workspaceId, List<Feedback> queued) {
         ObjectNode root = objectMapper.createObjectNode();
-        // The most recent MAX_PREPARED, newest first; the manifest says the capture is partial.
         root.put("limit", MAX_PREPARED);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
@@ -302,8 +298,6 @@ public class ReviewHistoryContentSource implements EvidenceSource {
 
     private ObjectNode observationsPayload(long workspaceId, List<Observation> observations, Instant since) {
         ObjectNode root = objectMapper.createObjectNode();
-        // Recorded since `since`, the most recent MAX_OBSERVATIONS of them, newest first, at most
-        // perPracticeLimit of any one practice.
         root.put("since", since.toString());
         root.put("limit", MAX_OBSERVATIONS);
         root.put("perPracticeLimit", MAX_OBSERVATIONS_PER_PRACTICE);
@@ -315,9 +309,6 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         ArrayNode items = root.putArray("observations");
         for (Observation o : observations) {
             ObjectNode node = items.addObject();
-            // What a composer reads of an earlier observation: the practice, the verdict, the piece of
-            // work and when. Not the recurrence key, which nothing in the sandbox resolves, and not the
-            // rationale, a paragraph per entry that only restates the verdict for the developer.
             node.put(
                     "practiceSlug",
                     o.getPractice() == null ? null : o.getPractice().getSlug());

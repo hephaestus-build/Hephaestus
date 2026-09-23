@@ -127,7 +127,6 @@ class GitHubSubIssueSyncServiceTest extends BaseUnitTest {
         assertThat(child.getParentIssue()).isSameAs(parent);
         assertThat(parent.getSubIssuesTotal()).isEqualTo(1);
         verify(issueRepository).save(child);
-        // Neither row was looked up as if GitHub's id were its own, nor stubbed as missing.
         verify(issueRepository, never()).findById(anyLong());
         verify(issueProcessor, never()).processStub(any(), any());
     }

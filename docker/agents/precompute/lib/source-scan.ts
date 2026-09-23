@@ -1,10 +1,4 @@
-/**
- * The walk a code practice shares: every added line of every source file in the languages the
- * practice names, placed in the declaration that encloses it, matched against the practice's own
- * closed list of patterns. The script owns the list, the scope and the directions; this owns the
- * language filter, the test-file skip, the comment skip, the placing and the hint shape. Facts
- * only: a hint says "this line matched this label inside this type", never what that means.
- */
+/** Shared source-line scanning and declaration placement; pattern matches are hints, not verdicts. */
 
 import {
 	type Declaration,
@@ -127,7 +121,6 @@ export async function scanAddedLines(
 	return scan;
 }
 
-/** How many hints carry a label. */
 export function countLabel(scan: SourceScan, label: string): number {
 	return scan.hints.filter((h) => h.pattern === label).length;
 }

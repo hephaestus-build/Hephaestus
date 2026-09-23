@@ -21,9 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * The child rollup {@code LinkedWorkItemContentSource} derives when a provider synced none, against a
- * real schema: the unit test mocks the count, so only Postgres can prove the query counts the children
- * of one parent, closed ones as completed, and leaves a merge request out of the count.
+ * Checks child-issue rollups against PostgreSQL, including exclusion of pull requests.
  */
 class LinkedWorkItemContentSourceIntegrationTest extends BaseIntegrationTest {
 

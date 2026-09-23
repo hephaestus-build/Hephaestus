@@ -29,8 +29,8 @@ public record EvidenceContribution(
          */
         Map<SourceKind, SourceCaptureState> stateOverrides,
         /**
-         * Content already materialised on disk, staged by path so its bytes never enter this process; the
-         * attempt folder takes a read-only copy and the workspace tar is streamed from there.
+         * Content staged by path instead of retained in byte arrays. The attempt folder receives a
+         * read-only copy, which is streamed into the workspace archive.
          */
         Map<String, Path> filesOnDisk,
         /**

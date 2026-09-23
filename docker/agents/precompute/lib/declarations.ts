@@ -1,19 +1,6 @@
 /**
- * The declaration a line of source lies in — "line 42 is inside `struct EventList: View`" — for the
- * brace-delimited languages, from a syntax table rather than a parser. A precompute script uses it
- * to place a candidate line so the review is told which type it belongs to instead of finding the
- * declaration itself across the checkout.
- *
- * Why not a parser: measured on the 1,226 Swift files of one cohort, this matcher and a tree-sitter
- * grammar name the same innermost declaration on 99.1 % of lines, and most of the rest is the
- * grammar failing on recent syntax. A grammar per language is a wasm the sandbox must carry and a
- * currency the project must chase; a syntax row is a few lines and a test. What a brace matcher
- * cannot do is placed honestly: a language without braces (Python, Ruby) has no rows here and a
- * script reports its placing as unknown.
- *
- * The tokenizer skips comments and strings — including multi-line, raw and interpolated strings,
- * which is where a naive matcher miscounts — and names a declaration by the keyword, the name and
- * the text between the name and the brace, from which a script reads conformance or inheritance.
+ * Heuristic declaration spans for brace-delimited languages, not a syntax parser. Strings and
+ * comments are skipped. Unsupported languages return null so callers report placement as unknown.
  */
 
 import { readFile } from "node:fs/promises";

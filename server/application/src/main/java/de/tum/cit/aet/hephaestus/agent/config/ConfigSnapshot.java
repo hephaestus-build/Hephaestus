@@ -58,9 +58,8 @@ public record ConfigSnapshot(
     private static final int CATALOG_SHAPE_MIN_VERSION = 4;
 
     /**
-     * Before version 6 a snapshot carried {@code supportsReasoning} instead of an effort, and a reasoning
-     * model ran at the Pi session's default thinking level, which sends {@code medium}. Such a job keeps
-     * asking for what it asked for when it was submitted.
+     * Snapshots before version 6 used {@code supportsReasoning}. Preserve their Pi default
+     * ({@code medium}) when that flag was true.
      */
     private static final int REASONING_EFFORT_MIN_VERSION = 6;
 

@@ -1,8 +1,4 @@
-/**
- * What a source file is, from its path: the language, and whether it is a test. One table for every
- * script, so a practice about "the Swift files of the change" and one about "the Kotlin files" name
- * the language the same way and never disagree about an extension.
- */
+/** Shared path-based language and test-file classification for precompute scripts. */
 
 const EXTENSION_LANGUAGE: Record<string, string> = {
 	swift: "swift",

@@ -23,9 +23,7 @@ if (scenarioRoot !== undefined && scenarioRoot !== "") {
 		namedExports: {
 			spawnSync(command: string, args: string[]) {
 				assert.equal(command, process.execPath);
-				// Substitute only the image installation prefix; execute the real runner and permissions.
-				// The library's dependencies are the toolchain's here, where the image installs its own
-				// under its prefix, and resolution probes every ancestor's node_modules on the way up.
+				// Use local dependencies but execute the real runner with its permission restrictions.
 				const toolchain = [
 					path.join(repositoryRoot, "docker/agents/node_modules"),
 					path.join(repositoryRoot, "docker/node_modules"),
@@ -46,11 +44,7 @@ if (scenarioRoot !== undefined && scenarioRoot !== "") {
 	await import("../../../main/resources/agent/pi-precompute.ts");
 } else {
 	void test("precompute stages only regular scripts and executes the image runner with task-declared locations", () => {
-		// The staged scripts are loaded as modules, and Node's permission model admits a module load
-		// only when the granted path and the loaded path are the same resolved path — unlike an ordinary
-		// read, which an unresolved grant satisfies. macOS reaches the temporary directory through a
-		// symlink, so an unresolved root fails every script's import while the rest of the scenario
-		// looks like it ran.
+		// Node module-load grants require resolved paths; macOS temporary directories can be symlinks.
 		const root = realpathSync(mkdtempSync(path.join(tmpdir(), "task-precompute-#")));
 		try {
 			const context = "areas/changed work";

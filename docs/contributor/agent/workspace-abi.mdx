@@ -11,11 +11,10 @@ a separate workspace contract.
 ## Layout
 
 The workspace has three data regions: read-only `inputs/`, writable `work/` scratch, and
-collected `out/` results. The rule that divides them: **the server projects what it stores and
-verifies what comes back; every derived view of the work is produced inside the container.** A file
-under `inputs/` is a stored record or a checkout, shaped into JSON and nothing more; the patch, its
-statistics and every precompute hint are written under `work/` by TypeScript running here; the
-commit list is a stored record and is staged under `inputs/context/`. Mount isolation is defined under [Path conventions](#path-conventions).
+collected `out/` results. The server stages captured records, the pinned repository and commit
+metadata under `inputs/`, then validates returned results. The container derives the patch, change
+statistics and precompute hints under `work/`. Mount isolation is defined under
+[Path conventions](#path-conventions).
 
 ```text
 /workspace/
@@ -78,8 +77,8 @@ execute on Node; see
   read-only. `work/`, `out/`, the Pi session directories `.pi` and `.sessions` are separate writable volumes of the same
   attempt, removed with it. There is no runtime allowlist of `inputs/`; the server validates every
   path it packs into the tar before the container exists.
-- **`inputs/context/`** — the stored records of the artifact under review, projected to JSON with no
-  narrative, no aggregates and no excerpts: a title, a body, a list of comments, a list of threads.
+- **`inputs/context/`** — captured records of the artifact under review, including metadata,
+  descriptions, comments, threads and commit metadata. The manifest records capture limits.
   `change.json` pins the reviewed range (`base_sha`, `head_sha`) and is the artifact a citation of the
   change names; the change itself is read from the checkout. `linked_work_items/<n>.md` is each linked
   issue as text, title first, for quoting. `description.md` is the description as its
@@ -127,9 +126,9 @@ execute on Node; see
 ## Pull request records
 
 What each `inputs/context/` file of a pull request review carries, field by field. A key listed as
-*when present* is absent — never `null` — when the provider recorded nothing. Every list runs oldest
-first; the memory bound on each list is `EvidenceLimits.MAX_ITEMS_PER_SOURCE` (10,000), the newest
-entries are the ones kept when it is reached, and the capture is then reported `PARTIAL`.
+*when present* is absent — never `null` — when the provider recorded nothing. Comment and review lists run oldest
+first. Their bound is `EvidenceLimits.MAX_ITEMS_PER_SOURCE` (10,000); when it is reached, the newest
+entries are kept and the capture is reported `PARTIAL`. Commit records have the separate bound below.
 
 **`metadata.json`** — the pull request as the provider holds it. `pr_number`, `pr_url`,
 `repository_full_name`, `source_branch`, `target_branch`, `commit_sha`, `title`, `body`, `state`,
@@ -164,7 +163,7 @@ when `true`). `general_comments.json` entries carry `bot` the same way beside th
 **`review_threads.json`** — `threads`, `reviewDecisions` and `truncated`. A thread: `id` (what a
 comment's `thread` names), `state` (`RESOLVED` or `UNRESOLVED`); when present, `path`, `line`,
 `resolvedBy`, `resolvedAt`, `outdated` and `createdAt`. `resolvedAt` is the moment the provider
-recorded: GitLab states it on the discussion, so every synced GitLab thread carries it; GitHub's
+recorded: GitLab can supply it on the discussion; GitHub's
 GraphQL thread carries no such moment, so on GitHub it is the time of the resolved webhook event and
 is absent for a resolution only the sync saw. A thread holding a Hephaestus note is left out. A decision is
 a submitted review that decided something: `state` (`APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`,

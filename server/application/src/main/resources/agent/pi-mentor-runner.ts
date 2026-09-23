@@ -1,20 +1,5 @@
-// pi-mentor-runner.ts — interactive Pi-mentor runner. Long-lived JSON-RPC 2.0 over stdin/stdout
-// (one object per line, terminator strictly `\n`).
-//
-// Protocol (Java ↔ runner):
-//   stdin  (Java→runner): requests `{jsonrpc, id, method, params}`
-//   stdout (runner→Java): responses + notifications (`method:"event"`) + runner→Java callbacks
-//                         (`fetch_context`).
-// Methods: hello, open_thread, prompt, steer, abort, close_thread, shutdown.
-// Session restore: Java injects `.sessions/<threadId>.jsonl` into the container at start
-//                  time (sourced from `chat_thread.session_jsonl` BYTEA in Postgres). The runner's
-//                  `bindThread` → `switchSession` loads byte-identical prior turns transparently
-//                  via the Pi SDK SessionManager — no explicit replay RPC is needed.
-// Custom tools: fetch_context (callback to Java, whitelisted paths), link_observation (event emit).
-// Error codes: -32600 invalid_request, -32601 method_not_found, -32000 thread_not_open,
-//              -32001 turn_already_in_flight, -32002 pi_error, -32003 invalid_state.
-// Every frame shape named above is declared in pi-mentor-protocol.ts, which is the one place the
-// contract with Java lives; this file implements it and pi-mentor-runner.spec.ts drives it.
+// Long-lived JSON-RPC runner; frame definitions live in pi-mentor-protocol.ts.
+// Java restores .sessions/<threadId>.jsonl before startup; SessionManager resumes it without replay RPCs.
 
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
@@ -157,13 +142,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
-/**
- * The text of a field that arrived as parsed JSON, and "" for anything with no text of its own.
- *
- * <p>Every field below is read through this. An object or an array coerces to "[object Object]" or to
- * its elements run together, and each of those is a non-empty string that would then pass a required-
- * field check and reach an allow-list, a path join or the model as if the caller had sent text.
- */
+/** Do not coerce objects or arrays into non-empty strings that pass required-field checks. */
 function jsonText(value: unknown): string {
 	if (typeof value === "string") {
 		return value;
@@ -174,12 +153,7 @@ function jsonText(value: unknown): string {
 	return "";
 }
 
-/**
- * JSON-RPC 2.0 §4 restricts an id to String, Number or Null. Anything else is malformed; treating
- * it as absent means the frame is handled as a notification and draws no response, which is what
- * Java already observes today — `MentorRunnerClient` coerces a response id with `asLong()` and
- * drops any response it cannot correlate.
- */
+/** JSON-RPC IDs are strings, numbers or null; malformed IDs cannot be correlated by Java. */
 function asJsonRpcId(value: unknown): JsonRpcId | undefined {
 	return typeof value === "string" || typeof value === "number" || value === null
 		? value
@@ -266,14 +240,7 @@ function sendEvent(threadId: string | null, event: MentorWireEvent) {
 // Strategy: hold ONE AgentSessionRuntime. Switch sessions per thread via `runtime.switchSession`
 // (re-subscribing on each switch per SDK docs).
 
-/**
- * The slice of the Pi SDK's `AgentSession` this runner drives.
- *
- * Declaring the subset rather than naming the class is what lets the protocol-only stub implement
- * the same contract without faking a whole SDK. The assignment in `createPiRuntime` makes the
- * compiler prove that the real `AgentSessionRuntime` still satisfies it, so an SDK rename or
- * signature change fails the build rather than the container.
- */
+/** Shared by the SDK adapter and protocol test stub; createPiRuntime checks adapter compatibility. */
 interface MentorAgentSession {
 	subscribe: (listener: (event: AgentSessionEvent) => void) => () => void;
 	prompt: (text: string) => Promise<void>;
@@ -908,12 +875,7 @@ function handleCloseThread(id: JsonRpcId | undefined, params: MentorParams) {
 /** A shutdown that has not drained by here is wedged; losing the frame beats never exiting. */
 const DRAIN_DEADLINE_MS = 5000;
 
-/**
- * Stops the runner once stdout has drained. `process.exit` discards whatever is still queued for a
- * pipe, and the frame most likely to be queued is the last one — the result the caller is waiting
- * for. Setting `exitCode` and releasing stdin lets the loop empty on its own, which drains the pipe;
- * the unref'd timer is the backstop for a runtime that never settles.
- */
+/** Let stdout drain before exit; process.exit would discard queued replies. */
 function exitWhenDrained(code: number): void {
 	// First failure wins: a later clean shutdown must not mask a crash's code.
 	if (code !== 0 || process.exitCode === undefined) {
@@ -1155,12 +1117,7 @@ function isMentorMethod(method: string): method is MentorMethod {
 }
 
 async function dispatch(frame: unknown) {
-	// Two shapes arrive on stdin:
-	//   1. JSON-RPC requests from Java: {jsonrpc, id, method, params}
-	//   2. JSON-RPC responses to our fetch_context callbacks: {jsonrpc, id, result|error}
-	// JSON-RPC 2.0 §6 allows batch (top-level array) but neither end emits batches today.
-	// Reject loudly rather than silently dropping — a future Java caller that bundles
-	// open_thread + prompt would otherwise vanish into the log.
+	// Java sends requests and callback responses, but no batches. Reject top-level arrays explicitly.
 	if (Array.isArray(frame)) {
 		sendError(null, ERR.INVALID_REQUEST, "batch requests are not supported on this transport");
 		return;

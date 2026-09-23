@@ -20,11 +20,8 @@ public enum PracticeAutonomy {
     }
 
     /**
-     * Whether this autonomy lets feedback reach {@code channel} without a person approving it first.
-     * {@code HUMAN_APPROVAL} gates only the pushed channels ({@link FeedbackChannel#pushed()}): a note on
-     * the work is public and reversible only by deleting it, so a person releases it. A practice page or a
-     * chat turn is read by the subject on request, so every practice that admits review at all delivers
-     * there. {@code OFF} delivers nowhere; {@code AUTOMATIC} everywhere.
+     * Whether feedback can reach {@code channel} without approval. {@code HUMAN_APPROVAL}
+     * requires approval only for {@linkplain FeedbackChannel#pushed() pushed channels}.
      */
     public boolean delivers(FeedbackChannel channel) {
         return channel.pushed() ? deliversWithoutApproval() : admitsReview();

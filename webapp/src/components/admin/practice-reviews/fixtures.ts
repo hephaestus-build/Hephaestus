@@ -345,12 +345,7 @@ const cited = (sourceKind: string, path: string, quote: string, line = 1): Evide
 	quoteRedacted: false,
 });
 
-/**
- * Shaped the way `DeliveryComposer` shapes a real note: a lead line, bold observation headings with an
- * inline-code locator, a fenced quote of the code, an italic why-this-matters, and a rule between
- * observations. Long enough that the server's preview cut lands inside the first fence, which is the
- * case a fixture of one-sentence previews never reaches.
- */
+/** Match DeliveryComposer formatting, with the preview cut inside the first code fence. */
 const LONG_BODY = [
 	"2 issues to tighten in this change, plus one thing worth keeping.",
 	"",

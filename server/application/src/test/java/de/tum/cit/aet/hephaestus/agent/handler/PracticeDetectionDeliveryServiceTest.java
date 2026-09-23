@@ -158,7 +158,6 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         metadata.put("repository_full_name", "owner/repo");
         metadata.put("pr_number", 42);
         testJob.setMetadata(metadata);
-        // The change is pinned by the diff source and quoted from the checkout the tree source captured.
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(objectMapper);
         EvidenceSnapshotFixtures.artifact(
                 EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", BASE + ":" + HEAD),

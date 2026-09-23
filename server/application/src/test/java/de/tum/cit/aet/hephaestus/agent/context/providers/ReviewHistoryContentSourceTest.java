@@ -182,8 +182,6 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
             var feedbackCapture = captureFeedbackHistory();
             JsonNode feedback = read(feedbackCapture.files().get("inputs/history/feedback.json"));
 
-            // The bound is data the review can compare, not prose it has to parse; how partial the
-            // capture is belongs to the manifest.
             assertThat(observations.propertyNames())
                     .containsExactlyInAnyOrder("since", "limit", "perPracticeLimit", "observations");
             assertThat(feedback.propertyNames()).containsExactlyInAnyOrder("since", "limit", "feedback");
@@ -202,7 +200,6 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         void preparedFeedbackCarriesTheLimitOnly() {
             JsonNode prepared = read(captureFeedbackHistory().files().get("inputs/history/prepared.json"));
 
-            // What is queued has no window: it is everything not yet received, up to the limit.
             assertThat(prepared.propertyNames()).containsExactlyInAnyOrder("limit", "prepared");
             assertThat(prepared.get("limit").asInt()).isPositive();
         }
@@ -262,7 +259,6 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         JsonNode entry = read(captured.files().get("inputs/history/observations.json"))
                 .get("observations")
                 .get(0);
-        // Neither the recurrence key nor the rationale: nothing in the sandbox reads them.
         assertThat(entry.propertyNames())
                 .containsExactlyInAnyOrder(
                         "practiceSlug",
@@ -293,7 +289,6 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         JsonNode records = read(captureObservationHistory().files().get("inputs/history/observations.json"))
                 .get("observations");
 
-        // The newest of the recurring practice survive, in order, and the other practice is untouched.
         assertThat(records.valueStream().map(r -> r.get("summary").asString()))
                 .containsExactly(
                         "Caught and ignored 0",

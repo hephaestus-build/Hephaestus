@@ -375,8 +375,7 @@ public class GitLabReviewReconciler {
     }
 
     /**
-     * The native ID of a CHANGES_REQUESTED review, hashed like a COMMENTED one but over the system
-     * note's GID with a prefix, so it never coincides with the COMMENTED review of a discussion.
+     * Hashes the system-note GID with a separate namespace from COMMENTED discussion reviews.
      */
     public static long generateChangesRequestedNativeId(String noteGlobalId, long authorNativeId) {
         return deterministicNativeId("requested-changes:" + noteGlobalId, authorNativeId);

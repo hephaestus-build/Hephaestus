@@ -1780,8 +1780,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @Test
         @DisplayName("the reasoning tokens the proxy counted reach the job row though the runner reports none")
         void cleanCompletionWithRunnerUsage_keepsTheProxysReasoningCount() {
-            // The Pi SDK folds reasoning into output and drops the detail, so the runner always reports
-            // zero; the proxy reads completion_tokens_details / output_tokens_details.reasoning_tokens.
+            // The proxy reports reasoning tokens omitted by the runner.
             job.setConfigSnapshot(snapshot.withPriceSnapshot(pricedSnapshot()).toJson(objectMapper));
             stubClaimableJob();
             setupFullExecution();

@@ -110,7 +110,6 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         var out = objectMapper.readTree(captured.files().get(FILE_KEY));
         assertThat(out.propertyNames()).containsExactlyInAnyOrder("comments", "truncated");
         assertThat(out.get("comments")).isEmpty();
-        // Present, and still EMPTY: the staged placeholder must not be read back as content.
         assertThat(captured.contentStates()).containsValue(SourceContentState.EMPTY);
     }
 
@@ -127,7 +126,6 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode comments = objectMapper.readTree(files.get(FILE_KEY)).get("comments");
-        // The adapter's classification, not a guess from the login; absent means a person.
         assertThat(comments.get(0).get("bot").asBoolean()).isTrue();
         assertThat(comments.get(1).has("bot")).isFalse();
     }

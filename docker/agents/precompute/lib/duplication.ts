@@ -1,9 +1,4 @@
-/**
- * Near-identical runs among the lines a change adds: two blocks whose lines have the same shape
- * once names and literals are set aside, so the reviewer sees every candidate copy with its spans
- * and the names that differ, and judges whether it is a unit of knowledge written twice or an idiom
- * that only looks alike. The pairing is by shape only; what the block means is not read here.
- */
+/** Same-shaped added blocks are duplication candidates; the review decides whether they duplicate knowledge. */
 
 import { isCommentLine } from "./declarations.ts";
 import { isTestPath, languageOf } from "./languages.ts";
@@ -83,7 +78,6 @@ export function duplicatePairs(diffFiles: ReadonlyMap<string, DiffFile>): Duplic
 	const files = [...diffFiles.values()]
 		.filter((file) => languageOf(file.path) !== null && !isTestPath(file.path))
 		.map((file) => ({ path: file.path, lines: shapedLines(file) }));
-	// Every run start keyed by the shape of its first MIN_RUN_LINES lines.
 	const starts = new Map<string, { file: number; index: number }[]>();
 	for (const [fileIndex, file] of files.entries()) {
 		for (let index = 0; index + MIN_RUN_LINES <= file.lines.length; index += 1) {

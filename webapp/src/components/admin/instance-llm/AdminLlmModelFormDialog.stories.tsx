@@ -63,7 +63,6 @@ export const EditModel: Story = {
 	args: { editing: mockModel },
 };
 
-/** A model with no effort set shows Provider default: nothing is sent and the provider's own default applies. */
 export const ReasoningEffortProviderDefault: Story = {
 	args: { editing: { ...mockModel, reasoningEffort: undefined } },
 	play: async () => {

@@ -5,7 +5,7 @@
 A practice review now reads three more facts from the record, on GitHub and GitLab alike: what the
 checks said about the pull request's head (GitHub's status check rollup, GitLab's head pipeline),
 which issues the provider records the pull request as closing — including links made in the
-provider's UI that no `#N` in the text names — and when each review thread was resolved. The
+provider's UI that no `#N` in the text names — and review-thread resolution times when available. The
 schema migration that stores them applies automatically.
 
 **Operators:** GitHub Apps created from an earlier manifest need the `check_suite` and `status`
@@ -14,7 +14,5 @@ read permissions if the app predates them; GitLab group webhooks registered by a
 need Pipeline events enabled, or the hook deleted so it is registered again. Until then the head's
 check state arrives only with the scheduled sync.
 
-A practice set to "Review before sending" now still writes the developer's own practice pages and
-Heph; only feedback posted on the work waits for approval. A page and a mentor turn are read by the
-developer on request and seen by nobody else, so nothing leaves the instance without a person
-saying yes.
+A practice set to **Review before sending** can still deliver feedback to the developer's practice
+pages and Heph, subject to channel rules. Only feedback posted on the work waits for approval.

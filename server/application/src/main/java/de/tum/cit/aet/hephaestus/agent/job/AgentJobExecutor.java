@@ -1374,9 +1374,7 @@ public class AgentJobExecutor {
             // otherwise a runner that never wrote usage.json would book real spend as zero.
             TerminalUsage usage = TerminalUsage.resolve(runnerUsage, proxyCounts);
 
-            // The row carries what the ledger bills: per bucket the larger of the runner's report and the
-            // proxy's count. The runner cannot see reasoning tokens at all — the Pi SDK folds them into
-            // output and drops the detail — so writing its report alone erased the proxy's reasoning count.
+            // Use the ledger totals: the runner may omit usage details counted by the proxy.
             if (runnerUsage != null && runnerUsage.totalCalls() > 0) {
                 freshJob.setLlmTotalCalls(usage.totalCalls());
                 freshJob.setLlmTotalInputTokens(clampToInt(usage.inputTokens()));

@@ -289,13 +289,7 @@ function renderSummary(recordRows: number, inDiffRows: number): string {
 	return lines.join("\n");
 }
 
-/**
- * Rows are trimmed until the summary fits its budget, and every practice keeps its pointer to the
- * JSON file that holds all of them. A record row is a fact the practice decides on and a changed-line
- * row is a lead the model can grep for, so the leads go first and the last few record rows stay:
- * on one cohort change the summary ran over by three per cent and a record practice saw none of
- * its rows while a lead practice kept ten.
- */
+/** Trim code leads before record facts; retain each practice's pointer to its complete JSON output. */
 const MIN_RECORD_ROWS = 3;
 const BUDGET_LADDER: [recordRows: number, inDiffRows: number][] = [
 	[RECORD_ROWS, IN_DIFF_ROWS],

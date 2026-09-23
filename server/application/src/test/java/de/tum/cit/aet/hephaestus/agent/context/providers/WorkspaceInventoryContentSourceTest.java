@@ -174,10 +174,8 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
 
         assertThat(files).containsKey(OUTPUT);
         JsonNode root = objectMapper.readTree(files.get(OUTPUT));
-        // The listing, which artifact is under review, and whether the project labels its issues; no guidance.
         assertThat(root.propertyNames())
                 .containsExactlyInAnyOrder("repository", "focal", "labelScheme", "issues", "pullRequests", "truncated");
-        // Mocked counts: a project with no labelling convention reads as zero labelled and no kinds in use.
         assertThat(root.get("labelScheme").get("issuesLabelled").asLong()).isZero();
         assertThat(root.get("labelScheme").get("labelsInUse")).isEmpty();
         assertThat(root.get("repository").asString()).isEqualTo("acme/widgets");
@@ -185,7 +183,6 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
         assertThat(root.get("focal").get("number").asInt()).isEqualTo(99);
 
         JsonNode issues = root.get("issues");
-        // The focal issue #99 is listed like any other; "focal" says which one it is.
         assertThat(issues).hasSize(3);
         assertThat(issues.get(0).get("number").asInt()).isEqualTo(99);
         assertThat(issues.get(1).get("number").asInt()).isEqualTo(12);
@@ -196,7 +193,6 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
         assertThat(issues.get(1).get("milestone").asString()).isEqualTo("Sprint 7");
         // Issue nodes never carry a draft flag (that is a PR-only field).
         assertThat(issues.get(1).has("isDraft")).isFalse();
-        // The third issue has no milestone -> the field is omitted, not null.
         assertThat(issues.get(2).has("milestone")).isFalse();
 
         JsonNode prs = root.get("pullRequests");
@@ -253,7 +249,6 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
         var captured = provider.capture(issueRequest(1), provider.sourceKinds());
 
         assertThat(captured.files()).containsKey(OUTPUT);
-        // Present, and still EMPTY: emptiness is read out of the listing, not out of the file list.
         assertThat(captured.contentStates()).containsValue(SourceContentState.EMPTY);
     }
 
@@ -320,7 +315,6 @@ class WorkspaceInventoryContentSourceTest extends BaseUnitTest {
         assertThat(repos.get(1).asString()).isEqualTo("acme/gadgets");
 
         assertThat(root.get("focal").get("type").asString()).isEqualTo("chat.conversation_thread");
-        // A conversation isn't itself an issue/PR, so there is no focal number.
         assertThat(root.get("focal").has("number")).isFalse();
 
         JsonNode issues = root.get("issues");

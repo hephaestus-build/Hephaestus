@@ -288,10 +288,10 @@ carry. `insufficiencyReason` is separate and is present only when `evidenceSuffi
 evidence cannot show. Folded into the limitation list it stops being answerable, since a limitation on a
 practice nobody reviews reads as one more caveat rather than the reason there is no review.
 
-Every bundled practice that requires the pull-request diff lists `scm.repository.tree` as `CONTEXTUAL`. A diff
-shows the changed lines and not the code they call into, so a reviewer restricted to it either guesses at the
-surrounding contract or abstains. The tree is contextual rather than required deliberately: a deployment that
-keeps no working copy, or a repository not yet mirrored, loses the surrounding code and still gets the review.
+Every bundled practice that requires the pull-request diff lists `scm.repository.tree` as `CONTEXTUAL`.
+The tree supplies surrounding code that the diff may not show. This binding does not remove the
+repository requirement for capturing the pinned diff: if that required capture fails, the practice
+cannot proceed. A missing local mirror can be cloned during review preparation.
 
 `automatedReview` is explicitly relative to Hephaestus, the pinned source contract, the declared bindings, and
 the governed integrations. It does not claim that a practice is universally observable. A developer, peer, or human mentor may have different context for a particular practice. This contract makes no claim that human review is always possible.

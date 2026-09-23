@@ -146,11 +146,10 @@ validity, suppression and the final egress guard still apply.
 | `HUMAN_APPROVAL` | yes         | yes                  | a workspace owner or administrator     | delivered                |
 | `AUTOMATIC`      | yes         | yes                  | the system, subject to delivery policy | delivered                |
 
-Approval exists for what is **pushed**: a note on the work is public to everyone who reads the pull request
-and reversible only by deleting it, so a person releases it. The practice page and a mentor turn are
-**pulled** — the developer reads them on request and nobody else sees them — so every practice that admits
-review at all delivers there, subject to the origin rule and the lane's own rules (author-attributed,
-corroborated, cooldown). The rule has one home, `PracticeAutonomy.delivers(channel)` over
+At `HUMAN_APPROVAL`, feedback **pushed** onto the work needs approval before release. Feedback on a
+practice page or in a mentor turn is **pulled** by the developer and does not need comment approval.
+It remains subject to channel access controls, the origin rule and delivery rules such as attribution,
+corroboration and cooldown. The rule has one home, `PracticeAutonomy.delivers(channel)` over
 `FeedbackChannel.pushed()`.
 
 `HUMAN_APPROVAL` is an operational mode, not silent observation. An in-context unit enters

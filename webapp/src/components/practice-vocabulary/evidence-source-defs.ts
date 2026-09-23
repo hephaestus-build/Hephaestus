@@ -28,13 +28,7 @@ export interface EvidenceSourceDef extends StatusDef {
 	locator: EvidenceLocator;
 }
 
-/**
- * The registered inputs a review may quote from, in operator-facing words.
- *
- * <p>Not a total `StatusDefs` over a union, because `sourceKind` is a `string` on the wire: an
- * unknown kind has to fall back rather than fail a lookup. {@link evidenceSourceDef} is the only
- * way in, so a surface cannot forget the fallback.
- */
+/** sourceKind is an open wire string; use evidenceSourceDef for its unknown-kind fallback. */
 const EVIDENCE_SOURCE_DEFS: Record<string, EvidenceSourceDef> = {
 	"scm.pull-request.core": {
 		label: "The pull request itself",
@@ -170,13 +164,7 @@ export const DIFF_SIDE_LABELS = {
 	NEW: "after",
 } satisfies Record<NonNullable<EvidenceCitation["side"]>, string>;
 
-/**
- * A place in a file, as the coordinate a developer would paste: `path:12–18`.
- *
- * <p>`endLine` is optional because the two callers disagree: a citation always carries one (the
- * server defaults it to `startLine`), while an inline placement's anchor may have none. Either way
- * a single line prints as one number rather than `12–12`.
- */
+/** Format path:line-range; placement anchors may omit endLine, unlike citations. */
 export function codeCitationLocator(span: {
 	path: string;
 	startLine: number;

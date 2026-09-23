@@ -264,7 +264,6 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
         // is what the run staged, and inputs/manifest.json is where that is stated, once.
         assertThat(index).contains("readsSources").contains("scm.pull-request.diff");
         assertThat(index).doesNotContain("allowedSources");
-        // Per-slug criteria only: the model reads each practice's own file, so there is no bundle to drift.
         assertThat(files)
                 .containsKey(md("authoring"))
                 .containsKey(md("retrospective"))

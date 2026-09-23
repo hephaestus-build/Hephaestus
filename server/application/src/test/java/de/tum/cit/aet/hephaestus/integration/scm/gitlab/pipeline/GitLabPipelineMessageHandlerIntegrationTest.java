@@ -27,8 +27,7 @@ import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * A GitLab Pipeline Hook from its payload to the head-check state of the merge request it names.
- * The fixture is a failed merge request pipeline for MR !11 on commit {@code bcbb5ec3…}.
+ * Checks GitLab pipeline payloads through persisted merge-request head-check state.
  */
 class GitLabPipelineMessageHandlerIntegrationTest extends BaseIntegrationTest {
 

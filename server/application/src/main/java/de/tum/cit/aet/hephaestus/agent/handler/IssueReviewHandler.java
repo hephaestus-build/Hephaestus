@@ -149,9 +149,7 @@ public class IssueReviewHandler implements JobTypeHandler {
                 ArtifactKinds.ISSUE,
                 new ContextRequest.IssueReviewRequest(job),
                 () -> buildTaskEnvelope(job, metadata),
-                // See PullRequestReviewHandler: a second, separate turn composes this developer's feedback
-                // once the measurements are final. An issue has no diff, so the note it may place is
-                // artifact-level.
+                // Compose feedback after observations are final; issues support artifact-level notes only.
                 files -> FeedbackCompositionInputs.stage(
                         files,
                         PracticeDetectionDeliveryService.originOf(metadata),

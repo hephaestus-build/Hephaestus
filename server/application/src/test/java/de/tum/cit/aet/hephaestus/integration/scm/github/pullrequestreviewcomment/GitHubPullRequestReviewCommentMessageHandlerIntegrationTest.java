@@ -161,7 +161,6 @@ class GitHubPullRequestReviewCommentMessageHandlerIntegrationTest extends BaseIn
                     assertThat(comment.getThread().getId()).isNotNull();
                     // Verify required fields are populated
                     assertThat(comment.getCommitId()).isNotEmpty();
-                    // The side of the diff the comment sits on, as the payload says it.
                     assertThat(comment.getSide()).isEqualTo(PullRequestReviewComment.Side.RIGHT);
                 });
     }

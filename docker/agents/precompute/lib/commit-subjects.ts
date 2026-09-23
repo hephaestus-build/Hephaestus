@@ -1,9 +1,4 @@
-/**
- * Facts about the authored commits of the reviewed range, for the two commit practices. A fact here
- * is a shape the subject has — a merge, a bare word, a repeat, a list of concerns, a cut-off phrase —
- * and what the commit touched, never a verdict: the criteria say what each shape means, and the model
- * decides.
- */
+/** Commit-subject shapes are review hints, not practice verdicts. */
 
 import type { ChangeCommit, ChangedFile } from "./change.ts";
 import type { Hint } from "./types.ts";
@@ -108,7 +103,6 @@ export function commitRows(facts: readonly SubjectFacts[]): Hint[] {
 		});
 }
 
-/** The count line both commit practices open with. */
 export function describeCommitCount(facts: readonly SubjectFacts[]): string {
 	const authored = facts.filter((f) => !f.merge).length;
 	const merges = facts.length - authored;

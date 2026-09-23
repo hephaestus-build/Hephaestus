@@ -1,8 +1,4 @@
-/**
- * Read-only helpers for the change view the container derives from the checkout before precompute
- * runs (`work/change/`, written by pi-change.ts): the commits of the reviewed range and the files it
- * touches. The diff itself reaches a script already parsed, as its second argument.
- */
+/** Read captured commit metadata and the container-derived change file list. */
 
 import { readFile } from "node:fs/promises";
 
@@ -74,8 +70,6 @@ export async function readCommits(contextDir: string | undefined): Promise<Chang
 	if (!isJsonObject(parsed) || !Array.isArray(parsed.commits)) {
 		return [];
 	}
-	// The server writes one field per line, so a commit's `sha` line is the coordinate a citation of
-	// commits.json names.
 	const lines = (source ?? "").split("\n");
 	return parsed.commits.filter(isJsonObject).map((commit) => {
 		const sha = text(commit.sha);

@@ -1425,7 +1425,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
 
             processor.processFromSync(syncDataWith("FAILED", "d".repeat(40), List.of(41, 42)), testRepo, 1L);
 
-            // The pipeline's verdict on the head, for that head; the one closing issue this repository holds.
             assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.FAILURE);
             assertThat(pr.getHeadCheckSha()).isEqualTo("d".repeat(40));
             assertThat(pr.getClosingIssues()).containsExactly(closed);
@@ -1448,7 +1447,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             processor.processFromSync(syncDataWith(null, null, null), testRepo, 1L);
 
             assertThat(pr.getClosingIssues()).containsExactly(earlier);
-            // No pipeline on the head is a fact about the head: no checks.
             assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.NONE);
             assertThat(pr.getHeadCheckSha()).isEqualTo("abc123");
         }

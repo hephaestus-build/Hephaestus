@@ -75,12 +75,6 @@ export type NormalizedObservation = ObservationAssessment & {
 	evidenceRationale: string;
 };
 
-/**
- * The narrowing every reader of model-authored or file-authored JSON in this runtime starts from.
- *
- * <p>Exported because pi-runner.ts parses the same class of input — a task envelope, a composition
- * request, an admission response — and one guard both modules share cannot drift from itself.
- */
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
@@ -125,13 +119,7 @@ export const SEVERITY_DESCRIPTIONS: Record<Severity, string> = {
 	INFO: "An advisory, low-impact problem. Still a NEGATIVE outcome; strengths and unassessed observations require null severity.",
 };
 
-/**
- * Renders a vocabulary as the `description` of its enum field, one line per value.
- *
- * <p>Throws on a value with no description, so a value added to the vocabulary without being described
- * fails here rather than reaching the model as an undifferentiated word — the same structural guard, one
- * level down, that AgentVocabularySyncTest applies across the language boundary.
- */
+/** Require a model-facing description for each enum value. */
 export function describeVocabulary<T extends string>(
 	values: readonly T[],
 	descriptions: Record<T, string>,
@@ -147,14 +135,7 @@ export function describeVocabulary<T extends string>(
 		.join("\n");
 }
 
-/**
- * The trimmed text of a value the model sent, and "" for anything that has no text of its own.
- *
- * <p>An object or an array has none. Coercing one yields "[object Object]", or its elements run
- * together, and either is a non-empty string — so a required-field check downstream reads a field the
- * model filled in with the wrong kind of value as one it filled in correctly. Here that value reads as
- * absent instead, which is the case those checks already answer.
- */
+/** Reject non-string values instead of coercing objects into non-empty required fields. */
 function trimmedText(value: unknown): string {
 	if (typeof value === "string") {
 		return value.trim();
@@ -489,13 +470,7 @@ function evidenceBranchOf(
 /** The summary heads the developer's practice page; a phrase, not the rationale. */
 export const MAX_SUMMARY_CHARS = 160;
 
-/**
- * The text, or as much of it as ends a sentence within `max` characters — failing that, a clause,
- * when what is kept is at least half the bound; undefined otherwise. A bound on a headline is what
- * the reader's page can show, and a text that runs past it by one clause is worth keeping up to the
- * clause before — the session is told what was kept. A summary refused for a clause too many was
- * refused again at the same length as often as not, so the clause is the cut a headline can take.
- */
+/** Shorten at a sentence boundary, or a clause boundary past half the limit; otherwise refuse. */
 export function boundedAtSentenceEnd(text: string, max: number): string | undefined {
 	if (text.length <= max) {
 		return text;
@@ -520,12 +495,7 @@ const EVIDENCE_FIELDS = ["citations", "search", "inapplicability", "undecidabili
 /** The search fields, which arrive beside the observation when the session forgets `search` wraps them. */
 const SEARCH_FIELDS = ["consulted", "lookedFor", "boundary"] as const;
 
-/**
- * The observation with each field in its home: what belongs under `evidence` and arrived beside it is
- * moved there, and the rationale that arrived under `evidence` is moved beside it. A field present in
- * both places is left for the unknown-field check to name. What moved is echoed in `notes`, so the
- * session sees the shape it should have sent.
- */
+/** Move misplaced evidence fields and report corrections; conflicting copies remain invalid. */
 function rehomed(observation: Record<string, unknown>, notes: string[]): Record<string, unknown> {
 	const beside = new Map(Object.entries(observation));
 	const measured = isRecord(observation.evidence) ? observation.evidence : {};
@@ -615,9 +585,6 @@ export function normalizeObservation(
 				"'Debug print left in the request handler'",
 		);
 	}
-	// A summary a clause too long is kept up to its last sentence or clause end within the bound: on
-	// the cohort one refusal in five was this, at a median of 175 characters, and each cost the turn a
-	// model call.
 	const title = boundedAtSentenceEnd(sent, MAX_SUMMARY_CHARS);
 	if (title === undefined) {
 		throw new Error(
@@ -759,26 +726,14 @@ export function validateSearchScope(
 	}
 }
 
-/**
- * Holds a NOT_APPLICABLE claim to sources this run actually staged.
- *
- * The same boundary the citations and the recorded search answer to: bytes that were never there cannot
- * have been read, so claiming to have read them is the inapplicability-shaped version of citing evidence
- * we never had.
- */
+/** A NOT_APPLICABLE warrant may name only sources staged for this run. */
 const CELL = String.raw`(?:PRESENT|ABSENT)\/(?:GOOD|BAD)`;
 const RULED_OUT_LINE = new RegExp(
 	String.raw`^-\s*(${CELL}(?:\s*(?:and|,|or)\s*${CELL})*)\s*(?:\([A-Z]+\))?\s*:\s*no ordinary case\b`,
 	"iu",
 );
 
-/**
- * The cells a practice's own Judge section rules out, as "- PRESENT/GOOD and ABSENT/GOOD: no
- * ordinary case". A practice whose behaviour in focus is undesirable has no GOOD cell: its absence is
- * ABSENT/BAD, the positive outcome, and a session that reads GOOD as "the outcome is good" records the
- * clean bill as a lapse. The criteria are the one home of that decision, so the guard is read from
- * them; a practice whose Judge section names no such line is not guarded.
- */
+/** Read forbidden cells from "no ordinary case" Judge bullets; unlisted cells remain allowed. */
 export function cellsRuledOut(criteria: string): Set<string> {
 	const judge = criteria.split(/^## Judge\s*$/mu)[1]?.split(/^## /mu)[0] ?? "";
 	const cells = new Set<string>();
@@ -857,15 +812,8 @@ export function describeCitationMismatch(
 }
 
 /**
- * The quote a citation records, read out of the artifact it names, or why none could be. A quote is
- * evidence that the model read these lines, so what is recorded is always the artifact's own bytes:
- * a quote copied with a diff marker, with a non-breaking space read as a space, or as the text a
- * JSON string spells with escapes, is the same reading, and is recorded as the artifact spells it.
- * An empty quote cites by coordinates alone and records the cited lines. Admission verifies the
- * recorded bytes against the artifact, so this is what makes the two checks agree.
- *
- * <p>A refusal says which of the coordinate, the side and the text was wrong, and shows what the
- * cited lines hold, so the next attempt can be copied from them.
+ * Resolve a citation to the artifact's exact text for admission. Accepted formatting differences
+ * are replaced with source text; an omitted quote is filled from the supplied coordinates.
  */
 export function resolveQuote(
 	citation: NormalizedCitation,
@@ -1074,12 +1022,7 @@ function diffLinesOf(citation: NormalizedCitation, content: string): Map<number,
 	return citedLines;
 }
 
-/**
- * Whether a quote is the diff line it claims: as displayed, or without the marker, or with its
- * horizontal whitespace read differently. The coordinate has already pinned which line is compared,
- * so two lines cannot be confused by spacing; the text is what a citation proves was read, and what
- * is recorded is the line's own bytes.
- */
+/** Compare text at pinned coordinates, allowing diff markers and horizontal whitespace variants. */
 function quotesDiffLine(diffLine: string, quoted: string): boolean {
 	if (diffLine.length === 0) {
 		return false;

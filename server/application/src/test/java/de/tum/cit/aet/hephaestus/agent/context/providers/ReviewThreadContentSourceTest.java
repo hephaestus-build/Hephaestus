@@ -157,8 +157,6 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         var captured = provider.capture(request(metadataWithPr()), provider.sourceKinds());
 
         JsonNode out = objectMapper.readTree(captured.files().get(FILE_KEY));
-        // Threads, decisions and the bound: the merge state and any tally are the review's to read from
-        // the pull request itself.
         assertThat(out.propertyNames()).containsExactlyInAnyOrder("threads", "reviewDecisions", "truncated");
         assertThat(out.get("threads")).isEmpty();
         assertThat(out.get("reviewDecisions")).isEmpty();
@@ -202,8 +200,6 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        // Both decisions are emitted losslessly with timestamps, oldest first like the comment files;
-        // supersession is the agent's to compute.
         JsonNode decisions = out.get("reviewDecisions");
         assertThat(decisions).hasSize(2);
         assertThat(decisions.get(0).get("submittedAt").asString()).isEqualTo("2025-06-01T10:00:00Z");
@@ -240,7 +236,6 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
         JsonNode decisions = out.get("reviewDecisions");
         assertThat(decisions).hasSize(ReviewThreadContentSource.MAX_DECISIONS);
-        // The latest APPROVE is retained, and listed last because the file runs oldest first.
         JsonNode last = decisions.get(decisions.size() - 1);
         assertThat(last.get("state").asString()).isEqualTo("APPROVED");
         assertThat(last.get("submittedAt").asString()).isEqualTo("2025-06-30T23:59:00Z");
@@ -270,8 +265,7 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
 
     @Test
     void shouldBoundDecisionsByTheMemoryLimitSoBusyMergeRequestsKeepTheirApprovals() {
-        // GitLab's sync makes one COMMENTED review per discussion and author; the old window of thirty
-        // let those push an approval out of the file.
+        // COMMENTED discussion rows must not crowd approval decisions out of the capture.
         assertThat(ReviewThreadContentSource.MAX_DECISIONS).isEqualTo(EvidenceLimits.MAX_ITEMS_PER_SOURCE);
     }
 
@@ -342,7 +336,6 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         assertThat(out.get("threads")).hasSize(2);
         JsonNode unresolved = out.get("threads").get(0);
         assertThat(unresolved.propertyNames()).containsExactlyInAnyOrder("id", "path", "line", "state");
-        // The stored id, which a comment in comments.json names as its `thread`.
         assertThat(unresolved.get("id").asLong()).isEqualTo(1L);
         assertThat(unresolved.get("path").asString()).isEqualTo("src/Foo.swift");
         assertThat(unresolved.get("line").asInt()).isEqualTo(12);
@@ -350,7 +343,6 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         JsonNode resolved = out.get("threads").get(1);
         assertThat(resolved.get("state").asString()).isEqualTo("RESOLVED");
         assertThat(resolved.get("resolvedBy").asString()).isEqualTo("reviewer-b");
-        // How many are still open is the review's to count from the rows.
         assertThat(out.has("unresolvedCount")).isFalse();
     }
 

@@ -70,7 +70,6 @@ class GitHubHeadCheckProcessorTest extends BaseUnitTest {
         assertThat(open.getHeadCheckState()).isEqualTo(CheckState.SUCCESS);
         assertThat(open.getHeadCheckSha()).isEqualTo(HEAD);
         verify(pullRequestRepository).save(open);
-        // A suite's success does not undo another suite's failure on the same head.
         assertThat(alreadyFailed.getHeadCheckState()).isEqualTo(CheckState.FAILURE);
         verify(pullRequestRepository, never()).save(alreadyFailed);
     }

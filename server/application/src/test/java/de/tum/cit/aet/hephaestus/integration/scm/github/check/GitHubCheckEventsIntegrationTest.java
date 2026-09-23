@@ -28,8 +28,7 @@ import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * The two GitHub check events, from their payloads to the head-check state of the pull requests
- * whose head the checked commit is. Both fixtures name commit {@code 67700ada…} of the fixture repository.
+ * Checks GitHub check-suite and commit-status payloads through persisted head-check state.
  */
 class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
 
@@ -135,7 +134,6 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
         checkSuiteHandler.handleEvent(load("check_suite.completed", GitHubCheckSuiteEventDTO.class));
         statusHandler.handleEvent(load("status", GitHubStatusEventDTO.class));
 
-        // One suite failed the head; a later successful status is another check's word, not the rollup's.
         assertThat(pullRequestRepository.findById(pr.getId()).orElseThrow().getHeadCheckState())
                 .isEqualTo(CheckState.FAILURE);
     }

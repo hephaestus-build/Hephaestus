@@ -36,12 +36,8 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * The issues a pull request refers to by number, as this repository stores them.
- *
- * <p>The server's part is the lookup: which numbers the title, the description, the branch name and
- * the commit messages mention, and what this repository knows about each. How a reference is worded —
- * a closing keyword, a bare mention, where in the text it sits — is read by the review from the same
- * title, description, branch and commits it has in front of it.
+ * Captures provider closing links and same-repository issue references from the title,
+ * description, branch and commit messages. The review interprets textual references.
  */
 @Component
 @Order(200)
@@ -63,11 +59,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
 
     static final String OUTPUT_FILE = OUTPUT_PREFIX + "linked_work_items.json";
 
-    /**
-     * One file per resolved item, its title on the first line and its body as written: what a review
-     * quotes. The JSON projection carries the same text escaped into one line, which a model cannot
-     * cite by line and quotes across its escapes; the text file is the one to cite.
-     */
+    /** Title and unescaped body for line-based citations; the JSON projection escapes the same text. */
     static final String ITEMS_PREFIX = OUTPUT_PREFIX + "linked_work_items/";
 
     static final int MAX_ITEMS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
@@ -85,10 +77,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
     /** An issue number opening a branch-slug segment: {@code 18-foo}, {@code feat/18-foo}. */
     private static final Pattern BRANCH_REF = Pattern.compile("(?:^|/)(\\d{1,7})-");
 
-    /**
-     * An HTML comment is not rendered, and neither provider links an issue from inside one: a
-     * template's {@code <!-- Example: #12 -->} is the template's text, not the author's reference.
-     */
+    /** Ignore template examples inside HTML comments when extracting issue references. */
     private static final Pattern HTML_COMMENT = Pattern.compile("<!--.*?-->", Pattern.DOTALL);
 
     private final ObjectMapper objectMapper;
@@ -241,8 +230,6 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         if (issue.getState() != null) node.put("state", issue.getState().name());
         node.put("url", issue.getHtmlUrl());
         node.put("body", issue.getBody());
-        // When the issue was opened and closed: a practice about working issue-first reads the opening
-        // against the change's first commit, and one about the close reads the closing against the merge.
         if (issue.getCreatedAt() != null)
             node.put("createdAt", issue.getCreatedAt().toString());
         if (issue.getClosedAt() != null)

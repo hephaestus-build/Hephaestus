@@ -265,47 +265,25 @@ standard as an experiment or a convention as a proven outcome.
 
 ### Precompute scripts
 
-A precompute script is a practice's own feature extraction. It runs inside the review container,
-receives the parsed diff, the artifact metadata, the captured context directory and the derived
-change directory (`work/change/`), and returns hints, metrics and directions. Nothing
-practice-specific is computed on the server. Four rules decide what goes where:
+A precompute script extracts candidates inside the review container. It receives the parsed diff,
+artifact metadata, captured context and derived change directory (`work/change/`). Its output is
+hints, metrics and directions, not observations.
 
-1. **A script enumerates the occasion and places the candidates; the model judges.** The purity
-   test forbids the observation vocabulary in a script, and a hint says "line 42 matched
-   `URLSession request` inside `struct EventList: View`", never that this is a lapse. A script earns
-   its place by recall (every candidate listed, so none is missed across twenty files) and by facts
-   the model cannot cheaply derive — an enclosing type, a manifest paired with its lock line, an
-   inventory scanned for an open issue.
-2. **The script owns the closed list; the library owns the mechanics.** The list of constructs a
-   practice judges by is written in its criteria and mirrored as the script's patterns — one
-   practice, one list, two readers. The library under `docker/agents/precompute/lib/` is
-   language-neutral: `languages.ts` (what a path is), `declarations.ts` (the declaration a line
-   lies in, for the brace languages, from a syntax table), `source-scan.ts` (the walk over added
-   lines with placing and a test-file skip), `references.ts`, `context.ts`, `change.ts`, `grep.ts`,
-   `files.ts`, and `review.ts` (the record beside the change: the readers of the comments, threads,
-   decisions, linked items and commits, and the rows a record practice decides on — one row per
-   reviewer comment with the author's reply, the thread's resolution and the commits after it; one
-   per decision placed against the merge; one per unresolved thread). A reader returns `null` for
-   a file the capture did not write and `[]` for an empty one, and a script says which it found,
-   because a missing record is never an empty loop. A technology enters the library as a syntax
-   row and an extension, never as a helper named for it; what makes a SwiftUI view a view
-   (`/\b(?:View|App|Scene)\b/` on the supertypes) is the practice's own fact and stays in its script.
-3. **No parser until a measurement asks for one.** The syntax-table matcher and a tree-sitter
-   grammar name the same innermost declaration on 99.1 % of the 99k Swift lines of one cohort, and
-   most of the rest is the grammar failing on recent syntax. A grammar per language is a wasm the
-   sandbox carries and a currency to chase; the matcher is a row and a test. A construct a line
-   scan cannot see — a modifier chain across lines, a closure nested in another — is left to the
-   model, which reads the checkout, and the script says so in its directions.
-4. **Unknown is a value.** A file the checkout does not carry, or a language with no syntax row,
-   places its lines as `unknown` and counts them; a script never guesses a placing it cannot read.
+- **Practice-specific predicates belong in the script.** Shared readers and scanning mechanics live
+  in `docker/agents/precompute/lib/`. Keep the predicates consistent with the practice criteria.
+- **A candidate is not a judgment.** A matched line or review thread directs inspection; the model
+  must check its context against the criteria. The purity test rejects observation vocabulary in
+  scripts, but does not establish that their output is complete or correct.
+- **Missing and empty differ.** Context readers return `null` when a capture file is absent and `[]`
+  when a captured list is empty. Scripts must preserve that distinction.
+- **Line scanning has limits.** Declaration placement uses syntax tables, not a full language parser.
+  Unsupported languages and unavailable files produce `unknown` placement. Directions must identify
+  relevant limits, such as constructs that span several lines.
 
-The runner renders `work/precompute-out/summary.md`, which the brief inlines: per practice its
-directions, then the changed-line hints cited as `` `path` [L<n>] `` (up to ten in full, else a
-sample and the pointer to the practice's JSON), then the record rows with every flag, true or
-false, since "no reply" is a fact. A script that matched nothing says so with the lines it scanned,
-so the model does not grep again. The summary is trimmed — record rows first, then changed-line
-rows, never the pointers — to stay under the brief's per-file bound, because a summary the brief
-withholds whole is worth nothing.
+The runner renders a bounded `work/precompute-out/summary.md` for the review brief. It includes
+practice directions, candidate locations and record rows. When rows do not fit, it retains pointers
+to the full per-practice JSON. A summary is an entry point to the evidence, not proof that the model
+inspected every candidate.
 
 ### Review the effective definition
 
@@ -329,9 +307,7 @@ Keep the cases and evaluation evidence with the relevant test or benchmark, and 
 in the pull request. Every bundled practice is written in the decision-procedure shape of
 [Writing effective practices](/admin/writing-practices#write-the-criteria-as-a-decision-procedure),
 and `CatalogCriteriaShapeTest` checks that shape (the sections, their order, the size bound). That
-test proves consistency of form — the one thing a small model needs to apply every practice the same
-way — and nothing about semantic quality: keyword counts and heading presence are never a proxy for
-that. Schema and fixture tests prove loading and faithful presentation; evidence-based case review
+test checks structure, not semantic quality. Schema and fixture tests prove loading and faithful presentation; evidence-based case review
 and model evaluation are separate checks. The shared preambles are one artifact-framing paragraph
 each; the grounding rules live once, in the shared review instructions. Changing a preamble affects
 every entry that uses it, so inspect all affected work types and preserve the existing

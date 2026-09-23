@@ -64,25 +64,15 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         return Set.of(CORE, DIFF, COMMENTS);
     }
 
-    /**
-     * The change the review is about, as {@code base_sha} and {@code head_sha}. The container derives
-     * every view of it — the patch, its statistics, its commits — from the checkout with {@code git};
-     * this file is what pins the range those views are of, and the artifact a diff citation names.
-     */
+    /** Pins {@code base_sha} and {@code head_sha} for derived change views and diff citations. */
     public static final String CHANGE_FILE = OUTPUT_PREFIX + "change.json";
 
-    /**
-     * The description as its author wrote it, one line per line. {@code metadata.json} carries the same
-     * text as a JSON string for programs; a review quotes the description from here, where a sentence is
-     * the bytes it reads, not their escaped form.
-     */
+    /** Unescaped author text for line-based citations; metadata.json also contains it as a JSON string. */
     public static final String DESCRIPTION_FILE = OUTPUT_PREFIX + "description.md";
 
     /**
-     * The commits of the change, oldest first, each with its message and file changes. Staged rather
-     * than derived in the container because a quote of a commit message is verified against the
-     * artifact it cites, and admission verifies only what the server staged: a review that reads the
-     * commits from a file git wrote under {@code work/} has nothing it may cite.
+     * Commit messages and file changes, oldest first. Staged on the server so admission can
+     * verify citations of commit messages.
      */
     public static final String COMMITS_FILE = OUTPUT_PREFIX + "commits.json";
 
@@ -95,11 +85,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
 
     static final int MAX_COMMENTS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
-    /**
-     * The prefix every note Hephaestus posts on a line carries ({@code <!-- hephaestus-diff-note -->},
-     * {@code <!-- hephaestus-approved-package:… -->}): a comment holding it is the tool's own earlier
-     * feedback, not a reviewer's, and is never fed back as one.
-     */
+    /** Excludes Hephaestus feedback from captured reviewer comments to prevent self-citation. */
     static final String HEPHAESTUS_MARKER = "<!-- hephaestus";
 
     private final ObjectMapper objectMapper;
@@ -321,8 +307,6 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         // Stated on its own because state alone does not carry it: a pull request the webhook closed
         // after the merge is stored CLOSED with merged_at set, and is merged.
         result.put("is_merged", pullRequest.isMerged());
-        // The moments a review places the state of the work against: a merge before the last thread
-        // was resolved is a different fact from one after it, and only a dated record can tell them apart.
         putInstant(result, "created_at", pullRequest.getCreatedAt());
         putInstant(result, "closed_at", pullRequest.getClosedAt());
         putInstant(result, "merged_at", pullRequest.getMergedAt());
@@ -331,13 +315,10 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         result.put("changed_files", pullRequest.getChangedFiles());
         if (pullRequest.getAuthor() != null) {
             result.put("author", pullRequest.getAuthor().getLogin());
-            // The provider's own classification, as the adapter stored it; absent means a person.
             if (pullRequest.getAuthor().getType() == User.Type.BOT) {
                 result.put("author_bot", true);
             }
         }
-        // Who landed it: a practice about the act of merging reads this beside merged_at and the
-        // approvals in review_threads.json, and says nothing when the two people differ.
         if (pullRequest.getMergedBy() != null) {
             result.put("merged_by", pullRequest.getMergedBy().getLogin());
         }
@@ -388,9 +369,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         var commentsArray = objectMapper.createArrayNode();
         for (var comment : comments) {
             var commentNode = objectMapper.createObjectNode();
-            // The stored ids, so a review can say which thread a comment belongs to and which comment it
-            // answers: `thread` is the `id` of an entry in review_threads.json, `in_reply_to` the `id` of
-            // another comment here.
+            // Thread and parent-comment IDs link these entries to review_threads.json and comments.json.
             if (comment.getId() != null) {
                 commentNode.put("id", comment.getId());
             }

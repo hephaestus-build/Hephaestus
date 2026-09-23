@@ -210,8 +210,6 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
         assertThat(provider.required()).isFalse();
     }
 
-    // --- (a) review path: raw bodies on disk, everything else in the index ---
-
     @Test
     void reviewPathStagesRawBodiesAndListsEveryLinkedDocumentByteStably() throws Exception {
         String body =
@@ -239,7 +237,6 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
 
         JsonNode index = objectMapper.readTree(first.get(OutlineDocumentContentSource.REVIEW_INDEX_KEY));
         assertThat(index.propertyNames()).containsExactlyInAnyOrder("documents", "unresolvedReferences");
-        // Sorted by collection and slug, so the listing is the same bytes on every run.
         JsonNode documents = index.get("documents");
         assertThat(documents).hasSize(2);
         JsonNode gone = documents.get(0);
@@ -293,7 +290,6 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
                 .get(0);
         assertThat(entry.get("path").asString()).isEqualTo("inputs/context/outline/engineering/onboarding-guide.md");
         assertThat(entry.get("available").asBoolean()).isFalse();
-        // Listed is found: the link resolved, even though there is nothing to read.
         assertThat(captured.contentStates()).containsValue(SourceContentState.NON_EMPTY);
     }
 
@@ -433,7 +429,6 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
         Map<String, byte[]> files = new LinkedHashMap<>();
         provider.contribute(prRequest(body), files);
 
-        // The file is the author's text and nothing else: no banner, no byline, no dates.
         assertThat(new String(
                         files.get("inputs/context/outline/engineering/onboarding-guide.md"), StandardCharsets.UTF_8))
                 .isEqualTo("Welcome.");
@@ -481,7 +476,6 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
         Map<String, byte[]> files = new LinkedHashMap<>();
         provider.contribute(prRequest(body), files);
 
-        // Archived is not gone: the real content still stages.
         assertThat(new String(files.get("inputs/context/outline/engineering/legacy-adr.md"), StandardCharsets.UTF_8))
                 .isEqualTo("This decision was superseded.");
         JsonNode entry = objectMapper
@@ -595,7 +589,6 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
 
         var captured = provider.capture(prRequest(body), provider.sourceKinds());
 
-        // The index is the only file: no note, no placeholder document.
         assertThat(captured.files()).containsOnlyKeys(OutlineDocumentContentSource.REVIEW_INDEX_KEY);
         JsonNode index = objectMapper.readTree(captured.files().get(OutlineDocumentContentSource.REVIEW_INDEX_KEY));
         assertThat(index.get("documents")).isEmpty();
@@ -659,7 +652,6 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
         var index = objectMapper.readTree(captured.files().get(OutlineDocumentContentSource.REVIEW_INDEX_KEY));
         assertThat(index.propertyNames()).containsExactlyInAnyOrder("documents", "unresolvedReferences");
         assertThat(index.get("documents")).isEmpty();
-        // Present, and still EMPTY: the index must not be read back as a document that was found.
         assertThat(captured.contentStates()).containsValue(SourceContentState.EMPTY);
         verify(projection, never()).documentsByReference(anyLong(), any());
     }
@@ -705,7 +697,6 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
                         "inputs/context/outline/ops/retry-policy.md",
                         "inputs/context/outline/dev/error-budget.md",
                         OutlineDocumentContentSource.REVIEW_INDEX_KEY);
-        // Retrieved docs stage the same way as linked ones; the index says how each was selected.
         assertThat(new String(files.get("inputs/context/outline/ops/retry-policy.md"), StandardCharsets.UTF_8))
                 .isEqualTo("Backoff rules.");
         JsonNode documents = objectMapper

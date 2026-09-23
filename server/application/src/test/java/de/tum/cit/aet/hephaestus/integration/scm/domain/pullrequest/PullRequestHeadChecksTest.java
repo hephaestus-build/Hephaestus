@@ -25,10 +25,8 @@ class PullRequestHeadChecksTest extends BaseUnitTest {
         PullRequest pr = new PullRequest();
         pr.observeHeadChecks(HEAD, CheckState.SUCCESS, false);
 
-        // One failed suite fails the head whatever the others report ...
         assertThat(pr.observeHeadChecks(HEAD, CheckState.FAILURE, false)).isTrue();
         assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.FAILURE);
-        // ... and a success arriving afterwards is another suite's, not the rollup's.
         assertThat(pr.observeHeadChecks(HEAD, CheckState.SUCCESS, false)).isFalse();
         assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.FAILURE);
     }

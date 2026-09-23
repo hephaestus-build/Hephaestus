@@ -42,10 +42,8 @@ public enum FeedbackChannel {
     IN_APP;
 
     /**
-     * Whether feedback on this channel is pushed out of Hephaestus — a note on the work, public to everyone
-     * who reads the pull request and reversible only by deleting it. A practice page or a mentor turn is
-     * pulled: the developer reads it on request, and nobody else sees it. Human approval exists for what is
-     * pushed ({@link de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy#delivers}).
+     * Whether delivery publishes outside Hephaestus and requires approval under
+     * {@link de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy#HUMAN_APPROVAL}.
      */
     public boolean pushed() {
         return this == IN_CONTEXT;

@@ -1,19 +1,7 @@
-// The change view: everything a review reads about "what changed", derived here from the checkout
-// with git. The server hands over the checkout and the pinned range (inputs/context/change.json)
-// and nothing else about the change; the patch, its statistics and the changed files are this
-// container's own reading of the same objects, so the layout below is owned here. The commits are
-// not: the server stages them as inputs/context/commits.json, an artifact a citation can name.
-//
-//   work/change/diff.patch      unified diff, renames detected, every hunk line prefixed `[L<n>] `
-//                               with its NEW-side line number (OLD-side for removed lines)
-//   work/change/diff_stat.txt   `git diff --stat`
-//   work/change/files.json      { files: [{ status, path, oldPath? }] }
-//   work/change/description.authored.md
-//                               the description's own lines — those not from the merge request
-//                               template the checkout carries — by their line numbers in description.md
-//
-// Run before the precompute scripts and the model. A checkout without a captured change (an issue
-// review, or a change the server could not pin) writes nothing, and the manifest already says so.
+// Derive work/change/ from the captured repository and pinned inputs/context/change.json range.
+// The server stages commits separately in inputs/context/commits.json for verifiable citations.
+// Hunk lines in diff.patch carry [L<n>]: NEW coordinates for additions/context, OLD for deletions.
+// description.authored.md keeps original description.md line numbers after template removal.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -172,12 +160,7 @@ function comparable(line: string): string {
 		.replace(/^(?<marker>[-*+]\s*)\[[ xX]\]/u, "$<marker>[ ]");
 }
 
-/**
- * Whether a description line is the form's. The form's line verbatim; the opening of one, since a
- * form's label (`- [ ] **Requirement:**`) stays when the placeholder after it moves to its own line
- * or gets an answer; or a bare dash, the placeholder itself. An answer as short as "N/A" is the
- * author's even when the form's guidance mentions it.
- */
+/** Match template text and label prefixes, but keep authored answers such as "N/A". */
 function fromTemplate(line: string, templateLines: ReadonlySet<string>): boolean {
 	if (templateLines.has(line)) {
 		return true;
@@ -234,12 +217,8 @@ function descriptionTemplates(repository: string, head: string): Map<string, str
 }
 
 /**
- * The description's own lines, apart from the form it was opened with. A pull request template ships
- * headings, checklists, placeholders and HTML comments, and a description that keeps them reads as
- * if the author wrote them: a "Closes #12" example became a linked issue, a checklist became the
- * issue's criteria, and a requirement heading became a reason. The template that shares the most
- * lines with the description is the one the form used; a line it carries is the template's, a line
- * inside an HTML comment is the template's, and the rest is the author's.
+ * Remove HTML comments and lines from the template with the most matches. This is a heuristic:
+ * the captured description remains authoritative, and retained lines keep their original numbers.
  */
 export function authoredDescription(
 	description: string,

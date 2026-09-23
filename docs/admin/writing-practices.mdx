@@ -86,57 +86,30 @@ A previous observation records an earlier judgment; it is not independent proof 
 
 ## Write the criteria as a decision procedure
 
-The criteria are read by a language model, once per review, beside every other practice of the
-same group. A contract that states rules in any order leaves the model to assemble a procedure on
-each read, and a small model assembles a different one each time. Write the procedure yourself, in
-this shape, in this order. The bundled catalog follows it, and `CatalogCriteriaShapeTest` checks it.
+The bundled catalog uses the following order. It is also a useful template for custom practices;
+the questions above remain the basis for deciding what belongs in each section.
 
-1. **BEHAVIOR FOCUS** — one line: the one observable behavior this practice judges.
-2. **The standard** — what counts as the behavior being done well, in two or three sentences, with
-   the words the model will find in the evidence ("an entry, an action and an expected result").
-3. **Occasion (a gate)** — when the practice does not apply, as a list of concrete kinds of work
-   ("an empty diff", "a conceptual diagram and the README text that embeds it"). Say that a match
-   ends the review with NOT_APPLICABLE, and name the mistake to avoid ("never record ABSENT for a
-   diagram: nothing there has a result a reviewer could check").
-4. **Sources** — every place the evidence may come from, numbered, with what each may establish and
-   what it may not ("a preview is an entry for the view it renders; it does not establish
-   navigation"). Name the captured files. Say what to do about content the model cannot open, such
-   as an image: count what the caption says, not what the image shows.
-5. **Judge** — the four matrix cells and the two unassessed statuses, each with the condition that
-   selects it, in the order the model should test them. State the common confusion explicitly
-   ("searched everything and found nothing is ABSENT, not UNDETERMINED"). One observation per practice
-   unless the criteria say otherwise. Decide every cell. A cell that has no case for this practice is
-   written exactly as `- PRESENT/GOOD and ABSENT/GOOD: no ordinary case.` — the review reads that
-   line and refuses an observation in such a cell, which is what keeps a model that reads GOOD as
-   "the outcome is good" from recording the absence of an undesirable behavior as a lapse.
-6. **Severity** — for negative outcomes only, by consequence, with the usual band named first.
-7. **Grounding** — what to cite for each cell, and the claims never to make (a build ran, an author's
-   intent).
-8. **Defer** — what belongs to a sibling practice, by name.
+1. **BEHAVIOR FOCUS** — name the observable behavior.
+2. **The standard** — define what doing that behavior well means.
+3. **Occasion** — identify work where the expectation does not apply.
+4. **Sources** — state which captured sources can support each claim and their limits.
+5. **Judge** — define the assessed cells, NOT_APPLICABLE and UNDETERMINED. Make the conditions
+   distinct, and state the order of checks where it matters.
+6. **Severity** — tie negative outcomes to consequences.
+7. **Grounding** — state the evidence needed to support each claim.
+8. **Defer** — identify expectations owned by other practices.
 
-Keep the whole under 8,000 characters. Short sentences; the imperative; no synonyms for a term the
-matrix already names. Every rule states the fact in the work that triggers it, never a threshold
-alone. Put a rule in the section where the model needs it, once: a rule repeated in two sections is
-read as two rules.
+Keep each requirement in one place. Use the matrix terms consistently. The bundled catalog has an
+8,000-character limit; meeting that limit does not establish that the criteria are clear or correct.
 
-The difference this makes is measured, not assumed: on 90 held-out merge requests of a student
-cohort, the same model with a 12 KB contract in no particular order agreed with the reference on
-26 % of cases and turned 23 of 37 non-occasions into negative feedback; with the same rules as an
-8 KB procedure it agreed on 70 % and turned one.
+The review recording tool reads excluded assessed cells from the Judge section. For example,
+`- PRESENT/GOOD and ABSENT/GOOD: no ordinary case.` excludes those two cells. Use that wording only
+when neither cell can apply to the named behavior. Do not copy exclusions from another practice
+without checking their meaning.
 
-## Example criteria to adapt
-
-The bundled practice `states-how-to-verify-the-change` is the shape above applied to verification
-guidance; open it in the practice editor and read it beside this list. In brief: the behavior is a
-communicated check (entry, action, expected result); the occasion gate lists the kinds of change
-that carry no result to check (empty diffs, moves, planning prose, conceptual diagrams, descriptive
-README text, deleted unreferenced templates); the sources are the whole description, an issue the
-author adopted, an authored preview or test in the patch, the repository's documented setup, and
-the author's own discussion; the judgment tests PRESENT/GOOD first and treats a check phrased as a
-check ("verify the list updates") as stating its expected result; ABSENT needs a material effect
-that reading the diff cannot confirm; UNDETERMINED needs a conflict, not an empty search.
-
-Tailor the evidence requirements and consequences to the work your workspace can actually capture.
+To see the template in use, open **State how to verify the change** in the practice editor.
+Adapt its structure, not its applicability rules: each practice needs evidence and consequences
+that match its own expectation and the sources your workspace can capture.
 
 ## Challenge the draft before adopting it
 

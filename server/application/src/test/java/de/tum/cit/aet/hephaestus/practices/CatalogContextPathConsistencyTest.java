@@ -31,7 +31,6 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
             "change.json", // PullRequestContentSource.CHANGE_FILE — the pinned base and head of the change
             "commits.json", // PullRequestContentSource.COMMITS_FILE — the commits of the change, quotable and citable
             "comments.json",
-            // The raw SQL-only projections (the agent cannot get these from the checkout):
             "linked_work_items.json", // LinkedWorkItemContentSource.OUTPUT_FILE — resolved linked-issue rows
             "review_threads.json", // ReviewThreadContentSource — review-decision/thread rows
             "general_comments.json", // GeneralReviewCommentContentSource — conversation-tab (non-inline) MR review

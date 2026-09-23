@@ -47,11 +47,8 @@ public record AgentProperties(
     public static final Duration MIN_HEARTBEAT_INTERVAL = Duration.ofSeconds(1);
 
     /**
-     * A worker with no heartbeat this recent is judged dead; its RUNNING jobs are requeued to a sibling.
-     * Long enough to outlast one database stall: a heartbeat waits out the pool's connection timeout
-     * before it fails, and a live worker whose jobs are requeued loses every review it is running —
-     * the token rotates under the sandbox and its result upload is refused. A dead worker's jobs still
-     * move on well inside the per-job timeout that backstops recovery.
+     * Requeues RUNNING jobs after this heartbeat timeout. Allow for the database connection timeout:
+     * a false expiry rotates attempt credentials and invalidates results from a live worker.
      */
     public static final Duration WORKER_LEASE_TTL = Duration.ofMinutes(5);
 

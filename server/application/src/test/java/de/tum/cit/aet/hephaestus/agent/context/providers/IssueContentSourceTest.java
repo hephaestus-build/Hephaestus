@@ -390,7 +390,6 @@ class IssueContentSourceTest extends BaseUnitTest {
             Map<String, byte[]> files = new LinkedHashMap<>();
             provider.contribute(request(sampleMetadata()), files);
 
-            // No rendered summary: the review reads the issue from its data, and its description as written.
             assertThat(files).containsOnlyKeys(METADATA_KEY, "inputs/context/description.md", COMMENTS_KEY);
             assertThat(new String(files.get("inputs/context/description.md"), StandardCharsets.UTF_8))
                     .isEqualTo("Make the catalogue honest.");

@@ -321,9 +321,7 @@ if (scenario !== undefined && scenario !== "") {
 									return;
 								}
 								if (scenario === "compose-loop") {
-									// A session that keeps calling a recording tool without recording anything: the
-									// SDK emits the start of every call whether or not its schema check let it
-									// through, and the runner ends the turn after enough of them.
+									// SDK validation failures emit tool events without executing the tool.
 									for (let call = 1; call <= 24; call += 1) {
 										emit({
 											type: "tool_execution_start",
@@ -498,9 +496,7 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							assert.match(schema, /One of: evidence\/change\.json, evidence\/metadata\.json/u);
 							assert.match(schema, /One of: OLD, NEW/u);
-							// Below the root, an object or a list is documented by its properties and items and
-							// typed by neither, since a string where an object goes must not refuse the call; a
-							// scalar keeps its type, which the SDK coerces rather than refuses.
+							// Container types permit per-item validation; Pi retains scalar coercion.
 							const parameters: unknown = report.parameters;
 							assert.ok(typeof parameters === "object" && parameters !== null);
 							const properties: unknown = Reflect.get(parameters, "properties");
@@ -622,13 +618,10 @@ if (scenario !== undefined && scenario !== "") {
 								observations: [undecided(["scm.pull-request.core", "scm.pull-request.diff"])],
 							});
 							record(`undecided-consulted:${JSON.stringify(consultedDiff)}`);
-							// A list sent as a string with one closing brace too many is repaired and read; one
-							// that is not JSON is refused with the parse error, never silently emptied.
 							const oneBraceTooMany = `${JSON.stringify([observation("test-practice", "Sent as a string with an extra brace")]).slice(0, -1)}}]`;
 							const repaired = await report.execute("o-00", { observations: oneBraceTooMany });
 							record(`repaired:${JSON.stringify(repaired)}`);
-							// One brace too many on a nested object closes the item before its last member: the
-							// member that follows belongs to the item, so the early closer is what goes.
+							// Close the item before its evidence field.
 							const intact = JSON.stringify([
 								observation("test-practice", "Sent as a string closed one brace early"),
 							]);
@@ -636,8 +629,7 @@ if (scenario !== undefined && scenario !== "") {
 							assert.notEqual(early, intact);
 							const earlyReply = await report.execute("o-01", { observations: early });
 							record(`repaired-early:${JSON.stringify(earlyReply)}`);
-							// One brace too few: the next item starts inside the first one's evidence object. An
-							// object's members are keys, never a bare object, so the closers owed are inserted.
+							// Leave the first item open before the next item starts.
 							const two = JSON.stringify([
 								observation("test-practice", "First of two, its evidence left open"),
 								observation("test-practice", "Second of two, starting inside the first"),
@@ -957,9 +949,6 @@ if (scenario !== undefined && scenario !== "") {
 							break;
 						}
 						case "overrun": {
-							// The first turn is aborted at its share, which ends the compaction it was in; the
-							// finishing turn is sent once the session is idle, in the same session, and records
-							// the practice.
 							assert.equal(child.status, 0, child.stderr);
 							const order = events.filter((event) =>
 								["prompt:1", "steer", "abort-compaction", "abort", "prompt:2"].includes(event),

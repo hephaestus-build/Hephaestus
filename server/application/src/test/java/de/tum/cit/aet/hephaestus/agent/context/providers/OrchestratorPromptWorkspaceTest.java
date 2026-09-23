@@ -65,7 +65,6 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                 .contains("| UNDETERMINED | null | null | none | null |")
                 .contains("`evidence.inapplicability`", "`evidence.search`", "`evidence.undecidability`")
                 .contains("a mention alone does not establish guidance supplied or adopted by the author");
-        // The criteria decide the outcome; the prompt itself pushes toward neither outcome.
         assertThat(prompt)
                 .contains("a positive outcome is as ordinary as a negative one")
                 .doesNotContain("Report all justified negative observations", "genuinely exemplary");

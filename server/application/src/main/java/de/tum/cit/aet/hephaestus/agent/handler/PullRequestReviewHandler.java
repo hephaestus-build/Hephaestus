@@ -130,8 +130,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             metadata.put(
                     PracticeCatalogInjector.SIGNAL_METADATA_KEY,
                     submissionRequest.triggerSignal().value());
-            // The gate admitted the practices this signal occasions on work in this draft state; the
-            // injector applies the same rule, so a draft is not reviewed for practices that skip drafts.
+            // Use the signal-time draft state for both gate and catalog selection.
             metadata.put(PracticeCatalogInjector.DRAFT_METADATA_KEY, pullRequestData.isDraft());
         }
         if (submissionRequest.reviewId() != null && submissionRequest.aboutUserId() != null) {
@@ -173,10 +172,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 new ContextRequest.PracticeReviewRequest(job),
                 () -> buildTaskEnvelope(job, metadata),
                 files -> {
-                    // Asks the run for a second, separate turn once its measurements are final: the feedback
-                    // to say now, on every lane this occasion can reach, composed over this person's record
-                    // rather than over this diff alone. Absent for a backfill sweep — see
-                    // FeedbackCompositionInputs.
+                    // Compose feedback after observations are final. Backfills omit composition.
                     FeedbackCompositionInputs.stage(files, PracticeDetectionDeliveryService.originOf(metadata));
                 });
 
@@ -310,13 +306,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         }
 
         CapturedEvidence captured = CapturedEvidence.of(job, objectMapper);
-        // What is left to catch is a review that answered without reading the change. A change citation
-        // is the one thing that cannot be produced without it: the runner re-reads every citation out of
-        // the diff it derived from the checkout (citationMatchesArtifact in pi-observation-normalize.ts)
-        // and rejects the observation when the quote is not there, and admission verifies the quote
-        // against the pinned revision. Both unassessed statuses count as deciding nothing —
-        // NOT_APPLICABLE and UNDETERMINED differ in what the run could tell, not in whether it settled
-        // anything.
+        // Refuse an entirely unassessed review only when it also reports no use of the captured diff.
         boolean nothingDecided =
                 parsed.validObservations().stream().noneMatch(f -> (f.assessmentStatus() == AssessmentStatus.ASSESSED));
         boolean changeCaptured = captured.availableSources().contains(PracticeSubjectClause.DIFF_SOURCE);
@@ -345,9 +335,8 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     }
 
     /**
-     * Whether any observation cites the pull request's own diff. The runner admits a citation only after
-     * finding its quote at the coordinates it names inside the staged artifact, so this is a report about
-     * bytes that were read rather than a claim the model makes about itself.
+     * Whether an observation cites the diff or names it in a consulted-source warrant.
+     * This prevents a refusal; it does not replace citation verification at admission.
      */
     static boolean readTheDiff(List<PracticeDetectionResultParser.ValidatedObservation> observations) {
         for (var observation : observations) {
@@ -362,10 +351,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                     return true;
                 }
             }
-            // A practice whose subject lives in the metadata rather than the code answers without a
-            // diff citation, and its warrant is where it names the diff among the sources it walked.
-            // The model writes that list, so it is weaker than a quote — which is why it only widens a
-            // refusal, and never stands in for the evidence an observation itself owes.
+            // Metadata-only practices can report consulting the diff without quoting it.
             for (String warrant : List.of("search", "inapplicability", "undecidability")) {
                 for (JsonNode consulted : evidence.path(warrant).path("consulted")) {
                     if (PracticeSubjectClause.DIFF_SOURCE.value().equals(consulted.asString())) {

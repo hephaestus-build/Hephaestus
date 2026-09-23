@@ -100,7 +100,6 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
                         "avoids-unsafe-panics-and-chosen-crashes",
                         "validates-and-escapes-untrusted-input",
                         "avoids-insecure-defaults-and-over-broad-permissions",
-                        // I/O inside a view is the behaviour, so a view that delegates is a positive absence.
                         "keeps-views-free-of-networking-and-persistence");
         assertThat(exhaustive.get("merged-past-unresolved-review-threads"))
                 .containsExactly(new SourceKind("scm.review-threads"));
