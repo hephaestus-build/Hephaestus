@@ -700,9 +700,9 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(16) reasoning_effort
         VARCHAR(200) data_handling_note
         VARCHAR(24) operated_by
-        VARCHAR(16) reasoning_effort
     }
 
     LlmModelPrice {
@@ -1256,6 +1256,7 @@ erDiagram
         VARCHAR(255) discussion_sync_cursor
         TIMESTAMPTZ discussions_synced_at
         BIGINT native_id
+        VARCHAR(2048) last_sync_error
     }
 
     ReviewBackfillRun {
@@ -1342,6 +1343,7 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         VARCHAR(32) last_history_synced_ts
         TIMESTAMPTZ history_synced_at
+        VARCHAR(2048) last_sync_error
     }
 
     SlackParticipantConsent {
@@ -1538,9 +1540,9 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(16) reasoning_effort
         VARCHAR(200) data_handling_note
         VARCHAR(24) operated_by
-        VARCHAR(16) reasoning_effort
     }
 
     WorkspaceMemberOnboarding {
