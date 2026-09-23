@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler.spi;
 
+import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -11,6 +12,15 @@ import tools.jackson.databind.JsonNode;
 public final class JobMetadataReader {
 
     private JobMetadataReader() {}
+
+    /** @return the job's metadata object; throws when the job carries none. */
+    public static JsonNode requireMetadata(AgentJob job) {
+        JsonNode metadata = job.getMetadata();
+        if (metadata == null || metadata.isNull() || metadata.isMissingNode()) {
+            throw new JobPreparationException("Job has no metadata: jobId=" + job.getId());
+        }
+        return metadata;
+    }
 
     /** @return the non-blank text at {@code field}; throws if absent, null, or blank. */
     public static String requireText(JsonNode metadata, String field) {

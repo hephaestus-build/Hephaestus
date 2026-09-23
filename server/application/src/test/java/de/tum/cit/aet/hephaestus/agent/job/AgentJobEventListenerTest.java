@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
@@ -50,6 +51,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -144,6 +146,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             @Nullable String headRefOid, @Nullable String headRefName, @Nullable String baseRefName) {
         PullRequest pr = new PullRequest();
         pr.setId(PR_ID);
+        pr.setBaseRefOid("a".repeat(40));
         org.springframework.test.util.ReflectionTestUtils.setField(pr, "headRefOid", headRefOid);
         org.springframework.test.util.ReflectionTestUtils.setField(pr, "headRefName", headRefName);
         org.springframework.test.util.ReflectionTestUtils.setField(pr, "baseRefName", baseRefName);
@@ -182,6 +185,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
         var captor = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
         verify(agentJobService)
                 .submit(eq(workspaceId), eq(AgentJobType.PULL_REQUEST_REVIEW), captor.capture(), any(), any());
+        assertThat(captor.getValue().baseRefOid()).isEqualTo("a".repeat(40));
         return captor.getValue();
     }
 
@@ -191,7 +195,8 @@ class AgentJobEventListenerTest extends BaseUnitTest {
     class TombstonedWorkTests {
 
         @ParameterizedTest
-        @ValueSource(strings = {"created", "ready", "synchronized", "merged", "closed", "reviewed"})
+        // A live push is deferred, and its resubmission holds a tombstone (PullRequestSignalResubmitter).
+        @ValueSource(strings = {"created", "ready", "merged", "closed", "reviewed"})
         void shouldHoldOccasionBeforeAdmissionWhenPullRequestIsTombstoned(String event) {
             PullRequest pr = mockPullRequest("abc123", "feature", "main");
             Repository repository = new Repository();
@@ -210,8 +215,6 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             switch (event) {
                 case "created" -> listener.onPullRequestCreated(new ScmDomainEvent.PullRequestCreated(data, context));
                 case "ready" -> listener.onPullRequestReady(new ScmDomainEvent.PullRequestReady(data, context));
-                case "synchronized" ->
-                    listener.onPullRequestSynchronized(new ScmDomainEvent.PullRequestSynchronized(data, context));
                 case "merged" -> listener.onPullRequestMerged(new ScmDomainEvent.PullRequestMerged(data, context));
                 case "closed" ->
                     listener.onPullRequestClosed(new ScmDomainEvent.PullRequestClosed(data, false, context));
@@ -333,6 +336,21 @@ class AgentJobEventListenerTest extends BaseUnitTest {
 
             verify(practiceReviewDetectionGate, never()).evaluate(any(), any(), any());
             verify(agentJobService, never()).submit(any(), any(), any(), any());
+        }
+
+        @Test
+        void shouldSubmitWithoutAPinnedBaseWhenTheProviderGaveNone() {
+            // A GitLab webhook carries no base SHA; preparation resolves the target branch instead.
+            var event = new ScmDomainEvent.PullRequestCreated(
+                    createPrData(Issue.State.OPEN, false, false), webhookContext(1L));
+            PullRequest pr = setupHappyPath();
+            org.springframework.test.util.ReflectionTestUtils.setField(pr, "baseRefOid", null);
+            listener.onPullRequestCreated(event);
+            var captor = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
+            verify(agentJobService)
+                    .submit(eq(WORKSPACE_ID), eq(AgentJobType.PULL_REQUEST_REVIEW), captor.capture(), any(), any());
+            assertThat(captor.getValue().baseRefOid()).isNull();
+            assertThat(captor.getValue().baseRefName()).isEqualTo("main");
         }
 
         @Test
@@ -475,16 +493,6 @@ class AgentJobEventListenerTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldPassPullRequestSynchronizedTriggerEventName() {
-            PullRequest pr = setupHappyPath();
-            var prData = createPrData(Issue.State.OPEN, false, false);
-
-            listener.onPullRequestSynchronized(new ScmDomainEvent.PullRequestSynchronized(prData, webhookContext(1L)));
-
-            verify(practiceReviewDetectionGate).evaluate(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED, TriggerMode.AUTO);
-        }
-
-        @Test
         void shouldNotPropagateExceptionsFromSubmit() {
             var prData = createPrData(Issue.State.OPEN, false, false);
             var event = new ScmDomainEvent.PullRequestCreated(prData, webhookContext(1L));
@@ -524,15 +532,17 @@ class AgentJobEventListenerTest extends BaseUnitTest {
     class PullRequestSynchronizedTests {
 
         @Test
-        void shouldSubmitWhenGatePasses() {
+        @DisplayName("a live push is deferred for the coalescer, not reviewed on arrival")
+        void shouldDeferALivePushForTheCoalescer() {
             var prData = createPrData(Issue.State.OPEN, false, false);
             var event = new ScmDomainEvent.PullRequestSynchronized(prData, webhookContext(1L));
 
-            setupHappyPath();
-
             listener.onPullRequestSynchronized(event);
 
-            assertThat(captureSubmission(WORKSPACE_ID).triggerSignal()).isEqualTo(ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+            var key = ArgumentCaptor.forClass(SignalKey.class);
+            verify(signalRecorder).defer(key.capture(), any());
+            assertThat(key.getValue().signalName()).isEqualTo(ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+            verifyNoInteractions(practiceReviewDetectionGate, agentJobService);
         }
 
         @Test
@@ -885,6 +895,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             pr.setHeadRefOid("abc123");
             pr.setHeadRefName("feature/test");
             pr.setBaseRefName("main");
+            pr.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
             pr.setState(Issue.State.OPEN);
             pr.setDraft(false);
 

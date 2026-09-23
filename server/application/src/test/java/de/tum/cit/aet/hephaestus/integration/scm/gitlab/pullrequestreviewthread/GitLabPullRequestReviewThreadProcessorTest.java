@@ -157,6 +157,56 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldDateTheResolutionFromTheDiscussionAndClearItWhenUnresolved() {
+            when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
+                    .thenReturn(Optional.empty());
+            when(threadRepository.save(any(PullRequestReviewThread.class)))
+                    .thenAnswer(inv -> inv.getArgument(0, PullRequestReviewThread.class));
+            Instant resolvedAt = Instant.parse("2024-01-16T09:30:00Z");
+            var resolved = new GitLabPullRequestReviewThreadProcessor.ThreadData(
+                    DISCUSSION_GID, true, null, "src/Foo.ts", 42, null, null, null, null, null, CREATED_AT, resolvedAt);
+
+            PullRequestReviewThread saved = processor.findOrCreateThread(resolved, pr, provider, SCOPE_ID);
+
+            assertThat(saved.getResolvedAt()).isEqualTo(resolvedAt);
+
+            when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
+                    .thenReturn(Optional.of(saved));
+            var reopened = new GitLabPullRequestReviewThreadProcessor.ThreadData(
+                    DISCUSSION_GID, false, null, "src/Foo.ts", 42, null, null, null, null, null, CREATED_AT, null);
+
+            PullRequestReviewThread updated = processor.findOrCreateThread(reopened, pr, provider, SCOPE_ID);
+
+            assertThat(updated.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(updated.getResolvedAt()).isNull();
+        }
+
+        @Test
+        void shouldKeepTheOldLineAsTheLineWhenTheDiscussionSitsOnARemovedLine() {
+            when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
+                    .thenReturn(Optional.empty());
+            when(threadRepository.save(any(PullRequestReviewThread.class)))
+                    .thenAnswer(inv -> inv.getArgument(0, PullRequestReviewThread.class));
+
+            var data = new GitLabPullRequestReviewThreadProcessor.ThreadData(
+                    DISCUSSION_GID,
+                    false,
+                    null,
+                    "src/Foo.ts",
+                    null,
+                    17,
+                    PullRequestReviewComment.Side.LEFT,
+                    "head-sha",
+                    "base-sha",
+                    CREATED_AT);
+
+            PullRequestReviewThread saved = processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
+
+            assertThat(saved.getLine()).isEqualTo(17);
+            assertThat(saved.getSide()).isEqualTo(PullRequestReviewComment.Side.LEFT);
+        }
+
+        @Test
         void shouldLeavePositionNullWhenDataHasNoPositionInfo() {
             when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
                     .thenReturn(Optional.empty());

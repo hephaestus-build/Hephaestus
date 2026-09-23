@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.config;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelBindingSource;
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
@@ -36,7 +37,7 @@ public record ConfigSnapshot(
         @Nullable String modelVersion,
         @Nullable Integer contextWindow,
         @Nullable Integer maxOutputTokens,
-        boolean supportsReasoning,
+        @Nullable ReasoningEffort reasoningEffort,
         @Nullable FundingSource connectionScope,
         @Nullable Long connectionId,
         @Nullable Long modelId,
@@ -48,13 +49,19 @@ public record ConfigSnapshot(
      * Bump only for a reshape (field removal, type change, semantic reinterpretation). Adding a
      * nullable field is compatible both ways and needs no bump.
      */
-    public static final int SCHEMA_VERSION = 5;
+    public static final int SCHEMA_VERSION = 6;
 
     /**
      * Oldest persisted version that already uses this record's shape: at or above it a payload
      * deserializes straight through, below it {@link #fromLegacyJson} must translate.
      */
     private static final int CATALOG_SHAPE_MIN_VERSION = 4;
+
+    /**
+     * Snapshots before version 6 used {@code supportsReasoning}. Preserve their Pi default
+     * ({@code medium}) when that flag was true.
+     */
+    private static final int REASONING_EFFORT_MIN_VERSION = 6;
 
     public ConfigSnapshot {
         Objects.requireNonNull(apiProtocol, "apiProtocol must not be null");
@@ -78,7 +85,7 @@ public record ConfigSnapshot(
                 null,
                 resolved.contextWindow(),
                 resolved.maxOutputTokens(),
-                resolved.supportsReasoning(),
+                resolved.reasoningEffort(),
                 ref.scope(),
                 ref.connectionId(),
                 ref.modelId(),
@@ -97,7 +104,7 @@ public record ConfigSnapshot(
                 modelVersion,
                 contextWindow,
                 maxOutputTokens,
-                supportsReasoning,
+                reasoningEffort,
                 connectionScope,
                 connectionId,
                 modelId,
@@ -126,7 +133,31 @@ public record ConfigSnapshot(
         if (version < CATALOG_SHAPE_MIN_VERSION) {
             return fromLegacyJson(node);
         }
-        return objectMapper.convertValue(node, ConfigSnapshot.class);
+        ConfigSnapshot snapshot = objectMapper.convertValue(node, ConfigSnapshot.class);
+        if (version < REASONING_EFFORT_MIN_VERSION
+                && node.path("supportsReasoning").asBoolean(false)) {
+            return snapshot.withReasoningEffort(ReasoningEffort.MEDIUM);
+        }
+        return snapshot;
+    }
+
+    private ConfigSnapshot withReasoningEffort(ReasoningEffort effort) {
+        return new ConfigSnapshot(
+                schemaVersion,
+                apiProtocol,
+                baseUrl,
+                upstreamModelId,
+                modelVersion,
+                contextWindow,
+                maxOutputTokens,
+                effort,
+                connectionScope,
+                connectionId,
+                modelId,
+                workspaceId,
+                timeoutSeconds,
+                allowInternet,
+                priceSnapshot);
     }
 
     /**
@@ -165,7 +196,7 @@ public record ConfigSnapshot(
                 modelVersion,
                 null,
                 null,
-                false,
+                null,
                 null,
                 null,
                 null,

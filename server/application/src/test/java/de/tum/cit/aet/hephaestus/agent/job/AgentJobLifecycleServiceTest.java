@@ -115,7 +115,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
                         null,
                         null,
                         null,
-                        false,
+                        null,
                         FundingSource.INSTANCE,
                         1L,
                         1L,

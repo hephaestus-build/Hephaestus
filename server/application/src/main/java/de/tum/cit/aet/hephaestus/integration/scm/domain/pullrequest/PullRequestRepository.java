@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import jakarta.persistence.QueryHint;
 import java.time.Instant;
 import java.util.List;
@@ -67,7 +68,8 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     @Query("""
         SELECT p FROM PullRequest p
         LEFT JOIN FETCH p.author
-        LEFT JOIN FETCH p.repository
+        LEFT JOIN FETCH p.repository r
+        LEFT JOIN FETCH r.provider
         WHERE p.id = :id
         """)
     Optional<PullRequest> findByIdWithAuthorAndRepository(@Param("id") Long id);
@@ -99,6 +101,22 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     Optional<PullRequest> findByIdWithAllForGate(@Param("id") Long id);
 
     /**
+     * Everything a practice review's {@code metadata.json} projects, fetched in one query because the
+     * projection is written outside a transaction: the author, who merged it, the labels, the assignees
+     * and the milestone. {@code DISTINCT} for the same reason as {@link #findByIdWithAllForGate}.
+     */
+    @Query("""
+        SELECT DISTINCT p FROM PullRequest p
+        LEFT JOIN FETCH p.labels
+        LEFT JOIN FETCH p.assignees
+        LEFT JOIN FETCH p.milestone
+        LEFT JOIN FETCH p.author
+        LEFT JOIN FETCH p.mergedBy
+        WHERE p.id = :id
+        """)
+    Optional<PullRequest> findByIdForReviewContext(@Param("id") Long id);
+
+    /**
      * The head commit alone, for keying a signal without paying for the gate's fetch graph — a
      * reconciliation pass records what it saw and never looks at the rest of the pull request.
      */
@@ -106,6 +124,17 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     Optional<String> findHeadRefOidById(@Param("id") Long id);
 
     List<PullRequest> findAllByRepository_Id(Long repositoryId);
+
+    /**
+     * The issues the provider records the pull request as closing, with their labels, in number order:
+     * the rows of {@code pull_request_closing_issue} for one pull request.
+     */
+    @Query("SELECT DISTINCT i FROM PullRequest p JOIN p.closingIssues i LEFT JOIN FETCH i.labels "
+            + "WHERE p.id = :id ORDER BY i.number")
+    List<Issue> findClosingIssuesById(@Param("id") Long id);
+
+    /** The pull requests whose head is {@code headRefOid}: the ones a check on that commit is about. */
+    List<PullRequest> findAllByRepository_IdAndHeadRefOid(Long repositoryId, String headRefOid);
 
     /**
      * Repository-wide pull-request inventory ordered newest-first by number, for the cross-artifact

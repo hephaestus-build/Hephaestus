@@ -150,7 +150,7 @@ public class GitLabDiffNoteWebhookProcessor extends BaseGitLabProcessor {
 
         // Capture effectively final for lambda
         final String threadPath = filePath;
-        final Integer threadLine = newLine;
+        final Integer threadLine = GitLabPullRequestReviewThreadProcessor.anchoredLine(newLine, oldLine);
 
         Instant createdAt = parseWebhookTimestamp(attrs.createdAt());
         Instant updatedAt = parseWebhookTimestamp(attrs.updatedAt());

@@ -3385,7 +3385,7 @@ export const updateGroupMutation = (options?: Partial<Options<UpdateGroupData>>)
 /**
  * Set how much autonomy the system has over one group
  *
- * Applies to every practice in the group that holds no autonomy of its own; practices that set their own are left alone. OFF stops their reviews entirely. HUMAN_APPROVAL runs them and records every observation, and holds feedback for an authorized reviewer. AUTOMATIC sends feedback without asking. Send a null autonomy to clear the group's own setting so it follows the workspace default.
+ * Applies to every practice in the group that holds no autonomy of its own; practices that set their own are left alone. OFF stops their reviews entirely. HUMAN_APPROVAL runs them and records every observation, holds feedback on the work for an authorized reviewer, and still writes the developer's practice pages and the mentor, which are read on request. AUTOMATIC sends feedback on the work without asking. Send a null autonomy to clear the group's own setting so it follows the workspace default.
  */
 export const setGroupAutonomyMutation = (options?: Partial<Options<SetGroupAutonomyData>>): UseMutationOptions<SetGroupAutonomyResponse, DefaultError, Options<SetGroupAutonomyData>> => {
   const mutationOptions: UseMutationOptions<SetGroupAutonomyResponse, DefaultError, Options<SetGroupAutonomyData>> = {
@@ -4405,7 +4405,7 @@ export const updatePracticeMutation = (options?: Partial<Options<UpdatePracticeD
 /**
  * Set how much autonomy the system has over one practice
  *
- * OFF stops the review entirely. HUMAN_APPROVAL runs it and records every observation and holds feedback for an authorized reviewer. AUTOMATIC sends feedback without asking, as far as this workspace's reach allows. Send a null autonomy to clear the practice's own setting so it follows its group, and through the group the workspace default.
+ * OFF stops the review entirely. HUMAN_APPROVAL runs it and records every observation, holds feedback on the work for an authorized reviewer, and still writes the developer's practice pages and the mentor, which are read on request. AUTOMATIC sends feedback on the work without asking, as far as this workspace's reach allows. Send a null autonomy to clear the practice's own setting so it follows its group, and through the group the workspace default.
  */
 export const setAutonomyMutation = (options?: Partial<Options<SetAutonomyData>>): UseMutationOptions<SetAutonomyResponse, SetAutonomyError, Options<SetAutonomyData>> => {
   const mutationOptions: UseMutationOptions<SetAutonomyResponse, SetAutonomyError, Options<SetAutonomyData>> = {

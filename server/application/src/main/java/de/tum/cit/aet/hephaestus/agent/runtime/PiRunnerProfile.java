@@ -31,8 +31,9 @@ public interface PiRunnerProfile {
             // The SDK writes one JSONL file per session, from the session's first message on.
             SandboxLayout.WORKSPACE_ROOT + "/" + SandboxLayout.SESSIONS_DIR,
             // pi-runner.ts writes work/composition/observations.json, the admitted observations it
-            // composes feedback from.
+            // composes feedback from, and work/notes/review.md, its record of what the review recorded.
             SandboxLayout.WORKSPACE_ROOT + "/" + SandboxLayout.WORK_PREFIX + "composition",
+            SandboxLayout.WORKSPACE_ROOT + "/" + SandboxLayout.WORK_PREFIX + "notes",
             SandboxLayout.OUTPUT_PATH,
             AGENT_TMPDIR);
 

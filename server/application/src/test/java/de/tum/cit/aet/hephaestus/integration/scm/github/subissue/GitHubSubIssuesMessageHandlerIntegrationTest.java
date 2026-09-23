@@ -139,8 +139,19 @@ class GitHubSubIssuesMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         handler.handleEvent(event);
 
-        // Then - handler processes without error
-        assertThat(event.action()).isEqualTo("sub_issue_added");
+        Issue parent = issueRepository
+                .findByRepositoryIdAndNumber(
+                        testRepository.getId(), event.parentIssue().number())
+                .orElseThrow();
+        Issue child = issueRepository
+                .findByRepositoryIdAndNumber(
+                        testRepository.getId(), event.subIssue().number())
+                .orElseThrow();
+        assertThat(child.getParentIssue()).isNotNull();
+        assertThat(child.getParentIssue().getId()).isEqualTo(parent.getId());
+        assertThat(parent.getSubIssuesTotal()).isEqualTo(1);
+        assertThat(parent.getSubIssuesCompleted()).isEqualTo(0);
+        assertThat(parent.getSubIssuesPercentCompleted()).isEqualTo(0);
     }
 
     @Test

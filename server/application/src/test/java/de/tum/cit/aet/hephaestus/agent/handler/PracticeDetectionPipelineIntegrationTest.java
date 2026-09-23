@@ -11,12 +11,16 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettings;
@@ -24,7 +28,6 @@ import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -75,6 +78,11 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    /** The pinned range of the reviewed change; nothing here quotes it, so no checkout is staged. */
+    private static final String BASE_SHA = "a".repeat(40);
+
+    private static final String HEAD_SHA = "b".repeat(40);
+
     @Autowired
     private JobTypeHandlerRegistry handlerRegistry;
 
@@ -88,7 +96,14 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
     private PracticeRevisionRepository practiceRevisionRepository;
 
     @Autowired
-    private ContentAddressedStore cas;
+    private JobEvidenceFiles evidenceFiles;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout evidenceLayout;
+
+    private final java.util.List<java.util.UUID> preparedJobIds = new java.util.ArrayList<>();
+    private final Map<String, byte[]> capturedFiles = new java.util.LinkedHashMap<>();
+    private final java.util.List<PreparedJobInputs> preparedEvidence = new java.util.ArrayList<>();
 
     @Autowired
     private AgentJobRepository agentJobRepository;
@@ -140,6 +155,20 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
     @AfterEach
     void resetHandlerDoubles() {
         org.mockito.Mockito.reset(commentPoster, diffNotePoster, accountPreferencesQuery);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void releasePreparedEvidence() throws Exception {
+        preparedEvidence.forEach(PreparedJobInputs::close);
+        preparedEvidence.clear();
+        for (var jobId : preparedJobIds) {
+            org.apache.commons.io.FileUtils.deleteDirectory(evidenceLayout
+                    .jobsRoot()
+                    .resolve(workspace.getId().toString())
+                    .resolve(jobId.toString())
+                    .toFile());
+        }
+        preparedJobIds.clear();
     }
 
     @BeforeEach
@@ -220,6 +249,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
 
         agentJob = new AgentJob();
         agentJob.setWorkspace(workspace);
+        agentJob.setWorkerId("test-worker");
         agentJob.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         agentJob.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         agentJob.setStatus(AgentJobStatus.COMPLETED);
@@ -238,6 +268,8 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         agentJob.setMetadata(metadata);
         agentJob.setEvidenceSnapshot(evidenceSnapshot(description, errors));
         agentJob = agentJobRepository.save(agentJob);
+        preparedEvidence.add(evidenceFiles.prepare(agentJob, PreparedJobInputs.filesOnly(capturedFiles)));
+        preparedJobIds.add(agentJob.getId());
 
         handler = handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW);
         when(diffNotePoster.reconcileInlineNotes(any(), any()))
@@ -268,13 +300,19 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         return admitAndSetOutput(job, rawOutput, true);
     }
 
+    /** The admission fence's own two steps, minus the ownership transaction it wraps them in. */
+    private void admit(AgentJob job, JsonNode observations) {
+        var pullRequests = (PullRequestReviewHandler) handler;
+        pullRequests.prepareObservations(job, observations).record(job);
+    }
+
     /**
      * @param reachedEveryPractice the coverage ledger the run left behind, which decides whether this
      *     review is allowed to say it found nothing
      */
     private AgentJob admitAndSetOutput(AgentJob job, String rawOutput, boolean reachedEveryPractice) {
         JsonNode observations = OBJECT_MAPPER.readTree(withEvidence(rawOutput)).path("observations");
-        ((PullRequestReviewHandler) handler).admitObservations(job, observations);
+        admit(job, observations);
         String digest = "test-admission-digest";
         JsonNode jobMetadata = job.getMetadata();
         org.junit.jupiter.api.Assertions.assertNotNull(jobMetadata);
@@ -305,6 +343,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
     private AgentJob newJobWithOutput(String rawOutput) {
         AgentJob next = new AgentJob();
         next.setWorkspace(workspace);
+        next.setWorkerId("test-worker");
         next.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         next.setStatus(AgentJobStatus.COMPLETED);
@@ -314,48 +353,36 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         next.setMetadata(metadata.deepCopy());
         next.setEvidenceSnapshot(agentJob.getEvidenceSnapshot().deepCopy());
         next = agentJobRepository.save(next);
+        preparedEvidence.add(evidenceFiles.prepare(next, PreparedJobInputs.filesOnly(capturedFiles)));
+        preparedJobIds.add(next.getId());
         return admitAndSetOutput(next, rawOutput);
     }
 
     private ObjectNode evidenceSnapshot(Practice... practices) {
-        ObjectNode snapshot = OBJECT_MAPPER.createObjectNode();
-        var sources =
-                snapshot.putObject("manifest").put("contractVersion", "1.1.0").putArray("sources");
+        ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(OBJECT_MAPPER);
         addArtifact(
-                sources.addObject().put("kind", "scm.pull-request.core"),
+                EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.core", null),
                 "inputs/context/metadata.json",
                 "{\"body\":\"Test body\"}");
         addArtifact(
-                sources.addObject().put("kind", "scm.pull-request.diff"),
-                "inputs/context/diff.patch",
-                "diff --git a/src/Main.java b/src/Main.java\n+++ b/src/Main.java\n@@ -10 +10 @@\n[L10] + insecure();\n");
-        var admitted = snapshot.putArray("practices");
+                EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", BASE_SHA + ":" + HEAD_SHA),
+                PullRequestContentSource.CHANGE_FILE,
+                "{\"base_sha\":\"" + BASE_SHA + "\",\"head_sha\":\"" + HEAD_SHA + "\"}");
         for (Practice practice : practices) {
-            admitted.addObject()
-                    .put("slug", practice.getSlug())
-                    .put("revisionId", practice.getCurrentRevision().getId());
+            EvidenceSnapshotFixtures.admittedPractice(
+                    snapshot,
+                    practice.getSlug(),
+                    java.util.Objects.requireNonNull(
+                            practice.getCurrentRevision().getId()));
         }
         return snapshot;
     }
 
     private void addArtifact(ObjectNode source, String path, String content) {
-        var facts = source.putObject("state")
-                .put("availability", "AVAILABLE")
-                .put("content", "NON_EMPTY")
-                .put("completeness", "COMPLETE")
-                .putObject("facts")
-                .put("capturedAt", "2026-08-03T00:00:00Z");
-        if ("scm.pull-request.diff".equals(source.path("kind").asString())) {
-            facts.put("immutableIdentity", "pipelinesha");
-        } else {
-            facts.put("sourceEffectiveAt", "2026-08-03T00:00:00Z");
-        }
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
-        source.putArray("artifacts")
-                .addObject()
-                .put("path", path)
-                .put("mediaType", path.endsWith(".json") ? "application/json" : "text/x-diff")
-                .put("sha256", cas.put(bytes))
+        capturedFiles.put(path, bytes);
+        EvidenceSnapshotFixtures.artifact(source, path, ProvenanceDigest.sha256Hex(bytes))
+                .put("mediaType", "application/json")
                 .put("bytes", bytes.length);
     }
 
@@ -589,7 +616,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                 }""";
             JsonNode submitted = OBJECT_MAPPER.readTree(withEvidence(output)).path("observations");
 
-            assertThatThrownBy(() -> ((PullRequestReviewHandler) handler).admitObservations(agentJob, submitted))
+            assertThatThrownBy(() -> admit(agentJob, submitted))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("practice not admitted to the job");
 

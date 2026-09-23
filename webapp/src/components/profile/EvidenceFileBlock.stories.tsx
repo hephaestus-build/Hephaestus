@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
 
 const meta = {
@@ -152,5 +153,22 @@ export const QuotedFromBeforeTheChange: Story = {
 				"return undefined;",
 			].join("\n"),
 		},
+	},
+};
+
+export const HistoricalSource: Story = {
+	args: {
+		location: {
+			path: "src/service.ts",
+			startLine: 12,
+			endLine: 12,
+			sourceKind: "scm.repository.tree",
+			revision: "b".repeat(40),
+			snippet: "return previousValue;",
+			redacted: false,
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("b".repeat(40))).toBeVisible();
 	},
 };

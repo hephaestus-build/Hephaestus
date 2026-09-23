@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHUserConn
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.dto.GitHubLabelDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.dto.GitHubMilestoneDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.SubIssuesSummaryDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import java.math.BigInteger;
 import java.time.Instant;
@@ -49,7 +50,9 @@ public record GitHubIssueDTO(
         @JsonProperty("milestone") @Nullable GitHubMilestoneDTO milestone,
         @JsonProperty("type") @Nullable GitHubIssueTypeDTO issueType,
         @JsonProperty("repository") @Nullable GitHubRepositoryRefDTO repository,
-        @JsonProperty("pull_request") @Nullable PullRequestRef pullRequest) {
+        @JsonProperty("pull_request") @Nullable PullRequestRef pullRequest,
+        /** The provider's rollup over this issue's sub-issues, as a webhook payload carries it. */
+        @JsonProperty("sub_issues_summary") @Nullable SubIssuesSummaryDTO subIssuesSummary) {
     /**
      * Returns true if this issue is actually a pull request.
      * GitHub REST API includes a pull_request field when the issue is a PR.
@@ -113,7 +116,8 @@ public record GitHubIssueDTO(
                 GitHubMilestoneDTO.fromMilestone(issue.getMilestone()),
                 GitHubIssueTypeDTO.fromIssueType(issue.getIssueType()),
                 null, // repository
-                null // pullRequest - GraphQL issues are never PRs
+                null, // pullRequest - GraphQL issues are never PRs
+                null // subIssuesSummary - the GraphQL sub-issue sync carries it
                 );
     }
 
@@ -157,7 +161,8 @@ public record GitHubIssueDTO(
                 GitHubMilestoneDTO.fromMilestone(issue.getMilestone()),
                 GitHubIssueTypeDTO.fromIssueType(issue.getIssueType()),
                 GitHubRepositoryRefDTO.fromRepository(issue.getRepository()),
-                null // pullRequest - GraphQL issues are never PRs
+                null, // pullRequest - GraphQL issues are never PRs
+                null // subIssuesSummary - the GraphQL sub-issue sync carries it
                 );
     }
 

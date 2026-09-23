@@ -19,6 +19,8 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -72,6 +74,9 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IssueSignalResubmitter submitter;
+
+    @Autowired
+    private PullRequestSignalResubmitter pushSubmitter;
 
     @Autowired
     private Fixture fixture;
@@ -257,10 +262,51 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
                         }));
     }
 
+    @Test
+    void shouldSettleLockedPushSignalInTheCoalescerTransaction() {
+        var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("push-" + UUID.randomUUID()));
+        SignalKey key =
+                new SignalKey(workspace.getId(), 1L, ScmSignals.PULL_REQUEST_SYNCHRONIZED, new SignalRevision("head"));
+        Instant now = Instant.now();
+        transactions.executeWithoutResult(status -> signals.insertDeferred(key, UUID.randomUUID(), now, now));
+
+        transactions.executeWithoutResult(status -> {
+            var pending = signals.lockDeferred(
+                    workspace.getId(), key.artifactId(), ScmSignals.PULL_REQUEST_SYNCHRONIZED.value());
+            pushSubmitter.resubmit(pending.getFirst());
+            status.setRollbackOnly();
+        });
+        assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.PULL_REQUEST.value(), key.artifactId()))
+                .singleElement()
+                .satisfies(signal -> assertThat(signal.getState()).isEqualTo(SignalState.DEFERRED));
+
+        transactions.executeWithoutResult(status -> {
+            var pending = signals.lockDeferred(
+                    workspace.getId(), key.artifactId(), ScmSignals.PULL_REQUEST_SYNCHRONIZED.value());
+            pushSubmitter.resubmit(pending.getFirst());
+        });
+        assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.PULL_REQUEST.value(), key.artifactId()))
+                .singleElement()
+                .satisfies(signal -> {
+                    assertThat(signal.getState()).isEqualTo(SignalState.LAPSED);
+                    assertThat(signal.getStateReason()).isEqualTo(SignalStateReason.ARTIFACT_GONE);
+                });
+    }
+
     record Fixture(IssueRepository issues, PracticeReviewDetectionGate gate, WorkspaceResolver workspaceResolver) {}
 
     @TestConfiguration
     static class Configuration {
+        @Bean
+        PullRequestSignalResubmitter lockedPushSubmitter(SignalRecorder recorder) {
+            return new PullRequestSignalResubmitter(
+                    mock(AgentJobService.class),
+                    mock(PullRequestRepository.class),
+                    mock(PracticeReviewDetectionGate.class),
+                    recorder,
+                    mock(PullRequestReviewRepository.class));
+        }
+
         @Bean
         Fixture coalescerFixture() {
             return new Fixture(

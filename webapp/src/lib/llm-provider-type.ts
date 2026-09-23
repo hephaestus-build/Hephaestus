@@ -27,7 +27,7 @@ export const API_PROTOCOLS = {
 	OPENAI_RESPONSES: "openai-responses",
 } as const;
 
-export function defaultProtocolFor(useResponsesApi = false): string {
+export function defaultProtocolFor(useResponsesApi = true): string {
 	return useResponsesApi ? API_PROTOCOLS.OPENAI_RESPONSES : API_PROTOCOLS.OPENAI_COMPLETIONS;
 }
 

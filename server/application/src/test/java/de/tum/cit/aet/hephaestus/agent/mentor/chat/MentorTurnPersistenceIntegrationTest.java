@@ -499,7 +499,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
                 "test-model",
                 null,
                 null,
-                false,
+                null,
                 FundingSource.INSTANCE,
                 1L,
                 1L,

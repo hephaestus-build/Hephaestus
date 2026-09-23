@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssue
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.dto.GitHubIssueCommentEventDTO.GitHubCommentDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.project.GitHubProjectItemSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.GitHubPullRequestReviewCommentSyncService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -236,6 +237,47 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
         when(requestSpec.execute()).thenReturn(Mono.just(response));
 
         when(repositoryRepository.findById(REPO_ID)).thenReturn(Optional.of(createRepository()));
+    }
+
+    @Nested
+    class SinglePullRequestRefresh {
+
+        @Test
+        void shouldReadOnePullRequestAgainAndProcessItWithTheSyncContext() {
+            GHPullRequest prNode = createGHPullRequest(createCommentConnection(List.of(), 0, false, null));
+            when(graphQlClient.documentName("GetPullRequestByNumber")).thenReturn(requestSpec);
+            when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
+            ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
+            when(response.isValid()).thenReturn(true);
+            ClientResponseField field = mock(ClientResponseField.class);
+            when(response.field("repository.pullRequest")).thenReturn(field);
+            when(field.toEntity(GHPullRequest.class)).thenReturn(prNode);
+            when(requestSpec.execute()).thenReturn(Mono.just(response));
+            Repository repository = createRepository();
+            when(repositoryRepository.findById(REPO_ID)).thenReturn(Optional.of(repository));
+            when(pullRequestProcessor.process(any(), any())).thenReturn(createPullRequest());
+
+            boolean refreshed = service.refreshPullRequest(SCOPE_ID, repository, PR_NUMBER);
+
+            assertThat(refreshed).isTrue();
+            verify(requestSpec).variable("number", PR_NUMBER);
+            verify(graphQlClientProvider).trackRateLimit(SCOPE_ID, response);
+            ArgumentCaptor<GitHubPullRequestDTO> captor = ArgumentCaptor.forClass(GitHubPullRequestDTO.class);
+            verify(pullRequestProcessor).process(captor.capture(), any(ProcessingContext.class));
+            assertThat(captor.getValue().number()).isEqualTo(PR_NUMBER);
+        }
+
+        @Test
+        void shouldLeaveTheWebhookViewStandingWhenTheRefreshFails() {
+            when(graphQlClient.documentName("GetPullRequestByNumber")).thenReturn(requestSpec);
+            when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
+            when(requestSpec.execute()).thenReturn(Mono.error(new IllegalStateException("GitHub is away")));
+
+            boolean refreshed = service.refreshPullRequest(SCOPE_ID, createRepository(), PR_NUMBER);
+
+            assertThat(refreshed).isFalse();
+            verify(pullRequestProcessor, org.mockito.Mockito.never()).process(any(), any());
+        }
     }
 
     @Nested

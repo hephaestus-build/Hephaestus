@@ -17,7 +17,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.DeveloperTextSanitizer;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -25,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +68,12 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     private static final int LOOKBACK_DAYS = 90;
 
     private static final int MAX_OBSERVATIONS = 50;
+
+    /**
+     * Caps each practice so repeated observations cannot crowd other practices out of the history.
+     */
+    static final int MAX_OBSERVATIONS_PER_PRACTICE = 3;
+
     private static final int MAX_FEEDBACK = 30;
 
     /**
@@ -218,11 +224,15 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                 PageRequest.of(0, MAX_OBSERVATIONS));
         Set<UUID> visible =
                 visibilityPolicy.permitsAll(workspaceId, recent, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
+        Map<String, Integer> perPractice = new HashMap<>();
         return recent.stream()
                 .filter(o -> visible.contains(o.getId()))
                 // Composition receives the current observations separately, with durable ids. Counting them
                 // again as history would turn a first occurrence into an apparent recurrence.
                 .filter(o -> excludedJobId == null || !excludedJobId.equals(o.getAgentJobId()))
+                // Newest first, so the ones a practice keeps are its most recent.
+                .filter(o ->
+                        perPractice.merge(o.getPractice().getSlug(), 1, Integer::sum) <= MAX_OBSERVATIONS_PER_PRACTICE)
                 .toList();
     }
 
@@ -250,12 +260,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
      */
     private ObjectNode preparedPayload(long workspaceId, List<Feedback> queued) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("window", "composed for this developer and not yet received, newest first");
-        root.put("count", queued.size());
-        root.put(
-                "completeness",
-                "PARTIAL: the most recent " + MAX_PREPARED
-                        + " queued items. Absence here is not proof nothing is queued.");
+        root.put("limit", MAX_PREPARED);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
                 queued.stream()
@@ -286,21 +291,16 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             // situation, coaching goal, evidence summary and success signal, and the turn itself is still written live.
             // Null when the run that queued it composed nothing,
             // which leaves only the fact that something is queued.
-            node.put("body", DeveloperTextSanitizer.sanitize(f.getBody()));
+            node.put("body", f.getBody());
         }
         return root;
     }
 
     private ObjectNode observationsPayload(long workspaceId, List<Observation> observations, Instant since) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("window", "observations recorded since " + since + ", newest first");
-        root.put("count", observations.size());
-        // Stated in the file itself, which the model reads directly, so an empty list can't be read as
-        // "never happened".
-        root.put(
-                "completeness",
-                "PARTIAL: the most recent " + MAX_OBSERVATIONS
-                        + " observations within the window. An observation absent here may still have been recorded.");
+        root.put("since", since.toString());
+        root.put("limit", MAX_OBSERVATIONS);
+        root.put("perPracticeLimit", MAX_OBSERVATIONS_PER_PRACTICE);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
                 observations.stream()
@@ -312,7 +312,6 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             node.put(
                     "practiceSlug",
                     o.getPractice() == null ? null : o.getPractice().getSlug());
-            node.put("recurrenceKey", o.getRecurrenceKey());
             node.put("summary", o.getSummary());
             node.put("assessmentStatus", o.getAssessmentStatus().name());
             node.put("outcome", o.getOutcome() == null ? null : o.getOutcome().name());
@@ -327,19 +326,14 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             node.put(
                     "observedAt",
                     o.getObservedAt() == null ? null : o.getObservedAt().toString());
-            node.put("evidenceRationale", DeveloperTextSanitizer.sanitize(o.getEvidenceRationale()));
         }
         return root;
     }
 
     private ObjectNode feedbackPayload(long workspaceId, List<Feedback> delivered, Instant since) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("window", "feedback delivered since " + since + ", newest first");
-        root.put("count", delivered.size());
-        root.put(
-                "completeness",
-                "PARTIAL: the most recent " + MAX_FEEDBACK
-                        + " delivered items within the window. Feedback absent here may still have been delivered.");
+        root.put("since", since.toString());
+        root.put("limit", MAX_FEEDBACK);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
                 delivered.stream()
@@ -353,7 +347,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             node.put(
                     "deliveredAt",
                     f.getDeliveredAt() == null ? null : f.getDeliveredAt().toString());
-            node.put("body", DeveloperTextSanitizer.sanitize(f.getBody()));
+            node.put("body", f.getBody());
         }
         return root;
     }
@@ -414,7 +408,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
 
     private byte[] serialize(ObjectNode payload, String path) {
         try {
-            return objectMapper.writeValueAsBytes(payload);
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(payload);
         } catch (RuntimeException e) {
             throw new EvidenceCollectionException("Failed to serialize review history: " + path, e);
         }

@@ -61,7 +61,7 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
                 observationRepository,
                 reactionRepository,
                 feedbackLedgerRecorder,
-                new PracticeReviewProperties(false, 15, 5, enabled));
+                new PracticeReviewProperties(false, 15, 5, enabled, null));
     }
 
     private AgentJob job() {

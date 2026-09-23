@@ -14,7 +14,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * Pre-pulls the agent container image on startup. Part of the worker capability (the Docker
+ * Pre-pulls the agent image on startup, so the first review does not spend its deadline on a pull. Part of the worker capability (the Docker
  * sandbox), so it shares the worker-role gate with {@code DockerSandboxConfiguration} — present
  * in the monolith ({@code matchIfMissing=true}), absent on non-worker pods.
  * Artifact generation does not run containers and must not contact the Docker registry.
@@ -45,8 +45,13 @@ public class AgentImagePullBootstrapper {
     @EventListener(ApplicationReadyEvent.class)
     @Order(0)
     public void pullOnStartup() {
+        pull(properties.reference());
+        contractVerifier.verify(properties.reference());
+    }
+
+    private void pull(String image) {
         ImagePullBootstrapperSupport.applyPolicy(
-                properties.reference(),
+                image,
                 properties.pullPolicy(),
                 imageOps,
                 AgentMetrics.AGENT_IMAGE_PULL_DURATION,
@@ -54,6 +59,5 @@ public class AgentImagePullBootstrapper {
                 AgentMetrics.AGENT_IMAGE_PULL_SKIPPED,
                 meterRegistry,
                 log);
-        contractVerifier.verify(properties.reference());
     }
 }

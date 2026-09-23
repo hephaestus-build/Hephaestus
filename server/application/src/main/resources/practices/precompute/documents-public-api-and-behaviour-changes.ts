@@ -8,7 +8,9 @@
 // Treating modifier-less Swift as public on an app-only repo yields false negative observations, so the
 // export-status table classifies it as internal. The table is keyed off file extension: adding a language =
 // one row, no engine change.
+import { isCommentLine } from "../lib/declarations.ts";
 import { findFiles, readFileLines } from "../lib/grep.ts";
+import { languageOf } from "../lib/languages.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 // ── (1) Public-product manifest scan ──────────────────────────────────────────────────────────────────────
@@ -57,9 +59,13 @@ const EXPORT_RULES: Record<string, ExportRule> = {
 		decl: /\b(?:func|class|struct|enum|protocol|extension|var|let|typealias|actor|init)\b/u,
 		isPublic: (l) => /\b(?:public|open)\b/u.test(l),
 	},
-	// TypeScript: an `export` keyword (or `export default`) marks the public surface.
-	ts: {
+	// TypeScript and JavaScript: an `export` keyword (or `export default`) marks the public surface.
+	typescript: {
 		decl: /\b(?:function|class|interface|type|enum|const|let|var|namespace)\b/u,
+		isPublic: (l) => /\bexport\b/u.test(l),
+	},
+	javascript: {
+		decl: /\b(?:function|class|const|let|var)\b/u,
 		isPublic: (l) => /\bexport\b/u.test(l),
 	},
 	// Java: only `public` declarations are part of the API; package-private/protected/private are not.
@@ -83,38 +89,6 @@ const EXPORT_RULES: Record<string, ExportRule> = {
 		isPublic: (l) => /^\s*(?:func|type|var|const)\s+(?:\([^)]*\)\s*)?[A-Z]/u.test(l),
 	},
 };
-
-// extension -> language key (one source of truth).
-const EXT_LANG: Record<string, string> = {
-	swift: "swift",
-	ts: "ts",
-	tsx: "ts",
-	mts: "ts",
-	cts: "ts",
-	js: "ts",
-	jsx: "ts",
-	mjs: "ts",
-	cjs: "ts",
-	java: "java",
-	kt: "kotlin",
-	kts: "kotlin",
-	py: "python",
-	go: "go",
-};
-
-function langOf(path: string): string | null {
-	const ext = path.split(".").pop()?.toLowerCase() ?? "";
-	return EXT_LANG[ext] ?? null;
-}
-
-function isComment(trimmed: string): boolean {
-	return (
-		trimmed.startsWith("//") ||
-		trimmed.startsWith("#") ||
-		trimmed.startsWith("*") ||
-		trimmed.startsWith("/*")
-	);
-}
 
 // (1) Does the repo declare a public library/framework product?
 async function declaresPublicProduct(repoPath: string): Promise<boolean> {
@@ -145,8 +119,10 @@ export default async function documentsPublicApiAndBehaviourChanges(
 	const hints: Hint[] = [];
 	let changedPublicSymbols = 0;
 	let changedInternalSymbols = 0;
+	let filesScanned = 0;
+	let linesAdded = 0;
 	for (const [path, df] of diffFiles) {
-		const lang = langOf(path);
+		const lang = languageOf(path);
 		if (lang === null) {
 			continue;
 		}
@@ -154,9 +130,13 @@ export default async function documentsPublicApiAndBehaviourChanges(
 		if (!rule) {
 			continue;
 		}
+		filesScanned += 1;
 		for (const [line, content] of df.addedLines) {
-			const trimmed = content.trimStart();
-			if (isComment(trimmed) || !rule.decl.test(content)) {
+			if (isCommentLine(content, lang)) {
+				continue;
+			}
+			linesAdded += 1;
+			if (!rule.decl.test(content)) {
 				continue;
 			}
 			const isPublic = rule.isPublic(content);
@@ -201,6 +181,8 @@ export default async function documentsPublicApiAndBehaviourChanges(
 			hasPublicProduct: hasPublicProduct ? 1 : 0,
 			changedPublicSymbols,
 			changedInternalSymbols,
+			filesScanned,
+			linesAdded,
 		},
 		directions,
 	};

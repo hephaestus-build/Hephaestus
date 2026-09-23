@@ -1,15 +1,6 @@
 /**
- * Runtime half of the precompute contract in ./types.ts.
- *
- * A practice script is DATA: it is stored per-practice in the DB and injected into
- * {output}/practices/{slug}.ts, so nothing the compiler knows about it survives to run time. Every
- * value crossing that boundary — the imported module, what it returns, the JSON already written to
- * disk — is therefore `unknown` until one of the guards below has checked it.
- *
- * Every violation these validators report is a value of the wrong type, so each throws a `TypeError`
- * carrying a `source`-prefixed message rather than returning a partial value: the runner turns that
- * throw into a per-practice `status: "error"` result, so one off-contract script degrades to "the
- * agent must analyse this practice manually" and never corrupts the run.
+ * Injected practice scripts are untyped at runtime. Invalid results throw TypeError; the runner
+ * records a per-practice error instead of exposing invalid data to the review.
  */
 
 import type { Hint, HintFlag, PracticeFindings, PracticeResult, PracticeScript } from "./types.ts";
@@ -17,6 +8,11 @@ import type { Hint, HintFlag, PracticeFindings, PracticeResult, PracticeScript }
 /** Narrow parsed JSON (or any foreign value) to a plain object — arrays and null are not objects here. */
 export function isJsonObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** A JSON field read as text: the string it holds, or "" for anything else. */
+export function text(value: unknown): string {
+	return typeof value === "string" ? value : "";
 }
 
 /**

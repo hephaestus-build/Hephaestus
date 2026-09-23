@@ -3,6 +3,8 @@
 // guard could live — the LLM decides whether a guard is actually present. General by design: a per-language
 // pattern table keyed off the file extension, NOT a single-language scan. Adding a language = adding a row,
 // no engine change. NO observation, severity, or "defect" — facts only.
+import { isCommentLine } from "../lib/declarations.ts";
+import { languageOf } from "../lib/languages.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 // Cross-language boundary/edge constructs. Most are language-agnostic enough to share, but the table is
@@ -28,7 +30,7 @@ const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 		["JSONDecoder.decode", /\.decode\s*\(/u],
 		[".first/.last", /\.(?:first|last)\b/u],
 	],
-	ts: [
+	typescript: [
 		...COMMON,
 		["non-null assertion !", /[A-Za-z0-9_)\]]![.;)\s]/u],
 		["parseInt/parseFloat", /\bparse(?:Int|Float)\s*\(/u],
@@ -36,7 +38,7 @@ const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 		["JSON.parse", /\bJSON\.parse\s*\(/u],
 		[".get(...) lookup", /\.get\s*\(/u],
 	],
-	js: [
+	javascript: [
 		...COMMON,
 		["parseInt/parseFloat", /\bparse(?:Int|Float)\s*\(/u],
 		["Number(...) parse", /\bNumber\s*\(/u],
@@ -101,41 +103,12 @@ const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 	],
 };
 
-// extension -> language key. One source of truth for both pattern lookup and comment syntax.
-const EXT_LANG: Record<string, string> = {
-	swift: "swift",
-	m: "swift",
-	mm: "swift",
-	ts: "ts",
-	tsx: "ts",
-	mts: "ts",
-	cts: "ts",
-	js: "js",
-	jsx: "js",
-	mjs: "js",
-	cjs: "js",
-	py: "python",
-	go: "go",
-	java: "java",
-	kt: "kotlin",
-	kts: "kotlin",
-	rs: "rust",
-	rb: "ruby",
-	c: "c",
-	h: "c",
-	cc: "c",
-	cpp: "c",
-	cxx: "c",
-	hpp: "c",
-	cs: "csharp",
-};
-
 // Public/exported function signatures with at least one parameter — the parameters are the boundary the
 // function must defend. We surface the signature site; the LLM checks whether the added body guards them.
 const SIGNATURE_PATTERNS: Record<string, RegExp> = {
 	swift: /\b(?:public|open)\s+func\s+\w+\s*\([^)]*[A-Za-z_][^)]*\)/u,
-	ts: /\bexport\s+(?:async\s+)?function\s+\w+\s*\([^)]*[A-Za-z_][^)]*\)/u,
-	js: /\bexport\s+(?:async\s+)?function\s+\w+\s*\([^)]*[A-Za-z_][^)]*\)/u,
+	typescript: /\bexport\s+(?:async\s+)?function\s+\w+\s*\([^)]*[A-Za-z_][^)]*\)/u,
+	javascript: /\bexport\s+(?:async\s+)?function\s+\w+\s*\([^)]*[A-Za-z_][^)]*\)/u,
 	python: /^\s*def\s+(?!_)\w+\s*\([^)]*[A-Za-z_][^)]*\)/u,
 	go: /^func\s+(?:\([^)]*\)\s*)?[A-Z]\w*\s*\([^)]*[A-Za-z_][^)]*\)/u,
 	java: /\bpublic\s+[\w<>[\],?\s]+\s+\w+\s*\([^)]*[A-Za-z_][^)]*\)/u,
@@ -146,21 +119,6 @@ const SIGNATURE_PATTERNS: Record<string, RegExp> = {
 	csharp: /\bpublic\s+[\w<>[\],?\s]+\s+\w+\s*\([^)]*[A-Za-z_][^)]*\)/u,
 };
 
-function langOf(path: string): string | null {
-	const ext = path.split(".").pop()?.toLowerCase() ?? "";
-	return EXT_LANG[ext] ?? null;
-}
-
-// Strip the obvious comment forms so we don't flag a pattern that only appears inside a comment.
-function isComment(trimmed: string): boolean {
-	return (
-		trimmed.startsWith("//") ||
-		trimmed.startsWith("#") ||
-		trimmed.startsWith("*") ||
-		trimmed.startsWith("/*")
-	);
-}
-
 export default function validatesInputsAndEdgeCasesAtTheBoundary(
 	_repo: string,
 	diffFiles: Map<string, DiffFile>,
@@ -169,9 +127,11 @@ export default function validatesInputsAndEdgeCasesAtTheBoundary(
 	const hints: Hint[] = [];
 	const byLang: Record<string, number> = {};
 	let signatureSites = 0;
+	let filesScanned = 0;
+	let linesAdded = 0;
 
 	for (const [path, df] of diffFiles) {
-		const lang = langOf(path);
+		const lang = languageOf(path);
 		if (lang === null) {
 			continue;
 		}
@@ -180,12 +140,13 @@ export default function validatesInputsAndEdgeCasesAtTheBoundary(
 			continue;
 		}
 		const sigRe = SIGNATURE_PATTERNS[lang];
+		filesScanned += 1;
 
 		for (const [line, content] of df.addedLines) {
-			const trimmed = content.trimStart();
-			if (isComment(trimmed)) {
+			if (isCommentLine(content, lang)) {
 				continue;
 			}
+			linesAdded += 1;
 
 			// Public/exported signature with parameters: the parameters are an unguarded-input candidate.
 			if (sigRe?.test(content) === true) {
@@ -231,6 +192,8 @@ export default function validatesInputsAndEdgeCasesAtTheBoundary(
 		metrics: {
 			edgeCandidateSitesAdded: hints.length,
 			exportedSignatureSites: signatureSites,
+			filesScanned,
+			linesAdded,
 			...byLang,
 		},
 		directions,

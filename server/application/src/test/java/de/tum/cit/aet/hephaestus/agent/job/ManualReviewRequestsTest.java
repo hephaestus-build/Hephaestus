@@ -350,6 +350,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
         pr.setHeadRefOid("abc123");
         pr.setHeadRefName("feature/branch");
         pr.setBaseRefName("main");
+        pr.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         pr.setRepository(repo);
         pr.setAssignees(Set.of());
         return pr;

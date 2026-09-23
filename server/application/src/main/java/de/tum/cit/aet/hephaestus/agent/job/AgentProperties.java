@@ -46,8 +46,11 @@ public record AgentProperties(
     /** Floor for {@link #heartbeatInterval}: below this the liveness signal floods {@code worker_registry}. */
     public static final Duration MIN_HEARTBEAT_INTERVAL = Duration.ofSeconds(1);
 
-    /** A worker with no heartbeat this recent is judged dead; its RUNNING jobs are requeued to a sibling. */
-    public static final Duration WORKER_LEASE_TTL = Duration.ofSeconds(60);
+    /**
+     * Requeues RUNNING jobs after this heartbeat timeout. Allow for the database connection timeout:
+     * a false expiry rotates attempt credentials and invalidates results from a live worker.
+     */
+    public static final Duration WORKER_LEASE_TTL = Duration.ofMinutes(5);
 
     /** Ceiling for {@link #heartbeatInterval} — half the lease, so a worker survives losing one beat. */
     public static final Duration MAX_HEARTBEAT_INTERVAL = WORKER_LEASE_TTL.dividedBy(2);

@@ -133,12 +133,7 @@ export const Default: Story = {
 	},
 };
 
-/**
- * The citations are built by walking the registry, so a kind added to the catalog is rendered here
- * the day it lands. The expected headings are written out rather than read back from the registry,
- * which falls back to the raw contract id for a kind it has no words for — asking it what the
- * heading should say would make a missing label agree with itself.
- */
+// Keep expected labels independent of the registry so missing labels cannot agree with themselves.
 export const EverySource: Story = {
 	args: {
 		evidence: { citations: knownEvidenceSourceKinds().map((kind) => citation(kind)) },
@@ -156,7 +151,7 @@ export const EverySource: Story = {
 				"The pull request itself",
 				"The code changes",
 				"Comments on the pull request",
-				"Files in the repository",
+				"Files and history in the repository",
 				"The issue itself",
 				"Comments on the issue",
 				"The document itself",
@@ -175,12 +170,7 @@ export const EverySource: Story = {
 	},
 };
 
-/**
- * Outside a `code` locator the line range is an offset into the serialised context file the quote
- * was pulled from — a line of a JSON blob, not a message of a Slack thread — and the server never
- * checks that it points at the quote. Both citations here claim the same lines; only one of them is
- * a location a reader could open.
- */
+/** Only code locators expose source coordinates; object coordinates refer to serialized context. */
 export const LineNumbersOnlyWhereTheyAreReal: Story = {
 	args: {
 		evidence: {
@@ -262,5 +252,16 @@ export const Mobile: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByRole("heading", { name: "The code changes", level: 4 });
 		await expectNoPageOverflow();
+	},
+};
+
+export const HistoricalSource: Story = {
+	args: {
+		evidence: {
+			citations: [citation("scm.repository.tree", { revision: "b".repeat(40) })],
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("b".repeat(40))).toBeVisible();
 	},
 };

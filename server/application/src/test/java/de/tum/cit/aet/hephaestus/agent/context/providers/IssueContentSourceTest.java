@@ -55,7 +55,6 @@ class IssueContentSourceTest extends BaseUnitTest {
     private static final long ISSUE_ID = 777L;
     private static final String METADATA_KEY = "inputs/context/metadata.json";
     private static final String COMMENTS_KEY = "inputs/context/comments.json";
-    private static final String SUMMARY_KEY = "inputs/context/issue_summary.md";
     private static final SourceKind CORE = new SourceKind("scm.issue.core");
     private static final SourceKind COMMENTS = new SourceKind("scm.issue.comments");
 
@@ -380,10 +379,10 @@ class IssueContentSourceTest extends BaseUnitTest {
     }
 
     @Nested
-    class Summary {
+    class StagedFiles {
 
         @Test
-        void writesIssueSummaryMarkdown() {
+        void stagesTheIssueAsMetadataAndCommentsOnly() {
             Issue issue = richIssue();
             stubComments(List.of(comment("bob", "first", Instant.parse("2025-06-01T10:00:00Z"))));
             when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
@@ -391,13 +390,9 @@ class IssueContentSourceTest extends BaseUnitTest {
             Map<String, byte[]> files = new LinkedHashMap<>();
             provider.contribute(request(sampleMetadata()), files);
 
-            assertThat(files).containsKey(SUMMARY_KEY);
-            String md = new String(files.get(SUMMARY_KEY), StandardCharsets.UTF_8);
-            assertThat(md).contains("# Issue #123 — Tighten the practice catalogue");
-            assertThat(md).contains("**State:** CLOSED (COMPLETED)");
-            assertThat(md).contains("**Type:** Task");
-            assertThat(md).contains("**Sub-issues:** 3/4 completed");
-            assertThat(md).doesNotContain("## Discussion").doesNotContain("**bob** wrote:");
+            assertThat(files).containsOnlyKeys(METADATA_KEY, "inputs/context/description.md", COMMENTS_KEY);
+            assertThat(new String(files.get("inputs/context/description.md"), StandardCharsets.UTF_8))
+                    .isEqualTo("Make the catalogue honest.");
 
             JsonNode comments = objectMapper.readTree(files.get(COMMENTS_KEY));
             assertThat(comments).hasSize(1);
@@ -453,7 +448,7 @@ class IssueContentSourceTest extends BaseUnitTest {
         }
 
         @Test
-        void rendersEmptyBodyPlaceholderInSummary() {
+        void stagesAnEmptyBodyAsAnEmptyString() {
             Issue issue = richIssue();
             issue.setBody(null);
             when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
@@ -461,10 +456,10 @@ class IssueContentSourceTest extends BaseUnitTest {
             Map<String, byte[]> files = new LinkedHashMap<>();
             provider.contribute(request(sampleMetadata()), files);
 
-            String md = new String(files.get(SUMMARY_KEY), StandardCharsets.UTF_8);
-            assertThat(md).contains("## Description\n\n_(empty)_");
             // An empty body still produces a valid metadata body field (empty string, not null).
-            assertThat(files).containsKey(METADATA_KEY);
+            JsonNode metadata = objectMapper.readTree(files.get(METADATA_KEY));
+            assertThat(metadata.get("body").isString()).isTrue();
+            assertThat(metadata.get("body").asString()).isEmpty();
         }
     }
 

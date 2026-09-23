@@ -95,7 +95,7 @@ class ReleaseCheckServiceTest {
         var service = service("1.2.3", true);
         when(client.fetchLatest(null)).thenReturn(found("1.2.3"));
         assertThat(service.check().status()).isEqualTo(ReleaseCheckStatus.CURRENT);
-        when(client.fetchLatest("\"etag\"")).thenReturn(found("1.1.0"));
+        when(client.fetchLatest("\"etag\"")).thenReturn(found("1.2.0"));
         assertThat(service.check().status()).isEqualTo(ReleaseCheckStatus.CURRENT);
     }
 

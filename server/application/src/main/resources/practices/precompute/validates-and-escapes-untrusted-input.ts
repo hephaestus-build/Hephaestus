@@ -5,6 +5,8 @@
 // per-language SOURCE table + a SINK table keyed off the file extension. Adding a language = adding rows,
 // no engine change. The taint flow spans lines, so we pair each source to nearby sinks and hand the LLM
 // the exact span to trace.
+import { isCommentLine } from "../lib/declarations.ts";
+import { languageOf } from "../lib/languages.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 /** A label -> pattern table row. The label is what a hint reports, so it is rendered verbatim. */
@@ -51,7 +53,7 @@ const SOURCES: PatternTable = {
 				/\bnew\s+(?:FileReader|FileInputStream)\s*\(|Files\.(?:read|newInputStream)\b/u,
 			],
 		],
-		ts: [
+		typescript: [
 			["express/koa req", /\breq\.(?:params|query|body|headers|cookies|get)\b/u],
 			["fs read", /\bfs\.(?:readFile|readFileSync|createReadStream)\b/u],
 			["URL/searchParams", /\b(?:searchParams|URLSearchParams|location\.(?:search|hash|href))\b/u],
@@ -116,7 +118,7 @@ const SINKS: PatternTable = {
 			],
 			["ObjectInputStream", /\bObjectInputStream\b/u],
 		],
-		ts: [
+		typescript: [
 			[
 				"innerHTML / dangerouslySetInnerHTML",
 				/\b(?:innerHTML|outerHTML|dangerouslySetInnerHTML|insertAdjacentHTML|document\.write)\b/u,
@@ -144,41 +146,12 @@ const SINKS: PatternTable = {
 	},
 };
 
-// extension -> language key (drives which SOURCES/SINKS rows refine the "all" set).
-const EXT_LANG: Record<string, string> = {
-	ts: "ts",
-	tsx: "ts",
-	mts: "ts",
-	cts: "ts",
-	js: "ts",
-	jsx: "ts",
-	mjs: "ts",
-	cjs: "ts",
-	py: "python",
-	java: "java",
-	go: "go",
-	rb: "ruby",
-	php: "php",
-	cs: "csharp",
-	swift: "swift",
-};
-
 // Sources and sinks co-occurring within this many added lines are surfaced as a candidate flow.
 const WINDOW = 25;
 
-function langOf(path: string): string | null {
-	const ext = path.split(".").pop()?.toLowerCase() ?? "";
-	return EXT_LANG[ext] ?? null;
-}
-
-function isComment(t: string): boolean {
-	return (
-		t.startsWith("//") ||
-		t.startsWith("#") ||
-		t.startsWith("*") ||
-		t.startsWith("/*") ||
-		t.startsWith("--")
-	);
+/** JavaScript shares TypeScript's surfaces; the lib names the two apart. */
+function rowsLanguage(lang: string | null): string | null {
+	return lang === "javascript" ? "typescript" : lang;
 }
 
 /** Cross-language rows first, then the rows for this file's language (none when it is unrecognised). */
@@ -202,20 +175,21 @@ export default function validatesAndEscapesUntrustedInput(
 ) {
 	const hints: Hint[] = [];
 	let flowCount = 0;
+	let linesAdded = 0;
 
 	for (const [path, df] of diffFiles) {
-		const lang = langOf(path);
-		const sourceRows = rowsFor(SOURCES, lang);
-		const sinkRows = rowsFor(SINKS, lang);
+		const lang = languageOf(path);
+		const sourceRows = rowsFor(SOURCES, rowsLanguage(lang));
+		const sinkRows = rowsFor(SINKS, rowsLanguage(lang));
 
 		// Collect source / sink positions on ADDED lines only.
 		const srcLines: { line: number; label: string; content: string }[] = [];
 		const sinkLines: { line: number; label: string; content: string }[] = [];
 		for (const [line, content] of df.addedLines) {
-			const trimmed = content.trimStart();
-			if (isComment(trimmed)) {
+			if (isCommentLine(content, lang ?? "")) {
 				continue;
 			}
+			linesAdded += 1;
 			const s = firstMatch(sourceRows, content);
 			if (s !== null) {
 				srcLines.push({ line, label: s, content });
@@ -259,5 +233,9 @@ export default function validatesAndEscapesUntrustedInput(
 				]
 			: [];
 
-	return { hints: hints.slice(0, 40), metrics: { sourceSinkFlows: flowCount }, directions };
+	return {
+		hints: hints.slice(0, 40),
+		metrics: { sourceSinkFlows: flowCount, filesScanned: diffFiles.size, linesAdded },
+		directions,
+	};
 }
