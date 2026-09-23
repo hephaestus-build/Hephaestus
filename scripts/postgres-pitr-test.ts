@@ -206,13 +206,29 @@ function sql(query: string): string {
 	);
 }
 
-function waitForDatabase(): void {
+function waitForDatabase(restored: boolean): void {
 	for (let attempt = 0; attempt < 60; attempt += 1) {
 		if (
 			spawnSync("docker", ["exec", container, "sh", "-c", 'test "$(cat /proc/1/comm)" = postgres'])
 				.status === 0 &&
 			spawnSync("docker", ["exec", container, "pg_isready", "-U", "root", "-d", "hephaestus"])
-				.status === 0
+				.status === 0 &&
+			(!restored ||
+				spawnSync(
+					"docker",
+					[
+						"exec",
+						container,
+						"psql",
+						"-U",
+						"root",
+						"-d",
+						"hephaestus",
+						"-Atc",
+						"SELECT pg_is_in_recovery()",
+					],
+					{ encoding: "utf8" },
+				).stdout.trim() === "f")
 		) {
 			return;
 		}
@@ -275,7 +291,7 @@ function start(restored = false): number {
 					"archive_command=pgbackrest --stanza=hephaestus archive-push %p",
 				]),
 	);
-	waitForDatabase();
+	waitForDatabase(restored);
 	const mapping = docker("port", container, "5432/tcp");
 	return Number(mapping.slice(mapping.lastIndexOf(":") + 1));
 }

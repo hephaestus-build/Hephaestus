@@ -92,19 +92,30 @@ application, broker and public ingress services are profiled out. From the
 isolated self-host directory, run:
 
 ```bash
+(
+set -eu
 dr() { docker compose --env-file .env --env-file release-lock.env -f compose.yaml -f compose.restore.yaml "$@"; }
 dr run --rm --no-deps pgbackrest-restore --stanza=hephaestus --type=time \
   --target='YYYY-MM-DD HH:MM:SS+00' --target-action=promote restore
 dr up -d --wait postgres
+for attempt in $(seq 1 360); do
+  recovery=$(dr exec -T postgres psql -U root -d hephaestus -Atc 'SELECT pg_is_in_recovery()')
+  [ "$recovery" = f ] && break
+  sleep 5
+done
+[ "$recovery" = f ] || { printf 'PostgreSQL did not promote within 30 minutes\n' >&2; exit 1; }
 dr exec -T postgres psql -U root -d hephaestus -v ON_ERROR_STOP=1 \
   < restore-clone-lockdown.sql
+)
 ```
 
 Choose a recorded UTC target covered by a full backup and uninterrupted archived WAL. Keep the clone's
 provider egress denied, `AGENT_ENABLED=false` on server **and** worker, and Silent Mode engaged
-before any application role starts. The lockdown transaction engages Silent Mode, pauses every
-workspace's feedback delivery, disables automatic/manual reviews and mentors, and advances the
-rollout revision so prepared work cannot use an earlier policy. It changes the **clone only**;
+before any application role starts. The PostgreSQL health check alone does not show that recovery
+has finished; the command above waits for promotion before it changes restored data. The lockdown
+transaction engages Silent Mode, pauses every workspace's feedback delivery, disables
+automatic/manual reviews and mentors, and advances the rollout revision so prepared work cannot
+use an earlier policy. It changes the **clone only**;
 never pipe this file into the production database. The restore overlay also refuses direct starts
 of the server, worker and webhook roles. An operator who later inspects application health must
 use a separately reviewed isolated override; removing this brake is an explicit release step,
