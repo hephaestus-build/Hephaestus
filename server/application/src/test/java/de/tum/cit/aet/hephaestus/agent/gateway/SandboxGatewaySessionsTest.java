@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -30,6 +31,17 @@ class SandboxGatewaySessionsTest {
     Path temporary;
 
     private final SandboxGatewaySessions sessions = new SandboxGatewaySessions();
+
+    @Test
+    void shouldNotReplaceAnActiveJobSession() throws Exception {
+        UUID jobId = UUID.randomUUID();
+        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
+        try (var session = sessions.register(jobId, "first-attempt", archive, "out")) {
+            assertThatThrownBy(() -> sessions.register(jobId, "second-attempt", archive, "out"))
+                    .isInstanceOf(IllegalStateException.class);
+            assertThat(sessions.require(jobId, "Bearer first-attempt")).isSameAs(session);
+        }
+    }
 
     @Test
     void shouldBindDownloadsToTheRegisteredCredentialAndAllowWholeFileRetry() throws Exception {

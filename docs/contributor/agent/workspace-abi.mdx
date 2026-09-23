@@ -26,6 +26,9 @@ For result upload, the runner sends `Content-Digest: sha-256=:<base64>:` over th
 The gateway checks it against the received bytes before it keeps the first complete result. Both
 the first success and a repeat `409` return the first result's strong `ETag`; the runner accepts
 either only when the tag matches its archive. Other `409` responses are failures, not acknowledgements.
+An authenticated upload sent to a worker that does not own the running attempt receives `409`
+without an `ETag`. The batch runtime URL contains the job ID; a token for another job cannot
+produce this ownership response for that URL.
 
 ```text
 /workspace/

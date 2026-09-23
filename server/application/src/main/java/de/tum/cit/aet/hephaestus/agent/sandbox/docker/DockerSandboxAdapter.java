@@ -192,6 +192,7 @@ public class DockerSandboxAdapter implements SandboxManager {
             }
             Map<String, String> labels = securityPolicy.buildLabels(jobId);
             attempt = launcher.open(
+                    jobId,
                     spec.networkPolicy(),
                     workspaceManager.createInputTar(
                             spec.inputFiles(), spec.inputFilesOnDisk(), spec.inputDirectories()),

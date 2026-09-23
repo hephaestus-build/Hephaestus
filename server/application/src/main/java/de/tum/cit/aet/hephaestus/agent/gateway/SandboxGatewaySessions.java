@@ -29,8 +29,14 @@ public class SandboxGatewaySessions {
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
 
     public Session register(String token, Path inputTar, String outputRoot) throws IOException {
-        var session = new Session(UUID.randomUUID(), token, inputTar, outputRoot);
-        sessions.put(session.id(), session);
+        return register(UUID.randomUUID(), token, inputTar, outputRoot);
+    }
+
+    public Session register(UUID id, String token, Path inputTar, String outputRoot) throws IOException {
+        var session = new Session(id, token, inputTar, outputRoot);
+        if (sessions.putIfAbsent(id, session) != null) {
+            throw new IllegalStateException("Gateway session already exists for this job");
+        }
         return session;
     }
 

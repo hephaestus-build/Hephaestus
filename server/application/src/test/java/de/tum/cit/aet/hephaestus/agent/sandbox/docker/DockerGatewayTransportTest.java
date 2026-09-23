@@ -100,7 +100,9 @@ class DockerGatewayTransportTest extends BaseUnitTest {
             var spec = created.getLast();
             String url = spec.environment().get("SANDBOX_RUNTIME_URL");
             assertThat(url).isNotNull();
-            var session = sessions.require(UUID.fromString(url.substring(url.lastIndexOf('/') + 1)), "Bearer token");
+            UUID sessionId = UUID.fromString(url.substring(url.lastIndexOf('/') + 1));
+            assertThat(sessionId).isEqualTo(jobId);
+            var session = sessions.require(sessionId, "Bearer token");
             if (invocation.getArgument(0).equals("initializer")) {
                 if (initializerExit == 0) {
                     try (var input = session.download()) {
