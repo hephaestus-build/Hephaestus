@@ -3,8 +3,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.sync;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -353,6 +355,40 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
         verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), isNull(), any());
         verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), isNull(), any());
         org.assertj.core.api.Assertions.assertThat(result).isTrue();
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, null);
+    }
+
+    @Test
+    void shouldRecordIncompleteIssueSyncAndClearAfterRecovery() {
+        SyncTarget target = syncTarget(null, null);
+        when(issueSyncService.syncForRepository(any(), any(), any(), any(), any()))
+                .thenReturn(SyncResult.abortedError(1), SyncResult.completed(3));
+
+        org.assertj.core.api.Assertions.assertThat(service.syncSyncTarget(target))
+                .isFalse();
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, "Issue sync: ABORTED_ERROR");
+
+        org.assertj.core.api.Assertions.assertThat(service.syncSyncTarget(target))
+                .isTrue();
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, null);
+    }
+
+    @Test
+    void shouldContinueIssueSyncAfterCommitBackfillFailsAndClearOnRecovery() {
+        SyncTarget target = syncTarget(null, null);
+        doThrow(new IllegalStateException("sensitive checkout detail"))
+                .doReturn(0)
+                .when(commitBackfillService)
+                .backfillCommits(any(), any(), any());
+
+        org.assertj.core.api.Assertions.assertThat(service.syncSyncTarget(target))
+                .isFalse();
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, "Commit backfill failed (IllegalStateException)");
+
+        org.assertj.core.api.Assertions.assertThat(service.syncSyncTarget(target))
+                .isTrue();
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, null);
+        verify(issueSyncService, times(2)).syncForRepository(any(), any(), any(), any(), any());
     }
 
     @Test

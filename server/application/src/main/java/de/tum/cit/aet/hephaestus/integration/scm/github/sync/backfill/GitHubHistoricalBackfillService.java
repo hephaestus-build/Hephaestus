@@ -1461,6 +1461,7 @@ public class GitHubHistoricalBackfillService {
     private void clearFailureState(Long syncTargetId) {
         repositoryCooldowns.remove(syncTargetId);
         consecutiveFailures.remove(syncTargetId);
+        syncTargetProvider.updateSyncError(syncTargetId, null);
     }
 
     /**
@@ -1471,6 +1472,8 @@ public class GitHubHistoricalBackfillService {
      */
     private void handleBackfillFailure(SyncTarget target, Exception e) {
         String safeRepoName = Objects.requireNonNull(sanitizeForLog(target.repositoryNameWithOwner()));
+        syncTargetProvider.updateSyncError(
+                target.id(), "Historical backfill failed (" + e.getClass().getSimpleName() + ")");
 
         // BackfillTransientException is explicitly marked as transient - always cooldown
         if (e instanceof BackfillTransientException) {

@@ -122,6 +122,7 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
         assertThat(firstPass).isEqualTo(1);
         assertThat(secondPass).isZero();
         verify(issueSyncService, times(1)).backfillIssues(eq(SCOPE_ID), any(), any(), anyInt());
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, null);
     }
 
     @Test
@@ -150,6 +151,7 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
         assertThat(service.runBackfillPass(SCOPE_ID, handle)).isZero();
 
         verify(issueSyncService, times(1)).backfillIssues(eq(SCOPE_ID), any(), any(), anyInt());
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, "Historical issue backfill aborted");
     }
 
     @Test

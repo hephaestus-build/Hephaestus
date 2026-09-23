@@ -189,6 +189,7 @@ public class SlackChannelConsentService {
             ConsentState from = channel.getConsentState();
             channel.setConsentState(ConsentState.PENDING);
             channel.setConsentAnnouncedAt(null);
+            channel.setLastSyncError(null);
             monitoredChannelRepository.save(channel);
             recordAudit(workspaceId, channel.getSlackChannelId(), from, ConsentState.PENDING, "channel re-added");
             return new RegistrationOutcome(toDTO(workspaceId, channel), false);
@@ -263,6 +264,7 @@ public class SlackChannelConsentService {
                     // eraseChannel persists REVOKED via bulk UPDATE; reflect it on the loaded entity for the DTO.
                     ingestService.eraseChannel(workspaceId, slackChannelId);
                     channel.setConsentState(ConsentState.REVOKED);
+                    channel.setLastSyncError(null);
                 }
                 case PENDING ->
                     throw new SlackChannelConsentViolationException(

@@ -304,6 +304,7 @@ class GitlabConnectionSyncStateProviderTest extends BaseUnitTest {
         @Test
         void shouldMapSyncedRepositoryWithItemCount() {
             RepositoryToMonitor monitor = monitor(1L, "group/synced-repo");
+            monitor.setLastSyncError("Issue sync: ABORTED_ERROR");
             when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(monitor));
 
             Repository repo = new Repository();
@@ -327,7 +328,7 @@ class GitlabConnectionSyncStateProviderTest extends BaseUnitTest {
             assertThat(resource.state()).isEqualTo("SYNCED");
             assertThat(resource.lastSyncedAt()).isEqualTo(syncedAt);
             assertThat(resource.itemCount()).isEqualTo(12L);
-            assertThat(resource.lastError()).isNull();
+            assertThat(resource.lastError()).isEqualTo("Issue sync: ABORTED_ERROR");
         }
 
         @Test

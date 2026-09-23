@@ -153,6 +153,11 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
     }
 
     @Override
+    public void updateSyncError(Long syncTargetId, @Nullable String error) {
+        repositoryToMonitorRepository.updateLastSyncError(syncTargetId, error);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<SyncMetadata> getSyncMetadata(Long scopeId) {
         return workspaceRepository.findById(scopeId).map(this::toSyncMetadata);

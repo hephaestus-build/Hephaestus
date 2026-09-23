@@ -1248,6 +1248,7 @@ erDiagram
         VARCHAR(255) discussion_sync_cursor
         TIMESTAMPTZ discussions_synced_at
         BIGINT native_id
+        VARCHAR(2048) last_sync_error
     }
 
     ReviewBackfillRun {
@@ -1334,6 +1335,7 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         VARCHAR(32) last_history_synced_ts
         TIMESTAMPTZ history_synced_at
+        VARCHAR(2048) last_sync_error
     }
 
     SlackParticipantConsent {

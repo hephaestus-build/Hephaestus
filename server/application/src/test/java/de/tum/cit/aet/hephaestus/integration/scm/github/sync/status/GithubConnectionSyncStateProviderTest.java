@@ -298,6 +298,7 @@ class GithubConnectionSyncStateProviderTest extends BaseUnitTest {
         void mapsRepositoryToMonitor_withItemCountFromGroupedQuery() {
             RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a");
             rtm.setId(500L);
+            rtm.setLastSyncError("Issue sync: ABORTED_ERROR");
             Instant issuesSyncedAt = Instant.now().minusSeconds(60);
             Instant prsSyncedAt = Instant.now().minusSeconds(30);
             rtm.setIssuesSyncedAt(issuesSyncedAt);
@@ -325,7 +326,7 @@ class GithubConnectionSyncStateProviderTest extends BaseUnitTest {
             assertThat(resource.lastSyncedAt()).isEqualTo(prsSyncedAt);
             assertThat(resource.itemCount()).isEqualTo(42L);
             assertThat(resource.upstreamCount()).isNull();
-            assertThat(resource.lastError()).isNull();
+            assertThat(resource.lastError()).isEqualTo("Issue sync: ABORTED_ERROR");
         }
 
         @Test

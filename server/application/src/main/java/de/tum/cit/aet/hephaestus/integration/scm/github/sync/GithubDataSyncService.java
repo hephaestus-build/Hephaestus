@@ -237,6 +237,7 @@ public class GithubDataSyncService {
                             scopeId,
                             safeNameWithOwner,
                             syncTarget.nativeId());
+                    syncTargetProvider.updateSyncError(syncTarget.id(), "Repository metadata unavailable");
                     return false;
                 }
                 log.info(
@@ -253,6 +254,7 @@ public class GithubDataSyncService {
                         "Skipped sync (transient): reason=syncReturnedEmpty, scopeId={}, repoName={}",
                         scopeId,
                         safeNameWithOwner);
+                syncTargetProvider.updateSyncError(syncTarget.id(), "Repository metadata sync failed");
                 return false;
             }
             repository = syncedRepository.get();
@@ -275,6 +277,7 @@ public class GithubDataSyncService {
                 safeNameWithOwner);
 
         try {
+            boolean metadataFailed = false;
             if (!repositoryCreatedDuringSync) {
                 var syncedRepository = repositorySyncService.syncRepository(scopeId, nameWithOwner, provider);
                 if (syncedRepository.isPresent()) {
@@ -282,6 +285,7 @@ public class GithubDataSyncService {
                     log.debug("Synced repository metadata: scopeId={}, repoId={}", scopeId, repositoryId);
                     syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.FULL_REPOSITORY, Instant.now());
                 } else {
+                    metadataFailed = true;
                     log.warn(
                             "Failed to sync repository metadata, continuing: scopeId={}, repoId={}",
                             scopeId,
@@ -292,7 +296,14 @@ public class GithubDataSyncService {
             // Backfill commits from local git clone. Uses local git, not the GitHub API, so
             // there is no rate limit concern. The backfill service has its own short-circuit
             // (HEAD SHA == latest known SHA → fast return).
-            int commitsBackfilled = commitBackfillService.backfillCommits(syncTarget, repository, scopeId);
+            int commitsBackfilled = -1;
+            String commitBackfillError = null;
+            try {
+                commitsBackfilled = commitBackfillService.backfillCommits(syncTarget, repository, scopeId);
+            } catch (RuntimeException e) {
+                commitBackfillError = "Commit backfill failed (" + e.getClass().getSimpleName() + ")";
+                log.warn("Commit backfill failed: scopeId={}, repoId={}", scopeId, repositoryId, e);
+            }
 
             // Do not gate the sub-syncs below on repository.updatedAt — GitHub does not reliably
             // bump it on issue/PR/comment activity, so such a gate cannot see new PRs. Each sub-sync
@@ -402,13 +413,35 @@ public class GithubDataSyncService {
                     discussionResult.count(),
                     issueResult.status(),
                     prResult.status());
-            return issueResult.isCompleted() && prResult.isCompleted() && discussionResult.isCompleted();
+            String error = metadataFailed ? "Repository metadata sync failed" : null;
+            if (error == null && issueResult.status() != SyncResult.Status.COMPLETED) {
+                error = "Issue sync: " + issueResult.status();
+            }
+            if (error == null && prResult.status() != SyncResult.Status.COMPLETED) {
+                error = "Pull request sync: " + prResult.status();
+            }
+            if (error == null && discussionResult.status() != SyncResult.Status.COMPLETED) {
+                error = "Discussion sync: " + discussionResult.status();
+            }
+            if (error == null && commitsEnriched < 0) {
+                error = "Commit author enrichment failed";
+            }
+            if (error == null && commitsMetadataEnriched < 0) {
+                error = "Commit metadata enrichment failed";
+            }
+            if (error == null) {
+                error = commitBackfillError;
+            }
+            syncTargetProvider.updateSyncError(syncTarget.id(), error);
+            return error == null;
         } catch (InstallationNotFoundException e) {
             // Re-throw to abort the entire sync operation
             throw e;
         } catch (Exception e) {
             ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
             Category category = classification.category();
+
+            syncTargetProvider.updateSyncError(syncTarget.id(), "Repository sync failed: " + category);
 
             boolean removed = false;
             switch (category) {

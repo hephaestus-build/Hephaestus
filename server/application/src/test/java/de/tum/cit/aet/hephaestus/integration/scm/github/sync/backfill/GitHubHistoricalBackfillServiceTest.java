@@ -705,6 +705,21 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
     class RunBackfillBatch {
 
         @Test
+        void shouldRecordBackfillFailureOnTheMonitoredRepository() {
+            service = createService(enabledSchedulerProperties);
+            SyncTarget target = createTargetWithBackfillInProgress(SYNC_TARGET_ID_A, "org/repo-a");
+            when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(1000);
+            when(repositoryRepository.findByNameWithOwner("org/repo-a"))
+                    .thenThrow(new IllegalStateException("sensitive database detail"));
+
+            assertThat(service.runBackfillBatch(target, 50, BackfillPageObserver.NOOP))
+                    .isFalse();
+
+            verify(syncTargetProvider)
+                    .updateSyncError(SYNC_TARGET_ID_A, "Historical backfill failed (IllegalStateException)");
+        }
+
+        @Test
         void alreadyComplete_returnsFalseWithoutCheckingRateLimit() {
             service = createService(enabledSchedulerProperties);
             SyncTarget target = createTargetWithBackfillComplete(SYNC_TARGET_ID_A, "org/repo-a");

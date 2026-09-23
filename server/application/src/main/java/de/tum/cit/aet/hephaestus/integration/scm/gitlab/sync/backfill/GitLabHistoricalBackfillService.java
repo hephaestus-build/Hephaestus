@@ -193,14 +193,17 @@ public class GitLabHistoricalBackfillService {
             int batchSize) {
         String safeName = sanitizeForLog(repo.getNameWithOwner());
         boolean didWork = false;
+        boolean attempted = false;
 
         // Backfill issues
         if (issueSync != null && !target.isIssueBackfillComplete()) {
+            attempted = true;
             try {
                 BackfillBatchResult result =
                         issueSync.backfillIssues(scopeId, repo, target.issueSyncCursor(), batchSize);
 
                 if (result.aborted()) {
+                    syncTargetProvider.updateSyncError(target.id(), "Historical issue backfill aborted");
                     repositoryCooldowns.put(target.id(), Cooldown.afterError(COOLDOWN_ERROR));
                     return false;
                 }
@@ -215,6 +218,9 @@ public class GitLabHistoricalBackfillService {
                     syncTargetProvider.updateIssueBackfillState(target.id(), 0, 0, null);
                 }
             } catch (Exception e) {
+                syncTargetProvider.updateSyncError(
+                        target.id(),
+                        "Historical issue backfill failed (" + e.getClass().getSimpleName() + ")");
                 log.warn("Issue backfill failed: repo={}", safeName, e);
                 repositoryCooldowns.put(target.id(), Cooldown.afterError(COOLDOWN_ERROR));
                 return didWork;
@@ -223,11 +229,13 @@ public class GitLabHistoricalBackfillService {
 
         // Backfill merge requests
         if (mrSync != null && !target.isPullRequestBackfillComplete()) {
+            attempted = true;
             try {
                 BackfillBatchResult result =
                         mrSync.backfillMergeRequests(scopeId, repo, target.pullRequestSyncCursor(), batchSize);
 
                 if (result.aborted()) {
+                    syncTargetProvider.updateSyncError(target.id(), "Historical merge request backfill aborted");
                     repositoryCooldowns.put(target.id(), Cooldown.afterError(COOLDOWN_ERROR));
                     return didWork;
                 }
@@ -241,6 +249,10 @@ public class GitLabHistoricalBackfillService {
                     syncTargetProvider.updatePullRequestBackfillState(target.id(), 0, 0, null);
                 }
             } catch (Exception e) {
+                syncTargetProvider.updateSyncError(
+                        target.id(),
+                        "Historical merge request backfill failed ("
+                                + e.getClass().getSimpleName() + ")");
                 log.warn("MR backfill failed: repo={}", safeName, e);
                 repositoryCooldowns.put(target.id(), Cooldown.afterError(COOLDOWN_ERROR));
                 return didWork;
@@ -250,6 +262,10 @@ public class GitLabHistoricalBackfillService {
         if (didWork) {
             syncTargetProvider.updateIssueBackfillState(target.id(), null, null, Instant.now());
             repositoryCooldowns.put(target.id(), Cooldown.afterProgress(COOLDOWN_NORMAL));
+        }
+
+        if (attempted) {
+            syncTargetProvider.updateSyncError(target.id(), null);
         }
 
         return didWork;
