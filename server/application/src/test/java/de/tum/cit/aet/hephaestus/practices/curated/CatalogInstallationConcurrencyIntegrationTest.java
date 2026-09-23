@@ -60,7 +60,7 @@ class CatalogInstallationConcurrencyIntegrationTest extends AbstractWorkspaceInt
         CompletableFuture<Void> writer =
                 CompletableFuture.runAsync(() -> transactionOperations.executeWithoutResult(ignored -> {
                     catalogService.writePractice(
-                            PRACTICE, EntityTagPrecondition.parse('"' + current.etag() + '"'), updated);
+                            PRACTICE, EntityTagPrecondition.parse('"' + current.etag() + '"'), updated, null);
                     writeReady.countDown();
                     await(allowCommit);
                 }));

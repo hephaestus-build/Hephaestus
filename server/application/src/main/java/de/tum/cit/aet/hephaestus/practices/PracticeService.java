@@ -289,6 +289,7 @@ public class PracticeService {
 
         Set<ClearablePracticeField> fieldsToClear = request.clear() == null ? Set.of() : request.clear();
         List<PracticeBinding> bindings = request.bindings() == null ? beforeDefinition.bindings() : request.bindings();
+        BindingChange.requireExplicit(beforeDefinition.bindings(), bindings, request.bindingChanges());
         // The kind is read off the bindings, so "the author moved this practice to another kind of
         // work" is a question about the new bindings rather than a separate field to compare.
         ArtifactKind artifactKind = PracticeBinding.artifactKindOf(bindings);
@@ -503,7 +504,8 @@ public class PracticeService {
     }
 
     private static PracticeBinding withoutEvidence(PracticeBinding binding) {
-        return new PracticeBinding(binding.signals(), List.of(), binding.onDrafts(), binding.subject());
+        return new PracticeBinding(
+                binding.signals(), List.of(), binding.onDrafts(), binding.subject(), binding.appliesWhen());
     }
 
     private static void applyDefinition(Practice practice, PracticeDefinition definition) {

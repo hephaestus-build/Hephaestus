@@ -102,6 +102,33 @@ export const Edit: Story = {
 	},
 };
 
+const scopedGate = {
+	absentSays: "the change has no Swift code",
+	anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+};
+
+export const ScopedReviewerEdit: Story = {
+	args: {
+		mode: "edit",
+		initialData: {
+			...initialData,
+			bindings: [{ ...mockPullRequestBinding, subject: "REVIEWER", appliesWhen: scopedGate }],
+		},
+		groups,
+		isPending: false,
+		onSubmit: fn(),
+	},
+	play: async () => {
+		await settledDrawerPanel();
+		await expect(
+			screen.getByRole("combobox", { name: "Person this practice judges" }),
+		).toHaveTextContent("reviewer");
+		await expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveValue(
+			JSON.stringify(scopedGate, null, 2),
+		);
+	},
+};
+
 export const StaleEdit: Story = {
 	args: {
 		mode: "edit",
