@@ -37,8 +37,18 @@ const outline = {
 } satisfies WorkspaceOnboardingLink;
 
 const allCovered = [
-	{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: true },
-	{ choice: "CLOUD", practiceReviewsReady: true, mentorReady: true },
+	{
+		choice: "IN_HOUSE_ONLY",
+		practiceReviewsReady: true,
+		mentorReady: true,
+		models: [{ name: "Llama 3.3", maker: "META", platform: "OLLAMA" }],
+	},
+	{
+		choice: "CLOUD",
+		practiceReviewsReady: true,
+		mentorReady: true,
+		models: [{ name: "GPT-5", maker: "OPENAI", platform: "AZURE" }],
+	},
 ] satisfies WorkspaceOnboarding["aiOptions"];
 
 const welcome = {
@@ -197,10 +207,10 @@ export const NoAi: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
-			/^No AI No practice feedback and no Heph for you\. No practice feedback, no Heph Nothing is sent anywhere Nothing is kept No one reads your work No models$/u,
+			/^No AI Hephaestus without AI\. No practice feedback, no Heph Nothing is sent anywhere Nothing is kept No one reads your work No models$/u,
 		);
 		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toHaveAccessibleName(
-			/^In-house AI on systems your organisation runs\. Practice feedback and Heph Stays inside your organisation Kept under your organisation.s rules Only your organisation can read it Only the models your organisation runs$/u,
+			/^In-house Your organisation.s own AI\. Practice feedback and Heph Stays inside your organisation Kept under your organisation.s rules Only your organisation can read it Runs Llama 3\.3$/u,
 		);
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
@@ -294,8 +304,8 @@ export const OptionUncovered: Story = {
 			data: {
 				...welcome,
 				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: false, mentorReady: false },
-					{ choice: "CLOUD", practiceReviewsReady: true, mentorReady: true },
+					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: false, mentorReady: false, models: [] },
+					{ choice: "CLOUD", practiceReviewsReady: true, mentorReady: true, models: [] },
 				],
 				links: [],
 			},
@@ -334,8 +344,8 @@ export const HephNotCovered: Story = {
 				...welcome,
 				aiChoice: "IN_HOUSE_ONLY",
 				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: false },
-					{ choice: "CLOUD", practiceReviewsReady: false, mentorReady: true },
+					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: false, models: [] },
+					{ choice: "CLOUD", practiceReviewsReady: false, mentorReady: true, models: [] },
 				],
 			},
 		},
@@ -370,8 +380,8 @@ export const SavedChoiceUncovered: Story = {
 				needsSetup: false,
 				aiChoice: "CLOUD",
 				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: true },
-					{ choice: "CLOUD", practiceReviewsReady: false, mentorReady: false },
+					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: true, models: [] },
+					{ choice: "CLOUD", practiceReviewsReady: false, mentorReady: false, models: [] },
 				],
 				links: [],
 			},

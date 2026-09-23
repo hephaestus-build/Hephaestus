@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace.onboarding;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.AiVendor;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
@@ -21,7 +22,14 @@ public record WorkspaceOnboardingDTO(
     public record WorkspaceAiOptionDTO(
             @NonNull MemberAiChoice choice,
             @NonNull boolean practiceReviewsReady,
-            @NonNull boolean mentorReady) {}
+            @NonNull boolean mentorReady,
+            @NonNull List<WorkspaceAiModelDTO> models) {}
+
+    /** A model this answer would use here: its name, who made it, and where it runs, when known. */
+    public record WorkspaceAiModelDTO(
+            @NonNull String name,
+            @Nullable AiVendor maker,
+            @Nullable AiVendor platform) {}
 
     public record WorkspaceOnboardingLinkDTO(
             @NonNull long connectionId,

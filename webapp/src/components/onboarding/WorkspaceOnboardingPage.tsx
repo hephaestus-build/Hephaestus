@@ -133,6 +133,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 		heading,
 		intro,
 		hint,
+		models,
 	} = memberSetupState(data, draft, focus);
 	const submission: OnboardingSubmission = ready?.submission ?? { status: "idle" };
 	const saving = submission.status === "saving";
@@ -193,7 +194,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 	return (
 		<div className="min-h-svh bg-background">
 			<Questionnaire onSubmit={submit}>
-				<PageLayout className="max-w-2xl px-6 py-10">
+				<PageLayout className="max-w-4xl px-6 py-10">
 					<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
 
 					<header className="space-y-4">
@@ -238,7 +239,12 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 								</QuestionnaireDescription>
 								<FactList facts={AI_FACTS} />
 								<fieldset disabled={saving} className="min-w-0 disabled:opacity-50">
-									<AiChoiceCards choice={choice} saved={data?.aiChoice} onChoice={setDraft} />
+									<AiChoiceCards
+										choice={choice}
+										saved={data?.aiChoice}
+										models={models}
+										onChoice={setDraft}
+									/>
 								</fieldset>
 								{hasText(coverage?.sentence) && (
 									<p className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -482,6 +488,9 @@ function memberSetupState(
 	// Saving an AI choice is independent of connecting accounts, even on a first visit.
 	const canSubmit = choice !== undefined && (changed || (firstVisit && requiredSatisfied));
 	const heading = "Your AI choice";
+	const models = Object.fromEntries(
+		(data?.aiOptions ?? []).map((option) => [option.choice, option.models]),
+	);
 	const workspaceName = data?.workspaceName ?? "this workspace";
 	// Heph speaks about Hephaestus, never as the reader of the work.
 	const intro = firstVisit
@@ -514,5 +523,6 @@ function memberSetupState(
 		heading,
 		intro,
 		hint,
+		models,
 	};
 }

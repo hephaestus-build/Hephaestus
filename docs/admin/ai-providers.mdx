@@ -267,7 +267,10 @@ slug is API surface; the title is what the UI shows.
 ## Data handling and members' AI choices
 
 Owners configure **Administration → Member onboarding** after membership is already managed by the
-workspace's existing mechanism. The setup page is hidden by default. Declare and assign models before
+workspace's existing mechanism. Members choosing an answer see the display name of each model that
+would serve them and the logo of its maker and platform, such as OpenAI on Azure or Llama on Ollama.
+Hephaestus recognises the vendor from the model ID and the connection's host. The host itself is
+never shown to members. Choose display names you are happy for developers to read. The setup page is hidden by default. Declare and assign models before
 enabling it, and wait until every runtime role has been upgraded before assigning models by tier.
 
 1. In either model console, declare each model's **Data handling** with one fact, **Operated by**:

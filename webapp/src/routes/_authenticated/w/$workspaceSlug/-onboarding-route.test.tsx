@@ -40,8 +40,8 @@ const firstVisit = {
 	needsSetup: true,
 } satisfies WorkspaceOnboarding;
 const aiOptions = [
-	{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: true },
-	{ choice: "CLOUD", practiceReviewsReady: true, mentorReady: true },
+	{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: true, mentorReady: true, models: [] },
+	{ choice: "CLOUD", practiceReviewsReady: true, mentorReady: true, models: [] },
 ] satisfies WorkspaceOnboarding["aiOptions"];
 const IN_HOUSE = /^In-house /u;
 const CLOUD = /^Cloud /u;

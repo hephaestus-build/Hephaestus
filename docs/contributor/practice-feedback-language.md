@@ -243,7 +243,8 @@ The sign-in and first-visit pages follow ten rules:
 4. Section titles are the question or the noun.
 5. Hints are one sentence and the primary button's accessible description.
 6. *Not set up here yet* for an AI answer, *unavailable right now* for an account link. The three
-   cards sit side by side with the same anatomy: a hero band with the choice's icon, the title, then
+   cards sit side by side with the same anatomy: a hero of white discs with the marks of the companies
+   behind the models the workspace set up (a red prohibition sign for No AI), the title, then
    aligned rows that compare the same five facts on every card, in this order: practice feedback and
    Heph, where it runs, what is kept, who can read it, which models. Each row carries a green check
    for a plus, an orange triangle for a caveat or a red cross for a minus, and one neutral grey info

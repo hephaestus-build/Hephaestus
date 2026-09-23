@@ -40,7 +40,9 @@ it("withholds the floating composer for No AI and after a failed preference refe
 	const optedIn: WorkspaceOnboarding = {
 		...preference,
 		aiChoice: "IN_HOUSE_ONLY",
-		aiOptions: [{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true }],
+		aiOptions: [
+			{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+		],
 	};
 	server.use(http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(optedIn)));
 	await act(async () => {
@@ -105,7 +107,9 @@ it("keeps setup free of the floating composer even when AI is available", async 
 		...workspaceOnboarding(),
 		needsSetup: true,
 		aiChoice: "IN_HOUSE_ONLY",
-		aiOptions: [{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true }],
+		aiOptions: [
+			{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+		],
 	});
 	renderRouteAtWithRouter("/w/acme/onboarding");
 	await screen.findByRole("radio", { name: /^In-house /u }, ROUTE_RENDER_WAIT);

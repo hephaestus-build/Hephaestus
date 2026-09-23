@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.config;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiVendor;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
@@ -10,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -71,9 +73,33 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
         for (var choice : choices) {
             var review = choice.ceiling().flatMap(ceiling -> loosestWithin(reviewRows, ceiling));
             var mentor = choice.ceiling().flatMap(ceiling -> loosestWithin(mentorRows, ceiling));
-            options.add(new Option(choice, review.isPresent(), mentor.isPresent()));
+            var models = Stream.concat(review.stream(), mentor.stream())
+                    .map(MemberAiRoutingAdapter::model)
+                    .flatMap(Optional::stream)
+                    .distinct()
+                    .toList();
+            options.add(new Option(choice, review.isPresent(), mentor.isPresent(), models));
         }
         return List.copyOf(options);
+    }
+
+    /** The name and marks a developer sees; the connection's URL stays on the server. */
+    private static Optional<WorkspaceAiAvailability.Model> model(WorkspaceAgentBinding binding) {
+        var instance = binding.getInstanceModel();
+        if (instance != null) {
+            return Optional.of(new WorkspaceAiAvailability.Model(
+                    instance.getDisplayName(),
+                    AiVendor.ofModel(instance.getUpstreamModelId()),
+                    AiVendor.ofHost(instance.getConnection().getBaseUrl())));
+        }
+        var own = binding.getWorkspaceModel();
+        if (own != null) {
+            return Optional.of(new WorkspaceAiAvailability.Model(
+                    own.getDisplayName(),
+                    AiVendor.ofModel(own.getUpstreamModelId()),
+                    AiVendor.ofHost(own.getConnection().getBaseUrl())));
+        }
+        return Optional.empty();
     }
 
     private List<WorkspaceAgentBinding> rowsIfEnabled(

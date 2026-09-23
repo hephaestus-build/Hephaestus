@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiVendor;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAiAvailability;
 import java.time.Clock;
@@ -171,12 +172,37 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldAnswerTheAccountEndpointWithoutAWorkspace() {
-        assertThat(service.accountChoice(10L)).isEqualTo(new AccountAiChoiceDTO(null, null));
+    void shouldAnswerTheAccountEndpointWithTheModelsOfEveryWorkspace() {
+        when(memberships.membershipsForAccount(10L))
+                .thenReturn(List.of(
+                        new AccountWorkspaceMembershipQuery.WorkspaceMembershipView(
+                                1L, "engineering", "Engineering", "MEMBER", 20L),
+                        new AccountWorkspaceMembershipQuery.WorkspaceMembershipView(
+                                2L, "research", "Research", "MEMBER", 20L)));
+        var gpt = new WorkspaceAiAvailability.Model("GPT-5", AiVendor.OPENAI, AiVendor.AZURE);
+        var llama = new WorkspaceAiAvailability.Model("Llama 3.3", AiVendor.META, AiVendor.OLLAMA);
+        when(availability.options(1L))
+                .thenReturn(List.of(
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, true, true, List.of(llama)),
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.CLOUD, true, true, List.of(gpt))));
+        when(availability.options(2L))
+                .thenReturn(List.of(
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, true, false, List.of(llama)),
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.CLOUD, false, false, List.of())));
+        var unanswered = service.accountChoice(10L);
+        assertThat(unanswered.choice()).isNull();
+        assertThat(unanswered.updatedAt()).isNull();
+        var llamaDto = new WorkspaceOnboardingDTO.WorkspaceAiModelDTO("Llama 3.3", AiVendor.META, AiVendor.OLLAMA);
+        var gptDto = new WorkspaceOnboardingDTO.WorkspaceAiModelDTO("GPT-5", AiVendor.OPENAI, AiVendor.AZURE);
+        // A model two workspaces share is named once.
+        assertThat(unanswered.options())
+                .containsExactly(
+                        new AccountAiChoiceDTO.AccountAiOptionDTO(MemberAiChoice.IN_HOUSE_ONLY, List.of(llamaDto)),
+                        new AccountAiChoiceDTO.AccountAiOptionDTO(MemberAiChoice.CLOUD, List.of(gptDto)));
         var result = service.chooseForAccount(10L, MemberAiChoice.CLOUD);
         assertThat(result.choice()).isEqualTo(MemberAiChoice.CLOUD);
         assertThat(result.updatedAt()).isEqualTo(NOW);
-        verifyNoInteractions(memberships, settings, members);
+        verifyNoInteractions(settings, members);
     }
 
     @Test
@@ -199,8 +225,8 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         enabledPolicy();
         when(availability.options(1L))
                 .thenReturn(List.of(
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false),
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.CLOUD, true, true)));
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false, List.of()),
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.CLOUD, true, true, List.of())));
         var result = service.choose(context, 10L, MemberAiChoice.IN_HOUSE_ONLY);
         var saved = ArgumentCaptor.forClass(AccountAiChoice.class);
         verify(choices).save(saved.capture());

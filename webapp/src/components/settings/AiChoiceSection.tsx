@@ -1,7 +1,7 @@
 import { type SubmitEvent, useId, useState } from "react";
 
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { AiChoiceCards } from "@/components/onboarding/AiChoiceCards";
+import { AiChoiceCards, type AiChoiceCardsProps } from "@/components/onboarding/AiChoiceCards";
 import type { MemberAiChoice } from "@/components/practice-vocabulary/data-handling-defs";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +16,8 @@ import { Spinner } from "@/components/ui/spinner";
 export interface AiChoiceSectionProps {
 	/** The saved answer; `undefined` pre-selects nothing. */
 	choice: MemberAiChoice | undefined;
+	/** The models each answer would use across your workspaces, for the vendor marks on the cards. */
+	models?: AiChoiceCardsProps["models"];
 	onSave: (choice: MemberAiChoice) => void;
 	isSaving?: boolean;
 	isLoading?: boolean;
@@ -26,6 +28,7 @@ export interface AiChoiceSectionProps {
 
 export function AiChoiceSection({
 	choice,
+	models,
 	onSave,
 	isSaving = false,
 	isLoading = false,
@@ -51,6 +54,7 @@ export function AiChoiceSection({
 				<AiChoiceForm
 					key={choice ?? "unanswered"}
 					choice={choice}
+					models={models}
 					onSave={onSave}
 					isSaving={isSaving}
 					isLoading={isLoading}
@@ -62,10 +66,12 @@ export function AiChoiceSection({
 
 function AiChoiceForm({
 	choice,
+	models,
 	onSave,
 	isSaving,
 	isLoading,
-}: Required<Pick<AiChoiceSectionProps, "choice" | "onSave" | "isSaving" | "isLoading">>) {
+}: Required<Pick<AiChoiceSectionProps, "choice" | "onSave" | "isSaving" | "isLoading">> &
+	Pick<AiChoiceSectionProps, "models">) {
 	const [draft, setDraft] = useState<MemberAiChoice>();
 	const hintId = useId();
 	const selected = draft ?? choice;
@@ -101,7 +107,7 @@ function AiChoiceForm({
 					</div>
 				) : (
 					<fieldset disabled={busy} className="min-w-0 disabled:opacity-50">
-						<AiChoiceCards choice={selected} saved={choice} onChoice={setDraft} />
+						<AiChoiceCards choice={selected} saved={choice} models={models} onChoice={setDraft} />
 					</fieldset>
 				)}
 			</QuestionnaireItem>

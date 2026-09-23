@@ -70,7 +70,12 @@ class WorkspaceOnboardingService {
                 choice,
                 availability.options(context.id()).stream()
                         .map(option -> new WorkspaceOnboardingDTO.WorkspaceAiOptionDTO(
-                                option.choice(), option.practiceReviewsReady(), option.mentorReady()))
+                                option.choice(),
+                                option.practiceReviewsReady(),
+                                option.mentorReady(),
+                                option.models().stream()
+                                        .map(WorkspaceOnboardingService::toDTO)
+                                        .toList()))
                         .toList(),
                 linkOptions);
     }
@@ -92,15 +97,37 @@ class WorkspaceOnboardingService {
 
     @Transactional(readOnly = true)
     public AccountAiChoiceDTO accountChoice(long accountId) {
-        return choices.findById(accountId)
-                .map(WorkspaceOnboardingService::toDTO)
-                .orElseGet(() -> new AccountAiChoiceDTO(null, null));
+        var row = choices.findById(accountId).orElse(null);
+        return new AccountAiChoiceDTO(
+                row == null ? null : row.getAiChoice(),
+                row == null ? null : row.getUpdatedAt(),
+                accountOptions(accountId));
     }
 
     @Transactional
     public AccountAiChoiceDTO chooseForAccount(long accountId, MemberAiChoice choice) {
         requireSelf();
-        return toDTO(writeChoice(accountId, choice));
+        var row = writeChoice(accountId, choice);
+        return new AccountAiChoiceDTO(row.getAiChoice(), row.getUpdatedAt(), accountOptions(accountId));
+    }
+
+    /** Each answer's models across the account's own workspaces, each model named once. */
+    private List<AccountAiChoiceDTO.AccountAiOptionDTO> accountOptions(long accountId) {
+        var byChoice = new java.util.LinkedHashMap<
+                MemberAiChoice, java.util.LinkedHashSet<WorkspaceOnboardingDTO.WorkspaceAiModelDTO>>();
+        for (var membership : memberships.membershipsForAccount(accountId)) {
+            for (var option : availability.options(membership.workspaceId())) {
+                var models = byChoice.computeIfAbsent(option.choice(), ignored -> new java.util.LinkedHashSet<>());
+                option.models().forEach(model -> models.add(toDTO(model)));
+            }
+        }
+        return byChoice.entrySet().stream()
+                .map(entry -> new AccountAiChoiceDTO.AccountAiOptionDTO(entry.getKey(), List.copyOf(entry.getValue())))
+                .toList();
+    }
+
+    private static WorkspaceOnboardingDTO.WorkspaceAiModelDTO toDTO(WorkspaceAiAvailability.Model model) {
+        return new WorkspaceOnboardingDTO.WorkspaceAiModelDTO(model.name(), model.maker(), model.platform());
     }
 
     private AccountAiChoice writeChoice(long accountId, MemberAiChoice choice) {
@@ -204,10 +231,6 @@ class WorkspaceOnboardingService {
         return workspaces
                 .findByIdForUpdate(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace not found"));
-    }
-
-    private static AccountAiChoiceDTO toDTO(AccountAiChoice row) {
-        return new AccountAiChoiceDTO(row.getAiChoice(), row.getUpdatedAt());
     }
 
     private static WorkspaceOnboardingSettingsDTO toDTO(WorkspaceOnboardingSettings policy) {

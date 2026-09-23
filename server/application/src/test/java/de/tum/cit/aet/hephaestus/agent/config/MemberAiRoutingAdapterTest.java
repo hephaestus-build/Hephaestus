@@ -3,11 +3,14 @@ package de.tum.cit.aet.hephaestus.agent.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiVendor;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
@@ -161,8 +164,8 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(cloud, undeclared));
         assertThat(routing.options(1L))
                 .containsExactly(
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false),
-                        new WorkspaceAiAvailability.Option(MemberAiChoice.CLOUD, false, true));
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false, List.of()),
+                        new WorkspaceAiAvailability.Option(MemberAiChoice.CLOUD, false, true, List.of()));
         // One query per enabled purpose, shared by both choices; a disabled purpose loads nothing.
         verify(bindings, times(1)).findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR);
         verify(bindings, never()).findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW);
@@ -178,5 +181,38 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
             assertThat(option.practiceReviewsReady()).isFalse();
             assertThat(option.mentorReady()).isFalse();
         });
+    }
+
+    @Test
+    void shouldNameTheModelsAnAnswerWouldUseWithTheirVendorsButNoUrl() {
+        var workspace = new Workspace();
+        workspace.getFeatures().setMentorEnabled(true);
+        workspace.getFeatures().setPracticesEnabled(true);
+        when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
+        var inHouse = ready(DataHandlingTier.IN_HOUSE);
+        inHouse.setInstanceModel(model("Llama 3.3", "meta-llama/Llama-3.3-70B", "http://ollama.internal:11434/v1"));
+        var cloud = ready(DataHandlingTier.CLOUD);
+        cloud.setInstanceModel(model("GPT-5", "gpt-5", "https://acme.openai.azure.com/openai"));
+        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
+                .thenReturn(List.of(inHouse, cloud));
+        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(inHouse));
+        var options = routing.options(1L);
+        assertThat(options.get(0).models())
+                .containsExactly(new WorkspaceAiAvailability.Model("Llama 3.3", AiVendor.META, AiVendor.OLLAMA));
+        // Cloud serves reviews from the cloud row and Heph from the in-house row, each named once.
+        assertThat(options.get(1).models())
+                .containsExactly(
+                        new WorkspaceAiAvailability.Model("GPT-5", AiVendor.OPENAI, AiVendor.AZURE),
+                        new WorkspaceAiAvailability.Model("Llama 3.3", AiVendor.META, AiVendor.OLLAMA));
+    }
+
+    private static LlmModel model(String name, String upstreamId, String baseUrl) {
+        var connection = new LlmConnection();
+        connection.setBaseUrl(baseUrl);
+        var model = new LlmModel();
+        model.setDisplayName(name);
+        model.setUpstreamModelId(upstreamId);
+        model.setConnection(connection);
+        return model;
     }
 }

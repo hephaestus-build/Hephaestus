@@ -5,15 +5,23 @@ export type ClientOptions = {
 };
 
 /**
- * The signed-in account's AI choice; both fields are absent until the person has answered.
+ * The signed-in account's AI choice, absent until the person has answered, and the models each
+ *  answer would use across all their workspaces, so User settings can show the same vendor marks as
+ *  a workspace's setup page.
  */
 export type AccountAiChoice = {
   choice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
+  options: Array<AccountAiOption>;
   updatedAt?: Date;
 };
 
 export type AccountAiChoiceRequest = {
   choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
+};
+
+export type AccountAiOption = {
+  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
+  models: Array<WorkspaceAiModel>;
 };
 
 /**
@@ -5965,9 +5973,19 @@ export type Workspace = {
   workspaceSlug: string;
 };
 
+/**
+ * A model this answer would use here: its name, who made it, and where it runs, when known.
+ */
+export type WorkspaceAiModel = {
+  maker?: 'OPENAI' | 'AZURE' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'OLLAMA';
+  name: string;
+  platform?: 'OPENAI' | 'AZURE' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'OLLAMA';
+};
+
 export type WorkspaceAiOption = {
   choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
   mentorReady: boolean;
+  models: Array<WorkspaceAiModel>;
   practiceReviewsReady: boolean;
 };
 

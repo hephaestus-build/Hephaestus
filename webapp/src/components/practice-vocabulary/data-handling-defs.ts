@@ -1,17 +1,12 @@
 import {
 	Building2Icon,
-	CircleCheckIcon,
 	CircleHelpIcon,
 	CircleOffIcon,
-	CircleXIcon,
 	CloudIcon,
 	EyeIcon,
 	GraduationCapIcon,
 	HandshakeIcon,
-	InfoIcon,
 	LockIcon,
-	type LucideIcon,
-	TriangleAlertIcon,
 } from "lucide-react";
 
 import type { AgentBinding, LlmModel, WorkspaceOnboarding } from "@/api/types.gen";
@@ -128,12 +123,15 @@ export interface ChoiceFact {
 	text: string;
 }
 
-/** Icon and colour per tone. Both channels carry it, so the order survives greyscale. */
-export const CHOICE_TONE_DEFS: Record<ChoiceTone, { icon: LucideIcon; className: string }> = {
-	pro: { icon: CircleCheckIcon, className: "text-success" },
-	caveat: { icon: TriangleAlertIcon, className: "text-warning" },
-	con: { icon: CircleXIcon, className: "text-destructive" },
-	neutral: { icon: InfoIcon, className: "text-muted-foreground" },
+/**
+ * The colour per tone. The card draws a different shape for each (a check, a triangle, a cross, an
+ * "i"), so the tone survives greyscale.
+ */
+export const CHOICE_TONE_CLASS: Record<ChoiceTone, string> = {
+	pro: "text-success",
+	caveat: "text-warning",
+	con: "text-destructive",
+	neutral: "text-muted-foreground",
 };
 
 /**
@@ -156,7 +154,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		label: "In-house",
 		icon: Building2Icon,
 		badgeVariant: "secondary",
-		description: "AI on systems your organisation runs.",
+		description: "Your organisation’s own AI.",
 		facts: {
 			feedback: { tone: "pro", text: "Practice feedback and Heph" },
 			where: { tone: "pro", text: "Stays inside your organisation" },
@@ -170,7 +168,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		label: "Cloud",
 		icon: CloudIcon,
 		badgeVariant: "secondary",
-		description: "In-house, plus approved providers.",
+		description: "Adds approved cloud providers.",
 		facts: {
 			feedback: { tone: "pro", text: "Practice feedback and Heph" },
 			where: { tone: "caveat", text: "Leaves your organisation for a provider" },
@@ -184,7 +182,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		label: "No AI",
 		icon: CircleOffIcon,
 		badgeVariant: "secondary",
-		description: "No practice feedback and no Heph for you.",
+		description: "Hephaestus without AI.",
 		facts: {
 			feedback: { tone: "con", text: "No practice feedback, no Heph" },
 			where: { tone: "pro", text: "Nothing is sent anywhere" },

@@ -16,6 +16,10 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		choice: undefined,
+		models: {
+			IN_HOUSE_ONLY: [{ name: "Gemma 3", maker: "GEMMA", platform: "OLLAMA" }],
+			CLOUD: [{ name: "Claude Sonnet", maker: "ANTHROPIC", platform: "ANTHROPIC" }],
+		},
 		onSave: fn(),
 	},
 } satisfies Meta<typeof AiChoiceSection>;
@@ -36,7 +40,7 @@ export const Unanswered: Story = {
 	play: async ({ canvas }) => {
 		const radios = canvas.getAllByRole("radio");
 		await expect(radios).toHaveLength(3);
-		for (const name of [IN_HOUSE, CLOUD, CLOUD, NO_AI]) {
+		for (const name of [IN_HOUSE, CLOUD, NO_AI]) {
 			await expect(canvas.getByRole("radio", { name })).not.toBeChecked();
 		}
 		const save = canvas.getByRole("button", { name: "Save" });

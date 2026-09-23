@@ -54,7 +54,9 @@ it("keeps an existing conversation readable under No AI and restores its compose
 			{
 				...preference,
 				aiChoice: "IN_HOUSE_ONLY",
-				aiOptions: [{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true }],
+				aiOptions: [
+					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+				],
 			},
 		);
 	});
@@ -75,7 +77,9 @@ it("names the saved choice when no Heph model is within it", async () => {
 			HttpResponse.json({
 				...workspaceOnboarding(),
 				aiChoice: "CLOUD",
-				aiOptions: [{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true }],
+				aiOptions: [
+					{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true, models: [] },
+				],
 			}),
 		),
 		http.get("*/workspaces/acme/mentor/threads", () => HttpResponse.json([])),
