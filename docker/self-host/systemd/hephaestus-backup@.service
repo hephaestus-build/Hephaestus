@@ -6,5 +6,5 @@ After=docker.service
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/hephaestus/docker/self-host
-ExecStart=/usr/bin/docker compose --env-file .env --env-file release-lock.env -f compose.yaml -f compose.backup.yaml run --rm --no-deps pgbackrest --stanza=hephaestus --type=%i backup
+ExecStart=/usr/bin/flock -n /run/lock/hephaestus-backup.lock /usr/bin/docker compose --env-file .env --env-file release-lock.env -f compose.yaml -f compose.backup.yaml run --rm --no-deps pgbackrest --stanza=hephaestus --type=%i backup
 TimeoutStartSec=6h

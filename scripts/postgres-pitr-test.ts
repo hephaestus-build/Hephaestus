@@ -70,6 +70,22 @@ function waitForDatabase(): void {
 	throw new Error(`restored PostgreSQL did not become ready:\n${docker("logs", container)}`);
 }
 
+function archiveCurrentWal(): void {
+	const segment = sql("SELECT pg_walfile_name(pg_current_wal_lsn())");
+	sql("SELECT pg_switch_wal()");
+	for (let attempt = 0; attempt < 60; attempt += 1) {
+		if (
+			sql(
+				`SELECT (pg_stat_file('pg_wal/archive_status/${segment}.done', true)).size IS NOT NULL`,
+			) === "t"
+		) {
+			return;
+		}
+		pause(1);
+	}
+	throw new Error(`WAL segment ${segment} was not archived within 60 seconds`);
+}
+
 function start(): void {
 	docker(
 		"run",
@@ -155,13 +171,12 @@ try {
 	sidecar("ro", "--type=full", "backup");
 	sidecar("ro", "verify");
 	sql("INSERT INTO restore_probe VALUES ('middle')");
-	sql("SELECT pg_switch_wal()");
+	archiveCurrentWal();
 	pause(2);
 	const target = `${new Date().toISOString().slice(0, 19).replace("T", " ")}+00`;
 	pause(2);
 	sql("INSERT INTO restore_probe VALUES ('after')");
-	sql("SELECT pg_switch_wal()");
-	pause(3);
+	archiveCurrentWal();
 	docker("rm", "-f", container);
 	docker("volume", "rm", data);
 	docker("volume", "create", data);
