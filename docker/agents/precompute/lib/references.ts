@@ -12,7 +12,10 @@
 const NUMBER_REF = /#(?<number>\d+)(?![\w]|\.[0-9])/gu;
 
 /** `closes #12`, `Fixes: #7`, `resolved #3`. */
-const CLOSING_REF = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*#(?<number>\d+)/giu;
+const CLOSING_REF = new RegExp(
+	String.raw`\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*${NUMBER_REF.source}`,
+	"giu",
+);
 
 /** An issue number opening a branch-slug segment: `18-foo`, `feat/18-foo`. */
 const BRANCH_REF = /(?:^|\/)(?<number>\d{1,7})-/gu;

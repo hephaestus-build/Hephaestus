@@ -248,7 +248,10 @@ export function LlmModelFields({
 						}
 					}}
 				>
-					<SelectTrigger id={`${idPrefix}-reasoning-effort`}>
+					<SelectTrigger
+						id={`${idPrefix}-reasoning-effort`}
+						aria-describedby={`${idPrefix}-reasoning-effort-description`}
+					>
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent aria-labelledby={`${idPrefix}-reasoning-effort-label`}>
@@ -259,10 +262,9 @@ export function LlmModelFields({
 						))}
 					</SelectContent>
 				</Select>
-				<FieldDescription>
-					How hard a reasoning model is asked to think. Provider default sends nothing, so the
-					provider’s own default applies — medium for OpenAI’s GPT-5 family. None asks a reasoning
-					model not to reason; leave a model that does not reason at Provider default.
+				<FieldDescription id={`${idPrefix}-reasoning-effort-description`}>
+					Provider default sends no effort setting. Supported levels and defaults depend on the
+					model and provider. Choose only a supported level; None requests no reasoning.
 				</FieldDescription>
 			</Field>
 

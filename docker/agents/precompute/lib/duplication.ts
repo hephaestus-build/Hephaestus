@@ -76,7 +76,7 @@ function consecutive(lines: ShapedLine[], index: number): boolean {
 
 /**
  * Every pair of runs of at least {@link MIN_RUN_LINES} consecutive added lines with the same
- * shapes, across and within the source files of a change, tests and generated files excluded.
+ * shapes, across and within the source files of a change, test files excluded.
  * Overlapping candidates collapse to the longest run starting at each position.
  */
 export function duplicatePairs(diffFiles: ReadonlyMap<string, DiffFile>): DuplicatePair[] {
@@ -88,7 +88,7 @@ export function duplicatePairs(diffFiles: ReadonlyMap<string, DiffFile>): Duplic
 	for (const [fileIndex, file] of files.entries()) {
 		for (let index = 0; index + MIN_RUN_LINES <= file.lines.length; index += 1) {
 			const window = file.lines.slice(index, index + MIN_RUN_LINES);
-			if (window.some((line) => bare(line.shape)) && window.every((line) => bare(line.shape))) {
+			if (window.every((line) => bare(line.shape))) {
 				continue;
 			}
 			if (window.some((_line, offset) => offset > 0 && !consecutive(file.lines, index + offset))) {
@@ -99,7 +99,6 @@ export function duplicatePairs(diffFiles: ReadonlyMap<string, DiffFile>): Duplic
 		}
 	}
 	const pairs: DuplicatePair[] = [];
-	const covered = new Set<string>();
 	for (const candidates of starts.values()) {
 		for (let i = 0; i < candidates.length; i += 1) {
 			for (let j = i + 1; j < candidates.length; j += 1) {
@@ -112,13 +111,8 @@ export function duplicatePairs(diffFiles: ReadonlyMap<string, DiffFile>): Duplic
 				if (pair === null) {
 					continue;
 				}
-				const key = `${pair.a.path}:${pair.a.startLine}|${pair.b.path}:${pair.b.startLine}`;
-				const inside = [...covered].some((seen) => {
-					const [sa, sb] = seen.split("|");
-					return sa !== undefined && sb !== undefined && within(pair.a, sa) && within(pair.b, sb);
-				});
+				const inside = pairs.some((seen) => within(pair.a, seen.a) && within(pair.b, seen.b));
 				if (!inside) {
-					covered.add(key);
 					pairs.push(pair);
 				}
 			}
@@ -127,9 +121,10 @@ export function duplicatePairs(diffFiles: ReadonlyMap<string, DiffFile>): Duplic
 	return pairs.toSorted((x, y) => y.lines - x.lines || x.a.path.localeCompare(y.a.path));
 }
 
-function within(span: { path: string; startLine: number }, seen: string): boolean {
-	const [path, start] = seen.split(":");
-	return path === span.path && start !== undefined && Number(start) <= span.startLine;
+function within(span: DuplicatePair["a"], seen: DuplicatePair["a"]): boolean {
+	return (
+		span.path === seen.path && span.startLine >= seen.startLine && span.endLine <= seen.endLine
+	);
 }
 
 /** The longest run of same-shaped lines from two starts, or null when the names differ too much. */

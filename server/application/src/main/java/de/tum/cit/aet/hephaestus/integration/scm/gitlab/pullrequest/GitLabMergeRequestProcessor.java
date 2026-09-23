@@ -943,16 +943,6 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Generates a deterministic native ID for a GitLab approval review.
-     * <p>
-     * Layout: {@code [mrNativeId (31 bits)][userNativeId (32 bits)]}, with bit 63 cleared
-     * to guarantee a positive result.
-     * <p>
-     * Collision-free when MR native IDs fit in 31 bits ({@code <= Integer.MAX_VALUE})
-     * and user native IDs fit in 32 bits. When either exceeds its safe range,
-     * collisions become possible due to bit truncation, and a warning is logged.
-     */
-    /**
      * GitLab's pipeline status as one {@link CheckState}: a pipeline that has not finished is pending
      * whatever stage it is in, a skipped one and no pipeline at all say nothing about the head.
      */
@@ -969,6 +959,16 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         };
     }
 
+    /**
+     * Generates a deterministic native ID for a GitLab approval review.
+     * <p>
+     * Layout: {@code [mrNativeId (31 bits)][userNativeId (32 bits)]}, with bit 63 cleared
+     * to guarantee a positive result.
+     * <p>
+     * Collision-free when MR native IDs fit in 31 bits ({@code <= Integer.MAX_VALUE})
+     * and user native IDs fit in 32 bits. When either exceeds its safe range,
+     * collisions become possible due to bit truncation, and a warning is logged.
+     */
     public static long generateApprovalNativeId(long mrNativeId, long userNativeId) {
         if (mrNativeId > Integer.MAX_VALUE || userNativeId > Integer.MAX_VALUE) {
             log.warn(

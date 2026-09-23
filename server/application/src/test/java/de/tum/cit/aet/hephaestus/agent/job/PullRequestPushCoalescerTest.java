@@ -73,6 +73,19 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReviewTheLatestHeadWhenContinuousPushesReachTheMaximumWait() {
+        ArtifactSignal older = signal(OLD_HEAD, 60 * 60);
+        ArtifactSignal newest = signal(NEW_HEAD, 30);
+        when(signals.lockDeferred(7L, 42L, SIGNAL)).thenReturn(List.of(older, newest));
+
+        coalescer.drain(7L, 42L, NOW);
+
+        verify(recorder).markRefused(older.key(), SignalStateReason.COALESCED);
+        verify(submitter).resubmit(newest);
+        verifyNoMoreInteractions(submitter, recorder);
+    }
+
+    @Test
     @DisplayName("a push inside the cooldown waits for it rather than being dropped")
     void shouldWaitOutTheCooldownRatherThanRefuse() {
         ArtifactSignal newest = signal(NEW_HEAD, 11 * 60);

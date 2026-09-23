@@ -196,16 +196,16 @@ The exact refusal semantics of all three controls, and the order the delivery ga
 
 ## What costs money
 
-Every started review is a model call, and there are exactly four things standing between a
-misconfiguration and a bill.
+A review can make many model calls. These controls limit which reviews can start and what they can spend.
 
 1. **The monthly AI budget.** There are two, and they are never added together: the *instance* budget caps
    a workspace's spend on shared models you registered, and the *workspace's own* budget caps its spend on
    its own connected provider. Each pauses only the work it funds. Setting either to exactly `0` is the
    supported way to hard-stop that purse mid-month; clearing the field removes the cap.
-2. **The cooldown.** The minimum gap between reviews of the same pull or merge request. New commits
-   are reviewed once the pushes stop for ten minutes, at the latest commit; a push inside the cooldown
-   waits for it to end rather than going unreviewed.
+2. **The cooldown.** The minimum gap between reviews of the same work for the same occasion. New commits
+   become eligible for one review at the latest commit after ten quiet minutes, or after sixty minutes
+   from the first pending push. The cooldown can delay that review further. This is a grouping delay,
+   not an hourly rate cap; queue and concurrency limits also affect when a review starts.
 3. **The per-person hourly allowance** on hand-requested reviews.
 4. **Coverage and autonomy**, which decide how much work is eligible in the first place.
 

@@ -17,13 +17,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 /**
- * The practices a developer has already been told about on several earlier pieces of work.
- *
- * <p>Six practices are negative on 40–75 % of the work in a cohort we measured; explained in full on
- * every change, they become the same five paragraphs on every merge request, and the developer learns to
- * skip them. A lapse that is a habit is named in one line on the work and explained on the practice
- * page, which is the surface built for a pattern across work ({@link InAppFeedbackRouter}). The window
- * and the threshold are the same the practice page uses, so the two surfaces call the same thing a habit.
+ * Uses earlier negative observations to shorten repeated feedback on the work. The window and
+ * threshold match the practice page ({@link InAppFeedbackRouter}).
  */
 @Component
 class RecurringLapses {

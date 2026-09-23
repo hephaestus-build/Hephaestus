@@ -106,3 +106,32 @@ void test("parallel code whose names differ everywhere is not a copy", () => {
 		0,
 	);
 });
+
+void test("separate matching blocks in the same file pair remain separate candidates", () => {
+	const first = ["prepare()", "load()", "validate()", "save()", "close()"];
+	const second = ["return start", "return next", "return middle", "return last", "return end"];
+	const pairs = duplicatePairs(
+		new Map([
+			file("App/A.swift", 1, [...first, "---", ...second]),
+			file("App/B.swift", 1, [...first, "+++", ...second]),
+		]),
+	);
+	assert.deepEqual(
+		pairs.map(({ a, b }) => [a.startLine, a.endLine, b.startLine, b.endLine]),
+		[
+			[1, 5, 1, 5],
+			[7, 11, 7, 11],
+		],
+	);
+});
+
+void test("candidate containment compares paths without interpreting their characters", () => {
+	const pairs = duplicatePairs(
+		new Map([
+			file("App/A:part|one.swift", 1, packing('" "', "1")),
+			file("App/B:part|two.swift", 1, packing('" "', "1")),
+		]),
+	);
+	assert.equal(pairs.length, 1);
+	assert.equal(pairs[0]?.lines, 10);
+});

@@ -1,6 +1,6 @@
 import type { LlmModel } from "@/api/types.gen";
 
-/** The server's `ReasoningEffort`: OpenAI's effort scale, which the providers that take one share. */
+/** The server's effort choices; each provider and model supports its own subset. */
 export type ReasoningEffort = NonNullable<LlmModel["reasoningEffort"]>;
 
 /** No effort set: none is sent, and the provider's own default applies. */

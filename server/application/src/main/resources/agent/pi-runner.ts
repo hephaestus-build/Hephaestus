@@ -2842,15 +2842,9 @@ ${criteriaOf(turn.slugs)}`;
 }
 
 /**
- * Compacts the session when the next prompt would not fit beside what it already holds.
- *
- * <p>The SDK compacts on its own only once a turn has ended past the threshold, and the composition
- * prompt — the instructions, every admitted observation, the history — lands in a session that has
- * just measured for most of an hour. On the cohort the first composer call then ended on the output
- * limit in one review of five; the SDK's overflow recovery dropped the prompt with the context, and
- * the composer went on reading files with nothing telling it what to write. Compacting first keeps
- * the prompt whole. The estimate is the SDK's own, chars over four, and a compaction that fails is
- * logged and the prompt sent anyway: the SDK's recovery is still behind it.
+ * Include the incoming composition prompt in the space check. Pi's automatic preflight compaction
+ * checks the previous assistant message, before appending this prompt. A failed manual compaction
+ * leaves the SDK's normal overflow recovery available.
  */
 async function makeRoomFor(
 	session: AgentSession,
@@ -2892,7 +2886,7 @@ function negativePractices(observations: readonly AdmittedObservation[]): string
 async function askComposerOnceMore(
 	session: AgentSession,
 	negatives: readonly string[],
-	deadline: Promise<undefined>,
+	deadline: ReturnType<typeof scheduleDeadline>,
 ): Promise<void> {
 	console.error(
 		`[pi-runner] composition left ${negatives.length} NEGATIVE practice(s) undecided — asking once more`,
@@ -2900,8 +2894,11 @@ async function askComposerOnceMore(
 	if (!(await settleSession(session, "composition", ABORT_SETTLE_MS))) {
 		throw new Error("the session was still busy when the composition was asked once more");
 	}
+	if (deadline.expired()) {
+		return;
+	}
 	repeatedCalls.clear();
-	await Promise.race([session.prompt(finishCompositionText(negatives)), deadline]);
+	await Promise.race([session.prompt(finishCompositionText(negatives)), deadline.elapsed]);
 }
 
 function finishCompositionText(negatives: readonly string[]): string {
@@ -3130,8 +3127,9 @@ async function main() {
 
 	/** One prompt of the session under a fair share of what is left; true when it ran to its own end. */
 	async function runTurn(label: string, text: string, remainingTurns: number): Promise<boolean> {
-		const remainingMs = measureEnd - Date.now();
-		const share = turnShare(Math.max(0, remainingMs), remainingTurns);
+		const turnStart = Date.now();
+		const remainingMs = measureEnd - turnStart;
+		let share = turnShare(Math.max(0, remainingMs), remainingTurns);
 		if (share.hardMs <= 0) {
 			console.error(`[pi-runner] ${label}: no budget left — skipped`);
 			hardAborted = true;
@@ -3139,6 +3137,13 @@ async function main() {
 		}
 		if (!(await settleSession(session, label, share.hardMs))) {
 			console.error(`[pi-runner] ${label}: session still busy — skipped`);
+			hardAborted = true;
+			return false;
+		}
+		// Waiting for the previous turn spends this turn's share, not the composition reserve.
+		const hardMs = Math.max(0, share.hardMs - (Date.now() - turnStart));
+		share = turnShare(hardMs, 1);
+		if (share.hardMs <= 0) {
 			hardAborted = true;
 			return false;
 		}
@@ -3299,7 +3304,7 @@ async function main() {
 					(slug) => !composedFeedback.units.some((unit) => unit.practiceSlug === slug),
 				);
 				if (!deadline.expired() && undecided.length > 0) {
-					await askComposerOnceMore(session, undecided, deadline.elapsed);
+					await askComposerOnceMore(session, undecided, deadline);
 				}
 			} catch (error) {
 				console.error(`[pi-runner] composition failed: ${errorText(error)}`);

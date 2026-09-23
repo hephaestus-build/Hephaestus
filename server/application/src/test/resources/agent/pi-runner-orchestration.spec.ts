@@ -126,7 +126,7 @@ if (scenario !== undefined && scenario !== "") {
 	/** The overrun scenario's first prompt ends only when the runner aborts it, like a call in flight. */
 	let releasePrompt: (() => void) | undefined;
 	/** A threshold compaction in flight: a model call of its own, which abort() alone does not end. */
-	let compacting = false;
+	let compacting = scenario === "settle-budget";
 	let idleWaiters: (() => void)[] = [];
 	const settleIdle = () => {
 		if (releasePrompt || compacting) {
@@ -138,6 +138,10 @@ if (scenario !== undefined && scenario !== "") {
 		idleWaiters = [];
 	};
 	const waitForIdle = async () => {
+		if (scenario === "settle-budget" && compacting) {
+			now += 20_000;
+			compacting = false;
+		}
 		const { promise, resolve } = Promise.withResolvers<undefined>();
 		idleWaiters.push(() => resolve(undefined));
 		settleIdle();
@@ -276,6 +280,11 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							if (text.includes("## This turn")) {
 								// The composition turn, in the same session.
+								if (scenario === "compose-settle-deadline") {
+									// The response ended, but its auto-compaction remains busy until the deadline.
+									compacting = true;
+									return;
+								}
 								if (scenario === "compose-quiet") {
 									// Nothing to withhold on a practice that is not NEGATIVE: the unit is skipped
 									// with the reason, and with no negatives the runner does not ask again.
@@ -685,6 +694,8 @@ if (scenario !== undefined && scenario !== "") {
 		"session-init",
 		"budget",
 		"overrun",
+		"settle-budget",
+		"compose-settle-deadline",
 		"provider-error",
 		"batch",
 		"finish",
@@ -704,6 +715,9 @@ if (scenario !== undefined && scenario !== "") {
 				budget: "aborts a turn that runs past its share and reports the practices as not reached",
 				overrun:
 					"ends a compaction with the aborted turn and waits for the session before the next turn is sent",
+				"settle-budget": "does not start a measuring turn after settling spent its share",
+				"compose-settle-deadline":
+					"does not start a finishing prompt after the composition deadline",
 				"provider-error":
 					"a provider error the SDK does not retry is a failure of the provider, not a review that found nothing",
 				batch: "stores several observations from one call and answers per item",
@@ -856,6 +870,12 @@ if (scenario !== undefined && scenario !== "") {
 							task: { kind: "practice_review", prompt: "Review the practice." },
 						}),
 					);
+					let budgetMs = "10000";
+					if (stage === "overrun") {
+						budgetMs = "3000";
+					} else if (stage === "compose-settle-deadline") {
+						budgetMs = "200";
+					}
 					const child = spawnSync(
 						process.execPath,
 						["--experimental-test-module-mocks", import.meta.filename],
@@ -865,7 +885,7 @@ if (scenario !== undefined && scenario !== "") {
 								PI_ORCHESTRATION_SCENARIO: stage,
 								PI_RUNNER_CWD: cwd,
 								PI_CODING_AGENT_DIR: cwd,
-								AGENT_BUDGET_MS: stage === "overrun" ? "3000" : "10000",
+								AGENT_BUDGET_MS: budgetMs,
 								LLM_PROXY_URL: "https://unused.invalid",
 								LLM_PROXY_TOKEN: "test-token",
 							},
@@ -891,6 +911,22 @@ if (scenario !== undefined && scenario !== "") {
 							})),
 						});
 					switch (stage) {
+						case "settle-budget": {
+							assert.equal(child.status, 1, child.stderr);
+							assert.ok(!events.some((event) => event.startsWith("prompt:")), events.join("\n"));
+							reached({ "test-practice": "NOT_REACHED" });
+							break;
+						}
+						case "compose-settle-deadline": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("prompt:")),
+								["prompt:1", "prompt:2"],
+							);
+							assert.match(child.stderr, /Composition timeout/u);
+							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
 						case "setup": {
 							assert.equal(child.status, 1, child.stderr);
 							assert.deepEqual(events, []);

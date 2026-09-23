@@ -22,7 +22,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -64,11 +63,11 @@ public class PullRequestSignalResubmitter implements PendingSignalResubmitter {
     }
 
     /**
-     * Its own transaction so one signal's failure cannot unwind the rest of the sweep, and so the
-     * submission path's idempotency-race rollback stays confined to this signal.
+     * Joins the coalescer transaction, which already locks the signal rows. A separate transaction
+     * would wait on those locks while the transaction that holds them waits for this call.
      */
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void resubmit(ArtifactSignal signal) {
         SignalKey key = signal.key();
         PullRequest pr =
