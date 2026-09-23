@@ -1248,7 +1248,8 @@ erDiagram
         VARCHAR(255) discussion_sync_cursor
         TIMESTAMPTZ discussions_synced_at
         BIGINT native_id
-        VARCHAR(2048) last_sync_error
+        VARCHAR(2048) historical_backfill_sync_error
+        VARCHAR(2048) recent_sync_error
     }
 
     ReviewBackfillRun {

@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
@@ -355,7 +356,7 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
         verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), isNull(), any());
         verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), isNull(), any());
         org.assertj.core.api.Assertions.assertThat(result).isTrue();
-        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, null);
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, null);
     }
 
     @Test
@@ -366,11 +367,11 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
 
         org.assertj.core.api.Assertions.assertThat(service.syncSyncTarget(target))
                 .isFalse();
-        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, "Issue sync: ABORTED_ERROR");
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, "Issue sync: ABORTED_ERROR");
 
         org.assertj.core.api.Assertions.assertThat(service.syncSyncTarget(target))
                 .isTrue();
-        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, null);
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, null);
     }
 
     @Test
@@ -383,11 +384,12 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
 
         org.assertj.core.api.Assertions.assertThat(service.syncSyncTarget(target))
                 .isFalse();
-        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, "Commit backfill failed (IllegalStateException)");
+        verify(syncTargetProvider)
+                .updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, "Commit backfill failed (IllegalStateException)");
 
         org.assertj.core.api.Assertions.assertThat(service.syncSyncTarget(target))
                 .isTrue();
-        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, null);
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, null);
         verify(issueSyncService, times(2)).syncForRepository(any(), any(), any(), any(), any());
     }
 

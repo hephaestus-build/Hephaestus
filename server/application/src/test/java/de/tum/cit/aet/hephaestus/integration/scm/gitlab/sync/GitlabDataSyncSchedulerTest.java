@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
@@ -289,10 +290,10 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
                 .thenReturn(SyncResult.abortedError(1), SyncResult.completed(2));
 
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
-        verify(syncTargetProvider).updateSyncError(77L, "Issue sync: ABORTED_ERROR");
+        verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Issue sync: ABORTED_ERROR");
 
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
-        verify(syncTargetProvider).updateSyncError(77L, null);
+        verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, null);
     }
 
     @Test
@@ -308,7 +309,7 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
 
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
-        verify(syncTargetProvider).updateSyncError(77L, "Issue sync: ABORTED_ERROR");
+        verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Issue sync: ABORTED_ERROR");
     }
 
     @Test
@@ -321,10 +322,10 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
                 .thenReturn(SyncResult.abortedError(0), SyncResult.completed(1));
 
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
-        verify(syncTargetProvider).updateSyncError(77L, "Sub-issue sync: ABORTED_ERROR");
+        verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Sub-issue sync: ABORTED_ERROR");
 
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
-        verify(syncTargetProvider).updateSyncError(77L, null);
+        verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, null);
     }
 
     @Test
@@ -334,7 +335,7 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
         verify(repositoryRepository, never()).updateLastSyncAt(eq(99L), any());
-        verify(syncTargetProvider, never()).updateSyncError(eq(77L), isNull());
+        verify(syncTargetProvider, never()).updateSyncError(eq(77L), eq(SyncPass.RECENT), isNull());
     }
 
     @Test
@@ -347,7 +348,7 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
 
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
-        verify(syncTargetProvider).updateSyncError(77L, "Label sync: ABORTED_ERROR");
+        verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Label sync: ABORTED_ERROR");
         verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.LABELS), any());
     }
 

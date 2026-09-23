@@ -68,7 +68,19 @@ public class RepositoryToMonitor {
     private Instant discussionsSyncedAt;
 
     @Column(length = 2048)
-    private @Nullable String lastSyncError;
+    private @Nullable String recentSyncError;
+
+    @Column(length = 2048)
+    private @Nullable String historicalBackfillSyncError;
+
+    public @Nullable String getSyncErrorSummary() {
+        if (recentSyncError == null) {
+            return historicalBackfillSyncError;
+        }
+        return historicalBackfillSyncError == null
+                ? recentSyncError
+                : recentSyncError + "; " + historicalBackfillSyncError;
+    }
 
     // Issue Backfill Tracking
 

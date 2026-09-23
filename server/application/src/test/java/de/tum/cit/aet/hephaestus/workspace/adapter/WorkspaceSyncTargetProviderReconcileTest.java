@@ -83,15 +83,6 @@ class WorkspaceSyncTargetProviderReconcileTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldWriteAndClearTheSelectedMonitorError() {
-        provider.updateSyncError(SYNC_TARGET_ID, "Issue sync: ABORTED_ERROR");
-        provider.updateSyncError(SYNC_TARGET_ID, null);
-
-        verify(repositoryToMonitorRepository).updateLastSyncError(SYNC_TARGET_ID, "Issue sync: ABORTED_ERROR");
-        verify(repositoryToMonitorRepository).updateLastSyncError(SYNC_TARGET_ID, null);
-    }
-
-    @Test
     void shouldRekeyNameAndRefreshConsumerWhenIdAgreesButNameChanged() {
         RepositoryToMonitor rtm = monitor(NATIVE_ID, OLD_NAME);
         when(repositoryToMonitorRepository.findById(SYNC_TARGET_ID)).thenReturn(Optional.of(rtm));

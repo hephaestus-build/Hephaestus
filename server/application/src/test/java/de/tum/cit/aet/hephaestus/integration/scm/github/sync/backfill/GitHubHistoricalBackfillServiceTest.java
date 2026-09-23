@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
@@ -716,7 +717,10 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
                     .isFalse();
 
             verify(syncTargetProvider)
-                    .updateSyncError(SYNC_TARGET_ID_A, "Historical backfill failed (IllegalStateException)");
+                    .updateSyncError(
+                            SYNC_TARGET_ID_A,
+                            SyncPass.HISTORICAL_BACKFILL,
+                            "Historical backfill failed (IllegalStateException)");
         }
 
         @Test

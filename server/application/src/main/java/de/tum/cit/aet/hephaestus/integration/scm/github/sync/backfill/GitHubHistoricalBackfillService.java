@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
@@ -1461,7 +1462,7 @@ public class GitHubHistoricalBackfillService {
     private void clearFailureState(Long syncTargetId) {
         repositoryCooldowns.remove(syncTargetId);
         consecutiveFailures.remove(syncTargetId);
-        syncTargetProvider.updateSyncError(syncTargetId, null);
+        syncTargetProvider.updateSyncError(syncTargetId, SyncPass.HISTORICAL_BACKFILL, null);
     }
 
     /**
@@ -1473,7 +1474,9 @@ public class GitHubHistoricalBackfillService {
     private void handleBackfillFailure(SyncTarget target, Exception e) {
         String safeRepoName = Objects.requireNonNull(sanitizeForLog(target.repositoryNameWithOwner()));
         syncTargetProvider.updateSyncError(
-                target.id(), "Historical backfill failed (" + e.getClass().getSimpleName() + ")");
+                target.id(),
+                SyncPass.HISTORICAL_BACKFILL,
+                "Historical backfill failed (" + e.getClass().getSimpleName() + ")");
 
         // BackfillTransientException is explicitly marked as transient - always cooldown
         if (e instanceof BackfillTransientException) {

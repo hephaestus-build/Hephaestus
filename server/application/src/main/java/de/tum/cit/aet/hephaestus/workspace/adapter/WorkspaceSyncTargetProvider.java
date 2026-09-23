@@ -153,8 +153,12 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
     }
 
     @Override
-    public void updateSyncError(Long syncTargetId, @Nullable String error) {
-        repositoryToMonitorRepository.updateLastSyncError(syncTargetId, error);
+    public void updateSyncError(Long syncTargetId, SyncPass pass, @Nullable String error) {
+        switch (pass) {
+            case RECENT -> repositoryToMonitorRepository.updateRecentSyncError(syncTargetId, error);
+            case HISTORICAL_BACKFILL ->
+                repositoryToMonitorRepository.updateHistoricalBackfillSyncError(syncTargetId, error);
+        }
     }
 
     @Override

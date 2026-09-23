@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
@@ -305,7 +306,7 @@ public class GitlabDataSyncScheduler {
 
             resourceErrors.forEach((targetId, error) -> {
                 if (error != null || handle == null || !handle.isCancellationRequested()) {
-                    syncTargetProvider.updateSyncError(targetId, error);
+                    syncTargetProvider.updateSyncError(targetId, SyncPass.RECENT, error);
                 }
             });
 

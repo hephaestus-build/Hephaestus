@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
@@ -24,7 +25,7 @@ class ResourceSyncErrorPersistenceIntegrationTest extends AbstractWorkspaceInteg
     private SlackMonitoredChannelRepository channelRepository;
 
     @Test
-    void shouldPersistAndClearOnlyTheSelectedWorkspaceMonitorError() {
+    void shouldKeepEachRepositoryPassErrorUntilThatPassRecovers() {
         User owner = persistUser("resource-error-owner");
         Workspace first = createWorkspace("resource-error-a", "First", "acme", AccountType.ORG, owner);
         Workspace second = createWorkspace("resource-error-b", "Second", "acme", AccountType.ORG, owner);
@@ -33,14 +34,24 @@ class ResourceSyncErrorPersistenceIntegrationTest extends AbstractWorkspaceInteg
         Long firstId = Objects.requireNonNull(firstMonitor.getId());
         Long secondId = Objects.requireNonNull(secondMonitor.getId());
 
-        syncTargetProvider.updateSyncError(firstId, "Issue sync: ABORTED_ERROR");
-        assertThat(monitorRepository.findById(firstId).orElseThrow().getLastSyncError())
-                .isEqualTo("Issue sync: ABORTED_ERROR");
-        assertThat(monitorRepository.findById(secondId).orElseThrow().getLastSyncError())
+        syncTargetProvider.updateSyncError(firstId, SyncPass.RECENT, "Issue sync: ABORTED_ERROR");
+        syncTargetProvider.updateSyncError(firstId, SyncPass.HISTORICAL_BACKFILL, "Historical issue backfill aborted");
+        assertThat(monitorRepository.findById(firstId).orElseThrow().getSyncErrorSummary())
+                .isEqualTo("Issue sync: ABORTED_ERROR; Historical issue backfill aborted");
+        assertThat(monitorRepository.findById(secondId).orElseThrow().getSyncErrorSummary())
                 .isNull();
 
-        syncTargetProvider.updateSyncError(firstId, null);
-        assertThat(monitorRepository.findById(firstId).orElseThrow().getLastSyncError())
+        syncTargetProvider.updateSyncError(firstId, SyncPass.RECENT, null);
+        assertThat(monitorRepository.findById(firstId).orElseThrow().getSyncErrorSummary())
+                .isEqualTo("Historical issue backfill aborted");
+
+        syncTargetProvider.updateSyncError(firstId, SyncPass.RECENT, "Issue sync: ABORTED_ERROR");
+        syncTargetProvider.updateSyncError(firstId, SyncPass.HISTORICAL_BACKFILL, null);
+        assertThat(monitorRepository.findById(firstId).orElseThrow().getSyncErrorSummary())
+                .isEqualTo("Issue sync: ABORTED_ERROR");
+
+        syncTargetProvider.updateSyncError(firstId, SyncPass.RECENT, null);
+        assertThat(monitorRepository.findById(firstId).orElseThrow().getSyncErrorSummary())
                 .isNull();
     }
 

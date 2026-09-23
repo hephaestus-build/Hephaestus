@@ -26,8 +26,13 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
 
     @Modifying
     @Transactional
-    @Query("UPDATE RepositoryToMonitor m SET m.lastSyncError = :error WHERE m.id = :id")
-    int updateLastSyncError(@Param("id") Long id, @Param("error") @Nullable String error);
+    @Query("UPDATE RepositoryToMonitor m SET m.recentSyncError = :error WHERE m.id = :id")
+    int updateRecentSyncError(@Param("id") Long id, @Param("error") @Nullable String error);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE RepositoryToMonitor m SET m.historicalBackfillSyncError = :error WHERE m.id = :id")
+    int updateHistoricalBackfillSyncError(@Param("id") Long id, @Param("error") @Nullable String error);
 
     /** Resolves which workspace a repository belongs to during sync, by full name (owner/name). */
     Optional<RepositoryToMonitor> findByNameWithOwner(String nameWithOwner);

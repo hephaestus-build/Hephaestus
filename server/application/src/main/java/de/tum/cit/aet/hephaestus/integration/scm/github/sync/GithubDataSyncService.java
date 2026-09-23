@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncMetadata;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
@@ -237,7 +238,8 @@ public class GithubDataSyncService {
                             scopeId,
                             safeNameWithOwner,
                             syncTarget.nativeId());
-                    syncTargetProvider.updateSyncError(syncTarget.id(), "Repository metadata unavailable");
+                    syncTargetProvider.updateSyncError(
+                            syncTarget.id(), SyncPass.RECENT, "Repository metadata unavailable");
                     return false;
                 }
                 log.info(
@@ -254,7 +256,7 @@ public class GithubDataSyncService {
                         "Skipped sync (transient): reason=syncReturnedEmpty, scopeId={}, repoName={}",
                         scopeId,
                         safeNameWithOwner);
-                syncTargetProvider.updateSyncError(syncTarget.id(), "Repository metadata sync failed");
+                syncTargetProvider.updateSyncError(syncTarget.id(), SyncPass.RECENT, "Repository metadata sync failed");
                 return false;
             }
             repository = syncedRepository.get();
@@ -432,7 +434,7 @@ public class GithubDataSyncService {
             if (error == null) {
                 error = commitBackfillError;
             }
-            syncTargetProvider.updateSyncError(syncTarget.id(), error);
+            syncTargetProvider.updateSyncError(syncTarget.id(), SyncPass.RECENT, error);
             return error == null;
         } catch (InstallationNotFoundException e) {
             // Re-throw to abort the entire sync operation
@@ -441,7 +443,7 @@ public class GithubDataSyncService {
             ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
             Category category = classification.category();
 
-            syncTargetProvider.updateSyncError(syncTarget.id(), "Repository sync failed: " + category);
+            syncTargetProvider.updateSyncError(syncTarget.id(), SyncPass.RECENT, "Repository sync failed: " + category);
 
             boolean removed = false;
             switch (category) {

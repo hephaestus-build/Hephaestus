@@ -46,8 +46,8 @@ public interface SyncTargetProvider extends SyncTimestampProvider, BackfillState
 
     void updateSyncTimestamp(Long syncTargetId, SyncType syncType, Instant syncedAt);
 
-    /** Record a failed resource pass, or clear the error after a complete successful pass. */
-    void updateSyncError(Long syncTargetId, @Nullable String error);
+    /** Record a failed resource pass, or clear only that pass's error after success. */
+    void updateSyncError(Long syncTargetId, SyncPass pass, @Nullable String error);
 
     /**
      * Gets sync sessions for batch synchronization, scoped to a single provider kind.
@@ -288,6 +288,11 @@ public interface SyncTargetProvider extends SyncTimestampProvider, BackfillState
             return (teamsSyncedAt == null
                     || teamsSyncedAt.isBefore(Instant.now().minusSeconds(cooldownMinutes * SECONDS_PER_MINUTE)));
         }
+    }
+
+    enum SyncPass {
+        RECENT,
+        HISTORICAL_BACKFILL,
     }
 
     /**
