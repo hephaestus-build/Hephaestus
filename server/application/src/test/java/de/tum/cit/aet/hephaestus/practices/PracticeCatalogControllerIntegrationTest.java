@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.ChatSignals;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.dto.BindPracticeGroupRequestDTO;
@@ -947,11 +948,17 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
         @Test
         @WithAdminUser
-        @DisplayName("partially updates practice (only name)")
+        @DisplayName("updates only the name and keeps the gate and reviewer on reload")
         void shouldPartiallyUpdate() {
             ensureAdminMembership(workspace);
             Practice practice = persistPractice("update-me", "Original Name", true);
             practice.setGroup(persistGroup("existing-group"));
+            PracticeBinding binding = practice.getBindings().getFirst();
+            PracticeSubject gate = new PracticeSubject(
+                    "the change has no Swift code",
+                    List.of(PracticeSubjectClause.changedPathMatches(List.of("**/*.swift"))));
+            practice.setBindings(List.of(new PracticeBinding(
+                    binding.signals(), binding.needs(), binding.onDrafts(), ActorRole.REVIEWER, gate)));
             practiceRepository.save(practice);
 
             var request =
@@ -976,6 +983,20 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             assertThat(result.criteria()).isEqualTo("Detect prompt for update-me");
             assertThat(result.autonomy().effective()).isEqualTo(PracticeAutonomy.AUTOMATIC);
             assertThat(result.groupSlug()).isEqualTo("existing-group");
+
+            PracticeDTO reloaded = webTestClient
+                    .get()
+                    .uri(BASE_URI + "/{slug}", workspace.getWorkspaceSlug(), "update-me")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(PracticeDTO.class)
+                    .returnResult()
+                    .getResponseBody();
+            assertThat(reloaded).isNotNull();
+            assertThat(reloaded.bindings().getFirst().appliesWhen()).isEqualTo(gate);
+            assertThat(reloaded.bindings().getFirst().subject()).isEqualTo(ActorRole.REVIEWER);
         }
 
         @Test
