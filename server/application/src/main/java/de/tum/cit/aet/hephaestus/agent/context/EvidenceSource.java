@@ -13,8 +13,6 @@ public interface EvidenceSource extends ContentSource {
 
     SourceKind sourceKindFor(String path);
 
-    default void prepareCapture(ContextRequest request, Set<SourceKind> selectedKinds) {}
-
     default void contributeSelected(ContextRequest request, Set<SourceKind> selectedKinds, Map<String, byte[]> files) {
         if (sourceKinds().stream().anyMatch(selectedKinds::contains)) {
             contribute(request, files);

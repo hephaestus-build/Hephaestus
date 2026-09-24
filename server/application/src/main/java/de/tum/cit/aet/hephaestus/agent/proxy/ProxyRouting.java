@@ -31,9 +31,15 @@ public record ProxyRouting(
      *     turn, which never retries). Orphan recovery can requeue an agent job — zeroing its per-attempt
      *     accumulators — while a call this credential authenticated is still out, so a late write must
      *     be dropped rather than billed to whoever owns the row now.
+     * @param workerId worker owning the authenticated job attempt; null for mentor turns
      * @param spentUsd priced with the rates frozen onto the execution at admission
      */
-    public record BilledAttempt(LlmUsageSourceType sourceType, UUID sourceId, int number, BigDecimal spentUsd) {}
+    public record BilledAttempt(
+            LlmUsageSourceType sourceType,
+            UUID sourceId,
+            int number,
+            BigDecimal spentUsd,
+            @Nullable String workerId) {}
 
     public @Nullable UUID sourceId() {
         return attempt == null ? null : attempt.sourceId();

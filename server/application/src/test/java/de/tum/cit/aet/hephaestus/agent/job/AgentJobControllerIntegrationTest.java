@@ -17,8 +17,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import tools.jackson.databind.ObjectMapper;
 
-@org.springframework.test.context.TestPropertySource(
-        properties = "hephaestus.practice-review.execution-capture.enabled=true")
 class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired

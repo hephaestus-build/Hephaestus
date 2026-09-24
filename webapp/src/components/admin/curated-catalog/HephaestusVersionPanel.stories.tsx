@@ -23,7 +23,16 @@ const status = (overrides: Partial<CatalogEntryStatus> = {}): CatalogEntryStatus
 const shipped = {
 	name: "Say what changed and why",
 	artifactKind: "scm.pull_request" as const,
-	bindings: [mockMergeBinding],
+	bindings: [
+		{
+			...mockMergeBinding,
+			subject: "REVIEWER" as const,
+			appliesWhen: {
+				absentSays: "the change has no Swift code",
+				anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+			},
+		},
+	],
 	criteria: "The updated default criteria.",
 	whyItMatters: "So a reviewer can start from intent rather than diff archaeology.",
 	automatedReviewPolicy: mockPullRequestPolicy,
@@ -78,6 +87,8 @@ export const UpdateChangesReviewBehavior: Story = {
 		// whole, which is what licenses a claim that nobody ever resolved one.
 		await expect(canvas.getAllByText("Merged").length).toBeGreaterThan(0);
 		await expect(canvas.getAllByText("· captured whole").length).toBeGreaterThan(0);
+		await expect(canvas.getByText("reviewer")).toBeVisible();
+		await expect(canvas.getByText("Changed path matches **/*.swift")).toBeVisible();
 		await expect(canvas.getAllByText("AI-supported mentoring").length).toBeGreaterThan(0);
 		await expect(canvas.getAllByText("Pull request details").length).toBeGreaterThan(0);
 		await expect(

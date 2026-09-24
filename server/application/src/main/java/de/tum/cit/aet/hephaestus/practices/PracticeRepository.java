@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 @WorkspaceAgnostic(
-        "Workspace-scoped via custom queries that all include workspaceId; PK-only DML allowed for delete/save")
+        "Workspace reads use workspaceId; global ID scans serve startup repair; PK-only DML serves delete/save")
 public interface PracticeRepository extends JpaRepository<Practice, Long> {
     /**
      * Every practice of the workspace, at any autonomy — including {@code OFF}, so the detection gate can tell
@@ -110,6 +110,15 @@ public interface PracticeRepository extends JpaRepository<Practice, Long> {
             + "AND p.sourceCuratedFingerprint = previous.reviewRuleFingerprint "
             + "AND p.sourceCuratedFingerprint LIKE 'v1:%'")
     List<Long> findSourceAlignedV1PracticeIds();
+
+    @Query("SELECT p.id FROM Practice p WHERE p.sourceCuratedSlug IS NOT NULL AND p.adoptedBase IS NULL")
+    List<Long> findIdsMissingAdoptedBase();
+
+    @Query(
+            value =
+                    "SELECT id FROM practice WHERE automated_review_policy ->> 'sourceContractVersion' = :version ORDER BY id",
+            nativeQuery = true)
+    List<Long> findIdsBySourceContractVersion(@Param("version") String version);
 
     /**
      * Every practice of a workspace in the order the admin catalogue shows them, groups first. No autonomy

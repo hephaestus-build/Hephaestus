@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContext
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewthread.dto.GitHubPullRequestReviewThreadEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
+import java.time.Instant;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,7 +98,9 @@ public class GitHubPullRequestReviewThreadMessageHandler
                 // Ensure the sender (who resolved the thread) exists
                 User resolvedBy =
                         userProcessor.ensureExists(event.sender(), Objects.requireNonNull(context.providerId()));
-                threadProcessor.resolve(threadId, resolvedBy, context);
+                // The payload dates the event; one without a date happened about now, since it just arrived.
+                Instant resolvedAt = event.updatedAt() != null ? event.updatedAt() : Instant.now();
+                threadProcessor.resolve(threadId, resolvedBy, resolvedAt, context);
             }
             case GitHubEventAction.PullRequestReviewThread.UNRESOLVED -> {
                 // Thread ID is derived from the first comment. If no comments exist, we cannot process.

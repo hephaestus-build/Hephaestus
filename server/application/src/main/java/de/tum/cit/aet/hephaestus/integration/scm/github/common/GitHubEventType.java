@@ -32,6 +32,10 @@ public enum GitHubEventType {
     MEMBER("member"),
     PUSH("push"),
 
+    // Check events: what the checks say about a head, per suite and per commit status
+    CHECK_SUITE("check_suite"),
+    STATUS("status"),
+
     // Discussion events
     DISCUSSION("discussion"),
     DISCUSSION_COMMENT("discussion_comment"),

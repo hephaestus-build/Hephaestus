@@ -154,8 +154,8 @@ configuration are database-backed runtime configuration and are not deployment s
 
 ## Agent image
 
-Worker roles require digest enforcement and a SHA-256-pinned `hephaestus.agent.image.reference`. See
-[Release image lock](./release-image-lock).
+Worker roles require digest enforcement and a SHA-256-pinned `hephaestus.agent.image.reference`
+(readiness fact `agent.image-contract`). See [Release image lock](./release-image-lock).
 
 ## Sandbox isolation
 
@@ -177,7 +177,6 @@ and workspace transfer limits remain under `hephaestus.sandbox.*`.
 | `cert-path`                                | `SANDBOX_DOCKER_CERT_PATH`               | unset                         |
 | `container-runtime`                        | `SANDBOX_DOCKER_CONTAINER_RUNTIME`       | Docker daemon default         |
 | `app-server-container-id`                  | `SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` | container `HOSTNAME`          |
-| `cli`                                      | `SANDBOX_DOCKER_CLI`                     | `docker`                      |
 | `owner`                                    | `SANDBOX_DOCKER_OWNER`                   | `default`                     |
 
 Compose forwards these variables to `application-server` and `application-worker`. Leave the

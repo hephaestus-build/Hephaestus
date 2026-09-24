@@ -4,4 +4,5 @@ public enum CatalogLink {
     IN_SYNC,
     LOCALLY_EDITED,
     UPDATE_AVAILABLE,
+    DECLINED,
 }

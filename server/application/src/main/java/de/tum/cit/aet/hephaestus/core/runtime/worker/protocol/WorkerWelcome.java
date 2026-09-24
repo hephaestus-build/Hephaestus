@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.runtime.worker.protocol;
 
-/** Hub handshake reply. {@code sessionId} is regenerated on every reconnect (log-correlation key, no application semantics). */
+/** Hub handshake reply. {@code sessionId} changes on reconnect and fences correlated Git operations. */
 public record WorkerWelcome(int negotiatedVersion, String sessionId) implements WorkerControlFrame {
     public WorkerWelcome {
         if (negotiatedVersion < 1) {

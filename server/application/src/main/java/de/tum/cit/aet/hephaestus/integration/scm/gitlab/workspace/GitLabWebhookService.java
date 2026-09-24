@@ -252,7 +252,7 @@ public class GitLabWebhookService {
                     true, // confidential_note_events
                     true, // push_events
                     true, // tag_push_events
-                    false, // pipeline_events
+                    true, // pipeline_events
                     true, // milestone_events
                     true, // member_events
                     true, // subgroup_events

@@ -46,6 +46,7 @@ interface CuratedPracticeFormBaseProps {
 	isKeepPending?: boolean;
 	onUseHephaestusVersion?: () => void;
 	onKeepCurrentDefinition?: () => void;
+	releaseReview?: React.ReactNode;
 	definitionOptions: PracticeDefinitionOptions;
 	/** What "leave without saving" does. The host owns it, because only the host knows where back is. */
 	cancel: React.ReactNode;
@@ -80,6 +81,7 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 		initialData,
 		definitionOptions,
 		onKeepCurrentDefinition,
+		releaseReview,
 		cancel,
 	} = props;
 	const [resetOpen, setResetOpen] = useState(false);
@@ -87,12 +89,12 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 		mode === "edit" &&
 		canUseHephaestusVersion(initialData.status) &&
 		onUseHephaestusVersion !== undefined;
-	const updateAvailable = mode === "edit" && initialData.status.state === "UPDATE_WAITING";
 	const formDisabled = isResetPending || isKeepPending;
 	/** The host's own banners, handed to the form so they land inside its padded, scrolling body. */
 	const banners = (
 		<>
-			{mode === "edit" && (
+			{mode === "edit" && initialData.status.state === "UPDATE_WAITING" && releaseReview}
+			{mode === "edit" && initialData.status.state !== "UPDATE_WAITING" && (
 				<HephaestusVersionPanel
 					status={initialData.status}
 					kind="practice"
@@ -127,7 +129,7 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 		</>
 	);
 
-	const resetLabel = updateAvailable ? "Apply Hephaestus update" : "Restore Hephaestus default";
+	const resetLabel = "Restore Hephaestus default";
 
 	return (
 		<>

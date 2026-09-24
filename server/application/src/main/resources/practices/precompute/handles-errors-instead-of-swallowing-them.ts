@@ -3,6 +3,8 @@
 // genuinely swallowed (no surfacing, logging, or recovery). Empty/no-op catch bodies routinely span lines
 // (`catch {\n}`), so patterns run over a window of CONSECUTIVE added lines per file, NOT a single line.
 // General by design: a per-language pattern table keyed off the file extension. Adding a language = a row.
+import { isCommentLine } from "../lib/declarations.ts";
+import { languageOf } from "../lib/languages.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 // language key -> [human label, regex] of error-discarding / swallowing constructs in ADDED code. The `\s`
@@ -14,7 +16,7 @@ const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 		["catch with only print", /\bcatch\s*\{\s*print\s*\([^)]*\)\s*\}/u],
 		["error ignored: if let error {}", /\bif\s+let\s+error\b[^{]*\{\s*\}/u],
 	],
-	ts: [
+	typescript: [
 		["empty catch", /\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}/u],
 		[".catch(noop)", /\.catch\s*\(\s*\(\s*[^)]*\)\s*=>\s*\{\s*\}\s*\)/u],
 		[
@@ -22,7 +24,7 @@ const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 			/\bcatch\s*(?:\([^)]*\))?\s*\{\s*console\.[a-z]+\([^)]*\)\s*;?\s*\}/u,
 		],
 	],
-	js: [
+	javascript: [
 		["empty catch", /\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}/u],
 		[".catch(noop)", /\.catch\s*\(\s*\(\s*[^)]*\)\s*=>\s*\{\s*\}\s*\)/u],
 		[
@@ -64,41 +66,6 @@ const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 	],
 };
 
-const EXT_LANG: Record<string, string> = {
-	swift: "swift",
-	m: "swift",
-	mm: "swift",
-	ts: "ts",
-	tsx: "ts",
-	mts: "ts",
-	cts: "ts",
-	js: "js",
-	jsx: "js",
-	mjs: "js",
-	cjs: "js",
-	py: "python",
-	go: "go",
-	java: "java",
-	kt: "kotlin",
-	kts: "kotlin",
-	rs: "rust",
-	rb: "ruby",
-};
-
-function langOf(path: string): string | null {
-	const ext = path.split(".").pop()?.toLowerCase() ?? "";
-	return EXT_LANG[ext] ?? null;
-}
-
-function isComment(trimmed: string): boolean {
-	return (
-		trimmed.startsWith("//") ||
-		trimmed.startsWith("#") ||
-		trimmed.startsWith("*") ||
-		trimmed.startsWith("/*")
-	);
-}
-
 // Group a file's added lines into windows of CONSECUTIVE line numbers so a multi-line construct
 // (e.g. `catch {` then `}`) is one searchable text block without falsely joining distant additions.
 function consecutiveWindows(added: Map<number, string>): { start: number; lines: string[] }[] {
@@ -128,8 +95,10 @@ export default function handlesErrorsInsteadOfSwallowingThem(
 ) {
 	const hints: Hint[] = [];
 	const byLang: Record<string, number> = {};
+	let filesScanned = 0;
+	let linesAdded = 0;
 	for (const [path, df] of diffFiles) {
-		const lang = langOf(path);
+		const lang = languageOf(path);
 		if (lang === null) {
 			continue;
 		}
@@ -137,6 +106,8 @@ export default function handlesErrorsInsteadOfSwallowingThem(
 		if (!patterns) {
 			continue;
 		}
+		filesScanned += 1;
+		linesAdded += df.addedLines.size;
 		for (const w of consecutiveWindows(df.addedLines)) {
 			const text = w.lines.join("\n");
 			for (const [name, re] of patterns) {
@@ -147,7 +118,7 @@ export default function handlesErrorsInsteadOfSwallowingThem(
 				const offset = text.slice(0, match.index).split("\n").length - 1;
 				const lineNum = w.start + offset;
 				const lineContent = w.lines[offset] ?? "";
-				if (isComment(lineContent.trimStart())) {
+				if (isCommentLine(lineContent, lang)) {
 					continue;
 				}
 				hints.push({
@@ -172,7 +143,7 @@ export default function handlesErrorsInsteadOfSwallowingThem(
 			: [];
 	return {
 		hints: hints.slice(0, 40),
-		metrics: { errorSwallowCandidates: hints.length, ...byLang },
+		metrics: { errorSwallowCandidates: hints.length, filesScanned, linesAdded, ...byLang },
 		directions,
 	};
 }

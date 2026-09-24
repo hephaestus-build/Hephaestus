@@ -18,7 +18,6 @@ const MODELS = [
 		scope: "SHARED",
 		displayName: "GPT Test",
 		connectionDisplayName: "Shared OpenAI",
-		supportsReasoning: false,
 		pricingMode: "NO_CHARGE",
 	},
 	{
@@ -26,7 +25,6 @@ const MODELS = [
 		scope: "SHARED",
 		displayName: "GPT Other",
 		connectionDisplayName: "Shared OpenAI",
-		supportsReasoning: false,
 		pricingMode: "NO_CHARGE",
 	},
 ];

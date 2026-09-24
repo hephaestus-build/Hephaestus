@@ -2,7 +2,6 @@ import { AlertTriangle } from "lucide-react";
 import { useId } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Field,
 	FieldContent,
@@ -11,6 +10,13 @@ import {
 	FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
 	type FieldErrors,
@@ -18,6 +24,13 @@ import {
 	validateLlmModelForm,
 } from "@/lib/llm-form-validation";
 import type { LlmAudience } from "@/lib/llm-pricing";
+import {
+	isReasoningEffortChoice,
+	PROVIDER_DEFAULT_EFFORT,
+	REASONING_EFFORT_CHOICES,
+	type ReasoningEffort,
+	type ReasoningEffortChoice,
+} from "@/lib/reasoning-effort";
 import { hasText } from "@/lib/text";
 
 import { PriceModeEditor, type PriceModeValue } from "./PriceModeEditor";
@@ -27,7 +40,7 @@ export interface LlmModelFieldsValue {
 	upstreamModelId: string;
 	contextWindow: string;
 	maxOutputTokens: string;
-	supportsReasoning: boolean;
+	reasoningEffort: ReasoningEffortChoice;
 	enabled: boolean;
 	price: PriceModeValue;
 }
@@ -37,7 +50,7 @@ interface EditedModel {
 	upstreamModelId: string;
 	contextWindow?: number;
 	maxOutputTokens?: number;
-	supportsReasoning?: boolean;
+	reasoningEffort?: ReasoningEffort;
 	enabled?: boolean;
 }
 
@@ -50,7 +63,7 @@ export function modelFieldsValueOf(
 		upstreamModelId: model?.upstreamModelId ?? "",
 		contextWindow: model?.contextWindow == null ? "" : String(model.contextWindow),
 		maxOutputTokens: model?.maxOutputTokens == null ? "" : String(model.maxOutputTokens),
-		supportsReasoning: model?.supportsReasoning ?? false,
+		reasoningEffort: model?.reasoningEffort ?? PROVIDER_DEFAULT_EFFORT,
 		enabled: model?.enabled ?? false,
 		price,
 	};
@@ -219,17 +232,40 @@ export function LlmModelFields({
 				</Field>
 			</div>
 
-			<Field orientation="horizontal">
-				<Checkbox
-					id={`${idPrefix}-supports-reasoning`}
-					checked={value.supportsReasoning}
-					onCheckedChange={(checked) => update({ supportsReasoning: checked })}
-				/>
-				<FieldContent>
-					<FieldLabel htmlFor={`${idPrefix}-supports-reasoning`} className="font-normal">
-						Supports a reasoning mode
-					</FieldLabel>
-				</FieldContent>
+			<Field>
+				<FieldLabel
+					id={`${idPrefix}-reasoning-effort-label`}
+					htmlFor={`${idPrefix}-reasoning-effort`}
+				>
+					Reasoning effort
+				</FieldLabel>
+				<Select
+					items={REASONING_EFFORT_CHOICES}
+					value={value.reasoningEffort}
+					onValueChange={(next) => {
+						if (isReasoningEffortChoice(next)) {
+							update({ reasoningEffort: next });
+						}
+					}}
+				>
+					<SelectTrigger
+						id={`${idPrefix}-reasoning-effort`}
+						aria-describedby={`${idPrefix}-reasoning-effort-description`}
+					>
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent aria-labelledby={`${idPrefix}-reasoning-effort-label`}>
+						{REASONING_EFFORT_CHOICES.map((choice) => (
+							<SelectItem key={choice.value} value={choice.value}>
+								{choice.label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<FieldDescription id={`${idPrefix}-reasoning-effort-description`}>
+					Provider default sends no effort setting. Supported levels and defaults depend on the
+					model and provider. Choose only a supported level; None requests no reasoning.
+				</FieldDescription>
 			</Field>
 
 			<Field orientation="horizontal">

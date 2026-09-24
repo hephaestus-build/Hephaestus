@@ -40,21 +40,25 @@ public class JobTokenAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String LLM_PROXY_SCOPE = "llm_proxy";
+    private static final String RUNTIME_PATH = "/internal/llm/runtime/";
 
     private final AgentJobRepository agentJobRepository;
     private final WorkerJwtVerifier jwtVerifier;
     private final MentorProxyCredentialRegistry mentorRegistry;
     private final ObjectMapper objectMapper;
+    private final String workerId;
 
     JobTokenAuthenticationFilter(
             AgentJobRepository agentJobRepository,
             WorkerJwtVerifier jwtVerifier,
             MentorProxyCredentialRegistry mentorRegistry,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            String workerId) {
         this.agentJobRepository = agentJobRepository;
         this.jwtVerifier = jwtVerifier;
         this.mentorRegistry = mentorRegistry;
         this.objectMapper = objectMapper;
+        this.workerId = workerId;
     }
 
     @Override
@@ -89,7 +93,16 @@ public class JobTokenAuthenticationFilter extends OncePerRequestFilter {
                 response.sendError(HttpServletResponse.SC_FORBIDDEN, "Insufficient token scope");
                 return;
             }
-            routing = resolveJobRouting(jwt);
+            if (!matchesRuntimeJob(request, jwt)) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid runtime URL for token");
+                return;
+            }
+            Optional<AgentJob> job = agentJobRepository.findByIdWithWorkspace(jwt.jobId());
+            routing = resolveJobRouting(jwt, job);
+            if (routing.isEmpty() && isResultUpload(request, jwt) && isOwnedByAnotherWorker(jwt, job)) {
+                response.sendError(HttpServletResponse.SC_CONFLICT, "Job is owned by another worker");
+                return;
+            }
         }
         if (routing.isEmpty()) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired token");
@@ -104,13 +117,37 @@ public class JobTokenAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
-    private Optional<ProxyRouting> resolveJobRouting(JobJwt jwt) {
-        Optional<AgentJob> optionalJob = agentJobRepository.findByIdWithWorkspace(jwt.jobId());
+    private boolean isOwnedByAnotherWorker(JobJwt jwt, Optional<AgentJob> optionalJob) {
+        return optionalJob
+                .filter(job -> job.getStatus() == AgentJobStatus.RUNNING
+                        && job.getWorkspace().getId().equals(jwt.workspaceId())
+                        && job.getRetryCount() == jwt.attempt())
+                .map(job -> job.getWorkerId() != null && !workerId.equals(job.getWorkerId()))
+                .orElse(false);
+    }
+
+    private static boolean isResultUpload(HttpServletRequest request, JobJwt jwt) {
+        return "POST".equals(request.getMethod())
+                && request.getRequestURI().equals(RUNTIME_PATH + jwt.jobId() + "/result");
+    }
+
+    private static boolean matchesRuntimeJob(HttpServletRequest request, JobJwt jwt) {
+        String path = request.getRequestURI();
+        if (!path.startsWith(RUNTIME_PATH)) {
+            return true;
+        }
+        int end = path.indexOf('/', RUNTIME_PATH.length());
+        String pathJobId = path.substring(RUNTIME_PATH.length(), end < 0 ? path.length() : end);
+        return pathJobId.equals(jwt.jobId().toString());
+    }
+
+    private Optional<ProxyRouting> resolveJobRouting(JobJwt jwt, Optional<AgentJob> optionalJob) {
         if (optionalJob.isEmpty()) {
             return Optional.empty();
         }
         AgentJob job = optionalJob.get();
-        if (job.getStatus() != AgentJobStatus.RUNNING
+        if (!workerId.equals(job.getWorkerId())
+                || job.getStatus() != AgentJobStatus.RUNNING
                 || !job.getWorkspace().getId().equals(jwt.workspaceId())
                 || job.getRetryCount() != jwt.attempt()) {
             return Optional.empty();
@@ -135,7 +172,11 @@ public class JobTokenAuthenticationFilter extends OncePerRequestFilter {
                 snapshot.modelId(),
                 job.getWorkspace().getId(),
                 new ProxyRouting.BilledAttempt(
-                        LlmUsageSourceType.AGENT_JOB, job.getId(), job.getRetryCount(), spentSoFarUsd(job, snapshot))));
+                        LlmUsageSourceType.AGENT_JOB,
+                        job.getId(),
+                        job.getRetryCount(),
+                        spentSoFarUsd(job, snapshot),
+                        job.getWorkerId())));
     }
 
     /**

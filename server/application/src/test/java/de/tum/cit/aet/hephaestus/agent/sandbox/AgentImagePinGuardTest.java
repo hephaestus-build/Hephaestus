@@ -11,9 +11,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class AgentImagePinGuardTest extends BaseUnitTest {
 
+    private static final String PINNED_AGENT = "ghcr.io/x/agent-pi@sha256:" + "a".repeat(64);
+
     @Test
     void shouldAllowStartupWhenReferenceIsDigestPinned() {
-        var props = new AgentImageProperties("ghcr.io/x/agent-pi@sha256:" + "a".repeat(64), ImagePullPolicy.ALWAYS);
+        var props = new AgentImageProperties(PINNED_AGENT, ImagePullPolicy.ALWAYS);
         assertThatCode(() -> new AgentImagePinGuard(props)).doesNotThrowAnyException();
     }
 

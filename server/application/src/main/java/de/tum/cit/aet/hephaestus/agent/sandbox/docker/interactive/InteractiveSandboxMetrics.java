@@ -16,9 +16,6 @@ import java.util.Objects;
  */
 public final class InteractiveSandboxMetrics {
 
-    final Counter attachFailureImage;
-    final Counter attachFailureStart;
-    final Counter attachFailureStdin;
     final Counter attachFailureFirstFrameTimeout;
     final Counter attachFailureFirstFrameFailed;
     final Counter attachFailureMaxSessions;
@@ -47,9 +44,6 @@ public final class InteractiveSandboxMetrics {
     private final Map<EvictionReason, Counter> evictionsByReason;
 
     public InteractiveSandboxMetrics(MeterRegistry registry) {
-        this.attachFailureImage = attachFailure(registry, "image_pull_failed");
-        this.attachFailureStart = attachFailure(registry, "container_start_failed");
-        this.attachFailureStdin = attachFailure(registry, "stdin_open_failed");
         // _timeout = runner went silent; _failed = pump/writer terminated before any frame.
         this.attachFailureFirstFrameTimeout = attachFailure(registry, "first_frame_timeout");
         this.attachFailureFirstFrameFailed = attachFailure(registry, "first_frame_failed");

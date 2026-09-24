@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider.SyncContext;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
@@ -122,6 +123,7 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
         assertThat(firstPass).isEqualTo(1);
         assertThat(secondPass).isZero();
         verify(issueSyncService, times(1)).backfillIssues(eq(SCOPE_ID), any(), any(), anyInt());
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.HISTORICAL_BACKFILL, null);
     }
 
     @Test
@@ -150,6 +152,8 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
         assertThat(service.runBackfillPass(SCOPE_ID, handle)).isZero();
 
         verify(issueSyncService, times(1)).backfillIssues(eq(SCOPE_ID), any(), any(), anyInt());
+        verify(syncTargetProvider)
+                .updateSyncError(SYNC_TARGET_ID, SyncPass.HISTORICAL_BACKFILL, "Historical issue backfill aborted");
     }
 
     @Test

@@ -5,16 +5,21 @@ import static de.tum.cit.aet.hephaestus.integration.scm.domain.common.DateTimeUt
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.MergeStateStatus;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GraphQlConnectionOverflowDetector;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssue;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMergeStateStatus;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMergeableState;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestCommit;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestState;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHReviewRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHReviewRequestConnection;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHStatusCheckRollup;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHStatusState;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHUser;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHUserConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.dto.GitHubLabelDTO;
@@ -23,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRep
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import java.math.BigInteger;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -78,7 +84,20 @@ public record GitHubPullRequestDTO(
          * Null when the PR is not merged or when created from webhook payloads
          * (which only provide the SHA via {@link #mergeCommitSha}).
          */
-        @Nullable MergeCommitInfo mergeCommitInfo) {
+        @Nullable MergeCommitInfo mergeCommitInfo,
+        /**
+         * What the checks said about the head, from GraphQL; null when the source did not read it (a
+         * webhook payload), which leaves the stored observation alone.
+         */
+        @Nullable HeadChecks headChecks,
+        /**
+         * The numbers of the issues of this repository GitHub records the pull request as closing,
+         * from GraphQL; null when the source did not read them, which leaves the stored set alone.
+         */
+        @Nullable List<Integer> closingIssueNumbers) {
+    /** The head the checks were observed for, and their rolled-up state. */
+    public record HeadChecks(String sha, CheckState state) {}
+
     /**
      * Merge commit metadata from GraphQL PR queries. All flat fields on the
      * Commit type — zero additional rate limit cost.
@@ -165,7 +184,64 @@ public record GitHubPullRequestDTO(
                 convertMergeStateStatus(pr.getMergeStateStatus()),
                 convertMergeableState(pr.getMergeable()),
                 pr.getMaintainerCanModify(),
-                extractMergeCommitInfo(pr));
+                extractMergeCommitInfo(pr),
+                extractHeadChecks(pr),
+                extractClosingIssueNumbers(pr));
+    }
+
+    /**
+     * The status check rollup of the head commit as one {@link CheckState}: EXPECTED and PENDING
+     * are still pending, ERROR and FAILURE failed, and a head with no rollup has no checks.
+     */
+    @Nullable
+    static HeadChecks extractHeadChecks(GHPullRequest pr) {
+        if (pr.getCommits() == null || pr.getCommits().getNodes() == null) {
+            return null;
+        }
+        for (GHPullRequestCommit node : pr.getCommits().getNodes()) {
+            if (node == null || node.getCommit() == null || node.getCommit().getOid() == null) {
+                continue;
+            }
+            GHStatusCheckRollup rollup = node.getCommit().getStatusCheckRollup();
+            return new HeadChecks(node.getCommit().getOid(), toCheckState(rollup == null ? null : rollup.getState()));
+        }
+        return null;
+    }
+
+    static CheckState toCheckState(@Nullable GHStatusState state) {
+        if (state == null) {
+            return CheckState.NONE;
+        }
+        return switch (state) {
+            case SUCCESS -> CheckState.SUCCESS;
+            case ERROR, FAILURE -> CheckState.FAILURE;
+            case EXPECTED, PENDING -> CheckState.PENDING;
+        };
+    }
+
+    /**
+     * The closing references that point at this repository's own issues. A reference into another
+     * repository is dropped here: the record holds this repository's issues, and a number from
+     * elsewhere would resolve to the wrong one.
+     */
+    @Nullable
+    static List<Integer> extractClosingIssueNumbers(GHPullRequest pr) {
+        if (pr.getClosingIssuesReferences() == null
+                || pr.getClosingIssuesReferences().getNodes() == null) {
+            return null;
+        }
+        String ownRepository =
+                pr.getRepository() == null ? null : pr.getRepository().getNameWithOwner();
+        List<Integer> numbers = new ArrayList<>();
+        for (GHIssue issue : pr.getClosingIssuesReferences().getNodes()) {
+            if (issue == null) continue;
+            String repository =
+                    issue.getRepository() == null ? null : issue.getRepository().getNameWithOwner();
+            if (ownRepository == null || ownRepository.equals(repository)) {
+                numbers.add(issue.getNumber());
+            }
+        }
+        return numbers;
     }
 
     /**

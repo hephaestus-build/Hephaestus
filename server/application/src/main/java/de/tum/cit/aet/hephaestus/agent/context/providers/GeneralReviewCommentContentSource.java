@@ -100,7 +100,9 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
         ObjectNode root = collect(pullRequestId);
         boolean truncated = root.path("truncated").asBoolean(false);
         return new EvidenceContribution(
-                Map.of(OUTPUT_PREFIX + FILE_NAME, objectMapper.writeValueAsBytes(root)),
+                Map.of(
+                        OUTPUT_PREFIX + FILE_NAME,
+                        objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root)),
                 Map.of(KIND, truncated ? SourceCompleteness.PARTIAL : SourceCompleteness.COMPLETE),
                 Map.of(),
                 Map.of(),
@@ -141,13 +143,14 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
             for (IssueComment c : comments) {
                 commentArray.add(toComment(c, c.getBody()));
             }
-            int emitted = commentArray.size();
-
             ObjectNode root = objectMapper.createObjectNode();
             root.set("comments", commentArray);
-            root.put("count", emitted);
             root.put("truncated", truncated);
-            log.info("GeneralReviewComments: prId={} emitted={} truncated={}", pullRequestId, emitted, truncated);
+            log.info(
+                    "GeneralReviewComments: prId={} emitted={} truncated={}",
+                    pullRequestId,
+                    commentArray.size(),
+                    truncated);
             return root;
         } catch (Exception e) {
             throw new EvidenceCollectionException("General-review-comment collection failed", e);
@@ -159,12 +162,20 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
         String author = login(c.getAuthor());
         if (author != null) {
             node.put("author", author);
+            if (isBot(c.getAuthor())) {
+                node.put("bot", true);
+            }
         }
         node.put("body", body);
         if (c.getCreatedAt() != null) {
             node.put("createdAt", c.getCreatedAt().toString());
         }
         return node;
+    }
+
+    /** The provider's own classification, as the adapter stored it. */
+    private static boolean isBot(@Nullable User user) {
+        return user != null && user.getType() == User.Type.BOT;
     }
 
     private static @Nullable String login(@Nullable User user) {

@@ -307,6 +307,9 @@ erDiagram
         TIMESTAMPTZ updated_at "NOT NULL"
         BIGINT version "NOT NULL"
         JSONB automated_review_policy
+        JSONB adopted_base
+        VARCHAR(32) adopted_base_source
+        JSONB delivery_behavior
     }
 
     DeliveryPolicyEvaluation {
@@ -506,6 +509,7 @@ erDiagram
         TEXT parent_shas
         VARCHAR(32) status_check_rollup_state
         VARCHAR(255) on_behalf_of_login
+        TIMESTAMPTZ git_details_captured_at
     }
 
     IdentityLink {
@@ -592,6 +596,8 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
         VARCHAR(40) merge_commit_sha
         TIMESTAMPTZ deleted_at
+        VARCHAR(40) head_check_sha
+        VARCHAR(16) head_check_state
     }
 
     IssueAssignee {
@@ -692,6 +698,7 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(16) reasoning_effort
     }
 
     LlmModelPrice {
@@ -919,6 +926,10 @@ erDiagram
         VARCHAR(96) source_curated_fingerprint
         JSONB automated_review_policy "NOT NULL"
         VARCHAR(16) autonomy
+        JSONB adopted_base
+        VARCHAR(32) adopted_base_source
+        VARCHAR(96) declined_offered_digest
+        JSONB delivery_behavior "NOT NULL"
     }
 
     PracticeCatalogInstallation {
@@ -975,6 +986,7 @@ erDiagram
         VARCHAR(32) group_color
         VARCHAR(96) review_rule_fingerprint
         JSONB automated_review_policy
+        JSONB delivery_behavior "NOT NULL"
     }
 
     ProductFeedback {
@@ -1110,6 +1122,11 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
     }
 
+    PullRequestClosingIssue {
+        BIGINT pull_request_id PK,FK
+        BIGINT issue_id PK,FK
+    }
+
     PullRequestRequestedReviewer {
         BIGINT pull_request_id PK,FK
         BIGINT user_id PK,FK
@@ -1179,6 +1196,7 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
         VARCHAR(64) commit_sha
         VARCHAR(64) original_commit_sha
+        TIMESTAMPTZ resolved_at
     }
 
     Reaction {
@@ -1239,6 +1257,8 @@ erDiagram
         VARCHAR(255) discussion_sync_cursor
         TIMESTAMPTZ discussions_synced_at
         BIGINT native_id
+        VARCHAR(2048) historical_backfill_sync_error
+        VARCHAR(2048) recent_sync_error
     }
 
     ReviewBackfillRun {
@@ -1325,6 +1345,7 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         VARCHAR(32) last_history_synced_ts
         TIMESTAMPTZ history_synced_at
+        VARCHAR(2048) last_sync_error
     }
 
     SlackParticipantConsent {
@@ -1520,6 +1541,7 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(16) reasoning_effort
     }
 
     WorkspaceMembership {
@@ -1751,6 +1773,8 @@ erDiagram
     Workspace }o--o{ LlmModelWorkspaceGrant : has
     RepositoryToMonitor }o--o{ PracticeReviewRepositoryTarget : reviewed
     Workspace }o--o{ PracticeReviewRepositoryTarget : reviewed
+    Issue }o--o{ PullRequestClosingIssue : has
+    Issue }o--o{ PullRequestClosingIssue : references
     Issue }o--o{ PullRequestRequestedReviewer : reviewed
     User }o--o{ PullRequestRequestedReviewer : reviewed
     Repository }o--o{ RepositoryCollaborator : has

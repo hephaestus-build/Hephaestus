@@ -119,7 +119,7 @@ class GeneralReviewCommentContentSourceIntegrationTest extends BaseIntegrationTe
 
         JsonNode staged = stage(pr);
 
-        assertThat(staged.get("count").asInt()).isEqualTo(2);
+        assertThat(staged.get("comments")).hasSize(2);
         assertThat(staged.get("comments").get(0).get("body").asString()).isEqualTo("this branch is always taken");
         assertThat(staged.get("comments").get(0).get("author").asString()).isEqualTo("reviewer-a");
         assertThat(staged.get("comments").get(1).get("author").asString()).isEqualTo("contributor-b");
@@ -135,7 +135,7 @@ class GeneralReviewCommentContentSourceIntegrationTest extends BaseIntegrationTe
 
         JsonNode staged = stage(target);
 
-        assertThat(staged.get("count").asInt()).isEqualTo(1);
+        assertThat(staged.get("comments")).hasSize(1);
         assertThat(staged.get("comments").get(0).get("body").asString()).isEqualTo("on the pull request under review");
     }
 

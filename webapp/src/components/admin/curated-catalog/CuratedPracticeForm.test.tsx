@@ -88,6 +88,66 @@ function moment(signal: string) {
 }
 
 describe("CuratedPracticeForm", () => {
+	it.each([
+		[
+			"gate",
+			{
+				...mockPullRequestBinding,
+				appliesWhen: {
+					absentSays: "the change has no Swift code",
+					anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+				},
+			},
+		],
+		["reviewer", { ...mockPullRequestBinding, subject: "REVIEWER" as const }],
+	])("keeps the %s on a name-only catalog save", async (_label, binding) => {
+		const onSubmit = submitSpy();
+		await renderForm({ bindings: [binding] }, onSubmit);
+		fireEvent.change(screen.getByRole("textbox", { name: /Name/u }), {
+			target: { value: "Review Swift code" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				bindings: [expect.objectContaining(binding)],
+				bindingChanges: undefined,
+			}),
+		);
+	});
+
+	it("shows the gate and reviewer when both are set", async () => {
+		const gate = {
+			absentSays: "the change has no Swift code",
+			anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+		};
+		await renderForm({
+			bindings: [{ ...mockPullRequestBinding, appliesWhen: gate, subject: "REVIEWER" }],
+		});
+		expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveProperty(
+			"value",
+			JSON.stringify(gate, null, 2),
+		);
+		expect(
+			screen.getByRole("combobox", { name: "Person this practice judges" }).textContent,
+		).toContain("reviewer");
+	});
+
+	it("marks a catalog gate removal as deliberate", async () => {
+		const onSubmit = submitSpy();
+		const gate = {
+			absentSays: "the change has no Swift code",
+			anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+		};
+		await renderForm({ bindings: [{ ...mockPullRequestBinding, appliesWhen: gate }] }, onSubmit);
+		fireEvent.change(screen.getByRole("textbox", { name: "Only review when" }), {
+			target: { value: "" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({ bindingChanges: ["APPLIES_WHEN"] }),
+		);
+	});
+
 	it("associates validation messages with invalid fields", async () => {
 		await renderWithRouter(
 			<CuratedPracticeForm
@@ -421,6 +481,45 @@ describe("CuratedPracticeForm", () => {
 				.getByRole("checkbox", { name: /^Closed$/u })
 				.getAttribute("aria-checked"),
 		).toBe("true");
+	});
+
+	it("shows each work type's own gate draft after a switch", async () => {
+		const user = userEvent.setup();
+		const pullRequestGate = {
+			absentSays: "the change has no Swift code",
+			anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+		};
+		const issueGate = {
+			absentSays: "the issue has no review comment",
+			anyOf: [{ diffContains: ["review"] }],
+		};
+		await renderForm({ bindings: [{ ...mockPullRequestBinding, appliesWhen: pullRequestGate }] });
+		const gateField = screen.getByRole<HTMLTextAreaElement>("textbox", {
+			name: "Only review when",
+		});
+
+		await user.click(screen.getByRole("radio", { name: /^Issue/u }));
+		expect(gateField.value).toBe(JSON.stringify(pullRequestGate, null, 2));
+		fireEvent.change(gateField, { target: { value: JSON.stringify(issueGate) } });
+		await user.click(screen.getByRole("radio", { name: /Pull or merge request/u }));
+		expect(gateField.value).toBe(JSON.stringify(pullRequestGate, null, 2));
+		await user.click(screen.getByRole("radio", { name: /^Issue/u }));
+		expect(gateField.value).toBe(JSON.stringify(issueGate));
+	});
+
+	it("keeps an unsupported reviewer visible until the admin chooses an issue subject", async () => {
+		const user = userEvent.setup();
+		const onSubmit = submitSpy();
+		await renderForm({ bindings: [{ ...mockPullRequestBinding, subject: "REVIEWER" }] }, onSubmit);
+		await user.click(screen.getByRole("radio", { name: /^Issue/u }));
+		const subject = screen.getByRole("combobox", { name: "Person this practice judges" });
+		expect(subject.textContent).toContain("reviewer (not available for this work)");
+		await user.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(subject.getAttribute("aria-invalid")).toBe("true");
+		expect(
+			screen.getAllByText("Choose a person this kind of work can identify.").length,
+		).toBeGreaterThan(0);
 	});
 
 	it("asks about drafts only where a draft can exist", async () => {

@@ -108,10 +108,26 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
 
         assertThat(captured.files()).containsKey(FILE_KEY);
         var out = objectMapper.readTree(captured.files().get(FILE_KEY));
+        assertThat(out.propertyNames()).containsExactlyInAnyOrder("comments", "truncated");
         assertThat(out.get("comments")).isEmpty();
-        assertThat(out.get("count").asInt()).isZero();
-        // Present, and still EMPTY: the staged placeholder must not be read back as content.
         assertThat(captured.contentStates()).containsValue(SourceContentState.EMPTY);
+    }
+
+    @Test
+    void shouldMarkACommentBotWhenTheAdapterStoredItsAuthorAsOne() throws Exception {
+        IssueComment automated =
+                comment("group_12_bot_9f3a", "Pipeline passed.", Instant.parse("2025-06-01T10:00:00Z"));
+        automated.getAuthor().setType(User.Type.BOT);
+        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+                .thenReturn(List.of(
+                        automated, comment("reviewer-a", "Looks right.", Instant.parse("2025-06-01T11:00:00Z"))));
+
+        Map<String, byte[]> files = new HashMap<>();
+        provider.contribute(request(metadataWithPr()), files);
+
+        JsonNode comments = objectMapper.readTree(files.get(FILE_KEY)).get("comments");
+        assertThat(comments.get(0).get("bot").asBoolean()).isTrue();
+        assertThat(comments.get(1).has("bot")).isFalse();
     }
 
     @Test
@@ -132,7 +148,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
 
         assertThat(files).containsKey(FILE_KEY);
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        assertThat(out.get("count").asInt()).isEqualTo(2);
+        assertThat(out.get("comments")).hasSize(2);
         JsonNode first = out.get("comments").get(0);
         assertThat(first.get("author").asString()).isEqualTo("reviewer-a");
         assertThat(first.get("body").asString()).contains("confidence");
@@ -156,7 +172,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        assertThat(out.get("count").asInt()).isEqualTo(1);
+        assertThat(out.get("comments")).hasSize(1);
         assertThat(out.get("comments").get(0).get("author").asString()).isEqualTo("reviewer-b");
     }
 
@@ -204,9 +220,9 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        assertThat(out.get("count").asInt()).isEqualTo(GeneralReviewCommentContentSource.MAX_COMMENTS);
         assertThat(out.get("truncated").asBoolean()).isTrue();
         JsonNode bodies = out.get("comments");
+        assertThat(bodies).hasSize(GeneralReviewCommentContentSource.MAX_COMMENTS);
         assertThat(bodies.get(0).get("body").asString()).isEqualTo("comment-5");
         assertThat(bodies.get(bodies.size() - 1).get("body").asString()).isEqualTo("comment-" + (total - 1));
         for (JsonNode c : bodies) {
@@ -266,7 +282,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        assertThat(out.get("count").asInt()).isEqualTo(1);
+        assertThat(out.get("comments")).hasSize(1);
         assertThat(out.get("comments").get(0).get("author").asString()).isEqualTo("reviewer-b");
     }
 
@@ -285,7 +301,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        assertThat(out.get("count").asInt()).isEqualTo(1);
+        assertThat(out.get("comments")).hasSize(1);
     }
 
     @Test

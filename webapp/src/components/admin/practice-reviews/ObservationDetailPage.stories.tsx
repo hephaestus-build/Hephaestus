@@ -6,12 +6,7 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 import { observationDetail, reviewObservationDetail, workspacePractices } from "./fixtures";
 import { ObservationDetailPage } from "./ObservationDetailPage";
 
-/**
- * The route fetches the record and the workspace's practice list; this screen only draws what it is
- * handed. Every story opens a record that exists in the fixture, by id — a hand-patched copy of one
- * detail, `{...detail, claimCurrentness: "STALE"}`, can describe a record no review could have
- * produced.
- */
+/** Select complete fixture records by ID to preserve cross-field consistency. */
 const meta = {
 	component: ObservationDetailPage,
 	parameters: {
@@ -58,20 +53,13 @@ export const EvidenceAcrossSources: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("3 passages from 3 sources.");
 		canvas.getByRole("heading", { name: "The code changes", level: 4 });
-		canvas.getByRole("heading", { name: "Files in the repository", level: 4 });
+		canvas.getByRole("heading", { name: "Files and history in the repository", level: 4 });
 		canvas.getByRole("heading", { name: "Review threads on the code", level: 4 });
 		await expect(canvas.queryByText(/scm\.pull-request/u)).not.toBeInTheDocument();
 	},
 };
 
-/**
- * A row is named by what the feedback is to the observation. Where it went reads as plain text in
- * the meta line and only what became of it is a tag — the same division `FeedbackRow` makes on the
- * Delivery list, so two rows built from one record have one layout.
- *
- * As two badges they said one thing twice: on the conversation lane the place and the outcome
- * resolve to the same icon under "In conversation" and "Delivered in conversation".
- */
+/** Render the delivery channel as text and its outcome as a badge, matching FeedbackRow. */
 export const LinkedFeedback: Story = {
 	play: async ({ canvas }) => {
 		const links = await canvas.findAllByRole("link", { name: "Feedback about this observation" });
@@ -184,14 +172,7 @@ export const NeverArrived: Story = {
 	},
 };
 
-/**
- * The row shape this page used to get wrong. A unit raised in the mentor conversation has a place
- * and an outcome that resolve to the *same* icon, and "Delivered in conversation" is word for word a
- * refinement of "In conversation" — every lane-specific outcome label must begin with the state it
- * refines, so a place badge beside it can only ever restate it.
- *
- * So the place is text and the outcome is the badge, which is also how the Delivery list draws it.
- */
+/** Conversation channel and outcome share an icon; show only the outcome as a badge. */
 export const RaisedInConversation: Story = {
 	args: { observation: observationDetail("ffffffff-3333-3333-3333-333333333333") },
 	parameters: { chromatic: { viewports: [1440] } },

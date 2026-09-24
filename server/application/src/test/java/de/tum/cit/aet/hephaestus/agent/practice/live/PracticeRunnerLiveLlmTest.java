@@ -73,6 +73,9 @@ class PracticeRunnerLiveLlmTest {
     /** Wall-clock cap for the whole runner — initial + retry budgets are derived from this. */
     private static final long AGENT_BUDGET_MS = 240_000L;
 
+    /** Where {@code pi-change.ts} writes the change view ({@code CHANGE_ROOT} there). */
+    private static final String CHANGE_VIEW_PREFIX = "work/change/";
+
     @BeforeAll
     static void installPiSdk() throws Exception {
         // Same marker + lock dance the mentor test uses so two JVMs (or repeated test runs)
@@ -307,25 +310,30 @@ class PracticeRunnerLiveLlmTest {
         Files.write(WORKSPACE.resolve("pi-provider.json"), buildProviderConfigJson(creds));
 
         // Practice catalog under /workspace/inputs/practices/ — the agent reads index.json (slug list)
-        // and all-criteria.md (per-practice rules) per the orchestrator instructions.
+        // and each practice's own criteria file per the orchestrator instructions.
         Path practicesDir = WORKSPACE.resolve(SandboxLayout.PRACTICES_PREFIX);
         Files.createDirectories(practicesDir);
         copyFixture("practices/index.json", practicesDir.resolve("index.json"));
-        copyFixture("practices/all-criteria.md", practicesDir.resolve("all-criteria.md"));
         copyFixture(
                 "practices/avoids-insecure-defaults-and-over-broad-permissions.md",
                 practicesDir.resolve("avoids-insecure-defaults-and-over-broad-permissions.md"));
 
-        // Context fixture — diff, metadata, comments, diff_summary. Mirrors what
+        // Context fixture — the pinned change, metadata, comments. Mirrors what
         // PullRequestContentSource materialises in production.
         Path contextDir = WORKSPACE.resolve(SandboxLayout.CONTEXT_PREFIX);
         Files.createDirectories(contextDir);
         // Every citation is checked against this; the runner refuses to start without it.
         copyFixture("manifest.json", WORKSPACE.resolve("inputs").resolve("manifest.json"));
-        copyFixture("diff.patch", contextDir.resolve("diff.patch"));
+        copyFixture("change.json", contextDir.resolve("change.json"));
         copyFixture("metadata.json", contextDir.resolve("metadata.json"));
         copyFixture("comments.json", contextDir.resolve("comments.json"));
-        copyFixture("diff_summary.md", contextDir.resolve("diff_summary.md"));
+
+        // The change view pi-change.ts derives from the checkout with git before the runner starts.
+        // This harness spawns the runner alone over a repo mount that is not a git repository, so the
+        // annotated diff is a fixture staged where the runner reads a citation of the change from.
+        Path changeDir = WORKSPACE.resolve(CHANGE_VIEW_PREFIX);
+        Files.createDirectories(changeDir);
+        copyFixture("diff.patch", changeDir.resolve("diff.patch"));
 
         // Real Swift source so the agent's read tool can pull the actual bytes when grepping the
         // repo mount (the orchestrator hints at /workspace/repo/ — we shim it as a symlink to the
@@ -342,9 +350,11 @@ class PracticeRunnerLiveLlmTest {
                 UUID.randomUUID(),
                 1L,
                 new Task.PracticeReview(
-                        "Review merge request #1 in test/fixture. Read inputs/context/diff_summary.md, "
-                                + "inputs/practices/all-criteria.md, inputs/practices/index.json, and inputs/context/metadata.json. "
-                                + "Apply the avoids-insecure-defaults-and-over-broad-permissions practice to inputs/context/diff.patch. Persist each "
+                        "Review merge request #1 in test/fixture. Read inputs/practices/index.json, "
+                                + "inputs/practices/avoids-insecure-defaults-and-over-broad-permissions.md, and inputs/context/metadata.json. "
+                                + "Apply the avoids-insecure-defaults-and-over-broad-permissions practice to "
+                                + CHANGE_VIEW_PREFIX
+                                + "diff.patch. Persist each "
                                 + "justified observation via report_observation (one tool call per observation). Follow "
                                 + SandboxLayout.ORCHESTRATOR_PATH
                                 + " for the schema and review rules.",

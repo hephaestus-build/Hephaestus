@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -91,7 +91,7 @@ void describe("grep", () => {
 		assert.ok(files.has("src/Views/ContentView.swift"));
 	});
 
-	void it("finds extension matches without shelling out and skips ignored paths", async () => {
+	void it("finds source files regardless of hidden or dependency-shaped paths", async () => {
 		const dir = await createTempDir();
 		await mkdir(path.join(dir, "src", "nested"), { recursive: true });
 		await mkdir(path.join(dir, ".hidden"), { recursive: true });
@@ -105,8 +105,38 @@ void describe("grep", () => {
 
 		const files = findFiles(dir, "swift");
 
-		assert.equal(files.length, 1);
-		assert.equal(files[0], path.join(dir, "src", "nested", "match.swift"));
+		assert.deepEqual(files, [
+			path.join(dir, ".build", "generated.swift"),
+			path.join(dir, ".hidden", "hidden.swift"),
+			path.join(dir, "node_modules", "pkg", "dep.swift"),
+			path.join(dir, "src", "nested", "match.swift"),
+		]);
+	});
+
+	void it("does not discover source through symlinked files or directories", async () => {
+		const dir = await createTempDir();
+		const outside = await createTempDir();
+		await writeFile(path.join(outside, "outside.swift"), "struct Outside {}\n");
+		await writeFile(path.join(dir, "inside.swift"), "struct Inside {}\n");
+		await symlink(outside, path.join(dir, "linked"), "dir");
+		await symlink(path.join(outside, "outside.swift"), path.join(dir, "linked.swift"));
+
+		assert.deepEqual(findFiles(dir, "swift"), [path.join(dir, "inside.swift")]);
+	});
+
+	void it("searches hidden source with standard brace and globstar patterns", async () => {
+		const dir = await createTempDir();
+		await mkdir(path.join(dir, ".github", "nested"), { recursive: true });
+		await writeFile(path.join(dir, ".github", "nested", "check.ts"), "needle\n");
+		await writeFile(path.join(dir, ".config.js"), "needle\n");
+		await writeFile(path.join(dir, "skip.txt"), "needle\n");
+
+		const matches = await grep("needle", dir, { glob: "**/*.{ts,js}" });
+
+		assert.deepEqual(matches.map((match) => match.file).toSorted(), [
+			".config.js",
+			".github/nested/check.ts",
+		]);
 	});
 
 	void it("never returns a directory whose name matches the file pattern", async () => {

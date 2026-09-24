@@ -59,11 +59,7 @@ public class GitLabManifest implements IntegrationManifest {
     }
 
     /**
-     * {@code scm.pull_request.synchronized} is deliberately absent: a push does fire the merge-request hook, but
-     * the processor derives no "new commits" transition from it, so a practice watching that signal stays a
-     * dormant binding on GitLab rather than one indistinguishable from a quiet week.
-     *
-     * <p>Delivery lanes track the same enablement flag as the channel beans; claiming a lane whose
+     * Delivery lanes track the same enablement flag as the channel beans; claiming a lane whose
      * {@code SummaryChannel} is not wired fails at boot.
      */
     @Override
@@ -75,6 +71,7 @@ public class GitLabManifest implements IntegrationManifest {
                         Set.of(
                                 ScmSignals.PULL_REQUEST_OPENED,
                                 ScmSignals.PULL_REQUEST_READY,
+                                ScmSignals.PULL_REQUEST_SYNCHRONIZED,
                                 ScmSignals.PULL_REQUEST_REVIEWED,
                                 ScmSignals.PULL_REQUEST_MERGED,
                                 ScmSignals.PULL_REQUEST_CLOSED),

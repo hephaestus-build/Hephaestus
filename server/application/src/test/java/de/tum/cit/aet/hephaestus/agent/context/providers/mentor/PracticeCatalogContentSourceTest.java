@@ -48,6 +48,32 @@ class PracticeCatalogContentSourceTest extends BaseUnitTest {
     PracticeCatalogContentSource provider;
 
     @Test
+    void handsTheMentorEveryPracticeThatAdmitsReviewAndNoneThatIsOff() throws Exception {
+        Workspace ws = new Workspace();
+        ws.setWorkspaceSlug("acme");
+        when(workspaceRepository.findById(eq(1L))).thenReturn(Optional.of(ws));
+        Practice awaiting = new Practice();
+        awaiting.setSlug("awaiting-approval");
+        awaiting.setName("Awaiting");
+        awaiting.setCriteria("c");
+        awaiting.setAutonomy(PracticeAutonomy.HUMAN_APPROVAL);
+        Practice off = new Practice();
+        off.setSlug("switched-off");
+        off.setName("Off");
+        off.setCriteria("c");
+        off.setAutonomy(PracticeAutonomy.OFF);
+        when(practiceRepository.findByWorkspaceId(eq(1L))).thenReturn(List.of(awaiting, off));
+
+        Map<String, byte[]> files = new HashMap<>();
+        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+
+        // A chat turn is read on request: approval gates only what is pushed onto the work.
+        JsonNode root = objectMapper.readTree(files.get("inputs/context/practice_catalog.json"));
+        assertThat(root.get("practices").valueStream().map(p -> p.get("slug").asString()))
+                .containsExactly("awaiting-approval");
+    }
+
+    @Test
     void writesCatalog() throws Exception {
         Workspace ws = new Workspace();
         ws.setWorkspaceSlug("acme");

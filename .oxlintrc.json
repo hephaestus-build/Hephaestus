@@ -493,6 +493,22 @@
 			"rules": { "unicorn/no-process-exit": "off" }
 		},
 		{
+			// The runner's tools answer per item, so a validator is one guard per rule of a contract, and
+			// a precompute script is one guard per shape it recognises; at the default 20 the rule grades
+			// how many rules the contract has. Forty is the line between that and a function doing several
+			// functions' work. An orchestration scenario is one linear story per stage, and is not graded.
+			"files": [
+				"server/application/src/main/resources/agent/**",
+				"server/application/src/main/resources/practices/precompute/**",
+				"docker/agents/precompute/**"
+			],
+			"rules": { "complexity": ["error", { "max": 40 }] }
+		},
+		{
+			"files": ["server/application/src/test/resources/agent/*.spec.ts"],
+			"rules": { "complexity": "off" }
+		},
+		{
 			// A changesets changelog plugin is loaded by `require`, so CommonJS is the format it must be in.
 			"files": [".changeset/*.cjs"],
 			"rules": { "import/no-commonjs": "off", "unicorn/prefer-module": "off" }

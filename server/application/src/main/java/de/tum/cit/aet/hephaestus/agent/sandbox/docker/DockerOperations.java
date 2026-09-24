@@ -9,7 +9,7 @@ import org.jspecify.annotations.Nullable;
  * Shared value types for Docker sandbox operations.
  *
  * <p>These records are used by the focused operation interfaces ({@link DockerContainerOperations},
- * {@link DockerNetworkOperations}, {@link DockerFileOperations}) and their implementations.
+ * {@link DockerNetworkOperations}, {@link DockerVolumeOperations}) and their implementations.
  */
 public final class DockerOperations {
 
@@ -42,7 +42,12 @@ public final class DockerOperations {
             @Nullable String cgroupnsMode,
             @Nullable String ipcMode,
             @Nullable String runtime,
-            Map<String, UlimitSpec> ulimits) {}
+            Map<String, UlimitSpec> ulimits,
+            List<VolumeMount> volumeMounts) {}
+
+    public record VolumeMount(String name, String target, boolean readOnly) {}
+
+    public record VolumeInfo(String name, Map<String, String> labels) {}
 
     public record UlimitSpec(long soft, long hard) {}
 

@@ -49,8 +49,31 @@ query GetRepositoryPullRequests(
                 maintainerCanModify
 
                 # Commits count
-                commits(first: 0) {
+                # The head commit and what the checks said about it; totalCount is the commit count.
+                commits(last: 1) {
                     totalCount
+                    nodes {
+                        commit {
+                            oid
+                            statusCheckRollup {
+                                state
+                            }
+                        }
+                    }
+                }
+
+                # The issues GitHub records this pull request as closing; only those of this
+                # repository are stored, so each side's repository is read to tell them apart.
+                repository {
+                    nameWithOwner
+                }
+                closingIssuesReferences(first: 50) {
+                    nodes {
+                        number
+                        repository {
+                            nameWithOwner
+                        }
+                    }
                 }
 
                 # Merge commit (available when PR is merged)

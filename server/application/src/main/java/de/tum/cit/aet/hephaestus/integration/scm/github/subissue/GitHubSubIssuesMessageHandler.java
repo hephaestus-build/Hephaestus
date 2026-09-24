@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMes
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
@@ -68,22 +69,26 @@ public class GitHubSubIssuesMessageHandler extends AbstractIntegrationMessageHan
         }
 
         // Ensure both issues exist
-        issueProcessor.process(parentIssueDto, context);
-        issueProcessor.process(subIssueDto, context);
+        Issue parent = issueProcessor.process(parentIssueDto, context);
+        Issue child = issueProcessor.process(subIssueDto, context);
 
-        // Process sub-issue relationship using the SubIssue action enum
-        Long subIssueId = subIssueDto.getDatabaseId();
-        Long parentIssueId = parentIssueDto.getDatabaseId();
+        // The relationship is keyed by the stored rows, whose ids are not GitHub's.
         GitHubEventAction.SubIssue action = event.actionType();
+        Long subIssueId = child == null ? null : child.getId();
+        Long parentIssueId = parent == null ? null : parent.getId();
         if (subIssueId == null || parentIssueId == null) {
-            log.warn("Skipped sub_issues event: reason=missingIssueId");
+            log.warn("Skipped sub_issues event: reason=issueNotStored");
             return;
         }
 
+        // The payload's parent carries GitHub's own rollup after the change; a payload without one
+        // leaves the rollup to the next sync.
         if (action.isAdded()) {
-            subIssueSyncService.processSubIssueEvent(subIssueId, parentIssueId, true);
+            subIssueSyncService.processSubIssueEvent(
+                    subIssueId, parentIssueId, true, parentIssueDto.subIssuesSummary());
         } else if (action.isRemoved()) {
-            subIssueSyncService.processSubIssueEvent(subIssueId, parentIssueId, false);
+            subIssueSyncService.processSubIssueEvent(
+                    subIssueId, parentIssueId, false, parentIssueDto.subIssuesSummary());
         } else {
             log.debug("Skipped sub_issues event: reason=unhandledAction, action={}", event.action());
         }

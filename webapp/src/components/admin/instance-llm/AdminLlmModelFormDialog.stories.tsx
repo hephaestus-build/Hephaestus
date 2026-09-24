@@ -20,7 +20,7 @@ const mockModel: LlmModel = {
 	connectionId: 1,
 	connectionDisplayName: "OpenAI production",
 	enabled: true,
-	supportsReasoning: true,
+	reasoningEffort: "MEDIUM",
 	visibility: "GRANTED",
 	grantedWorkspaceIds: [1],
 	currentPrice: {
@@ -61,6 +61,24 @@ export const AddModel: Story = {};
 
 export const EditModel: Story = {
 	args: { editing: mockModel },
+};
+
+export const ReasoningEffortProviderDefault: Story = {
+	args: { editing: { ...mockModel, reasoningEffort: undefined } },
+	play: async () => {
+		await expect(
+			await screen.findByRole("combobox", { name: "Reasoning effort" }),
+		).toHaveTextContent("Provider default");
+	},
+};
+
+export const ReasoningEffortExtraHigh: Story = {
+	args: { editing: { ...mockModel, reasoningEffort: "XHIGH" } },
+	play: async () => {
+		await expect(
+			await screen.findByRole("combobox", { name: "Reasoning effort" }),
+		).toHaveTextContent("Extra high");
+	},
 };
 
 export const EditKeepsAccessSeparate: Story = {

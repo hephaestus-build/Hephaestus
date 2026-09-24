@@ -239,6 +239,13 @@ The login provider is instance-agnostic: gitlab.com works out of the box, and an
 
 This env-seeds **one** default GitLab login provider (registration id `gitlab`). Additional GitLab instances are added at runtime by an instance admin under **Instance admin → Login providers** — no redeploy.
 
+The auto-registered group webhook subscribes to merge request, issue, note, push, tag push, pipeline,
+milestone, member, subgroup and project events. A hook registered by an earlier release does not gain
+a subscription on upgrade: for a workspace connected before pipeline events were read, enable
+**Pipeline events** on the hook under the group's **Settings → Webhooks**, or delete the hook and let
+Hephaestus register it again on the next sync. Until then the head pipeline's state reaches
+Hephaestus only through the scheduled sync.
+
 ### Practice review
 
 Practice review has its own page: **[Practice Review](./practice-review)** covers the deployment
@@ -333,7 +340,7 @@ The sync scheduler fetches recent GitHub activity (issues, PRs, reviews) for mon
 
 **Backfill behavior:** After recent sync completes, backfill works backwards from the highest issue number, syncing in small batches. It pauses when rate limits drop below the threshold and resumes on the next cycle. Progress is checkpointed per repository.
 
-**Disconnecting erases the active mirror.** Disconnecting a workspace's GitHub, GitLab, Slack, or Outline connection — and purging a workspace — hard-deletes its active PostgreSQL mirror. Materialized diagnostic output, replay/CAS artifacts, and broker messages expire under their documented bounded retention windows. The operation is irreversible, and reconnecting performs a fresh initial sync. See the erasure triggers in the [record of processing](./dsms/record-of-processing.md).
+**Disconnecting erases the active mirror.** Disconnecting a workspace's GitHub, GitLab, Slack, or Outline connection — and purging a workspace — hard-deletes its active PostgreSQL mirror. Materialized diagnostic output, worker-input copies, and broker messages expire under their documented bounded retention windows. The operation is irreversible, and reconnecting performs a fresh initial sync. See the erasure triggers in the [record of processing](./dsms/record-of-processing.md).
 
 ## Deployment steps (reference stack)
 

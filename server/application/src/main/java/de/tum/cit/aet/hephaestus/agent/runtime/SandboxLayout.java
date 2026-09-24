@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.runtime;
 
+import java.time.Duration;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -17,12 +18,12 @@ public final class SandboxLayout {
     public static final String WORKSPACE_ROOT = "/workspace";
 
     // ── Layout (ADR 0020): read-only vs writable by LOCATION, not lore ──────────────────────────────
-    //   inputs/  — EVERYTHING the agent may only read (the path-guard whitelists exactly this subtree)
+    //   inputs/  — EVERYTHING the agent may only read (the /workspace volume is mounted read-only)
     //   work/    — scratch the agent + precompute write during the run; NEVER collected
     //   out/     — the ONLY directory collected back into SQL
     //   .pi/     — the Pi SDK runtime home (vendor dir)
 
-    /** Workspace-relative prefix for the read-only input subtree (the only region the path-guard whitelists). */
+    /** Workspace-relative prefix for the read-only input subtree. */
     public static final String INPUTS_PREFIX = "inputs/";
 
     public static final String SOURCES_PREFIX = INPUTS_PREFIX + "sources/";
@@ -141,6 +142,14 @@ public final class SandboxLayout {
     /** Exit code emitted by the Pi runner on envelope/image drift (unsupported {@code schemaVersion} or {@code kind}). */
     public static final int EXIT_ENVELOPE_MISMATCH = 42;
 
+    /** The result was not acknowledged before the upload deadline. */
+    public static final int EXIT_UPLOAD_FAILED = 43;
+
+    /** The child was stopped at the work deadline; upload still had its own window. */
+    public static final int EXIT_WORK_TIMEOUT = 124;
+
+    public static final Duration RESULT_UPLOAD_GRACE = Duration.ofMinutes(10);
+
     /**
      * Exit code emitted by the Pi runner when the review finished but the call admitting it never
      * reached this server — the sandbox holds the app server's address as it was when the container
@@ -161,7 +170,7 @@ public final class SandboxLayout {
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 
     /** Runtime contract required by the staged runners. */
-    public static final int RUNTIME_CONTRACT_VERSION = 2;
+    public static final int RUNTIME_CONTRACT_VERSION = 3;
 
     /** Node major required by the staged runners. */
     public static final int NODE_MAJOR = 24;

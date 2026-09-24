@@ -1,0 +1,10 @@
+[Unit]
+Description=Schedule Hephaestus daily PostgreSQL differential backup
+
+[Timer]
+OnCalendar=Mon..Sat *-*-* 02:15:00 UTC
+Persistent=true
+Unit=hephaestus-backup@diff.service
+
+[Install]
+WantedBy=timers.target

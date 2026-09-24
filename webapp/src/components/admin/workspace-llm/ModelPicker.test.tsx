@@ -15,7 +15,7 @@ const models: AvailableLlmModel[] = [
 		pricingMode: "PRICED",
 		per1mInputUsd: 1,
 		per1mOutputUsd: 2,
-		supportsReasoning: true,
+		reasoningEffort: "MEDIUM",
 	},
 	{
 		id: 2,
@@ -23,7 +23,6 @@ const models: AvailableLlmModel[] = [
 		displayName: "GPT-5",
 		connectionDisplayName: "Workspace endpoint",
 		pricingMode: "NO_CHARGE",
-		supportsReasoning: false,
 	},
 ];
 

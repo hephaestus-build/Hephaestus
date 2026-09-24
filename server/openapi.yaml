@@ -133,6 +133,8 @@ tags:
     GitLab-specific REST endpoints used during the workspace creation wizard. Gated on the
      <code>GITLAB_WORKSPACE_CREATION</code> feature flag.
   name: git-lab-preflight-controller
+- description: Review catalogue changes before they affect a workspace
+  name: Practice Catalog
 - description: Instance-admin LLM connection and settings management
   name: Admin LLM
 - description: Manage practice groups
@@ -1340,8 +1342,8 @@ paths:
       - Admin Practice Catalog
   /admin/practice-catalog/practices/{slug}/override/acknowledgement:
     put:
-      description: Records that the Hephaestus update was reviewed and keeps the saved
-        definition.
+      description: Acknowledges that a saved custom practice is no longer shipped.
+        Changed bundled practices use the release endpoint.
       operationId: adminKeepCuratedPractice
       parameters:
       - in: path
@@ -1404,6 +1406,77 @@ paths:
                 $ref: "#/components/schemas/CuratedCatalog"
           description: OK
       summary: Move a practice to another catalog group
+      tags:
+      - Admin Practice Catalog
+  /admin/practice-catalog/practices/{slug}/release:
+    delete:
+      operationId: adminDeclinePracticeRelease
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CuratedPractice"
+          description: OK
+      summary: Decline this bundled practice update
+      tags:
+      - Admin Practice Catalog
+    get:
+      operationId: adminGetPracticeRelease
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeReleaseProposal"
+          description: OK
+      summary: Compare a bundled practice update with the instance version
+      tags:
+      - Admin Practice Catalog
+    put:
+      operationId: adminAcceptPracticeRelease
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptPracticeReleaseRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CuratedPractice"
+          description: OK
+      summary: Accept selected fields from a bundled practice update
       tags:
       - Admin Practice Catalog
   /admin/practice-catalog/practices/{slug}/status:
@@ -4812,9 +4885,10 @@ paths:
       description: "Applies to every practice in the group that holds no autonomy\
         \ of its own; practices that set their own are left alone. OFF stops their\
         \ reviews entirely. HUMAN_APPROVAL runs them and records every observation,\
-        \ and holds feedback for an authorized reviewer. AUTOMATIC sends feedback\
-        \ without asking. Send a null autonomy to clear the group's own setting so\
-        \ it follows the workspace default."
+        \ holds feedback on the work for an authorized reviewer, and still writes\
+        \ the developer's practice pages and the mentor, which are read on request.\
+        \ AUTOMATIC sends feedback on the work without asking. Send a null autonomy\
+        \ to clear the group's own setting so it follows the workspace default."
       operationId: setGroupAutonomy
       parameters:
       - description: Workspace slug
@@ -5565,6 +5639,117 @@ paths:
       summary: Get observation detail
       tags:
       - Practice Observations
+  /workspaces/{workspaceSlug}/practices/releases:
+    get:
+      operationId: listPracticeReleases
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PracticeReleaseProposal"
+          description: OK
+      summary: List pending practice releases
+      tags:
+      - Practice Catalog
+  /workspaces/{workspaceSlug}/practices/releases/{slug}:
+    delete:
+      operationId: declinePracticeRelease
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: The offered version was declined
+      summary: Decline this version of a practice release
+      tags:
+      - Practice Catalog
+    get:
+      operationId: getPracticeRelease
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeReleaseProposal"
+          description: OK
+      summary: "Compare the adopted, current, and offered practice"
+      tags:
+      - Practice Catalog
+    put:
+      operationId: acceptPracticeRelease
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptPracticeReleaseRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Practice"
+          description: OK
+      summary: Accept selected fields from a practice release
+      tags:
+      - Practice Catalog
   /workspaces/{workspaceSlug}/practices/reorder:
     patch:
       description: Sets each practice's display order to its index in the provided
@@ -5910,6 +6095,7 @@ paths:
             enum:
             - VOLUME_CAPPED
             - COMPOSER_DEDUPED
+            - COMPOSER_WITHHELD
             - REACTED_DISPUTED
             - REACTED_NOT_APPLICABLE
             - CONVERSATION_EXPIRED
@@ -6645,10 +6831,12 @@ paths:
   /workspaces/{workspaceSlug}/practices/{practiceSlug}/autonomy:
     patch:
       description: "OFF stops the review entirely. HUMAN_APPROVAL runs it and records\
-        \ every observation and holds feedback for an authorized reviewer. AUTOMATIC\
-        \ sends feedback without asking, as far as this workspace's reach allows.\
-        \ Send a null autonomy to clear the practice's own setting so it follows its\
-        \ group, and through the group the workspace default."
+        \ every observation, holds feedback on the work for an authorized reviewer,\
+        \ and still writes the developer's practice pages and the mentor, which are\
+        \ read on request. AUTOMATIC sends feedback on the work without asking, as\
+        \ far as this workspace's reach allows. Send a null autonomy to clear the\
+        \ practice's own setting so it follows its group, and through the group the\
+        \ workspace default."
       operationId: setAutonomy
       parameters:
       - description: Workspace slug
@@ -8169,6 +8357,18 @@ paths:
       - workspace
 components:
   schemas:
+    AcceptPracticeReleaseRequest:
+      type: object
+      properties:
+        choices:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+            - CURRENT
+            - OFFERED
+      required:
+      - choices
     AccountRef:
       type: object
       description: A human-readable account identity. <code>displayName</code>/<code>email</code>
@@ -8760,22 +8960,30 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort requested of the model; null sends none,\
+            \ the provider's default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         scope:
           type: string
           description: SHARED (instance catalog) or WORKSPACE (your own provider)
           enum:
           - SHARED
           - WORKSPACE
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
       required:
       - connectionDisplayName
       - displayName
       - id
       - pricingMode
       - scope
-      - supportsReasoning
     BackfillSummary:
       type: object
       description: Connection-level backfill rollup
@@ -8912,6 +9120,7 @@ components:
           - IN_SYNC
           - LOCALLY_EDITED
           - UPDATE_AVAILABLE
+          - DECLINED
         slug:
           type: string
           description: Slug of the catalog entry this copy was made from
@@ -9541,7 +9750,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
           minLength: 1
           pattern: openai-completions|openai-responses
         authMode:
@@ -9594,14 +9803,23 @@ components:
           format: int32
           description: Maximum output tokens
           minimum: 1
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort to request; null sends none, so the provider's\
+            \ own default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
           maxLength: 63
           minLength: 0
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
         upstreamModelId:
           type: string
           description: Upstream provider model id
@@ -9713,6 +9931,8 @@ components:
           description: Practice review criteria
           maxLength: 50000
           minLength: 0
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         groupSlug:
           type:
           - string
@@ -9882,7 +10102,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
           minLength: 1
           pattern: openai-completions|openai-responses
         authMode:
@@ -9966,14 +10186,23 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort to request; null sends none, so the provider's\
+            \ own default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
           maxLength: 63
           minLength: 0
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
         upstreamModelId:
           type: string
           description: Upstream provider model id
@@ -10180,6 +10409,8 @@ components:
             $ref: "#/components/schemas/PracticeBinding"
         criteria:
           type: string
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         groupSlug:
           type: string
         name:
@@ -10196,6 +10427,7 @@ components:
       - automatedReviewValidation
       - bindings
       - criteria
+      - deliveryBehavior
       - name
     CuratedPracticeRequest:
       type: object
@@ -10205,6 +10437,15 @@ components:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
           description: Evidence requirements; omit to use the recommended requirements
             for the selected work type
+        bindingChanges:
+          type: array
+          description: Explicit intent to change the gate or the person judged
+          items:
+            type: string
+            enum:
+            - APPLIES_WHEN
+            - SUBJECT
+          uniqueItems: true
         bindings:
           type: array
           description: The one occasion this practice is reviewed on; the kind of
@@ -10217,6 +10458,8 @@ components:
           type: string
           maxLength: 50000
           minLength: 0
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         groupSlug:
           type: string
           maxLength: 64
@@ -10394,6 +10637,7 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -10519,6 +10763,8 @@ components:
           type: string
         quoteRedacted:
           type: boolean
+        revision:
+          type: string
         side:
           type: string
           enum:
@@ -11370,7 +11616,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
         authMode:
           type: string
           description: Credential shape
@@ -11458,12 +11704,21 @@ components:
           type: integer
           format: int32
           description: Maximum output tokens
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort requested of the model; null sends none,\
+            \ the provider's default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         slug:
           type: string
           description: Unique slug within the connection
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
         updatedAt:
           type: string
           format: date-time
@@ -11486,7 +11741,6 @@ components:
       - grantedWorkspaceIds
       - id
       - slug
-      - supportsReasoning
       - upstreamModelId
       - visibility
     LlmModelPrice:
@@ -12474,6 +12728,8 @@ components:
         criteria:
           type: string
           description: Practice review criteria
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         displayOrder:
           type: integer
           format: int32
@@ -12513,6 +12769,7 @@ components:
       - bindings
       - createdAt
       - criteria
+      - deliveryBehavior
       - displayOrder
       - id
       - name
@@ -12630,9 +12887,44 @@ components:
           - AUTHOR
           - ASSIGNEE
           - REVIEWER
+          - MERGER
       required:
       - needs
       - signals
+    PracticeDefinition:
+      type: object
+      description: |-
+        A practice as its author wrote it.
+
+         <p><code>artifactKind</code> is not a field. It is read off {@link de.tum.cit.aet.hephaestus.practices.PracticeDefinition#bindings #bindings()}, whose signal names carry
+         it as a prefix, so there is nothing for a second statement of it to disagree with.
+      properties:
+        automatedReviewPolicy:
+          $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
+        bindings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeBinding"
+        criteria:
+          type: string
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
+        groupSlug:
+          type: string
+        name:
+          type: string
+        precomputeScript:
+          type: string
+        whatGoodLooksLike:
+          type: string
+        whyItMatters:
+          type: string
+      required:
+      - automatedReviewPolicy
+      - bindings
+      - criteria
+      - deliveryBehavior
+      - name
     PracticeDefinitionOptions:
       type: object
       description: "What a practice author may choose, per type of reviewed work"
@@ -12640,7 +12932,7 @@ components:
         sourceContractVersion:
           type: string
           description: Source contract these options describe
-          example: 1.0.0
+          example: 1.2.0
         workTypes:
           type: array
           items:
@@ -12648,6 +12940,19 @@ components:
       required:
       - sourceContractVersion
       - workTypes
+    PracticeDeliveryBehavior:
+      type: object
+      description: "Delivery choices declared by the practice author, not inferred\
+        \ from its slug."
+      properties:
+        overlapGroup:
+          type: string
+        redundantToSlug:
+          type: string
+        summaryOnly:
+          type: boolean
+      required:
+      - summaryOnly
     PracticeEvidenceBlocker:
       type: object
       description: "One thing that blocked automated review, and how many reviews\
@@ -13073,6 +13378,69 @@ components:
       required:
       - displayName
       - signal
+    PracticeReleaseField:
+      type: object
+      properties:
+        conflict:
+          type: boolean
+        field:
+          type: string
+          enum:
+          - NAME
+          - BINDINGS
+          - CRITERIA
+          - PRECOMPUTE_SCRIPT
+          - AUTOMATED_REVIEW_POLICY
+          - WHY_IT_MATTERS
+          - WHAT_GOOD_LOOKS_LIKE
+          - GROUP_SLUG
+          - DELIVERY_BEHAVIOR
+        offeredChanged:
+          type: boolean
+      required:
+      - conflict
+      - field
+      - offeredChanged
+    PracticeReleaseProposal:
+      type: object
+      description: One offer and the exact three versions an administrator reviews
+        before deciding.
+      properties:
+        base:
+          $ref: "#/components/schemas/PracticeDefinition"
+        baseSource:
+          type: string
+          enum:
+          - EXACT_ADOPTION
+          - BUNDLED_DIGEST_MATCH
+          - BUNDLED_FINGERPRINT_MATCH
+          - CURRENT_DEFINITION
+        current:
+          $ref: "#/components/schemas/PracticeDefinition"
+        currentRevision:
+          type: integer
+          format: int32
+        etag:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeReleaseField"
+        offered:
+          $ref: "#/components/schemas/PracticeDefinition"
+        offeredDigest:
+          type: string
+        slug:
+          type: string
+      required:
+      - base
+      - baseSource
+      - current
+      - etag
+      - fields
+      - offered
+      - offeredDigest
+      - slug
     PracticeReviewCoveragePreview:
       type: object
       properties:
@@ -13450,6 +13818,7 @@ components:
             enum:
             - VOLUME_CAPPED
             - COMPOSER_DEDUPED
+            - COMPOSER_WITHHELD
             - REACTED_DISPUTED
             - REACTED_NOT_APPLICABLE
             - CONVERSATION_EXPIRED
@@ -13542,6 +13911,15 @@ components:
             A review somebody asks for by hand is not among them — see manualReviewSignal.
           items:
             $ref: "#/components/schemas/PracticeSignalOption"
+        subjectRoles:
+          type: array
+          items:
+            type: string
+            enum:
+            - AUTHOR
+            - ASSIGNEE
+            - REVIEWER
+            - MERGER
         supportedAutomatedReviewModes:
           type: array
           items:
@@ -13557,6 +13935,7 @@ components:
       - recommendedNeeds
       - recommendedPolicy
       - signals
+      - subjectRoles
       - supportedAutomatedReviewModes
     ProbeLlmConnectionRequest:
       type: object
@@ -14462,6 +14841,7 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -14633,6 +15013,7 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -14773,6 +15154,7 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -16389,6 +16771,10 @@ components:
       description: Update a model's metadata (all fields optional; pricing and sharing
         are separate)
       properties:
+        clearReasoningEffort:
+          type: boolean
+          description: "True clears the reasoning effort, so the provider's own default\
+            \ applies"
         contextWindow:
           type: integer
           format: int32
@@ -16407,9 +16793,18 @@ components:
           format: int32
           description: Maximum output tokens
           minimum: 1
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
+        reasoningEffort:
+          type: string
+          description: Reasoning effort to request; null keeps the current one (see
+            clearReasoningEffort)
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
     UpdateLlmModelSharingRequest:
       type: object
       description: "Share with: all workspaces, or a selected set"
@@ -16516,6 +16911,15 @@ components:
           description: "Replacement review settings; omit to preserve them, or to\
             \ take the recommended ones when the bindings move the practice to a different\
             \ kind of work"
+        bindingChanges:
+          type: array
+          description: Explicit intent to change the gate or the person judged
+          items:
+            type: string
+            enum:
+            - APPLIES_WHEN
+            - SUBJECT
+          uniqueItems: true
         bindings:
           type: array
           description: Replacement occasion and its evidence; omit to leave it unchanged
@@ -16539,6 +16943,8 @@ components:
           maxLength: 50000
           minLength: 0
           pattern: "[\\s\\S]*\\S[\\s\\S]*"
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         group:
           $ref: "#/components/schemas/BindPracticeGroupRequest"
           description: Catalog placement to apply with the definition update; omit
@@ -16777,6 +17183,10 @@ components:
       type: object
       description: Update a model on your AI provider (all fields optional)
       properties:
+        clearReasoningEffort:
+          type: boolean
+          description: "True clears the reasoning effort, so the provider's own default\
+            \ applies"
         contextWindow:
           type: integer
           format: int32
@@ -16825,9 +17235,18 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
+        reasoningEffort:
+          type: string
+          description: Reasoning effort to request; null keeps the current one (see
+            clearReasoningEffort)
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
     UpdateWorkspaceNotificationsRequest:
       type: object
       description: Request to update leaderboard notification settings
@@ -17216,7 +17635,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
         authMode:
           type: string
           description: Credential shape
@@ -17323,12 +17742,21 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort requested of the model; null sends none,\
+            \ the provider's default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         slug:
           type: string
           description: Unique slug within the workspace
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
         updatedAt:
           type: string
           format: date-time
@@ -17346,7 +17774,6 @@ components:
       - id
       - pricingMode
       - slug
-      - supportsReasoning
       - upstreamModelId
     WorkspaceLlmProbeResult:
       type: object

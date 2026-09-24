@@ -16,6 +16,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 import lombok.Getter;
@@ -96,6 +97,16 @@ public class PullRequestReviewThread extends BaseGitServiceEntity {
     @JoinColumn(name = "resolved_by_id")
     @ToString.Exclude
     private @Nullable User resolvedBy;
+
+    /**
+     * When the thread was resolved. GitLab states it on the discussion, so its sync fills it; GitHub's
+     * GraphQL thread carries no resolution time, so on GitHub it is the time of the
+     * {@code pull_request_review_thread} resolved event and stays null for a resolution only the sync
+     * saw. Cleared when the thread is unresolved again.
+     */
+    @Nullable
+    @Column(name = "resolved_at")
+    private Instant resolvedAt;
 
     @OneToMany(mappedBy = "thread", cascade = CascadeType.REMOVE, orphanRemoval = true)
     @ToString.Exclude
