@@ -1,11 +1,11 @@
-import { AlertTriangle, ChevronDown } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronsUpDownIcon } from "lucide-react";
 import { useId, useState } from "react";
 
 import { FactList } from "@/components/auth/FactList";
 import { type StatusDefs, statusValues } from "@/components/common/status-def";
 import {
 	AI_MODEL_BRANDS,
-	AI_MODEL_BRAND_LABELS,
+	AI_MODEL_BRAND_META,
 	type AiModelBrand,
 } from "@/components/icons/ai-model-brand-logos";
 import {
@@ -19,6 +19,17 @@ import { DataHandlingBadge } from "@/components/practice-vocabulary/DataHandling
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+	Combobox,
+	ComboboxContent,
+	ComboboxEmpty,
+	ComboboxIcon,
+	ComboboxItem,
+	ComboboxItemIndicator,
+	ComboboxList,
+	ComboboxSearchInput,
+	ComboboxTrigger,
+} from "@/components/ui/combobox";
 import {
 	Field,
 	FieldContent,
@@ -126,6 +137,12 @@ export function modelDetailsBodyOf(value: LlmModelFieldsValue) {
 }
 
 const canBeActive = (price: PriceModeValue) => price.pricingMode !== "UNPRICED";
+
+const BRAND_OPTIONS = ["NONE", ...AI_MODEL_BRANDS] as const;
+
+function brandLabel(brand: (typeof BRAND_OPTIONS)[number]): string {
+	return brand === "NONE" ? "Not listed or unknown" : AI_MODEL_BRAND_META[brand].label;
+}
 
 const withPrice = (value: LlmModelFieldsValue, price: PriceModeValue): LlmModelFieldsValue => ({
 	...value,
@@ -314,35 +331,57 @@ export function LlmModelFields({
 
 			<Field>
 				<FieldLabel id={`${idPrefix}-brand-label`} htmlFor={`${idPrefix}-brand`}>
-					Model brand <span className="font-normal text-muted-foreground">(optional)</span>
+					Model maker <span className="font-normal text-muted-foreground">(optional)</span>
 				</FieldLabel>
-				<Select
-					items={[
-						{ value: "UNDECLARED", label: "Not specified" },
-						...AI_MODEL_BRANDS.map((brand) => ({
-							value: brand,
-							label: AI_MODEL_BRAND_LABELS[brand],
-						})),
-					]}
-					value={value.brand ?? "UNDECLARED"}
-					onValueChange={(brand) =>
-						update({ brand: AI_MODEL_BRANDS.find((item) => item === brand) })
-					}
+				<Combobox
+					items={BRAND_OPTIONS}
+					value={value.brand ?? "NONE"}
+					onValueChange={(brand) => {
+						if (brand !== null) {
+							update({ brand: brand === "NONE" ? undefined : brand });
+						}
+					}}
+					itemToStringLabel={brandLabel}
 				>
-					<SelectTrigger id={`${idPrefix}-brand`}>
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent aria-labelledby={`${idPrefix}-brand-label`}>
-						<SelectItem value="UNDECLARED">Not specified</SelectItem>
-						{AI_MODEL_BRANDS.map((brand) => (
-							<SelectItem key={brand} value={brand}>
-								{AI_MODEL_BRAND_LABELS[brand]}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
+					<ComboboxTrigger id={`${idPrefix}-brand`} className="w-full justify-between">
+						<span className="flex min-w-0 items-center gap-2">
+							{value.brand && (
+								<img
+									src={AI_MODEL_BRAND_META[value.brand].src}
+									alt=""
+									className="size-5 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
+								/>
+							)}
+							<span className="truncate">{brandLabel(value.brand ?? "NONE")}</span>
+						</span>
+						<ComboboxIcon render={<ChevronsUpDownIcon className="size-4 opacity-50" />} />
+					</ComboboxTrigger>
+					<ComboboxContent align="start">
+						<ComboboxSearchInput
+							placeholder="Search model makers…"
+							aria-label="Search model makers"
+						/>
+						<ComboboxEmpty>No matching maker. Leave this blank if it is not listed.</ComboboxEmpty>
+						<ComboboxList aria-labelledby={`${idPrefix}-brand-label`}>
+							{(brand: (typeof BRAND_OPTIONS)[number]) => (
+								<ComboboxItem key={brand} value={brand}>
+									{brand !== "NONE" && (
+										<img
+											src={AI_MODEL_BRAND_META[brand].src}
+											alt=""
+											className="size-5 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
+										/>
+									)}
+									<span className="truncate">{brandLabel(brand)}</span>
+									<ComboboxItemIndicator />
+								</ComboboxItem>
+							)}
+						</ComboboxList>
+					</ComboboxContent>
+				</Combobox>
 				<FieldDescription>
-					Shown beside this model in workspace AI choices. This does not identify who hosts it.
+					Shown beside this model in workspace AI choices. It does not identify the service that
+					receives requests or who operates the model.
 				</FieldDescription>
 			</Field>
 

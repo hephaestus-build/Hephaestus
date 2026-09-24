@@ -198,7 +198,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		expect(screen.getByRole("radio", { name: "A provider" }).getAttribute("aria-checked")).toBe(
 			"true",
 		);
-		expect(screen.getByRole("combobox", { name: "Model brand (optional)" }).textContent).toContain(
+		expect(screen.getByRole("combobox", { name: "Model maker (optional)" }).textContent).toContain(
 			"Qwen",
 		);
 		screen.getByText("Cloud");
@@ -212,8 +212,8 @@ describe("WorkspaceLlmModelFormDialog", () => {
 				dataHandlingNote: "EU region",
 			}),
 		);
-		await userEvent.click(screen.getByRole("combobox", { name: "Model brand (optional)" }));
-		await userEvent.click(await screen.findByRole("option", { name: "Not specified" }));
+		await userEvent.click(screen.getByRole("combobox", { name: "Model maker (optional)" }));
+		await userEvent.click(await screen.findByRole("option", { name: "Not listed or unknown" }));
 		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onUpdate.mock.calls[1]?.[1]).toStrictEqual(
 			expect.objectContaining({ brand: undefined, clearBrand: true }),

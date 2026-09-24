@@ -9328,6 +9328,10 @@ components:
           - MISTRAL
           - QWEN
           - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         connectionDisplayName:
           type: string
           description: Owning connection's display name
@@ -10177,10 +10181,22 @@ components:
           type: string
           description: Admin-declared connection platform; null when not declared
           enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
           - AZURE
           - AWS_BEDROCK
           - GOOGLE_VERTEX
           - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
           - VERCEL_AI_GATEWAY
         displayName:
           type: string
@@ -10215,6 +10231,10 @@ components:
           - MISTRAL
           - QWEN
           - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         contextWindow:
           type: integer
           format: int32
@@ -10562,10 +10582,22 @@ components:
           type: string
           description: Admin-declared connection platform; null when not declared
           enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
           - AZURE
           - AWS_BEDROCK
           - GOOGLE_VERTEX
           - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
           - VERCEL_AI_GATEWAY
         displayName:
           type: string
@@ -10600,6 +10632,10 @@ components:
           - MISTRAL
           - QWEN
           - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         contextWindow:
           type: integer
           format: int32
@@ -12144,10 +12180,22 @@ components:
           type: string
           description: Admin-declared connection platform
           enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
           - AZURE
           - AWS_BEDROCK
           - GOOGLE_VERTEX
           - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
           - VERCEL_AI_GATEWAY
         createdAt:
           type: string
@@ -12200,6 +12248,10 @@ components:
           - MISTRAL
           - QWEN
           - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         connectionDisplayName:
           type: string
           description: Owning connection's display name
@@ -17370,10 +17422,22 @@ components:
           type: string
           description: Admin-declared connection platform
           enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
           - AZURE
           - AWS_BEDROCK
           - GOOGLE_VERTEX
           - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
           - VERCEL_AI_GATEWAY
         displayName:
           type: string
@@ -17438,6 +17502,10 @@ components:
           - MISTRAL
           - QWEN
           - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         clearBrand:
           type: boolean
           description: Clear the declared model brand
@@ -17879,10 +17947,22 @@ components:
           type: string
           description: Admin-declared connection platform
           enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
           - AZURE
           - AWS_BEDROCK
           - GOOGLE_VERTEX
           - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
           - VERCEL_AI_GATEWAY
         displayName:
           type: string
@@ -17908,6 +17988,10 @@ components:
           - MISTRAL
           - QWEN
           - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         clearBrand:
           type: boolean
           description: Clear the declared model brand
@@ -18314,13 +18398,29 @@ components:
           - MISTRAL
           - QWEN
           - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         connectionPlatform:
           type: string
           enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
           - AZURE
           - AWS_BEDROCK
           - GOOGLE_VERTEX
           - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
           - VERCEL_AI_GATEWAY
         dataHandlingTier:
           type: string
@@ -18441,10 +18541,22 @@ components:
           type: string
           description: Admin-declared connection platform
           enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
           - AZURE
           - AWS_BEDROCK
           - GOOGLE_VERTEX
           - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
           - VERCEL_AI_GATEWAY
         createdAt:
           type: string
@@ -18497,6 +18609,10 @@ components:
           - MISTRAL
           - QWEN
           - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         connectionDisplayName:
           type: string
           description: Owning connection's display name

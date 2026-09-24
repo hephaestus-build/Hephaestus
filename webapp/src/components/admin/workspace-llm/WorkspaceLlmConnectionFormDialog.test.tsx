@@ -80,8 +80,8 @@ describe("WorkspaceLlmConnectionFormDialog", () => {
 
 	it("saves a declared connection platform", async () => {
 		const onUpdate = renderDialog();
-		await userEvent.click(screen.getByRole("combobox", { name: /Connection platform/u }));
-		await userEvent.click(await screen.findByRole("option", { name: "Azure" }));
+		await userEvent.click(screen.getByRole("combobox", { name: /Service receiving requests/u }));
+		await userEvent.click(await screen.findByRole("option", { name: "Microsoft Azure" }));
 		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onUpdate).toHaveBeenCalledWith(
 			connection.id,

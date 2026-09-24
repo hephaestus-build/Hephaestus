@@ -407,7 +407,7 @@ export type AvailableLlmModel = {
   /**
    * Model brand declared by an admin; display only
    */
-  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
   /**
    * Owning connection's display name
    */
@@ -884,7 +884,7 @@ export type CreateLlmConnectionRequest = {
   /**
    * Admin-declared connection platform; null when not declared
    */
-  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
   /**
    * Human-readable name
    */
@@ -906,7 +906,7 @@ export type CreateLlmModelRequest = {
   /**
    * Model brand declared by an admin; display only
    */
-  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
   /**
    * Context window in tokens
    */
@@ -1136,7 +1136,7 @@ export type CreateWorkspaceLlmConnectionRequest = {
   /**
    * Admin-declared connection platform; null when not declared
    */
-  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
   /**
    * Human-readable name
    */
@@ -1158,7 +1158,7 @@ export type CreateWorkspaceLlmModelRequest = {
   /**
    * Model brand declared by an admin; display only
    */
-  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
   /**
    * Context window in tokens
    */
@@ -2122,7 +2122,7 @@ export type LlmConnection = {
   /**
    * Admin-declared connection platform
    */
-  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
   /**
    * Creation timestamp
    */
@@ -2160,7 +2160,7 @@ export type LlmModel = {
   /**
    * Model brand declared by an admin; display only
    */
-  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
   /**
    * Owning connection's display name
    */
@@ -5489,7 +5489,7 @@ export type UpdateLlmConnectionRequest = {
   /**
    * Admin-declared connection platform
    */
-  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
   /**
    * Human-readable name
    */
@@ -5537,7 +5537,7 @@ export type UpdateLlmModelRequest = {
   /**
    * Model brand declared by an admin; null keeps current
    */
-  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
   /**
    * Clear the declared model brand
    */
@@ -5877,7 +5877,7 @@ export type UpdateWorkspaceLlmConnectionRequest = {
   /**
    * Admin-declared connection platform
    */
-  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
   /**
    * Human-readable name
    */
@@ -5895,7 +5895,7 @@ export type UpdateWorkspaceLlmModelRequest = {
   /**
    * Model brand declared by an admin; null keeps current
    */
-  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
   /**
    * Clear the declared model brand
    */
@@ -6215,8 +6215,8 @@ export type Workspace = {
  * A model this answer would use here.
  */
 export type WorkspaceAiModel = {
-  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
-  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
   dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
   name: string;
 };
@@ -6305,7 +6305,7 @@ export type WorkspaceLlmConnection = {
   /**
    * Admin-declared connection platform
    */
-  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
   /**
    * Creation timestamp
    */
@@ -6343,7 +6343,7 @@ export type WorkspaceLlmModel = {
   /**
    * Model brand declared by an admin; display only
    */
-  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
   /**
    * Owning connection's display name
    */

@@ -61,7 +61,7 @@ required.
 | **Base URL** | yes | The provider's OpenAI-compatible root, ≤ 2048 characters — e.g. `https://api.openai.com/v1`, or `https://<resource>.openai.azure.com/openai/v1` for Azure. Must be HTTPS, must carry no credentials, query string or fragment. **Immutable after create.** |
 | **API shape** | yes | `openai-responses` (Responses API) or `openai-completions` (Chat Completions). In the form this is the *"Use the Responses API"* checkbox, ticked for a new connection. Prefer the Responses API: a review or the mentor calls tools across many turns, and the Responses API can preserve reasoning between tool calls for models and providers that support it. OpenAI, the Vercel AI Gateway, OpenRouter and vLLM offer this API, but support depends on the model and deployment. Clear the checkbox for an endpoint that supports only Chat Completions. **Immutable after create.** |
 | **Authentication** | no | `BEARER` → `Authorization: Bearer <key>`, or `API_KEY` → `api-key: <key>`. Defaults to `BEARER`; Azure needs `API_KEY`. **Immutable after create.** |
-| **Connection platform** | no | The service the configured endpoint sends requests to, such as Azure or Vercel AI Gateway. This is a display declaration, not proof of where inference runs or who operates the model. You can change or clear it later. |
+| **Service receiving requests** | no | Search for the service the configured endpoint sends requests to, such as Logos, Azure, or Vercel AI Gateway. Leave it as **Not listed or unknown** if the service is absent or uncertain. This is a display declaration, not proof of where inference runs or who operates the model. You can change or clear it later. |
 | **API key** | no | Write-only. Encrypted at rest, never returned — a saved connection reports only `hasApiKey` and the last four characters. Leave it blank on edit to keep the stored key; tick **Remove stored API key** to delete it. Genuinely optional: a self-hosted vLLM or Ollama gateway may need no credential at all. |
 | **Slug** | no | Internal identifier, ≤ 63 characters. Derived from the display name when you omit it. **Immutable after create.** |
 
@@ -82,7 +82,7 @@ The create form offers **OpenAI** (`https://api.openai.com/v1`, Bearer), **Azure
 (`https://RESOURCE.openai.azure.com/openai/v1`, API key) and **Other OpenAI-compatible endpoint**.
 These only prefill the two fields; nothing about the preset is stored. Reopening an Azure connection
 for editing shows it as "Other", because the preset itself is not persisted. Use the separate
-**Connection platform** declaration if you want a member to see an Azure mark beside a model in a
+**Service receiving requests** declaration if you want a member to see an Azure mark beside a model in a
 workspace. For a gateway, name the gateway that receives the request, not an unknown downstream
 service. Leave it blank if you cannot confirm the connection. The platform is not inferred from
 the URL and does not set the model's data-handling tier.
@@ -287,15 +287,19 @@ slug is API surface; the title is what the UI shows.
 
 Owners configure **Administration → Member onboarding** after membership is already managed by the
 workspace's existing mechanism. In that workspace, members can see the display names of models
-that are ready for their answer. You can declare an optional **Model brand** on a model and an
-optional **Connection platform** on its connection. Their marks appear beside the actual model only
+that are ready for their answer. You can declare an optional **Model maker** on a model and an
+optional **Service receiving requests** on its connection. Their marks appear beside the actual model only
 in this workspace, and name different facts: who made the model and which service receives its
 requests. Leave either blank when you cannot confirm it. Neither field sets the data-handling tier;
 **Operated by** does. For example, an OpenAI model served by Azure can show both marks. A private
 endpoint does not by itself mean your organisation operates the model: Microsoft-managed
 [Foundry inference](https://learn.microsoft.com/en-us/azure/foundry/concepts/deployments-overview)
 is provider-operated, while a model your organisation runs on its own Azure machines can be
-declared in-house. Hephaestus does not infer these facts from a model ID or connection URL. Choose
+declared in-house. **Logos** is the AI service in Edutelligence, with its own webapp and mark; it
+is not an Edutelligence brand choice. Your organisation can run Logos itself, or a provider can run
+it. Select the Logos mark only when this connection actually receives requests through Logos; then
+declare **Operated by** from your deployment and agreement, not from that mark. Hephaestus does not
+infer these facts from a model ID or connection URL. Choose
 display names you are happy for developers to read. The setup page is hidden by default. Declare and assign models before
 enabling it, and wait until every runtime role has been upgraded before assigning models by tier.
 

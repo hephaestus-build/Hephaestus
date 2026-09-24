@@ -9,5 +9,9 @@ public enum AiModelBrand {
     META,
     MISTRAL,
     QWEN,
-    DEEPSEEK
+    DEEPSEEK,
+    XAI,
+    COHERE,
+    Z_AI,
+    MOONSHOT
 }

@@ -97,8 +97,7 @@ export const OPERATED_BY_DEFS: StatusDefs<OperatedBy> = {
 };
 
 export interface MemberAiChoiceDef extends StatusDef {
-	benefit: string;
-	tradeoff: string;
+	facts: readonly { tone: "pro" | "caveat" | "con" | "neutral"; text: string }[];
 	ceiling: DataHandlingTier | null;
 }
 
@@ -107,27 +106,39 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		label: "In-house",
 		icon: Building2Icon,
 		badgeVariant: "secondary",
-		description: "Keep AI processing under your organisation’s operation.",
-		benefit: "Only models declared as organisation-operated may handle new AI requests.",
-		tradeoff: "If no in-house model is ready here, AI features wait.",
+		description: "Use only models declared in-house.",
+		facts: [
+			{ tone: "pro", text: "Practice feedback and Heph can run." },
+			{ tone: "pro", text: "Only models declared in-house may serve you." },
+			{ tone: "pro", text: "New AI requests go only to those models." },
+			{ tone: "caveat", text: "If none is ready here, AI features wait." },
+		],
 		ceiling: "IN_HOUSE",
 	},
 	CLOUD: {
 		label: "Cloud",
 		icon: CloudIcon,
 		badgeVariant: "secondary",
-		description: "Use in-house or provider-operated AI.",
-		benefit: "Both in-house and provider-operated models are allowed.",
-		tradeoff: "A configured provider may receive work sent for AI.",
+		description: "Also allow models run by providers.",
+		facts: [
+			{ tone: "pro", text: "Practice feedback and Heph can run." },
+			{ tone: "pro", text: "In-house and provider-operated models may serve you." },
+			{ tone: "caveat", text: "A configured provider may receive new AI requests." },
+			{ tone: "neutral", text: "Its terms decide retention and access." },
+		],
 		ceiling: "CLOUD",
 	},
 	NO_AI: {
 		label: "No AI",
 		icon: CircleOffIcon,
 		badgeVariant: "secondary",
-		description: "Use Hephaestus without new AI reviews or Heph replies.",
-		benefit: "No new AI requests for practice reviews or Heph.",
-		tradeoff: "No new AI feedback or Heph replies; sync and stored work continue.",
+		description: "Use Hephaestus without new AI processing.",
+		facts: [
+			{ tone: "con", text: "No new practice feedback or Heph replies." },
+			{ tone: "neutral", text: "No model may serve your work." },
+			{ tone: "pro", text: "No new AI requests for your work." },
+			{ tone: "neutral", text: "Sync, stored work, and earlier results remain." },
+		],
 		ceiling: null,
 	},
 };

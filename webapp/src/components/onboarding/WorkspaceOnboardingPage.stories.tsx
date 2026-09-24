@@ -207,7 +207,7 @@ export const NoAi: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
-			/No AI.*Benefit\. No new AI requests for practice reviews or Heph\..*Trade-off\. No new AI feedback or Heph replies; sync and stored work continue/u,
+			/No AI.*No new practice feedback or Heph replies.*No new AI requests for your work.*Sync, stored work, and earlier results remain/u,
 		);
 		await expect(canvas.queryByRole("region", { name: /Models for this answer/u })).toBeNull();
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
@@ -229,14 +229,26 @@ export const WorkspaceModels: Story = {
 						choice: "IN_HOUSE_ONLY",
 						practiceReviewsReady: true,
 						mentorReady: true,
-						models: [{ name: "Qwen3", brand: "QWEN", dataHandlingTier: "IN_HOUSE" }],
+						models: [
+							{
+								name: "Qwen3",
+								brand: "QWEN",
+								connectionPlatform: "LOGOS",
+								dataHandlingTier: "IN_HOUSE",
+							},
+						],
 					},
 					{
 						choice: "CLOUD",
 						practiceReviewsReady: true,
 						mentorReady: true,
 						models: [
-							{ name: "Qwen3", brand: "QWEN", dataHandlingTier: "IN_HOUSE" },
+							{
+								name: "Qwen3",
+								brand: "QWEN",
+								connectionPlatform: "LOGOS",
+								dataHandlingTier: "IN_HOUSE",
+							},
 							{
 								name: "gpt-6-luna",
 								brand: "OPENAI",
@@ -255,11 +267,48 @@ export const WorkspaceModels: Story = {
 		await expect(models).toHaveTextContent("Qwen3");
 		await expect(models).toHaveTextContent("gpt-6-luna");
 		await expect(models).toHaveTextContent("Model: OpenAI");
-		await expect(models).toHaveTextContent("via Azure");
+		await expect(models).toHaveTextContent("via Microsoft Azure");
 		await expect(models).toHaveTextContent("Declared cloud");
 		await expect(models).toHaveTextContent("Team model");
-		await expect(models.querySelectorAll("img")).toHaveLength(3);
-		await expect(canvas.getByRole("radio", { name: CLOUD }).querySelector("img")).toBeNull();
+		await expect(models.querySelectorAll("img")).toHaveLength(4);
+		await expect(canvas.getByRole("radio", { name: CLOUD })).toHaveTextContent(
+			"gpt-6-luna via Microsoft Azure",
+		);
+	},
+};
+
+export const ProviderOperatedLogos: Story = {
+	args: {
+		state: {
+			...ready,
+			data: {
+				...welcome,
+				links: [],
+				aiChoice: "CLOUD",
+				aiOptions: [
+					{ choice: "IN_HOUSE_ONLY", practiceReviewsReady: false, mentorReady: false, models: [] },
+					{
+						choice: "CLOUD",
+						practiceReviewsReady: true,
+						mentorReady: true,
+						models: [
+							{
+								name: "Qwen3",
+								brand: "QWEN",
+								connectionPlatform: "LOGOS",
+								dataHandlingTier: "CLOUD",
+							},
+						],
+					},
+				],
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		const models = canvas.getByRole("region", { name: "Models for this answer in Engineering" });
+		await expect(models).toHaveTextContent("Qwen3");
+		await expect(models).toHaveTextContent("via Logos");
+		await expect(models).toHaveTextContent("Declared cloud");
 	},
 };
 
@@ -356,9 +405,7 @@ export const OptionUncovered: Story = {
 	},
 	play: async ({ canvas, userEvent, args }) => {
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
-		await expect(inHouse).toHaveAccessibleName(
-			/Trade-off\. If no in-house model is ready here, AI features wait/u,
-		);
+		await expect(inHouse).toHaveAccessibleName(/If none is ready here, AI features wait/u);
 		await expect(canvas.queryByText(/is set up within this answer yet/u)).toBeNull();
 		await expect(inHouse).not.toHaveAttribute("aria-disabled");
 		await userEvent.click(inHouse);

@@ -8,14 +8,8 @@ import { LegalLinks } from "@/components/auth/LegalLinks";
 import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import {
-	AI_CONNECTION_PLATFORM_LABELS,
-	AI_CONNECTION_PLATFORM_LOGOS,
-} from "@/components/icons/ai-connection-platform-logos";
-import {
-	AI_MODEL_BRAND_LABELS,
-	AI_MODEL_BRAND_LOGOS,
-} from "@/components/icons/ai-model-brand-logos";
+import { AI_CONNECTION_PLATFORM_META } from "@/components/icons/ai-connection-platform-logos";
+import { AI_MODEL_BRAND_META } from "@/components/icons/ai-model-brand-logos";
 import { getProviderIcon } from "@/components/icons/integration-provider-icons";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
@@ -232,7 +226,14 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 								</QuestionnaireDescription>
 								<FactList facts={AI_FACTS} />
 								<fieldset disabled={saving} className="min-w-0 disabled:opacity-50">
-									<AiChoiceCards choice={choice} saved={data?.aiChoice} onChoice={setDraft} />
+									<AiChoiceCards
+										choice={choice}
+										saved={data?.aiChoice}
+										onChoice={setDraft}
+										modelsByChoice={Object.fromEntries(
+											state.data.aiOptions.map((option) => [option.choice, option.models]),
+										)}
+									/>
 								</fieldset>
 								{models.length > 0 && (
 									<WorkspaceModels workspaceName={state.data.workspaceName} models={models} />
@@ -535,13 +536,9 @@ function WorkspaceModels({
 			</p>
 			<ul className="mt-3 grid gap-2 sm:grid-cols-2">
 				{models.map((model) => {
-					const brand = model.brand ? AI_MODEL_BRAND_LOGOS[model.brand] : undefined;
-					const brandLabel = model.brand ? AI_MODEL_BRAND_LABELS[model.brand] : undefined;
+					const brand = model.brand ? AI_MODEL_BRAND_META[model.brand] : undefined;
 					const platform = model.connectionPlatform
-						? AI_CONNECTION_PLATFORM_LOGOS[model.connectionPlatform]
-						: undefined;
-					const platformLabel = model.connectionPlatform
-						? AI_CONNECTION_PLATFORM_LABELS[model.connectionPlatform]
+						? AI_CONNECTION_PLATFORM_META[model.connectionPlatform]
 						: undefined;
 					const tier = DATA_HANDLING_DEFS[model.dataHandlingTier];
 					return (
@@ -550,9 +547,9 @@ function WorkspaceModels({
 							className="min-w-0 rounded-md border border-border bg-background p-3 text-sm"
 						>
 							<div className="flex items-center gap-2">
-								{hasText(brand) && (
+								{brand !== undefined && (
 									<img
-										src={brand}
+										src={brand.src}
 										alt=""
 										className="size-6 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
 									/>
@@ -562,17 +559,15 @@ function WorkspaceModels({
 								</span>
 							</div>
 							<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-muted-foreground">
-								{hasText(brandLabel) && <span>Model: {brandLabel}</span>}
-								{hasText(platformLabel) && (
+								{brand !== undefined && <span>Model: {brand.label}</span>}
+								{platform !== undefined && (
 									<span className="inline-flex items-center gap-1.5">
-										{hasText(platform) && (
-											<img
-												src={platform}
-												alt=""
-												className="size-4 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
-											/>
-										)}
-										via {platformLabel}
+										<img
+											src={platform.src}
+											alt=""
+											className="size-4 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
+										/>
+										via {platform.label}
 									</span>
 								)}
 								<Badge variant={tier.badgeVariant}>

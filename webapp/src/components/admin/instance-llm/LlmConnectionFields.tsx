@@ -1,11 +1,23 @@
+import { ChevronsUpDownIcon } from "lucide-react";
 import { useId } from "react";
 
 import {
-	AI_CONNECTION_PLATFORM_LABELS,
+	AI_CONNECTION_PLATFORM_META,
 	AI_CONNECTION_PLATFORMS,
 	type AiConnectionPlatform,
 } from "@/components/icons/ai-connection-platform-logos";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+	Combobox,
+	ComboboxContent,
+	ComboboxEmpty,
+	ComboboxIcon,
+	ComboboxItem,
+	ComboboxItemIndicator,
+	ComboboxList,
+	ComboboxSearchInput,
+	ComboboxTrigger,
+} from "@/components/ui/combobox";
 import {
 	Field,
 	FieldContent,
@@ -51,6 +63,14 @@ export interface LlmConnectionFieldsValue {
 	apiKey: string;
 	clearApiKey: boolean;
 	connectionPlatform?: AiConnectionPlatform;
+}
+
+const PLATFORM_OPTIONS = ["NONE", ...AI_CONNECTION_PLATFORMS] as const;
+
+function platformLabel(platform: (typeof PLATFORM_OPTIONS)[number]): string {
+	return platform === "NONE"
+		? "Not listed or unknown"
+		: AI_CONNECTION_PLATFORM_META[platform].label;
 }
 
 type EditedConnection = OpenAiConnectionIdentity & {
@@ -223,37 +243,56 @@ export function LlmConnectionFields({
 
 			<Field>
 				<FieldLabel id={connectionPlatformLabelId} htmlFor={connectionPlatformId}>
-					Connection platform <span className="font-normal text-muted-foreground">(optional)</span>
+					Service receiving requests{" "}
+					<span className="font-normal text-muted-foreground">(optional)</span>
 				</FieldLabel>
-				<Select
-					items={[
-						{ value: "UNDECLARED", label: "Not declared" },
-						...AI_CONNECTION_PLATFORMS.map((platform) => ({
-							value: platform,
-							label: AI_CONNECTION_PLATFORM_LABELS[platform],
-						})),
-					]}
-					value={value.connectionPlatform ?? "UNDECLARED"}
-					onValueChange={(platform) =>
-						update({
-							connectionPlatform: AI_CONNECTION_PLATFORMS.find((item) => item === platform),
-						})
-					}
+				<Combobox
+					items={PLATFORM_OPTIONS}
+					value={value.connectionPlatform ?? "NONE"}
+					onValueChange={(platform) => {
+						if (platform !== null) {
+							update({ connectionPlatform: platform === "NONE" ? undefined : platform });
+						}
+					}}
+					itemToStringLabel={platformLabel}
 				>
-					<SelectTrigger id={connectionPlatformId} className="w-full">
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent aria-labelledby={connectionPlatformLabelId}>
-						<SelectItem value="UNDECLARED">Not declared</SelectItem>
-						{AI_CONNECTION_PLATFORMS.map((platform) => (
-							<SelectItem key={platform} value={platform}>
-								{AI_CONNECTION_PLATFORM_LABELS[platform]}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
+					<ComboboxTrigger id={connectionPlatformId} className="w-full justify-between">
+						<span className="flex min-w-0 items-center gap-2">
+							{value.connectionPlatform && (
+								<img
+									src={AI_CONNECTION_PLATFORM_META[value.connectionPlatform].src}
+									alt=""
+									className="size-5 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
+								/>
+							)}
+							<span className="truncate">{platformLabel(value.connectionPlatform ?? "NONE")}</span>
+						</span>
+						<ComboboxIcon render={<ChevronsUpDownIcon className="size-4 opacity-50" />} />
+					</ComboboxTrigger>
+					<ComboboxContent align="start">
+						<ComboboxSearchInput placeholder="Search services…" aria-label="Search services" />
+						<ComboboxEmpty>
+							No matching service. Leave this blank if it is not listed.
+						</ComboboxEmpty>
+						<ComboboxList aria-labelledby={connectionPlatformLabelId}>
+							{(platform: (typeof PLATFORM_OPTIONS)[number]) => (
+								<ComboboxItem key={platform} value={platform}>
+									{platform !== "NONE" && (
+										<img
+											src={AI_CONNECTION_PLATFORM_META[platform].src}
+											alt=""
+											className="size-5 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
+										/>
+									)}
+									<span className="truncate">{platformLabel(platform)}</span>
+									<ComboboxItemIndicator />
+								</ComboboxItem>
+							)}
+						</ComboboxList>
+					</ComboboxContent>
+				</Combobox>
 				<FieldDescription>
-					Name the service that receives requests, if known. This does not say who operates it or
+					For example, Logos, Azure, or a gateway. Its mark does not say who operates the model or
 					where data stays.
 				</FieldDescription>
 			</Field>
