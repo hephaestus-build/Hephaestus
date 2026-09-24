@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewPersonMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -53,6 +54,37 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
 class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
+
+    @Test
+    void shouldRefuseIssueFeedbackWhenTheReviewedSnapshotChangedBeforeEgress() {
+        AgentJob job = pullRequestJob();
+        job.setArtifactKind(ArtifactKind.of("scm.issue"));
+        var metadata = tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+        metadata.put("issue_id", PULL_REQUEST_ID);
+        metadata.put("issue_number", 17);
+        metadata.put("repository_id", REPOSITORY_ID);
+        metadata.put("repository_full_name", "owner/repo");
+        metadata.put("review_snapshot_id", UUID.randomUUID().toString());
+        job.setMetadata(metadata);
+        PullRequest work = openPullRequest();
+        Issue issue = new Issue();
+        issue.setId(work.getId());
+        issue.setNumber(work.getNumber());
+        issue.setRepository(work.getRepository());
+        issue.setAuthor(work.getAuthor());
+        issue.setState(Issue.State.OPEN);
+        issue.setReviewSnapshotId(UUID.randomUUID());
+        when(issueRepository.findByIdWithAuthorAndRepository(PULL_REQUEST_ID)).thenReturn(Optional.of(issue));
+        when(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, "owner/repo"))
+                .thenReturn(true);
+        when(coverageService.assess(any(), eq("owner/repo"), eq(null), any(), eq(false)))
+                .thenReturn(coverage(true));
+        when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(AUTHOR_ID)).thenReturn(true);
+
+        var decision = policy().evaluateIssue(job, DeliveryPolicyStage.EGRESS, null, java.util.Set.of());
+
+        assertThat(decision.refusal()).isEqualTo(FeedbackSuppressionReason.ISSUE_SNAPSHOT_CHANGED);
+    }
 
     private static final long WORKSPACE_ID = 3L;
     private static final long PULL_REQUEST_ID = 41L;
@@ -154,8 +186,11 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
             metadata.put("issue_number", 17);
             metadata.put("repository_id", REPOSITORY_ID);
             metadata.put("repository_full_name", "owner/repo");
+            UUID snapshot = UUID.randomUUID();
+            metadata.put("review_snapshot_id", snapshot.toString());
             job.setMetadata(metadata);
             Issue issue = new Issue();
+            issue.setReviewSnapshotId(snapshot);
             issue.setId(work.getId());
             issue.setNumber(work.getNumber());
             issue.setAuthor(work.getAuthor());
@@ -320,6 +355,33 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
     }
 
     @Test
+    @DisplayName("merged work gets no comment on the work, and its feedback still reaches the developer's own page")
+    void shouldKeepMergedFeedbackOnTheDevelopersOwnSurfaces() {
+        AgentJob job = pullRequestJob();
+        PullRequest pullRequest = openPullRequest();
+        pullRequest.setState(Issue.State.MERGED);
+        stubPullRequestEvaluation(pullRequest, coverage(true));
+        when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(AUTHOR_ID)).thenReturn(true);
+        Practice practice = new Practice();
+        practice.setSlug("merge-retrospective");
+        practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
+        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, java.util.Set.of("merge-retrospective")))
+                .thenReturn(java.util.List.of(practice));
+
+        assertThat(policy().evaluatePullRequest(job).allowed()).isFalse();
+        assertThat(recordedRefusal()).isEqualTo(FeedbackSuppressionReason.ARTIFACT_MERGED);
+        assertThat(policy().evaluateForRecipient(
+                                job,
+                                DeliveryPolicyStage.EGRESS,
+                                UUID.randomUUID(),
+                                DeliveryPolicySurface.IN_APP,
+                                AUTHOR_ID,
+                                java.util.Set.of("merge-retrospective"))
+                        .allowed())
+                .isTrue();
+    }
+
+    @Test
     void reviewerFeedbackUsesTheReviewerForCoverageAndConsent() {
         AgentJob job = pullRequestJob();
         var metadata = org.junit.jupiter.api.Assertions.assertInstanceOf(
@@ -425,6 +487,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         pullRequest.setNumber(17);
         pullRequest.setState(Issue.State.OPEN);
         pullRequest.setBaseRefName("main");
+        pullRequest.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         Repository repository = new Repository();
         repository.setId(REPOSITORY_ID);
         repository.setNameWithOwner("owner/repo");
@@ -497,8 +560,11 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
             metadata.put("issue_number", 17);
             metadata.put("repository_id", REPOSITORY_ID);
             metadata.put("repository_full_name", "owner/repo");
+            UUID snapshot = UUID.randomUUID();
+            metadata.put("review_snapshot_id", snapshot.toString());
             job.setMetadata(metadata);
             Issue issue = new Issue();
+            issue.setReviewSnapshotId(snapshot);
             issue.setId(artifact.getId());
             issue.setNumber(artifact.getNumber());
             issue.setAuthor(artifact.getAuthor());

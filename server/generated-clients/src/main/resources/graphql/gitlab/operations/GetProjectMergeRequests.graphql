@@ -40,6 +40,11 @@ query GetProjectMergeRequests($fullPath: ID!, $first: Int!, $after: String, $upd
                     iid
                 }
                 userNotesCount
+                # What the pipeline said about the head, and for which head.
+                headPipeline {
+                    status
+                    sha
+                }
                 author {
                     ...GitLabUserFields
                 }

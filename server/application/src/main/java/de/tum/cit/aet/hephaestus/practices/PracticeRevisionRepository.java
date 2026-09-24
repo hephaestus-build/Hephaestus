@@ -18,6 +18,10 @@ public interface PracticeRevisionRepository
 
     Optional<PracticeRevision> findById(Long id);
 
+    @Query(
+            "SELECT r FROM PracticeRevision r JOIN FETCH r.practice p JOIN FETCH p.workspace WHERE r.id = :id AND p.workspace.id = :workspaceId")
+    Optional<PracticeRevision> findByIdAndWorkspaceId(@Param("id") Long id, @Param("workspaceId") Long workspaceId);
+
     List<PracticeRevision> findAll();
 
     Optional<PracticeRevision> findFirstByPracticeIdOrderByRevisionNumberDesc(Long practiceId);

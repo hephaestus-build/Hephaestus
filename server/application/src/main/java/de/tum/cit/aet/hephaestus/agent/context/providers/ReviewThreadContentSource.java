@@ -9,13 +9,13 @@ import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,7 +51,7 @@ public class ReviewThreadContentSource implements EvidenceSource {
 
     static final int MAX_THREADS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
-    static final int MAX_DECISIONS = 30;
+    static final int MAX_DECISIONS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
     private final ObjectMapper objectMapper;
     private final PullRequestRepository pullRequestRepository;
@@ -89,7 +89,7 @@ public class ReviewThreadContentSource implements EvidenceSource {
         files.putAll(capture(request, selectedKinds).files());
     }
 
-    private ObjectNode collect(long pullRequestId, PullRequest pullRequest) {
+    private ObjectNode collect(long pullRequestId) {
         try {
             List<Long> threadIds = new java.util.ArrayList<>(
                     threadRepository.findRecentIdsByPullRequestId(pullRequestId, PageRequest.of(0, MAX_THREADS + 1)));
@@ -105,30 +105,23 @@ public class ReviewThreadContentSource implements EvidenceSource {
             if (reviews.size() > MAX_DECISIONS + 1) {
                 reviews = new java.util.ArrayList<>(reviews.subList(0, MAX_DECISIONS + 1));
             }
+            // The query returns newest first so the bound keeps the latest decision; the file lists
+            // them oldest first, the order comments.json and general_comments.json share.
             boolean decisionsTruncated = reviews.size() > MAX_DECISIONS;
             if (decisionsTruncated) reviews.remove(reviews.size() - 1);
+            reviews.sort(Comparator.comparing(
+                    PullRequestReview::getSubmittedAt, Comparator.nullsLast(Comparator.naturalOrder())));
 
             ObjectNode root = objectMapper.createObjectNode();
 
             ArrayNode threadArray = objectMapper.createArrayNode();
-            int unresolved = 0;
-            int emittedThreads = 0;
             for (PullRequestReviewThread t : threads) {
-                if (t == null) {
+                if (t == null || isHephaestusThread(t)) {
                     continue;
-                }
-                if (isHephaestusThread(t)) {
-                    continue;
-                }
-                boolean isUnresolved = t.getState() == PullRequestReviewThread.State.UNRESOLVED;
-                if (isUnresolved) {
-                    unresolved++;
                 }
                 threadArray.add(toThread(t));
-                emittedThreads++;
             }
             root.set("threads", threadArray);
-            root.put("unresolvedCount", unresolved);
 
             ArrayNode decisionArray = objectMapper.createArrayNode();
             for (PullRequestReview review : reviews) {
@@ -139,20 +132,22 @@ public class ReviewThreadContentSource implements EvidenceSource {
                         || review.getState() == PullRequestReview.State.UNKNOWN) {
                     continue;
                 }
+                // A COMMENTED review with no body is the container of inline comments — GitHub's batch, or
+                // the row GitLab's sync makes per discussion and author — and its substance is already in
+                // comments.json. Listing it here would be a decision that decided nothing.
+                if (review.getState() == PullRequestReview.State.COMMENTED && isBlank(review.getBody())) {
+                    continue;
+                }
                 decisionArray.add(toDecision(review));
             }
             root.set("reviewDecisions", decisionArray);
             root.put("truncated", threadsTruncated || decisionsTruncated);
 
-            root.put("mergeState", mergeState(pullRequest));
-
             log.info(
-                    "ReviewThreads: prId={} threads={} unresolved={} decisions={} mergeState={}",
+                    "ReviewThreads: prId={} threads={} decisions={}",
                     pullRequestId,
-                    emittedThreads,
-                    unresolved,
-                    decisionArray.size(),
-                    root.get("mergeState").asString());
+                    threadArray.size(),
+                    decisionArray.size());
             return root;
         } catch (Exception e) {
             throw new EvidenceCollectionException("Review-thread collection failed", e);
@@ -178,12 +173,14 @@ public class ReviewThreadContentSource implements EvidenceSource {
         if (pullRequest == null || pullRequest.getDeletedAt() != null) {
             return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
         }
-        ObjectNode root = collect(pullRequestId, pullRequest);
+        ObjectNode root = collect(pullRequestId);
         boolean empty =
                 root.path("threads").isEmpty() && root.path("reviewDecisions").isEmpty();
         boolean truncated = root.path("truncated").asBoolean();
         return new EvidenceContribution(
-                Map.of(OUTPUT_PREFIX + FILE_NAME, objectMapper.writeValueAsBytes(root)),
+                Map.of(
+                        OUTPUT_PREFIX + FILE_NAME,
+                        objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root)),
                 Map.of(KIND, truncated ? SourceCompleteness.PARTIAL : SourceCompleteness.COMPLETE),
                 Map.of(),
                 Map.of(),
@@ -223,6 +220,9 @@ public class ReviewThreadContentSource implements EvidenceSource {
 
     private ObjectNode toThread(PullRequestReviewThread t) {
         ObjectNode node = objectMapper.createObjectNode();
+        if (t.getId() != null) {
+            node.put("id", t.getId());
+        }
         if (t.getPath() != null) {
             node.put("path", t.getPath());
         }
@@ -234,8 +234,14 @@ public class ReviewThreadContentSource implements EvidenceSource {
         if (resolver != null) {
             node.put("resolvedBy", resolver);
         }
+        if (t.getResolvedAt() != null) {
+            node.put("resolvedAt", t.getResolvedAt().toString());
+        }
         if (t.getOutdated() != null) {
             node.put("outdated", t.getOutdated());
+        }
+        if (t.getCreatedAt() != null) {
+            node.put("createdAt", t.getCreatedAt().toString());
         }
         return node;
     }
@@ -249,24 +255,23 @@ public class ReviewThreadContentSource implements EvidenceSource {
         String author = login(review.getAuthor());
         if (author != null) {
             node.put("author", author);
+            if (review.getAuthor() != null && review.getAuthor().getType() == User.Type.BOT) {
+                node.put("bot", true);
+            }
         }
         // Raw timestamp so the agent can compute supersession (a later APPROVE by the same reviewer
         // overriding an earlier CHANGES_REQUESTED) downstream — this connector loads facts, it does not judge.
         if (review.getSubmittedAt() != null) {
             node.put("submittedAt", review.getSubmittedAt().toString());
         }
+        if (!isBlank(review.getBody())) {
+            node.put("body", review.getBody());
+        }
         return node;
     }
 
-    private static String mergeState(PullRequest pullRequest) {
-        if (pullRequest.isMerged()) {
-            return "MERGED";
-        }
-        if (pullRequest.getState() != null) {
-            // Issue.State: OPEN / CLOSED / MERGED.
-            return pullRequest.getState().name();
-        }
-        return "UNKNOWN";
+    private static boolean isBlank(@Nullable String text) {
+        return text == null || text.isBlank();
     }
 
     private static @Nullable String login(@Nullable User user) {

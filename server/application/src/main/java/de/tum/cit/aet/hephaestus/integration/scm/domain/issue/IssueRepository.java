@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,6 +21,15 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @WorkspaceAgnostic("Issues scoped through repository_id -> repository.workspace_id")
 public interface IssueRepository extends JpaRepository<Issue, Long> {
+    @Transactional
+    @Modifying
+    @Query(value = """
+        UPDATE issue SET review_snapshot_id = :snapshotId, review_snapshot_digest = :digest
+        WHERE id = :issueId AND issue_type = 'ISSUE'
+          AND review_snapshot_digest IS DISTINCT FROM :digest
+        """, nativeQuery = true)
+    int advanceReviewSnapshot(
+            @Param("issueId") long issueId, @Param("snapshotId") UUID snapshotId, @Param("digest") String digest);
     /**
      * Finds an issue (not a pull request) by repository ID and number.
      * Uses {@code TYPE(i) = Issue} to exclude PullRequest subclass rows, which is
@@ -41,6 +51,22 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
         WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId AND i.number = :number
         """)
     Optional<Issue> findByRepositoryIdAndNumber(@Param("repositoryId") long repositoryId, @Param("number") int number);
+
+    /**
+     * How many issues name {@code parentIssueId} as their parent, and how many of those are closed, as one
+     * {@code [total, completed]} row: the rollup a provider that syncs only the parent link never supplies.
+     * {@code TYPE(i) = Issue} keeps a pull request out of the count even if one ever carried a parent.
+     */
+    @Query("SELECT COUNT(i) AS total, COALESCE(SUM(CASE WHEN i.state = :closed THEN 1 ELSE 0 END), 0) AS completed "
+            + "FROM Issue i WHERE TYPE(i) = Issue AND i.parentIssue.id = :parentIssueId")
+    ChildRollup countChildrenByParentIssueId(
+            @Param("parentIssueId") long parentIssueId, @Param("closed") Issue.State closed);
+
+    interface ChildRollup {
+        long getTotal();
+
+        long getCompleted();
+    }
 
     /** Fetches an issue with its repository eagerly — used to build an issue-detection job submission. */
     @Query("SELECT i FROM Issue i LEFT JOIN FETCH i.repository WHERE TYPE(i) = Issue AND i.id = :id")
@@ -188,6 +214,23 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
             + "WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId AND i.deletedAt IS NULL "
             + "ORDER BY i.number DESC")
     List<Issue> findIssueInventoryByRepositoryId(@Param("repositoryId") long repositoryId, Pageable pageable);
+
+    /**
+     * How many of a repository's issues carry at least one label, and which label names are in use — the
+     * two facts that say whether the project has a labelling convention at all, without fetching the label
+     * collection of every inventory row.
+     */
+    @Query("SELECT COUNT(DISTINCT i.id) FROM Issue i JOIN i.labels l "
+            + "WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId AND i.deletedAt IS NULL")
+    long countLabelledIssuesByRepositoryId(@Param("repositoryId") long repositoryId);
+
+    @Query(
+            "SELECT COUNT(i) FROM Issue i WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId AND i.deletedAt IS NULL")
+    long countIssuesByRepositoryId(@Param("repositoryId") long repositoryId);
+
+    @Query("SELECT DISTINCT l.name FROM Issue i JOIN i.labels l "
+            + "WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId AND i.deletedAt IS NULL ORDER BY l.name")
+    List<String> findLabelNamesInUseByRepositoryId(@Param("repositoryId") long repositoryId);
 
     /**
      * Nullifies milestone references on all issues that reference the given milestone.

@@ -96,7 +96,9 @@ public final class DeveloperTextSanitizer {
         }
         String out = kept.toString();
         out = out.replaceAll("[ \\t]{2,}", " ")
-                .replaceAll("[ \\t]+([.,;])", "$1")
+                // Only a punctuation mark left dangling by a removed sentence: a leading-dot name such as
+                // `.task`, `.onAppear` or `.gitignore` keeps the space before it.
+                .replaceAll("[ \\t]+([.,;])(?=\\s|$)", "$1")
                 .replaceAll("\\n{3,}", "\n\n");
         return stripEnvelopeCorruption(out.strip());
     }

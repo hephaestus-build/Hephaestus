@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
- * Refuses agent image references that cannot name a build matching this server.
+ * Refuses an agent image reference that cannot name a build matching this server.
  *
  * <p>Applies in every runtime profile, unlike {@link AgentImagePinGuard}: a digest is a production requirement, but a
  * <em>channel tag</em> — one that moves from build to build rather than naming one — is wrong in
@@ -75,53 +75,48 @@ public class AgentImageReferenceGuard {
                     + FIX;
 
     public AgentImageReferenceGuard(AgentImageProperties properties) {
-        String reference = properties.reference();
+        check("hephaestus.agent.image.reference", "HEPHAESTUS_AGENT_IMAGE_REFERENCE", properties.reference());
+    }
+
+    private static void check(String setting, String variable, @Nullable String reference) {
         if (reference == null || reference.isBlank()) {
-            throw new IllegalStateException(
-                    "hephaestus.agent.image.reference is not set and could not be derived. " + DOCS);
+            throw new IllegalStateException(setting + " is not set and could not be derived. " + DOCS);
         }
         if (reference.indexOf('@') >= 0) {
             if (!ImageReference.isDigestPinned(reference)) {
-                throw new IllegalStateException(
-                        "hephaestus.agent.image.reference carries a digest but is not a lowercase name with a "
-                                + "sha256 of 64 lowercase hex characters: "
-                                + reference
-                                + ". "
-                                + DOCS);
+                throw new IllegalStateException(setting
+                        + " carries a digest but is not a lowercase name with a sha256 of 64 lowercase hex characters: "
+                        + reference
+                        + ". "
+                        + DOCS);
             }
             return;
         }
         String tag = tagOf(reference);
         if (tag == null) {
-            throw new IllegalStateException(
-                    "hephaestus.agent.image.reference names no tag, so it resolves to `" + IMPLICIT_TAG
-                            + "`: "
-                            + reference
-                            + ". "
-                            + CHANNEL_ADVICE);
+            throw new IllegalStateException(setting + " names no tag, so it resolves to `" + IMPLICIT_TAG + "`: "
+                    + reference + ". " + CHANNEL_ADVICE);
         }
         if (!TAG.matcher(tag).matches()) {
-            throw new IllegalStateException("hephaestus.agent.image.reference carries no usable tag: " + reference
+            throw new IllegalStateException(setting + " carries no usable tag: " + reference
                     + ". The tag follows spring.application.version, so an empty one means APP_VERSION reached "
-                    + "this container empty — give the deployment its image tag, or name the agent image "
-                    + "explicitly. "
+                    + "this container empty — give the deployment its image tag, or name the image explicitly. "
                     + DOCS);
         }
         if (NAMED_CHANNELS.contains(tag)) {
             throw new IllegalStateException(
-                    "hephaestus.agent.image.reference must not be a channel tag: " + reference + ". " + CHANNEL_ADVICE);
+                    setting + " must not be a channel tag: " + reference + ". " + CHANNEL_ADVICE);
         }
         if (VERSION_SERIES.matcher(tag).matches()) {
             throw new IllegalStateException(
-                    "hephaestus.agent.image.reference names a version series rather than one release: " + reference
-                            + ". "
-                            + SERIES_ADVICE);
+                    setting + " names a version series rather than one release: " + reference + ". " + SERIES_ADVICE);
         }
         if (DEVELOPMENT_VERSION.equals(tag)) {
             log.warn(
-                    "Agent image reference {} was derived from an unset APP_VERSION, so no such image is published. "
-                            + "Set HEPHAESTUS_AGENT_IMAGE_REFERENCE to the agent image this checkout should run against. {}",
+                    "Image reference {} was derived from an unset APP_VERSION, so no such image is published. "
+                            + "Set {} to the image this checkout should run against. {}",
                     reference,
+                    variable,
                     DOCS);
         }
     }

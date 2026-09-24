@@ -175,7 +175,7 @@ public class DevTriggerController {
             return Prepared.done("Issue missing repository: issueId=" + issue.getId());
         }
         if (triggerSignal != null) {
-            GateDecision decision = detectionGate.evaluateIssue(issue, triggerSignal, TriggerMode.AUTO);
+            GateDecision decision = detectionGate.evaluateIssue(issue, workspaceId, triggerSignal, TriggerMode.AUTO);
             if (decision instanceof GateDecision.Skip skip) {
                 recordRefusal(
                         ScmSignals.issueKey(workspaceId, triggerSignal, ScmEventPayload.IssueData.from(issue))

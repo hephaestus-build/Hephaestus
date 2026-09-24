@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
@@ -20,7 +21,7 @@ import tools.jackson.core.json.JsonReadFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Parses normalized agent output into validated observations without throwing on malformed entries. */
+/** Validates submitted observations into typed ones without throwing on malformed entries. */
 public class PracticeDetectionResultParser {
 
     private static final Logger log = LoggerFactory.getLogger(PracticeDetectionResultParser.class);
@@ -57,6 +58,7 @@ public class PracticeDetectionResultParser {
                 .build();
     }
 
+    /** Parses a raw model output whose {@code rawOutput} text carries the observations, leniently. */
     public ParseResult parse(@Nullable JsonNode jobOutput) {
         if (jobOutput == null || jobOutput.isNull() || jobOutput.isMissingNode()) {
             return ParseResult.empty("jobOutput is null or missing");
@@ -88,18 +90,22 @@ public class PracticeDetectionResultParser {
         if (root == null || root.isNull()) {
             return ParseResult.empty("rawOutput parsed to null");
         }
-        JsonNode observationsNode = extractObservationsNode(root);
-        if (observationsNode == null || !observationsNode.isArray()) {
+        return parseObservations(root.get("observations"));
+    }
+
+    /** Validates an already-structured observations array, as the runner submits it for admission. */
+    public ParseResult parseObservations(@Nullable JsonNode observations) {
+        if (observations == null || !observations.isArray()) {
             return ParseResult.empty("missing or non-array 'observations' field");
         }
-        if (observationsNode.isEmpty()) {
+        if (observations.isEmpty()) {
             return ParseResult.empty("observations array is empty");
         }
 
         List<ValidatedObservation> valid = new ArrayList<>();
         List<DiscardedEntry> discarded = new ArrayList<>();
-        for (int i = 0; i < observationsNode.size(); i++) {
-            JsonNode entry = observationsNode.get(i);
+        for (int i = 0; i < observations.size(); i++) {
+            JsonNode entry = observations.get(i);
             if (!entry.isObject()) {
                 discarded.add(new DiscardedEntry(i, "entry is not a JSON object"));
                 continue;
@@ -112,10 +118,6 @@ public class PracticeDetectionResultParser {
         }
 
         return new ParseResult(Collections.unmodifiableList(valid), Collections.unmodifiableList(discarded));
-    }
-
-    private JsonNode extractObservationsNode(JsonNode root) {
-        return root.get("observations");
     }
 
     private ValidatedObservation validateEntry(JsonNode entry, int index) {
@@ -302,7 +304,30 @@ public class PracticeDetectionResultParser {
             @Nullable Severity severity,
             @Nullable JsonNode evidence,
             @Nullable String evidenceRationale,
-            @Nullable ObservationKeys keys) {
+            @Nullable ObservationKeys keys,
+            PracticeDeliveryBehavior deliveryBehavior) {
+        public ValidatedObservation(
+                String practiceSlug,
+                String summary,
+                AssessmentStatus assessmentStatus,
+                @Nullable Presence presence,
+                @Nullable Assessment assessment,
+                @Nullable Severity severity,
+                @Nullable JsonNode evidence,
+                @Nullable String evidenceRationale,
+                @Nullable ObservationKeys keys) {
+            this(
+                    practiceSlug,
+                    summary,
+                    assessmentStatus,
+                    presence,
+                    assessment,
+                    severity,
+                    evidence,
+                    evidenceRationale,
+                    keys,
+                    PracticeDeliveryBehavior.DEFAULT);
+        }
         /** The parser's output shape: an observation not yet stamped with its persisted identities. */
         public ValidatedObservation(
                 String practiceSlug,
@@ -322,7 +347,8 @@ public class PracticeDetectionResultParser {
                     severity,
                     evidence,
                     evidenceRationale,
-                    null);
+                    null,
+                    PracticeDeliveryBehavior.DEFAULT);
         }
 
         public ValidatedObservation withKeys(@Nullable ObservationKeys keys) {
@@ -335,7 +361,8 @@ public class PracticeDetectionResultParser {
                     severity,
                     evidence,
                     evidenceRationale,
-                    keys);
+                    keys,
+                    deliveryBehavior);
         }
 
         public @Nullable Outcome outcome() {

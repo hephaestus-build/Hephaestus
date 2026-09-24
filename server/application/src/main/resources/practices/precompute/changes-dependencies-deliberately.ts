@@ -74,7 +74,7 @@ const NPM_NON_DEP_KEYS = new Set([
 ]);
 // TOML name = "constraint"  or  name = { version = "constraint" }
 const reTomlDep =
-	/^\s*(?<name>[A-Za-z0-9_.-]+)\s*=\s*(?:"(?<quotedVersion>[^"]*)"|\{[^}]*version\s*=\s*"(?<tableVersion>[^"]*)"[^}]*\})/u;
+	/^\s*(?<name>[A-Za-z0-9_.-]+)\s*=\s*(?:"(?<quoted>[^"]*)"|\{[^}]*version\s*=\s*"(?<table>[^"]*)"[^}]*\})/u;
 // requirements.txt  name==1.2.3 / name>=1,<2 / name
 const reReqDep = /^\s*(?<name>[A-Za-z0-9_.\-[\]]+)\s*(?<constraint>(?:[<>=!~]=?|@)\S.*)?$/u;
 // Gemfile  gem "name", "~> 1.2"
@@ -86,16 +86,35 @@ const reMvnVersion = /<version>\s*(?<version>[^<\s]+)\s*<\/version>/u;
 const reGradleDep = /["'](?<coordinate>[\w.-]+:[\w.-]+):(?<constraint>[^"']*)["']/u;
 // Swift PM  .package(url: "...", from: "1.2.3") / exact: "1.2.3" / "1.0.0"..."2.0.0"
 const reSwiftPkg =
-	/\.package\(\s*url:\s*["'](?<url>[^"']+)["'][^)]*?(?:from:\s*["'](?<fromVersion>[^"']+)["']|exact:\s*["'](?<exactVersion>[^"']+)["']|["'](?<rangeLow>[^"']+)["']\s*\.\.[.<]\s*["'](?<rangeHigh>[^"']+)["'])/u;
+	/\.package\(\s*url:\s*["'](?<url>[^"']+)["'][^)]*?(?:from:\s*["'](?<from>[^"']+)["']|exact:\s*["'](?<exact>[^"']+)["']|["'](?<low>[^"']+)["']\s*\.\.[.<]\s*["'](?<high>[^"']+)["'])/u;
 // go.mod  require module v1.2.3  (single-line or block-body line)
 const reGoMod =
 	/^\s*(?:require\s+)?(?<name>[\w./-]+\.[\w./-]+\/\S+|[\w.-]+\/\S+)\s+(?<version>v\d\S*)/u;
+
+/** A Swift PM constraint as one word: `from:`, `exact:`, a range, or nothing when the package pins none. */
+function swiftConstraint(
+	fromVersion: string | undefined,
+	exactVersion: string | undefined,
+	rangeLow: string | undefined,
+	rangeHigh: string | undefined,
+): string {
+	if (fromVersion !== undefined && fromVersion !== "") {
+		return `from:${fromVersion}`;
+	}
+	if (exactVersion !== undefined && exactVersion !== "") {
+		return `exact:${exactVersion}`;
+	}
+	if (rangeLow !== undefined && rangeLow !== "" && rangeHigh !== undefined && rangeHigh !== "") {
+		return `${rangeLow}..${rangeHigh}`;
+	}
+	return "";
+}
 
 // Cargo.toml and pyproject.toml read dependency lines identically. The two version groups are the two
 // arms of an alternation — `name = "1.2"` fills the first, `name = { version = "1.2" }` the second, and
 // an inline table with no version key (`name = { features = [...] }`) fills neither.
 function parseTomlDependency(line: string): { name: string; constraint: string } | null {
-	const { name, quotedVersion, tableVersion } = reTomlDep.exec(line)?.groups ?? {};
+	const [, name, quotedVersion, tableVersion] = reTomlDep.exec(line) ?? [];
 	if (name === undefined) {
 		return null;
 	}
@@ -109,7 +128,7 @@ const ECOSYSTEMS: Ecosystem[] = [
 		parse: (line) => {
 			// The value group matches empty (`"dep": ""`); the key group cannot, so its absence means the
 			// line is not a `"key": "value"` pair at all.
-			const { name, constraint = "" } = reJsonDep.exec(line)?.groups ?? {};
+			const [, name, constraint = ""] = reJsonDep.exec(line) ?? [];
 			if (name === undefined) {
 				return null;
 			}
@@ -143,7 +162,7 @@ const ECOSYSTEMS: Ecosystem[] = [
 			}
 			// A bare `numpy` line has no constraint group at all — that absence is the PIN_DROPPED signal
 			// this script exists to surface, so it becomes "" rather than dropping the dependency.
-			const { name, constraint = "" } = reReqDep.exec(t)?.groups ?? {};
+			const [, name, constraint = ""] = reReqDep.exec(t) ?? [];
 			if (name === undefined) {
 				return null;
 			}
@@ -162,7 +181,7 @@ const ECOSYSTEMS: Ecosystem[] = [
 		lockfiles: ["Gemfile.lock"],
 		parse: (line) => {
 			// `gem "puma"` carries no constraint group — an absent pin, not an absent dependency.
-			const { name, constraint = "" } = reGemDep.exec(line)?.groups ?? {};
+			const [, name, constraint = ""] = reGemDep.exec(line) ?? [];
 			if (name === undefined) {
 				return null;
 			}
@@ -182,7 +201,7 @@ const ECOSYSTEMS: Ecosystem[] = [
 		parse: (line) => {
 			// The version group matches empty for a trailing-colon coordinate (`"g:a:"`); the coordinate
 			// group cannot be empty.
-			const { coordinate, constraint = "" } = reGradleDep.exec(line)?.groups ?? {};
+			const [, coordinate, constraint = ""] = reGradleDep.exec(line) ?? [];
 			if (coordinate === undefined) {
 				return null;
 			}
@@ -196,8 +215,7 @@ const ECOSYSTEMS: Ecosystem[] = [
 		parse: (line) => {
 			// The url group is required; the three constraint forms are alternatives, so at most one of
 			// them is present on any given line and the range form always yields BOTH of its bounds.
-			const { url, fromVersion, exactVersion, rangeLow, rangeHigh } =
-				reSwiftPkg.exec(line)?.groups ?? {};
+			const [, url, fromVersion, exactVersion, rangeLow, rangeHigh] = reSwiftPkg.exec(line) ?? [];
 			if (url === undefined) {
 				return null;
 			}
@@ -207,16 +225,17 @@ const ECOSYSTEMS: Ecosystem[] = [
 					.pop()
 					?.replace(/\.git$/u, "") ?? url;
 			// from: => caret-like (loose), exact: => exact, range => loose
-			let constraint = "";
-			if (fromVersion !== undefined) {
-				constraint = `from:${fromVersion}`;
-			} else if (exactVersion !== undefined) {
-				constraint = `exact:${exactVersion}`;
-			} else if (rangeLow !== undefined && rangeHigh !== undefined) {
-				constraint = `${rangeLow}..${rangeHigh}`;
-			}
+			const constraint = swiftConstraint(fromVersion, exactVersion, rangeLow, rangeHigh);
 			return { name, constraint };
 		},
+	},
+	{
+		// XcodeGen project.yml: a package is declared under `packages:` as a url line followed by a
+		// constraint line; the pairing across lines is done in collectXcodeGenDeps, so parse() is
+		// unused here as it is for Maven.
+		isManifest: (b) => b === "project.yml" || b === "project.yaml",
+		lockfiles: ["Package.resolved"],
+		parse: () => null,
 	},
 	{
 		// Go modules
@@ -224,7 +243,7 @@ const ECOSYSTEMS: Ecosystem[] = [
 		lockfiles: ["go.sum"],
 		parse: (line) => {
 			// Both groups are required: a go.mod require line without a `v…` version is not matched at all.
-			const { name, version } = reGoMod.exec(line)?.groups ?? {};
+			const [, name, version] = reGoMod.exec(line) ?? [];
 			if (name === undefined || version === undefined) {
 				return null;
 			}
@@ -247,10 +266,8 @@ function ecosystemFor(path: string): Ecosystem | null {
 	return ECOSYSTEMS.find((e) => e.isManifest(base)) ?? null;
 }
 
-type DependencyFact = "ADDED" | "REMOVED" | "UNCHANGED" | "PIN_DROPPED" | "PIN_LOOSENED" | "BUMPED";
-
 // Classify the constraint delta for a dependency present on both sides (added + removed for same name).
-function classifyDelta(oldC: string, newC: string): DependencyFact {
+function classifyDelta(oldC: string, newC: string): string {
 	const o = oldC.trim();
 	const n = newC.trim();
 	// Identical constraint text on both sides means the -X/+X pair differs only by whitespace/newline (e.g. a
@@ -295,15 +312,15 @@ function collectMavenDeps(df: DiffFile, side: "added" | "removed"): Map<string, 
 	let pendingName: string | null = null;
 	let pendingLine = 0;
 	for (const [ln, content] of ordered) {
-		const { artifactId } = reMvnArtifact.exec(content)?.groups ?? {};
+		const [, artifactId] = reMvnArtifact.exec(content) ?? [];
 		if (artifactId !== undefined) {
 			pendingName = artifactId;
 			pendingLine = ln;
-			// record artifact even if no adjacent version line appears
+			// The artifact is recorded even when no version line follows within the window.
 			out.set(artifactId, "");
 			continue;
 		}
-		const { version } = reMvnVersion.exec(content)?.groups ?? {};
+		const [, version] = reMvnVersion.exec(content) ?? [];
 		if (version !== undefined && pendingName !== null && ln - pendingLine <= MVN_PAIR_WINDOW) {
 			out.set(pendingName, version);
 			pendingName = null;
@@ -312,63 +329,49 @@ function collectMavenDeps(df: DiffFile, side: "added" | "removed"): Map<string, 
 	return out;
 }
 
-// The diff line for a dependency name on a given side (for hint placement). Match on a quote/word/coordinate
-// boundary, not a bare substring, so a prefix-sharing sibling (react vs react-dom, or a scoped name appearing
-// inside another package's URL) doesn't grab the wrong line.
-function lineFor(df: DiffFile, name: string, side: "added" | "removed"): number {
+// XcodeGen pairs a `url:` line with the constraint line that follows it (`from:`, `exactVersion:`,
+// `majorVersion:`, `minorVersion:`, `branch:`, `revision:`), within the same window Maven uses.
+const reXcodeGenUrl = /^\s*url:\s*(?<url>\S+)/u;
+const reXcodeGenBound =
+	/^\s*(?<kind>from|exactVersion|majorVersion|minorVersion|branch|revision):\s*(?<value>\S+)/u;
+function collectXcodeGenDeps(df: DiffFile, side: "added" | "removed"): Map<string, string> {
+	const out = new Map<string, string>();
 	const lines = side === "added" ? df.addedLines : df.removedLines;
-	const bounded = new RegExp(`(^|[^\\w.\\-/])${escapeRegExp(name)}([^\\w.\\-/]|$)`, "u");
-	for (const [ln, content] of lines) {
-		if (bounded.test(content)) {
-			return ln;
+	const ordered = [...lines.entries()].toSorted((a, b) => a[0] - b[0]);
+	let pendingName: string | null = null;
+	let pendingLine = 0;
+	for (const [ln, content] of ordered) {
+		const [, url] = reXcodeGenUrl.exec(content) ?? [];
+		if (url !== undefined) {
+			pendingName =
+				url
+					.split("/")
+					.pop()
+					?.replace(/\.git$/u, "") ?? url;
+			pendingLine = ln;
+			out.set(pendingName, "");
+			continue;
+		}
+		const [, kind, bound] = reXcodeGenBound.exec(content) ?? [];
+		if (
+			kind !== undefined &&
+			bound !== undefined &&
+			pendingName !== null &&
+			ln - pendingLine <= MVN_PAIR_WINDOW
+		) {
+			out.set(pendingName, `${kind}:${bound}`);
+			pendingName = null;
 		}
 	}
-	// Fallback: a constructed key (e.g. a Gradle group:name coordinate) may not survive the boundary
-	// test against the raw line — keep the substring scan so the hint still lands on a real line.
-	for (const [ln, content] of lines) {
-		if (content.includes(name)) {
-			return ln;
-		}
-	}
-	return 0;
+	return out;
 }
 
-interface DependencyChange {
-	fact: DependencyFact;
-	side: "added" | "removed";
-	context: string;
-}
-
-// `name` comes from the union of both sides, so a name on neither is not a case here.
-function dependencyChange(
-	name: string,
-	added: Map<string, string>,
-	removed: Map<string, string>,
-): DependencyChange {
-	const oldC = removed.get(name) ?? "";
-	const newC = added.get(name) ?? "";
-	if (added.has(name) && !removed.has(name)) {
-		return { fact: "ADDED", side: "added", context: `+ ${name} ${newC}`.trim() };
+/** The hint's context line: the dependency as it was added, removed, or changed. */
+function dependencyContext(fact: string, name: string, oldC: string, newC: string): string {
+	if (fact === "ADDED") {
+		return `+ ${name} ${newC}`.trim();
 	}
-	if (!added.has(name) && removed.has(name)) {
-		return { fact: "REMOVED", side: "removed", context: `- ${name} ${oldC}`.trim() };
-	}
-	return { fact: classifyDelta(oldC, newC), side: "added", context: `${name}: ${oldC} -> ${newC}` };
-}
-
-// Which lockfile basenames exist anywhere in the repo (sibling-present fact)? findFiles needs an extension;
-// scan the basenames we care about via their extensions.
-function repoLockfiles(repoPath: string, lockfileNames: Set<string>): Set<string> {
-	const present = new Set<string>();
-	for (const ext of ["json", "lock", "yaml", "resolved", "lockfile", "sum"]) {
-		for (const f of findFiles(repoPath, ext)) {
-			const base = basenameLower(f);
-			if (lockfileNames.has(base)) {
-				present.add(base);
-			}
-		}
-	}
-	return present;
+	return fact === "REMOVED" ? `- ${name} ${oldC}`.trim() : `${name}: ${oldC} -> ${newC}`;
 }
 
 export default function changesDependenciesDeliberately(
@@ -379,19 +382,26 @@ export default function changesDependenciesDeliberately(
 	const hints: Hint[] = [];
 	const changedManifests = new Set<string>();
 	const touchedLockfiles = new Set<string>();
-	const tally: Record<DependencyFact, number> = {
-		ADDED: 0,
-		REMOVED: 0,
-		UNCHANGED: 0,
-		PIN_DROPPED: 0,
-		PIN_LOOSENED: 0,
-		BUMPED: 0,
-	};
+	let depsAdded = 0;
+	let depsRemoved = 0;
+	let pinsLoosened = 0;
+	let pinsDropped = 0;
+	let bumped = 0;
 
+	// Which lockfile basenames exist anywhere in the repo (sibling-present fact)?
 	const allLockfileNames = new Set(
 		ECOSYSTEMS.flatMap((e) => e.lockfiles.map((l) => l.toLowerCase())),
 	);
-	const repoLockfilesPresent = repoLockfiles(repoPath, allLockfileNames);
+	const repoLockfilesPresent = new Set<string>();
+	// findFiles needs an extension; scan the basenames we care about via their extensions.
+	for (const ext of ["json", "lock", "yaml", "resolved", "lockfile", "sum"]) {
+		for (const f of findFiles(repoPath, ext)) {
+			const base = basenameLower(f);
+			if (allLockfileNames.has(base)) {
+				repoLockfilesPresent.add(base);
+			}
+		}
+	}
 
 	for (const [path, df] of diffFiles) {
 		const base = basenameLower(path);
@@ -406,31 +416,76 @@ export default function changesDependenciesDeliberately(
 		changedManifests.add(path);
 
 		const isMaven = base === "pom.xml";
-		const added = isMaven ? collectMavenDeps(df, "added") : collectDeps(df, eco, "added");
-		const removed = isMaven ? collectMavenDeps(df, "removed") : collectDeps(df, eco, "removed");
+		const isXcodeGen = base === "project.yml" || base === "project.yaml";
+		const collect = (side: "added" | "removed") => {
+			if (isMaven) {
+				return collectMavenDeps(df, side);
+			}
+			return isXcodeGen ? collectXcodeGenDeps(df, side) : collectDeps(df, eco, side);
+		};
+		const added = collect("added");
+		const removed = collect("removed");
+
+		// helper to find the diff line for a dependency name on a given side (for hint placement). Match on a
+		// quote/word/coordinate boundary, not a bare substring, so a prefix-sharing sibling (react vs
+		// react-dom, or a scoped name appearing inside another package's URL) doesn't grab the wrong line.
+		const lineFor = (name: string, side: "added" | "removed"): number => {
+			const lines = side === "added" ? df.addedLines : df.removedLines;
+			const bounded = new RegExp(`(?:^|[^\\w.\\-/])${escapeRegExp(name)}(?:[^\\w.\\-/]|$)`, "u");
+			for (const [ln, content] of lines) {
+				if (bounded.test(content)) {
+					return ln;
+				}
+			}
+			// Fallback: a constructed key (e.g. a Gradle group:name coordinate) may not survive the boundary
+			// test against the raw line — keep the substring scan so the hint still lands on a real line.
+			for (const [ln, content] of lines) {
+				if (content.includes(name)) {
+					return ln;
+				}
+			}
+			return 0;
+		};
 
 		const allNames = new Set<string>([...added.keys(), ...removed.keys()]);
 		for (const name of allNames) {
-			const { fact, side, context } = dependencyChange(name, added, removed);
-			tally[fact] += 1;
+			const inAdded = added.has(name);
+			const inRemoved = removed.has(name);
+			let fact: string;
+			let side: "added" | "removed" = "added";
+			if (inAdded && !inRemoved) {
+				fact = "ADDED";
+				depsAdded += 1;
+			} else if (!inAdded && inRemoved) {
+				fact = "REMOVED";
+				side = "removed";
+				depsRemoved += 1;
+			} else {
+				fact = classifyDelta(removed.get(name) ?? "", added.get(name) ?? "");
+				if (fact === "PIN_LOOSENED") {
+					pinsLoosened += 1;
+				} else if (fact === "PIN_DROPPED") {
+					pinsDropped += 1;
+				} else if (fact === "UNCHANGED") {
+					// whitespace/newline-only line pair — not a version change, count nothing
+				} else {
+					bumped += 1;
+				}
+			}
+			const oldC = removed.get(name) ?? "";
+			const newC = added.get(name) ?? "";
+			const ctx = dependencyContext(fact, name, oldC, newC);
 			hints.push({
 				file: path,
-				line: lineFor(df, name, side),
+				line: lineFor(name, side),
 				pattern: `dep:${fact}`,
-				context: context.slice(0, 160),
+				context: ctx.slice(0, 160),
 				inDiff: true,
 				flags: { ecosystem: base, dependency: name },
 			});
 		}
 	}
 
-	const {
-		ADDED: depsAdded,
-		REMOVED: depsRemoved,
-		PIN_LOOSENED: pinsLoosened,
-		PIN_DROPPED: pinsDropped,
-		BUMPED: bumped,
-	} = tally;
 	const lockfilePresent = repoLockfilesPresent.size > 0 || touchedLockfiles.size > 0;
 
 	const mavenChanged = [...changedManifests].some((p) => basenameLower(p) === "pom.xml");

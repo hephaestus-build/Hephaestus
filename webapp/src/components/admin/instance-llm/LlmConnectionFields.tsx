@@ -59,7 +59,7 @@ export function connectionFieldsValueOf(
 		displayName: connection?.displayName ?? "",
 		baseUrl: connection?.baseUrl ?? baseUrlDefaultFor("OPENAI"),
 		preset: connection ? presetForConnection(connection) : "OPENAI",
-		useResponsesApi: connection ? usesResponsesApi(connection.apiProtocol) : false,
+		useResponsesApi: connection ? usesResponsesApi(connection.apiProtocol) : true,
 		authMode: connection?.authMode ?? "BEARER",
 		apiKey: "",
 		clearApiKey: false,
@@ -179,8 +179,11 @@ export function LlmConnectionFields({
 						/>
 						<FieldContent>
 							<FieldLabel htmlFor={responsesApiId} className="font-normal">
-								Use the Responses API instead of Chat Completions
+								Use the Responses API
 							</FieldLabel>
+							<FieldDescription>
+								Clear it only for an endpoint that serves Chat Completions alone.
+							</FieldDescription>
 						</FieldContent>
 					</Field>
 				</FieldGroup>

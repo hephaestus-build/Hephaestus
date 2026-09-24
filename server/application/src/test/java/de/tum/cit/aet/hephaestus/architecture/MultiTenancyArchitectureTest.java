@@ -117,6 +117,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
             for (Method method : ObservationRepository.class.getDeclaredMethods()) {
                 Query query = method.getAnnotation(Query.class);
                 if (query == null) continue;
+                if (method.isAnnotationPresent(WorkspaceAgnostic.class)) continue;
                 assertThat(method.getParameters())
                         .as("%s must bind workspaceId", method.getName())
                         .anyMatch(parameter -> {
@@ -525,6 +526,9 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "ScmMirrorErasedEvent", // Carries workspaceId directly (SCM disconnect/purge
                                         // erase; derived-row listeners in practices + activity)
                                         "ApplicationReadyEvent", // Spring lifecycle, no workspace needed
+                                        // Control-plane lifecycle: a worker's session closed, so the Git operations
+                                        // dispatched to it fail; no workspace is party to the event.
+                                        "WorkerDisconnectedEvent",
                                         "ContextRefreshedEvent", // Spring lifecycle, no workspace needed
                                         "WorkspacesInitializedEvent", // Startup lifecycle, signals all workspaces ready
                                         // core.auth (ADR 0017): authentication is USER/SYSTEM-scoped, never

@@ -52,7 +52,7 @@ const group = (dependsOn: readonly string[]) => ({
 
 const webappSources = "'webapp/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 const agentSources =
-	"'server/application/src/{main,test}/resources/agent/**/*.ts' 'server/application/src/main/resources/practices/precompute/**/*.ts' 'docker/agents/precompute/**/*.ts' 'scripts/**/*.ts'";
+	"'server/application/src/{main,test}/resources/agent/**/*.ts' 'server/application/src/main/resources/practices/precompute/**/*.ts' 'docker/agents/{precompute,pi}/**/*.ts' 'scripts/**/*.ts'";
 const loadSources = "'load-tests/**/*.js'";
 const docsSources = "'docs/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 // Two passes: a negation applies to the whole invocation, so `!*/**` would also drop the nested set.
@@ -231,6 +231,7 @@ export default defineConfig({
 			"test:server:integration": run(`${gradlew} :application:integrationTest`),
 			"test:server:mutation": run("node scripts/run-security-mutations.ts"),
 			"test:postgres-restore": run("node scripts/postgres-backup-restore-test.ts"),
+			"test:postgres-pitr": run("node scripts/postgres-pitr-test.ts"),
 
 			// Webapp
 			// `vp check` is format plus lint; the format half is `gate:webapp-format`, so one failure
@@ -267,7 +268,7 @@ export default defineConfig({
 			]),
 			"gate:agent-tests": group(["test:agents"]),
 			"test:agents": run(
-				"node --test server/application/src/test/resources/agent/*.spec.ts docker/agents/precompute/*.test.ts docker/agents/precompute/lib/*.test.ts",
+				"node --test server/application/src/test/resources/agent/*.spec.ts docker/agents/precompute/*.test.ts docker/agents/precompute/lib/*.test.ts docker/agents/pi/*.test.ts",
 			),
 			"test:tooling": run("node --test scripts/*.test.ts"),
 

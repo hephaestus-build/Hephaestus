@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
+import { CHANGE_ROOT } from "./pi-change.ts";
 import { SUPPORTED_SCHEMA_VERSION, resolveTaskPaths } from "./pi-task-paths.ts";
 
 const root = path.resolve(process.argv[2] ?? "/workspace");
@@ -40,11 +41,15 @@ const child = spawnSync(
 		"--repo",
 		paths.repositoryRoot,
 		"--diff",
-		path.resolve(paths.contextRoot, "diff.patch"),
+		path.resolve(root, CHANGE_ROOT, "diff.patch"),
 		"--metadata",
 		path.resolve(paths.contextRoot, "metadata.json"),
 		"--context",
 		paths.contextRoot,
+		"--context-reference",
+		path.relative(root, paths.contextRoot),
+		"--change",
+		path.resolve(root, CHANGE_ROOT),
 		"--practices",
 		path.resolve(stage, "practices"),
 		"--output",

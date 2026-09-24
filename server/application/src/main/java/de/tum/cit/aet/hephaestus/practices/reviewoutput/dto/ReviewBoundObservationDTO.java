@@ -68,7 +68,9 @@ public record ReviewBoundObservationDTO(
                 row.getAssessment(),
                 row.getSeverity(),
                 ReviewClaimCurrentness.of(
-                        row.getPracticeRevisionFingerprint(), row.getCurrentPracticeRevisionFingerprint()),
+                        row.getPracticeRevisionFingerprint(),
+                        row.getCurrentPracticeRevisionFingerprint(),
+                        row.getSupersededAt()),
                 row.getObservedAt());
     }
 }

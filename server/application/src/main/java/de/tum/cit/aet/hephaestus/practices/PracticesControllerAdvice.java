@@ -98,6 +98,22 @@ public class PracticesControllerAdvice {
                 Objects.toString(exception.getMessage(), "Request failed"));
     }
 
+    @ExceptionHandler(PracticeReleasePreconditionRequiredException.class)
+    ProblemDetail handleReleasePreconditionRequired(PracticeReleasePreconditionRequiredException exception) {
+        return problem(
+                HttpStatus.PRECONDITION_REQUIRED,
+                "Practice release version required",
+                Objects.toString(exception.getMessage(), "Request failed"));
+    }
+
+    @ExceptionHandler(StalePracticeReleaseException.class)
+    ProblemDetail handleStaleRelease(StalePracticeReleaseException exception) {
+        return problem(
+                HttpStatus.PRECONDITION_FAILED,
+                "Practice release changed",
+                Objects.toString(exception.getMessage(), "Request failed"));
+    }
+
     @ExceptionHandler(InvalidReviewCoverageException.class)
     ProblemDetail handleInvalidReviewCoverage(InvalidReviewCoverageException exception) {
         return problem(

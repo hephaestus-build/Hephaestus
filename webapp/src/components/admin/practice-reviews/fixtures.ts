@@ -169,19 +169,20 @@ function practiceFixture(
 		updatedAt: new Date("2026-06-01T00:00:00Z"),
 		bindings: [],
 		autonomy: { effective: autonomy, inherited: false, source: "PRACTICE" },
+		deliveryBehavior: { summaryOnly: false },
 		automatedReviewPolicy: {
 			automatedReview: {
 				evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
 				mode: "LANGUAGE_MODEL",
 			},
 			knownLimitations: [],
-			sourceContractVersion: "1.0.0",
+			sourceContractVersion: "1.2.0",
 			whenEvidenceIsInsufficient: "SKIP_AUTOMATED_REVIEW",
 		},
 		automatedReviewValidation: {
 			policyDigest: "sha256:0",
 			reviewRuleFingerprint: "rule:1",
-			sourceContractVersion: "1.0.0",
+			sourceContractVersion: "1.2.0",
 			status: "AUTHOR_DECLARED",
 		},
 	};
@@ -326,7 +327,7 @@ const diff = (
 	quote: string,
 ): EvidenceCitation => ({
 	sourceKind: "scm.pull-request.diff",
-	artifactPath: "inputs/context/diff.patch",
+	artifactPath: "inputs/context/change.json",
 	path,
 	side: "NEW",
 	startLine,
@@ -345,12 +346,7 @@ const cited = (sourceKind: string, path: string, quote: string, line = 1): Evide
 	quoteRedacted: false,
 });
 
-/**
- * Shaped the way `DeliveryComposer` shapes a real note: a lead line, bold observation headings with an
- * inline-code locator, a fenced quote of the code, an italic why-this-matters, and a rule between
- * observations. Long enough that the server's preview cut lands inside the first fence, which is the
- * case a fixture of one-sentence previews never reaches.
- */
+/** Match DeliveryComposer formatting, with the preview cut inside the first code fence. */
 const LONG_BODY = [
 	"2 issues to tighten in this change, plus one thing worth keeping.",
 	"",

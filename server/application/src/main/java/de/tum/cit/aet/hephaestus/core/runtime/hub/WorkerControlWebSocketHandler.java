@@ -46,7 +46,7 @@ public class WorkerControlWebSocketHandler extends TextWebSocketHandler {
         t.setDaemon(true);
         return t;
     });
-
+    /** Wired by the application server's Git executor, which is the only consumer of worker Git output. */
     public WorkerControlWebSocketHandler(
             WorkerSessionRegistry registry, FrameCodec codec, MeterRegistry meterRegistry) {
         this.registry = registry;

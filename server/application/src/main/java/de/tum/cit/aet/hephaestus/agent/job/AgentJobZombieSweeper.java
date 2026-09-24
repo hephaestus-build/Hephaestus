@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.StuckDeliveryRow;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
@@ -45,7 +46,7 @@ public class AgentJobZombieSweeper {
 
     private static final Logger log = LoggerFactory.getLogger(AgentJobZombieSweeper.class);
 
-    private static final Duration RUNNING_BUFFER = Duration.ofMinutes(5);
+    private static final Duration RUNNING_BUFFER = SandboxLayout.RESULT_UPLOAD_GRACE.plusMinutes(5);
 
     /** Grace before a RUNNING job is judged orphaned, so a (re)started worker can write its first heartbeat. */
     private static final Duration ORPHAN_STARTUP_GRACE = Duration.ofSeconds(120);
@@ -157,8 +158,10 @@ public class AgentJobZombieSweeper {
         if (lockedJob == null || lockedJob.getStatus() != AgentJobStatus.RUNNING) return null;
         int timeoutSeconds = getTimeoutFromSnapshot(lockedJob);
         Duration maxLifetime = Duration.ofSeconds(timeoutSeconds).plus(RUNNING_BUFFER);
-        if (lockedJob.getStartedAt() != null
-                && lockedJob.getStartedAt().plus(maxLifetime).isAfter(Instant.now())) {
+        Instant deadlineAnchor = lockedJob.getExecutionStartedAt() != null
+                ? lockedJob.getExecutionStartedAt()
+                : lockedJob.getStartedAt();
+        if (deadlineAnchor != null && deadlineAnchor.plus(maxLifetime).isAfter(Instant.now())) {
             return null;
         }
 

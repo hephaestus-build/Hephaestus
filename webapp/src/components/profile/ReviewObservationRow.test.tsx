@@ -7,6 +7,7 @@ import { ReviewObservationRow, type ReviewObservationRowProps } from "./ReviewOb
 
 const observation: PracticeGroupReviewObservation = {
 	observationId: "00000000-0000-0000-0000-000000000001",
+	claimCurrentness: "CURRENT",
 	feedbackId: "00000000-0000-0000-0000-000000000002",
 	practiceSlug: "explain-decisions",
 	practiceName: "Explain significant decisions",

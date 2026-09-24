@@ -1,0 +1,50 @@
+# Isolated restore clone only. Never combine this with compose.backup.yaml.
+# The same read-only bucket identity serves pgBackRest restore and PostgreSQL WAL replay.
+x-pgbackrest-restore-env: &pgbackrest-restore-env
+  PGBACKREST_REPO1_S3_BUCKET: ${BACKUP_S3_BUCKET:?Set BACKUP_S3_BUCKET}
+  PGBACKREST_REPO1_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:?Set BACKUP_S3_ENDPOINT}
+  PGBACKREST_REPO1_S3_REGION: ${BACKUP_S3_REGION:?Set BACKUP_S3_REGION}
+  PGBACKREST_REPO1_S3_URI_STYLE: ${BACKUP_S3_URI_STYLE:-path}
+  PGBACKREST_REPO1_S3_KEY: ${BACKUP_RESTORE_S3_KEY:?Set a read-only BACKUP_RESTORE_S3_KEY}
+  PGBACKREST_REPO1_S3_KEY_SECRET: ${BACKUP_RESTORE_S3_KEY_SECRET:?Set BACKUP_RESTORE_S3_KEY_SECRET}
+  PGBACKREST_REPO1_CIPHER_PASS: ${BACKUP_CIPHER_PASS:?Set BACKUP_CIPHER_PASS}
+
+services:
+  # A plain `up` on a clone must not boot application code, broker consumers or public ingress.
+  application-server:
+    profiles: [restore-release-only]
+    entrypoint: [/bin/false]
+  application-worker:
+    profiles: [restore-release-only]
+    entrypoint: [/bin/false]
+  webhook-server:
+    profiles: [restore-release-only]
+    entrypoint: [/bin/false]
+  webapp:
+    profiles: [restore-release-only]
+  reverse-proxy:
+    profiles: [restore-release-only]
+  nats-server:
+    profiles: [restore-release-only]
+  volume-init:
+    profiles: [restore-release-only]
+
+  postgres:
+    command: !override [postgres, -c, archive_mode=off]
+    environment:
+      <<: *pgbackrest-restore-env
+    volumes:
+      - ./pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+
+  pgbackrest-restore:
+    profiles: [restore]
+    image: "${HEPHAESTUS_IMAGE_POSTGRES:?verified release lock required}"
+    user: postgres
+    entrypoint: [pgbackrest]
+    command: [--stanza=hephaestus, info]
+    environment:
+      <<: *pgbackrest-restore-env
+    volumes:
+      - ./pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - postgresql-data:/var/lib/postgresql
+    networks: [shared-network]

@@ -134,7 +134,9 @@ task-level note wearing a costume — rewrite it or drop it.
 - `<compositionRequest>` — the bounds for this turn: which lanes are open, how many units
   each may carry, and how many separate pieces of work a pattern needs.
 
-You may `read` and `grep` these files. You have nothing else, and you need nothing else.
+The admitted observations are in this turn already, and the evidence you read while measuring is
+still in your context; read the history files with `read`. This turn writes nothing but feedback.
+Compose only from the admitted observations.
 
 ---
 
@@ -274,10 +276,11 @@ saw and stops — so these live here, and nowhere else in the system.
 
 ## Persisting
 
-Call `report_feedback` once per unit, as soon as it is ready. Do not batch, and do not print a message as
-text — text is not persisted and the turn will end having produced nothing.
+Call `report_feedback` with every unit you have ready — it takes a list and stores or skips each one,
+with the reason — and call it again if more become ready. Do not print a message as text — text is not
+persisted and the turn will end having produced nothing.
 
-The tool takes `channel`, `practiceSlug`, `basedOn`, `action`, the words, and — for `IN_CONTEXT` — a
+Each unit carries `channel`, `practiceSlug`, `basedOn`, `action`, the words, and — for `IN_CONTEXT` — a
 `placement`. It takes no presence, no assessment, no severity and no confidence, and that is deliberate:
 this is an intervention, not a measurement, and a message that could carry a verdict would eventually be
 read back as one.

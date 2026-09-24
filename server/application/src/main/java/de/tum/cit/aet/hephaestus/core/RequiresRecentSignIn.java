@@ -18,6 +18,6 @@ import java.lang.annotation.Target;
  * That is why this annotation carries no type of its own, and why the architecture test also requires
  * that declaration.
  */
-@Target(ElementType.METHOD)
+@Target({ElementType.METHOD, ElementType.ANNOTATION_TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface RequiresRecentSignIn {}

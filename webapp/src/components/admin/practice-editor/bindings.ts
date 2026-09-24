@@ -28,12 +28,14 @@ export function soleBinding(bindings: readonly PracticeBinding[]): PracticeBindi
 }
 
 export function normalizeBinding(binding: PracticeBinding): PracticeBinding {
+	const { onDrafts, ...rest } = binding;
 	return {
+		...rest,
 		signals: [...new Set(binding.signals)].sort((left, right) => left.localeCompare(right)),
 		needs: [...binding.needs].sort((left, right) =>
 			left.sourceKind.localeCompare(right.sourceKind),
 		),
-		...(binding.onDrafts === true ? { onDrafts: true } : {}),
+		...(onDrafts === true ? { onDrafts: true } : {}),
 	};
 }
 

@@ -6,7 +6,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -38,8 +38,10 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,14 +53,13 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-@Tag("unit")
-class ReviewHistoryContentSourceTest {
+class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     private static final long WORKSPACE_ID = 7L;
     private static final long PR_ID = 42L;
@@ -73,20 +74,26 @@ class ReviewHistoryContentSourceTest {
             Set.of(OBSERVED_ARTIFACT_ROW_ID, DELIVERED_ARTIFACT_ROW_ID, UNNAMEABLE_ARTIFACT_ROW_ID);
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Mock
     private ObservationRepository observationRepository;
+
+    @Mock
     private FeedbackRepository feedbackRepository;
+
+    @Mock
     private ObservationVisibilityPolicy visibilityPolicy;
+
+    @Mock
     private PullRequestRepository pullRequestRepository;
+
+    @Mock
     private IssueRepository issueRepository;
+
     private ReviewHistoryContentSource provider;
 
     @BeforeEach
     void setUp() {
-        observationRepository = mock(ObservationRepository.class);
-        feedbackRepository = mock(FeedbackRepository.class);
-        visibilityPolicy = mock(ObservationVisibilityPolicy.class);
-        pullRequestRepository = mock(PullRequestRepository.class);
-        issueRepository = mock(IssueRepository.class);
         provider = new ReviewHistoryContentSource(
                 observationRepository,
                 feedbackRepository,
@@ -95,16 +102,21 @@ class ReviewHistoryContentSourceTest {
                 issueRepository,
                 new StagedArtifactNames(ReviewHistoryContentSourceTest::identitiesOf),
                 objectMapper);
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+        lenient()
+                .when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
                 .thenReturn(List.of());
-        when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+        lenient()
+                .when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
                 .thenReturn(List.of());
-        when(feedbackRepository.findPreparedForRecipient(any(), any(), any())).thenReturn(List.of());
-        when(visibilityPolicy.permitsAll(anyLong(), any(), any())).thenAnswer(invocation -> {
+        lenient()
+                .when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
+                .thenReturn(List.of());
+        lenient().when(visibilityPolicy.permitsAll(anyLong(), any(), any())).thenAnswer(invocation -> {
             Collection<Observation> batch = invocation.getArgument(1);
             return batch.stream().map(Observation::getId).collect(Collectors.toSet());
         });
-        when(pullRequestRepository.findByIdWithAuthorAndRepository(eq(PR_ID)))
+        lenient()
+                .when(pullRequestRepository.findByIdWithAuthorAndRepository(eq(PR_ID)))
                 .thenReturn(Optional.of(pullRequestBy(AUTHOR_ID)));
     }
 
@@ -160,21 +172,129 @@ class ReviewHistoryContentSourceTest {
                 .containsEntry(ReviewHistoryContentSource.FEEDBACK_HISTORY, SourceContentState.EMPTY);
     }
 
+    @Nested
+    class TheBoundsEachFileStates {
+
+        @Test
+        void observationsAndFeedbackCarryTheWindowStartAndTheLimitAsValues() {
+            Instant before = Instant.now();
+            JsonNode observations = read(captureObservationHistory().files().get("inputs/history/observations.json"));
+            var feedbackCapture = captureFeedbackHistory();
+            JsonNode feedback = read(feedbackCapture.files().get("inputs/history/feedback.json"));
+
+            assertThat(observations.propertyNames())
+                    .containsExactlyInAnyOrder("since", "limit", "perPracticeLimit", "observations");
+            assertThat(feedback.propertyNames()).containsExactlyInAnyOrder("since", "limit", "feedback");
+            assertThat(observations.get("limit").isInt()).isTrue();
+            assertThat(observations.get("limit").asInt()).isPositive();
+            assertThat(observations.get("perPracticeLimit").asInt())
+                    .isEqualTo(ReviewHistoryContentSource.MAX_OBSERVATIONS_PER_PRACTICE);
+            assertThat(feedback.get("limit").asInt()).isPositive();
+            Instant observationsSince = Instant.parse(observations.get("since").asString());
+            Instant feedbackSince = Instant.parse(feedback.get("since").asString());
+            assertThat(observationsSince).isBefore(before);
+            assertThat(feedbackSince).isBefore(before);
+        }
+
+        @Test
+        void preparedFeedbackCarriesTheLimitOnly() {
+            JsonNode prepared = read(captureFeedbackHistory().files().get("inputs/history/prepared.json"));
+
+            assertThat(prepared.propertyNames()).containsExactlyInAnyOrder("limit", "prepared");
+            assertThat(prepared.get("limit").asInt()).isPositive();
+        }
+    }
+
     @Test
-    void stagesEarlierObservationsWithTheRecurrenceKeyThatLinksThem() {
+    void stagesTheRecordedTextAsItWasWritten() {
+        String rationale = "The practice requires a test; the assessment is BAD -> MAJOR severity band.";
+        String body = "Per the fixed bucketing this is a MINOR severity tier finding.";
         when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
-                .thenReturn(List.of(observation("swallows-errors", "rec-1", "Caught and ignored")));
+                .thenReturn(List.of(observationWithRationale(rationale)));
+        when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+                .thenReturn(List.of(Feedback.builder()
+                        .channel(FeedbackChannel.IN_CONTEXT)
+                        .body(body)
+                        .deliveredAt(Instant.parse("2026-07-01T09:00:00Z"))
+                        .build()));
+        when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
+                .thenReturn(List.of(Feedback.builder()
+                        .channel(FeedbackChannel.IN_APP)
+                        .threadKey("in-app:99:swallows-errors")
+                        .body(body)
+                        .createdAt(Instant.parse("2026-07-02T09:00:00Z"))
+                        .build()));
+
+        var feedbackCapture = captureFeedbackHistory();
+
+        // History is the record of what was observed and said; rewriting it would stage a record that
+        // never existed.
+        assertThat(read(captureObservationHistory().files().get("inputs/history/observations.json"))
+                        .get("observations")
+                        .get(0)
+                        .get("summary")
+                        .asString())
+                .isEqualTo("Caught and ignored");
+        assertThat(read(feedbackCapture.files().get("inputs/history/feedback.json"))
+                        .get("feedback")
+                        .get(0)
+                        .get("body")
+                        .asString())
+                .isEqualTo(body);
+        assertThat(read(feedbackCapture.files().get("inputs/history/prepared.json"))
+                        .get("prepared")
+                        .get(0)
+                        .get("body")
+                        .asString())
+                .isEqualTo(body);
+    }
+
+    @Test
+    void stagesEarlierObservationsAsThePracticeTheVerdictAndTheSummary() {
+        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+                .thenReturn(List.of(observationAgainst(ArtifactKinds.PULL_REQUEST, OBSERVED_ARTIFACT_ROW_ID)));
 
         var captured = captureObservationHistory();
 
         JsonNode entry = read(captured.files().get("inputs/history/observations.json"))
                 .get("observations")
                 .get(0);
+        assertThat(entry.propertyNames())
+                .containsExactlyInAnyOrder(
+                        "practiceSlug",
+                        "summary",
+                        "assessmentStatus",
+                        "outcome",
+                        "presence",
+                        "assessment",
+                        "severity",
+                        "artifact",
+                        "observedAt");
         assertThat(entry.get("practiceSlug").asString()).isEqualTo("swallows-errors");
-        assertThat(entry.get("recurrenceKey").asString()).isEqualTo("rec-1");
         assertThat(entry.get("summary").asString()).isEqualTo("Caught and ignored");
         assertThat(captured.contentStates())
                 .containsEntry(ReviewHistoryContentSource.OBSERVATION_HISTORY, SourceContentState.NON_EMPTY);
+    }
+
+    @Test
+    void shouldKeepOnlyTheNewestFewObservationsOfOnePracticeWhenItRecursMoreOften() {
+        List<Observation> newestFirst = new ArrayList<>();
+        for (int i = 0; i < ReviewHistoryContentSource.MAX_OBSERVATIONS_PER_PRACTICE + 2; i++) {
+            newestFirst.add(observation("swallows-errors", "rec-" + i, "Caught and ignored " + i));
+        }
+        newestFirst.add(observation("verification-guidance", "rec-v", "Missing restart check"));
+        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+                .thenReturn(newestFirst);
+
+        JsonNode records = read(captureObservationHistory().files().get("inputs/history/observations.json"))
+                .get("observations");
+
+        assertThat(records.valueStream().map(r -> r.get("summary").asString()))
+                .containsExactly(
+                        "Caught and ignored 0",
+                        "Caught and ignored 1",
+                        "Caught and ignored 2",
+                        "Missing restart check");
     }
 
     @Test
@@ -446,12 +566,27 @@ class ReviewHistoryContentSourceTest {
         return observation(practiceSlug, recurrenceKey, title, null, null);
     }
 
+    private static Observation observationWithRationale(String rationale) {
+        return observation("swallows-errors", "rec-1", "Caught and ignored", null, null, rationale);
+    }
+
     private static Observation observation(
             String practiceSlug,
             String recurrenceKey,
             String title,
             @Nullable ArtifactKind artifactKind,
             @Nullable Long artifactId) {
+        return observation(
+                practiceSlug, recurrenceKey, title, artifactKind, artifactId, "The catch block logs and continues.");
+    }
+
+    private static Observation observation(
+            String practiceSlug,
+            String recurrenceKey,
+            String title,
+            @Nullable ArtifactKind artifactKind,
+            @Nullable Long artifactId,
+            String evidenceRationale) {
         Practice practice = new Practice();
         practice.setSlug(practiceSlug);
         return Observation.builder()
@@ -465,7 +600,7 @@ class ReviewHistoryContentSourceTest {
                 .artifactKind(artifactKind)
                 .artifactId(artifactId)
                 .observedAt(Instant.parse("2026-07-01T09:00:00Z"))
-                .evidenceRationale("The catch block logs and continues.")
+                .evidenceRationale(evidenceRationale)
                 .build();
     }
 }

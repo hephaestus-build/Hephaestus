@@ -12,7 +12,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Immutable context for domain events - safe for async handling.
+ * Immutable context for domain events - safe for async handling. The actor is the initiating user,
+ * not necessarily the developer whose work is reviewed.
  */
 public record EventContext(
         @NonNull UUID eventId,
@@ -22,8 +23,21 @@ public record EventContext(
         @NonNull DataSource source,
         @Nullable String webhookAction,
         @NonNull String correlationId,
-        @Nullable IdentityProviderType providerType) {
+        @Nullable IdentityProviderType providerType,
+        @Nullable Long actorUserId) {
     private static final Logger log = LoggerFactory.getLogger(EventContext.class);
+
+    public EventContext(
+            @NonNull UUID eventId,
+            @NonNull Instant occurredAt,
+            @Nullable Long scopeId,
+            @Nullable RepositoryRef repository,
+            @NonNull DataSource source,
+            @Nullable String webhookAction,
+            @NonNull String correlationId,
+            @Nullable IdentityProviderType providerType) {
+        this(eventId, occurredAt, scopeId, repository, source, webhookAction, correlationId, providerType, null);
+    }
 
     public static EventContext from(ProcessingContext ctx) {
         // ProcessingContext.provider() may hold a detached JPA proxy when the
@@ -49,7 +63,8 @@ public record EventContext(
                 ctx.source(),
                 ctx.webhookAction(),
                 ctx.correlationId(),
-                resolvedType);
+                resolvedType,
+                ctx.actorUserId());
     }
 
     public static EventContext forSync(Long scopeId, RepositoryRef repository) {

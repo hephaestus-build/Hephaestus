@@ -20,6 +20,7 @@ const run: PracticeGroupReviewRun = {
 	observations: [
 		{
 			observationId: "00000000-0000-0000-0000-000000000102",
+			claimCurrentness: "CURRENT",
 			practiceSlug: "records-decisions",
 			practiceName: "Record significant decisions",
 			title: "The workspace trade-off is documented",
@@ -29,6 +30,7 @@ const run: PracticeGroupReviewRun = {
 		},
 		{
 			observationId: "00000000-0000-0000-0000-000000000103",
+			claimCurrentness: "CURRENT",
 			practiceSlug: "keeps-docs-current",
 			practiceName: "Keep linked documentation current",
 			title: "A linked page still uses the old component name",
@@ -123,6 +125,7 @@ const denseRun: PracticeGroupReviewRun = {
 		...run.observations,
 		{
 			observationId: "00000000-0000-0000-0000-000000000104",
+			claimCurrentness: "CURRENT",
 			practiceSlug: "small-changes",
 			practiceName: "Keep changes focused",
 			title: "The refactor and the fix arrived together",
@@ -133,6 +136,7 @@ const denseRun: PracticeGroupReviewRun = {
 		},
 		{
 			observationId: "00000000-0000-0000-0000-000000000105",
+			claimCurrentness: "CURRENT",
 			practiceSlug: "covers-new-behavior",
 			practiceName: "Cover new behavior with a test",
 			title: "The new branch has no test exercising it",

@@ -1,0 +1,46 @@
+# Opt-in overlay: docker compose -f compose.yaml -f compose.backup.yaml ...
+# Keep this separate: required repository credentials must not block a normal install.
+x-pgbackrest-env: &pgbackrest-env
+  PGBACKREST_REPO1_S3_BUCKET: ${BACKUP_S3_BUCKET:?Set BACKUP_S3_BUCKET}
+  PGBACKREST_REPO1_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:?Set BACKUP_S3_ENDPOINT}
+  PGBACKREST_REPO1_S3_REGION: ${BACKUP_S3_REGION:?Set BACKUP_S3_REGION}
+  PGBACKREST_REPO1_S3_URI_STYLE: ${BACKUP_S3_URI_STYLE:-path}
+  PGBACKREST_REPO1_S3_KEY: ${BACKUP_S3_KEY:?Set BACKUP_S3_KEY}
+  PGBACKREST_REPO1_S3_KEY_SECRET: ${BACKUP_S3_KEY_SECRET:?Set BACKUP_S3_KEY_SECRET}
+  PGBACKREST_REPO1_CIPHER_PASS: ${BACKUP_CIPHER_PASS:?Set BACKUP_CIPHER_PASS}
+
+services:
+  postgres:
+    environment:
+      <<: *pgbackrest-env
+    command:
+      - postgres
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_timeout=60s
+      - -c
+      - archive_command=pgbackrest --stanza=hephaestus archive-push %p
+    volumes:
+      - ./pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - postgres-socket:/var/run/postgresql
+
+  pgbackrest:
+    profiles: [backup]
+    image: "${HEPHAESTUS_IMAGE_POSTGRES:?verified release lock required}"
+    user: postgres
+    entrypoint: [pgbackrest]
+    command: [--stanza=hephaestus, info]
+    environment:
+      <<: *pgbackrest-env
+    volumes:
+      - ./pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - postgresql-data:/var/lib/postgresql:ro
+      - postgres-socket:/var/run/postgresql
+    networks: [shared-network]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-socket:

@@ -137,6 +137,7 @@ public class AgentJobService {
                 pr.getHeadRefName(),
                 pr.getHeadRefOid(),
                 pr.getBaseRefName(),
+                pr.getBaseRefOid(),
                 triggerSignal,
                 ObservationOrigin.MANUAL);
     }
@@ -159,7 +160,9 @@ public class AgentJobService {
                 issue.getHtmlUrl(),
                 issue.getUpdatedAt(),
                 triggerSignal,
-                ObservationOrigin.MANUAL);
+                ObservationOrigin.MANUAL,
+                null,
+                issue.getReviewSnapshotId());
     }
 
     /**

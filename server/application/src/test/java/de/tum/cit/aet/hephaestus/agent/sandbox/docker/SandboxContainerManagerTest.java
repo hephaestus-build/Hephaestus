@@ -39,7 +39,7 @@ class SandboxContainerManagerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        properties = new SandboxProperties(5, 10, 60, 209_715_200L, 500_000, null);
+        properties = new SandboxProperties(5, 10, 60, null);
         executor = Executors.newSingleThreadExecutor();
         manager = new SandboxContainerManager(
                 containerOps, image -> {}, properties, "default", executor, Duration.ofMillis(20));

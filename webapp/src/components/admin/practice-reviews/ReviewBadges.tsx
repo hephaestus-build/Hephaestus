@@ -1,5 +1,3 @@
-import { CircleHelp, ClockAlert } from "lucide-react";
-
 import { cn } from "cn";
 import type {
 	ReviewFeedbackCounts,
@@ -17,39 +15,8 @@ import {
 } from "@/components/practice-vocabulary/observation-result";
 import { derivedOutcome } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { hasText } from "@/lib/text";
-
-type NonCurrentClaimCurrentness = Exclude<ReviewObservation["claimCurrentness"], "CURRENT">;
-
-const CLAIM_CURRENTNESS_CONFIG = {
-	STALE: {
-		badge: "Uses older review rules",
-		badgeVariant: "warning",
-		Icon: ClockAlert,
-		title: "This was judged against an older version of the practice",
-		description:
-			"The practice has been edited since. What it says may no longer be what the practice asks for.",
-	},
-	UNVERIFIABLE: {
-		badge: "Rules version unknown",
-		badgeVariant: "outline",
-		Icon: CircleHelp,
-		title: "We can't tell which version of the practice this was judged against",
-		description:
-			"The record of which practice text the review read was not kept, so there is no way to say whether the practice has changed since. Treat it as you would any observation you have not checked.",
-	},
-} as const satisfies Record<
-	NonCurrentClaimCurrentness,
-	{
-		badge: string;
-		badgeVariant: "warning" | "outline";
-		Icon: typeof ClockAlert;
-		title: string;
-		description: string;
-	}
->;
 
 export function ObservationResultBadge({
 	observation,
@@ -94,36 +61,6 @@ export function ObservationOriginBadge({ origin }: { origin: ReviewObservation["
 		<Badge variant="outline">
 			{origin === "BACKFILL" ? "From a review of past work" : "Requested by hand"}
 		</Badge>
-	);
-}
-
-export function ClaimCurrentnessBadge({
-	currentness,
-}: {
-	currentness: ReviewObservation["claimCurrentness"];
-}) {
-	if (currentness === "CURRENT") {
-		return null;
-	}
-	const config = CLAIM_CURRENTNESS_CONFIG[currentness];
-	return <Badge variant={config.badgeVariant}>{config.badge}</Badge>;
-}
-
-export function ClaimCurrentnessAlert({
-	currentness,
-}: {
-	currentness: ReviewObservation["claimCurrentness"];
-}) {
-	if (currentness === "CURRENT") {
-		return null;
-	}
-	const { Icon, title, description } = CLAIM_CURRENTNESS_CONFIG[currentness];
-	return (
-		<Alert variant="warning">
-			<Icon />
-			<AlertTitle>{title}</AlertTitle>
-			<AlertDescription>{description}</AlertDescription>
-		</Alert>
 	);
 }
 

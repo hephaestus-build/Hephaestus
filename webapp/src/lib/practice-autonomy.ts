@@ -23,8 +23,9 @@ export const PRACTICE_AUTONOMY_DESCRIPTIONS: Record<PracticeAutonomy, string> = 
 export const PRACTICE_AUTONOMY_ADDS: Record<PracticeAutonomy, string> = {
 	OFF: "Nothing runs. No review, no record, nothing said.",
 	HUMAN_APPROVAL:
-		"Adds assisted delivery. Feedback waits for an authorized reviewer to approve or reject it.",
-	AUTOMATIC: "Adds automatic delivery. Eligible feedback is sent without waiting for approval.",
+		"Adds assisted delivery. Feedback on the work waits for an authorized reviewer to approve or reject it; practice pages and the mentor are written regardless.",
+	AUTOMATIC:
+		"Adds automatic delivery. Eligible feedback is sent onto the work without waiting for approval.",
 };
 
 export const WORKSPACE_DEFAULT_SOURCE = "the workspace default";

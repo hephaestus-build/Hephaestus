@@ -11,5 +11,10 @@
     <include file="./changelog/1789067582535_changelog.xml" relativeToChangelogFile="true"/>
     <include file="./changelog/1789123473151_changelog.xml" relativeToChangelogFile="true"/>
     <include file="./changelog/1789117764980_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1789135709162_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790187943939_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790187096652_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790186862162_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1789140289208_changelog.xml" relativeToChangelogFile="true"/>
     <include file="./changelog/1789190761030_changelog.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

@@ -12,7 +12,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
@@ -39,8 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
  * preferred_username — login (standard OIDC claim)
  * roles              — flat string array of granted roles (Hephaestus-specific; the authority converter reads it)
  * given_name         — first name; only when known
- * act                — RFC 8693 actor object {@code {"sub": "<impersonator_id>"}}; absent when not impersonating
- * imp_exp            — absolute impersonation ceiling (epoch seconds); see {@link TokenConstraints}
  * session_exp        — absolute session ceiling (epoch seconds); see {@link TokenConstraints}
  * auth_time          — last interactive sign-in (epoch seconds, standard OIDC claim); see {@link TokenConstraints}
  * </pre>
@@ -82,8 +79,8 @@ public class HephaestusJwtIssuer {
      *
      * <p>The token's {@code exp} is capped at the earliest of {@code now + accessTtl} and the ceilings in
      * {@code constraints}, and those ceilings are also carried as claims, so {@code AuthSessionService
-     * .refresh} re-caps the rotated token at the same instants — a rolling silent refresh can extend
-     * neither an impersonation nor a session (OWASP absolute timeout).
+     * .refresh} re-caps the rotated token at the same instants — a rolling silent refresh cannot
+     * extend a session (OWASP absolute timeout).
      *
      * @param principal   account id + login + roles to bake in.
      * @param constraints the authority and deadlines carried across rotations.
@@ -91,14 +88,9 @@ public class HephaestusJwtIssuer {
      */
     @Transactional
     public Token issue(JwtPrincipal principal, TokenConstraints constraints, @Nullable HttpServletRequest request) {
-        Long impersonatorId = constraints.impersonatorId();
-        Instant impersonationExpiresAt = constraints.impersonationExpiresAt();
         Instant sessionExpiresAt = constraints.sessionExpiresAt();
         Instant now = clock.instant();
         Instant expiresAt = now.plus(properties.accessTtl());
-        if (impersonationExpiresAt != null && impersonationExpiresAt.isBefore(expiresAt)) {
-            expiresAt = impersonationExpiresAt;
-        }
         if (sessionExpiresAt != null && sessionExpiresAt.isBefore(expiresAt)) {
             expiresAt = sessionExpiresAt;
         }
@@ -119,14 +111,6 @@ public class HephaestusJwtIssuer {
                 .claim("roles", List.copyOf(principal.roles()));
         if (principal.givenName() != null) {
             claims.claim("given_name", principal.givenName());
-        }
-        if (impersonatorId != null) {
-            claims.claim("act", Map.of("sub", String.valueOf(impersonatorId)));
-        }
-        if (impersonationExpiresAt != null) {
-            // Absolute impersonation ceiling (epoch seconds), constant across refreshes. refresh reads
-            // it to auto-exit; it is NOT the per-token exp (which is min(now+accessTtl, this)).
-            claims.claim("imp_exp", impersonationExpiresAt.getEpochSecond());
         }
         if (sessionExpiresAt != null) {
             // Absolute session ceiling (epoch seconds), constant across refreshes (OWASP absolute timeout).

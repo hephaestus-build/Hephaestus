@@ -29,11 +29,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * The evidence half of the {@code docs.document} contract: the one file a document review reads.
+ * The evidence half of the {@code docs.document} contract: the two files a document review reads.
  *
  * <p>The interesting cases are the two absences. A subject the mirror no longer holds, and a subject
  * whose body was evicted, both have to produce <em>no file</em> rather than an empty one — the evidence
@@ -56,7 +57,7 @@ class DocumentContentSourceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        source = new DocumentContentSource(projection);
+        source = new DocumentContentSource(projection, objectMapper);
     }
 
     @Test
@@ -75,20 +76,41 @@ class DocumentContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("renders the document under the untrusted-content banner, provenance included")
-    void rendersTheDocumentQuarantined() {
-        when(projection.documentById(WORKSPACE_ID, DOCUMENT_ID)).thenReturn(Optional.of(document("The body prose.")));
+    @DisplayName("stages the body as the wiki holds it and its provenance as data beside it")
+    void stagesTheBodyRawAndTheProvenanceAsJson() {
+        String body = "# Architecture decision\n\nThe body prose.\n";
+        when(projection.documentById(WORKSPACE_ID, DOCUMENT_ID)).thenReturn(Optional.of(document(body)));
         Map<String, byte[]> files = new LinkedHashMap<>();
 
         source.contribute(new ContextRequest.DocumentReviewRequest(job()), files);
 
-        assertThat(files).containsOnlyKeys("inputs/context/document.md");
-        String rendered = new String(files.get("inputs/context/document.md"), StandardCharsets.UTF_8);
-        // The banner has to precede the title, not merely be present: a title is exactly the field an
-        // injection is written into, and text above the banner is not covered by it.
-        assertThat(rendered).startsWith("<!-- UNTRUSTED_EXTERNAL:");
-        assertThat(rendered).contains("# Architecture decision", "- Collection: Engineering", "The body prose.");
-        assertThat(rendered.indexOf("UNTRUSTED_EXTERNAL")).isLessThan(rendered.indexOf("# Architecture decision"));
+        assertThat(files).containsOnlyKeys(DocumentContentSource.BODY_KEY, DocumentContentSource.METADATA_KEY);
+        assertThat(DocumentContentSource.BODY_KEY).isEqualTo("inputs/context/document.md");
+        assertThat(DocumentContentSource.METADATA_KEY).isEqualTo("inputs/context/document.json");
+        assertThat(new String(files.get(DocumentContentSource.BODY_KEY), StandardCharsets.UTF_8))
+                .isEqualTo(body);
+
+        JsonNode metadata = objectMapper.readTree(files.get(DocumentContentSource.METADATA_KEY));
+        assertThat(metadata.propertyNames())
+                .containsExactlyInAnyOrder(
+                        "title",
+                        "collection",
+                        "collectionSlug",
+                        "slug",
+                        "createdBy",
+                        "updatedBy",
+                        "createdAt",
+                        "updatedAt",
+                        "archived");
+        assertThat(metadata.get("title").asString()).isEqualTo("Architecture decision");
+        assertThat(metadata.get("collection").asString()).isEqualTo("Engineering");
+        assertThat(metadata.get("collectionSlug").asString()).isEqualTo("engineering");
+        assertThat(metadata.get("slug").asString()).isEqualTo("architecture-decision");
+        assertThat(metadata.get("createdBy").asString()).isEqualTo("Ada Lovelace");
+        assertThat(metadata.get("updatedBy").asString()).isEqualTo("Ada Lovelace");
+        assertThat(metadata.get("createdAt").asString()).isEqualTo("2026-08-01T00:00:00Z");
+        assertThat(metadata.get("updatedAt").asString()).isEqualTo("2026-08-05T00:00:00Z");
+        assertThat(metadata.get("archived").asBoolean()).isFalse();
     }
 
     @Test

@@ -25,8 +25,7 @@ class SandboxSpecTest extends BaseUnitTest {
                         ResourceLimits.DEFAULT,
                         SecurityProfile.DEFAULT,
                         Map.of(),
-                        "/workspace/out",
-                        null))
+                        "/workspace/out"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("blank");
     }
@@ -44,13 +43,11 @@ class SandboxSpecTest extends BaseUnitTest {
                 ResourceLimits.DEFAULT,
                 null,
                 null,
-                "/workspace/out",
-                null);
+                "/workspace/out");
         assertThat(spec.jobId()).isNotNull();
         assertThat(spec.command()).isEmpty();
         assertThat(spec.environment()).isEmpty();
         assertThat(spec.inputFiles()).isEmpty();
-        assertThat(spec.volumeMounts()).isEmpty();
     }
 
     @Nested

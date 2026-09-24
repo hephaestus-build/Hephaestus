@@ -41,6 +41,7 @@ import org.jspecify.annotations.Nullable;
  *                       entries and events from a single webhook or sync operation
  * @param webhookAction  The webhook action (e.g. "opened", "closed") if from webhook
  * @param source         Whether data came from sync or webhook
+ * @param actorUserId    Local user ID of the webhook sender, not the issue author; absent for sync
  */
 public record ProcessingContext(
         @Nullable Long scopeId,
@@ -49,7 +50,24 @@ public record ProcessingContext(
         Instant startedAt,
         String correlationId,
         @Nullable String webhookAction,
-        DataSource source) {
+        DataSource source,
+        @Nullable Long actorUserId) {
+    public ProcessingContext(
+            @Nullable Long scopeId,
+            @Nullable Repository repository,
+            @Nullable IdentityProvider provider,
+            Instant startedAt,
+            String correlationId,
+            @Nullable String webhookAction,
+            DataSource source) {
+        this(scopeId, repository, provider, startedAt, correlationId, webhookAction, source, null);
+    }
+
+    /** The webhook sender is not necessarily the developer whose work is reviewed. */
+    public ProcessingContext withActorUserId(@Nullable Long actorUserId) {
+        return new ProcessingContext(
+                scopeId, repository, provider, startedAt, correlationId, webhookAction, source, actorUserId);
+    }
     /**
      * Returns the provider's database ID for use in upsert queries.
      */

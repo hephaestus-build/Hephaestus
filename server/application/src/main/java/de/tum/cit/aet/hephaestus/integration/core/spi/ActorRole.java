@@ -21,4 +21,9 @@ public enum ActorRole {
 
     /** Responded to the artifact — the only relation a practice about reviewing can be about. */
     REVIEWER,
+    /**
+     * Merged the reviewed work. A MERGER practice in an author review applies only when
+     * the author also merged it.
+     */
+    MERGER,
 }

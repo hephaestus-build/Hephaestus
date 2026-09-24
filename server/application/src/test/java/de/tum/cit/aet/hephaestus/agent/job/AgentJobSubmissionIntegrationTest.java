@@ -203,7 +203,8 @@ class AgentJobSubmissionIntegrationTest extends BaseIntegrationTest {
                 null,
                 null,
                 null);
-        return new PullRequestReviewSubmissionRequest(prData, "feature/submit", commitSha, defaultBranch);
+        return new PullRequestReviewSubmissionRequest(
+                prData, "feature/submit", commitSha, defaultBranch, "a".repeat(40));
     }
 
     @Nested

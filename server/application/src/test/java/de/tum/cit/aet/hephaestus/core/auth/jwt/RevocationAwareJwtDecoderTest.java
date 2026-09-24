@@ -10,6 +10,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.nimbusds.jose.JOSEObjectType;
@@ -39,6 +40,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -143,6 +145,27 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
                 .keyId(signingKey.getKeyID())
                 .build();
         return encoder.encode(JwtEncoderParameters.from(header, claims.build())).getTokenValue();
+    }
+
+    @Test
+    void shouldRejectADelegatedTokenWhenItsSignatureIsStillValid() {
+        IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
+        var claims = JwtClaimsSet.builder()
+                .issuer(ISSUER.toString())
+                .subject("42")
+                .audience(List.of(AUDIENCE))
+                .id(UUID.randomUUID().toString())
+                .issuedAt(NOW.minusSeconds(60))
+                .expiresAt(NOW.plusSeconds(600))
+                .claim("act", Map.of("sub", "7"))
+                .build();
+        var header = JwsHeader.with(SignatureAlgorithm.ES256)
+                .keyId(signingKey.getKeyID())
+                .build();
+        String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+
+        assertThatThrownBy(() -> decoder(repo, cacheManager()).decode(token)).isInstanceOf(BadJwtException.class);
+        verifyNoInteractions(repo);
     }
 
     @Test

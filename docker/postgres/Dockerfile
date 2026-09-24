@@ -9,7 +9,7 @@ RUN set -eux; \
     echo "source commit: ${SOURCE_COMMIT:-<unset — local build>}"; \
     apt-get update; \
     apt-get upgrade -y; \
-    apt-get install -y --no-install-recommends "postgresql-18-partman=${PARTMAN_VERSION}"; \
+    apt-get install -y --no-install-recommends "postgresql-18-partman=${PARTMAN_VERSION}" pgbackrest; \
     rm -rf /var/lib/apt/lists/*
 
 # Replace upstream's Go-based gosu with distro-patched setpriv, preserving the entrypoint contract.

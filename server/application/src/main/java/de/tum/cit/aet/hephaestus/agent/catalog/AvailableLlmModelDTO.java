@@ -23,8 +23,11 @@ public record AvailableLlmModelDTO(
         @NonNull @Schema(description = "Owning connection's display name")
         String connectionDisplayName,
 
-        @NonNull @Schema(description = "Whether the model supports a reasoning mode")
-        Boolean supportsReasoning,
+        @Nullable
+        @Schema(
+                description =
+                        "Reasoning effort requested of the model; null sends none, the provider's default applies")
+        ReasoningEffort reasoningEffort,
 
         @NonNull @Schema(description = "Pricing mode") PricingMode pricingMode,
 
@@ -46,7 +49,7 @@ public record AvailableLlmModelDTO(
                 model.getId(),
                 model.getDisplayName(),
                 model.getConnection().getDisplayName(),
-                model.isSupportsReasoning(),
+                model.getReasoningEffort(),
                 pricingMode,
                 currentPrice != null ? currentPrice.getPer1mInputUsd() : null,
                 currentPrice != null ? currentPrice.getPer1mOutputUsd() : null,
@@ -60,7 +63,7 @@ public record AvailableLlmModelDTO(
                 model.getId(),
                 model.getDisplayName(),
                 model.getConnection().getDisplayName(),
-                model.isSupportsReasoning(),
+                model.getReasoningEffort(),
                 model.getPricingMode(),
                 model.getPer1mInputUsd(),
                 model.getPer1mOutputUsd(),

@@ -32,7 +32,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("productfeedback.ProductFeedbackEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.SurveyEmailInvitationIntegrationTest", "email-capture"),
             assignment("notification.email.EmailAdminControllerIntegrationTest", "email-capture"),
-            assignment("agent.job.AgentJobControllerIntegrationTest", "execution-capture-enabled"),
+            assignment("agent.handler.ObservationAdmissionConcurrencyIntegrationTest", "admission-race"),
             assignment("agent.job.DeferredIssueEventIntegrationTest", "issue-event-transaction"),
             assignment("agent.job.IssueUpdateCoalescerIntegrationTest", "issue-coalescer-transaction"),
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"),
@@ -56,7 +56,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry(
                     "email-capture",
                     "shared configured sender identity and captured SMTP boundary for durable delivery and HTTP authorization"),
-            Map.entry("execution-capture-enabled", "enabled private capture must not expose raw archives over HTTP"),
+            Map.entry(
+                    "admission-race",
+                    "real proxied observation admission with a held verification and bounded database lock waits"),
             Map.entry(
                     "issue-event-transaction",
                     "real transactional event listener with controlled workspace resolution"),
@@ -96,7 +98,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "productfeedback.ProductFeedbackEmailIntegrationTest",
             "productfeedback.SurveyEmailInvitationIntegrationTest",
             "notification.email.EmailAdminControllerIntegrationTest",
-            "agent.job.AgentJobControllerIntegrationTest",
             "agent.job.IssueUpdateCoalescerIntegrationTest",
             "core.auth.dev.DevLoginIntegrationTest",
             "integration.outline.OutlineFrameworkRegistrationIntegrationTest",

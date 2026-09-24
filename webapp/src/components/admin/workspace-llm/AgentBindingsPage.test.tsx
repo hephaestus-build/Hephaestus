@@ -10,7 +10,6 @@ const model: AvailableLlmModel = {
 	scope: "SHARED",
 	displayName: "GPT Test",
 	connectionDisplayName: "Shared OpenAI",
-	supportsReasoning: false,
 	pricingMode: "NO_CHARGE",
 };
 

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -62,6 +63,10 @@ public class IdentityProvider {
     public IdentityProvider(IdentityProviderType type, String serverUrl) {
         this.type = type;
         this.serverUrl = serverUrl;
+    }
+
+    public IntegrationKind kind() {
+        return type.kind();
     }
 
     @Override

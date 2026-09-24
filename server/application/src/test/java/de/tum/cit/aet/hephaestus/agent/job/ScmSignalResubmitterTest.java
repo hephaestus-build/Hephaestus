@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.handler.IssueReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionRequest;
+import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
@@ -34,6 +36,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -103,7 +106,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         new IssueSignalResubmitter(agentJobService, issueRepository, gate, signalRecorder).resubmit(signal);
 
         verify(signalRecorder).markRefused(signal.key(), SignalStateReason.ARTIFACT_NOT_VISIBLE);
-        verify(gate, never()).evaluateIssue(any(), any(), any());
+        verify(gate, never()).evaluateIssue(any(), anyLong(), any(), any());
         verify(agentJobService, never()).submit(any(), any(), any(), any(), any());
     }
 
@@ -134,7 +137,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         Issue issue = issue();
         GateDecision.Detect detection = detection();
         when(issueRepository.findByIdWithRepositoryAndAssignees(ARTIFACT_ID)).thenReturn(Optional.of(issue));
-        when(gate.evaluateIssue(issue, ScmSignals.ISSUE_OPENED, TriggerMode.AUTO))
+        when(gate.evaluateIssue(issue, WORKSPACE_ID, ScmSignals.ISSUE_OPENED, TriggerMode.AUTO))
                 .thenReturn(detection);
 
         new IssueSignalResubmitter(agentJobService, issueRepository, gate, signalRecorder).resubmit(signal);
@@ -150,12 +153,45 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepTheInitiatingActorAndReviewedDeveloperDistinctAfterDeferral() {
+        Issue issue = issue();
+        UUID snapshotId = UUID.randomUUID();
+        issue.setReviewSnapshotId(snapshotId);
+        User author = new User();
+        author.setId(123L);
+        issue.setAuthor(author);
+        ArtifactSignal signal = signal(ScmSignals.ISSUE_UPDATED.value());
+        signal.setRevision(ScmSignals.issueUpdatedRevision(ScmEventPayload.IssueData.from(issue))
+                .value());
+        signal.setActorUserId(456L);
+        GateDecision.Detect detection = detection();
+        when(issueRepository.findByIdWithRepositoryAndAssignees(ARTIFACT_ID)).thenReturn(Optional.of(issue));
+        when(gate.evaluateIssue(issue, WORKSPACE_ID, ScmSignals.ISSUE_UPDATED, TriggerMode.AUTO))
+                .thenReturn(detection);
+
+        new IssueSignalResubmitter(agentJobService, issueRepository, gate, signalRecorder).resubmit(signal);
+
+        ArgumentCaptor<IssueReviewSubmissionRequest> request =
+                ArgumentCaptor.forClass(IssueReviewSubmissionRequest.class);
+        verify(agentJobService)
+                .submit(
+                        eq(WORKSPACE_ID),
+                        eq(AgentJobType.ISSUE_REVIEW),
+                        request.capture(),
+                        eq(signal.key()),
+                        eq(detection));
+        assertThat(request.getValue().actorUserId()).isEqualTo(456L);
+        assertThat(author.getId()).isEqualTo(123L);
+        assertThat(request.getValue().reviewSnapshotId()).isEqualTo(snapshotId);
+    }
+
+    @Test
     void shouldNotRetryAnUpdateAgainstADifferentIssueSnapshot() {
         ArtifactSignal signal = signal(ScmSignals.ISSUE_UPDATED.value());
         when(issueRepository.findByIdWithRepositoryAndAssignees(ARTIFACT_ID)).thenReturn(Optional.of(issue()));
         new IssueSignalResubmitter(agentJobService, issueRepository, gate, signalRecorder).resubmit(signal);
         verify(signalRecorder).markRefused(signal.key(), SignalStateReason.COALESCED);
-        verify(gate, never()).evaluateIssue(any(), any(), any());
+        verify(gate, never()).evaluateIssue(any(), anyLong(), any(), any());
         verify(agentJobService, never()).submit(any(), any(), any(), any(), any());
     }
 
@@ -245,6 +281,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         pullRequest.setHeadRefName("feature");
         pullRequest.setHeadRefOid("abc123");
         pullRequest.setBaseRefName("main");
+        pullRequest.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         return pullRequest;
     }
 

@@ -1,14 +1,17 @@
 package de.tum.cit.aet.hephaestus.practices.curated.dto;
 
+import de.tum.cit.aet.hephaestus.practices.BindingChange;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -54,7 +57,35 @@ public record CuratedPracticeRequestDTO(
         String whatGoodLooksLike,
 
         @Size(max = 64, message = "Group slug must be at most 64 characters") @Nullable
-        String groupSlug) {
+        String groupSlug,
+
+        @Schema(description = "Explicit intent to change the gate or the person judged") @Nullable
+        Set<BindingChange> bindingChanges,
+
+        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior) {
+    public CuratedPracticeRequestDTO(
+            String name,
+            List<PracticeBinding> bindings,
+            String criteria,
+            @Nullable String precomputeScript,
+            @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy,
+            @Nullable String whyItMatters,
+            @Nullable String whatGoodLooksLike,
+            @Nullable String groupSlug,
+            @Nullable Set<BindingChange> bindingChanges) {
+        this(
+                name,
+                bindings,
+                criteria,
+                precomputeScript,
+                automatedReviewPolicy,
+                whyItMatters,
+                whatGoodLooksLike,
+                groupSlug,
+                bindingChanges,
+                null);
+    }
+
     public PracticeDefinition definition(PracticeAutomatedReviewPolicy resolvedEvidence) {
         return new PracticeDefinition(
                 name,
@@ -64,6 +95,7 @@ public record CuratedPracticeRequestDTO(
                 resolvedEvidence,
                 whyItMatters,
                 whatGoodLooksLike,
-                groupSlug);
+                groupSlug,
+                deliveryBehavior == null ? PracticeDeliveryBehavior.DEFAULT : deliveryBehavior);
     }
 }

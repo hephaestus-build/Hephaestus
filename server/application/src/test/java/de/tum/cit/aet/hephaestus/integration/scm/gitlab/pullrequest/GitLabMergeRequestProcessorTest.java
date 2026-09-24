@@ -20,9 +20,11 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
@@ -50,6 +52,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -96,6 +100,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
     private MilestoneRepository milestoneRepository;
 
     @Mock
+    private IssueRepository issueRepository;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private GitLabMergeRequestProcessor processor;
@@ -116,6 +123,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 pullRequestRepository,
                 reviewRepository,
                 milestoneRepository,
+                issueRepository,
                 userRepository,
                 labelRepository,
                 repositoryRepository,
@@ -494,6 +502,79 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         }
 
         @Test
+        @DisplayName("a new merge request opened ready is Created only, as a GitHub pull request is")
+        void shouldNotRaiseReadyWhenANonDraftMergeRequestIsOpened() {
+            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.of(createPullRequestEntity()));
+            when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
+                    .thenReturn(createUserEntity());
+
+            processor.process(createEvent("open", "opened", false), createContext());
+
+            verify(eventPublisher).publishEvent(any(ScmDomainEvent.PullRequestCreated.class));
+            verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.PullRequestReady.class));
+            verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.PullRequestSynchronized.class));
+        }
+
+        @Test
+        @DisplayName(
+                "an update that pushed commits raises Synchronized, whether GitLab names oldrev or only the head moved")
+        void shouldRaiseSynchronizedWhenAnUpdateMovesTheHead() {
+            PullRequest pr = createPullRequestEntity();
+            pr.setHeadRefOid("a".repeat(40));
+            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
+            when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
+                    .thenReturn(createUserEntity());
+
+            processor.process(pushEvent("b".repeat(40), null), createContext());
+
+            verify(eventPublisher).publishEvent(any(ScmDomainEvent.PullRequestSynchronized.class));
+        }
+
+        @Test
+        @DisplayName("an update that pushed nothing, such as a title edit, raises no Synchronized")
+        void shouldNotRaiseSynchronizedWhenTheHeadStays() {
+            PullRequest pr = createPullRequestEntity();
+            pr.setHeadRefOid("a".repeat(40));
+            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
+            when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
+                    .thenReturn(createUserEntity());
+
+            processor.process(pushEvent("a".repeat(40), null), createContext());
+
+            verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.PullRequestSynchronized.class));
+        }
+
+        private GitLabMergeRequestEventDTO pushEvent(String head, @Nullable String oldrev) {
+            var attrs = new GitLabMergeRequestEventDTO.ObjectAttributes(
+                    RAW_MR_ID,
+                    MR_IID,
+                    "Add awesome feature",
+                    "This MR adds an awesome feature",
+                    "opened",
+                    "update",
+                    "feature/awesome-feature",
+                    "main",
+                    false,
+                    RAW_USER_ID,
+                    null,
+                    null,
+                    "2024-01-15T10:00:00Z",
+                    "2024-01-16T10:00:00Z",
+                    null,
+                    null,
+                    "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                    new GitLabMergeRequestEventDTO.LastCommit(head, "Fix", "Fix"),
+                    null,
+                    oldrev);
+            return new GitLabMergeRequestEventDTO(
+                    "merge_request", "merge_request", createUser(), createProject(), attrs, List.of(), null, null);
+        }
+
+        @Test
         void processUpdatesExistingPR() {
             PullRequest pr = createPullRequestEntity();
             // 2 calls: stale check + isNew (process), post-upsert fetch (upsertMergeRequest)
@@ -820,6 +901,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     "2024-01-15T14:00:00Z",
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
                     null,
+                    null,
                     null);
             GitLabMergeRequestEventDTO event = new GitLabMergeRequestEventDTO(
                     "merge_request",
@@ -905,6 +987,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                    null,
                     null,
                     null);
             GitLabMergeRequestEventDTO event = new GitLabMergeRequestEventDTO(
@@ -1095,6 +1178,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                    null,
                     null,
                     null);
             GitLabMergeRequestEventDTO event = new GitLabMergeRequestEventDTO(
@@ -1325,6 +1409,100 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldRecordTheHeadPipelineAndTheClosingIssuesFromSync() {
+            PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.of(pr));
+            when(gitLabUserService.findOrCreateUser(any(GitLabUserLookup.class), eq(PROVIDER_ID)))
+                    .thenReturn(createUserEntity());
+            Issue closed = new Issue();
+            closed.setId(9001L);
+            closed.setNumber(41);
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 41)).thenReturn(Optional.of(closed));
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.empty());
+            when(pullRequestRepository.save(pr)).thenReturn(pr);
+
+            processor.processFromSync(syncDataWith("FAILED", "d".repeat(40), List.of(41, 42)), testRepo, 1L);
+
+            assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.FAILURE);
+            assertThat(pr.getHeadCheckSha()).isEqualTo("d".repeat(40));
+            assertThat(pr.getClosingIssues()).containsExactly(closed);
+            verify(pullRequestRepository).save(pr);
+        }
+
+        @Test
+        void shouldLeaveTheClosingIssuesAloneWhenTheSyncDidNotReadThem() {
+            PullRequest pr = createPullRequestEntity();
+            Issue earlier = new Issue();
+            earlier.setId(9002L);
+            pr.getClosingIssues().add(earlier);
+            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.of(pr));
+            when(gitLabUserService.findOrCreateUser(any(GitLabUserLookup.class), eq(PROVIDER_ID)))
+                    .thenReturn(createUserEntity());
+            when(pullRequestRepository.save(pr)).thenReturn(pr);
+
+            processor.processFromSync(syncDataWith(null, null, null), testRepo, 1L);
+
+            assertThat(pr.getClosingIssues()).containsExactly(earlier);
+            assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.NONE);
+            assertThat(pr.getHeadCheckSha()).isEqualTo("abc123");
+        }
+
+        private GitLabMergeRequestProcessor.SyncMergeRequestData syncDataWith(
+                @Nullable String pipelineStatus, @Nullable String pipelineSha, @Nullable List<Integer> closing) {
+            return new GitLabMergeRequestProcessor.SyncMergeRequestData(
+                    "gid://gitlab/MergeRequest/999555",
+                    "5",
+                    "Add awesome feature",
+                    null,
+                    "opened",
+                    false,
+                    null,
+                    null,
+                    false,
+                    "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    0,
+                    0,
+                    0,
+                    "feature/awesome-feature",
+                    "main",
+                    "abc123",
+                    null,
+                    null,
+                    false,
+                    0,
+                    "gid://gitlab/User/12345",
+                    "testuser",
+                    "Test User",
+                    "https://gitlab.com/uploads/avatar.png",
+                    "https://gitlab.com/testuser",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    pipelineStatus,
+                    pipelineSha,
+                    closing);
+        }
+
+        @Test
         void processFromSyncLinksMilestone() {
             PullRequest pr = createPullRequestEntity();
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
@@ -1383,7 +1561,11 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null,
-                    3);
+                    3,
+                    null, // headPipelineStatus
+                    null, // headPipelineSha
+                    null // closingIssueNumbers
+                    );
             processor.processFromSync(syncData, testRepo, 1L);
 
             verify(pullRequestRepository)
@@ -1479,7 +1661,11 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null,
-                    99);
+                    99,
+                    null, // headPipelineStatus
+                    null, // headPipelineSha
+                    null // closingIssueNumbers
+                    );
             processor.processFromSync(syncData, testRepo, 1L);
 
             verify(pullRequestRepository)
@@ -1577,7 +1763,11 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null,
-                    null);
+                    null,
+                    null, // headPipelineStatus
+                    null, // headPipelineSha
+                    null // closingIssueNumbers
+                    );
             PullRequest result = processor.processFromSync(syncData, testRepo, 1L);
 
             assertThat(result).isNull();
@@ -1628,7 +1818,11 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null,
-                    null);
+                    null,
+                    null, // headPipelineStatus
+                    null, // headPipelineSha
+                    null // closingIssueNumbers
+                    );
             PullRequest result = processor.processFromSync(syncData, testRepo, 1L);
 
             assertThat(result).isNull();
@@ -1728,7 +1922,11 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                             "https://gitlab.com/reviewer1",
                             null)),
                     null,
-                    null);
+                    null,
+                    null, // headPipelineStatus
+                    null, // headPipelineSha
+                    null // closingIssueNumbers
+                    );
             processor.processFromSync(syncData, testRepo, 1L);
 
             // Verify new approval was created (save called for new review)
@@ -1887,7 +2085,11 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null,
-                    null);
+                    null,
+                    null, // headPipelineStatus
+                    null, // headPipelineSha
+                    null // closingIssueNumbers
+                    );
             processor.processFromSync(syncData, testRepo, 1L);
 
             verify(pullRequestRepository)
@@ -1976,6 +2178,31 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         return ProcessingContext.forWebhook(1L, testRepo, "open");
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "SUCCESS, SUCCESS",
+        "FAILED, FAILURE",
+        "CANCELED, CANCELLED",
+        "CANCELING, CANCELLED",
+        "SKIPPED, NONE",
+        "CREATED, PENDING",
+        "WAITING_FOR_RESOURCE, PENDING",
+        "PREPARING, PENDING",
+        "PENDING, PENDING",
+        "RUNNING, PENDING",
+        "MANUAL, PENDING",
+        "SCHEDULED, PENDING",
+        "failed, FAILURE",
+    })
+    void shouldMapAPipelineStatusToOneCheckState(String status, CheckState expected) {
+        assertThat(GitLabMergeRequestProcessor.mapPipelineStatus(status)).isEqualTo(expected);
+    }
+
+    @Test
+    void shouldCallNoPipelineNoChecks() {
+        assertThat(GitLabMergeRequestProcessor.mapPipelineStatus(null)).isEqualTo(CheckState.NONE);
+    }
+
     private PullRequest createPullRequestEntity() {
         PullRequest pr = new PullRequest();
         pr.setId(ENTITY_MR_ID);
@@ -2030,6 +2257,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
                 null,
+                null,
                 null);
         return new GitLabMergeRequestEventDTO(
                 "merge_request",
@@ -2061,6 +2289,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                null,
                 null,
                 null);
         return new GitLabMergeRequestEventDTO(
@@ -2094,6 +2323,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
                 null,
+                null,
                 null);
         return new GitLabMergeRequestEventDTO(
                 "merge_request", "confidential_merge_request", createUser(), createProject(), attrs, null, null, null);
@@ -2118,6 +2348,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                null,
                 null,
                 null);
         return new GitLabMergeRequestEventDTO(
@@ -2201,6 +2432,10 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 null,
                 null,
-                null);
+                null,
+                null, // headPipelineStatus
+                null, // headPipelineSha
+                null // closingIssueNumbers
+                );
     }
 }

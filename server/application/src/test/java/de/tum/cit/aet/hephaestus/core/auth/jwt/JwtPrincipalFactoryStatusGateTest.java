@@ -13,7 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Regression guard for the ADR 0017 account-status gate: every JWT-issue path (login success
- * handler, refresh, impersonation) funnels through {@link JwtPrincipalFactory#forAccount} which is
+ * handler, refresh) funnels through {@link JwtPrincipalFactory#forAccount} which is
  * the last line that must refuse a non-ACTIVE account. Without it, a SUSPENDED account could log in
  * and a DELETING account (post "delete my account") could resurrect itself by re-authenticating.
  * These tests fail if the status check is removed — the status check short-circuits before any

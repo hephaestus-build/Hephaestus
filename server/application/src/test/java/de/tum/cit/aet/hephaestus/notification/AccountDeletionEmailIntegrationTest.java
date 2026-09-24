@@ -93,7 +93,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         long accountId = persistAccount(address, Instant.now());
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            accountService.softDelete(accountId, null);
+            accountService.softDelete(accountId);
             status.setRollbackOnly();
         });
 
@@ -110,7 +110,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         String address = "backlog-" + UUID.randomUUID() + "@hephaestus.test";
         long accountId = persistAccount(address, Instant.now());
         mailSender.failWith(new MailSendException("relay down", new ConnectException("refused")));
-        accountService.softDelete(accountId, null);
+        accountService.softDelete(accountId);
         List<UUID> expiredIds = new ArrayList<>();
         try {
             for (int i = 0; i < NotificationRedeliveryJob.BATCH_SIZE; i++) {
@@ -161,7 +161,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
     void shouldAdvancePastAStillFailingBatchOnTheNextRetry() {
         long accountId = persistAccount("fair-retry-" + UUID.randomUUID() + "@hephaestus.test", Instant.now());
         mailSender.failWith(new MailSendException("relay down", new ConnectException("refused")));
-        accountService.softDelete(accountId, null);
+        accountService.softDelete(accountId);
         UUID newest =
                 (UUID) Objects.requireNonNull(publications(accountId).getFirst().get("id"));
         List<UUID> older = new ArrayList<>();
@@ -227,7 +227,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
     void shouldApplyFailedStatusAndMinimumAgeBeforeTheFairBatchLimit() {
         long accountId = persistAccount("retry-filter-" + UUID.randomUUID() + "@hephaestus.test", Instant.now());
         mailSender.failWith(new MailSendException("relay down", new ConnectException("refused")));
-        accountService.softDelete(accountId, null);
+        accountService.softDelete(accountId);
         UUID source =
                 (UUID) Objects.requireNonNull(publications(accountId).getFirst().get("id"));
         List<UUID> other = new ArrayList<>();
@@ -306,7 +306,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         String address = "delete-me-" + UUID.randomUUID() + "@hephaestus.test";
         long accountId = persistAccount(address, Instant.now());
 
-        accountService.softDelete(accountId, null);
+        accountService.softDelete(accountId);
 
         List<MimeMessage> toAddress = mailSender.sent().stream()
                 .filter(message -> recipient(message).equals(address))
@@ -326,7 +326,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         String address = "unverified-" + UUID.randomUUID() + "@hephaestus.test";
         long accountId = persistAccount(address, null);
 
-        accountService.softDelete(accountId, null);
+        accountService.softDelete(accountId);
 
         assertThat(mailSender.sent()).noneMatch(message -> recipient(message).equals(address));
         assertThat(publications(accountId)).isEmpty();
@@ -338,7 +338,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         long accountId = persistAccount(address, Instant.now());
         mailSender.failWith(new MailSendException("relay down", new ConnectException("refused")));
 
-        accountService.softDelete(accountId, null);
+        accountService.softDelete(accountId);
 
         assertThat(mailSender.sent()).noneMatch(message -> recipient(message).equals(address));
         assertThat(publications(accountId)).singleElement().satisfies(row -> {
@@ -361,7 +361,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         long accountId = persistAccount(address, Instant.now());
         setSilentMode(true);
         try {
-            accountService.softDelete(accountId, null);
+            accountService.softDelete(accountId);
         } finally {
             setSilentMode(false);
         }

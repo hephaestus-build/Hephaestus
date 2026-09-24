@@ -150,12 +150,12 @@ export const OutlinedTonesShareOneSurface: Story = {
 	render: () => (
 		<div className="flex items-center gap-2">
 			<Button variant="warning-outline">Enable writes</Button>
-			<Button variant="destructive-outline">Stop impersonating</Button>
+			<Button variant="destructive-outline">Revoke access</Button>
 		</div>
 	),
 	play: async ({ canvas }) => {
 		const warning = style(canvas.getByRole("button", { name: "Enable writes" }));
-		const destructive = style(canvas.getByRole("button", { name: "Stop impersonating" }));
+		const destructive = style(canvas.getByRole("button", { name: "Revoke access" }));
 		await expect(warning.backgroundColor).toBe(destructive.backgroundColor);
 		await expect(warning.borderTopWidth).toBe(destructive.borderTopWidth);
 	},

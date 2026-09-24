@@ -86,6 +86,9 @@ public class SlackMonitoredChannel {
     @Column(name = "history_synced_at")
     private @Nullable Instant historySyncedAt;
 
+    @Column(name = "last_sync_error", length = 2048)
+    private @Nullable String lastSyncError;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

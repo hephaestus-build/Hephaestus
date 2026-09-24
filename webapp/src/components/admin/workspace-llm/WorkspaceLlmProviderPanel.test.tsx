@@ -45,7 +45,6 @@ function model(id: number, connectionId: number, displayName: string): Workspace
 		displayName,
 		upstreamModelId: `upstream-${id}`,
 		enabled: true,
-		supportsReasoning: false,
 		pricingMode: "UNPRICED",
 		currency: "USD",
 		createdAt: new Date("2026-07-01T00:00:00Z"),

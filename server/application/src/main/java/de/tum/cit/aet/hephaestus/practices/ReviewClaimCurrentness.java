@@ -3,13 +3,26 @@ package de.tum.cit.aet.hephaestus.practices;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 
-@Schema(description = "Whether an observation was produced using the current review rules")
+@Schema(description = "Whether an observation still has current review rules and supporting work snapshot")
 public enum ReviewClaimCurrentness {
     CURRENT,
     STALE,
     UNVERIFIABLE;
+
+    public static ReviewClaimCurrentness of(
+            @Nullable PracticeRevision evaluated, Practice practice, @Nullable Instant supersededAt) {
+        return supersededAt != null ? STALE : of(evaluated, practice);
+    }
+
+    public static ReviewClaimCurrentness of(
+            @Nullable String evaluatedFingerprint,
+            @Nullable String currentFingerprint,
+            @Nullable Instant supersededAt) {
+        return supersededAt != null ? STALE : of(evaluatedFingerprint, currentFingerprint);
+    }
 
     public static ReviewClaimCurrentness of(@Nullable PracticeRevision evaluated, Practice practice) {
         PracticeRevision current = practice.getCurrentRevision();

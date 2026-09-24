@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -40,6 +41,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
@@ -97,9 +99,6 @@ import tools.jackson.databind.ObjectMapper;
 class AgentJobExecutorTest extends BaseUnitTest {
 
     @Mock
-    private ExecutionArchiveService executionArchive;
-
-    @Mock
     private LlmUsageRecorder usageRecorder;
 
     @Mock
@@ -113,6 +112,9 @@ class AgentJobExecutorTest extends BaseUnitTest {
 
     @Mock
     private JobTypeHandlerRegistry handlerRegistry;
+
+    @Mock
+    private JobEvidenceFiles evidenceFiles;
 
     @Mock
     private PracticePiAdapter practiceAgent;
@@ -151,13 +153,14 @@ class AgentJobExecutorTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
+        lenient().when(evidenceFiles.prepare(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
 
         executor = new AgentJobExecutor(
-                executionArchive,
                 AGENT_PROPS,
                 jobRepository,
                 bindingRepository,
                 handlerRegistry,
+                evidenceFiles,
                 practiceAgent,
                 workerJwtIssuer,
                 sandboxManager,
@@ -189,7 +192,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 null,
                 null,
                 null,
-                false,
+                null,
                 null,
                 null,
                 null,
@@ -229,7 +232,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         lenient().when(transactionTemplate.getTransactionManager()).thenReturn(transactionManager);
         lenient().when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         lenient()
-                .when(workerJwtIssuer.issueForJob(any(), anyLong(), anyInt(), any()))
+                .when(workerJwtIssuer.issueForJobUntil(any(), anyLong(), anyInt(), any()))
                 .thenReturn("job-jwt");
 
         lenient()
@@ -286,11 +289,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
         void doesNotDeliverWhenFencedOut() {
             // Worker has identity "test-worker" → terminal writes are fenced to the owner.
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -379,6 +382,13 @@ class AgentJobExecutorTest extends BaseUnitTest {
             verify(jobRepository).save(captured.capture());
             assertThat(captured.getValue().getStatus()).isEqualTo(AgentJobStatus.RUNNING);
             assertThat(captured.getValue().getStartedAt()).isNotNull();
+            ArgumentCaptor<Instant> tokenExpiry = ArgumentCaptor.forClass(Instant.class);
+            verify(workerJwtIssuer).issueForJobUntil(eq(jobId), eq(99L), anyInt(), tokenExpiry.capture());
+            ArgumentCaptor<SandboxSpec> sandboxSpec = ArgumentCaptor.forClass(SandboxSpec.class);
+            verify(sandboxManager).execute(sandboxSpec.capture());
+            long deadline = Long.parseLong(sandboxSpec.getValue().environment().get("SANDBOX_WORK_DEADLINE_MS"));
+            assertThat(tokenExpiry.getValue())
+                    .isEqualTo(Instant.ofEpochMilli(deadline).plus(SandboxLayout.RESULT_UPLOAD_GRACE));
         }
 
         @Test
@@ -698,7 +708,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
             JobTypeHandler handler = mock(JobTypeHandler.class);
             when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
             Instant now = Instant.parse("2026-08-03T10:00:00Z");
-            SourceContractVersion version = new SourceContractVersion("1.1.0");
+            SourceContractVersion version = new SourceContractVersion("1.2.0");
             String artifactKind = "scm.pull_request";
             SourceKind source = new SourceKind("scm.pull-request.diff");
             ArtifactSourceManifest manifest = new ArtifactSourceManifest(
@@ -718,8 +728,14 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     now,
                     List.of(new AutomatedReviewReadinessDecision(
                             "example", now, false, List.of(), List.of(assessment))));
-            PreparedJobInputs inputs =
-                    new PreparedJobInputs(Map.of(SandboxLayout.MANIFEST_PATH, "{}".getBytes()), manifest, readiness);
+            var released = new java.util.concurrent.atomic.AtomicBoolean();
+            PreparedJobInputs inputs = new PreparedJobInputs(
+                    new de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence(
+                            Map.of(SandboxLayout.MANIFEST_PATH, "{}".getBytes()),
+                            Map.of(),
+                            List.of(() -> released.set(true)),
+                            manifest),
+                    readiness);
             when(handler.prepareInputs(any()))
                     .thenThrow(new InsufficientEvidenceException("No practice has sufficient evidence", inputs));
             when(jobRepository.updateProvenanceDigests(any(), any(), anyInt(), any()))
@@ -762,6 +778,8 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             .count())
                     .isOne();
             verify(sandboxManager, never()).execute(any());
+            // Never staged for an attempt, so nothing else would ever release what the capture put on disk.
+            assertThat(released).isTrue();
         }
 
         @ParameterizedTest
@@ -1033,11 +1051,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 "a classified infra failure is requeued (not failed) with backoff + a rotated token, fenced to this worker")
         void infraFailureIsRequeuedNotFailed() {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1097,11 +1115,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @DisplayName("a review the runner could not admit (exit 75) is requeued, keeping its transcript on the row")
         void unreachableServerIsRequeuedWithItsTranscript() {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1159,11 +1177,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @DisplayName("a review that reached no practice because the provider never answered is run again (exit 76)")
         void unansweredProviderIsRequeued() {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1214,11 +1232,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @DisplayName("a review whose observations did reach the server is NOT run again (exit 75, digest on the row)")
         void unreachableServerDoesNotRepeatAnAdmittedReview() {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1276,11 +1294,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @DisplayName("an unadmitted review terminalizes as before once the retry cap is spent (exit 75, CAS loses)")
         void unreachableServerFallsThroughWhenRequeueLoses() {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1335,11 +1353,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @DisplayName("an infra failure after the observations were admitted fails terminally instead of repeating")
         void infraFailureDoesNotRepeatAnAdmittedReview() {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1394,11 +1412,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 "a classified infra failure falls through to FAILED when the requeue CAS loses (retry cap exhausted)")
         void infraFailureFallsThroughToFailedWhenRequeueLoses() {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1441,11 +1459,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @DisplayName("an unclassified exception still fails immediately, without attempting a requeue")
         void unclassifiedExceptionNeverAttemptsRequeue() {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1766,6 +1784,38 @@ class AgentJobExecutorTest extends BaseUnitTest {
             assertThat(sample.getValue().inputTokens()).isEqualTo(1000);
             assertThat(sample.getValue().outputTokens()).isEqualTo(700);
         }
+
+        @Test
+        @DisplayName("the reasoning tokens the proxy counted reach the job row though the runner reports none")
+        void cleanCompletionWithRunnerUsage_keepsTheProxysReasoningCount() {
+            // The proxy reports reasoning tokens omitted by the runner.
+            job.setConfigSnapshot(snapshot.withPriceSnapshot(pricedSnapshot()).toJson(objectMapper));
+            stubClaimableJob();
+            setupFullExecution();
+            when(practiceAgent.parseResult(any()))
+                    .thenReturn(new AgentResult(
+                            true,
+                            Map.of("review", "LGTM"),
+                            new AgentResult.LlmUsage("gpt-5", 1000, 700, 0, 10, 20, 0.0, 6)));
+
+            AgentJob freshJob = freshJob();
+            when(jobRepository.findById(any(UUID.class))).thenReturn(Optional.of(freshJob));
+            lenient()
+                    .when(jobRepository.findLlmUsageById(jobId))
+                    .thenReturn(Optional.of(new AgentJobLlmUsage(6, 1000, 700, 320, 10, 20)));
+            when(jobRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(jobRepository.transitionStatus(any(), eq(AgentJobStatus.COMPLETED), any(), any(), any()))
+                    .thenReturn(1);
+
+            executor.processJob(jobId);
+
+            assertThat(freshJob.getLlmTotalReasoningTokens()).isEqualTo(320);
+            assertThat(freshJob.getLlmTotalInputTokens()).isEqualTo(1000);
+            ArgumentCaptor<LlmUsageRecorder.LlmUsageSample> sample =
+                    ArgumentCaptor.forClass(LlmUsageRecorder.LlmUsageSample.class);
+            verify(usageRecorder).record(eq(99L), sample.capture());
+            assertThat(sample.getValue().reasoningTokens()).isEqualTo(320);
+        }
     }
 
     @Nested
@@ -1880,11 +1930,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @DisplayName("the practice request carries resolved routing and an attempt-scoped job JWT")
         void passesResolvedRoutingAndJobJwtToSandboxRequest() {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1960,11 +2010,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
             capacityState.claimReview(); // 2 in flight; reviewMax is 2 (see workerProps)
 
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2009,11 +2059,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             new WorkerProperties.Control(URI.create("ws://example"), "tok", Duration.ofSeconds(10))));
 
             executor = new AgentJobExecutor(
-                    executionArchive,
                     smallBatch,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2073,11 +2123,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
                                         URI.create("ws://example"), "tok", Duration.ofSeconds(10))));
 
                 executor = new AgentJobExecutor(
-                        executionArchive,
                         AGENT_PROPS,
                         jobRepository,
                         bindingRepository,
                         handlerRegistry,
+                        evidenceFiles,
                         practiceAgent,
                         workerJwtIssuer,
                         sandboxManager,
@@ -2122,11 +2172,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
                                         URI.create("ws://example"), "tok", Duration.ofSeconds(10))));
 
                 executor = new AgentJobExecutor(
-                        executionArchive,
                         AGENT_PROPS,
                         jobRepository,
                         bindingRepository,
                         handlerRegistry,
+                        evidenceFiles,
                         practiceAgent,
                         workerJwtIssuer,
                         sandboxManager,
@@ -2165,11 +2215,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @DisplayName("a pool-rejected claim is requeued WITHOUT incrementing retry_count, self-fenced to this worker")
         void requeuesWithoutRetryIncrementSelfFenced() {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2209,11 +2259,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @DisplayName("retries the requeue write a bounded number of times before giving up")
         void retriesTheRequeueWriteOnTransientFailureButWritesOnlyOnce() {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2270,11 +2320,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @DisplayName("draining an in-flight job requeues it (RUNNING -> QUEUED) instead of cancelling it")
         void drainRequeuesInsteadOfCancelling() throws Exception {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2310,11 +2360,11 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 "falls back to a worker-fenced terminal cancel when the requeue CAS loses (retry cap exhausted / fence lost)")
         void fallsBackToFencedCancelWhenRequeueLoses() throws Exception {
             executor = new AgentJobExecutor(
-                    executionArchive,
                     AGENT_PROPS,
                     jobRepository,
                     bindingRepository,
                     handlerRegistry,
+                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2463,7 +2513,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 "/output",
                 SecurityProfile.DEFAULT,
                 new NetworkPolicy(false, null, "test-token"),
-                Map.of(),
                 "prompt-digest");
         when(practiceAgent.buildSandboxSpec(any())).thenReturn(agentSpec);
         when(practiceAgent.parseResult(any())).thenReturn(new AgentResult(true, Map.of("review", "LGTM")));
@@ -2481,7 +2530,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 "/output",
                 null,
                 null,
-                Map.of(),
                 "prompt-digest");
     }
 
@@ -2503,15 +2551,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         when(handler.prepareInputs(any())).thenReturn(PreparedJobInputs.filesOnly(Map.of()));
 
         PracticeSandboxSpec agentSpec = new PracticeSandboxSpec(
-                "ghcr.io/agent:latest",
-                List.of("/bin/agent"),
-                Map.of(),
-                Map.of(),
-                "/output",
-                null,
-                null,
-                Map.of(),
-                null);
+                "ghcr.io/agent:latest", List.of("/bin/agent"), Map.of(), Map.of(), "/output", null, null, null);
         when(practiceAgent.buildSandboxSpec(any())).thenReturn(agentSpec);
 
         when(sandboxManager.execute(any())).thenThrow(exception);

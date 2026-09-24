@@ -100,7 +100,7 @@ public record ObservationDetailDTO(
                 includeEvidence ? ObservationEvidenceDTO.from(observation.getEvidence()) : null,
                 observation.getEvidenceRationale(),
                 deliveredFeedback,
-                ReviewClaimCurrentness.of(observation.getPracticeRevision(), practice),
+                ReviewClaimCurrentness.of(observation.getPracticeRevision(), practice, observation.getSupersededAt()),
                 observation.getOrigin(),
                 artifactUrl,
                 observation.getObservedAt());

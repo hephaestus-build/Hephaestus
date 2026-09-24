@@ -45,8 +45,13 @@ public class WorkerJwtIssuer {
 
     public String issueForJob(UUID jobId, Long workspaceId, int attempt, Duration ttl) {
         if (ttl.isNegative() || ttl.isZero()) throw new IllegalArgumentException("ttl must be positive");
+        return issueForJobUntil(jobId, workspaceId, attempt, Instant.now().plus(ttl));
+    }
+
+    public String issueForJobUntil(UUID jobId, Long workspaceId, int attempt, Instant expiresAt) {
         WorkerSigningKey active = keyRing.active();
         Instant now = Instant.now();
+        if (!expiresAt.isAfter(now)) throw new IllegalArgumentException("expiresAt must be in the future");
         return JWT.create()
                 .withHeader(Map.of("kid", active.kid(), "typ", JOB_TOKEN_TYPE))
                 .withIssuer(properties.issuer())
@@ -58,7 +63,7 @@ public class WorkerJwtIssuer {
                 .withJWTId(UUID.randomUUID().toString())
                 .withIssuedAt(now)
                 .withNotBefore(now)
-                .withExpiresAt(now.plus(ttl))
+                .withExpiresAt(expiresAt)
                 .sign(Algorithm.RSA256(active.publicKey(), active.privateKey()));
     }
 

@@ -68,7 +68,7 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
         PracticeRevision appended = service.append(practice);
 
         assertThat(appended.getCriteria()).isEqualTo("Give specific feedback");
-        assertThat(appended.getReviewRuleFingerprint()).hasSize(67).startsWith("v3:");
+        assertThat(appended.getReviewRuleFingerprint()).hasSize(67).startsWith("v4:");
         assertThat(practice.getCurrentRevision()).isSameAs(appended);
     }
 

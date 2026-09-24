@@ -14,7 +14,7 @@ const mockModels: LlmModel[] = [
 		connectionId: 1,
 		connectionDisplayName: "OpenAI production",
 		enabled: true,
-		supportsReasoning: true,
+		reasoningEffort: "MEDIUM",
 		visibility: "PUBLIC",
 		grantedWorkspaceIds: [],
 		currentPrice: {
@@ -35,7 +35,6 @@ const mockModels: LlmModel[] = [
 		connectionId: 1,
 		connectionDisplayName: "OpenAI production",
 		enabled: true,
-		supportsReasoning: false,
 		visibility: "GRANTED",
 		grantedWorkspaceIds: [10, 11],
 		currentPrice: {
@@ -55,7 +54,6 @@ const mockModels: LlmModel[] = [
 		connectionId: 1,
 		connectionDisplayName: "OpenAI production",
 		enabled: false,
-		supportsReasoning: false,
 		visibility: "PUBLIC",
 		grantedWorkspaceIds: [],
 		createdAt: new Date("2026-06-01T10:00:00Z"),

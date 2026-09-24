@@ -3,6 +3,7 @@ import { ScanSearchIcon } from "lucide-react";
 
 import type { Practice, ReviewObservation } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { ClaimCurrentnessBadge } from "@/components/practice-vocabulary/ClaimCurrentness";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +18,6 @@ import {
 import { REVIEW_PAGE_SIZE, type ReviewScopeSearch } from "./review-search";
 import { ReviewArtifactLabel } from "./ReviewArtifact";
 import {
-	ClaimCurrentnessBadge,
 	FeedbackCountsSummary,
 	ObservationOriginBadge,
 	ObservationResultBadge,

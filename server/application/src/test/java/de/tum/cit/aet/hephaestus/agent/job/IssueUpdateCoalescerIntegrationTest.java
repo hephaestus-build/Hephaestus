@@ -10,6 +10,9 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
@@ -19,8 +22,12 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -65,6 +72,12 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
     private WorkspaceRepository workspaces;
 
     @Autowired
+    private IdentityProviderRepository providers;
+
+    @Autowired
+    private UserRepository users;
+
+    @Autowired
     private TransactionTemplate transactions;
 
     @Autowired
@@ -72,6 +85,9 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IssueSignalResubmitter submitter;
+
+    @Autowired
+    private PullRequestSignalResubmitter pushSubmitter;
 
     @Autowired
     private Fixture fixture;
@@ -98,6 +114,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
     private IssueUpdateCoalescer coalescer;
     private SignalKey current;
     private Issue issue;
+    private Long finalActorId;
 
     @BeforeEach
     void setUp() {
@@ -137,21 +154,39 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
         issue.setTitle("Current title");
         issue.setState(Issue.State.OPEN);
         issue.setRepository(repository);
+        var provider = providers.save(
+                new IdentityProvider(IdentityProviderType.GITHUB, "https://burst-" + UUID.randomUUID() + ".example"));
+        issue.setAuthor(createUser(provider, "author", 1L));
+        var earlierActor = createUser(provider, "earlier-editor", 2L);
+        finalActorId = createUser(provider, "final-editor", 3L).getId();
         when(fixture.issues().findByIdWithRepositoryAndAssignees(issue.getId())).thenReturn(Optional.of(issue));
-        when(fixture.gate().evaluateIssue(issue, ScmSignals.ISSUE_UPDATED, TriggerMode.AUTO))
+        when(fixture.gate().evaluateIssue(issue, workspace.getId(), ScmSignals.ISSUE_UPDATED, TriggerMode.AUTO))
                 .thenReturn(new GateDecision.Detect(workspace, List.of(), 0L, TriggerMode.AUTO));
-        when(fixture.workspaceResolver().resolveForRepository("owner/repo")).thenReturn(Optional.of(workspace));
+        when(fixture.workspaceResolver().resolveAllForRepository("owner/repo")).thenReturn(List.of(workspace));
         current = ScmSignals.issueKey(
                         workspace.getId(), ScmSignals.ISSUE_UPDATED, ScmEventPayload.IssueData.from(issue))
                 .orElseThrow();
         SignalKey intermediate =
                 new SignalKey(workspace.getId(), issue.getId(), ScmSignals.ISSUE_UPDATED, new SignalRevision("before"));
         transactions.executeWithoutResult(status -> {
-            signals.insertDeferred(intermediate, UUID.randomUUID(), NOW.minusSeconds(60), NOW.minusSeconds(60));
-            signals.insertDeferred(current, UUID.randomUUID(), NOW.minusSeconds(30), NOW.minusSeconds(30));
+            signals.insertDeferred(
+                    intermediate, UUID.randomUUID(), NOW.minusSeconds(60), NOW.minusSeconds(60), earlierActor.getId());
+            signals.insertDeferred(
+                    current, UUID.randomUUID(), NOW.minusSeconds(30), NOW.minusSeconds(30), finalActorId);
         });
         coalescer = new IssueUpdateCoalescer(
                 signals, fixture.issues(), recorder, submitter, fixture.workspaceResolver(), transactions);
+    }
+
+    private User createUser(IdentityProvider provider, String login, long nativeId) {
+        var user = new User();
+        user.setProvider(provider);
+        user.setNativeId(nativeId);
+        user.setLogin(login);
+        user.setAvatarUrl("https://example.com/avatar/" + login);
+        user.setHtmlUrl("https://example.com/" + login);
+        user.setType(User.Type.USER);
+        return users.save(user);
     }
 
     @Test
@@ -175,6 +210,13 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
                                         .get(AgentJob.SIGNAL_REVISION_METADATA_KEY)
                                         .asString())
                                 .isEqualTo(current.revision().value());
+                        assertThat(Objects.requireNonNull(job.getMetadata())
+                                        .path("actor_user_id")
+                                        .asLong())
+                                .isEqualTo(finalActorId);
+                        assertThat(finalActorId)
+                                .isNotEqualTo(Objects.requireNonNull(issue.getAuthor())
+                                        .getId());
                     } else {
                         assertThat(signal.getState()).isEqualTo(SignalState.SUPPRESSED);
                         assertThat(signal.getStateReason()).isEqualTo(SignalStateReason.COALESCED);
@@ -183,12 +225,24 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldSettleItsOwnWorkspaceWhenAnotherWorkspaceAlsoMonitorsTheIssue() {
+        Workspace other = workspaces.save(WorkspaceTestFixtures.activeWorkspace("shared-" + UUID.randomUUID()));
+        when(fixture.workspaceResolver().resolveAllForRepository("owner/repo")).thenReturn(List.of(workspace, other));
+
+        transactions.executeWithoutResult(status -> coalescer.drain(workspace.getId(), current.artifactId(), NOW));
+
+        assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), current.artifactId()))
+                .anySatisfy(signal -> assertThat(signal.getState()).isEqualTo(SignalState.TRIGGERED));
+        assertThat(jobs.findListRows(other.getId(), null, Pageable.unpaged())).isEmpty();
+    }
+
+    @Test
     void shouldRefuseTheWholeGroupRatherThanReviewUnderAWorkspaceThatNoLongerOwnsTheRepository() {
         Workspace other = WorkspaceTestFixtures.activeWorkspace("coalescer2-" + UUID.randomUUID());
         other.getFeatures().setPracticesEnabled(true);
         other = workspaces.save(other);
         // The repository was re-keyed to another workspace inside the quiet window (ADR 0024 § re-keying).
-        when(fixture.workspaceResolver().resolveForRepository("owner/repo")).thenReturn(Optional.of(other));
+        when(fixture.workspaceResolver().resolveAllForRepository("owner/repo")).thenReturn(List.of(other));
 
         transactions.executeWithoutResult(status -> coalescer.drain(workspace.getId(), current.artifactId(), NOW));
 
@@ -257,10 +311,51 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
                         }));
     }
 
+    @Test
+    void shouldSettleLockedPushSignalInTheCoalescerTransaction() {
+        var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("push-" + UUID.randomUUID()));
+        SignalKey key =
+                new SignalKey(workspace.getId(), 1L, ScmSignals.PULL_REQUEST_SYNCHRONIZED, new SignalRevision("head"));
+        Instant now = Instant.now();
+        transactions.executeWithoutResult(status -> signals.insertDeferred(key, UUID.randomUUID(), now, now, null));
+
+        transactions.executeWithoutResult(status -> {
+            var pending = signals.lockDeferred(
+                    workspace.getId(), key.artifactId(), ScmSignals.PULL_REQUEST_SYNCHRONIZED.value());
+            pushSubmitter.resubmit(pending.getFirst());
+            status.setRollbackOnly();
+        });
+        assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.PULL_REQUEST.value(), key.artifactId()))
+                .singleElement()
+                .satisfies(signal -> assertThat(signal.getState()).isEqualTo(SignalState.DEFERRED));
+
+        transactions.executeWithoutResult(status -> {
+            var pending = signals.lockDeferred(
+                    workspace.getId(), key.artifactId(), ScmSignals.PULL_REQUEST_SYNCHRONIZED.value());
+            pushSubmitter.resubmit(pending.getFirst());
+        });
+        assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.PULL_REQUEST.value(), key.artifactId()))
+                .singleElement()
+                .satisfies(signal -> {
+                    assertThat(signal.getState()).isEqualTo(SignalState.LAPSED);
+                    assertThat(signal.getStateReason()).isEqualTo(SignalStateReason.ARTIFACT_GONE);
+                });
+    }
+
     record Fixture(IssueRepository issues, PracticeReviewDetectionGate gate, WorkspaceResolver workspaceResolver) {}
 
     @TestConfiguration
     static class Configuration {
+        @Bean
+        PullRequestSignalResubmitter lockedPushSubmitter(SignalRecorder recorder) {
+            return new PullRequestSignalResubmitter(
+                    mock(AgentJobService.class),
+                    mock(PullRequestRepository.class),
+                    mock(PracticeReviewDetectionGate.class),
+                    recorder,
+                    mock(PullRequestReviewRepository.class));
+        }
+
         @Bean
         Fixture coalescerFixture() {
             return new Fixture(

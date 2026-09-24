@@ -18,7 +18,7 @@ public enum InAppRoutingDecision {
     /** Evidence does not meet the composition contract's minimum distinct-work threshold. */
     UNCORROBORATED,
 
-    /** The practice's autonomy (OFF or HUMAN_APPROVAL) does not admit the in-app lane. */
+    /** The practice's autonomy is OFF, or the evidence's origin has no entitlement to the in-app lane. */
     PRACTICE_REQUIRES_APPROVAL,
 
     /**

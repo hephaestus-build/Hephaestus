@@ -339,7 +339,7 @@ pitest {
             "de.tum.cit.aet.hephaestus.core.security.ServerUrlValidator",
             "de.tum.cit.aet.hephaestus.core.security.PrivateAddressGuard",
             "de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy",
-            "de.tum.cit.aet.hephaestus.core.security.ImpersonationGuard",
+            "de.tum.cit.aet.hephaestus.core.auth.UserViewAccessService",
             "de.tum.cit.aet.hephaestus.integration.core.oauth.state.HmacOAuthStateService",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.AdminBootstrapPolicy",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.ReturnToValidator",
@@ -354,7 +354,7 @@ pitest {
             "de.tum.cit.aet.hephaestus.core.security.ServerUrlValidatorTest",
             "de.tum.cit.aet.hephaestus.core.security.PrivateAddressGuardTest",
             "de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicyTest",
-            "de.tum.cit.aet.hephaestus.core.security.ImpersonationGuardTest",
+            "de.tum.cit.aet.hephaestus.core.auth.UserViewAccessServiceTest",
             "de.tum.cit.aet.hephaestus.integration.core.oauth.state.HmacOAuthStateServiceTest",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.AdminBootstrapPolicyTest",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.ReturnToValidatorTest",
@@ -424,9 +424,9 @@ for ((taskName, command) in
                 "--changelog-file=${layout.buildDirectory.file("changelog_new.xml").get().asFile}",
                 "--reference-url=hibernate:spring:de.tum.cit.aet.hephaestus?dialect=org.hibernate.dialect.PostgreSQLDialect&hibernate.physical_naming_strategy=org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy&hibernate.implicit_naming_strategy=org.springframework.boot.hibernate.SpringImplicitNamingStrategy",
                 // Hibernate cannot emit unmapped tables, partitions, or scalar-id foreign keys.
-                // event_publication is the JDBC registry; pending contractions are listed in
-                // docs/contributor/database-migration.mdx.
-                "--exclude-objects=table:shedlock,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,table:consent_notice,column:notice_sha256,table:product_survey_submission,foreignkey:sfk_.*",
+                // Pending contractions are listed in docs/contributor/database-migration.mdx.
+                // event_publication is the JDBC registry.
+                "--exclude-objects=table:shedlock,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,table:consent_notice,column:notice_sha256,table:product_survey_submission,column:supports_reasoning,foreignkey:sfk_.*",
             )
         }
     }

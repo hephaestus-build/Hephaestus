@@ -11,31 +11,40 @@ should start with [Practice Review](./practice-review.mdx).
 
 ## Deployment configuration
 
-Configuration metadata in the server is the source of truth for property names, types, and defaults. The
-reference Compose files are the source of truth for which environment variables they forward; do not copy
-those inventories into another deployment manifest from this page.
+Server configuration metadata defines property names, types, and defaults; the reference Compose files
+define which environment variables reach the application.
 
 A working deployment must:
 
 - enable the agent runtime on both the submitting server and claiming worker;
-- make repository checkout and the shared fabric volume available to every worker that captures repository
-  evidence;
+- enable `GIT_CHECKOUT_ENABLED` for repository access and give every server and worker container its
+  own storage under `HEPHAESTUS_FABRIC_ROOT` for repository mirrors and attempt inputs; enabling agent
+  execution alone does not enable repository collection;
 - set campaign, request-rate, retry, and retention limits appropriate to its budget and governance policy.
 
-Who gets practice review is **not** among them. There is no instance-wide population flag: each workspace
-turns itself on, and decides its own coverage.
+Each workspace enables practice review and chooses its own coverage.
+
+`PRACTICE_REVIEW_SAMPLING_TEMPERATURE` sets the sampling temperature for practice-review
+model calls, not mentor calls. If unset, the provider default applies. Use a value supported by the
+selected model and confirm that your deployment forwards the setting. A low temperature does not
+guarantee repeatable judgments; evaluate changes against representative cases.
 
 See the
 [server configuration](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/application.yml)
 and [reference Compose files](https://github.com/hephaestus-build/Hephaestus/tree/main/docker) before changing an
 environment variable. Unknown or unforwarded variables do not configure the application.
 
-Repository checkouts, replay metadata, and content-addressed evidence share the fabric root. A split
-or multi-host deployment must mount the same durable read-write filesystem on every server and worker, with
-cross-process locks, atomic rename, and access controls suitable for source content.
-
-[ADR 0039](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0039-git-and-postgresql-own-evidence.md)
-records the decision to replace this mount; current releases still require it.
+Repository mirrors and attempt folders are disposable container-local storage, not a shared evidence
+store. Each container keeps bare mirrors under its own `HEPHAESTUS_FABRIC_ROOT` (`/data/git-repos` by
+default; the shipped Compose files mount the `git-repos` volume into the server and `worker-git-repos`
+into the worker) and clones a missing mirror again on the next sync or review. Git runs in-process
+through JGit, so no `git` binary and no second image are involved: commit ingestion runs on the server
+role against the server's mirrors, review preparation on the worker role against the worker's, and a
+server whose worker role is enabled uses its one root for both. Attempt folders live under the same
+root. Sandbox inputs and results travel through the authenticated worker gateway.
+PostgreSQL retains admitted observations and their citation verification results; delivery does not
+require the worker's source files. The storage and cleanup contract is defined in
+[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion).
 
 Source authorization is not a deployment toggle. The shipped artifact-source contract fixes which governed
 sources each purpose may use; integrations only determine which authorized sources are available. See
@@ -43,17 +52,15 @@ sources each purpose may use; integrations only determine which authorized sourc
 
 ## Running instance
 
-Nothing on this page configures a workspace. Model readiness, coverage, delivery status, autonomy, spend
-and the per-artifact trace are all workspace-administrator screens, and
-[Practice review](./practice-review.mdx) is the guide to them.
+For workspace model readiness, coverage, autonomy, spend and review activity, see
+[Practice review](./practice-review.mdx).
 
 ### Queue health
 
 The job queue exposes its own signals — alert off these rather than reading application logs.
 
-- **`agent.queue.oldest_age_seconds`** — age of the oldest eligible queued job, `0` when empty. **This is
-  the one to alert on**: a briefly busy queue and a stuck one both show non-zero depth, but only a stuck
-  queue shows a climbing age.
+- **`agent.queue.oldest_age_seconds`** — age of the oldest eligible queued job, `0` when empty.
+  Alert on sustained growth: queue depth alone does not distinguish a transient burst from persistent backlog.
 - **`agent.queue.depth`** — queued jobs eligible to run now.
 - **`agent.queue.held`** — jobs parked on an exhausted budget.
 - **`agent.queue.running`** — jobs running fleet-wide.
@@ -139,8 +146,8 @@ fence, retry count, and lease together prevent duplicate provider writes.
 
 ## Limits you should know about
 
-Configuration metadata and the artifact-source catalog are the source of truth for current values. These
-behaviors matter independently of their exact defaults:
+Configuration metadata describes deployment settings; the artifact-source catalog defines capture semantics.
+These behaviors matter independently of configured capacity:
 
 - **Background task cadences are fixed in code.** Their thresholds may be configurable even when their
   polling schedules are not.
@@ -151,20 +158,35 @@ behaviors matter independently of their exact defaults:
   then go quiet when their deadline passes.
 - **Nothing is ever deleted from the occurrence ledger**, in any state, including retired rows. It is the
   record of what was *not* done, and it only grows. Size it accordingly on a busy instance.
-- **The repository-tree capture is bounded**, by file count, total size, and per-file size
-  (`GIT_TREE_MAX_FILES`, `GIT_TREE_MAX_TOTAL_SIZE`, `GIT_TREE_MAX_FILE_SIZE`). When a bound bites, the
-  capture reports itself **partial** and names which bound it hit rather than silently truncating. The
-  values in force are the ones declared in the artifact-source catalog's selection scope for that source —
-  read them there rather than from a copy. None of the three is forwarded by the shipped Compose files.
+- **Repository capture includes every regular and executable file at the reviewed commit**, including
+  binary content and large files, plus sanitized Git history reachable from the reviewed commit and
+  the mirrored branches and tags. Native bash, Git, ripgrep, and file-discovery tools are available.
+  File count and content size do not truncate the tree. Symbolic links are materialized as regular
+  files containing the link target, without following it. Submodules are not hydrated; their
+  presence, like an excluded unsafe path, is reported as a partial capture, and a snapshot entry that
+  is not a regular file or directory fails the capture. Git LFS pointers are captured as committed,
+  not replaced by downloads. Provision storage for the mirror, captured content, and per-job staging;
+  model-facing output limits do not bound capture storage. The captured worktree and Git metadata are
+  read-only, with no repository credentials or upstream configuration. Reviews use an isolated
+  internal Docker network; the authenticated worker gateway must be reachable on that network.
+- **Repository preparation is bounded per snapshot and per walk.** Server and worker roles use
+  JGit for capture. This work needs no sandbox admission and does not count against
+  `SANDBOX_MAX_CONCURRENT`; `GIT_MAX_CONCURRENT_INGESTIONS` (default 2) caps how many captured
+  commits a container writes to PostgreSQL at once. A repository whose checkout plus mirrored history
+  exceeds `GIT_MAX_SNAPSHOT_BYTES` (8 GiB by default) is refused whole, measured before the snapshot is
+  written; raise it for larger monorepos. Refusal fails the operation; it never selects a smaller
+  tree. The mirror itself is not measured, so size the fabric root for the repositories you monitor.
+  A commit-history walk reads commits in pages of 256 and pauses after 32 pages that needed
+  capture — pages whose commits were all captured before do not count — and the next sync cycle
+  resumes from the commits already captured.
 - **Linked Outline documents are retrieval-limited, and the mentor and review paths do not agree.** A
   review resolves documents *linked from* the work first and only tops up a small number by search; the
   mentor searches the whole corpus and truncates each document. Neither path can report that it found
   everything, and neither is a substitute for the other when you are diagnosing missing context.
 - **Work that has been deleted at the provider yields a review with no evidence, not an empty one.**
   Once a reconciliation pass finds work missing upstream, evidence capture reports its sources as
-  unavailable and the review stops without recording anything about that work. That is the instance
-  working as intended, not a capture failure to chase. If the work reappears, the next ordinary sync
-  clears the mark and a later review reads it again.
+  unavailable and the review stops without recording anything about that work. If the work reappears,
+  the next ordinary sync clears the mark and a later review reads it again.
 - **No screen edits what the model is told.** What Hephaestus observes is shaped by each practice's
   criteria; the wording it then chooses is shaped by a prompt that ships with the release. Changing the
   latter is a code change.
