@@ -177,8 +177,10 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
 
         webTestClient
                 .get()
-                .uri("/workspaces/stale-user-view/user-view/users/99/practices")
+                .uri("/workspaces/stale-user-view/practices/standings")
                 .headers(h -> h.setBearerAuth(tokenFor(admin, staleSignIn())))
+                .header("X-User-View-Workspace", "stale-user-view")
+                .header("X-User-View-User", "99")
                 .header("X-User-View-Reason", "Support")
                 .exchange()
                 .expectStatus()

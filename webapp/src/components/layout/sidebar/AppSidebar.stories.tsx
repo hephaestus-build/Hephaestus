@@ -95,7 +95,7 @@ export const AdminUser: Story = {
 export const ReadOnlyUserView: Story = {
 	args: {
 		username: "alex",
-		isAdmin: true,
+		isAdmin: false,
 		isAppAdmin: false,
 		hasMentorAccess: true,
 		readOnly: true,

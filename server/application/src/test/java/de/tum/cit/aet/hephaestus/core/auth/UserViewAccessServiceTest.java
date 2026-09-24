@@ -55,8 +55,7 @@ class UserViewAccessServiceTest extends BaseUnitTest {
     void shouldRecordTheAdministratorAsActingAndTheViewedUserWhenTheUserHasNoAccount() {
         when(writer.write(any())).thenReturn(true);
 
-        service.record(
-                7L, 99L, null, "Investigate%20missing%20feedback", "/workspaces/acme/user-view/users/99/practices");
+        service.record(7L, 99L, null, "Investigate%20missing%20feedback", "/workspaces/acme/practices/standings");
 
         AuthEventData event = written();
         assertThat(event.actingAccountId()).isEqualTo(42L);
@@ -65,7 +64,7 @@ class UserViewAccessServiceTest extends BaseUnitTest {
         assertThat(event.workspaceId()).isEqualTo(7L);
         assertThat(event.details())
                 .contains("\"reason\":\"Investigate missing feedback\"")
-                .contains("\"read\":\"/workspaces/acme/user-view/users/99/practices\"");
+                .contains("\"read\":\"/workspaces/acme/practices/standings\"");
     }
 
     @Test
