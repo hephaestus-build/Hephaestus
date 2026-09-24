@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -11,6 +12,8 @@ import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.DeveloperPracticeSummaryProjection;
+import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +23,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -37,6 +41,7 @@ public class ObservationService {
     private final FeedbackObservationRepository feedbackObservationRepository;
     private final UserRepository userRepository;
     private final ReviewRunTargetLookup reviewRunTargetLookup;
+    private final EvidenceAuthorization evidenceAuthorization;
 
     /** Feed ordering: by observation time or by severity (direction applies to both). */
     public enum ObservationSort {
@@ -95,16 +100,12 @@ public class ObservationService {
                 pageable);
     }
 
-    /**
-     * Link to the reviewed artifact behind an observation. Empty when the run target is unknown, for example
-     * after the artifact was deleted.
-     */
-    @Transactional(readOnly = true)
-    public Optional<String> getArtifactUrl(Long workspaceId, Observation observation) {
-        return Optional.ofNullable(reviewRunTargetLookup
-                        .findByJobIds(workspaceId, List.of(observation.getAgentJobId()))
-                        .get(observation.getAgentJobId()))
-                .map(ReviewRunTargetLookup.Target::url);
+    /** Absent when the run target was never recorded or the artifact was deleted since. */
+    private @Nullable String artifactUrl(Long workspaceId, Observation observation) {
+        var target = reviewRunTargetLookup
+                .findByJobIds(workspaceId, List.of(observation.getAgentJobId()))
+                .get(observation.getAgentJobId());
+        return target == null ? null : target.url();
     }
 
     /** Per-practice observation counts for the current user in a workspace. */
@@ -128,38 +129,34 @@ public class ObservationService {
     private static final List<String> FEEDBACK_CHANNELS =
             List.of(FeedbackChannel.IN_CONTEXT.name(), FeedbackChannel.IN_CHAT.name());
 
-    /**
-     * Missing and unowned observations both raise not-found to avoid disclosing their existence.
-     *
-     * @return the observation if it exists and belongs to the current user
-     * @throws EntityNotFoundException if no user, or observation not found/not owned
-     */
+    /** Missing and unowned observations both raise not-found to avoid disclosing their existence. */
     @Transactional(readOnly = true)
-    public Observation getObservation(Long workspaceId, UUID observationId) {
+    public ObservationDetailDTO getObservationDetail(Long workspaceId, UUID observationId) {
         Optional<User> currentUser = userRepository.getCurrentUser();
         if (currentUser.isEmpty()) {
             throw new EntityNotFoundException("Observation", observationId.toString());
         }
-        return observationRepository
-                .findByIdAndDeveloperAndWorkspace(
-                        observationId, currentUser.get().getId(), workspaceId)
-                .orElseThrow(() -> new EntityNotFoundException("Observation", observationId.toString()));
+        return detail(workspaceId, currentUser.get().getId(), observationId);
     }
 
-    /**
-     * The delivered feedback body for a single observation — the developer's advice source for the detail view
-     * (ADR 0021: advice lives on the delivered {@code Feedback}, not the immutable observation). Null when the
-     * observation was never delivered. Callers pass this into {@code ObservationDetailDTO.from}.
-     *
-     * <p>Takes the workspace even though the observation id alone identifies a row: the body it returns
-     * belongs to a feedback unit, and feedback is tenant-scoped whatever the observation is.
-     */
     @Transactional(readOnly = true)
-    public Optional<String> getDeliveredGuidance(Long workspaceId, UUID observationId) {
-        return Optional.ofNullable(deliveredFeedbackByObservation(workspaceId, Set.of(observationId))
-                .get(observationId));
+    public ObservationDetailDTO getObservationDetail(Long workspaceId, Long developerId, UUID observationId) {
+        return detail(workspaceId, developerId, observationId);
     }
 
+    private ObservationDetailDTO detail(Long workspaceId, Long developerId, UUID observationId) {
+        Observation observation = observationRepository
+                .findByIdAndDeveloperAndWorkspace(observationId, developerId, workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Observation", observationId.toString()));
+        return ObservationDetailDTO.from(
+                observation,
+                deliveredFeedbackByObservation(workspaceId, Set.of(observationId))
+                        .get(observationId),
+                artifactUrl(workspaceId, observation),
+                evidenceAuthorization.permits(workspaceId, observation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY));
+    }
+
+    /** Advice lives on the delivered feedback, not the immutable observation (ADR 0021); absent when never delivered. */
     private Map<UUID, String> deliveredFeedbackByObservation(Long workspaceId, Set<UUID> observationIds) {
         if (observationIds.isEmpty()) {
             return Map.of();

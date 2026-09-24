@@ -51,9 +51,8 @@ public class IdentityLinkAuthentication {
     }
 
     /**
-     * The account id from the access cookie, or {@code null} when there is no token, the token is
-     * invalid or revoked, or the session is an impersonation — an operator must not link an identity
-     * into someone else's account, and the {@code act} claim is the only signal that they are one.
+     * The account id from the access cookie, or {@code null} when there is no token or the token is
+     * invalid or revoked.
      *
      * @throws de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException when the session is
      *     valid but the sign-in behind it is no longer recent.
@@ -68,9 +67,6 @@ public class IdentityLinkAuthentication {
         Long accountId;
         try {
             jwt = jwtDecoder.decode(token);
-            if (jwt.hasClaim("act")) {
-                return null;
-            }
             accountId = Long.parseLong(jwt.getSubject());
         } catch (JwtException | NumberFormatException ex) {
             log.warn("auth.link: token rejected: {}", ex.getMessage());

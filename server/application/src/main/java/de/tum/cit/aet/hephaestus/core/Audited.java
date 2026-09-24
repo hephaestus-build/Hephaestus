@@ -13,7 +13,7 @@ import java.lang.annotation.Target;
  * without a recorded decision about auditing it. That makes the trail's completeness a property of the
  * build rather than of anyone's memory.
  */
-@Target(ElementType.METHOD)
+@Target({ElementType.METHOD, ElementType.ANNOTATION_TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Audited {
     AuditLedger ledger();

@@ -50,7 +50,6 @@ import { safeReturnTo } from "@/runtime/auth/guard";
 import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools";
 import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 import { isCopilotExcludedRoute } from "./-copilot-route";
-import { ImpersonationBannerHost } from "./-ImpersonationBannerHost";
 
 const GlobalCopilot = lazy(async () => import("./-GlobalCopilot"));
 
@@ -102,7 +101,6 @@ function RootLayout() {
 			<HeadContent />
 			<SkipToContent />
 			{loginOpen !== true && <CookieConsentBanner />}
-			<ImpersonationBannerHost />
 			<ProviderColorScope>
 				<SidebarProvider>
 					<AppSidebarContainer />
@@ -284,7 +282,6 @@ function HeaderContainer() {
 		logout,
 		getUserProfilePictureUrl,
 		getUserId,
-		isImpersonating,
 	} = useAuth();
 	const {
 		chromeWorkspaceSlug,
@@ -310,7 +307,7 @@ function HeaderContainer() {
 			avatarUrl={getUserProfilePictureUrl()}
 			workspaceSlug={chromeWorkspaceSlug}
 			feedbackDialog={
-				!isLoading && isAuthenticated && !isImpersonating ? (
+				!isLoading && isAuthenticated ? (
 					<ProductFeedbackControls
 						key={`${getUserId()}:${chromeWorkspaceSlug}`}
 						workspaceSlug={chromeWorkspaceSlug}

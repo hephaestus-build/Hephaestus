@@ -53,6 +53,11 @@ public class PracticeGroupStandingService {
     @Transactional(readOnly = true)
     public List<PracticeGroupStandingDTO> getGroupStandings(Long workspaceId, List<PracticeGroup> groups) {
         PracticeStandingService.StandingSnapshot snapshot = practiceStandingService.getStandingSnapshot(workspaceId);
+        return summarize(groups, snapshot);
+    }
+
+    public List<PracticeGroupStandingDTO> summarize(
+            List<PracticeGroup> groups, PracticeStandingService.StandingSnapshot snapshot) {
         Map<String, List<PracticeStandingDTO>> cardsByGroup = cardsByGroup(snapshot.practices());
         Map<String, PracticeTrend> practiceTrends =
                 practiceTrendService.calculatePractices(snapshot.evidenceByPractice());

@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Instance-admin workspaces overview, guarded by the namespaced {@code app_admin} authority. Returns
- * metadata only (no tenant content); cross-tenant content is reachable only via audited impersonation.
+ * metadata only (no tenant content); private user content is reached through audited read-only user views.
  * Thin adapter over {@link WorkspaceAdminService}.
  */
 @RestController

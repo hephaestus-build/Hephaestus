@@ -26,6 +26,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { ContributingPractice } from "@/lib/practice-standing";
 import { hasText } from "@/lib/text";
 import { PracticeNextStepCallout } from "./PracticeNextStepCallout";
 import { PracticeTrendChip } from "./PracticeTrendChip";
@@ -59,16 +60,6 @@ const EMPTY_FEED: ReviewRunFeedState = {
 		// An empty feed has nothing more to load, and `hasMore: false` keeps the button off screen.
 	},
 };
-export interface ContributingPractice {
-	slug: string;
-	name: string;
-	whyItMatters?: string;
-	whatGoodLooksLike?: string;
-	standing?: PracticeStanding["standing"];
-	trend?: PracticeTrend;
-	nextStep?: string;
-}
-
 export interface PracticeGroupDetailPageProps {
 	group?: PracticeGroup;
 	standing?: PracticeGroupStanding;

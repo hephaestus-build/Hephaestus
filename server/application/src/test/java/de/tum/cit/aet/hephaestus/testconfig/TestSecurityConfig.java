@@ -23,13 +23,6 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 @Profile("test")
 public class TestSecurityConfig {
 
-    /** Stable token strings + claims used by the impersonation-guard integration test. */
-    public static final String IMPERSONATION_TOKEN = "mock-jwt-token-for-impersonation";
-
-    public static final String NUMERIC_SUBJECT_TOKEN = "mock-jwt-token-for-numeric-user";
-    private static final String IMPERSONATION_JTI = "11111111-1111-1111-1111-111111111111";
-    private static final String NUMERIC_JTI = "22222222-2222-2222-2222-222222222222";
-
     /**
      * Mock JWT decoder that creates a valid JWT for testing.
      * This decoder will be used by the main SecurityConfig's OAuth2 resource server configuration.
@@ -51,40 +44,6 @@ public class TestSecurityConfig {
     @Primary
     public JwtDecoder mockJwtDecoder() {
         return token -> {
-            // Impersonation token: numeric sub + RFC 8693 `act` claim so ImpersonationGuard treats
-            // the session as read-only. A valid jti keeps the controller path (logout) clean.
-            if (IMPERSONATION_TOKEN.equals(token)) {
-                return Jwt.withTokenValue(token)
-                        .header("alg", "ES256")
-                        .header("typ", "JWT")
-                        .claim("sub", "1")
-                        .claim("preferred_username", "impersonated")
-                        .claim("iss", "https://test-issuer")
-                        .claim("aud", "test-audience")
-                        .claim("jti", IMPERSONATION_JTI)
-                        .claim("roles", Arrays.asList("app_admin"))
-                        .claim("act", Map.of("sub", "2"))
-                        .claim("auth_time", Instant.now().getEpochSecond())
-                        .issuedAt(Instant.now())
-                        .expiresAt(Instant.now().plusSeconds(3600))
-                        .build();
-            }
-            // Plain (non-act) token with a numeric sub + valid jti — a normal write must be allowed.
-            if (NUMERIC_SUBJECT_TOKEN.equals(token)) {
-                return Jwt.withTokenValue(token)
-                        .header("alg", "ES256")
-                        .header("typ", "JWT")
-                        .claim("sub", "1")
-                        .claim("preferred_username", "numericuser")
-                        .claim("iss", "https://test-issuer")
-                        .claim("aud", "test-audience")
-                        .claim("jti", NUMERIC_JTI)
-                        .claim("auth_time", Instant.now().getEpochSecond())
-                        .issuedAt(Instant.now())
-                        .expiresAt(Instant.now().plusSeconds(3600))
-                        .build();
-            }
-
             // Dynamic numeric-subject token: "mock-jwt-sub-<accountId>" decodes to that exact `sub`,
             // so a test can authenticate AS a specific (DB-assigned) Account id — required since the
             // native-auth migration keys currentAccountId() on a numeric JWT sub (ADR 0017). Carries the
