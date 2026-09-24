@@ -98,7 +98,7 @@ describe("read-only user view", () => {
 
 	it("carries the encoded reason and the user id on every private read", async () => {
 		const reads = privateReads();
-		renderRouteAt("/admin/workspaces/engineering/users");
+		const queryClient = renderRouteAt("/admin/workspaces/engineering/users");
 		const user = await openUserView("never-signed-in");
 		await user.click(await screen.findByRole("tab", { name: "Conversations" }));
 		await screen.findByText("No existing conversations");
@@ -112,6 +112,15 @@ describe("read-only user view", () => {
 				reason: "Investigate%20missing%20feedback",
 			},
 		]);
+		const serializedKeys = JSON.stringify(
+			queryClient
+				.getQueryCache()
+				.getAll()
+				.map((query) => query.queryKey),
+		);
+		expect(serializedKeys).not.toContain(REASON);
+		expect(serializedKeys).not.toContain(encodeURIComponent(REASON));
+		expect(serializedKeys).toContain('"userId":11');
 	});
 
 	it("unmounts the view on exit", async () => {

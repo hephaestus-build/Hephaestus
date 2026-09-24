@@ -1,15 +1,23 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import {
-	getUserPracticeViewOptions,
-	getUserViewConversationOptions,
-	getUserViewObservationOptions,
-	getUserViewTrendOptions,
+	getUserPracticeViewQueryKey,
+	getUserViewConversationQueryKey,
+	getUserViewObservationQueryKey,
+	getUserViewTrendQueryKey,
 	getWorkspaceOptions,
-	listUserViewConversationsOptions,
-	listUserViewRunsInfiniteOptions,
+	listUserViewConversationsQueryKey,
+	listUserViewRunsInfiniteQueryKey,
 	listUserViewUsersOptions,
 } from "@/api/@tanstack/react-query.gen";
+import {
+	getUserPracticeView,
+	getUserViewConversation,
+	getUserViewObservation,
+	getUserViewTrend,
+	listUserViewConversations,
+	listUserViewRuns,
+} from "@/api/sdk.gen";
 import type { Workspace } from "@/api/types.gen";
 import type { UserViewConversationsState } from "@/components/admin/users/UserViewConversations";
 import type { UserViewConversationState } from "@/components/admin/users/UserViewConversationThread";
@@ -45,6 +53,11 @@ function privateRequest({ workspaceSlug, userId, reason }: ViewedUser) {
 	};
 }
 
+function privateCacheIdentity<T extends ReturnType<typeof privateRequest>>(request: T) {
+	// The audit reason belongs in the request, not in a serializable query key.
+	return { ...request, headers: { "X-User-View-Reason": "" } };
+}
+
 export type UserViewWorkspaceState = PanelState<
 	Pick<Workspace, "displayName" | "practicesEnabled" | "mentorEnabled">
 >;
@@ -74,8 +87,13 @@ export function useUserViewUsers(workspaceSlug: string, page: number): UserViewU
 }
 
 export function useUserPracticeView(viewed: ViewedUser): UserPracticeViewState {
+	const request = privateRequest(viewed);
 	const query = useQuery({
-		...getUserPracticeViewOptions(privateRequest(viewed)),
+		queryKey: getUserPracticeViewQueryKey(privateCacheIdentity(request)),
+		queryFn: async ({ signal }) => {
+			const { data } = await getUserPracticeView({ ...request, signal, throwOnError: true });
+			return data;
+		},
 		...PRIVATE_READ,
 	});
 	return panelState(query, (summary) => ({ status: "ready", summary }));
@@ -88,27 +106,55 @@ export function useUserViewGroup(
 	const request = privateRequest(viewed);
 	const groupSlug = selection?.groupSlug ?? "";
 	const observationId = selection?.observationId;
+	const groupPath = { ...request.path, groupSlug };
+	const runsQuery = { size: USER_VIEW_RUNS_PAGE_SIZE, practiceSlug: selection?.practiceSlug };
+	const observationPath = { ...request.path, observationId: observationId ?? "" };
 	const trend = useQuery({
-		...getUserViewTrendOptions({ ...request, path: { ...request.path, groupSlug } }),
+		queryKey: getUserViewTrendQueryKey(privateCacheIdentity({ ...request, path: groupPath })),
+		queryFn: async ({ signal }) => {
+			const { data } = await getUserViewTrend({
+				...request,
+				path: groupPath,
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
 		...PRIVATE_READ,
 		enabled: selection !== undefined,
 	});
 	const runs = useInfiniteQuery({
-		...listUserViewRunsInfiniteOptions({
-			...request,
-			path: { ...request.path, groupSlug },
-			query: { size: USER_VIEW_RUNS_PAGE_SIZE, practiceSlug: selection?.practiceSlug },
-		}),
+		queryKey: listUserViewRunsInfiniteQueryKey(
+			privateCacheIdentity({ ...request, path: groupPath, query: runsQuery }),
+		),
+		queryFn: async ({ pageParam, signal }) => {
+			const { data } = await listUserViewRuns({
+				...request,
+				path: groupPath,
+				query: { ...runsQuery, page: pageParam },
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
 		...PRIVATE_READ,
 		enabled: selection !== undefined,
 		initialPageParam: 0,
 		getNextPageParam: (last) => (last.hasNext === true ? (last.page ?? 0) + 1 : undefined),
 	});
 	const observation = useQuery({
-		...getUserViewObservationOptions({
-			...request,
-			path: { ...request.path, observationId: observationId ?? "" },
-		}),
+		queryKey: getUserViewObservationQueryKey(
+			privateCacheIdentity({ ...request, path: observationPath }),
+		),
+		queryFn: async ({ signal }) => {
+			const { data } = await getUserViewObservation({
+				...request,
+				path: observationPath,
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
 		...PRIVATE_READ,
 		enabled: selection !== undefined && observationId !== undefined,
 	});
@@ -177,11 +223,21 @@ export function useUserViewConversations(
 	page: number,
 	enabled: boolean,
 ): UserViewConversationsState {
+	const request = privateRequest(viewed);
+	const conversationsQuery = { page, size: USER_VIEW_PAGE_SIZE };
 	const query = useQuery({
-		...listUserViewConversationsOptions({
-			...privateRequest(viewed),
-			query: { page, size: USER_VIEW_PAGE_SIZE },
-		}),
+		queryKey: listUserViewConversationsQueryKey(
+			privateCacheIdentity({ ...request, query: conversationsQuery }),
+		),
+		queryFn: async ({ signal }) => {
+			const { data } = await listUserViewConversations({
+				...request,
+				query: conversationsQuery,
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
 		...PRIVATE_READ,
 		enabled,
 	});
@@ -197,11 +253,20 @@ export function useUserViewConversation(
 	threadId: string | undefined,
 ): UserViewConversationState {
 	const request = privateRequest(viewed);
+	const conversationPath = { ...request.path, threadId: threadId ?? "" };
 	const query = useQuery({
-		...getUserViewConversationOptions({
-			...request,
-			path: { ...request.path, threadId: threadId ?? "" },
-		}),
+		queryKey: getUserViewConversationQueryKey(
+			privateCacheIdentity({ ...request, path: conversationPath }),
+		),
+		queryFn: async ({ signal }) => {
+			const { data } = await getUserViewConversation({
+				...request,
+				path: conversationPath,
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
 		...PRIVATE_READ,
 		enabled: threadId !== undefined,
 	});
