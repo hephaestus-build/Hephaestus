@@ -89,7 +89,10 @@ export function AiChoiceCards({ choice, saved, onChoice, modelsByChoice }: AiCho
 					>
 						<span
 							data-slot="ai-choice-header"
-							className={cn("flex flex-col gap-2 rounded-lg p-3 md:h-48", CHOICE_VISUALS[value])}
+							className={cn(
+								"flex flex-col gap-2 rounded-lg p-3 md:min-h-44",
+								CHOICE_VISUALS[value],
+							)}
 						>
 							<span className="flex items-center gap-2 text-base font-semibold text-foreground">
 								<Icon
@@ -154,7 +157,7 @@ export function AiChoiceCards({ choice, saved, onChoice, modelsByChoice }: AiCho
 								return (
 									<span
 										key={MEMBER_AI_CHOICE_DIMENSIONS[index]}
-										className="grid content-center gap-1.5 border-b border-border py-2.5 last:border-b-0 md:h-28"
+										className="grid content-start gap-1.5 border-b border-border py-2.5 last:border-b-0 md:min-h-26"
 									>
 										<span className="text-xs font-medium text-muted-foreground">
 											{MEMBER_AI_CHOICE_DIMENSIONS[index]}
