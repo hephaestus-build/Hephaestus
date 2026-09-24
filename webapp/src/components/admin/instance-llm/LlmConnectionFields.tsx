@@ -1,5 +1,10 @@
 import { useId } from "react";
 
+import {
+	AI_CONNECTION_PLATFORM_LABELS,
+	AI_CONNECTION_PLATFORMS,
+	type AiConnectionPlatform,
+} from "@/components/icons/ai-connection-platform-logos";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Field,
@@ -45,11 +50,13 @@ export interface LlmConnectionFieldsValue {
 	/** Always blank on open: a stored key is never read back to the browser. */
 	apiKey: string;
 	clearApiKey: boolean;
+	connectionPlatform?: AiConnectionPlatform;
 }
 
 type EditedConnection = OpenAiConnectionIdentity & {
 	displayName: string;
 	authMode?: LlmAuthMode;
+	connectionPlatform?: AiConnectionPlatform;
 };
 
 export function connectionFieldsValueOf(
@@ -63,6 +70,7 @@ export function connectionFieldsValueOf(
 		authMode: connection?.authMode ?? "BEARER",
 		apiKey: "",
 		clearApiKey: false,
+		connectionPlatform: connection?.connectionPlatform,
 	};
 }
 
@@ -101,6 +109,8 @@ export function LlmConnectionFields({
 	const presetLabelId = useId();
 	const responsesApiId = useId();
 	const baseUrlId = useId();
+	const connectionPlatformId = useId();
+	const connectionPlatformLabelId = useId();
 	const authModeId = useId();
 	const authModeLabelId = useId();
 	const apiKeyId = useId();
@@ -209,6 +219,43 @@ export function LlmConnectionFields({
 					</FieldDescription>
 				)}
 				{hasText(errors.baseUrl) && <FieldError id={baseUrlErrorId}>{errors.baseUrl}</FieldError>}
+			</Field>
+
+			<Field>
+				<FieldLabel id={connectionPlatformLabelId} htmlFor={connectionPlatformId}>
+					Connection platform <span className="font-normal text-muted-foreground">(optional)</span>
+				</FieldLabel>
+				<Select
+					items={[
+						{ value: "UNDECLARED", label: "Not declared" },
+						...AI_CONNECTION_PLATFORMS.map((platform) => ({
+							value: platform,
+							label: AI_CONNECTION_PLATFORM_LABELS[platform],
+						})),
+					]}
+					value={value.connectionPlatform ?? "UNDECLARED"}
+					onValueChange={(platform) =>
+						update({
+							connectionPlatform: AI_CONNECTION_PLATFORMS.find((item) => item === platform),
+						})
+					}
+				>
+					<SelectTrigger id={connectionPlatformId} className="w-full">
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent aria-labelledby={connectionPlatformLabelId}>
+						<SelectItem value="UNDECLARED">Not declared</SelectItem>
+						{AI_CONNECTION_PLATFORMS.map((platform) => (
+							<SelectItem key={platform} value={platform}>
+								{AI_CONNECTION_PLATFORM_LABELS[platform]}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<FieldDescription>
+					Name the service that receives requests, if known. This does not say who operates it or
+					where data stays.
+				</FieldDescription>
 			</Field>
 
 			{!isEdit && value.preset === "OTHER" && (

@@ -882,6 +882,10 @@ export type CreateLlmConnectionRequest = {
    */
   baseUrl: string;
   /**
+   * Admin-declared connection platform; null when not declared
+   */
+  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
+  /**
    * Human-readable name
    */
   displayName: string;
@@ -1129,6 +1133,10 @@ export type CreateWorkspaceLlmConnectionRequest = {
    * Provider base URL
    */
   baseUrl: string;
+  /**
+   * Admin-declared connection platform; null when not declared
+   */
+  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
   /**
    * Human-readable name
    */
@@ -2111,6 +2119,10 @@ export type LlmConnection = {
    * Provider base URL
    */
   baseUrl: string;
+  /**
+   * Admin-declared connection platform
+   */
+  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
   /**
    * Creation timestamp
    */
@@ -5471,6 +5483,14 @@ export type UpdateLlmConnectionRequest = {
    */
   clearApiKey?: boolean;
   /**
+   * Set true to clear the declared connection platform
+   */
+  clearConnectionPlatform?: boolean;
+  /**
+   * Admin-declared connection platform
+   */
+  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
+  /**
    * Human-readable name
    */
   displayName?: string;
@@ -5851,6 +5871,14 @@ export type UpdateWorkspaceLlmConnectionRequest = {
    */
   clearApiKey?: boolean;
   /**
+   * Set true to clear the declared connection platform
+   */
+  clearConnectionPlatform?: boolean;
+  /**
+   * Admin-declared connection platform
+   */
+  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
+  /**
    * Human-readable name
    */
   displayName?: string;
@@ -6188,6 +6216,8 @@ export type Workspace = {
  */
 export type WorkspaceAiModel = {
   brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
+  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
+  dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
   name: string;
 };
 
@@ -6272,6 +6302,10 @@ export type WorkspaceLlmConnection = {
    * Provider base URL
    */
   baseUrl: string;
+  /**
+   * Admin-declared connection platform
+   */
+  connectionPlatform?: 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'VERCEL_AI_GATEWAY';
   /**
    * Creation timestamp
    */

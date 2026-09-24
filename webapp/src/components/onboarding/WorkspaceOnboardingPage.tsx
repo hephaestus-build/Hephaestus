@@ -9,6 +9,10 @@ import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import {
+	AI_CONNECTION_PLATFORM_LABELS,
+	AI_CONNECTION_PLATFORM_LOGOS,
+} from "@/components/icons/ai-connection-platform-logos";
+import {
 	AI_MODEL_BRAND_LABELS,
 	AI_MODEL_BRAND_LOGOS,
 } from "@/components/icons/ai-model-brand-logos";
@@ -17,6 +21,7 @@ import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
 import { HephSays } from "@/components/mentor/HephSays";
 import {
+	DATA_HANDLING_DEFS,
 	type MemberAiChoice,
 	memberAiChoiceTitle,
 } from "@/components/practice-vocabulary/data-handling-defs";
@@ -198,9 +203,9 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 							<span className="sr-only">Loading…</span>
 							<Skeleton className="h-20 w-full" />
 							<div className="grid gap-3 md:grid-cols-3">
-								<Skeleton className="h-28" />
-								<Skeleton className="h-28" />
-								<Skeleton className="h-28" />
+								<Skeleton className="h-64" />
+								<Skeleton className="h-64" />
+								<Skeleton className="h-64" />
 							</div>
 						</div>
 					)}
@@ -523,27 +528,59 @@ function WorkspaceModels({
 			aria-label={`Models for this answer in ${workspaceName}`}
 			className="rounded-lg border border-border bg-muted/30 p-4"
 		>
-			<p className="text-sm font-medium text-foreground">
-				Models set up for this answer in {workspaceName}
+			<p className="text-sm font-semibold text-foreground">Ready models in {workspaceName}</p>
+			<p className="mt-1 text-sm text-muted-foreground">
+				These models are set up for this answer. The marks show the model and connection; data
+				handling is declared separately.
 			</p>
-			<ul className="mt-3 flex flex-wrap gap-2">
+			<ul className="mt-3 grid gap-2 sm:grid-cols-2">
 				{models.map((model) => {
 					const brand = model.brand ? AI_MODEL_BRAND_LOGOS[model.brand] : undefined;
 					const brandLabel = model.brand ? AI_MODEL_BRAND_LABELS[model.brand] : undefined;
+					const platform = model.connectionPlatform
+						? AI_CONNECTION_PLATFORM_LOGOS[model.connectionPlatform]
+						: undefined;
+					const platformLabel = model.connectionPlatform
+						? AI_CONNECTION_PLATFORM_LABELS[model.connectionPlatform]
+						: undefined;
+					const tier = DATA_HANDLING_DEFS[model.dataHandlingTier];
 					return (
 						<li
-							key={`${model.name}-${model.brand ?? "unknown"}`}
-							className="flex max-w-full min-w-0 items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
+							key={`${model.name}-${model.brand ?? "unknown"}-${model.connectionPlatform ?? "unknown"}`}
+							className="min-w-0 rounded-md border border-border bg-background p-3 text-sm"
 						>
-							{hasText(brand) && (
-								<img
-									src={brand}
-									alt=""
-									className="size-5 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
-								/>
-							)}
-							<span className="min-w-0 break-words text-foreground">{model.name}</span>
-							{hasText(brandLabel) && <span className="text-muted-foreground"> {brandLabel}</span>}
+							<div className="flex items-center gap-2">
+								{hasText(brand) && (
+									<img
+										src={brand}
+										alt=""
+										className="size-6 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
+									/>
+								)}
+								<span className="min-w-0 font-medium break-words text-foreground">
+									{model.name}
+								</span>
+							</div>
+							<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-muted-foreground">
+								{hasText(brandLabel) && <span>Model: {brandLabel}</span>}
+								{hasText(platformLabel) && (
+									<span className="inline-flex items-center gap-1.5">
+										{hasText(platform) && (
+											<img
+												src={platform}
+												alt=""
+												className="size-4 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
+											/>
+										)}
+										via {platformLabel}
+									</span>
+								)}
+								<Badge variant={tier.badgeVariant}>
+									{model.dataHandlingTier === "UNDECLARED"
+										? tier.label
+										: `Declared ${tier.label.toLowerCase()}`}
+								</Badge>
+							</div>
 						</li>
 					);
 				})}

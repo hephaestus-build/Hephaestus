@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { assert, describe, expect, it, vi } from "vitest";
 
 import type { LlmConnection } from "@/api/types.gen";
@@ -66,6 +67,18 @@ describe("AdminLlmConnectionFormDialog", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		const update = onUpdate.mock.calls[0]?.[1];
 		expect(update).toStrictEqual({ displayName: "Custom endpoint" });
+	});
+
+	it("saves and clears a declared connection platform", async () => {
+		const onUpdate = vi.fn<AdminLlmConnectionFormDialogProps["onUpdate"]>();
+		renderDialog({ editing: { ...connection, connectionPlatform: "AZURE" }, onUpdate });
+		await userEvent.click(screen.getByRole("combobox", { name: /Connection platform/u }));
+		await userEvent.click(await screen.findByRole("option", { name: "Not declared" }));
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onUpdate).toHaveBeenCalledWith(connection.id, {
+			displayName: "Custom endpoint",
+			clearConnectionPlatform: true,
+		});
 	});
 
 	it("tests a replacement credential instead of reporting the old saved credential", () => {

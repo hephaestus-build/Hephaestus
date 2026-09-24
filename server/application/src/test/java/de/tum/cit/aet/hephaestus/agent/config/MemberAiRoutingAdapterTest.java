@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAiAvailability;
@@ -205,21 +206,33 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         workspace.getFeatures().setPracticesEnabled(true);
         when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
         var inHouse = ready(DataHandlingTier.IN_HOUSE);
-        inHouse.setInstanceModel(
-                model("Llama 3.3", "meta-llama/Llama-3.3-70B", "http://ollama.internal:11434/v1", AiModelBrand.META));
+        var inHouseModel =
+                model("Llama 3.3", "meta-llama/Llama-3.3-70B", "https://org-operated-vm.example/v1", AiModelBrand.META);
+        inHouseModel.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
+        inHouseModel.getConnection().setConnectionPlatform(LlmConnectionPlatform.AZURE);
+        inHouse.setInstanceModel(inHouseModel);
         var cloud = ready(DataHandlingTier.CLOUD);
-        cloud.setInstanceModel(model("GPT-5", "gpt-5", "https://acme.openai.azure.com/openai", AiModelBrand.OPENAI));
+        var azureModel = model("GPT-6 Luna", "gpt-6-luna", "https://acme.openai.azure.com/openai", AiModelBrand.OPENAI);
+        azureModel.getConnection().setConnectionPlatform(LlmConnectionPlatform.AZURE);
+        azureModel.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
+        cloud.setInstanceModel(azureModel);
         when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
                 .thenReturn(List.of(inHouse, cloud));
         when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(inHouse));
         var options = routing.options(1L);
         assertThat(options.get(0).models())
-                .containsExactly(new WorkspaceAiAvailability.Model("Llama 3.3", AiModelBrand.META));
+                .containsExactly(new WorkspaceAiAvailability.Model(
+                        "Llama 3.3", AiModelBrand.META, LlmConnectionPlatform.AZURE, DataHandlingTier.IN_HOUSE));
         // Cloud serves reviews from the cloud row and Heph from the in-house row, each named once.
         assertThat(options.get(1).models())
                 .containsExactly(
-                        new WorkspaceAiAvailability.Model("GPT-5", AiModelBrand.OPENAI),
-                        new WorkspaceAiAvailability.Model("Llama 3.3", AiModelBrand.META));
+                        new WorkspaceAiAvailability.Model(
+                                "GPT-6 Luna", AiModelBrand.OPENAI, LlmConnectionPlatform.AZURE, DataHandlingTier.CLOUD),
+                        new WorkspaceAiAvailability.Model(
+                                "Llama 3.3",
+                                AiModelBrand.META,
+                                LlmConnectionPlatform.AZURE,
+                                DataHandlingTier.IN_HOUSE));
     }
 
     @Test
@@ -228,10 +241,12 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         workspace.getFeatures().setMentorEnabled(true);
         when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
         var cloud = ready(DataHandlingTier.CLOUD);
-        cloud.setInstanceModel(model("Custom model", "gpt-5", "https://api.openai.com/v1", null));
+        var cloudModel = model("Custom model", "gpt-5", "https://api.openai.com/v1", null);
+        cloudModel.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
+        cloud.setInstanceModel(cloudModel);
         when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(cloud));
         assertThat(routing.options(1L).get(1).models())
-                .containsExactly(new WorkspaceAiAvailability.Model("Custom model", null));
+                .containsExactly(new WorkspaceAiAvailability.Model("Custom model", null, null, DataHandlingTier.CLOUD));
     }
 
     private static LlmModel model(String name, String upstreamId, String baseUrl, @Nullable AiModelBrand brand) {

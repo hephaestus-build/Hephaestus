@@ -614,7 +614,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         "openai-completions",
                         LlmAuthMode.BEARER,
                         "sk-workspace-secret-9999",
-                        true))
+                        true,
+                        null))
                 .exchange()
                 .expectStatus()
                 .isCreated()

@@ -106,7 +106,8 @@ class WorkspaceOnboardingService {
     }
 
     private static WorkspaceOnboardingDTO.WorkspaceAiModelDTO toDTO(WorkspaceAiAvailability.Model model) {
-        return new WorkspaceOnboardingDTO.WorkspaceAiModelDTO(model.name(), model.brand());
+        return new WorkspaceOnboardingDTO.WorkspaceAiModelDTO(
+                model.name(), model.brand(), model.connectionPlatform(), model.dataHandlingTier());
     }
 
     private AccountAiChoice writeChoice(long accountId, MemberAiChoice choice) {

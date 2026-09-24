@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { WorkspaceLlmConnection } from "@/api/types.gen";
@@ -74,6 +75,17 @@ describe("WorkspaceLlmConnectionFormDialog", () => {
 		expect(onUpdate).toHaveBeenCalledWith(
 			connection.id,
 			expect.objectContaining({ enabled: false, clearApiKey: true }),
+		);
+	});
+
+	it("saves a declared connection platform", async () => {
+		const onUpdate = renderDialog();
+		await userEvent.click(screen.getByRole("combobox", { name: /Connection platform/u }));
+		await userEvent.click(await screen.findByRole("option", { name: "Azure" }));
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onUpdate).toHaveBeenCalledWith(
+			connection.id,
+			expect.objectContaining({ connectionPlatform: "AZURE" }),
 		);
 	});
 });

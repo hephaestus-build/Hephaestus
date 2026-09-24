@@ -706,6 +706,7 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(32) connection_platform
     }
 
     LlmModel {
@@ -1574,6 +1575,7 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(32) connection_platform
     }
 
     WorkspaceLlmModel {

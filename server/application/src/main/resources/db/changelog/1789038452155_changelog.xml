@@ -145,4 +145,14 @@
             <column name="brand" type="VARCHAR(16)"/>
         </addColumn>
     </changeSet>
+    <changeSet id="1789038452155-21" author="hephaestus">
+        <addColumn tableName="llm_connection">
+            <column name="connection_platform" type="VARCHAR(32)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789038452155-22" author="hephaestus">
+        <addColumn tableName="workspace_llm_connection">
+            <column name="connection_platform" type="VARCHAR(32)"/>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>

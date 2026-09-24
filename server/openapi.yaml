@@ -10173,6 +10173,15 @@ components:
           description: Provider base URL
           maxLength: 2048
           minLength: 0
+        connectionPlatform:
+          type: string
+          description: Admin-declared connection platform; null when not declared
+          enum:
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - VERCEL_AI_GATEWAY
         displayName:
           type: string
           description: Human-readable name
@@ -10549,6 +10558,15 @@ components:
           description: Provider base URL
           maxLength: 2048
           minLength: 0
+        connectionPlatform:
+          type: string
+          description: Admin-declared connection platform; null when not declared
+          enum:
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - VERCEL_AI_GATEWAY
         displayName:
           type: string
           description: Human-readable name
@@ -12122,6 +12140,15 @@ components:
         baseUrl:
           type: string
           description: Provider base URL
+        connectionPlatform:
+          type: string
+          description: Admin-declared connection platform
+          enum:
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - VERCEL_AI_GATEWAY
         createdAt:
           type: string
           format: date-time
@@ -17336,6 +17363,18 @@ components:
         clearApiKey:
           type: boolean
           description: Set true to clear the stored API key
+        clearConnectionPlatform:
+          type: boolean
+          description: Set true to clear the declared connection platform
+        connectionPlatform:
+          type: string
+          description: Admin-declared connection platform
+          enum:
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - VERCEL_AI_GATEWAY
         displayName:
           type: string
           description: Human-readable name
@@ -17833,6 +17872,18 @@ components:
         clearApiKey:
           type: boolean
           description: Set true to clear the stored API key
+        clearConnectionPlatform:
+          type: boolean
+          description: Set true to clear the declared connection platform
+        connectionPlatform:
+          type: string
+          description: Admin-declared connection platform
+          enum:
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - VERCEL_AI_GATEWAY
         displayName:
           type: string
           description: Human-readable name
@@ -18264,9 +18315,24 @@ components:
           - MISTRAL
           - QWEN
           - DEEPSEEK
+        connectionPlatform:
+          type: string
+          enum:
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - VERCEL_AI_GATEWAY
+        dataHandlingTier:
+          type: string
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
         name:
           type: string
       required:
+      - dataHandlingTier
       - name
     WorkspaceAiOption:
       type: object
@@ -18372,6 +18438,15 @@ components:
         baseUrl:
           type: string
           description: Provider base URL
+        connectionPlatform:
+          type: string
+          description: Admin-declared connection platform
+          enum:
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - VERCEL_AI_GATEWAY
         createdAt:
           type: string
           format: date-time

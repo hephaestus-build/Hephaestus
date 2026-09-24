@@ -41,13 +41,13 @@ const allCovered = [
 		choice: "IN_HOUSE_ONLY",
 		practiceReviewsReady: true,
 		mentorReady: true,
-		models: [{ name: "Llama 3.3", brand: "META" }],
+		models: [{ name: "Llama 3.3", brand: "META", dataHandlingTier: "IN_HOUSE" }],
 	},
 	{
 		choice: "CLOUD",
 		practiceReviewsReady: true,
 		mentorReady: true,
-		models: [{ name: "GPT-5", brand: "OPENAI" }],
+		models: [{ name: "GPT-5", brand: "OPENAI", dataHandlingTier: "CLOUD" }],
 	},
 ] satisfies WorkspaceOnboarding["aiOptions"];
 
@@ -193,7 +193,9 @@ export const AnswerAndContinue: Story = {
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
 		await expect(canvas.getByRole("radio", { name: CLOUD })).toBeChecked();
 		const models = canvas.getByRole("region", { name: "Models for this answer in Engineering" });
-		await expect(models).toHaveTextContent("GPT-5 OpenAI");
+		await expect(models).toHaveTextContent("GPT-5");
+		await expect(models).toHaveTextContent("Model: OpenAI");
+		await expect(models).toHaveTextContent("Declared cloud");
 		await expect(canvas.getByText("Press Continue and it holds in every workspace.")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
@@ -205,7 +207,7 @@ export const NoAi: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
-			/No AI processing for practice reviews or Heph.*Sync and stored work stay available/u,
+			/No AI.*Benefit\. No new AI requests for practice reviews or Heph\..*Trade-off\. No new AI feedback or Heph replies; sync and stored work continue/u,
 		);
 		await expect(canvas.queryByRole("region", { name: /Models for this answer/u })).toBeNull();
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
@@ -227,16 +229,21 @@ export const WorkspaceModels: Story = {
 						choice: "IN_HOUSE_ONLY",
 						practiceReviewsReady: true,
 						mentorReady: true,
-						models: [{ name: "Qwen3", brand: "QWEN" }],
+						models: [{ name: "Qwen3", brand: "QWEN", dataHandlingTier: "IN_HOUSE" }],
 					},
 					{
 						choice: "CLOUD",
 						practiceReviewsReady: true,
 						mentorReady: true,
 						models: [
-							{ name: "Qwen3", brand: "QWEN" },
-							{ name: "Gemma 3", brand: "GEMMA" },
-							{ name: "Team model" },
+							{ name: "Qwen3", brand: "QWEN", dataHandlingTier: "IN_HOUSE" },
+							{
+								name: "gpt-6-luna",
+								brand: "OPENAI",
+								connectionPlatform: "AZURE",
+								dataHandlingTier: "CLOUD",
+							},
+							{ name: "Team model", dataHandlingTier: "IN_HOUSE" },
 						],
 					},
 				],
@@ -245,10 +252,13 @@ export const WorkspaceModels: Story = {
 	},
 	play: async ({ canvas }) => {
 		const models = canvas.getByRole("region", { name: "Models for this answer in Engineering" });
-		await expect(models).toHaveTextContent("Qwen3 Qwen");
-		await expect(models).toHaveTextContent("Gemma 3 Google Gemma");
+		await expect(models).toHaveTextContent("Qwen3");
+		await expect(models).toHaveTextContent("gpt-6-luna");
+		await expect(models).toHaveTextContent("Model: OpenAI");
+		await expect(models).toHaveTextContent("via Azure");
+		await expect(models).toHaveTextContent("Declared cloud");
 		await expect(models).toHaveTextContent("Team model");
-		await expect(models.querySelectorAll("img")).toHaveLength(2);
+		await expect(models.querySelectorAll("img")).toHaveLength(3);
 		await expect(canvas.getByRole("radio", { name: CLOUD }).querySelector("img")).toBeNull();
 	},
 };
@@ -346,7 +356,9 @@ export const OptionUncovered: Story = {
 	},
 	play: async ({ canvas, userEvent, args }) => {
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
-		await expect(inHouse).toHaveAccessibleName(/Cloud-only models will not run for you/u);
+		await expect(inHouse).toHaveAccessibleName(
+			/Trade-off\. If no in-house model is ready here, AI features wait/u,
+		);
 		await expect(canvas.queryByText(/is set up within this answer yet/u)).toBeNull();
 		await expect(inHouse).not.toHaveAttribute("aria-disabled");
 		await userEvent.click(inHouse);

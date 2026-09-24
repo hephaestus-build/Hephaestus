@@ -97,7 +97,8 @@ export const OPERATED_BY_DEFS: StatusDefs<OperatedBy> = {
 };
 
 export interface MemberAiChoiceDef extends StatusDef {
-	consequence: string;
+	benefit: string;
+	tradeoff: string;
 	ceiling: DataHandlingTier | null;
 }
 
@@ -106,24 +107,27 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		label: "In-house",
 		icon: Building2Icon,
 		badgeVariant: "secondary",
-		description: "AI on systems your organisation operates.",
-		consequence: "Cloud-only models will not run for you.",
+		description: "Keep AI processing under your organisation’s operation.",
+		benefit: "Only models declared as organisation-operated may handle new AI requests.",
+		tradeoff: "If no in-house model is ready here, AI features wait.",
 		ceiling: "IN_HOUSE",
 	},
 	CLOUD: {
 		label: "Cloud",
 		icon: CloudIcon,
 		badgeVariant: "secondary",
-		description: "AI from your organisation or providers it configured.",
-		consequence: "AI requests may send your work to a provider.",
+		description: "Use in-house or provider-operated AI.",
+		benefit: "Both in-house and provider-operated models are allowed.",
+		tradeoff: "A configured provider may receive work sent for AI.",
 		ceiling: "CLOUD",
 	},
 	NO_AI: {
 		label: "No AI",
 		icon: CircleOffIcon,
 		badgeVariant: "secondary",
-		description: "No AI processing for practice reviews or Heph.",
-		consequence: "Sync and stored work stay available.",
+		description: "Use Hephaestus without new AI reviews or Heph replies.",
+		benefit: "No new AI requests for practice reviews or Heph.",
+		tradeoff: "No new AI feedback or Heph replies; sync and stored work continue.",
 		ceiling: null,
 	},
 };

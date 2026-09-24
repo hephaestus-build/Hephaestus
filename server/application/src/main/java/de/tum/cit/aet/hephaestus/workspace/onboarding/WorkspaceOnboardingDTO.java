@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.workspace.onboarding;
 
 import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
@@ -25,9 +27,12 @@ public record WorkspaceOnboardingDTO(
             @NonNull boolean mentorReady,
             @NonNull List<WorkspaceAiModelDTO> models) {}
 
-    /** A model this answer would use here, with its declared brand when known. */
+    /** A model this answer would use here. */
     public record WorkspaceAiModelDTO(
-            @NonNull String name, @Nullable AiModelBrand brand) {}
+            @NonNull String name,
+            @Nullable AiModelBrand brand,
+            @Nullable LlmConnectionPlatform connectionPlatform,
+            @NonNull DataHandlingTier dataHandlingTier) {}
 
     public record WorkspaceOnboardingLinkDTO(
             @NonNull long connectionId,

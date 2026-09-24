@@ -55,7 +55,8 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 "openai-completions",
                 LlmAuthMode.BEARER,
                 "sk-workspace-secret",
-                true);
+                true,
+                null);
         return Objects.requireNonNull(webTestClient
                 .post()
                 .uri("/workspaces/{slug}/llm/connections", workspace.getWorkspaceSlug())

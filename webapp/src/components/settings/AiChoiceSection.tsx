@@ -93,9 +93,9 @@ function AiChoiceForm({
 				{isLoading ? (
 					<div className="grid gap-3 md:grid-cols-3" aria-busy="true">
 						<span className="sr-only">Loading…</span>
-						<Skeleton className="h-28" />
-						<Skeleton className="h-28" />
-						<Skeleton className="h-28" />
+						<Skeleton className="h-64" />
+						<Skeleton className="h-64" />
+						<Skeleton className="h-64" />
 					</div>
 				) : (
 					<fieldset disabled={busy} className="min-w-0 disabled:opacity-50">

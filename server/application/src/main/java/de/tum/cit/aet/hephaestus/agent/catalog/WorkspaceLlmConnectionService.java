@@ -70,6 +70,7 @@ public class WorkspaceLlmConnectionService {
         connection.setWorkspace(workspace);
         connection.setSlug(slug);
         connection.setDisplayName(request.displayName());
+        connection.setConnectionPlatform(request.connectionPlatform());
         connection.setBaseUrl(request.baseUrl().trim());
         connection.setApiProtocol(request.apiProtocol());
         connection.setAuthMode(request.authMode() != null ? request.authMode() : LlmAuthMode.BEARER);
@@ -113,6 +114,11 @@ public class WorkspaceLlmConnectionService {
 
         if (request.displayName() != null) {
             connection.setDisplayName(request.displayName());
+        }
+        if (Boolean.TRUE.equals(request.clearConnectionPlatform())) {
+            connection.setConnectionPlatform(null);
+        } else if (request.connectionPlatform() != null) {
+            connection.setConnectionPlatform(request.connectionPlatform());
         }
         if (Boolean.TRUE.equals(request.clearApiKey())) {
             connection.setApiKey(null);

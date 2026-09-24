@@ -76,11 +76,11 @@ it requires an account you have not connected. Your answer is a boundary, not a 
 models: anything stricter than your answer also counts, and nothing ever switches you to anything
 looser.
 
-| Answer       | What it means                                                                                                                                                                                  |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **In-house** | Models your organisation says it operates for practice reviews and Heph. |
-| **Cloud** | In-house models and models operated by providers your organisation approved. The provider's agreement determines what it keeps or reviews. |
-| **No AI** | No new AI requests for your work in practice reviews or Heph, in any workspace. Other storage and authorised access do not stop. |
+| Answer | What you get | Trade-off |
+| --- | --- | --- |
+| **In-house** | Only models declared as operated by your organisation may handle new AI requests. | If none is ready in a workspace, its AI features wait. |
+| **Cloud** | Both in-house and provider-operated models may handle new AI requests. | A configured provider may receive work sent for AI. Its agreement determines retention and access. |
+| **No AI** | No new AI requests for practice reviews or Heph. | No new AI feedback or Heph replies; sync and stored work continue. |
 
 Each workspace sets up its own models within these answers. When nothing in the workspace you are
 looking at is set up within your selected answer, one sentence below the cards says so: that answer is
@@ -88,7 +88,9 @@ looking at is set up within your selected answer, one sentence below the cards s
 switches you to another answer. Wait for a workspace owner to add a model, or change your answer.
 "Set up" describes the configuration, not current service health or a guarantee of speed. In-house
 models depend on your organisation's capacity and storage rules, and allowing the cloud does not
-guarantee better models or faster replies. No declared model uses your work for training.
+guarantee better models or faster replies. A model mark names its maker, not who runs it. For
+example, an OpenAI model served by Azure is not automatically in-house because its endpoint is
+private. Ask a workspace owner who operates the deployment and what terms apply to your work.
 
 On your first visit, nothing is preselected. Choose an answer and select **Continue**; on a return
 visit the button reads **Save**. You can choose any answer, including one no workspace has set up yet.

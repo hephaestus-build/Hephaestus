@@ -87,15 +87,23 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
         return List.copyOf(options);
     }
 
-    /** The name and declared brand a developer sees; the connection URL stays on the server. */
+    /** The ready binding's model declarations; the connection URL stays on the server. */
     private static Optional<WorkspaceAiAvailability.Model> model(WorkspaceAgentBinding binding) {
         var instance = binding.getInstanceModel();
         if (instance != null) {
-            return Optional.of(new WorkspaceAiAvailability.Model(instance.getDisplayName(), instance.getBrand()));
+            return Optional.of(new WorkspaceAiAvailability.Model(
+                    instance.getDisplayName(),
+                    instance.getBrand(),
+                    instance.getConnection().getConnectionPlatform(),
+                    instance.getDataHandlingTier()));
         }
         var own = binding.getWorkspaceModel();
         if (own != null) {
-            return Optional.of(new WorkspaceAiAvailability.Model(own.getDisplayName(), own.getBrand()));
+            return Optional.of(new WorkspaceAiAvailability.Model(
+                    own.getDisplayName(),
+                    own.getBrand(),
+                    own.getConnection().getConnectionPlatform(),
+                    own.getDataHandlingTier()));
         }
         return Optional.empty();
     }
