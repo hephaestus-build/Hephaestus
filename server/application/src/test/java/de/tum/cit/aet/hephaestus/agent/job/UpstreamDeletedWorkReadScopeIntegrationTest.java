@@ -344,8 +344,13 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
         var event = new ScmDomainEvent.IssueCreated(data, webhookContext());
         var jobs = mock(AgentJobService.class);
         var detectionGate = mock(PracticeReviewDetectionGate.class);
-        var listener =
-                new IssueAgentJobEventListener(jobs, issueRepository, detectionGate, workspaceResolver, signalRecorder);
+        var listener = new IssueAgentJobEventListener(
+                jobs,
+                issueRepository,
+                detectionGate,
+                workspaceResolver,
+                signalRecorder,
+                java.util.Objects.requireNonNull(transactionTemplate.getTransactionManager()));
         tombstoneIssue();
 
         transactionTemplate.executeWithoutResult(status -> listener.onIssueCreated(event));

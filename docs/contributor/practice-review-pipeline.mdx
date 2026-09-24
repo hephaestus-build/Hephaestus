@@ -174,10 +174,11 @@ fields occasions nothing: GitHub compares the mirrored row against the incoming 
 `changes` diff its `update` action carries, which is the only thing distinguishing a retitling from a
 due-date, weight or time-tracking edit.
 
-Synchronization updates the issue projection without creating lifecycle occasions. GitLab synchronization
-includes native type, but its webhook contract does not provide a reliable type transition; the GitLab
-adapter therefore does not advertise live type-change reviews. A type set on GitLab still reaches the
-snapshot through the mirror, so it lands in the digest of whichever later `update` happens to fire.
+Synchronization updates the issue projection without starting a live review. When GitLab sync finds
+changed review evidence on an existing open issue, it advances the snapshot and records the update
+occasion as sync-discovered. This retires stale observations without coaching on historical work.
+GitLab synchronization includes native type, but its webhook contract does not provide a reliable
+type transition; the GitLab adapter therefore does not advertise live type-change reviews.
 
 Every practice bound to `scm.issue.updated` is reevaluated. Practice bindings declare occasions and evidence
 sources, not dependencies on individual issue fields, so there is no second, per-field dependency model

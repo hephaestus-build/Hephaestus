@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -33,6 +34,8 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Import(DeferredIssueEventIntegrationTest.Configuration.class)
@@ -51,6 +54,15 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private Fixture fixture;
+
+    @Autowired
+    private SignalRecorder recorder;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private Workspace workspace;
 
@@ -80,6 +92,35 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
         });
         assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), 42L))
                 .isEmpty();
+    }
+
+    @Test
+    void shouldCommitOtherWorkspaceWhenOneDatabaseWriteFails() {
+        Workspace other = workspaces.save(WorkspaceTestFixtures.activeWorkspace("other-event-" + UUID.randomUUID()));
+        when(fixture.resolver().resolveAllForRepository("owner/repo")).thenReturn(List.of(workspace, other));
+        var attempts = new java.util.concurrent.atomic.AtomicInteger();
+        when(fixture.issueRepository().findByIdWithRepositoryAndAssignees(anyLong()))
+                .thenAnswer(invocation -> {
+                    if (attempts.getAndIncrement() == 0) {
+                        jdbcTemplate.execute("INSERT INTO missing_issue_event_test_table VALUES (1)");
+                    }
+                    return java.util.Optional.empty();
+                });
+        var listener = new IssueAgentJobEventListener(
+                mock(AgentJobService.class),
+                fixture.issueRepository(),
+                mock(PracticeReviewDetectionGate.class),
+                fixture.resolver(),
+                recorder,
+                transactionManager);
+        var updated = event();
+
+        listener.onIssueCreated(new ScmDomainEvent.IssueCreated(updated.issue(), updated.context()));
+
+        assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), 42L))
+                .isEmpty();
+        assertThat(signals.findForArtifact(other.getId(), ScmSignals.ISSUE.value(), 42L))
+                .hasSize(1);
     }
 
     private ScmDomainEvent.IssueUpdated event() {
@@ -114,23 +155,27 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
         return new ScmDomainEvent.IssueUpdated(issue, Set.of("title"), context);
     }
 
-    record Fixture(WorkspaceResolver resolver) {}
+    record Fixture(WorkspaceResolver resolver, IssueRepository issueRepository) {}
 
     @TestConfiguration
     static class Configuration {
         @Bean
         Fixture deferredIssueFixture() {
-            return new Fixture(mock(WorkspaceResolver.class));
+            return new Fixture(mock(WorkspaceResolver.class), mock(IssueRepository.class));
         }
 
         @Bean
-        IssueAgentJobEventListener deferredIssueListener(Fixture fixture, SignalRecorder recorder) {
+        IssueAgentJobEventListener deferredIssueListener(
+                Fixture fixture,
+                SignalRecorder recorder,
+                org.springframework.transaction.PlatformTransactionManager transactionManager) {
             return new IssueAgentJobEventListener(
                     mock(AgentJobService.class),
-                    mock(IssueRepository.class),
+                    fixture.issueRepository(),
                     mock(PracticeReviewDetectionGate.class),
                     fixture.resolver(),
-                    recorder);
+                    recorder,
+                    transactionManager);
         }
     }
 }

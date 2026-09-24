@@ -55,6 +55,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
@@ -162,6 +163,24 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         entityManager.clear();
         assertThat(issueRepository.findById(issue.getId()).orElseThrow().getReviewSnapshotId())
                 .isEqualTo(returned);
+    }
+
+    @Test
+    @Transactional
+    void shouldKeepAdvancedSnapshotWhenManagedIssueFlushesLater() {
+        Issue issue = persistIssue();
+        entityManager.flush();
+        UUID snapshotId = UUID.randomUUID();
+
+        assertThat(issueRepository.advanceReviewSnapshot(issue.getId(), snapshotId, "advanced"))
+                .isOne();
+        issue.setTitle("Edited after snapshot advance");
+        entityManager.flush();
+        entityManager.clear();
+
+        Issue reloaded = issueRepository.findById(issue.getId()).orElseThrow();
+        assertThat(reloaded.getReviewSnapshotId()).isEqualTo(snapshotId);
+        assertThat(reloaded.getReviewSnapshotDigest()).isEqualTo("advanced");
     }
 
     @Test

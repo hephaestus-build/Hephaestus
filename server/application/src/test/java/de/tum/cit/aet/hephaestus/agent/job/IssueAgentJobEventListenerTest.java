@@ -46,6 +46,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 class IssueAgentJobEventListenerTest extends BaseUnitTest {
 
@@ -70,6 +72,9 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
     @Mock
     private SignalRecorder signalRecorder;
 
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private IssueAgentJobEventListener listener;
 
     private Workspace owningWorkspace;
@@ -77,7 +82,15 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         listener = new IssueAgentJobEventListener(
-                agentJobService, issueRepository, practiceReviewDetectionGate, workspaceResolver, signalRecorder);
+                agentJobService,
+                issueRepository,
+                practiceReviewDetectionGate,
+                workspaceResolver,
+                signalRecorder,
+                transactionManager);
+        lenient()
+                .when(transactionManager.getTransaction(any()))
+                .thenAnswer(invocation -> new SimpleTransactionStatus());
 
         owningWorkspace = new Workspace();
         owningWorkspace.setId(WORKSPACE_ID);
@@ -87,8 +100,6 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
         lenient().when(workspaceResolver.resolveAllForRepository(any())).thenReturn(List.of(owningWorkspace));
         lenient().when(signalRecorder.record(any(), any(), any())).thenReturn(true);
     }
-
-    // Helpers
 
     private ScmEventPayload.IssueData createIssueData(Issue.State state) {
         return new ScmEventPayload.IssueData(
@@ -127,10 +138,6 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
         return EventContext.forSync(1L, REPO_REF);
     }
 
-    /**
-     * Creates a real Issue with the fields the listener reads set: id, number, title, body, state,
-     * updatedAt, and a repository carrying id + nameWithOwner.
-     */
     private Issue createIssue(Issue.State state) {
         Issue issue = new Issue();
         issue.setId(ISSUE_ID);
@@ -164,8 +171,6 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
         verify(agentJobService).submit(eq(workspaceId), eq(AgentJobType.ISSUE_REVIEW), captor.capture(), any(), any());
         return captor.getValue();
     }
-
-    // Test Groups
 
     @Nested
     class TombstonedWorkTests {

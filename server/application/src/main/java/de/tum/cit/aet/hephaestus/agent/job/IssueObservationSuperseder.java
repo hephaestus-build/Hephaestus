@@ -49,7 +49,6 @@ public class IssueObservationSuperseder {
         }
         String digest = ScmSignals.issueUpdatedRevision(issue).value();
         if (issues.advanceReviewSnapshot(issue.id(), UUID.randomUUID(), digest) != 1) {
-            // A replay with identical review evidence is not a new transition.
             return;
         }
         observations.supersedeIssueObservations(issue.id(), Instant.now());

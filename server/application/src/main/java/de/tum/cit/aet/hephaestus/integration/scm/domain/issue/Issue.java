@@ -59,11 +59,11 @@ public class Issue extends BaseGitServiceEntity {
 
     /** Changes on every reviewable issue transition, even when content returns to an earlier state. */
     @Nullable
-    @Column(name = "review_snapshot_id")
+    @Column(name = "review_snapshot_id", insertable = false, updatable = false)
     private UUID reviewSnapshotId;
 
     @Nullable
-    @Column(name = "review_snapshot_digest", length = 128)
+    @Column(name = "review_snapshot_digest", length = 128, insertable = false, updatable = false)
     private String reviewSnapshotDigest;
 
     public ReviewSubject reviewSubject() {

@@ -84,6 +84,9 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
     private GitLabIssueMessageHandler handler;
 
     @Autowired
+    private GitLabIssueProcessor processor;
+
+    @Autowired
     private IssueRepository issueRepository;
 
     @Autowired
@@ -138,6 +141,49 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Nested
     class BasicLifecycleEvents {
+
+        @Test
+        void shouldAdvanceReviewSnapshotWhenSyncChangesAnOpenIssue() throws Exception {
+            handler.handleEvent(loadPayload("issue.open"));
+            Issue before = issueRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
+                    .orElseThrow();
+            var previousSnapshot = before.getReviewSnapshotId();
+            eventListener.clear();
+
+            processor.processFromSync(
+                    new GitLabIssueProcessor.SyncIssueData(
+                            "gid://gitlab/Issue/422296",
+                            "5",
+                            "Updated title",
+                            FIXTURE_ISSUE_BODY,
+                            "opened",
+                            false,
+                            FIXTURE_ISSUE_HTML_URL,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            0,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null),
+                    savedRepo,
+                    null);
+
+            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).hasSize(1);
+            Issue after = issueRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
+                    .orElseThrow();
+            assertThat(after.getTitle()).isEqualTo("Updated title");
+            assertThat(after.getReviewSnapshotId()).isNotNull().isNotEqualTo(previousSnapshot);
+        }
 
         @Test
         void shouldPersistIssueOnOpenEvent() throws Exception {
