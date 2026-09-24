@@ -49,7 +49,7 @@ export function UserViewDialog({
 		<Dialog
 			open
 			onOpenChange={(open) => {
-				if (!open && !isPending) {
+				if (!open) {
 					onClose();
 				}
 			}}
@@ -59,9 +59,9 @@ export function UserViewDialog({
 					<DialogHeader>
 						<DialogTitle>View as {name}</DialogTitle>
 						<DialogDescription>
-							View this user’s private practices and existing conversations, read-only. You stay
-							signed in as yourself. Each access is audited. No account setup or personal choices
-							will be completed.
+							View this user’s workspace pages, including private feedback and saved Heph
+							conversations, read-only. You stay signed in as yourself. Each access is audited. No
+							account setup or personal choices will be completed.
 						</DialogDescription>
 					</DialogHeader>
 					<DialogBody className="py-1">
@@ -90,9 +90,7 @@ export function UserViewDialog({
 						</FieldGroup>
 					</DialogBody>
 					<DialogFooter>
-						<DialogClose render={<Button type="button" variant="outline" disabled={isPending} />}>
-							Cancel
-						</DialogClose>
+						<DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
 						<Button type="submit" disabled={trimmed === "" || isPending}>
 							{isPending ? "Opening…" : "View as user"}
 						</Button>

@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.activity.ActivityEvent;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
 import de.tum.cit.aet.hephaestus.activity.ActivityTargetType;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.tenancy.TenancyViolationException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
@@ -90,9 +89,6 @@ class UserProfileServiceTest {
     private static final ProfileActivityStatsDTO STATS_STUB =
             new ProfileActivityStatsDTO(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
-    @Mock
-    private de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository userRepository;
-
     private UserProfileService service;
 
     @BeforeEach
@@ -105,7 +101,6 @@ class UserProfileServiceTest {
                 issueCommentRepository,
                 reviewActivityAssembler,
                 workspaceMembershipService,
-                userRepository,
                 workspaceContributionActivityService,
                 profileActivityQueryService,
                 activityEventRepository);
@@ -406,38 +401,6 @@ class UserProfileServiceTest {
     @Nested
     @DisplayName("getUserProfile")
     class UserProfileTests {
-
-        @Test
-        void usesTheSelectedActorIdWhenProvidersShareALogin() {
-            User selected = createUser(USER_ID, USER_LOGIN);
-            UserViewContextHolder.set(new UserViewContextHolder.View(WORKSPACE_ID, "acme", USER_ID, USER_LOGIN));
-            try {
-                when(userRepository.findById(USER_ID)).thenReturn(Optional.of(selected));
-                when(workspaceContributionActivityService.findFirstContributionInstant(WORKSPACE_ID, USER_ID))
-                        .thenReturn(Optional.empty());
-
-                assertThat(service.getUserProfile(USER_LOGIN, WORKSPACE_ID, AFTER, BEFORE))
-                        .isPresent()
-                        .get()
-                        .extracting(profile -> profile.userInfo().id())
-                        .isEqualTo(USER_ID);
-                verify(workspaceMembershipService, never()).findMemberByLogin(any(), any());
-            } finally {
-                UserViewContextHolder.clear();
-            }
-        }
-
-        @Test
-        void doesNotResolveAnotherProfileWhileViewingAUser() {
-            UserViewContextHolder.set(new UserViewContextHolder.View(WORKSPACE_ID, "acme", USER_ID, USER_LOGIN));
-            try {
-                assertThat(service.getUserProfile("another-user", WORKSPACE_ID, AFTER, BEFORE))
-                        .isEmpty();
-                verifyNoInteractions(userRepository, workspaceMembershipService);
-            } finally {
-                UserViewContextHolder.clear();
-            }
-        }
 
         @Test
         @DisplayName("lists contributed repositories without loading their labels")

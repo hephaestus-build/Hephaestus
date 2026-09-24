@@ -52,10 +52,10 @@ function linkAccount(providerAlias: string, returnTo?: string) {
 
 async function logout() {
 	try {
+		await authClient.logout();
 		if (getUserViewSession()) {
 			clearUserView();
 		}
-		await authClient.logout();
 	} catch {
 		toast.error("Could not confirm sign-out. Please try again.");
 	}

@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityTargetType;
 import de.tum.cit.aet.hephaestus.activity.scoring.XpPrecision;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
@@ -19,7 +18,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryInfoDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserInfoDTO;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.profile.dto.ProfileActivityMonitorDTO;
 import de.tum.cit.aet.hephaestus.profile.dto.ProfileActivityStatsDTO;
 import de.tum.cit.aet.hephaestus.profile.dto.ProfileDTO;
@@ -67,7 +65,6 @@ public class UserProfileService {
     private final IssueCommentRepository issueCommentRepository;
     private final ProfileReviewActivityAssembler reviewActivityAssembler;
     private final WorkspaceMembershipService workspaceMembershipService;
-    private final UserRepository userRepository;
     private final WorkspaceContributionActivityService workspaceContributionActivityService;
     private final ProfileActivityQueryService profileActivityQueryService;
     private final ActivityEventRepository activityEventRepository;
@@ -94,7 +91,7 @@ public class UserProfileService {
                 timeRange.after(),
                 timeRange.before());
 
-        Optional<User> optionalUser = resolveUser(workspaceId, login);
+        Optional<User> optionalUser = workspaceMembershipService.findMemberByLogin(workspaceId, login);
         if (optionalUser.isEmpty()) {
             return Optional.empty();
         }
@@ -129,7 +126,7 @@ public class UserProfileService {
             @Nullable Instant before,
             @Nullable Set<Long> repositoryIds,
             @Nullable Integer limit) {
-        Optional<User> optionalUser = resolveUser(workspaceId, login);
+        Optional<User> optionalUser = workspaceMembershipService.findMemberByLogin(workspaceId, login);
         if (optionalUser.isEmpty()) {
             return Optional.empty();
         }
@@ -168,18 +165,6 @@ public class UserProfileService {
                 repositories,
                 filteredReviewActivity.size(),
                 filteredAuthoredPullRequests.size()));
-    }
-
-    private Optional<User> resolveUser(Long workspaceId, String login) {
-        var viewed = UserViewContextHolder.get();
-        if (viewed != null) {
-            if (!Objects.equals(viewed.workspaceId(), workspaceId)
-                    || !viewed.login().equalsIgnoreCase(login)) {
-                return Optional.empty();
-            }
-            return userRepository.findById(viewed.userId());
-        }
-        return workspaceMembershipService.findMemberByLogin(workspaceId, login);
     }
 
     private TimeRange resolveTimeRange(String login, @Nullable Instant after, @Nullable Instant before) {

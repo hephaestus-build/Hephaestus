@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon, Users } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
 import { getUserViewUser } from "@/api/sdk.gen";
+import type { UserViewUser } from "@/api/types.gen";
 import { UserViewDialog } from "@/components/admin/users/UserViewDialog";
 import { UserViewUsersTable } from "@/components/admin/users/UserViewUsersTable";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
@@ -32,45 +33,14 @@ export const Route = createFileRoute("/_authenticated/admin/workspaces_/$workspa
 });
 
 function WorkspaceUsersRoute() {
-	const { getUserId } = useAuth();
 	const { workspaceSlug } = Route.useParams();
 	const { page: searchPage, user: selectedId } = Route.useSearch();
 	const updateSearch = useSearchPatch<Search>();
-	const [viewError, setViewError] = useState<unknown>();
-	const [pending, setPending] = useState(false);
 	const page = searchPage ?? 0;
 	const workspace = useUserViewWorkspace(workspaceSlug);
 	const users = useUserViewUsers(workspaceSlug, page);
 	const target =
 		users.status === "ready" ? users.users.find((user) => user.userId === selectedId) : undefined;
-	const challenge = stepUpChallengeOf(viewError);
-	const confirmAccess = useConfirmAccess(challenge !== undefined);
-	const openView = async (reason: string) => {
-		if (!target) {
-			return;
-		}
-		setPending(true);
-		setViewError(undefined);
-		try {
-			const { data } = await getUserViewUser({
-				path: { workspaceSlug, userId: target.userId },
-				headers: { "X-User-View-Reason": encodeURIComponent(reason) },
-				throwOnError: true,
-			});
-			startUserView({
-				operatorAccountId: Number(getUserId()),
-				workspaceSlug,
-				userId: data.userId,
-				login: data.login,
-				name: data.name ?? data.login,
-				hasAccount: data.accountId != null,
-				reason,
-			});
-		} catch (error) {
-			setViewError(error);
-			setPending(false);
-		}
-	};
 
 	useClampedPage(page, users.status === "ready" ? users.totalPages : undefined, (next) =>
 		updateSearch({ page: pageParam(next) }),
@@ -94,16 +64,78 @@ function WorkspaceUsersRoute() {
 				onView={(user) => updateSearch({ user: user.userId })}
 			/>
 			{target && (
+				<UserViewEntry
+					key={`${workspaceSlug}:${target.userId}`}
+					workspaceSlug={workspaceSlug}
+					user={target}
+					onClose={() => updateSearch({ user: undefined })}
+				/>
+			)}
+		</PageLayout>
+	);
+}
+
+function UserViewEntry({
+	workspaceSlug,
+	user,
+	onClose,
+}: {
+	workspaceSlug: string;
+	user: UserViewUser;
+	onClose: () => void;
+}) {
+	const { getUserId } = useAuth();
+	const [failure, setFailure] = useState<unknown>();
+	const [pending, setPending] = useState(false);
+	const request = useRef<AbortController | null>(null);
+	const challenge = stepUpChallengeOf(failure);
+	const confirmAccess = useConfirmAccess(challenge !== undefined);
+
+	useEffect(() => () => request.current?.abort(), []);
+
+	const openView = async (reason: string) => {
+		setPending(true);
+		setFailure(undefined);
+		const controller = new AbortController();
+		request.current = controller;
+		try {
+			const { data } = await getUserViewUser({
+				path: { workspaceSlug, userId: user.userId },
+				headers: { "X-User-View-Reason": encodeURIComponent(reason) },
+				signal: controller.signal,
+				throwOnError: true,
+			});
+			if (controller.signal.aborted) {
+				return;
+			}
+			startUserView({
+				operatorAccountId: Number(getUserId()),
+				workspaceSlug,
+				userId: data.userId,
+				login: data.login,
+				name: data.name ?? data.login,
+				hasAccount: data.accountId != null,
+				reason,
+			});
+		} catch (error) {
+			if (controller.signal.aborted) {
+				return;
+			}
+			setFailure(error);
+			setPending(false);
+		}
+	};
+
+	return (
+		<>
+			{challenge === undefined && (
 				<UserViewDialog
-					key={target.userId}
-					name={target.name ?? target.login}
+					name={user.name ?? user.login}
 					isPending={pending}
-					error={
-						challenge === undefined && viewError != null ? problemDetailOf(viewError) : undefined
-					}
+					error={failure == null ? undefined : problemDetailOf(failure)}
 					onClose={() => {
-						setViewError(undefined);
-						updateSearch({ user: undefined });
+						request.current?.abort();
+						onClose();
 					}}
 					onConfirm={(reason) => {
 						void openView(reason);
@@ -114,7 +146,7 @@ function WorkspaceUsersRoute() {
 				open={challenge !== undefined}
 				onOpenChange={(open) => {
 					if (!open) {
-						setViewError(undefined);
+						setFailure(undefined);
 					}
 				}}
 				maxAgeSeconds={challenge?.maxAgeSeconds}
@@ -124,6 +156,6 @@ function WorkspaceUsersRoute() {
 				onRetry={confirmAccess.retry}
 				onSignIn={confirmAccess.signIn}
 			/>
-		</PageLayout>
+		</>
 	);
 }

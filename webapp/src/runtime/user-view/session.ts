@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import environment from "@/environment";
+
 const STORAGE_KEY = "hephaestus.user-view";
 
 const userViewSchema = z.object({
@@ -54,7 +56,15 @@ export function applyUserViewHeaders(request: Request): Request {
 	if (session === undefined) {
 		return request;
 	}
-	const path = new URL(request.url).pathname;
+	const basePath = new URL(environment.serverUrl, window.location.origin).pathname.replace(
+		/\/$/u,
+		"",
+	);
+	const requestPath = new URL(request.url).pathname;
+	const path =
+		basePath && requestPath.startsWith(`${basePath}/`)
+			? requestPath.slice(basePath.length)
+			: requestPath;
 	if (
 		path.startsWith("/auth/") ||
 		path.startsWith("/oauth/") ||

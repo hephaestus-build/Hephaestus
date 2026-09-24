@@ -28,9 +28,10 @@ export const EmptyReason: Story = {
 
 export const Opening: Story = {
 	args: { isPending: true },
-	play: async () => {
-		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Cancel" }));
+	play: async ({ args }) => {
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Opening…" }));
+		await userEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+		await expect(args.onClose).toHaveBeenCalledOnce();
 	},
 };
 

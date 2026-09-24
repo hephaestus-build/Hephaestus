@@ -1,11 +1,12 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { server } from "@/mocks/server";
 import { clearUserView, getUserViewSession, startUserView } from "@/runtime/user-view/session";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { deferred } from "@/test/async";
+import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
 
 vi.mock("@/runtime/user-view/session", async (importOriginal) => ({
 	...(await importOriginal()),
@@ -94,7 +95,57 @@ describe("view as user entry", () => {
 		renderRouteAt("/admin/workspaces/engineering/users");
 		await submitReason();
 		await screen.findByRole("dialog", { name: "Confirm access" });
+		expect(screen.queryByRole("dialog", { name: "View as Sam" })).toBeNull();
 		expect(startUserView).not.toHaveBeenCalled();
+	});
+
+	it("cancels a pending read and lets the same user be selected again", async () => {
+		const pendingRead = deferred();
+		const started = deferred();
+		const aborted = deferred();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/user-view/users/:userId", async ({ request }) => {
+				request.signal.addEventListener("abort", () => aborted.resolve(), { once: true });
+				started.resolve();
+				await pendingRead.promise;
+				return HttpResponse.json(users.content[0]);
+			}),
+		);
+		const { router } = renderRouteAtWithRouter("/admin/workspaces/engineering/users");
+		await submitReason();
+		await started.promise;
+		await act(async () => {
+			await router.navigate({
+				to: "/admin/workspaces/$workspaceSlug/users",
+				params: { workspaceSlug: "engineering" },
+				search: { page: 0 },
+			});
+		});
+		await aborted.promise;
+		const replacementRead = vi.fn(() => HttpResponse.json(users.content[0]));
+		server.use(http.get("*/workspaces/:workspaceSlug/user-view/users/:userId", replacementRead));
+		await act(async () => {
+			await router.navigate({
+				to: "/admin/workspaces/$workspaceSlug/users",
+				params: { workspaceSlug: "engineering" },
+				search: { page: 0, user: 11 },
+			});
+		});
+		const dialog = await screen.findByRole("dialog", { name: "View as Sam" });
+		const user = userEvent.setup();
+		await user.type(
+			within(dialog).getByRole("textbox", { name: "Reason for access" }),
+			"Check again",
+		);
+		await user.click(within(dialog).getByRole("button", { name: "View as user" }));
+		await waitFor(() =>
+			expect(startUserView).toHaveBeenCalledExactlyOnceWith(
+				expect.objectContaining({ reason: "Check again" }),
+			),
+		);
+		await act(async () => pendingRead.resolve());
+		expect(replacementRead).toHaveBeenCalledOnce();
+		expect(startUserView).toHaveBeenCalledOnce();
 	});
 
 	it("clears a view left by a different signed-in administrator", async () => {

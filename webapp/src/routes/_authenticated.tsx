@@ -16,6 +16,7 @@ export const Route = createFileRoute("/_authenticated")({
 		const viewed = getUserViewSession();
 		if (viewed && viewed.operatorAccountId !== user.id) {
 			clearUserView();
+			context.queryClient.clear();
 			throw redirect({ to: "/", replace: true });
 		}
 		if (await consentIsPending(context.queryClient)) {

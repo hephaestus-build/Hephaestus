@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applyUserViewHeaders, clearUserView, getUserViewSession } from "./session";
+
+vi.mock("@/environment", () => ({ default: { serverUrl: "https://example.test/api" } }));
 
 const session = {
 	operatorAccountId: 7,
@@ -35,9 +37,18 @@ describe("user view request context", () => {
 
 	it("keeps the current account lookup outside the viewed identity", () => {
 		sessionStorage.setItem("hephaestus.user-view", JSON.stringify(session));
-		const request = applyUserViewHeaders(new Request("https://example.test/user"));
+		const request = applyUserViewHeaders(new Request("https://example.test/api/user"));
 
 		expect(request.headers.has("X-User-View-User")).toBe(false);
+	});
+
+	it("attaches the selected identity to workspace reads behind the production API prefix", () => {
+		sessionStorage.setItem("hephaestus.user-view", JSON.stringify(session));
+		const request = applyUserViewHeaders(
+			new Request("https://example.test/api/workspaces/acme/practices/standings"),
+		);
+
+		expect(request.headers.get("X-User-View-User")).toBe("42");
 	});
 
 	it("ignores invalid stored identities", () => {
