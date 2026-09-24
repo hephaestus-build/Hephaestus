@@ -41,13 +41,13 @@ const allCovered = [
 		choice: "IN_HOUSE_ONLY",
 		practiceReviewsReady: true,
 		mentorReady: true,
-		models: [{ name: "Llama 3.3", maker: "META", platform: "OLLAMA" }],
+		models: [{ name: "Llama 3.3", brand: "META" }],
 	},
 	{
 		choice: "CLOUD",
 		practiceReviewsReady: true,
 		mentorReady: true,
-		models: [{ name: "GPT-5", maker: "OPENAI", platform: "AZURE" }],
+		models: [{ name: "GPT-5", brand: "OPENAI" }],
 	},
 ] satisfies WorkspaceOnboarding["aiOptions"];
 
@@ -156,16 +156,12 @@ export const Default: Story = {
 		await expectGenuinelyDisabled(submit);
 		await expect(submit).toHaveAccessibleDescription("Choose an answer to continue.");
 		await expect(canvas.queryByRole("button", { name: "From your team" })).toBeNull();
-		// Three cards side by side, level: the fact rows line up so a reader compares across.
 		const [first, second, third] = radios.map(cardOf);
 		if (!first || !second || !third) {
 			throw new Error("Expected three cards");
 		}
 		await expect(first.top).toBe(second.top);
 		await expect(second.top).toBe(third.top);
-		await expect(first.height).toBe(second.height);
-		await expect(second.height).toBe(third.height);
-		// Facts are grouped: the term sits above its sentence, beside one chip.
 		const term = canvas.getByText("What AI does");
 		const detail = canvas.getByText(/Hephaestus reviews your work against/u);
 		await expect(detail.getBoundingClientRect().top).toBeGreaterThan(
@@ -196,6 +192,8 @@ export const AnswerAndContinue: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
 		await expect(canvas.getByRole("radio", { name: CLOUD })).toBeChecked();
+		const models = canvas.getByRole("region", { name: "Models for this answer in Engineering" });
+		await expect(models).toHaveTextContent("GPT-5 OpenAI");
 		await expect(canvas.getByText("Press Continue and it holds in every workspace.")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
@@ -207,14 +205,51 @@ export const NoAi: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
-			/^No AI Hephaestus without AI\. No practice feedback, no Heph Nothing is sent anywhere Nothing is kept No one reads your work No models$/u,
+			/No AI processing for practice reviews or Heph.*Sync and stored work stay available/u,
 		);
-		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toHaveAccessibleName(
-			/^In-house Your organisation.s own AI\. Practice feedback and Heph Stays inside your organisation Kept under your organisation.s rules Only your organisation can read it Runs Llama 3\.3$/u,
-		);
+		await expect(canvas.queryByRole("region", { name: /Models for this answer/u })).toBeNull();
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("NO_AI");
+	},
+};
+
+export const WorkspaceModels: Story = {
+	args: {
+		state: {
+			...ready,
+			data: {
+				...welcome,
+				links: [],
+				aiChoice: "CLOUD",
+				aiOptions: [
+					{
+						choice: "IN_HOUSE_ONLY",
+						practiceReviewsReady: true,
+						mentorReady: true,
+						models: [{ name: "Qwen3", brand: "QWEN" }],
+					},
+					{
+						choice: "CLOUD",
+						practiceReviewsReady: true,
+						mentorReady: true,
+						models: [
+							{ name: "Qwen3", brand: "QWEN" },
+							{ name: "Gemma 3", brand: "GEMMA" },
+							{ name: "Team model" },
+						],
+					},
+				],
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		const models = canvas.getByRole("region", { name: "Models for this answer in Engineering" });
+		await expect(models).toHaveTextContent("Qwen3 Qwen");
+		await expect(models).toHaveTextContent("Gemma 3 Google Gemma");
+		await expect(models).toHaveTextContent("Team model");
+		await expect(models.querySelectorAll("img")).toHaveLength(2);
+		await expect(canvas.getByRole("radio", { name: CLOUD }).querySelector("img")).toBeNull();
 	},
 };
 
@@ -237,13 +272,11 @@ export const RequiredLinkOpen: Story = {
 		const submit = canvas.getByRole("button", { name: "Continue" });
 		await expectGenuinelyDisabled(submit);
 		await expect(submit).toHaveAccessibleDescription("Connect Slack to finish setup.");
-		// A saved answer on a first visit came from another workspace: it holds here as well.
 		await expect(
 			canvas.getByText(
 				"Your AI choice is set and holds in all your workspaces. Connect Slack and you're in.",
 			),
 		).toBeVisible();
-		// Each account row carries its provider's own mark, not the generic link glyph.
 		await expect(canvas.getByTitle("SlackIcon")).toBeVisible();
 		await expect(canvas.getByTitle("OutlineIcon")).toBeVisible();
 		await expect(canvas.queryByTitle("LinkIcon")).toBeNull();
@@ -313,10 +346,8 @@ export const OptionUncovered: Story = {
 	},
 	play: async ({ canvas, userEvent, args }) => {
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
-		// The cards carry no configuration: the consequence appears once the answer is selected.
-		await expect(inHouse).toHaveAccessibleName(/Only the models your organisation runs$/u);
+		await expect(inHouse).toHaveAccessibleName(/Cloud-only models will not run for you/u);
 		await expect(canvas.queryByText(/is set up within this answer yet/u)).toBeNull();
-		// A ceiling nobody has built up to is still a valid answer, so the card is not disabled.
 		await expect(inHouse).not.toHaveAttribute("aria-disabled");
 		await userEvent.click(inHouse);
 		await expect(inHouse).toBeChecked();
@@ -351,7 +382,6 @@ export const HephNotCovered: Story = {
 		},
 	},
 	play: async ({ canvas, userEvent }) => {
-		// Reviews run for the saved answer, so Heph claims only the part that does not.
 		await expect(
 			canvas.getByText(
 				"Part of your choice isn't set up here yet. Nothing switches you anywhere else.",
@@ -534,7 +564,6 @@ export const Saving: Story = {
 		await userEvent.click(noAi);
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Saving…" }));
-		// The cards stay on screen while the write is in flight; only their controls are held.
 		for (const radio of canvas.getAllByRole("radio")) {
 			await expect(radio.closest("label")).toBeVisible();
 			await expect(radio).toBeDisabled();
@@ -654,7 +683,6 @@ export const Narrow: Story = {
 		// 1440px the overflow assertion below would pass without proving anything.
 		await expect(window.innerWidth).toBe(320);
 		await expectNoPageOverflow();
-		// One column: every card starts below the one before it.
 		const cards = canvas.getAllByRole("radio").map(cardOf);
 		for (let index = 1; index < cards.length; index += 1) {
 			const above = cards[index - 1];
@@ -665,7 +693,8 @@ export const Narrow: Story = {
 			await expect(card.top).toBeGreaterThanOrEqual(above.bottom);
 			await expect(card.left).toBe(above.left);
 		}
-		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
+		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
+		await expect(canvas.getByRole("region", { name: /Models for this answer/u })).toBeVisible();
 		await expectNoPageOverflow();
 	},
 };
@@ -704,10 +733,21 @@ export const SkipWithoutSaving: Story = {
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
 		const skip = canvas.getByRole("button", { name: "Skip for now" });
 		await expect(skip).toHaveAccessibleDescription(
-			"Skipping does not save an answer selected above. AI stays off until you save a choice.",
+			"Skipping does not save an answer selected above. This workspace cannot use AI for you until you save an answer.",
 		);
 		await userEvent.click(skip);
 		await expect(readyArgs(args).onSubmit).not.toHaveBeenCalled();
 		await expect(readyArgs(args).onLeave).toHaveBeenCalledOnce();
+	},
+};
+
+export const OptionalChoiceSkipped: Story = {
+	args: {
+		state: { ...ready, data: { ...welcome, aiChoiceRequired: false, links: [] } },
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Skip for now" })).toHaveAccessibleDescription(
+			"Skipping does not save an answer selected above. Workspaces that do not require an answer may use a model whose handling is not declared.",
+		);
 	},
 };

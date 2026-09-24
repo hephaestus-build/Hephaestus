@@ -1,21 +1,17 @@
-import {
-	BotIcon,
-	CheckIcon,
-	GraduationCapIcon,
-	InfoIcon,
-	Link2Icon,
-	RefreshCwIcon,
-	SparklesIcon,
-} from "lucide-react";
+import { BotIcon, CheckIcon, InfoIcon, Link2Icon, RefreshCwIcon, SparklesIcon } from "lucide-react";
 import { type SubmitEvent, useEffect, useId, useRef, useState } from "react";
 import { hasText } from "@/lib/text";
 
-import type { WorkspaceOnboarding } from "@/api/types.gen";
+import type { WorkspaceAiModel, WorkspaceOnboarding } from "@/api/types.gen";
 import { type Fact, FactList } from "@/components/auth/FactList";
 import { LegalLinks } from "@/components/auth/LegalLinks";
 import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import {
+	AI_MODEL_BRAND_LABELS,
+	AI_MODEL_BRAND_LOGOS,
+} from "@/components/icons/ai-model-brand-logos";
 import { getProviderIcon } from "@/components/icons/integration-provider-icons";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
@@ -83,10 +79,6 @@ export interface WorkspaceOnboardingPageProps {
 		  };
 }
 
-/**
- * Everything that explains the choice, addressed to every answer at once; the answers themselves
- * carry a title and two sentences each. The stories' meta block has the reasoning.
- */
 const AI_FACTS: readonly Fact[] = [
 	{
 		icon: BotIcon,
@@ -95,9 +87,9 @@ const AI_FACTS: readonly Fact[] = [
 			"Hephaestus reviews your work against your team’s practices. Heph talks it through with you.",
 	},
 	{
-		icon: GraduationCapIcon,
-		term: "Never for training",
-		detail: "Your work is never used to train a model, whichever answer you give.",
+		icon: InfoIcon,
+		term: "What this choice controls",
+		detail: "Future AI requests for practice reviews and Heph. Sync and stored work are separate.",
 	},
 	{
 		icon: RefreshCwIcon,
@@ -110,7 +102,6 @@ function joinNames(names: readonly string[]): string {
 	return names.join(" and ");
 }
 
-/** One account-wide decision, with this workspace's account links kept separate from saving it. */
 export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPageProps) {
 	const [draft, setDraft] = useState<MemberAiChoice>();
 	const id = useId();
@@ -155,8 +146,6 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 		}
 	}, [submissionStatus]);
 
-	// Heph narrates the reader's answers; the footer hint says the same thing factually and reaches
-	// the button through `aria-describedby`, so focusing it does not replay the line.
 	const narration = onboardingNarration({
 		status: state.status,
 		changed,
@@ -207,12 +196,11 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 					{state.status === "loading" && (
 						<div className="space-y-6" aria-busy="true">
 							<span className="sr-only">Loading…</span>
-							<Skeleton className="h-32 w-full" />
-							<div className="grid gap-3 sm:grid-cols-2">
-								<Skeleton className="h-20" />
-								<Skeleton className="h-20" />
-								<Skeleton className="h-20" />
-								<Skeleton className="h-20" />
+							<Skeleton className="h-20 w-full" />
+							<div className="grid gap-3 md:grid-cols-3">
+								<Skeleton className="h-28" />
+								<Skeleton className="h-28" />
+								<Skeleton className="h-28" />
 							</div>
 						</div>
 					)}
@@ -239,13 +227,11 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 								</QuestionnaireDescription>
 								<FactList facts={AI_FACTS} />
 								<fieldset disabled={saving} className="min-w-0 disabled:opacity-50">
-									<AiChoiceCards
-										choice={choice}
-										saved={data?.aiChoice}
-										models={models}
-										onChoice={setDraft}
-									/>
+									<AiChoiceCards choice={choice} saved={data?.aiChoice} onChoice={setDraft} />
 								</fieldset>
+								{models.length > 0 && (
+									<WorkspaceModels workspaceName={state.data.workspaceName} models={models} />
+								)}
 								{hasText(coverage?.sentence) && (
 									<p className="flex items-start gap-2 text-sm text-muted-foreground">
 										<InfoIcon className="mt-0.5 size-4 shrink-0 text-mentor" aria-hidden="true" />
@@ -291,7 +277,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 														</ItemMedia>
 														<ItemContent>
 															<ItemTitle className="break-words">{link.displayName}</ItemTitle>
-															{/* The reason a link cannot be connected has to be readable in full. */}
+
 															<ItemDescription id={descriptionId} className="line-clamp-none">
 																{rowDescription}
 															</ItemDescription>
@@ -354,7 +340,6 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 						<>
 							<Separator />
 
-							{/* The exit sits at the far edge from the primary: only one of the two moves the flow on. */}
 							<footer className="flex flex-col gap-4 sm:flex-row-reverse sm:items-center sm:justify-between">
 								<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
 									{hasText(hint) && (
@@ -387,10 +372,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 							</footer>
 							{firstVisit && (
 								<p id={`${id}-skip-hint`} className="text-sm text-muted-foreground">
-									Skipping does not save an answer selected above.{" "}
-									{data?.aiChoice == null
-										? "AI stays off until you save a choice."
-										: `Your saved choice (${memberAiChoiceTitle(data.aiChoice)}) stays in effect.`}
+									Skipping does not save an answer selected above. {skipHint(data)}
 								</p>
 							)}
 						</>
@@ -401,6 +383,15 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 			</Questionnaire>
 		</div>
 	);
+}
+
+function skipHint(data: WorkspaceOnboarding | undefined): string {
+	if (data?.aiChoice != null) {
+		return `Your saved choice (${memberAiChoiceTitle(data.aiChoice)}) stays in effect.`;
+	}
+	return data?.aiChoiceRequired === true
+		? "This workspace cannot use AI for you until you save an answer."
+		: "Workspaces that do not require an answer may use a model whose handling is not declared.";
 }
 
 function onboardingNarration({
@@ -432,7 +423,6 @@ function onboardingNarration({
 		return "Hephaestus couldn't fetch your setup just now.";
 	}
 	if (changed) {
-		// A draft nobody has built up to is still an answer worth saving; say so before the cue.
 		const uncovered =
 			coverage === "none" ? "That isn't set up here yet. Nothing switches you elsewhere. " : "";
 		if (firstVisit) {
@@ -452,7 +442,6 @@ function onboardingNarration({
 		return "Part of your choice isn't set up here yet. Nothing switches you anywhere else.";
 	}
 	if (firstVisit && answered) {
-		// The same line whether the answer was just saved here or made in another workspace.
 		return requiredSatisfied
 			? "Your AI choice is set and holds in all your workspaces. Let's get to work."
 			: `Your AI choice is set and holds in all your workspaces. Connect ${openRequiredNames} and you're in.`;
@@ -474,7 +463,6 @@ function memberSetupState(
 	focus: WorkspaceOnboardingPageProps["focus"],
 ) {
 	const firstVisit = data?.needsSetup === true;
-	// A return visit reached through an OAuth round-trip: nothing is owed, so Heph names the exit.
 	const afterLink = focus === "accounts" && data !== undefined && !firstVisit;
 	const answered = data?.aiChoice != null;
 	const choice = draft ?? data?.aiChoice;
@@ -485,17 +473,13 @@ function memberSetupState(
 	const openRequired = openRequiredLinks(links);
 	const openRequiredNames = joinNames(openRequired.map((link) => link.displayName));
 	const requiredSatisfied = openRequired.length === 0;
-	// Saving an AI choice is independent of connecting accounts, even on a first visit.
 	const canSubmit = choice !== undefined && (changed || (firstVisit && requiredSatisfied));
 	const heading = "Your AI choice";
-	const models = Object.fromEntries(
-		(data?.aiOptions ?? []).map((option) => [option.choice, option.models]),
-	);
+	const models = data?.aiOptions.find((option) => option.choice === choice)?.models ?? [];
 	const workspaceName = data?.workspaceName ?? "this workspace";
-	// Heph speaks about Hephaestus, never as the reader of the work.
 	const intro = firstVisit
-		? `Before you start in ${workspaceName}, one question. Hephaestus only reads your work with the AI you allow, and you answer once for all your workspaces.`
-		: `Hephaestus only reads your work in ${workspaceName} with the AI you allow. Your answer holds in all your workspaces.`;
+		? `Before you start in ${workspaceName}, one question. Your answer controls future AI requests for practice reviews and Heph across all your workspaces.`
+		: `Your answer controls future AI requests for practice reviews and Heph in ${workspaceName}, and holds in all your workspaces.`;
 	let hint: string | undefined;
 	if (data !== undefined) {
 		if (choice === undefined) {
@@ -525,4 +509,45 @@ function memberSetupState(
 		hint,
 		models,
 	};
+}
+
+function WorkspaceModels({
+	workspaceName,
+	models,
+}: {
+	workspaceName: string;
+	models: readonly WorkspaceAiModel[];
+}) {
+	return (
+		<section
+			aria-label={`Models for this answer in ${workspaceName}`}
+			className="rounded-lg border border-border bg-muted/30 p-4"
+		>
+			<p className="text-sm font-medium text-foreground">
+				Models set up for this answer in {workspaceName}
+			</p>
+			<ul className="mt-3 flex flex-wrap gap-2">
+				{models.map((model) => {
+					const brand = model.brand ? AI_MODEL_BRAND_LOGOS[model.brand] : undefined;
+					const brandLabel = model.brand ? AI_MODEL_BRAND_LABELS[model.brand] : undefined;
+					return (
+						<li
+							key={`${model.name}-${model.brand ?? "unknown"}`}
+							className="flex max-w-full min-w-0 items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
+						>
+							{hasText(brand) && (
+								<img
+									src={brand}
+									alt=""
+									className="size-5 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
+								/>
+							)}
+							<span className="min-w-0 break-words text-foreground">{model.name}</span>
+							{hasText(brandLabel) && <span className="text-muted-foreground">{brandLabel}</span>}
+						</li>
+					);
+				})}
+			</ul>
+		</section>
+	);
 }

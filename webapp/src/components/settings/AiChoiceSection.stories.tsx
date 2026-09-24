@@ -16,10 +16,6 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		choice: undefined,
-		models: {
-			IN_HOUSE_ONLY: [{ name: "Gemma 3", maker: "GEMMA", platform: "OLLAMA" }],
-			CLOUD: [{ name: "Claude Sonnet", maker: "ANTHROPIC", platform: "ANTHROPIC" }],
-		},
 		onSave: fn(),
 	},
 } satisfies Meta<typeof AiChoiceSection>;

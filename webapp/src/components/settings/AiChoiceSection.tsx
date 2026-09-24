@@ -1,7 +1,7 @@
 import { type SubmitEvent, useId, useState } from "react";
 
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { AiChoiceCards, type AiChoiceCardsProps } from "@/components/onboarding/AiChoiceCards";
+import { AiChoiceCards } from "@/components/onboarding/AiChoiceCards";
 import type { MemberAiChoice } from "@/components/practice-vocabulary/data-handling-defs";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +16,6 @@ import { Spinner } from "@/components/ui/spinner";
 export interface AiChoiceSectionProps {
 	/** The saved answer; `undefined` pre-selects nothing. */
 	choice: MemberAiChoice | undefined;
-	/** The models each answer would use across your workspaces, for the vendor marks on the cards. */
-	models?: AiChoiceCardsProps["models"];
 	onSave: (choice: MemberAiChoice) => void;
 	isSaving?: boolean;
 	isLoading?: boolean;
@@ -28,7 +26,6 @@ export interface AiChoiceSectionProps {
 
 export function AiChoiceSection({
 	choice,
-	models,
 	onSave,
 	isSaving = false,
 	isLoading = false,
@@ -54,7 +51,6 @@ export function AiChoiceSection({
 				<AiChoiceForm
 					key={choice ?? "unanswered"}
 					choice={choice}
-					models={models}
 					onSave={onSave}
 					isSaving={isSaving}
 					isLoading={isLoading}
@@ -66,12 +62,10 @@ export function AiChoiceSection({
 
 function AiChoiceForm({
 	choice,
-	models,
 	onSave,
 	isSaving,
 	isLoading,
-}: Required<Pick<AiChoiceSectionProps, "choice" | "onSave" | "isSaving" | "isLoading">> &
-	Pick<AiChoiceSectionProps, "models">) {
+}: Required<Pick<AiChoiceSectionProps, "choice" | "onSave" | "isSaving" | "isLoading">>) {
 	const [draft, setDraft] = useState<MemberAiChoice>();
 	const hintId = useId();
 	const selected = draft ?? choice;
@@ -93,21 +87,19 @@ function AiChoiceForm({
 			<QuestionnaireItem name="ai-choice" required>
 				<QuestionnaireTitle>Which AI may handle your work?</QuestionnaireTitle>
 				<QuestionnaireDescription>
-					Compare the three and pick one. Cloud also allows in-house AI. Your work is never used for
-					training. Each workspace sets up its own models, and Your AI choice in a workspace’s
-					sidebar shows what runs there.
+					Choose what may handle future practice reviews and Heph requests. Cloud also allows
+					in-house AI. See available models in each workspace.
 				</QuestionnaireDescription>
 				{isLoading ? (
-					<div className="grid gap-3 sm:grid-cols-2" aria-busy="true">
+					<div className="grid gap-3 md:grid-cols-3" aria-busy="true">
 						<span className="sr-only">Loading…</span>
-						<Skeleton className="h-20" />
-						<Skeleton className="h-20" />
-						<Skeleton className="h-20" />
-						<Skeleton className="h-20" />
+						<Skeleton className="h-28" />
+						<Skeleton className="h-28" />
+						<Skeleton className="h-28" />
 					</div>
 				) : (
 					<fieldset disabled={busy} className="min-w-0 disabled:opacity-50">
-						<AiChoiceCards choice={selected} saved={choice} models={models} onChoice={setDraft} />
+						<AiChoiceCards choice={selected} saved={choice} onChoice={setDraft} />
 					</fieldset>
 				)}
 			</QuestionnaireItem>

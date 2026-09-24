@@ -368,9 +368,6 @@ function RouteComponent() {
 			}}
 			aiChoiceProps={{
 				choice: aiChoiceQuery.data?.choice,
-				models: Object.fromEntries(
-					(aiChoiceQuery.data?.options ?? []).map((option) => [option.choice, option.models]),
-				),
 				onSave: (choice) => aiChoiceMutation.mutate({ body: { choice } }),
 				isSaving: aiChoiceMutation.isPending,
 				isLoading: aiChoiceQuery.isLoading,
