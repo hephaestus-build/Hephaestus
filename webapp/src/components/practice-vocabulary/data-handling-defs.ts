@@ -123,7 +123,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		facts: [
 			{ tone: "pro", text: "Feedback and Heph, when ready." },
 			{ tone: "caveat", text: "Only in-house models." },
-			{ tone: "caveat", text: "Hardware can limit model size and speed." },
+			{ tone: "caveat", text: "In-house capacity may limit model size or speed." },
 			{ tone: "pro", text: "Only in-house models receive them." },
 		],
 		ceiling: "IN_HOUSE",
@@ -136,7 +136,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		facts: [
 			{ tone: "pro", text: "Feedback and Heph, when ready." },
 			{ tone: "pro", text: "In-house and provider models." },
-			{ tone: "neutral", text: "Larger models or more capacity may be available." },
+			{ tone: "neutral", text: "May offer stronger models or more capacity." },
 			{ tone: "caveat", text: "A configured provider may receive them." },
 		],
 		ceiling: "CLOUD",
