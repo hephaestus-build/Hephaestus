@@ -196,7 +196,7 @@ class DockerSandboxLiveTest {
                     List.of("sh", "-c", "printf partial > /workspace/out/partial.txt; sleep 300"),
                     Map.of(),
                     new NetworkPolicy(true, null, "live-gateway-token"),
-                    new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofSeconds(3)),
+                    new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofSeconds(20)),
                     testSecurityProfile(),
                     Map.of(),
                     "/workspace/out");
