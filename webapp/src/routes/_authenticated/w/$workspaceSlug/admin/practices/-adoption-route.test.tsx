@@ -203,6 +203,7 @@ describe("catalog adoption over practice setup", () => {
 			http.get("*/workspaces/:workspaceSlug/practices/definition-options", () =>
 				HttpResponse.json(mockPracticeDefinitionOptions),
 			),
+			http.get("*/workspaces/:workspaceSlug/practices/releases", () => HttpResponse.json([])),
 			http.get("*/workspaces/:workspaceSlug/practices/:practiceSlug", () =>
 				HttpResponse.json(workspacePractice),
 			),

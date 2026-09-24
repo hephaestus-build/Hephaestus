@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.practices.curated.CatalogEntry;
 import de.tum.cit.aet.hephaestus.practices.curated.CuratedCatalogService;
+import de.tum.cit.aet.hephaestus.practices.curated.CuratedPracticeReleaseService;
 import de.tum.cit.aet.hephaestus.practices.curated.EffectiveCatalog;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeReleaseProposalDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -31,6 +32,7 @@ public class PracticeReleaseService {
     private final PracticeRepository practices;
     private final WorkspaceRepository workspaces;
     private final CuratedCatalogService catalogService;
+    private final CuratedPracticeReleaseService instanceReleases;
     private final PracticeGroupService groups;
     private final PracticeDefinitionValidator validator;
     private final PracticeRevisionService revisions;
@@ -60,7 +62,7 @@ public class PracticeReleaseService {
             Map<PracticeDefinitionField, PracticeReleaseChoice> choices) {
         Workspace workspace = lockWorkspace(ctx);
         Practice practice = practice(ctx, slug);
-        PracticeReleaseProposalDTO proposal = requireProposal(practice, catalogService.catalogForDecision());
+        PracticeReleaseProposalDTO proposal = requireProposal(practice, instanceReleases.catalogForDecision());
         PracticeReleasePrecondition.requireCurrent(precondition, proposal);
         PracticeDefinition merged =
                 PracticeDefinitionMerge.apply(proposal.base(), proposal.current(), proposal.offered(), choices);
@@ -107,7 +109,7 @@ public class PracticeReleaseService {
     public void decline(WorkspaceContext ctx, String slug, @Nullable EntityTagPrecondition precondition) {
         lockWorkspace(ctx);
         Practice practice = practice(ctx, slug);
-        PracticeReleaseProposalDTO proposal = requireProposal(practice, catalogService.catalogForDecision());
+        PracticeReleaseProposalDTO proposal = requireProposal(practice, instanceReleases.catalogForDecision());
         PracticeReleasePrecondition.requireCurrent(precondition, proposal);
         PracticeDefinitionSnapshot before =
                 PracticeDefinitionSnapshot.of(practice, revisions.currentRevisionNumber(practice));

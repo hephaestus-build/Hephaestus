@@ -242,6 +242,7 @@ interface FormErrors {
 	bindings?: BindingsProblem;
 	gate?: string;
 	subject?: string;
+	delivery?: string;
 	/**
 	 * One list, in the order the fields appear, so the summary reads down the form and the first
 	 * entry is also the field to focus. The summary and the focus target both come from it, so they
@@ -257,6 +258,7 @@ function formErrors(
 	mode: PracticeDefinitionFormProps["mode"],
 	selectedWorkType: PracticeWorkTypeDefinitionOptions | undefined,
 	revealSlug: () => void,
+	deliveryId: string,
 ): FormErrors {
 	const nameTooShort = form.name.trim().length < 3;
 	const criteriaTooShort = form.criteria.trim().length < 3;
@@ -268,6 +270,11 @@ function formErrors(
 		selectedWorkType &&
 		!selectedWorkType.subjectRoles.includes(form.bindings[0].subject ?? "AUTHOR")
 			? "Choose a person this kind of work can identify."
+			: undefined;
+	const preferredSlug = form.deliveryBehavior.redundantToSlug?.trim();
+	const deliveryError =
+		hasText(preferredSlug) && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(preferredSlug)
+			? "Use lowercase letters, numbers, and single hyphens."
 			: undefined;
 	const summary = [
 		nameTooShort && {
@@ -291,6 +298,11 @@ function formErrors(
 			// Lives inside the collapsed Technical settings panel, which unmounts its contents.
 			reveal: revealSlug,
 		},
+		hasText(deliveryError) && {
+			fieldId: `${deliveryId}-redundant`,
+			message: deliveryError,
+			reveal: revealSlug,
+		},
 	].filter((entry): entry is FormError => Boolean(entry));
 	return {
 		name: nameTooShort ? "Name must be at least 3 characters" : undefined,
@@ -300,6 +312,7 @@ function formErrors(
 		bindings,
 		gate: gateError,
 		subject: subjectError,
+		delivery: deliveryError,
 		summary,
 	};
 }
@@ -480,7 +493,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		});
 	};
 
-	const errors = formErrors(form, mode, selectedWorkType, () => setShowAdvanced(true));
+	const errors = formErrors(form, mode, selectedWorkType, () => setShowAdvanced(true), deliveryId);
 	const valid = errors.summary.length === 0;
 	const shownErrors = refusals > 0 ? errors : NO_ERRORS;
 
@@ -930,6 +943,10 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 											id={`${deliveryId}-redundant`}
 											pattern="[a-z0-9]+(-[a-z0-9]+)*"
 											title="Use lowercase letters, numbers, and single hyphens."
+											aria-invalid={hasText(shownErrors.delivery)}
+											aria-describedby={
+												hasText(shownErrors.delivery) ? `${deliveryId}-redundant-error` : undefined
+											}
 											value={form.deliveryBehavior.redundantToSlug ?? ""}
 											disabled={formDisabled}
 											onChange={(event) =>
@@ -946,6 +963,9 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 											When both practices are negative, show feedback from the preferred practice
 											instead of this one.
 										</FieldDescription>
+										<FieldError id={`${deliveryId}-redundant-error`}>
+											{shownErrors.delivery}
+										</FieldError>
 									</Field>
 								</div>
 

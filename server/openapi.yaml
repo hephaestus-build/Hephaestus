@@ -8814,6 +8814,7 @@ components:
           - IN_SYNC
           - LOCALLY_EDITED
           - UPDATE_AVAILABLE
+          - DECLINED
         slug:
           type: string
           description: Slug of the catalog entry this copy was made from

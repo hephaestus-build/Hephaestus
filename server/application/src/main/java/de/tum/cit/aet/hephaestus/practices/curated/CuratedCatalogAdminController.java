@@ -65,6 +65,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class CuratedCatalogAdminController {
 
     private final CuratedCatalogService service;
+    private final CuratedPracticeReleaseService releases;
     private final PracticeEvidenceDefaults evidenceDefaults;
     private final PracticeDefinitionOptionsService definitionOptionsService;
 
@@ -104,7 +105,7 @@ public class CuratedCatalogAdminController {
             summary = "Compare a bundled practice update with the instance version",
             operationId = "adminGetPracticeRelease")
     public ResponseEntity<PracticeReleaseProposalDTO> getPracticeRelease(@PathVariable String slug) {
-        PracticeReleaseProposalDTO proposal = service.practiceRelease(slug);
+        PracticeReleaseProposalDTO proposal = releases.practiceRelease(slug);
         return ResponseEntity.ok().eTag(etag(proposal.etag())).body(proposal);
     }
 
@@ -118,9 +119,7 @@ public class CuratedCatalogAdminController {
             @Parameter(required = true) @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) @Nullable
                     String ifMatch,
             @Valid @RequestBody AcceptPracticeReleaseRequestDTO request) {
-        return ok(
-                service.acceptPracticeRelease(slug, precondition(ifMatch), request.choices()),
-                CuratedPracticeDTO::from);
+        return ok(releases.accept(slug, precondition(ifMatch), request.choices()), CuratedPracticeDTO::from);
     }
 
     @DeleteMapping("/practices/{slug}/release")
@@ -130,7 +129,7 @@ public class CuratedCatalogAdminController {
             @PathVariable String slug,
             @Parameter(required = true) @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) @Nullable
                     String ifMatch) {
-        return ok(service.declinePracticeRelease(slug, precondition(ifMatch)), CuratedPracticeDTO::from);
+        return ok(releases.decline(slug, precondition(ifMatch)), CuratedPracticeDTO::from);
     }
 
     @PostMapping("/practices")

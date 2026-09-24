@@ -42,6 +42,15 @@ export function CatalogOriginBadge({ origin, kind, className }: CatalogOriginBad
 			/>
 		);
 	}
+	if (origin.link === "DECLINED") {
+		return (
+			<OriginBadge
+				className={className}
+				label="Update declined"
+				explanation="You declined this catalogue version. Your copy is unchanged. A different version can be offered later."
+			/>
+		);
+	}
 	if (origin.link === "IN_SYNC") {
 		return (
 			<OriginBadge

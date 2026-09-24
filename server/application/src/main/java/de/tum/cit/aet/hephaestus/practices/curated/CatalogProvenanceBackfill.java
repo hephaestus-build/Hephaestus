@@ -132,7 +132,8 @@ public class CatalogProvenanceBackfill {
                                 managed.getWhatGoodLooksLike(),
                                 managed.getGroup() == null
                                         ? null
-                                        : managed.getGroup().getSlug());
+                                        : managed.getGroup().getSlug(),
+                                managed.getDeliveryBehavior());
                         if (!aligned.provenanceFingerprint(entry.slug())
                                 .equals(effective.provenanceFingerprint(entry.slug()))) {
                             return;

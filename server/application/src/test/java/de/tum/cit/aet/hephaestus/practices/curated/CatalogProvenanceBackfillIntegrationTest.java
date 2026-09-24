@@ -41,6 +41,9 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
     private CuratedCatalogService catalogService;
 
     @Autowired
+    private CuratedPracticeReleaseService releases;
+
+    @Autowired
     private PracticeEvidenceDefaults evidenceDefaults;
 
     @Autowired
@@ -227,8 +230,8 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
         assertThat(saved.getAdoptedBase()).isEqualTo(edited);
         assertThat(saved.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.CURRENT_DEFINITION);
 
-        var proposal = catalogService.practiceRelease(SHIPPED_SLUG);
-        catalogService.acceptPracticeRelease(
+        var proposal = releases.practiceRelease(SHIPPED_SLUG);
+        releases.accept(
                 SHIPPED_SLUG,
                 EntityTagPrecondition.parse('"' + proposal.etag() + '"'),
                 Map.of(
@@ -238,6 +241,26 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                 overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
         assertThat(kept.getAdoptedBase()).isEqualTo(bundled);
         assertThat(kept.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.EXACT_ADOPTION);
+    }
+
+    @Test
+    void preservesAnAcceptedBundledVersionWhenOnlyTheDigestGainedDeliveryBehavior() {
+        PracticeDefinition bundled = shipped();
+        CuratedPracticeOverride override = new CuratedPracticeOverride(SHIPPED_SLUG, Instant.now());
+        override.write(
+                withCriteria(bundled, "Local criteria"),
+                CuratedDefinitionDigest.beforeDeliveryBehavior(SHIPPED_SLUG, bundled),
+                Instant.now());
+        overrideRepository.save(override);
+
+        backfill.run();
+
+        CuratedPracticeOverride saved =
+                overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
+        assertThat(saved.getAdoptedBase()).isEqualTo(bundled);
+        assertThat(saved.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.BUNDLED_DIGEST_MATCH);
+        assertThat(saved.getAcceptedBundledDigest()).isEqualTo(CuratedDefinitionDigest.of(SHIPPED_SLUG, bundled));
+        assertThat(catalogService.practice(SHIPPED_SLUG).state()).isEqualTo(CatalogEntryState.EDITED_HERE);
     }
 
     @Test

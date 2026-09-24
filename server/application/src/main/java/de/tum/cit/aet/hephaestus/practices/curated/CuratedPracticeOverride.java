@@ -172,6 +172,10 @@ public class CuratedPracticeOverride {
         if (current == null) {
             return;
         }
+        if (bundled != null
+                && CuratedDefinitionDigest.beforeDeliveryBehavior(slug, bundled).equals(acceptedBundledDigest)) {
+            acceptedBundledDigest = CuratedDefinitionDigest.of(slug, bundled);
+        }
         if (bundled != null && CuratedDefinitionDigest.of(slug, bundled).equals(acceptedBundledDigest)) {
             adoptedBase = bundled;
             adoptedBaseSource = AdoptedBaseSource.BUNDLED_DIGEST_MATCH;

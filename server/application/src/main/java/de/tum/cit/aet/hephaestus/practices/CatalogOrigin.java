@@ -22,11 +22,19 @@ public final class CatalogOrigin {
         boolean sourceOffered = entry != null && catalog.isEffectivelyOffered(entry);
         if (practice.getAdoptedBase() != null && entry != null) {
             PracticeDefinition current = PracticeDefinition.from(practice);
-            CatalogLink link = current.equals(entry.effective())
-                    ? CatalogLink.IN_SYNC
-                    : current.equals(practice.getAdoptedBase())
-                            ? CatalogLink.UPDATE_AVAILABLE
-                            : CatalogLink.LOCALLY_EDITED;
+            boolean declined = entry.effective()
+                    .exactFingerprint(practice.getSourceCuratedSlug())
+                    .equals(practice.getDeclinedOfferedDigest());
+            CatalogLink link;
+            if (current.equals(entry.effective())) {
+                link = CatalogLink.IN_SYNC;
+            } else if (declined) {
+                link = CatalogLink.DECLINED;
+            } else if (current.equals(practice.getAdoptedBase())) {
+                link = CatalogLink.UPDATE_AVAILABLE;
+            } else {
+                link = CatalogLink.LOCALLY_EDITED;
+            }
             return new CatalogOriginDTO(practice.getSourceCuratedSlug(), link, sourceOffered);
         }
         return describe(

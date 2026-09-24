@@ -28,6 +28,9 @@ class CuratedPracticeReleaseIntegrationTest extends BaseIntegrationTest {
     private CuratedCatalogService catalog;
 
     @Autowired
+    private CuratedPracticeReleaseService releases;
+
+    @Autowired
     private CuratedPracticeOverrideRepository overrides;
 
     @BeforeEach
@@ -38,7 +41,7 @@ class CuratedPracticeReleaseIntegrationTest extends BaseIntegrationTest {
     @Test
     void acceptCanKeepAConflictingFieldAndAdvanceTheBundledBase() {
         customizeFromOlderBundle();
-        PracticeReleaseProposalDTO proposal = catalog.practiceRelease(SLUG);
+        PracticeReleaseProposalDTO proposal = releases.practiceRelease(SLUG);
         assertThat(proposal.fields()).anySatisfy(field -> {
             assertThat(field.field()).isEqualTo(PracticeDefinitionField.CRITERIA);
             assertThat(field.conflict()).isTrue();
@@ -46,36 +49,47 @@ class CuratedPracticeReleaseIntegrationTest extends BaseIntegrationTest {
         var entry = catalog.practice(SLUG);
         assertThatThrownBy(() -> catalog.keepPractice(SLUG, EntityTagPrecondition.parse("\"" + entry.etag() + "\"")))
                 .isInstanceOf(CuratedCatalogConflictException.class);
-        assertThatThrownBy(() -> catalog.acceptPracticeRelease(
+        assertThatThrownBy(() -> releases.accept(
                         SLUG,
                         EntityTagPrecondition.parse("\"stale\""),
                         Map.of(PracticeDefinitionField.CRITERIA, PracticeReleaseChoice.CURRENT)))
                 .isInstanceOf(StalePracticeReleaseException.class);
 
-        catalog.acceptPracticeRelease(
-                SLUG, match(proposal), Map.of(PracticeDefinitionField.CRITERIA, PracticeReleaseChoice.CURRENT));
+        releases.accept(SLUG, match(proposal), Map.of(PracticeDefinitionField.CRITERIA, PracticeReleaseChoice.CURRENT));
 
         CuratedPracticeOverride saved = overrides.findBySlug(SLUG).orElseThrow();
         assertThat(Objects.requireNonNull(saved.definition()).criteria()).isEqualTo("Local criteria");
         assertThat(saved.getAdoptedBase()).isEqualTo(proposal.offered());
         assertThat(saved.getAcceptedBundledDigest()).isEqualTo(CuratedDefinitionDigest.of(SLUG, proposal.offered()));
         assertThat(catalog.practice(SLUG).state()).isEqualTo(CatalogEntryState.EDITED_HERE);
-        assertThatThrownBy(() -> catalog.practiceRelease(SLUG)).isInstanceOf(EntityNotFoundException.class);
+        assertThatThrownBy(() -> releases.practiceRelease(SLUG)).isInstanceOf(EntityNotFoundException.class);
     }
 
     @Test
     void declineAcknowledgesOnlyThisOfferWithoutChangingTheBaseOrDefinition() {
         customizeFromOlderBundle();
-        PracticeReleaseProposalDTO proposal = catalog.practiceRelease(SLUG);
+        PracticeReleaseProposalDTO proposal = releases.practiceRelease(SLUG);
 
-        catalog.declinePracticeRelease(SLUG, match(proposal));
+        releases.decline(SLUG, match(proposal));
 
         CuratedPracticeOverride saved = overrides.findBySlug(SLUG).orElseThrow();
         assertThat(saved.definition()).isEqualTo(proposal.current());
         assertThat(saved.getAdoptedBase()).isEqualTo(proposal.base());
         assertThat(saved.getAcceptedBundledDigest()).isEqualTo(CuratedDefinitionDigest.of(SLUG, proposal.offered()));
         assertThat(catalog.practice(SLUG).state()).isEqualTo(CatalogEntryState.EDITED_HERE);
-        assertThatThrownBy(() -> catalog.practiceRelease(SLUG)).isInstanceOf(EntityNotFoundException.class);
+        assertThatThrownBy(() -> releases.practiceRelease(SLUG)).isInstanceOf(EntityNotFoundException.class);
+    }
+
+    @Test
+    void acceptingTheOfferedDefinitionReturnsToFollowingTheBundle() {
+        customizeFromOlderBundle();
+        PracticeReleaseProposalDTO proposal = releases.practiceRelease(SLUG);
+
+        releases.accept(SLUG, match(proposal), Map.of(PracticeDefinitionField.CRITERIA, PracticeReleaseChoice.OFFERED));
+
+        assertThat(catalog.practice(SLUG).effective()).isEqualTo(proposal.offered());
+        assertThat(catalog.practice(SLUG).state()).isEqualTo(CatalogEntryState.FROM_HEPHAESTUS);
+        assertThatThrownBy(() -> releases.practiceRelease(SLUG)).isInstanceOf(EntityNotFoundException.class);
     }
 
     private void customizeFromOlderBundle() {

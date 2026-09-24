@@ -496,7 +496,7 @@ export type CatalogGroupPracticeAction = {
  * The catalog entry a workspace copy came from and whether it differs now
  */
 export type CatalogOrigin = {
-  link: 'IN_SYNC' | 'LOCALLY_EDITED' | 'UPDATE_AVAILABLE';
+  link: 'IN_SYNC' | 'LOCALLY_EDITED' | 'UPDATE_AVAILABLE' | 'DECLINED';
   /**
    * Slug of the catalog entry this copy was made from
    */

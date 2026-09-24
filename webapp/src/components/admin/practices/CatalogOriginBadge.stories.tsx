@@ -49,6 +49,23 @@ export const CatalogChanged: Story = {
 	},
 };
 
+export const UpdateDeclined: Story = {
+	args: {
+		origin: {
+			slug: "clear-pr-description",
+			link: "DECLINED",
+			sourceOffered: true,
+		},
+	},
+	play: async ({ canvas }) => {
+		canvas.getByRole("button", { name: "Update declined" }).focus();
+		const tooltip = await within(document.body).findByText(
+			/different version can be offered later/u,
+		);
+		await waitFor(async () => expect(tooltip).toBeVisible());
+	},
+};
+
 export const Customized: Story = {
 	args: {
 		origin: {

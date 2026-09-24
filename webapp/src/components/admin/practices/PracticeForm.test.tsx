@@ -86,6 +86,26 @@ describe("workspace practice scope", () => {
 		);
 	});
 
+	it("keeps an invalid preferred slug in the editor with a field error", async () => {
+		const onSubmit = vi.fn();
+		await renderPractice(mockPullRequestBinding, onSubmit);
+		const user = userEvent.setup();
+		await user.click(screen.getByRole("button", { name: /Technical settings/u }));
+		await user.type(
+			screen.getByRole("textbox", { name: "Preferred practice slug" }),
+			"Invalid Slug",
+		);
+		await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(
+			screen.getByRole("textbox", { name: "Preferred practice slug" }).getAttribute("aria-invalid"),
+		).toBe("true");
+		expect(screen.getAllByText("Use lowercase letters, numbers, and single hyphens.")).toHaveLength(
+			2,
+		);
+	});
+
 	it.each([
 		["gate", { ...mockPullRequestBinding, appliesWhen: gate }],
 		["reviewer", { ...mockPullRequestBinding, subject: "REVIEWER" as const }],
