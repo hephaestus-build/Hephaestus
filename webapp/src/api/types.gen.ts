@@ -11,23 +11,15 @@ export type AcceptPracticeReleaseRequest = {
 };
 
 /**
- * The signed-in account's AI choice, absent until the person has answered, and the models each
- *  answer would use across all their workspaces, so User settings can show the same vendor marks as
- *  a workspace's setup page.
+ * One account-wide answer; model names belong only to workspace-specific views.
  */
 export type AccountAiChoice = {
   choice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
-  options: Array<AccountAiOption>;
   updatedAt?: Date;
 };
 
 export type AccountAiChoiceRequest = {
   choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
-};
-
-export type AccountAiOption = {
-  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
-  models: Array<WorkspaceAiModel>;
 };
 
 /**
@@ -412,6 +404,10 @@ export type AutonomyRollup = {
  * A model available for this workspace to bind a Task to
  */
 export type AvailableLlmModel = {
+  /**
+   * Model brand declared by an admin; display only
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
   /**
    * Owning connection's display name
    */
@@ -904,6 +900,10 @@ export type CreateLlmConnectionRequest = {
  */
 export type CreateLlmModelRequest = {
   /**
+   * Model brand declared by an admin; display only
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
+  /**
    * Context window in tokens
    */
   contextWindow?: number;
@@ -1147,6 +1147,10 @@ export type CreateWorkspaceLlmConnectionRequest = {
  * Create a model on your AI provider
  */
 export type CreateWorkspaceLlmModelRequest = {
+  /**
+   * Model brand declared by an admin; display only
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
   /**
    * Context window in tokens
    */
@@ -2141,6 +2145,10 @@ export type LlmConnection = {
  * Instance catalog model
  */
 export type LlmModel = {
+  /**
+   * Model brand declared by an admin; display only
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
   /**
    * Owning connection's display name
    */
@@ -5507,6 +5515,14 @@ export type UpdateLlmModelPriceRequest = {
  */
 export type UpdateLlmModelRequest = {
   /**
+   * Model brand declared by an admin; null keeps current
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
+  /**
+   * Clear the declared model brand
+   */
+  clearBrand?: boolean;
+  /**
    * True clears the reasoning effort, so the provider's own default applies
    */
   clearReasoningEffort?: boolean;
@@ -5849,6 +5865,14 @@ export type UpdateWorkspaceLlmConnectionRequest = {
  */
 export type UpdateWorkspaceLlmModelRequest = {
   /**
+   * Model brand declared by an admin; null keeps current
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
+  /**
+   * Clear the declared model brand
+   */
+  clearBrand?: boolean;
+  /**
    * True clears the reasoning effort, so the provider's own default applies
    */
   clearReasoningEffort?: boolean;
@@ -6160,12 +6184,11 @@ export type Workspace = {
 };
 
 /**
- * A model this answer would use here: its name, who made it, and where it runs, when known.
+ * A model this answer would use here, with its declared brand when known.
  */
 export type WorkspaceAiModel = {
-  maker?: 'OPENAI' | 'AZURE' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'OLLAMA';
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
   name: string;
-  platform?: 'OPENAI' | 'AZURE' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'OLLAMA';
 };
 
 export type WorkspaceAiOption = {
@@ -6283,6 +6306,10 @@ export type WorkspaceLlmConnection = {
  * A model on your AI provider
  */
 export type WorkspaceLlmModel = {
+  /**
+   * Model brand declared by an admin; display only
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
   /**
    * Owning connection's display name
    */

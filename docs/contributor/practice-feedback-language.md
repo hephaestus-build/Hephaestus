@@ -184,80 +184,16 @@ available. If there is no material change to check, record the evidenced lack of
 
 ## Member onboarding and AI choices
 
-**Member onboarding** is first-visit setup after existing workspace membership. It is not an
-admission request, approval, entitlement, or provisioning workflow. It is configuration and a
-member's own choice, not research consent. The member-facing word is **setup**: a workspace
-*needs setup* while its page is still owed. Retired words: *processing location*, *Unclassified*,
-*AI preference*, *Workspace preferences*, *Workspace default*, *welcome* as the name of the setup,
-its state or the page heading, *Provider, nothing kept*, *Provider, kept for safety checks*,
-*Stays in-house*, *Kept after the reply* and *reach*.
+**Member onboarding** is first-visit setup for a person who already belongs to a workspace. It is not a request for access, an approval flow, or research consent. A workspace *needs setup* while its page is still owed. The member-facing name for the account-wide answer is **your AI choice**; **Member onboarding** names the workspace owner's configuration page. Do not call either one a *workspace preference* or a *workspace default*.
 
-**Data handling** is what an admin declares about a model: one fact, never an inference from a
-hostname, connection or provider kind. **Operated by** is *Your organisation* or *A provider* under
-terms your organisation accepted. Declaring it is also the admin's confirmation that the model's
-terms rule out training on what it receives. Hephaestus does not accept a model that trains on
-developers' work. An admin-only **note** carries region, agreement, renewal date and retention
-details and is never shown to developers. No retention period appears in product copy.
+An admin declares a model's **Operated by** fact as **Your organisation** or **A provider**. Hephaestus derives **In-house** (`IN_HOUSE`) or **Cloud** (`CLOUD`) from that declaration; without it, the model is **Not declared** (`UNDECLARED`). The declaration does not verify a provider's location, retention, or training terms. An optional model brand is a separate display label selected by the admin, not evidence of who operates the model. Unknown brands have no logo. The [admin AI provider guide](/admin/ai-providers#data-handling-and-members-ai-choices) owns the configuration and routing details.
 
-From that fact Hephaestus derives one **data-handling tier**, strictest first, and shows it as a
-badge with a label and an icon everywhere a model appears:
+A developer's **AI choice** is a ceiling held by the account across its workspaces:
 
-| Tier | Label | Derived when | What a developer reads |
-| --- | --- | --- | --- |
-| `IN_HOUSE` | **In-house** | operated by your organisation | Runs only on systems your organisation runs. Your work never leaves it. |
-| `CLOUD` | **Cloud** | operated by a provider | A provider your organisation approved handles it. Your work leaves your organisation, the provider may keep it briefly for safety checks, and its staff may read flagged content. |
-| `UNDECLARED` | **Not declared** | the fact is missing | Never shown to developers. An admin to-do. |
+| Answer | Meaning |
+| --- | --- |
+| **In-house** (`IN_HOUSE_ONLY`) | Allow only declared In-house AI processing for practice reviews and Heph. |
+| **Cloud** (`CLOUD`) | Also allow declared Cloud processing; In-house still qualifies. |
+| **No AI** (`NO_AI`) | Stop new AI requests for this person's work in practice reviews and Heph. It does not stop source synchronisation, storage, authorised reads, or requests already sent. |
 
-A developer's **AI choice** is a ceiling: the loosest tier they accept, or **No AI**. It is the
-person's, answered once per account, and holds in every workspace they are a member of on this
-instance. A workspace decides what runs within it, never the ceiling itself. The three AI answers
-are **In-house** (`IN_HOUSE_ONLY`, only systems the organisation runs), **Cloud** (`CLOUD`,
-in-house plus the providers the organisation approved) and **No AI**. Anything stricter than the
-answer also counts, so Cloud allows in-house models too. Nothing ever switches a developer to a
-looser tier, and *Not declared* sits outside every ceiling. A member may choose any answer
-regardless of what any workspace has bound today: consent is to a boundary, not to the current
-inventory, so adding, removing or re-declaring a model never asks again. The member-facing name for
-the choice is **your AI choice** on every surface: the sidebar item, the heading, the notice, the
-**User settings** section and the copy.
-
-The workspace admin's model page has one row per tier and purpose: **In-house**, **Cloud** and
-**Members who haven't chosen**. The last names the *Not declared* row. It serves only members who
-have not chosen yet, where the choice is optional, and never a member who chose. (*Workspace
-default* is retired here. It already names practice autonomy.)
-
-Two phrases, two meanings, never swapped: an AI answer that no ready model covers is **not set up
-here yet** (a workspace owner adds a model), and an account link whose integration is broken is
-**unavailable right now** (it does not hold the member up).
-
-The sign-in and first-visit pages follow ten rules:
-
-1. Heph speaks only inside `HephSays`, and about Hephaestus in the third person: "Hephaestus reads
-   your work only with the AI you allow", never "I read your work". He introduces himself once, on
-   the sign-in setup page.
-2. Outside the bubble: plain second person, no "please", contractions allowed. Alert titles start
-   "Couldn't …".
-3. Buttons: **Continue** moves on, **Save AI choice** saves before required account links are complete,
-   **Save** on a return visit, **Skip for now** defers, **Sign out**
-   only on the sign-in setup page, **Back to workspace** on a return visit. Never Next, Finish,
-   Submit or Done.
-4. Section titles are the question or the noun.
-5. Hints are one sentence and the primary button's accessible description.
-6. *Not set up here yet* for an AI answer, *unavailable right now* for an account link. The three
-   cards sit side by side with the same anatomy: a hero of white discs with the marks of the companies
-   behind the models the workspace set up (a red prohibition sign for No AI), the title, then
-   aligned rows that compare the same five facts on every card, in this order: practice feedback and
-   Heph, where it runs, what is kept, who can read it, which models. Each row carries a green check
-   for a plus, an orange triangle for a caveat or a red cross for a minus, and one neutral grey info
-   row. No reach meter, no "Allows" or "Consider" prose, no configuration rows. The facts above the
-   cards are grouped items with the icon, term and detail stacked, not two-column rows. One sentence
-   below the cards names what this workspace has not set up within the selected answer, and nothing
-   when it is covered.
-7. Ask "a workspace owner" on the workspace page, "whoever runs this Hephaestus instance" on the
-   sign-in page.
-8. The first-visit heading is **Your AI choice**, never a greeting. Heph's first line on the
-   workspace page names the workspace through `{workspaceName}`. "This workspace" in body text.
-9. "AI" when reviews and Heph are both meant, "practice reviews" or "Heph" when one is, and never
-   *model*, *LLM* or *agent*.
-10. Both pages open on "Give me a moment. Hephaestus is fetching your setup." and close on "That's
-    everything. Let's get to work." When the setup cannot be read, Heph says "Hephaestus couldn't
-    fetch your setup just now."
+A choice is a boundary, not a selection of today's models. A workspace can add or remove models without asking the member again. **Not declared** sits outside both explicit AI ceilings and can serve only someone who has not chosen where a choice is optional. **Members who haven't chosen** is the admin label for that row. An AI answer with no ready model here is **not set up here yet**; a broken account integration is **unavailable right now**. Keep both visible without silently changing the person's answer. The [user privacy guide](/user/privacy#your-ai-choice) owns the member-facing data boundary.

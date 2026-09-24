@@ -282,16 +282,17 @@ slug is API surface; the title is what the UI shows.
 ## Data handling and members' AI choices
 
 Owners configure **Administration → Member onboarding** after membership is already managed by the
-workspace's existing mechanism. Members choosing an answer see the display name of each model that
-would serve them and the logo of its maker and platform, such as OpenAI on Azure or Llama on Ollama.
-Hephaestus recognises the vendor from the model ID and the connection's host. The host itself is
-never shown to members. Choose display names you are happy for developers to read. The setup page is hidden by default. Declare and assign models before
+workspace's existing mechanism. In that workspace, members can see the display names of models
+that are ready for their answer. You can set an optional model brand in either model console; its
+mark appears only beside that model's name. Leave the brand empty if you cannot confirm it.
+Hephaestus does not infer a brand or data location from a model ID or connection URL. Choose display
+names you are happy for developers to read. The setup page is hidden by default. Declare and assign models before
 enabling it, and wait until every runtime role has been upgraded before assigning models by tier.
 
 1. In either model console, declare each model's **Data handling** with one fact, **Operated by**:
-   **Your organisation**, or **A provider** under terms your organisation accepted. Declaring it
-   also confirms that the model's terms rule out training on what it receives. Hephaestus does not
-   accept a model that trains on developers' work. From that fact Hephaestus derives one tier,
+   **Your organisation**, or **A provider** under terms your organisation accepted. This declaration
+   does not verify a provider's retention or training terms. Check those terms with your provider
+   before you enable the model. From the operator fact Hephaestus derives one tier,
    **In-house** or **Cloud**, and shows it as a badge wherever the model appears. Declare what the
    agreement says, not what the hostname suggests: verify the endpoint, gateway routing,
    subprocessors and data-handling agreement first. A note for admins carries the region, the

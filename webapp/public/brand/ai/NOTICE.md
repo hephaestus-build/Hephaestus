@@ -1,6 +1,3 @@
-# AI vendor marks
+# AI model-brand marks
 
-The SVG files in this folder come from `@lobehub/icons-static-svg` 1.95.1
-(https://github.com/lobehub/lobe-icons), MIT licence, copyright (c) LobeHub. The marks themselves are
-trademarks of their owners. Hephaestus shows one only to name the company behind a model a workspace
-actually set up, the way Artemis's AI choice dialog shows Azure and OpenAI.
+These SVG files come from [`@lobehub/icons-static-svg` 1.95.1](https://github.com/lobehub/lobe-icons). Its MIT license is in [LICENSE](./LICENSE). The marks remain trademarks of their owners. Hephaestus shows a mark only when a workspace administrator declares that model brand; it does not use a mark to describe hosting, data location, or provider terms.

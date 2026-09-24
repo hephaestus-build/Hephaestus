@@ -120,7 +120,6 @@ const LLM_MODEL_FORM_FIELDS = [
 	"per1mCacheReadUsd",
 	"per1mCacheWriteUsd",
 	"note",
-	"trainingConfirmed",
 	"dataHandlingNote",
 ] as const;
 
@@ -139,8 +138,6 @@ export interface LlmModelFormValue {
 	per1mCacheWriteUsd?: number;
 	note?: string;
 	operatedBy?: LlmModel["operatedBy"];
-	/** The admin's confirmation that the model's terms rule out training; owed once the model is declared. */
-	trainingConfirmed?: boolean;
 	dataHandlingNote?: string;
 }
 
@@ -162,18 +159,9 @@ const llmModelFormSchema = z
 		per1mCacheWriteUsd: rateSchema.optional(),
 		note: z.string().trim().max(500, "Use 500 characters or fewer.").optional(),
 		operatedBy: z.enum(["OWN_ORGANISATION", "PROVIDER"]).optional(),
-		trainingConfirmed: z.boolean().optional(),
 		dataHandlingNote: z.string().trim().max(200, "Use 200 characters or fewer.").optional(),
 	})
 	.superRefine((value, ctx) => {
-		// Undeclared stays saveable: models that predate the declaration must keep working.
-		if (value.operatedBy !== undefined && value.trainingConfirmed !== true) {
-			ctx.addIssue({
-				code: "custom",
-				path: ["trainingConfirmed"],
-				message: "Confirm the training guarantee, or leave data handling undeclared.",
-			});
-		}
 		if (value.pricingMode === "PRICED") {
 			const rates = [
 				value.per1mInputUsd,

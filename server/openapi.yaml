@@ -8728,10 +8728,8 @@ components:
       - choices
     AccountAiChoice:
       type: object
-      description: |-
-        The signed-in account's AI choice, absent until the person has answered, and the models each
-         answer would use across all their workspaces, so User settings can show the same vendor marks as
-         a workspace's setup page.
+      description: One account-wide answer; model names belong only to workspace-specific
+        views.
       properties:
         choice:
           type: string
@@ -8739,15 +8737,9 @@ components:
           - NO_AI
           - IN_HOUSE_ONLY
           - CLOUD
-        options:
-          type: array
-          items:
-            $ref: "#/components/schemas/AccountAiOption"
         updatedAt:
           type: string
           format: date-time
-      required:
-      - options
     AccountAiChoiceRequest:
       type: object
       properties:
@@ -8759,22 +8751,6 @@ components:
           - CLOUD
       required:
       - choice
-    AccountAiOption:
-      type: object
-      properties:
-        choice:
-          type: string
-          enum:
-          - NO_AI
-          - IN_HOUSE_ONLY
-          - CLOUD
-        models:
-          type: array
-          items:
-            $ref: "#/components/schemas/WorkspaceAiModel"
-      required:
-      - choice
-      - models
     AccountRef:
       type: object
       description: A human-readable account identity. <code>displayName</code>/<code>email</code>
@@ -9340,6 +9316,18 @@ components:
       type: object
       description: A model available for this workspace to bind a Task to
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; display only
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
         connectionDisplayName:
           type: string
           description: Owning connection's display name
@@ -10206,6 +10194,18 @@ components:
       type: object
       description: Create a model on an instance LLM connection
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; display only
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
         contextWindow:
           type: integer
           format: int32
@@ -10570,6 +10570,18 @@ components:
       type: object
       description: Create a model on your AI provider
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; display only
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
         contextWindow:
           type: integer
           format: int32
@@ -12149,6 +12161,18 @@ components:
       type: object
       description: Instance catalog model
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; display only
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
         connectionDisplayName:
           type: string
           description: Owning connection's display name
@@ -17363,6 +17387,21 @@ components:
       description: Update a model's metadata (all fields optional; pricing and sharing
         are separate)
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; null keeps current
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
+        clearBrand:
+          type: boolean
+          description: Clear the declared model brand
         clearReasoningEffort:
           type: boolean
           description: "True clears the reasoning effort, so the provider's own default\
@@ -17806,6 +17845,21 @@ components:
       type: object
       description: Update a model on your AI provider (all fields optional)
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; null keeps current
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
+        clearBrand:
+          type: boolean
+          description: Clear the declared model brand
         clearReasoningEffort:
           type: boolean
           description: "True clears the reasoning effort, so the provider's own default\
@@ -18196,14 +18250,13 @@ components:
       - workspaceSlug
     WorkspaceAiModel:
       type: object
-      description: "A model this answer would use here: its name, who made it, and\
-        \ where it runs, when known."
+      description: "A model this answer would use here, with its declared brand when\
+        \ known."
       properties:
-        maker:
+        brand:
           type: string
           enum:
           - OPENAI
-          - AZURE
           - ANTHROPIC
           - GEMINI
           - GEMMA
@@ -18211,22 +18264,8 @@ components:
           - MISTRAL
           - QWEN
           - DEEPSEEK
-          - OLLAMA
         name:
           type: string
-        platform:
-          type: string
-          enum:
-          - OPENAI
-          - AZURE
-          - ANTHROPIC
-          - GEMINI
-          - GEMMA
-          - META
-          - MISTRAL
-          - QWEN
-          - DEEPSEEK
-          - OLLAMA
       required:
       - name
     WorkspaceAiOption:
@@ -18372,6 +18411,18 @@ components:
       type: object
       description: A model on your AI provider
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; display only
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
         connectionDisplayName:
           type: string
           description: Owning connection's display name

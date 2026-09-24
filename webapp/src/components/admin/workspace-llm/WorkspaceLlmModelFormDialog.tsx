@@ -6,7 +6,7 @@ import type {
 	WorkspaceLlmModel,
 } from "@/api/types.gen";
 import {
-	dataHandlingBodyOf,
+	modelDetailsBodyOf,
 	LlmModelFields,
 	type LlmModelFieldsValue,
 	modelFieldsValueOf,
@@ -99,7 +99,7 @@ function WorkspaceLlmModelFormDialogContent({
 			displayName: fields.displayName.trim(),
 			contextWindow: fields.contextWindow.trim() ? Number(fields.contextWindow) : undefined,
 			maxOutputTokens: fields.maxOutputTokens.trim() ? Number(fields.maxOutputTokens) : undefined,
-			...dataHandlingBodyOf(fields),
+			...modelDetailsBodyOf(fields),
 			enabled: isEdit ? fields.enabled : false,
 			pricingMode: price.pricingMode,
 			per1mInputUsd: price.pricingMode === "PRICED" ? price.per1mInputUsd : undefined,
@@ -112,6 +112,7 @@ function WorkspaceLlmModelFormDialogContent({
 		if (isEdit) {
 			onUpdate(editing.id, {
 				...shared,
+				clearBrand: fields.brand === undefined,
 				...reasoningEffortUpdateOf(fields.reasoningEffort),
 			} satisfies UpdateWorkspaceLlmModelRequest);
 			return;

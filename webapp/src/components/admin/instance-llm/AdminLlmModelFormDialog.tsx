@@ -25,7 +25,7 @@ import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
 import { reasoningEffortOf, reasoningEffortUpdateOf } from "@/lib/reasoning-effort";
 
 import {
-	dataHandlingBodyOf,
+	modelDetailsBodyOf,
 	LlmModelFields,
 	type LlmModelFieldsValue,
 	modelFieldsValueOf,
@@ -113,11 +113,15 @@ function AdminLlmModelFormDialogContent({
 			displayName: fields.displayName.trim(),
 			contextWindow: fields.contextWindow.trim() ? Number(fields.contextWindow) : undefined,
 			maxOutputTokens: fields.maxOutputTokens.trim() ? Number(fields.maxOutputTokens) : undefined,
-			...dataHandlingBodyOf(fields),
+			...modelDetailsBodyOf(fields),
 			enabled: fields.enabled,
 		};
 		const metadata: CreateLlmModelRequest | UpdateLlmModelRequest = isEdit
-			? { ...metadataShared, ...reasoningEffortUpdateOf(fields.reasoningEffort) }
+			? {
+					...metadataShared,
+					clearBrand: fields.brand === undefined,
+					...reasoningEffortUpdateOf(fields.reasoningEffort),
+				}
 			: {
 					...metadataShared,
 					reasoningEffort: reasoningEffortOf(fields.reasoningEffort),

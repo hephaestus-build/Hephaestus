@@ -118,15 +118,12 @@ describe("validateLlmModelForm", () => {
 	});
 
 	it("keeps an undeclared model saveable, so upgraded catalogs are not locked", () => {
-		expect(validateLlmModelForm({ ...validModel, trainingConfirmed: false })).toStrictEqual({});
+		expect(validateLlmModelForm(validModel)).toStrictEqual({});
 	});
 
-	it("requires the training guarantee once the model is declared", () => {
+	it("accepts a declared operator without claiming to verify the provider agreement", () => {
 		const declared = { ...validModel, operatedBy: "PROVIDER" } as const;
-		expect(validateLlmModelForm(declared)).toStrictEqual({
-			trainingConfirmed: "Confirm the training guarantee, or leave data handling undeclared.",
-		});
-		expect(validateLlmModelForm({ ...declared, trainingConfirmed: true })).toStrictEqual({});
+		expect(validateLlmModelForm(declared)).toStrictEqual({});
 	});
 
 	it("bounds the admin note to the column that stores it", () => {

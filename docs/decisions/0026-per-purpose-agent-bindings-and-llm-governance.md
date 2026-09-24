@@ -36,8 +36,7 @@
 > developers do not need the provider split. It asked them to weigh a retention detail they cannot
 > verify and that changes with the provider's terms, and it made the answers read as a ladder of
 > risk rather than a boundary. One cloud answer with honest caveats on its card (the work leaves the
-> organisation, a provider may keep it briefly for safety checks, its staff may read flagged
-> content) is clearer, and the retention detail lives in the admin-only note where the agreement
+> organisation, a provider may keep or review it under its agreement) is clearer, and the retention detail lives in the admin-only note where the agreement
 > already is. A developer's choice is now `NO_AI`, `IN_HOUSE_ONLY` or `CLOUD`, still a ceiling, so
 > Cloud also admits in-house models. Both amendments land in the same unreleased changelog, so no
 > saved choice predates the two-tier meaning.

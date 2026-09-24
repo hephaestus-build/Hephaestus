@@ -203,7 +203,7 @@ describe("AdminLlmModelFormDialog", () => {
 		);
 	});
 
-	it("sends the declaration and the note once declared and confirmed, and neither otherwise", () => {
+	it("sends the declared operator and note without claiming to verify provider terms", () => {
 		const onSave = renderDialog();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
 		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
@@ -213,21 +213,6 @@ describe("AdminLlmModelFormDialog", () => {
 		);
 
 		fireEvent.click(screen.getByRole("radio", { name: "A provider" }));
-		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
-		const trainingError = screen.getByRole("alert");
-		expect(trainingError.textContent).toBe(
-			"Confirm the training guarantee, or leave data handling undeclared.",
-		);
-		// The fault is the checkbox alone, so only the checkbox is flagged and described by it.
-		const training = screen.getByRole("checkbox", { name: /rule out training/u });
-		expect(training.getAttribute("aria-invalid")).toBe("true");
-		expect(training.getAttribute("aria-describedby")).toBe(trainingError.id);
-		expect(
-			screen.getByRole("radiogroup", { name: "Operated by" }).getAttribute("aria-invalid"),
-		).not.toBe("true");
-		expect(onSave).toHaveBeenCalledOnce();
-
-		fireEvent.click(training);
 		fireEvent.change(screen.getByLabelText(/^Note for admins/u), {
 			target: { value: "EU region, DPA renews 2027-01" },
 		});

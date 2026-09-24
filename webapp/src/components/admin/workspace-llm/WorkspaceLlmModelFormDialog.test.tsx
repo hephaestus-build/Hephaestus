@@ -166,11 +166,12 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		expect(onUpdate.mock.calls[0]?.[1]).toStrictEqual(expect.objectContaining({ enabled: false }));
 	});
 
-	it("opens a declared model with its operator selected and the training guarantee already confirmed", () => {
+	it("opens a declared model with its operator selected and can clear its brand", async () => {
 		const onUpdate = vi.fn();
 		const editing: WorkspaceLlmModel = {
 			dataHandlingTier: "CLOUD",
 			operatedBy: "PROVIDER",
+			brand: "QWEN",
 			dataHandlingNote: "EU region",
 			id: 3,
 			slug: "gpt-5",
@@ -197,32 +198,34 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		expect(screen.getByRole("radio", { name: "A provider" }).getAttribute("aria-checked")).toBe(
 			"true",
 		);
-		expect(
-			screen.getByRole("checkbox", { name: /rule out training/u }).getAttribute("aria-checked"),
-		).toBe("true");
+		expect(screen.getByRole("combobox", { name: "Model brand (optional)" }).textContent).toContain(
+			"Qwen",
+		);
 		screen.getByText("Cloud");
 		expect(screen.queryByText(/stop serving/u)).toBeNull();
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onUpdate.mock.calls[0]?.[1]).toStrictEqual(
-			expect.objectContaining({ operatedBy: "PROVIDER", dataHandlingNote: "EU region" }),
+			expect.objectContaining({
+				operatedBy: "PROVIDER",
+				brand: "QWEN",
+				clearBrand: false,
+				dataHandlingNote: "EU region",
+			}),
+		);
+		await userEvent.click(screen.getByRole("combobox", { name: "Model brand (optional)" }));
+		await userEvent.click(await screen.findByRole("option", { name: "Not specified" }));
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onUpdate.mock.calls[1]?.[1]).toStrictEqual(
+			expect.objectContaining({ brand: undefined, clearBrand: true }),
 		);
 
-		// Leaving the stored tier drops the model out of the rows that hold it, and the form says so
-		// before Save. Re-declaring it afterwards asks for the training guarantee again, and that
-		// checkbox alone is the flagged fault.
 		fireEvent.click(screen.getByRole("button", { name: "Leave undeclared" }));
 		screen.getByText("Rows holding this model as Cloud stop serving");
 		fireEvent.click(screen.getByRole("radio", { name: "Your organisation" }));
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-		const error = screen.getByText(
-			"Confirm the training guarantee, or leave data handling undeclared.",
+		expect(onUpdate).toHaveBeenCalledTimes(3);
+		expect(onUpdate.mock.calls[2]?.[1]).toStrictEqual(
+			expect.objectContaining({ operatedBy: "OWN_ORGANISATION" }),
 		);
-		const training = screen.getByRole("checkbox", { name: /rule out training/u });
-		expect(training.getAttribute("aria-invalid")).toBe("true");
-		expect(training.getAttribute("aria-describedby")).toBe(error.id);
-		expect(
-			screen.getByRole("radiogroup", { name: "Operated by" }).getAttribute("aria-invalid"),
-		).not.toBe("true");
-		expect(onUpdate).toHaveBeenCalledOnce();
 	});
 });

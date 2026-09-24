@@ -543,7 +543,7 @@ function WorkspaceModels({
 								/>
 							)}
 							<span className="min-w-0 break-words text-foreground">{model.name}</span>
-							{hasText(brandLabel) && <span className="text-muted-foreground">{brandLabel}</span>}
+							{hasText(brandLabel) && <span className="text-muted-foreground"> {brandLabel}</span>}
 						</li>
 					);
 				})}

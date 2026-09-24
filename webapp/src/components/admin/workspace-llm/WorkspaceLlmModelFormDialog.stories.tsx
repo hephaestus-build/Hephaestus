@@ -81,12 +81,7 @@ export const AddModel: Story = {
 		await fillIdentity(dialog);
 		await userEvent.click(within(dialog).getByRole("radio", { name: "A provider" }));
 		await userEvent.click(within(dialog).getByRole("button", { name: /add inactive model/iu }));
-		await expectSettledVisible(
-			await within(dialog).findByText(
-				"Confirm the training guarantee, or leave data handling undeclared.",
-			),
-		);
-		await expect(args.onCreate).not.toHaveBeenCalled();
+		await expect(args.onCreate).toHaveBeenCalledOnce();
 	},
 };
 
@@ -95,7 +90,6 @@ export const DeclaredPreview: Story = {
 		const dialog = await screen.findByRole("dialog");
 		await fillIdentity(dialog);
 		await userEvent.click(within(dialog).getByRole("radio", { name: "A provider" }));
-		await userEvent.click(within(dialog).getByRole("checkbox", { name: /rule out training/u }));
 
 		await expectSettledVisible(within(dialog).getByText("Cloud"));
 		// The preview's guarantee rows are the only definition list in the form.

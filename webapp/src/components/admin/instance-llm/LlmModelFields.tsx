@@ -4,6 +4,11 @@ import { useId, useState } from "react";
 import { FactList } from "@/components/auth/FactList";
 import { type StatusDefs, statusValues } from "@/components/common/status-def";
 import {
+	AI_MODEL_BRANDS,
+	AI_MODEL_BRAND_LABELS,
+	type AiModelBrand,
+} from "@/components/icons/ai-model-brand-logos";
+import {
 	DATA_HANDLING_DEFS,
 	type DataHandlingTier,
 	deriveDataHandlingTier,
@@ -13,7 +18,6 @@ import {
 import { DataHandlingBadge } from "@/components/practice-vocabulary/DataHandlingBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
 	Field,
@@ -61,7 +65,7 @@ export interface LlmModelFieldsValue {
 	reasoningEffort: ReasoningEffortChoice;
 	/** Absent until the admin declares the model, as the wire carries it. */
 	operatedBy?: OperatedBy;
-	trainingConfirmed: boolean;
+	brand?: AiModelBrand;
 	dataHandlingNote: string;
 	enabled: boolean;
 	price: PriceModeValue;
@@ -74,6 +78,7 @@ interface EditedModel {
 	maxOutputTokens?: number;
 	reasoningEffort?: ReasoningEffort;
 	operatedBy?: OperatedBy;
+	brand?: AiModelBrand;
 	dataHandlingNote?: string;
 	enabled?: boolean;
 }
@@ -89,8 +94,7 @@ export function modelFieldsValueOf(
 		maxOutputTokens: model?.maxOutputTokens == null ? "" : String(model.maxOutputTokens),
 		reasoningEffort: model?.reasoningEffort ?? PROVIDER_DEFAULT_EFFORT,
 		operatedBy: model?.operatedBy,
-		// A declared model was confirmed when it was declared; the admin is not asked twice.
-		trainingConfirmed: model?.operatedBy !== undefined,
+		brand: model?.brand,
 		dataHandlingNote: model?.dataHandlingNote ?? "",
 		enabled: model?.enabled ?? false,
 		price,
@@ -108,16 +112,15 @@ export function validateModelFields(
 		contextWindow: value.contextWindow,
 		maxOutputTokens: value.maxOutputTokens,
 		operatedBy: value.operatedBy,
-		trainingConfirmed: value.trainingConfirmed,
 		dataHandlingNote: value.dataHandlingNote,
 		...value.price,
 	});
 }
 
-/** The declaration as the request DTOs carry it: an undeclared model omits it, a blank note too. */
-export function dataHandlingBodyOf(value: LlmModelFieldsValue) {
+export function modelDetailsBodyOf(value: LlmModelFieldsValue) {
 	return {
 		operatedBy: value.operatedBy,
+		brand: value.brand,
 		dataHandlingNote: value.dataHandlingNote.trim() || undefined,
 	};
 }
@@ -244,7 +247,6 @@ export function LlmModelFields({
 	const upstreamModelIdErrorId = useId();
 	const contextWindowErrorId = useId();
 	const maxOutputTokensErrorId = useId();
-	const trainingErrorId = useId();
 	const dataHandlingNoteErrorId = useId();
 	const suggestionsId = `${idPrefix}-upstream-id-options`;
 
@@ -310,6 +312,40 @@ export function LlmModelFields({
 				)}
 			</Field>
 
+			<Field>
+				<FieldLabel id={`${idPrefix}-brand-label`} htmlFor={`${idPrefix}-brand`}>
+					Model brand <span className="font-normal text-muted-foreground">(optional)</span>
+				</FieldLabel>
+				<Select
+					items={[
+						{ value: "UNDECLARED", label: "Not specified" },
+						...AI_MODEL_BRANDS.map((brand) => ({
+							value: brand,
+							label: AI_MODEL_BRAND_LABELS[brand],
+						})),
+					]}
+					value={value.brand ?? "UNDECLARED"}
+					onValueChange={(brand) =>
+						update({ brand: AI_MODEL_BRANDS.find((item) => item === brand) })
+					}
+				>
+					<SelectTrigger id={`${idPrefix}-brand`}>
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent aria-labelledby={`${idPrefix}-brand-label`}>
+						<SelectItem value="UNDECLARED">Not specified</SelectItem>
+						{AI_MODEL_BRANDS.map((brand) => (
+							<SelectItem key={brand} value={brand}>
+								{AI_MODEL_BRAND_LABELS[brand]}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<FieldDescription>
+					Shown beside this model in workspace AI choices. This does not identify who hosts it.
+				</FieldDescription>
+			</Field>
+
 			<PriceModeEditor
 				audience={audience}
 				idPrefix={`${idPrefix}-price`}
@@ -344,8 +380,8 @@ export function LlmModelFields({
 			<FieldSet>
 				<FieldLegend variant="label">Data handling</FieldLegend>
 				<FieldDescription>
-					Developers read this as your promise. Declare what the agreement says. The hostname is not
-					the agreement.
+					Declare who operates the connection. Check the provider agreement for data location,
+					retention, and training terms.
 				</FieldDescription>
 
 				<FactChoice
@@ -357,33 +393,13 @@ export function LlmModelFields({
 					onChange={(operatedBy) => update({ operatedBy })}
 				/>
 
-				<Field orientation="horizontal" data-invalid={Boolean(errors.trainingConfirmed)}>
-					<Checkbox
-						id={`${idPrefix}-training`}
-						checked={value.trainingConfirmed}
-						onCheckedChange={(trainingConfirmed) => update({ trainingConfirmed })}
-						required={declared}
-						aria-invalid={Boolean(errors.trainingConfirmed)}
-						aria-describedby={hasText(errors.trainingConfirmed) ? trainingErrorId : undefined}
-					/>
-					<FieldContent>
-						<FieldLabel htmlFor={`${idPrefix}-training`} className="font-normal">
-							Its terms rule out training on what it receives. Hephaestus does not accept models
-							that train on developers’ work.
-						</FieldLabel>
-						{hasText(errors.trainingConfirmed) && (
-							<FieldError id={trainingErrorId}>{errors.trainingConfirmed}</FieldError>
-						)}
-					</FieldContent>
-				</Field>
-
 				{declared && (
 					<Button
 						type="button"
 						variant="ghost"
 						size="sm"
 						className="-ml-2 w-fit"
-						onClick={() => update({ operatedBy: undefined, trainingConfirmed: false })}
+						onClick={() => update({ operatedBy: undefined })}
 					>
 						Leave undeclared
 					</Button>
