@@ -17,8 +17,20 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "hephaestus.consent")
 public record ConsentProperties(@Nullable String researchOrganization) {
 
+    public ConsentProperties {
+        if (researchOrganization != null) {
+            researchOrganization = researchOrganization.strip();
+            if (researchOrganization.isEmpty()) {
+                researchOrganization = null;
+            } else if (researchOrganization.codePointCount(0, researchOrganization.length()) > 255) {
+                throw new IllegalArgumentException(
+                        "hephaestus.consent.research-organization must not exceed 255 characters");
+            }
+        }
+    }
+
     /** The configured name, or {@code null} when this deployment runs no study. */
     public @Nullable String researchProgramme() {
-        return researchOrganization == null || researchOrganization.isBlank() ? null : researchOrganization.strip();
+        return researchOrganization;
     }
 }
