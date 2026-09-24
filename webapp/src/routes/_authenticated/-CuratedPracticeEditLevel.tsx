@@ -124,6 +124,8 @@ function LoadedCuratedPracticeEditor({
 		},
 		onError: (error) => {
 			if (problemStatusOf(error) === 412) {
+				void continueWithDraft();
+				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 				void releaseQuery.refetch();
 			}
 			toast.error("Couldn't accept the update", { description: problemDetailOf(error) });
@@ -139,6 +141,8 @@ function LoadedCuratedPracticeEditor({
 		},
 		onError: (error) => {
 			if (problemStatusOf(error) === 412) {
+				void continueWithDraft();
+				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 				void releaseQuery.refetch();
 			}
 			toast.error("Couldn't decline the update", { description: problemDetailOf(error) });

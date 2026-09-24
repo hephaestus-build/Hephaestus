@@ -547,6 +547,53 @@ describe("instance catalog routes", () => {
 		expect(body).toStrictEqual({ choices: { CRITERIA: "OFFERED" } });
 	});
 
+	it("refreshes the practice when a release decision is stale", async () => {
+		mockCatalog();
+		server.use(
+			http.get("*/admin/practice-catalog/practices/:slug", () =>
+				HttpResponse.json({
+					slug: "describe-what-and-why",
+					definition: practiceDefinition,
+					shipped: { ...practiceDefinition, criteria: "Hephaestus criteria" },
+					status: status({ state: "UPDATE_WAITING" }),
+				}),
+			),
+			http.get("*/admin/practice-catalog/practices/:slug/release", () =>
+				HttpResponse.json(release),
+			),
+			http.put("*/admin/practice-catalog/practices/:slug/release", () => {
+				server.use(
+					http.get("*/admin/practice-catalog/practices/:slug", () =>
+						HttpResponse.json({
+							slug: "describe-what-and-why",
+							definition: practiceDefinition,
+							status: status({ state: "EDITED_HERE" }),
+						}),
+					),
+					http.get(
+						"*/admin/practice-catalog/practices/:slug/release",
+						() => new HttpResponse(null, { status: 404 }),
+					),
+				);
+				return HttpResponse.json({ status: 412, title: "Stale" }, { status: 412 });
+			}),
+		);
+		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
+
+		const radioGroup = await screen.findByRole(
+			"radiogroup",
+			{ name: "Use a version for Review criteria" },
+			ROUTE_RENDER_WAIT,
+		);
+		fireEvent.click(within(radioGroup).getByRole("radio", { name: "Offered" }));
+		fireEvent.click(screen.getByRole("button", { name: "Accept selected fields" }));
+
+		await screen.findByText("Customized on this instance", undefined, ROUTE_RENDER_WAIT);
+		expect(
+			screen.queryByRole("radiogroup", { name: "Use a version for Review criteria" }),
+		).toBeNull();
+	});
+
 	it("lets a waiting update be declined, not only taken", async () => {
 		mockCatalog();
 		let ifMatch: string | null = null;
