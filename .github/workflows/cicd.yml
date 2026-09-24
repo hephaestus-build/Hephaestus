@@ -304,6 +304,8 @@ jobs:
               - '.github/workflows/cicd.yml'
               - '.java-version'
               - '.github/workflows/ci-build.yml'
+              - 'scripts/postgres-backup-restore-test.ts'
+              - 'scripts/postgres-pitr-test.ts'
               - '.github/workflows/reusable-docker-build.yml'
               - '.github/actions/setup-toolchain/**'
               - '.github/actions/setup-caches/**'
