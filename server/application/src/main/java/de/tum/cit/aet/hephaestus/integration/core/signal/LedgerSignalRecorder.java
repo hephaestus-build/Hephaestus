@@ -73,8 +73,8 @@ public class LedgerSignalRecorder implements SignalRecorder {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean defer(SignalKey key, Instant occurredAt) {
-        int affected = repository.insertDeferred(key, UUID.randomUUID(), occurredAt, Instant.now());
+    public boolean defer(SignalKey key, Instant occurredAt, @Nullable Long actorUserId) {
+        int affected = repository.insertDeferred(key, UUID.randomUUID(), occurredAt, Instant.now(), actorUserId);
         meterRegistry
                 .counter(
                         IntegrationCoreMetrics.REVIEW_OCCASIONS,

@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -27,6 +28,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
@@ -244,6 +246,87 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertNotNull(issue);
             // Issue should still exist (edited, not created new)
             assertThat(issueRepository.count()).isEqualTo(1);
+        }
+
+        @Test
+        void shouldPreserveAnEditorWhoIsNotTheIssueAuthor() throws Exception {
+            handler.handleEvent(loadPayload("issues.opened"));
+            eventListener.clear();
+            GitHubIssueEventDTO edit = loadPayload("issues.edited");
+            var editor = new GitHubUserDTO(987654321L, null, "different-editor", null, null, null, null);
+            handler.handleEvent(new GitHubIssueEventDTO(
+                    edit.action(),
+                    edit.issue(),
+                    edit.repository(),
+                    edit.organization(),
+                    editor,
+                    edit.label(),
+                    edit.issueType(),
+                    edit.changes()));
+
+            Issue issue = issueRepository
+                    .findByRepositoryIdAndNumber(testRepository.getId(), 20)
+                    .orElseThrow();
+            var update = eventListener.ofType(ScmDomainEvent.IssueUpdated.class).getFirst();
+            var context = Objects.requireNonNull(update.context());
+            assertThat(context.actorUserId())
+                    .isNotNull()
+                    .isNotEqualTo(Objects.requireNonNull(issue.getAuthor()).getId());
+            assertThat(userRepository.findByNativeIdAndProviderId(
+                            987654321L,
+                            Objects.requireNonNull(Objects.requireNonNull(testRepository.getProvider())
+                                    .getId())))
+                    .map(user -> user.getId())
+                    .contains(context.actorUserId());
+        }
+
+        @Test
+        void shouldPreserveTheActorOnReassignmentAndReopen() throws Exception {
+            handler.handleEvent(loadPayload("issues.opened"));
+            var editor = new GitHubUserDTO(987654321L, null, "different-editor", null, null, null, null);
+            GitHubIssueEventDTO assigned = loadPayload("issues.assigned");
+            eventListener.clear();
+            handler.handleEvent(new GitHubIssueEventDTO(
+                    assigned.action(),
+                    assigned.issue(),
+                    assigned.repository(),
+                    assigned.organization(),
+                    editor,
+                    assigned.label(),
+                    assigned.issueType(),
+                    assigned.changes()));
+            Long actorId = userRepository
+                    .findByNativeIdAndProviderId(
+                            987654321L,
+                            Objects.requireNonNull(Objects.requireNonNull(testRepository.getProvider())
+                                    .getId()))
+                    .orElseThrow()
+                    .getId();
+            assertThat(Objects.requireNonNull(eventListener
+                                    .ofType(ScmDomainEvent.IssueUpdated.class)
+                                    .getFirst()
+                                    .context())
+                            .actorUserId())
+                    .isEqualTo(actorId);
+
+            handler.handleEvent(loadPayload("issues.closed"));
+            GitHubIssueEventDTO reopened = loadPayload("issues.reopened");
+            eventListener.clear();
+            handler.handleEvent(new GitHubIssueEventDTO(
+                    reopened.action(),
+                    reopened.issue(),
+                    reopened.repository(),
+                    reopened.organization(),
+                    editor,
+                    reopened.label(),
+                    reopened.issueType(),
+                    reopened.changes()));
+            assertThat(Objects.requireNonNull(eventListener
+                                    .ofType(ScmDomainEvent.IssueUpdated.class)
+                                    .getFirst()
+                                    .context())
+                            .actorUserId())
+                    .isEqualTo(actorId);
         }
 
         @Test

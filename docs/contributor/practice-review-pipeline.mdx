@@ -64,6 +64,43 @@ use separate reasons when more than one stage stops.
 An occasion is one named signal on one revision of one artifact. It is recorded in
 `artifact_signal` before admission, so a review that does not start still has an auditable outcome.
 
+### Issue snapshot supersession
+
+An issue observation is current only while both its practice review rule and its supporting issue
+snapshot are current. A change to title, body, state, state reason, native type, milestone, labels or
+assignees advances the issue's review snapshot in the mirror transaction and marks earlier issue
+observations historical. An identical replay does neither. A return to earlier content is a **new**
+transition: the snapshot token changes even though its content digest matches an older one, and the
+older observations do not become current again. The snapshot-deduplicated automatic occasion may
+already be settled for that content; in that case there is no new current observation until a new
+review is requested. A failed, refused, or undecided later review never implies that the earlier
+judgment was correct or incorrect.
+
+One mirrored issue can be reviewed in several workspaces. Its transition retires observations in
+every workspace that recorded that issue, without exposing one workspace's history to another.
+Each monitoring workspace records and settles its own issue-update occasion; a later monitor change
+cannot redirect a queued review to a different workspace.
+
+At observation publication, the review must still name the issue's current snapshot token. The
+publication transaction locks the issue row; a concurrent mirror update either completes first and
+rejects the old review, or completes afterwards and marks its observations historical. A historical
+observation keeps its evidence, job, feedback links and original developer. It is not a human
+retraction ([#1507](https://github.com/hephaestus-build/Hephaestus/issues/1507)). Existing issue
+observations with no reliable snapshot token become historical at migration, rather than being
+presented as verified current claims. Operator review history reports `STALE`; current developer
+standings and Heph context omit superseded claims.
+
+The webhook sender is the **initiating actor**, not necessarily the issue author or the developer
+under review. Issue-update occasions retain the actor in the deferred ledger and carry it into the
+review job; sync discoveries have no initiating actor. Coalescing uses the actor of the final
+reviewed snapshot. GitHub issues webhooks name `sender`; GitLab issue webhooks name `user`
+([GitHub payload](https://docs.github.com/en/webhooks/webhook-events-and-payloads#issues),
+[GitLab payload](https://docs.gitlab.com/user/project/integrations/webhook_events/#issue-events)).
+GitLab still has no advertised live native-type transition. This policy does not merge evidence
+sufficiency, review execution and semantic outcome; those remain separate as described in
+[#1428](https://github.com/hephaestus-build/Hephaestus/issues/1428) and
+[#1429](https://github.com/hephaestus-build/Hephaestus/issues/1429).
+
 `SignalState` has six values: `RECORDED` for an occurrence nobody has decided on yet, `DEFERRED` for one
 queued in the [update coalescer](#durable-update-coalescing), `TRIGGERED` for one that started a review,
 terminal `SUPPRESSED`, retryable `PENDING`, and retired `LAPSED`. Terminal rows never reopen — a coalesced
@@ -137,10 +174,11 @@ fields occasions nothing: GitHub compares the mirrored row against the incoming 
 `changes` diff its `update` action carries, which is the only thing distinguishing a retitling from a
 due-date, weight or time-tracking edit.
 
-Synchronization updates the issue projection without creating lifecycle occasions. GitLab synchronization
-includes native type, but its webhook contract does not provide a reliable type transition; the GitLab
-adapter therefore does not advertise live type-change reviews. A type set on GitLab still reaches the
-snapshot through the mirror, so it lands in the digest of whichever later `update` happens to fire.
+Synchronization updates the issue projection without starting a live review. When GitLab sync finds
+changed review evidence on an existing open issue, it advances the snapshot and records the update
+occasion as sync-discovered. This retires stale observations without coaching on historical work.
+GitLab synchronization includes native type, but its webhook contract does not provide a reliable
+type transition; the GitLab adapter therefore does not advertise live type-change reviews.
 
 Every practice bound to `scm.issue.updated` is reevaluated. Practice bindings declare occasions and evidence
 sources, not dependencies on individual issue fields, so there is no second, per-field dependency model

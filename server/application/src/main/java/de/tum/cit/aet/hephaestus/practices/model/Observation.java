@@ -63,6 +63,10 @@ import tools.jackson.databind.JsonNode;
 @AllArgsConstructor
 public class Observation {
 
+    /** A later reviewable issue transition retired this claim; provenance remains unchanged. */
+    @Column(name = "superseded_at")
+    private @Nullable Instant supersededAt;
+
     @Id
     @Column(columnDefinition = "UUID")
     private UUID id;

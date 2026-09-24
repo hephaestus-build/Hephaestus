@@ -220,6 +220,7 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
                evaluatedRevision.id AS practiceRevisionId,
                evaluatedRevision.reviewRuleFingerprint AS practiceRevisionFingerprint,
                currentRevision.reviewRuleFingerprint AS currentPracticeRevisionFingerprint,
+               o.supersededAt AS supersededAt,
                o.observedAt AS observedAt
         FROM FeedbackObservation fo
         JOIN fo.observation o
@@ -249,6 +250,9 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
 
     interface BoundObservation {
         UUID getObservationId();
+
+        @Nullable
+        Instant getSupersededAt();
 
         EvidenceRole getRole();
 

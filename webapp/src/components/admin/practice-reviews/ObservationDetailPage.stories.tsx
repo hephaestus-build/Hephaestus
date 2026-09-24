@@ -82,8 +82,7 @@ export const SupportsAnotherObservation: Story = {
 };
 
 /**
- * Judged against a version of the practice that has since been edited, which the page has to say so
- * a reader does not measure today's rules against yesterday's answer.
+ * Historical feedback stays visible, but the page does not present it as a current claim.
  */
 export const FeedbackWasWithheld: Story = {
 	args: { observation: observationDetail("bbbbbbbb-2222-2222-2222-222222222222") },
@@ -91,7 +90,7 @@ export const FeedbackWasWithheld: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByRole("link", { name: "Feedback about this observation" });
 		canvas.getByText("Found while reviewing past work, which is measured but never sent.");
-		canvas.getByText("This was judged against an older version of the practice");
+		canvas.getByText("This observation is no longer current");
 	},
 };
 

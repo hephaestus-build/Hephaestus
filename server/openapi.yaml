@@ -6101,6 +6101,7 @@ paths:
             - CONVERSATION_EXPIRED
             - ARTIFACT_GONE
             - ARTIFACT_CLOSED
+            - ISSUE_SNAPSHOT_CHANGED
             - ARTIFACT_MERGED
             - ARTIFACT_DRAFT
             - RECIPIENT_OPTED_OUT
@@ -10643,6 +10644,7 @@ components:
           - CONVERSATION_EXPIRED
           - ARTIFACT_GONE
           - ARTIFACT_CLOSED
+          - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
@@ -11973,8 +11975,8 @@ components:
           - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -12084,8 +12086,8 @@ components:
           - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -13161,6 +13163,14 @@ components:
           - ASSESSED
           - NOT_APPLICABLE
           - UNDETERMINED
+        claimCurrentness:
+          type: string
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
+          enum:
+          - CURRENT
+          - STALE
+          - UNVERIFIABLE
         feedbackId:
           type: string
           format: uuid
@@ -13210,6 +13220,7 @@ components:
           type: string
       required:
       - assessmentStatus
+      - claimCurrentness
       - observationId
       - practiceName
       - practiceSlug
@@ -13824,6 +13835,7 @@ components:
             - CONVERSATION_EXPIRED
             - ARTIFACT_GONE
             - ARTIFACT_CLOSED
+            - ISSUE_SNAPSHOT_CHANGED
             - ARTIFACT_MERGED
             - ARTIFACT_DRAFT
             - RECIPIENT_OPTED_OUT
@@ -14847,6 +14859,7 @@ components:
           - CONVERSATION_EXPIRED
           - ARTIFACT_GONE
           - ARTIFACT_CLOSED
+          - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
@@ -14886,8 +14899,8 @@ components:
           - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -15019,6 +15032,7 @@ components:
           - CONVERSATION_EXPIRED
           - ARTIFACT_GONE
           - ARTIFACT_CLOSED
+          - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
@@ -15160,6 +15174,7 @@ components:
           - CONVERSATION_EXPIRED
           - ARTIFACT_GONE
           - ARTIFACT_CLOSED
+          - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
@@ -15240,8 +15255,8 @@ components:
           - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -15362,8 +15377,8 @@ components:
           - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE

@@ -5,8 +5,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.List;
 import java.util.Optional;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -38,7 +38,7 @@ class WorkspaceResolverTest extends BaseUnitTest {
         return workspace;
     }
 
-    private RepositoryToMonitor createMonitor(@Nullable Workspace workspace) {
+    private RepositoryToMonitor createMonitor(Workspace workspace) {
         RepositoryToMonitor monitor = new RepositoryToMonitor();
         monitor.setWorkspace(workspace);
         return monitor;
@@ -60,12 +60,24 @@ class WorkspaceResolverTest extends BaseUnitTest {
     class AuthoritativeResolutionTests {
 
         @Test
+        void resolvesEveryWorkspaceMonitoringASharedRepository() {
+            Workspace first = createWorkspace("first");
+            Workspace second = createWorkspace("second");
+            second.setId(2L);
+            when(repositoryToMonitorRepository.findAllWithWorkspaceByNameWithOwner("owner/repo"))
+                    .thenReturn(List.of(createMonitor(first), createMonitor(second)));
+
+            assertThat(resolver.resolveAllForRepository("owner/repo")).containsExactly(first, second);
+            verifyNoInteractions(workspaceRepository);
+        }
+
+        @Test
         @DisplayName("Should resolve workspace from monitor configuration")
         void resolvesFromMonitor() {
             Workspace workspace = createWorkspace("test-workspace");
             RepositoryToMonitor monitor = createMonitor(workspace);
-            when(repositoryToMonitorRepository.findWithWorkspaceByNameWithOwner("ls1intum/Hephaestus"))
-                    .thenReturn(Optional.of(monitor));
+            when(repositoryToMonitorRepository.findAllWithWorkspaceByNameWithOwner("ls1intum/Hephaestus"))
+                    .thenReturn(List.of(monitor));
 
             Optional<Workspace> result = resolver.resolveForRepository("ls1intum/Hephaestus");
 
@@ -74,17 +86,6 @@ class WorkspaceResolverTest extends BaseUnitTest {
             // Should not fall through to heuristic lookup
             verifyNoInteractions(workspaceRepository);
         }
-
-        @Test
-        void returnsEmptyForMonitorWithNullWorkspace() {
-            RepositoryToMonitor monitor = createMonitor(null);
-            when(repositoryToMonitorRepository.findWithWorkspaceByNameWithOwner("ls1intum/Hephaestus"))
-                    .thenReturn(Optional.of(monitor));
-
-            Optional<Workspace> result = resolver.resolveForRepository("ls1intum/Hephaestus");
-
-            assertThat(result).isEmpty();
-        }
     }
 
     @Nested
@@ -92,8 +93,6 @@ class WorkspaceResolverTest extends BaseUnitTest {
 
         @Test
         void fallsBackToOwnerLookup() {
-            when(repositoryToMonitorRepository.findWithWorkspaceByNameWithOwner("ls1intum/Hephaestus"))
-                    .thenReturn(Optional.empty());
             Workspace workspace = createWorkspace("ls1intum-workspace");
             when(workspaceRepository.findByAccountLoginIgnoreCase("ls1intum")).thenReturn(Optional.of(workspace));
 
@@ -105,8 +104,6 @@ class WorkspaceResolverTest extends BaseUnitTest {
 
         @Test
         void returnsEmptyWhenNoMatch() {
-            when(repositoryToMonitorRepository.findWithWorkspaceByNameWithOwner("unknown/repo"))
-                    .thenReturn(Optional.empty());
             when(workspaceRepository.findByAccountLoginIgnoreCase("unknown")).thenReturn(Optional.empty());
 
             Optional<Workspace> result = resolver.resolveForRepository("unknown/repo");
@@ -116,8 +113,6 @@ class WorkspaceResolverTest extends BaseUnitTest {
 
         @Test
         void returnsEmptyForNoSlash() {
-            when(repositoryToMonitorRepository.findWithWorkspaceByNameWithOwner("noslash"))
-                    .thenReturn(Optional.empty());
 
             Optional<Workspace> result = resolver.resolveForRepository("noslash");
 
@@ -127,8 +122,6 @@ class WorkspaceResolverTest extends BaseUnitTest {
 
         @Test
         void skipsHeuristicForEmptyOwner() {
-            when(repositoryToMonitorRepository.findWithWorkspaceByNameWithOwner("/repo"))
-                    .thenReturn(Optional.empty());
 
             Optional<Workspace> result = resolver.resolveForRepository("/repo");
 

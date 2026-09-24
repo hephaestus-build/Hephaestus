@@ -204,6 +204,32 @@ class IssueReviewHandlerTest extends BaseUnitTest {
     class CreateSubmission {
 
         @Test
+        void shouldKeepEditorAndSnapshotInJobMetadataWithoutChangingTheReviewedSubject() {
+            var request = sampleRequest();
+            var snapshot = java.util.UUID.randomUUID();
+            var attributed = new IssueReviewSubmissionRequest(
+                    request.issueId(),
+                    request.issueNumber(),
+                    request.repositoryId(),
+                    request.repositoryFullName(),
+                    request.title(),
+                    request.body(),
+                    request.state(),
+                    request.url(),
+                    request.updatedAt(),
+                    request.triggerSignal(),
+                    request.observationOrigin(),
+                    456L,
+                    snapshot);
+
+            JsonNode metadata = handler.createSubmission(attributed).metadata();
+
+            assertThat(metadata.path("actor_user_id").asLong()).isEqualTo(456L);
+            assertThat(metadata.path("review_snapshot_id").asString()).isEqualTo(snapshot.toString());
+            assertThat(metadata.has("about_user_id")).isFalse();
+        }
+
+        @Test
         void buildsIssueMetadata() {
             JobSubmission submission = handler.createSubmission(sampleRequest());
             JsonNode metadata = submission.metadata();

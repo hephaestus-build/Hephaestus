@@ -91,7 +91,7 @@ public record ReviewObservationDetailDTO(
                 includeEvidence ? ObservationEvidenceDTO.from(observation.getEvidence()) : null,
                 observation.getEvidenceRationale(),
                 observation.getRecurrenceKey(),
-                ReviewClaimCurrentness.of(revision, practice),
+                ReviewClaimCurrentness.of(revision, practice, observation.getSupersededAt()),
                 observation.getObservedAt(),
                 feedback);
     }

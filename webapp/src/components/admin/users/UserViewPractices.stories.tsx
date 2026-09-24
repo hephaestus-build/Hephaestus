@@ -116,6 +116,7 @@ const run: PracticeGroupReviewRun = {
 			presence: "PRESENT",
 			assessment: "BAD",
 			severity: "MAJOR",
+			claimCurrentness: "CURRENT",
 		},
 	],
 };

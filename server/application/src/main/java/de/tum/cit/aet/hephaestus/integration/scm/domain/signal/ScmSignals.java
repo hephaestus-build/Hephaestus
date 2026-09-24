@@ -54,6 +54,10 @@ public final class ScmSignals {
     public static final SignalName ISSUE_CLOSED = SignalName.of("scm.issue.closed");
     public static final SignalName ISSUE_MANUAL_REVIEW = SignalName.of("scm.issue.manual_review");
 
+    /** Fields used by issue review evidence; other mirror changes do not retire its observations. */
+    public static final Set<String> REVIEWABLE_ISSUE_FIELDS =
+            Set.of("title", "body", "state", "stateReason", "issueType", "milestone", "relationships");
+
     private static final Map<String, SignalName> BY_TRIGGER_EVENT = Map.of(
             TriggerEventNames.PULL_REQUEST_CREATED,
             PULL_REQUEST_OPENED,

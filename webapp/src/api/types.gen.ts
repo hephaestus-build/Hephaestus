@@ -1354,7 +1354,7 @@ export type DeliveryPolicyTrace = {
   admittedRevision: number;
   allowed: boolean;
   checks: Array<DeliveryPolicyTraceCheck>;
-  decisiveReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  decisiveReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
   evaluatedAt: Date;
   evaluatedRevision?: number;
   facts: DeliveryPolicyFactsSnapshot;
@@ -2300,7 +2300,7 @@ export type ObservationDetail = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -2376,7 +2376,7 @@ export type ObservationList = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -3108,6 +3108,10 @@ export type PracticeGroupReviewObservation = {
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation still has current review rules and supporting work snapshot
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   feedbackId?: string;
   feedbackResolution?: 'ADDRESSED' | 'DISPUTED' | 'NOT_APPLICABLE';
   feedbackResponseComment?: string;
@@ -3515,7 +3519,7 @@ export type PracticeTraceEntry = {
   /**
    * Why prepared feedback was withheld. Non-empty with observations present means we measured and deliberately said nothing.
    */
-  withheldReasons: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
+  withheldReasons: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
 };
 
 export type PracticeTrend = {
@@ -4181,7 +4185,7 @@ export type ReviewBoundFeedback = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
 };
 
 /**
@@ -4194,7 +4198,7 @@ export type ReviewBoundObservation = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4263,7 +4267,7 @@ export type ReviewFeedback = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
 };
 
 /**
@@ -4337,7 +4341,7 @@ export type ReviewFeedbackDetail = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
   /**
    * Cross-run continuity key tying successive deliveries together
    */
@@ -4382,7 +4386,7 @@ export type ReviewObservation = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4449,7 +4453,7 @@ export type ReviewObservationDetail = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   evidence?: ObservationEvidence;
@@ -6417,7 +6421,7 @@ export type ObservationDetailWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -6481,7 +6485,7 @@ export type ObservationListWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -6551,6 +6555,10 @@ export type PracticeGroupReviewObservationWritable = {
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation still has current review rules and supporting work snapshot
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   feedbackId?: string;
   feedbackResolution?: 'ADDRESSED' | 'DISPUTED' | 'NOT_APPLICABLE';
   feedbackResponseComment?: string;
@@ -6736,7 +6744,7 @@ export type ReviewBoundObservationWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -6823,7 +6831,7 @@ export type ReviewFeedbackDetailWritable = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
   /**
    * Cross-run continuity key tying successive deliveries together
    */
@@ -6842,7 +6850,7 @@ export type ReviewObservationWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -6889,7 +6897,7 @@ export type ReviewObservationDetailWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   evidence?: ObservationEvidence;
@@ -11854,7 +11862,7 @@ export type ListPracticeReviewFeedbackData = {
     page?: number;
     size?: number;
     deliveryState?: Array<'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED'>;
-    suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
+    suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
     channel?: Array<'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP'>;
     agentJobId?: string;
     /**

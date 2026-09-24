@@ -28,7 +28,12 @@ public interface SignalRecorder {
      *
      * @return whether this call queued content
      */
-    boolean defer(SignalKey key, Instant occurredAt);
+    default boolean defer(SignalKey key, Instant occurredAt) {
+        return defer(key, occurredAt, null);
+    }
+
+    /** Queue an issue update with the initiator, if the webhook named one. */
+    boolean defer(SignalKey key, Instant occurredAt, @Nullable Long actorUserId);
 
     /** Link the occasion to its admitted job. */
     void markTriggered(SignalKey key, UUID jobId);

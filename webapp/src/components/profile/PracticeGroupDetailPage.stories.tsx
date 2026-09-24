@@ -56,6 +56,7 @@ type Story = StoryObj<typeof meta>;
 
 const observation: PracticeGroupReviewObservation = {
 	observationId: "00000000-0000-0000-0000-000000000102",
+	claimCurrentness: "CURRENT",
 	feedbackId: "00000000-0000-0000-0000-000000000103",
 	practiceSlug: "small-changes",
 	practiceName: "Keep changes focused",

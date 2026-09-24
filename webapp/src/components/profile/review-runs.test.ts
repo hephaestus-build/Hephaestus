@@ -6,6 +6,7 @@ const observation = (
 	overrides: Partial<PracticeGroupReviewObservation> = {},
 ): PracticeGroupReviewObservation => ({
 	observationId: "00000000-0000-0000-0000-000000000001",
+	claimCurrentness: "CURRENT",
 	practiceSlug: "records-decisions",
 	practiceName: "Record significant decisions",
 	title: "The workspace trade-off is documented",

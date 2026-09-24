@@ -5,6 +5,7 @@ import type { PracticeGroupReviewObservation } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { type StatusDefs, statusToneClass, statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { ClaimCurrentnessBadge } from "@/components/practice-vocabulary/ClaimCurrentness";
 import {
 	FEEDBACK_RESOLUTION_DEFS,
 	type FeedbackResolution,
@@ -230,6 +231,7 @@ export function ReviewObservationRow({
 						)}
 					</div>
 					<div className="flex flex-wrap items-center gap-2 sm:justify-end">
+						<ClaimCurrentnessBadge currentness={observation.claimCurrentness} />
 						{observation.severity && <StatusBadge def={SEVERITY_DEFS[observation.severity]} />}
 						<span
 							className={cn("inline-flex items-center gap-1 text-xs font-medium", status.className)}

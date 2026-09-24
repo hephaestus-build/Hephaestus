@@ -229,6 +229,7 @@ it("refreshes every cached filter of the group after responding to feedback", as
 								assessmentStatus: "ASSESSED",
 								presence: "PRESENT",
 								assessment: "BAD",
+								claimCurrentness: "CURRENT",
 								feedbackUsefulness: usefulness,
 							},
 						],
