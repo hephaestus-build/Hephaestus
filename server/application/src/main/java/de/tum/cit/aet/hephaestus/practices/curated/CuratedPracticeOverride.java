@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.practices.curated;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -52,6 +54,10 @@ public class CuratedPracticeOverride {
     @Column(name = "automated_review_policy", columnDefinition = "jsonb")
     private @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "delivery_behavior", columnDefinition = "jsonb")
+    private @Nullable PracticeDeliveryBehavior deliveryBehavior;
+
     @Column(name = "why_it_matters", columnDefinition = "TEXT")
     private @Nullable String whyItMatters;
 
@@ -66,6 +72,15 @@ public class CuratedPracticeOverride {
 
     @Column(name = "based_on_digest", length = 128)
     private @Nullable String acceptedBundledDigest;
+
+    /** Bundled definition on which this customization was based. Null for instance-authored entries. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "adopted_base", columnDefinition = "jsonb")
+    private @Nullable PracticeDefinition adoptedBase;
+
+    @Column(name = "adopted_base_source", length = 32)
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    private @Nullable AdoptedBaseSource adoptedBaseSource;
 
     @Column(name = "retired_at")
     private @Nullable Instant retiredAt;
@@ -102,7 +117,8 @@ public class CuratedPracticeOverride {
                 automatedReviewPolicy,
                 whyItMatters,
                 whatGoodLooksLike,
-                groupSlug);
+                groupSlug,
+                deliveryBehavior == null ? PracticeDeliveryBehavior.DEFAULT : deliveryBehavior);
     }
 
     public void write(PracticeDefinition definition, @Nullable String acceptedBundledDigest, Instant now) {
@@ -112,11 +128,21 @@ public class CuratedPracticeOverride {
         this.criteria = definition.criteria();
         this.precomputeScript = definition.precomputeScript();
         this.automatedReviewPolicy = definition.automatedReviewPolicy();
+        this.deliveryBehavior = definition.deliveryBehavior();
         this.whyItMatters = definition.whyItMatters();
         this.whatGoodLooksLike = definition.whatGoodLooksLike();
         this.groupSlug = definition.groupSlug();
         this.acceptedBundledDigest = acceptedBundledDigest;
         this.updatedAt = Objects.requireNonNull(now, "now");
+    }
+
+    public void writeLocalChange(PracticeDefinition definition, @Nullable PracticeDefinition shipped, Instant now) {
+        if (definition() == null && shipped != null) {
+            adoptBundledBase(shipped);
+        } else {
+            backfillBase(shipped);
+        }
+        write(definition, acceptedBundledDigest, now);
     }
 
     public void clearDefinition(Instant now) {
@@ -126,11 +152,46 @@ public class CuratedPracticeOverride {
         this.criteria = null;
         this.precomputeScript = null;
         this.automatedReviewPolicy = null;
+        this.deliveryBehavior = null;
         this.whyItMatters = null;
         this.whatGoodLooksLike = null;
         this.groupSlug = null;
         this.acceptedBundledDigest = null;
+        this.adoptedBase = null;
+        this.adoptedBaseSource = null;
         this.updatedAt = Objects.requireNonNull(now, "now");
+    }
+
+    public void adoptBundledBase(PracticeDefinition bundled) {
+        this.adoptedBase = bundled;
+        this.adoptedBaseSource = AdoptedBaseSource.EXACT_ADOPTION;
+        this.acceptedBundledDigest = CuratedDefinitionDigest.of(slug, bundled);
+    }
+
+    public void acceptBundledRelease(PracticeDefinition merged, PracticeDefinition bundled, Instant now) {
+        write(merged, CuratedDefinitionDigest.of(slug, bundled), now);
+        adoptBundledBase(bundled);
+    }
+
+    public void backfillBase(@Nullable PracticeDefinition bundled) {
+        if (adoptedBase != null || acceptedBundledDigest == null) {
+            return;
+        }
+        PracticeDefinition current = definition();
+        if (current == null) {
+            return;
+        }
+        if (bundled != null
+                && CuratedDefinitionDigest.beforeDeliveryBehavior(slug, bundled).equals(acceptedBundledDigest)) {
+            acceptedBundledDigest = CuratedDefinitionDigest.of(slug, bundled);
+        }
+        if (bundled != null && CuratedDefinitionDigest.of(slug, bundled).equals(acceptedBundledDigest)) {
+            adoptedBase = bundled;
+            adoptedBaseSource = AdoptedBaseSource.BUNDLED_DIGEST_MATCH;
+        } else {
+            adoptedBase = current;
+            adoptedBaseSource = AdoptedBaseSource.CURRENT_DEFINITION;
+        }
     }
 
     public void acknowledge(@Nullable String shippedDigest, Instant now) {

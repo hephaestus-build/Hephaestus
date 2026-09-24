@@ -32,6 +32,7 @@ const initialData: CuratedPracticeFormInitialValue = {
 	whyItMatters: "Reviewers should not need to reconstruct the author's intent.",
 	whatGoodLooksLike: "The description states why, what changed, and how it was verified.",
 	precomputeScript: "export default function precompute() { return {}; }",
+	deliveryBehavior: { summaryOnly: false },
 	automatedReviewPolicy: mockPullRequestPolicy,
 	automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 	status: {
@@ -161,6 +162,7 @@ export const HephaestusUpdateAvailable: Story = {
 				artifactKind: "scm.pull_request",
 				bindings: [mockPullRequestBinding],
 				criteria: "The updated default criteria",
+				deliveryBehavior: { summaryOnly: false },
 				automatedReviewPolicy: mockPullRequestPolicy,
 				automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 				whyItMatters: "So a reviewer can start from intent rather than diff archaeology.",
@@ -168,24 +170,18 @@ export const HephaestusUpdateAvailable: Story = {
 		},
 		groups,
 		isPending: false,
+		releaseReview: <p>Compare the adopted, saved, and offered fields.</p>,
 		onUseHephaestusVersion: fn(),
 		onKeepCurrentDefinition: fn(),
 		onSubmit: fn(),
 	},
 	play: async () => {
 		const popup = await settledDrawerPanel();
-		// The version banner is the host's, not the form's: rendered as a sibling of `DrawerBody` it
-		// lands directly on the panel, which has no padding, and touches both edges.
 		await expectPanelContentInset(popup);
-		// The full label, since colour alone cannot carry which kind of update it is.
-		await expect(screen.getByText("Hephaestus update available: review rules")).toBeVisible();
-		await expect(screen.getByText(/would change review rules/u)).toBeVisible();
-		await expect(screen.getByRole("button", { name: "Review Hephaestus update" })).toBeVisible();
-		await expect(screen.getByRole("button", { name: "Apply Hephaestus update" })).toBeVisible();
-		await expect(screen.getByRole("button", { name: "Keep saved version" })).toBeVisible();
-		await userEvent.click(screen.getByRole("button", { name: "Review Hephaestus update" }));
-		await expect(screen.getByText("Unassigned")).toBeVisible();
-		await expect(screen.getAllByText("Not set").length).toBeGreaterThan(0);
+		await expect(screen.getByText("Compare the adopted, saved, and offered fields.")).toBeVisible();
+		await expect(
+			screen.queryByRole("button", { name: "Keep saved version" }),
+		).not.toBeInTheDocument();
 	},
 };
 

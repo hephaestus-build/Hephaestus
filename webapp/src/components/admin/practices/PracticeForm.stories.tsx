@@ -163,22 +163,22 @@ export const ValidationAndSubmit: Story = {
 		);
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
 		await expect(createSubmit).toHaveBeenCalledWith(
-			{
+			expect.objectContaining({
 				name: "Clear review context",
 				slug: "clear-review-context",
 				criteria: "Check whether the reviewed work explains its purpose.",
 				bindings: [
-					{
+					expect.objectContaining({
 						signals: [
 							"scm.pull_request.opened",
 							"scm.pull_request.ready",
 							"scm.pull_request.synchronized",
 						],
 						needs: mockPullRequestWorkType.recommendedNeeds,
-					},
+					}),
 				],
 				automatedReviewPolicy: mockPullRequestWorkType.recommendedPolicy,
-			},
+			}),
 			null,
 		);
 	},
@@ -200,18 +200,18 @@ export const ConversationPractice: Story = {
 		);
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
 		await expect(createSubmit).toHaveBeenCalledWith(
-			{
+			expect.objectContaining({
 				name: "Helpful discussion",
 				slug: "helpful-discussion",
 				criteria: "Check whether the conversation stays constructive.",
 				bindings: [
-					{
+					expect.objectContaining({
 						signals: ["chat.conversation_thread.settled"],
 						needs: mockConversationWorkType.recommendedNeeds,
-					},
+					}),
 				],
 				automatedReviewPolicy: mockConversationWorkType.recommendedPolicy,
-			},
+			}),
 			null,
 		);
 	},

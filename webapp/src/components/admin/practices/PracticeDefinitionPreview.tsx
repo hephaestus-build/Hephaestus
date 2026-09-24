@@ -71,6 +71,32 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 						</div>
 					</AccordionContent>
 				</AccordionItem>
+				{(definition.deliveryBehavior.summaryOnly ||
+					hasText(definition.deliveryBehavior.overlapGroup) ||
+					hasText(definition.deliveryBehavior.redundantToSlug)) && (
+					<AccordionItem value="delivery-behavior">
+						<AccordionTrigger>How feedback is delivered</AccordionTrigger>
+						<AccordionContent>
+							<ul className="list-inside list-disc text-sm text-muted-foreground">
+								{definition.deliveryBehavior.summaryOnly && (
+									<li>Feedback stays in the summary, not on a changed line.</li>
+								)}
+								{hasText(definition.deliveryBehavior.overlapGroup) && (
+									<li>
+										On issues, only one overlapping practice in the{" "}
+										{definition.deliveryBehavior.overlapGroup} group is shown.
+									</li>
+								)}
+								{hasText(definition.deliveryBehavior.redundantToSlug) && (
+									<li>
+										When both apply, feedback for {definition.deliveryBehavior.redundantToSlug}{" "}
+										takes priority.
+									</li>
+								)}
+							</ul>
+						</AccordionContent>
+					</AccordionItem>
+				)}
 				{hasText(definition.precomputeScript) && (
 					<AccordionItem value="static-analysis">
 						<AccordionTrigger>What it measures first</AccordionTrigger>

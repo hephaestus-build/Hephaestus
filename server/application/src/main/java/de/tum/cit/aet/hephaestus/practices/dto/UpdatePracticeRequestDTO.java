@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.practices.BindingChange;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
@@ -70,4 +71,31 @@ public record UpdatePracticeRequestDTO(
         Set<ClearablePracticeField> clear,
 
         @Schema(description = "Explicit intent to change the gate or the person judged") @Nullable
-        Set<BindingChange> bindingChanges) {}
+        Set<BindingChange> bindingChanges,
+
+        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior) {
+    public UpdatePracticeRequestDTO(
+            @Nullable String name,
+            @Nullable List<PracticeBinding> bindings,
+            @Nullable String criteria,
+            @Nullable String precomputeScript,
+            @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy,
+            @Nullable String whyItMatters,
+            @Nullable String whatGoodLooksLike,
+            @Nullable BindPracticeGroupRequestDTO group,
+            @Nullable Set<ClearablePracticeField> clear,
+            @Nullable Set<BindingChange> bindingChanges) {
+        this(
+                name,
+                bindings,
+                criteria,
+                precomputeScript,
+                automatedReviewPolicy,
+                whyItMatters,
+                whatGoodLooksLike,
+                group,
+                clear,
+                bindingChanges,
+                null);
+    }
+}

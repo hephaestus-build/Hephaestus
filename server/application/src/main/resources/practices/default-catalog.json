@@ -46,6 +46,7 @@
 				},
 				{
 					"slug": "describe-what-and-why",
+					"deliveryBehavior": {"summaryOnly": true},
 					"name": "Describe what changed and why",
 					"on": [
 						{
@@ -109,6 +110,7 @@
 				},
 				{
 					"slug": "ready-and-traceable-handoff",
+					"deliveryBehavior": {"summaryOnly": false, "redundantToSlug": "ships-tests-with-the-change"},
 					"name": "Mark the change ready and link its issue",
 					"on": [
 						{
@@ -136,6 +138,7 @@
 				},
 				{
 					"slug": "commit-subjects-explain-each-change",
+					"deliveryBehavior": {"summaryOnly": true},
 					"name": "Write commit subjects a reviewer can follow",
 					"on": [
 						{
@@ -300,6 +303,7 @@
 				},
 				{
 					"slug": "issue-scoped-to-single-concern",
+					"deliveryBehavior": {"summaryOnly": false, "overlapGroup": "issue-structure"},
 					"name": "Keep the issue to one concern",
 					"on": [
 						{
@@ -322,6 +326,7 @@
 				},
 				{
 					"slug": "issue-has-checkable-outcome",
+					"deliveryBehavior": {"summaryOnly": false, "overlapGroup": "issue-structure"},
 					"name": "Define a checkable outcome",
 					"on": [
 						{
@@ -1263,6 +1268,7 @@
 			"practices": [
 				{
 					"slug": "commits-are-atomic-and-cohesive",
+					"deliveryBehavior": {"summaryOnly": true},
 					"name": "Keep each commit to one logical change",
 					"on": [
 						{
@@ -1423,6 +1429,7 @@
 				},
 				{
 					"slug": "merge-confirms-the-linked-issue-outcome",
+					"deliveryBehavior": {"summaryOnly": false, "redundantToSlug": "honours-linked-issue-acceptance-criteria"},
 					"name": "Confirm the issue's outcome when the change lands",
 					"on": [
 						{

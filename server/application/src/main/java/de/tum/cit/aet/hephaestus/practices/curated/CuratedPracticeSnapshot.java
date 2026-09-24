@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.CanonicalDigest;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicyDigest;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
@@ -23,7 +24,8 @@ record CuratedPracticeSnapshot(
         @Nullable String whyItMatters,
         @Nullable String whatGoodLooksLike,
         @Nullable String groupSlug,
-        @Nullable String shippedDigest)
+        @Nullable String shippedDigest,
+        PracticeDeliveryBehavior deliveryBehavior)
         implements ConfigAuditSnapshot {
     static CuratedPracticeSnapshot of(CatalogEntry<PracticeDefinition> entry) {
         PracticeDefinition definition = entry.effective();
@@ -41,6 +43,7 @@ record CuratedPracticeSnapshot(
                 definition.whyItMatters(),
                 definition.whatGoodLooksLike(),
                 definition.groupSlug(),
-                entry.shipped() == null ? null : entry.shipped().digest(entry.slug()));
+                entry.shipped() == null ? null : entry.shipped().digest(entry.slug()),
+                definition.deliveryBehavior());
     }
 }

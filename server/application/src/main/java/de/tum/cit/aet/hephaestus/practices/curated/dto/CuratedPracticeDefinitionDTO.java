@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewValidation;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
@@ -21,7 +22,8 @@ public record CuratedPracticeDefinitionDTO(
         @NonNull PracticeAutomatedReviewValidation automatedReviewValidation,
         @Nullable String whyItMatters,
         @Nullable String whatGoodLooksLike,
-        @Nullable String groupSlug) {
+        @Nullable String groupSlug,
+        @NonNull PracticeDeliveryBehavior deliveryBehavior) {
     public static CuratedPracticeDefinitionDTO from(String practiceSlug, PracticeDefinition definition) {
         return new CuratedPracticeDefinitionDTO(
                 definition.name(),
@@ -33,6 +35,7 @@ public record CuratedPracticeDefinitionDTO(
                 PracticeAutomatedReviewValidation.authorDeclared(practiceSlug, definition),
                 definition.whyItMatters(),
                 definition.whatGoodLooksLike(),
-                definition.groupSlug());
+                definition.groupSlug(),
+                definition.deliveryBehavior());
     }
 }

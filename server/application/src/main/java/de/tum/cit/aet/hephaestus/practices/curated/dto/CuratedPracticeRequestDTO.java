@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.practices.BindingChange;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -59,7 +60,32 @@ public record CuratedPracticeRequestDTO(
         String groupSlug,
 
         @Schema(description = "Explicit intent to change the gate or the person judged") @Nullable
-        Set<BindingChange> bindingChanges) {
+        Set<BindingChange> bindingChanges,
+
+        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior) {
+    public CuratedPracticeRequestDTO(
+            String name,
+            List<PracticeBinding> bindings,
+            String criteria,
+            @Nullable String precomputeScript,
+            @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy,
+            @Nullable String whyItMatters,
+            @Nullable String whatGoodLooksLike,
+            @Nullable String groupSlug,
+            @Nullable Set<BindingChange> bindingChanges) {
+        this(
+                name,
+                bindings,
+                criteria,
+                precomputeScript,
+                automatedReviewPolicy,
+                whyItMatters,
+                whatGoodLooksLike,
+                groupSlug,
+                bindingChanges,
+                null);
+    }
+
     public PracticeDefinition definition(PracticeAutomatedReviewPolicy resolvedEvidence) {
         return new PracticeDefinition(
                 name,
@@ -69,6 +95,7 @@ public record CuratedPracticeRequestDTO(
                 resolvedEvidence,
                 whyItMatters,
                 whatGoodLooksLike,
-                groupSlug);
+                groupSlug,
+                deliveryBehavior == null ? PracticeDeliveryBehavior.DEFAULT : deliveryBehavior);
     }
 }

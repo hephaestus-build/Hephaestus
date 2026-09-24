@@ -82,7 +82,7 @@ public class CuratedCatalogService {
         }
         CuratedPracticeOverride override =
                 practiceOverrides.findBySlug(slug).orElseGet(() -> new CuratedPracticeOverride(slug, clock.instant()));
-        override.write(definition, CuratedCatalogModel.digestOf(entry.shipped(), slug), clock.instant());
+        override.writeLocalChange(definition, entry.shipped(), clock.instant());
         practiceOverrides.save(override);
         return recordPractice(slug, entry);
     }
@@ -132,6 +132,10 @@ public class CuratedCatalogService {
                 CuratedCatalogModel.requireEntry(loadCatalog().practice(slug), CATALOG_PRACTICE, slug, precondition);
         if (entry.overridden() == null) {
             return entry;
+        }
+        if (entry.shipped() != null) {
+            throw new CuratedCatalogConflictException(
+                    "Review changed bundled practices through the practice release instead.");
         }
         practiceOverrides.findBySlug(slug).ifPresent(override -> {
             override.acknowledge(CuratedCatalogModel.digestOf(entry.shipped(), slug), clock.instant());
@@ -363,9 +367,10 @@ public class CuratedCatalogService {
                 definition.automatedReviewPolicy(),
                 definition.whyItMatters(),
                 definition.whatGoodLooksLike(),
-                groupSlug);
+                groupSlug,
+                definition.deliveryBehavior());
         CuratedPracticeOverride override = practiceOverride(slug, now);
-        override.write(moved, CuratedCatalogModel.digestOf(entry.shipped(), slug), now);
+        override.writeLocalChange(moved, entry.shipped(), now);
         practiceOverrides.save(override);
         resequencePractices(source, now);
         resequencePractices(target, now);
@@ -373,7 +378,7 @@ public class CuratedCatalogService {
         return loadCatalog();
     }
 
-    private CatalogEntry<PracticeDefinition> recordPractice(String slug, CatalogEntry<PracticeDefinition> before) {
+    CatalogEntry<PracticeDefinition> recordPractice(String slug, CatalogEntry<PracticeDefinition> before) {
         CatalogEntry<PracticeDefinition> after = loadPractice(slug);
         configAudit.record(ConfigAuditEntry.instanceUpdated(
                 ConfigAuditEntityType.CURATED_PRACTICE,

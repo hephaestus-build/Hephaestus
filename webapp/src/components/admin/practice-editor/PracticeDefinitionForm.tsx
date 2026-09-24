@@ -1,10 +1,11 @@
 import deepEqual from "fast-deep-equal";
 import { ChevronRight, RotateCcw } from "lucide-react";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import type {
 	PracticeAutomatedReviewPolicy,
 	PracticeBinding,
+	PracticeDeliveryBehavior,
 	UpdatePracticeRequest,
 	PracticeDefinitionOptions,
 	PracticeEvidenceOutcome,
@@ -66,6 +67,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { artifactKindLabel } from "@/lib/artifact-kinds";
@@ -95,6 +97,7 @@ export interface PracticeDefinitionValue {
 	whatGoodLooksLike?: string;
 	precomputeScript?: string;
 	automatedReviewPolicy: PracticeAutomatedReviewPolicy;
+	deliveryBehavior?: PracticeDeliveryBehavior;
 }
 
 interface PracticeDefinitionFormBaseProps {
@@ -148,6 +151,7 @@ interface FormState {
 	whatGoodLooksLike: string;
 	precomputeScript: string;
 	automatedReviewPolicy: PracticeAutomatedReviewPolicy;
+	deliveryBehavior: PracticeDeliveryBehavior;
 }
 
 /** Everything a work type owns, stashed so switching away and back does not discard the work. */
@@ -180,6 +184,7 @@ function blankState(fallback: PracticeWorkTypeDefinitionOptions | undefined): Fo
 		whatGoodLooksLike: "",
 		precomputeScript: "",
 		automatedReviewPolicy: fallback?.recommendedPolicy ?? EMPTY_POLICY,
+		deliveryBehavior: { summaryOnly: false },
 	};
 }
 
@@ -202,6 +207,7 @@ function stateOf(
 		whatGoodLooksLike: initialData.whatGoodLooksLike ?? "",
 		precomputeScript: initialData.precomputeScript ?? "",
 		automatedReviewPolicy: initialData.automatedReviewPolicy,
+		deliveryBehavior: { summaryOnly: false, ...initialData.deliveryBehavior },
 	};
 }
 
@@ -236,6 +242,7 @@ interface FormErrors {
 	bindings?: BindingsProblem;
 	gate?: string;
 	subject?: string;
+	delivery?: string;
 	/**
 	 * One list, in the order the fields appear, so the summary reads down the form and the first
 	 * entry is also the field to focus. The summary and the focus target both come from it, so they
@@ -251,6 +258,7 @@ function formErrors(
 	mode: PracticeDefinitionFormProps["mode"],
 	selectedWorkType: PracticeWorkTypeDefinitionOptions | undefined,
 	revealSlug: () => void,
+	deliveryId: string,
 ): FormErrors {
 	const nameTooShort = form.name.trim().length < 3;
 	const criteriaTooShort = form.criteria.trim().length < 3;
@@ -262,6 +270,11 @@ function formErrors(
 		selectedWorkType &&
 		!selectedWorkType.subjectRoles.includes(form.bindings[0].subject ?? "AUTHOR")
 			? "Choose a person this kind of work can identify."
+			: undefined;
+	const preferredSlug = form.deliveryBehavior.redundantToSlug?.trim();
+	const deliveryError =
+		hasText(preferredSlug) && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(preferredSlug)
+			? "Use lowercase letters, numbers, and single hyphens."
 			: undefined;
 	const summary = [
 		nameTooShort && {
@@ -285,6 +298,11 @@ function formErrors(
 			// Lives inside the collapsed Technical settings panel, which unmounts its contents.
 			reveal: revealSlug,
 		},
+		hasText(deliveryError) && {
+			fieldId: `${deliveryId}-redundant`,
+			message: deliveryError,
+			reveal: revealSlug,
+		},
 	].filter((entry): entry is FormError => Boolean(entry));
 	return {
 		name: nameTooShort ? "Name must be at least 3 characters" : undefined,
@@ -294,6 +312,7 @@ function formErrors(
 		bindings,
 		gate: gateError,
 		subject: subjectError,
+		delivery: deliveryError,
 		summary,
 	};
 }
@@ -358,6 +377,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 	} = props;
 	const formDisabled = isPending || disabled;
 	const [form, setForm] = useState<FormState>(() => initialState(definitionOptions, initialData));
+	const deliveryId = useId();
 	// Counts refused submits, not "has submitted": it re-keys the summary so a second refusal
 	// focuses it again.
 	const [refusals, setRefusals] = useState(0);
@@ -473,7 +493,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		});
 	};
 
-	const errors = formErrors(form, mode, selectedWorkType, () => setShowAdvanced(true));
+	const errors = formErrors(form, mode, selectedWorkType, () => setShowAdvanced(true), deliveryId);
 	const valid = errors.summary.length === 0;
 	const shownErrors = refusals > 0 ? errors : NO_ERRORS;
 
@@ -489,6 +509,8 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 			return;
 		}
 
+		const overlapGroup = form.deliveryBehavior.overlapGroup?.trim();
+		const redundantToSlug = form.deliveryBehavior.redundantToSlug?.trim();
 		const submission = props.onSubmit({
 			slug: form.slug,
 			name: form.name.trim(),
@@ -504,6 +526,11 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 				? { precomputeScript: form.precomputeScript.trim() }
 				: {}),
 			automatedReviewPolicy: form.automatedReviewPolicy,
+			deliveryBehavior: {
+				summaryOnly: form.deliveryBehavior.summaryOnly,
+				overlapGroup: hasText(overlapGroup) ? overlapGroup : undefined,
+				redundantToSlug: hasText(redundantToSlug) ? redundantToSlug : undefined,
+			},
 		});
 		// After dispatch, not before: `track` needs the promise the dispatch returns.
 		unsavedChanges.track(submission);
@@ -842,7 +869,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 										type="button"
 										variant="ghost"
 										size="inline"
-										className="group items-start text-left disabled:opacity-100"
+										className="group min-w-0 items-start text-left whitespace-normal disabled:opacity-100"
 									/>
 								}
 							>
@@ -850,7 +877,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 								<span>
 									<span className="block text-lg font-semibold">Technical settings</span>
 									<span className="block text-sm font-normal text-muted-foreground">
-										Identifier{canRunMentoring ? " and static analysis" : ""}
+										Identifier, feedback delivery{canRunMentoring ? ", and static analysis" : ""}
 									</span>
 								</span>
 							</CollapsibleTrigger>
@@ -862,6 +889,85 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									error={shownErrors.slug}
 									onChange={(slug) => setForm((previous) => ({ ...previous, slug }))}
 								/>
+
+								<div className="space-y-4">
+									<div>
+										<p className="font-medium">Feedback delivery</p>
+										<p className="text-sm text-muted-foreground">
+											Use these choices when feedback from this practice overlaps with other
+											feedback.
+										</p>
+									</div>
+									<label
+										className="flex items-center justify-between gap-4 text-sm"
+										htmlFor={`${deliveryId}-summary`}
+									>
+										<span>Show this practice in the summary, not beside a diff line</span>
+										<Switch
+											id={`${deliveryId}-summary`}
+											checked={form.deliveryBehavior.summaryOnly}
+											disabled={formDisabled}
+											onCheckedChange={(summaryOnly) =>
+												setForm((previous) => ({
+													...previous,
+													deliveryBehavior: { ...previous.deliveryBehavior, summaryOnly },
+												}))
+											}
+										/>
+									</label>
+									<Field>
+										<FieldLabel htmlFor={`${deliveryId}-overlap`}>Overlap group</FieldLabel>
+										<Input
+											id={`${deliveryId}-overlap`}
+											value={form.deliveryBehavior.overlapGroup ?? ""}
+											disabled={formDisabled}
+											onChange={(event) =>
+												setForm((previous) => ({
+													...previous,
+													deliveryBehavior: {
+														...previous.deliveryBehavior,
+														overlapGroup: event.target.value,
+													},
+												}))
+											}
+										/>
+										<FieldDescription>
+											On an issue, only the first negative practice in this group is shown.
+										</FieldDescription>
+									</Field>
+									<Field>
+										<FieldLabel htmlFor={`${deliveryId}-redundant`}>
+											Preferred practice slug
+										</FieldLabel>
+										<Input
+											id={`${deliveryId}-redundant`}
+											pattern="[a-z0-9]+(-[a-z0-9]+)*"
+											title="Use lowercase letters, numbers, and single hyphens."
+											aria-invalid={hasText(shownErrors.delivery)}
+											aria-describedby={
+												hasText(shownErrors.delivery) ? `${deliveryId}-redundant-error` : undefined
+											}
+											value={form.deliveryBehavior.redundantToSlug ?? ""}
+											disabled={formDisabled}
+											onChange={(event) =>
+												setForm((previous) => ({
+													...previous,
+													deliveryBehavior: {
+														...previous.deliveryBehavior,
+														redundantToSlug: event.target.value,
+													},
+												}))
+											}
+										/>
+										<FieldDescription>
+											When both practices are negative, show feedback from the preferred practice
+											instead of this one.
+										</FieldDescription>
+										<FieldError id={`${deliveryId}-redundant-error`}>
+											{shownErrors.delivery}
+										</FieldError>
+									</Field>
+								</div>
 
 								{canRunMentoring && (
 									<div className="space-y-3">

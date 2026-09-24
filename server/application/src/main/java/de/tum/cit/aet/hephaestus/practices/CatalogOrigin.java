@@ -8,21 +8,40 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import org.jspecify.annotations.Nullable;
 
-/** Derives workspace drift from current, source, and effective catalog fingerprints. */
+/** Summarizes provenance for the badge; the release proposal carries the complete comparison. */
 public final class CatalogOrigin {
 
     private CatalogOrigin() {}
 
     public static @Nullable CatalogOriginDTO of(Practice practice, EffectiveCatalog catalog) {
-        if (practice.getSourceCuratedSlug() == null || practice.getCurrentRevision() == null) {
+        if (practice.getSourceCuratedSlug() == null) {
             return null;
         }
         CatalogEntry<PracticeDefinition> entry =
                 catalog.practice(practice.getSourceCuratedSlug()).orElse(null);
         boolean sourceOffered = entry != null && catalog.isEffectivelyOffered(entry);
+        if (practice.getAdoptedBase() != null && entry != null) {
+            PracticeDefinition current = PracticeDefinition.from(practice);
+            boolean declined = entry.effective()
+                    .exactFingerprint(practice.getSourceCuratedSlug())
+                    .equals(practice.getDeclinedOfferedDigest());
+            CatalogLink link;
+            if (current.equals(entry.effective())) {
+                link = CatalogLink.IN_SYNC;
+            } else if (declined) {
+                link = CatalogLink.DECLINED;
+            } else if (current.equals(practice.getAdoptedBase())) {
+                link = CatalogLink.UPDATE_AVAILABLE;
+            } else {
+                link = CatalogLink.LOCALLY_EDITED;
+            }
+            return new CatalogOriginDTO(practice.getSourceCuratedSlug(), link, sourceOffered);
+        }
         return describe(
                 practice.getSourceCuratedSlug(),
-                practice.getCurrentRevision().getReviewRuleFingerprint(),
+                practice.getCurrentRevision() == null
+                        ? null
+                        : practice.getCurrentRevision().getReviewRuleFingerprint(),
                 practice.getSourceCuratedFingerprint(),
                 entry == null ? null : entry.effective().provenanceFingerprint(entry.slug()),
                 sourceOffered);

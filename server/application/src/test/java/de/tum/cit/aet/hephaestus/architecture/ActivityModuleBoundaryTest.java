@@ -165,6 +165,8 @@ class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
                     .should()
                     .haveSimpleName("PracticeCatalogController")
                     .orShould()
+                    .haveSimpleName("PracticeReleaseController")
+                    .orShould()
                     .haveSimpleName("PracticeGroupController")
                     .orShould()
                     .haveSimpleName("ObservationController")
@@ -191,7 +193,7 @@ class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
                     .orShould()
                     .haveSimpleName("PracticeStandingController")
                     .because(
-                            "Only PracticeCatalogController, PracticeGroupController, ObservationController, "
+                            "Only PracticeCatalogController, PracticeReleaseController, PracticeGroupController, ObservationController, "
                                     + "FeedbackResponseController, PracticeReviewSettingsController, PracticeReviewOutputController, "
                                     + "CuratedCatalogAdminController, CuratedPracticeCatalogController, CatalogAdoptionController, "
                                     + "ArtifactTraceController, InAppFeedbackController, PracticeGroupDetailController, "

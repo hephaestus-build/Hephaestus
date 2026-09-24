@@ -223,6 +223,10 @@ public class PracticeService {
         practice.setWorkspace(workspace);
         practice.setSourceCuratedSlug(sourceCuratedSlug);
         practice.setSourceCuratedFingerprint(sourceCuratedFingerprint);
+        if (sourceCuratedSlug != null) {
+            practice.setAdoptedBase(definition);
+            practice.setAdoptedBaseSource(AdoptedBaseSource.EXACT_ADOPTION);
+        }
         practice.setGroup(group);
         practice.setDisplayOrder(
                 practiceRepository.findMaxDisplayOrder(ctx.id(), group == null ? null : group.getId()) + 1);
@@ -322,7 +326,8 @@ public class PracticeService {
                         fieldsToClear.contains(ClearablePracticeField.WHAT_GOOD_LOOKS_LIKE)),
                 request.group() == null
                         ? beforeDefinition.groupSlug()
-                        : request.group().groupSlug());
+                        : request.group().groupSlug(),
+                request.deliveryBehavior() == null ? beforeDefinition.deliveryBehavior() : request.deliveryBehavior());
 
         if (afterDefinition.equals(beforeDefinition)) {
             return practice;
@@ -451,7 +456,8 @@ public class PracticeService {
                         : request.automatedReviewPolicy(),
                 request.whyItMatters(),
                 request.whatGoodLooksLike(),
-                request.groupSlug());
+                request.groupSlug(),
+                request.deliveryBehavior() == null ? PracticeDeliveryBehavior.DEFAULT : request.deliveryBehavior());
     }
 
     private static <T> T required(@Nullable T value, String field) {
@@ -496,7 +502,8 @@ public class PracticeService {
                 definition.automatedReviewPolicy(),
                 definition.whyItMatters(),
                 definition.whatGoodLooksLike(),
-                definition.groupSlug());
+                definition.groupSlug(),
+                definition.deliveryBehavior());
     }
 
     private static PracticeBinding withoutEvidence(PracticeBinding binding) {
@@ -504,12 +511,13 @@ public class PracticeService {
                 binding.signals(), List.of(), binding.onDrafts(), binding.subject(), binding.appliesWhen());
     }
 
-    private static void applyDefinition(Practice practice, PracticeDefinition definition) {
+    static void applyDefinition(Practice practice, PracticeDefinition definition) {
         practice.setName(definition.name());
         practice.setBindings(definition.bindings());
         practice.setCriteria(definition.criteria());
         practice.setPrecomputeScript(definition.precomputeScript());
         practice.setAutomatedReviewPolicy(definition.automatedReviewPolicy());
+        practice.setDeliveryBehavior(definition.deliveryBehavior());
         practice.setWhyItMatters(definition.whyItMatters());
         practice.setWhatGoodLooksLike(definition.whatGoodLooksLike());
     }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.event.WorkspacesInitializedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -66,6 +67,9 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
 
     @Autowired
     private PracticeEvidenceDefaults evidenceDefaults;
+
+    @Autowired
+    private CuratedCatalogService catalogService;
 
     private Workspace workspace;
 
@@ -569,6 +573,23 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                     assertThat(practice.position()).isZero();
                     assertThat(practice.status().state()).isEqualTo(CatalogEntryState.EDITED_HERE);
                 });
+    }
+
+    @Test
+    void movingAPracticeKeepsItsDeclaredDeliveryBehavior() {
+        EffectiveCatalog before = catalogService.catalog();
+        var original = before.practice(PRACTICE).orElseThrow();
+        assertThat(original.effective().deliveryBehavior().summaryOnly()).isTrue();
+        String destination = before.groups().stream()
+                .map(CatalogEntry::slug)
+                .filter(slug -> !slug.equals(original.effective().groupSlug()))
+                .findFirst()
+                .orElseThrow();
+
+        catalogService.placePractice(PRACTICE, EntityTagPrecondition.parse(quote(before.etag())), destination, 0);
+
+        assertThat(catalogService.practice(PRACTICE).effective().deliveryBehavior())
+                .isEqualTo(original.effective().deliveryBehavior());
     }
 
     @Test
