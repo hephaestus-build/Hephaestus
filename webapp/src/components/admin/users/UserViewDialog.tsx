@@ -49,7 +49,7 @@ export function UserViewDialog({
 		<Dialog
 			open
 			onOpenChange={(open) => {
-				if (!open) {
+				if (!open && !isPending) {
 					onClose();
 				}
 			}}
@@ -90,7 +90,9 @@ export function UserViewDialog({
 						</FieldGroup>
 					</DialogBody>
 					<DialogFooter>
-						<DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+						<DialogClose render={<Button type="button" variant="outline" disabled={isPending} />}>
+							Cancel
+						</DialogClose>
 						<Button type="submit" disabled={trimmed === "" || isPending}>
 							{isPending ? "Opening…" : "View as user"}
 						</Button>

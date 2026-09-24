@@ -95,6 +95,7 @@ function WorkspaceUsersRoute() {
 			/>
 			{target && (
 				<UserViewDialog
+					key={target.userId}
 					name={target.name ?? target.login}
 					isPending={pending}
 					error={

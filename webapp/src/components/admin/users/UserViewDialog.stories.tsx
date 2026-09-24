@@ -26,6 +26,14 @@ export const EmptyReason: Story = {
 	},
 };
 
+export const Opening: Story = {
+	args: { isPending: true },
+	play: async () => {
+		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Cancel" }));
+		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Opening…" }));
+	},
+};
+
 export const SubmitsTrimmedReason: Story = {
 	play: async ({ args }) => {
 		await userEvent.type(
