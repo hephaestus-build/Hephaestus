@@ -18301,8 +18301,7 @@ components:
       - workspaceSlug
     WorkspaceAiModel:
       type: object
-      description: "A model this answer would use here, with its declared brand when\
-        \ known."
+      description: A model this answer would use here.
       properties:
         brand:
           type: string

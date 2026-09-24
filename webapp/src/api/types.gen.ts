@@ -6212,7 +6212,7 @@ export type Workspace = {
 };
 
 /**
- * A model this answer would use here, with its declared brand when known.
+ * A model this answer would use here.
  */
 export type WorkspaceAiModel = {
   brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK';
