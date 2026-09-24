@@ -77,6 +77,50 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    void shouldUseProviderIdentityForTheListedAndAuditedAccountWhenActorCacheIsStale() {
+        User other = persistUser("different-member");
+        ensureWorkspaceMembership(workspace, other, WorkspaceMembership.WorkspaceRole.MEMBER);
+        Account viewedAccount = persistAccount("Viewed account");
+        Account otherAccount = persistAccount("Other account");
+        long providerId = Objects.requireNonNull(ensureGitHubProvider().getId());
+
+        IdentityLink viewedLink = new IdentityLink();
+        viewedLink.setAccount(viewedAccount);
+        viewedLink.setProviderId(providerId);
+        viewedLink.setSubject(viewed.getNativeId().toString());
+        viewedLink.setExternalActorId(other.getId());
+        identityLinks.save(viewedLink);
+        IdentityLink otherLink = new IdentityLink();
+        otherLink.setAccount(otherAccount);
+        otherLink.setProviderId(providerId);
+        otherLink.setSubject(other.getNativeId().toString());
+        otherLink.setExternalActorId(viewed.getId());
+        identityLinks.save(otherLink);
+
+        request("/user-view/users")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].userId")
+                .isEqualTo(other.getId())
+                .jsonPath("$.content[0].accountId")
+                .isEqualTo(otherAccount.getId())
+                .jsonPath("$.content[1].userId")
+                .isEqualTo(viewed.getId())
+                .jsonPath("$.content[1].accountId")
+                .isEqualTo(viewedAccount.getId());
+
+        request(viewedPath() + "/practices").exchange().expectStatus().isOk().expectBody(Void.class);
+        var audit = jdbc.queryForMap(
+                "SELECT account_id, acting_account_id FROM auth_event WHERE event_type = 'USER_VIEW' AND viewed_user_id = ?",
+                viewed.getId());
+        assertThat(audit)
+                .containsEntry("account_id", viewedAccount.getId())
+                .containsEntry("acting_account_id", administrator.getId());
+    }
+
+    @Test
     void shouldPageHumanMembersOnlyWhenABotIsAMemberToo() {
         User bot = persistUser("automation");
         bot.setType(User.Type.BOT);

@@ -9,8 +9,8 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventData;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
-import de.tum.cit.aet.hephaestus.core.auth.domain.LinkedAccountRow;
 import de.tum.cit.aet.hephaestus.core.auth.spi.UserViewAccess;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -106,11 +106,21 @@ class UserViewAccessServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldMapEachLinkedUserToItsAccountAndStatus() {
-        when(identityLinks.findLinkedAccountsByExternalActorIds(List.of(99L, 100L)))
-                .thenReturn(List.of(new LinkedAccountRow(99L, 3L, Account.Status.DELETING)));
+    void shouldMapByProviderSubjectRatherThanCachedActorId() {
+        var account = new Account("Viewed account");
+        account.setId(3L);
+        account.setStatus(Account.Status.DELETING);
+        var link = new IdentityLink();
+        link.setAccount(account);
+        link.setProviderId(55L);
+        link.setSubject("123");
+        link.setExternalActorId(100L);
+        when(identityLinks.findActiveScmLinks(List.of(55L), List.of("123", "124")))
+                .thenReturn(List.of(link));
 
-        assertThat(service.linkedAccounts(List.of(99L, 100L)))
+        assertThat(service.linkedAccounts(List.of(
+                        new UserViewAccess.ActorIdentity(99L, 55L, "123"),
+                        new UserViewAccess.ActorIdentity(100L, 55L, "124"))))
                 .containsExactly(Map.entry(99L, new UserViewAccess.LinkedAccount(3L, "DELETING")));
     }
 

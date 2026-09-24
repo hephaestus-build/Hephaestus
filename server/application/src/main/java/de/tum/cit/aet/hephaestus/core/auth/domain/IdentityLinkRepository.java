@@ -72,14 +72,14 @@ public interface IdentityLinkRepository extends JpaRepository<IdentityLink, Long
     int deleteByIdAndAccountId(@Param("id") Long id, @Param("accountId") Long accountId);
 
     @Query("""
-        SELECT new de.tum.cit.aet.hephaestus.core.auth.domain.LinkedAccountRow(
-                   il.externalActorId, il.account.id, il.account.status)
-          FROM IdentityLink il
-         WHERE il.externalActorId IN :externalActorIds
+        SELECT il FROM IdentityLink il JOIN FETCH il.account
+         WHERE il.providerId IN :providerIds
+           AND il.subject IN :subjects
+           AND il.teamId IS NULL
            AND il.disabledAt IS NULL
         """)
-    List<LinkedAccountRow> findLinkedAccountsByExternalActorIds(
-            @Param("externalActorIds") Collection<Long> externalActorIds);
+    List<IdentityLink> findActiveScmLinks(
+            @Param("providerIds") Collection<Long> providerIds, @Param("subjects") Collection<String> subjects);
 
     /**
      * Fills an absent cached actor reference; an existing reference is never replaced.
