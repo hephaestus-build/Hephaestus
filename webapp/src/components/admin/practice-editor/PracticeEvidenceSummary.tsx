@@ -63,6 +63,31 @@ function OccasionSummary({ binding, sources, signals }: OccasionSummaryProps) {
 				{binding.onDrafts === true && <Badge variant="outline">Drafts included</Badge>}
 			</div>
 			<dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[6.5rem_1fr]">
+				<dt className="text-muted-foreground">Person judged</dt>
+				<dd className="capitalize">{binding.subject?.toLowerCase() ?? "author"}</dd>
+				<dt className="text-muted-foreground">Only review when</dt>
+				<dd className="space-y-1">
+					{binding.appliesWhen ? (
+						<>
+							<ul className="list-inside list-disc">
+								{binding.appliesWhen.anyOf?.map((clause, index) => (
+									<li key={index} className="break-words">
+										{clause.changedPathMatches && (
+											<>Changed path matches {clause.changedPathMatches.join(", ")}</>
+										)}
+										{clause.diffContains && <>Diff contains {clause.diffContains.join(", ")}</>}
+										{clause.evidenceHasItems && <>Evidence has items: {clause.evidenceHasItems}</>}
+									</li>
+								))}
+							</ul>
+							<p className="text-muted-foreground">
+								Otherwise skip: {binding.appliesWhen.absentSays}
+							</p>
+						</>
+					) : (
+						"All work of this kind"
+					)}
+				</dd>
 				<dt className="text-muted-foreground">Must have</dt>
 				<dd className="flex flex-wrap gap-1.5">
 					{required.length > 0 ? (

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -22,6 +23,16 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
     Optional<RepositoryToMonitor> findByWorkspaceIdAndNameWithOwner(Long workspaceId, String nameWithOwner);
 
     List<RepositoryToMonitor> findByWorkspaceId(Long workspaceId);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE RepositoryToMonitor m SET m.recentSyncError = :error WHERE m.id = :id")
+    int updateRecentSyncError(@Param("id") Long id, @Param("error") @Nullable String error);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE RepositoryToMonitor m SET m.historicalBackfillSyncError = :error WHERE m.id = :id")
+    int updateHistoricalBackfillSyncError(@Param("id") Long id, @Param("error") @Nullable String error);
 
     /** Resolves which workspace a repository belongs to during sync, by full name (owner/name). */
     Optional<RepositoryToMonitor> findByNameWithOwner(String nameWithOwner);

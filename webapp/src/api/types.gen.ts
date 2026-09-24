@@ -4,6 +4,12 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type AcceptPracticeReleaseRequest = {
+  choices: {
+    [key: string]: 'CURRENT' | 'OFFERED';
+  };
+};
+
 /**
  * A human-readable account identity. <code>displayName</code>/<code>email</code> are null for deleted accounts.
  */
@@ -490,7 +496,7 @@ export type CatalogGroupPracticeAction = {
  * The catalog entry a workspace copy came from and whether it differs now
  */
 export type CatalogOrigin = {
-  link: 'IN_SYNC' | 'LOCALLY_EDITED' | 'UPDATE_AVAILABLE';
+  link: 'IN_SYNC' | 'LOCALLY_EDITED' | 'UPDATE_AVAILABLE' | 'DECLINED';
   /**
    * Slug of the catalog entry this copy was made from
    */
@@ -975,6 +981,7 @@ export type CreatePracticeRequest = {
    * Practice review criteria
    */
   criteria: string;
+  deliveryBehavior?: PracticeDeliveryBehavior;
   /**
    * Practice group to add the practice to. Omit or set to null for Unassigned.
    */
@@ -1258,6 +1265,7 @@ export type CuratedPracticeDefinition = {
   automatedReviewValidation: PracticeAutomatedReviewValidation;
   bindings: Array<PracticeBinding>;
   criteria: string;
+  deliveryBehavior: PracticeDeliveryBehavior;
   groupSlug?: string;
   name: string;
   precomputeScript?: string;
@@ -1274,12 +1282,17 @@ export type CuratedPracticeRequest = {
    */
   automatedReviewPolicy?: PracticeAutomatedReviewPolicy;
   /**
+   * Explicit intent to change the gate or the person judged
+   */
+  bindingChanges?: Array<'APPLIES_WHEN' | 'SUBJECT'>;
+  /**
    * The one occasion this practice is reviewed on; the kind of work is read off the signals
    */
   bindings: [
     PracticeBinding
   ];
   criteria: string;
+  deliveryBehavior?: PracticeDeliveryBehavior;
   groupSlug?: string;
   name: string;
   precomputeScript?: string;
@@ -2744,6 +2757,7 @@ export type Practice = {
    * Practice review criteria
    */
   criteria: string;
+  deliveryBehavior: PracticeDeliveryBehavior;
   /**
    * Position within its group (lowest first); ties broken by name
    */
@@ -2871,6 +2885,24 @@ export type PracticeBinding = {
 };
 
 /**
+ * A practice as its author wrote it.
+ *
+ *  <p><code>artifactKind</code> is not a field. It is read off {@link de.tum.cit.aet.hephaestus.practices.PracticeDefinition#bindings #bindings()}, whose signal names carry
+ *  it as a prefix, so there is nothing for a second statement of it to disagree with.
+ */
+export type PracticeDefinition = {
+  automatedReviewPolicy: PracticeAutomatedReviewPolicy;
+  bindings: Array<PracticeBinding>;
+  criteria: string;
+  deliveryBehavior: PracticeDeliveryBehavior;
+  groupSlug?: string;
+  name: string;
+  precomputeScript?: string;
+  whatGoodLooksLike?: string;
+  whyItMatters?: string;
+};
+
+/**
  * What a practice author may choose, per type of reviewed work
  */
 export type PracticeDefinitionOptions = {
@@ -2879,6 +2911,15 @@ export type PracticeDefinitionOptions = {
    */
   sourceContractVersion: string;
   workTypes: Array<PracticeWorkTypeDefinitionOptions>;
+};
+
+/**
+ * Delivery choices declared by the practice author, not inferred from its slug.
+ */
+export type PracticeDeliveryBehavior = {
+  overlapGroup?: string;
+  redundantToSlug?: string;
+  summaryOnly: boolean;
 };
 
 /**
@@ -3152,6 +3193,27 @@ export type PracticeGroupTrend = {
 export type PracticeManualReviewSignal = {
   displayName: string;
   signal: string;
+};
+
+export type PracticeReleaseField = {
+  conflict: boolean;
+  field: 'NAME' | 'BINDINGS' | 'CRITERIA' | 'PRECOMPUTE_SCRIPT' | 'AUTOMATED_REVIEW_POLICY' | 'WHY_IT_MATTERS' | 'WHAT_GOOD_LOOKS_LIKE' | 'GROUP_SLUG' | 'DELIVERY_BEHAVIOR';
+  offeredChanged: boolean;
+};
+
+/**
+ * One offer and the exact three versions an administrator reviews before deciding.
+ */
+export type PracticeReleaseProposal = {
+  base: PracticeDefinition;
+  baseSource: 'EXACT_ADOPTION' | 'BUNDLED_DIGEST_MATCH' | 'BUNDLED_FINGERPRINT_MATCH' | 'CURRENT_DEFINITION';
+  current: PracticeDefinition;
+  currentRevision?: number;
+  etag: string;
+  fields: Array<PracticeReleaseField>;
+  offered: PracticeDefinition;
+  offeredDigest: string;
+  slug: string;
 };
 
 export type PracticeReviewCoveragePreview = {
@@ -3458,6 +3520,7 @@ export type PracticeWorkTypeDefinitionOptions = {
    * The occasions a practice on this work type can be bound to. A review somebody asks for by hand is not among them — see manualReviewSignal.
    */
   signals: Array<PracticeSignalOption>;
+  subjectRoles: Array<'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER'>;
   supportedAutomatedReviewModes: Array<'LANGUAGE_MODEL' | 'NONE'>;
 };
 
@@ -5411,6 +5474,10 @@ export type UpdatePracticeRequest = {
    */
   automatedReviewPolicy?: PracticeAutomatedReviewPolicy;
   /**
+   * Explicit intent to change the gate or the person judged
+   */
+  bindingChanges?: Array<'APPLIES_WHEN' | 'SUBJECT'>;
+  /**
    * Replacement occasion and its evidence; omit to leave it unchanged
    */
   bindings?: [
@@ -5424,6 +5491,7 @@ export type UpdatePracticeRequest = {
    * Practice review criteria
    */
   criteria?: string;
+  deliveryBehavior?: PracticeDeliveryBehavior;
   /**
    * Catalog placement to apply with the definition update; omit to leave unchanged
    */
@@ -7816,6 +7884,66 @@ export type AdminPlaceCuratedPracticeResponses = {
 };
 
 export type AdminPlaceCuratedPracticeResponse = AdminPlaceCuratedPracticeResponses[keyof AdminPlaceCuratedPracticeResponses];
+
+export type AdminDeclinePracticeReleaseData = {
+  body?: never;
+  headers: {
+    'If-Match': string;
+  };
+  path: {
+    slug: string;
+  };
+  query?: never;
+  url: '/admin/practice-catalog/practices/{slug}/release';
+};
+
+export type AdminDeclinePracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: CuratedPractice;
+};
+
+export type AdminDeclinePracticeReleaseResponse = AdminDeclinePracticeReleaseResponses[keyof AdminDeclinePracticeReleaseResponses];
+
+export type AdminGetPracticeReleaseData = {
+  body?: never;
+  path: {
+    slug: string;
+  };
+  query?: never;
+  url: '/admin/practice-catalog/practices/{slug}/release';
+};
+
+export type AdminGetPracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: PracticeReleaseProposal;
+};
+
+export type AdminGetPracticeReleaseResponse = AdminGetPracticeReleaseResponses[keyof AdminGetPracticeReleaseResponses];
+
+export type AdminAcceptPracticeReleaseData = {
+  body: AcceptPracticeReleaseRequest;
+  headers: {
+    'If-Match': string;
+  };
+  path: {
+    slug: string;
+  };
+  query?: never;
+  url: '/admin/practice-catalog/practices/{slug}/release';
+};
+
+export type AdminAcceptPracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: CuratedPractice;
+};
+
+export type AdminAcceptPracticeReleaseResponse = AdminAcceptPracticeReleaseResponses[keyof AdminAcceptPracticeReleaseResponses];
 
 export type AdminUpdateCuratedPracticeStatusData = {
   body: UpdateCuratedStatusRequest;
@@ -11385,6 +11513,99 @@ export type GetObservationResponses = {
 };
 
 export type GetObservationResponse = GetObservationResponses[keyof GetObservationResponses];
+
+export type ListPracticeReleasesData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/releases';
+};
+
+export type ListPracticeReleasesResponses = {
+  /**
+   * OK
+   */
+  200: Array<PracticeReleaseProposal>;
+};
+
+export type ListPracticeReleasesResponse = ListPracticeReleasesResponses[keyof ListPracticeReleasesResponses];
+
+export type DeclinePracticeReleaseData = {
+  body?: never;
+  headers: {
+    'If-Match': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    slug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/releases/{slug}';
+};
+
+export type DeclinePracticeReleaseResponses = {
+  /**
+   * The offered version was declined
+   */
+  204: void;
+};
+
+export type DeclinePracticeReleaseResponse = DeclinePracticeReleaseResponses[keyof DeclinePracticeReleaseResponses];
+
+export type GetPracticeReleaseData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    slug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/releases/{slug}';
+};
+
+export type GetPracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: PracticeReleaseProposal;
+};
+
+export type GetPracticeReleaseResponse = GetPracticeReleaseResponses[keyof GetPracticeReleaseResponses];
+
+export type AcceptPracticeReleaseData = {
+  body: AcceptPracticeReleaseRequest;
+  headers: {
+    'If-Match': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    slug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/releases/{slug}';
+};
+
+export type AcceptPracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: Practice;
+};
+
+export type AcceptPracticeReleaseResponse = AcceptPracticeReleaseResponses[keyof AcceptPracticeReleaseResponses];
 
 export type ReorderPracticesData = {
   body: ReorderPracticesRequest;

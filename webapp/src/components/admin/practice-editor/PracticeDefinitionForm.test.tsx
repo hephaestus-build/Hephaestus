@@ -43,6 +43,21 @@ function fillValidDraft() {
 	});
 }
 
+describe("the gate field", () => {
+	it("does not save malformed JSON while keeping the draft visible", async () => {
+		const onSubmit = vi.fn();
+		await renderCreateForm(onSubmit);
+		fillValidDraft();
+		fireEvent.change(screen.getByRole("textbox", { name: "Only review when" }), {
+			target: { value: "{" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Create practice" }));
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveProperty("value", "{");
+		expect(screen.getAllByText("Enter valid JSON for the gate.").length).toBeGreaterThan(0);
+	});
+});
+
 describe("the identifier a practice is created under", () => {
 	it("follows the name until an author writes one of their own", async () => {
 		await renderCreateForm(vi.fn());

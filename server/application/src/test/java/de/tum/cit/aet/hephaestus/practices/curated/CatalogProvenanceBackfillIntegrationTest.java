@@ -3,13 +3,20 @@ package de.tum.cit.aet.hephaestus.practices.curated;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionField;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
+import de.tum.cit.aet.hephaestus.practices.PracticeReleaseChoice;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -28,7 +35,13 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
     private CatalogProvenanceBackfill backfill;
 
     @Autowired
+    private CuratedPracticeOverrideRepository overrideRepository;
+
+    @Autowired
     private CuratedCatalogService catalogService;
+
+    @Autowired
+    private CuratedPracticeReleaseService releases;
 
     @Autowired
     private PracticeEvidenceDefaults evidenceDefaults;
@@ -62,6 +75,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
         assertThat(stamped.practices()).isEqualTo(2);
         assertThat(stampedPractices(matching)).isOne();
         assertThat(stampedPractices(edited)).isOne();
+        assertThat(baseSource(matching)).isEqualTo("BUNDLED_FINGERPRINT_MATCH");
         assertThat(unfingerprintedRevisions()).isZero();
         assertThat(workspacesAwaiting()).isZero();
     }
@@ -156,6 +170,169 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                 .isEqualTo("The workspace intentionally changed these criteria");
     }
 
+    @Test
+    void shouldUseMatchingBundledDefinitionForOldAdoption() {
+        PracticeDefinition bundled = shipped();
+        seedLegacyWorkspace(
+                matching,
+                bundled.criteria(),
+                false,
+                bundled.automatedReviewPolicy(),
+                bundled.provenanceFingerprint(SHIPPED_SLUG));
+
+        backfill.run();
+
+        assertThat(baseSource(matching)).isEqualTo("BUNDLED_FINGERPRINT_MATCH");
+        assertThat(baseCriteria(matching)).isEqualTo(bundled.criteria());
+    }
+
+    @Test
+    void shouldUseCurrentDefinitionWhenOldFingerprintDoesNotMatch() {
+        seedLegacyWorkspace(
+                matching, "Locally changed criteria", false, shipped().automatedReviewPolicy(), "v3:" + "a".repeat(64));
+
+        backfill.run();
+
+        assertThat(baseSource(matching)).isEqualTo("CURRENT_DEFINITION");
+        assertThat(baseCriteria(matching)).isEqualTo("Locally changed criteria");
+    }
+
+    @Test
+    void shouldBackfillInstanceOverrideFromMatchingBundledDigest() {
+        PracticeDefinition bundled = shipped();
+        CuratedPracticeOverride override = new CuratedPracticeOverride(SHIPPED_SLUG, Instant.now());
+        override.write(
+                withCriteria(bundled, "Instance criteria"),
+                CuratedDefinitionDigest.of(SHIPPED_SLUG, bundled),
+                Instant.now());
+        overrideRepository.save(override);
+
+        backfill.run();
+
+        CuratedPracticeOverride saved =
+                overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
+        assertThat(saved.getAdoptedBase()).isEqualTo(bundled);
+        assertThat(saved.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.BUNDLED_DIGEST_MATCH);
+    }
+
+    @Test
+    void shouldUseCurrentInstanceDefinitionWhenBundledDigestDoesNotMatch() {
+        PracticeDefinition bundled = shipped();
+        CuratedPracticeOverride override = new CuratedPracticeOverride(SHIPPED_SLUG, Instant.now());
+        PracticeDefinition edited = withCriteria(bundled, "Old instance criteria");
+        override.write(edited, "not-the-current-bundle", Instant.now());
+        overrideRepository.save(override);
+
+        backfill.run();
+
+        CuratedPracticeOverride saved =
+                overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
+        assertThat(saved.getAdoptedBase()).isEqualTo(edited);
+        assertThat(saved.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.CURRENT_DEFINITION);
+
+        var proposal = releases.practiceRelease(SHIPPED_SLUG);
+        releases.accept(
+                SHIPPED_SLUG,
+                EntityTagPrecondition.parse('"' + proposal.etag() + '"'),
+                Map.of(
+                        PracticeDefinitionField.CRITERIA, PracticeReleaseChoice.CURRENT,
+                        PracticeDefinitionField.DELIVERY_BEHAVIOR, PracticeReleaseChoice.OFFERED));
+        CuratedPracticeOverride kept =
+                overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
+        assertThat(kept.getAdoptedBase()).isEqualTo(bundled);
+        assertThat(kept.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.EXACT_ADOPTION);
+    }
+
+    @Test
+    void preservesAnAcceptedBundledVersionWhenOnlyTheDigestGainedDeliveryBehavior() {
+        PracticeDefinition bundled = shipped();
+        CuratedPracticeOverride override = new CuratedPracticeOverride(SHIPPED_SLUG, Instant.now());
+        override.write(
+                withCriteria(bundled, "Local criteria"),
+                CuratedDefinitionDigest.beforeDeliveryBehavior(SHIPPED_SLUG, bundled),
+                Instant.now());
+        overrideRepository.save(override);
+
+        backfill.run();
+
+        CuratedPracticeOverride saved =
+                overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
+        assertThat(saved.getAdoptedBase()).isEqualTo(bundled);
+        assertThat(saved.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.BUNDLED_DIGEST_MATCH);
+        assertThat(saved.getAcceptedBundledDigest()).isEqualTo(CuratedDefinitionDigest.of(SHIPPED_SLUG, bundled));
+        assertThat(catalogService.practice(SHIPPED_SLUG).state()).isEqualTo(CatalogEntryState.EDITED_HERE);
+    }
+
+    @Test
+    void shouldPreserveLegacyInstanceBaseAndDigestWhenEditedBeforeRepair() {
+        PracticeDefinition bundled = shipped();
+        PracticeDefinition old = withCriteria(bundled, "Old instance criteria");
+        CuratedPracticeOverride override = new CuratedPracticeOverride(SHIPPED_SLUG, Instant.now());
+        String oldDigest = "practice:v2:" + "a".repeat(64);
+        override.write(old, oldDigest, Instant.now());
+        overrideRepository.save(override);
+
+        var entry = catalogService.practice(SHIPPED_SLUG);
+        catalogService.writePractice(
+                SHIPPED_SLUG,
+                EntityTagPrecondition.parse('"' + entry.etag() + '"'),
+                withCriteria(bundled, "New instance criteria"),
+                null);
+
+        CuratedPracticeOverride saved =
+                overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
+        assertThat(saved.getAdoptedBase()).isEqualTo(old);
+        assertThat(saved.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.CURRENT_DEFINITION);
+        assertThat(saved.getAcceptedBundledDigest()).isEqualTo(oldDigest);
+    }
+
+    @Test
+    void shouldKeepInstanceBaseThroughLaterCustomization() {
+        PracticeDefinition bundled = shipped();
+        var entry = catalogService.practice(SHIPPED_SLUG);
+        PracticeDefinition first = withCriteria(bundled, "First instance criteria");
+        catalogService.writePractice(SHIPPED_SLUG, EntityTagPrecondition.parse('"' + entry.etag() + '"'), first, null);
+        var firstOverride = overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
+        assertThat(firstOverride.getAdoptedBase()).isEqualTo(bundled);
+        assertThat(firstOverride.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.EXACT_ADOPTION);
+        assertThat(firstOverride.getAcceptedBundledDigest())
+                .isEqualTo(CuratedDefinitionDigest.of(SHIPPED_SLUG, bundled));
+
+        var changed = catalogService.practice(SHIPPED_SLUG);
+        catalogService.writePractice(
+                SHIPPED_SLUG,
+                EntityTagPrecondition.parse('"' + changed.etag() + '"'),
+                withCriteria(bundled, "Second instance criteria"),
+                null);
+
+        assertThat(overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow().getAdoptedBase())
+                .isEqualTo(bundled);
+    }
+
+    private PracticeDefinition withCriteria(PracticeDefinition definition, String criteria) {
+        return new PracticeDefinition(
+                definition.name(),
+                definition.bindings(),
+                criteria,
+                definition.precomputeScript(),
+                definition.automatedReviewPolicy(),
+                definition.whyItMatters(),
+                definition.whatGoodLooksLike(),
+                definition.groupSlug());
+    }
+
+    private String baseSource(Workspace workspace) {
+        return Objects.requireNonNull(jdbcTemplate.queryForObject(
+                "SELECT adopted_base_source FROM practice WHERE workspace_id = ?", String.class, workspace.getId()));
+    }
+
+    private String baseCriteria(Workspace workspace) {
+        return Objects.requireNonNull(jdbcTemplate.queryForObject(
+                "SELECT adopted_base ->> 'criteria' FROM practice WHERE workspace_id = ?",
+                String.class,
+                workspace.getId()));
+    }
+
     private PracticeDefinition shipped() {
         return catalogService.catalog().practice(SHIPPED_SLUG).orElseThrow().effective();
     }
@@ -170,10 +347,10 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                 ignored -> jdbcTemplate.update("""
                 INSERT INTO practice_revision (
                     practice_id, revision_number, slug, name, applies_to, bindings, criteria,
-                    automated_review_policy, why_it_matters, group_slug, review_rule_fingerprint, created_at
+                    automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
                 )
                 SELECT id, 0, slug, name, applies_to, bindings, criteria,
-                       NULL, 'Reviewers need context', ?, NULL, now()
+                       NULL, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, NULL, now()
                 FROM practice WHERE workspace_id = ?
                 """, shipped().groupSlug(), matching.getId()));
 
@@ -211,9 +388,9 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                     """
                 INSERT INTO practice (
                     workspace_id, practice_group_id, slug, name, applies_to, display_order, bindings,
-                    criteria, automated_review_policy, why_it_matters, source_curated_slug,
+                    criteria, automated_review_policy, delivery_behavior, why_it_matters, source_curated_slug,
                     source_curated_fingerprint, autonomy, created_at
-                ) VALUES (?, ?, ?, ?, ?, 0, ?::jsonb, ?, ?::jsonb, 'Reviewers need context', ?, ?, 'AUTOMATIC', now())
+                ) VALUES (?, ?, ?, ?, ?, 0, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, 'AUTOMATIC', now())
                 RETURNING id
                 """,
                     Long.class,
@@ -231,8 +408,8 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                     """
                 INSERT INTO practice_revision (
                     practice_id, revision_number, slug, name, applies_to, bindings, criteria,
-                    automated_review_policy, why_it_matters, group_slug, review_rule_fingerprint, created_at
-                ) VALUES (?, 1, ?, ?, ?, ?::jsonb, ?, ?::jsonb, 'Reviewers need context', ?, ?, now())
+                    automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
+                ) VALUES (?, 1, ?, ?, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, now())
                 RETURNING id
                 """,
                     Long.class,
@@ -250,8 +427,8 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                         """
                     INSERT INTO practice_revision (
                         practice_id, revision_number, slug, name, applies_to, bindings, criteria,
-                        automated_review_policy, why_it_matters, group_slug, review_rule_fingerprint, created_at
-                    ) VALUES (?, 2, ?, ?, ?, ?::jsonb, ?, ?::jsonb, 'Reviewers need context', ?, NULL, now())
+                        automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
+                    ) VALUES (?, 2, ?, ?, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, NULL, now())
                     RETURNING id
                     """,
                         Long.class,

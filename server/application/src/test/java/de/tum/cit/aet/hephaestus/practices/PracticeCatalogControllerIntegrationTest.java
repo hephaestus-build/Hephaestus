@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.ChatSignals;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.dto.BindPracticeGroupRequestDTO;
@@ -174,6 +175,38 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
     private Consumer<HttpHeaders> withCsrfForAnonymousWrite() {
         return TestAuthUtils.withCsrf(TestAuthUtils.fetchCsrfToken(webTestClient));
+    }
+
+    @Test
+    @WithAdminUser
+    void workspaceAdminCanOpenTheReleaseInbox() {
+        ensureAdminMembership(workspace);
+
+        webTestClient
+                .get()
+                .uri(BASE_URI + "/releases", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .json("[]");
+    }
+
+    @Test
+    @WithMentorUser
+    void workspaceMentorCannotOpenTheReleaseInbox() {
+        User member = persistUser("mentor");
+        ensureWorkspaceMembership(workspace, member, WorkspaceMembership.WorkspaceRole.MEMBER);
+
+        webTestClient
+                .get()
+                .uri(BASE_URI + "/releases", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -947,14 +980,21 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
         @Test
         @WithAdminUser
-        @DisplayName("partially updates practice (only name)")
+        @DisplayName("updates only the name and keeps the gate and reviewer on reload")
         void shouldPartiallyUpdate() {
             ensureAdminMembership(workspace);
             Practice practice = persistPractice("update-me", "Original Name", true);
             practice.setGroup(persistGroup("existing-group"));
+            PracticeBinding binding = practice.getBindings().getFirst();
+            PracticeSubject gate = new PracticeSubject(
+                    "the change has no Swift code",
+                    List.of(PracticeSubjectClause.changedPathMatches(List.of("**/*.swift"))));
+            practice.setBindings(List.of(new PracticeBinding(
+                    binding.signals(), binding.needs(), binding.onDrafts(), ActorRole.REVIEWER, gate)));
             practiceRepository.save(practice);
 
-            var request = new UpdatePracticeRequestDTO("Updated Name", null, null, null, null, null, null, null, null);
+            var request =
+                    new UpdatePracticeRequestDTO("Updated Name", null, null, null, null, null, null, null, null, null);
 
             PracticeDTO result = webTestClient
                     .patch()
@@ -975,6 +1015,20 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             assertThat(result.criteria()).isEqualTo("Detect prompt for update-me");
             assertThat(result.autonomy().effective()).isEqualTo(PracticeAutonomy.AUTOMATIC);
             assertThat(result.groupSlug()).isEqualTo("existing-group");
+
+            PracticeDTO reloaded = webTestClient
+                    .get()
+                    .uri(BASE_URI + "/{slug}", workspace.getWorkspaceSlug(), "update-me")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(PracticeDTO.class)
+                    .returnResult()
+                    .getResponseBody();
+            assertThat(reloaded).isNotNull();
+            assertThat(reloaded.bindings().getFirst().appliesWhen()).isEqualTo(gate);
+            assertThat(reloaded.bindings().getFirst().subject()).isEqualTo(ActorRole.REVIEWER);
         }
 
         @Test
@@ -985,6 +1039,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             var request = new UpdatePracticeRequestDTO(
                     null,
                     PracticeTestEvidence.bindings(ScmSignals.ISSUE_OPENED),
+                    null,
                     null,
                     null,
                     null,
@@ -1017,7 +1072,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             ensureAdminMembership(workspace);
             Practice practice = persistPractice("remove-automated-review", "Remove assessment", true);
             PracticeAutomatedReviewPolicy requirements = withoutAutomatedReview(practice.getAutomatedReviewPolicy());
-            var request = new UpdatePracticeRequestDTO(null, null, null, null, requirements, null, null, null, null);
+            var request =
+                    new UpdatePracticeRequestDTO(null, null, null, null, requirements, null, null, null, null, null);
 
             PracticeDTO result = webTestClient
                     .patch()
@@ -1064,6 +1120,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     null,
                     new BindPracticeGroupRequestDTO("target-group"),
+                    null,
                     null);
 
             PracticeDTO result = webTestClient
@@ -1118,6 +1175,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     null,
                     new BindPracticeGroupRequestDTO("missing-group"),
+                    null,
                     null);
 
             webTestClient
@@ -1218,7 +1276,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         void shouldReturn404() {
             ensureAdminMembership(workspace);
 
-            var request = new UpdatePracticeRequestDTO("Name", null, null, null, null, null, null, null, null);
+            var request = new UpdatePracticeRequestDTO("Name", null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -1238,7 +1296,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             ensureAdminMembership(workspace);
             persistPractice("bad-update", "Name", true);
 
-            var request = new UpdatePracticeRequestDTO("AB", null, null, null, null, null, null, null, null);
+            var request = new UpdatePracticeRequestDTO("AB", null, null, null, null, null, null, null, null, null);
 
             ProblemDetail problem = webTestClient
                     .patch()
@@ -1267,7 +1325,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             ensureAdminMembership(workspace);
             persistPractice("ws-name", "Name", true);
 
-            var request = new UpdatePracticeRequestDTO("   ", null, null, null, null, null, null, null, null);
+            var request = new UpdatePracticeRequestDTO("   ", null, null, null, null, null, null, null, null, null);
 
             ProblemDetail problem = webTestClient
                     .patch()
@@ -1296,7 +1354,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             ensureAdminMembership(workspace);
             persistPractice("ws-criteria", "Name", true);
 
-            var request = new UpdatePracticeRequestDTO(null, null, "   ", null, null, null, null, null, null);
+            var request = new UpdatePracticeRequestDTO(null, null, "   ", null, null, null, null, null, null, null);
 
             ProblemDetail problem = webTestClient
                     .patch()
@@ -1337,6 +1395,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     null,
                     null,
+                    null,
                     null);
 
             webTestClient
@@ -1358,7 +1417,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             ensureWorkspaceMembership(workspace, memberUser, WorkspaceMembership.WorkspaceRole.MEMBER);
             persistPractice("forbidden-update", "Name", true);
 
-            var request = new UpdatePracticeRequestDTO("New Name", null, null, null, null, null, null, null, null);
+            var request =
+                    new UpdatePracticeRequestDTO("New Name", null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -1375,7 +1435,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         @Test
         @DisplayName("returns 401 when not logged in")
         void shouldReturnUnauthorized() {
-            var request = new UpdatePracticeRequestDTO("Name", null, null, null, null, null, null, null, null);
+            var request = new UpdatePracticeRequestDTO("Name", null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -1968,7 +2028,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
             practiceRepository.save(practice);
 
-            var request = new UpdatePracticeRequestDTO("Hacked Name", null, null, null, null, null, null, null, null);
+            var request =
+                    new UpdatePracticeRequestDTO("Hacked Name", null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -2026,7 +2087,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .extracting(PracticeBinding::signals, as(InstanceOfAssertFactories.list(SignalName.class)))
                     .containsExactly(ScmSignals.PULL_REQUEST_OPENED, ScmSignals.PULL_REQUEST_REVIEWED);
             assertThat(revisions.get(0).getCriteria()).isEqualTo("Detect if the PR follows best practices");
-            assertThat(revisions.get(0).getReviewRuleFingerprint()).hasSize(67).startsWith("v3:");
+            assertThat(revisions.get(0).getReviewRuleFingerprint()).hasSize(67).startsWith("v4:");
             assertThat(revisions.get(0).getCreatedAt()).isNotNull();
         }
 
@@ -2048,7 +2109,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .expectBody(Void.class);
 
             var request = new UpdatePracticeRequestDTO(
-                    null, null, "A revised detection rubric", null, null, null, null, null, null);
+                    null, null, "A revised detection rubric", null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -2087,8 +2148,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .isCreated()
                     .expectBody(Void.class);
 
-            var request =
-                    new UpdatePracticeRequestDTO("Renamed Practice", null, null, null, null, null, null, null, null);
+            var request = new UpdatePracticeRequestDTO(
+                    "Renamed Practice", null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -2129,7 +2190,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .expectBody(Void.class);
 
             var request = new UpdatePracticeRequestDTO(
-                    null, null, "Detect if the PR follows best practices", null, null, null, null, null, null);
+                    null, null, "Detect if the PR follows best practices", null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -2155,7 +2216,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             practiceService.updatePractice(
                     ctx,
                     "raced-practice",
-                    new UpdatePracticeRequestDTO(null, null, "baseline criteria", null, null, null, null, null, null));
+                    new UpdatePracticeRequestDTO(
+                            null, null, "baseline criteria", null, null, null, null, null, null, null));
 
             int threads = 2;
             var startGate = new CountDownLatch(1);
@@ -2173,7 +2235,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                                     ctx,
                                     "raced-practice",
                                     new UpdatePracticeRequestDTO(
-                                            null, null, criteria, null, null, null, null, null, null));
+                                            null, null, criteria, null, null, null, null, null, null, null));
                         } catch (Throwable t) {
                             failures.add(t);
                         } finally {
@@ -2487,7 +2549,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             persistPractice("guard-update", "Guard Update", true);
 
             var request = new UpdatePracticeRequestDTO(
-                    null, null, null, null, null, null, "This behaviour is PRESENT.", null, null);
+                    null, null, null, null, null, null, "This behaviour is PRESENT.", null, null, null);
 
             webTestClient
                     .patch()

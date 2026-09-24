@@ -284,7 +284,10 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 observation.getSeverity(),
                 observation.getEvidence(),
                 observation.getEvidenceRationale(),
-                new ObservationKeys(observation.getOccurrenceKey(), observation.getRecurrenceKey()));
+                new ObservationKeys(observation.getOccurrenceKey(), observation.getRecurrenceKey()),
+                observation.getPracticeRevision() == null
+                        ? observation.getPractice().getDeliveryBehavior()
+                        : observation.getPracticeRevision().getDeliveryBehavior());
     }
 
     @Override

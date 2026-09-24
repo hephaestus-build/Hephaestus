@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.spi;
 
 import java.time.Instant;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Main SPI for the integration.scm sync engine to discover and manage synchronization
@@ -44,6 +45,9 @@ public interface SyncTargetProvider extends SyncTimestampProvider, BackfillState
     }
 
     void updateSyncTimestamp(Long syncTargetId, SyncType syncType, Instant syncedAt);
+
+    /** Record a failed resource pass, or clear only that pass's error after success. */
+    void updateSyncError(Long syncTargetId, SyncPass pass, @Nullable String error);
 
     /**
      * Gets sync sessions for batch synchronization, scoped to a single provider kind.
@@ -284,6 +288,11 @@ public interface SyncTargetProvider extends SyncTimestampProvider, BackfillState
             return (teamsSyncedAt == null
                     || teamsSyncedAt.isBefore(Instant.now().minusSeconds(cooldownMinutes * SECONDS_PER_MINUTE)));
         }
+    }
+
+    enum SyncPass {
+        RECENT,
+        HISTORICAL_BACKFILL,
     }
 
     /**

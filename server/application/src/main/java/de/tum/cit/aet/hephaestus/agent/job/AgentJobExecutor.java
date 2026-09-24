@@ -756,11 +756,14 @@ public class AgentJobExecutor {
         preparedInputs = evidenceFiles.prepare(job, preparedInputs);
         try {
             // Sandboxes access providers through the LLM proxy with an attempt-scoped credential.
-            String jobToken = workerJwtIssuer.issueForJob(
+            Instant workDeadline = Instant.now()
+                    .plusSeconds(snapshot.timeoutSeconds())
+                    .truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+            String jobToken = workerJwtIssuer.issueForJobUntil(
                     jobId,
                     job.getWorkspace().getId(),
                     job.getRetryCount(),
-                    Duration.ofSeconds(snapshot.timeoutSeconds()).plusMinutes(5));
+                    workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE));
             PracticeAgentRequest adapterRequest = new PracticeAgentRequest(
                     snapshot.apiProtocol(),
                     snapshot.upstreamModelId(),
@@ -777,7 +780,8 @@ public class AgentJobExecutor {
                     preparedInputs.filesOnDisk(),
                     preparedInputs.directories(),
                     agentSpec,
-                    snapshot);
+                    snapshot,
+                    workDeadline);
             persistProvenanceDigests(
                     jobId,
                     job.getJobType(),
@@ -858,9 +862,12 @@ public class AgentJobExecutor {
             Map<String, java.nio.file.Path> handlerFilesOnDisk,
             List<EvidenceDirectory> handlerDirectories,
             PracticeSandboxSpec agentSpec,
-            ConfigSnapshot snapshot) {
+            ConfigSnapshot snapshot,
+            Instant workDeadline) {
         Map<String, byte[]> allInputFiles = new HashMap<>(handlerFiles);
         allInputFiles.putAll(agentSpec.inputFiles());
+        Map<String, String> environment = new HashMap<>(agentSpec.environment());
+        environment.put("SANDBOX_WORK_DEADLINE_MS", Long.toString(workDeadline.toEpochMilli()));
 
         ResourceLimits limits = new ResourceLimits(
                 ResourceLimits.DEFAULT.memoryBytes(),
@@ -872,7 +879,7 @@ public class AgentJobExecutor {
                 jobId,
                 agentSpec.image(),
                 agentSpec.command(),
-                agentSpec.environment(),
+                environment,
                 agentSpec.networkPolicy(),
                 limits,
                 agentSpec.securityProfile(),

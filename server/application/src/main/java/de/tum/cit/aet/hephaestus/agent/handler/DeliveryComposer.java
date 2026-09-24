@@ -39,15 +39,6 @@ class DeliveryComposer {
     static final int MAX_DIFF_NOTE_BODY_LENGTH = 2_000;
 
     static final int MAX_IMPROVEMENT_SUGGESTIONS = 3;
-    static final Set<String> NON_INLINABLE_PRACTICES =
-            Set.of("describe-what-and-why", "commits-are-atomic-and-cohesive", "commit-subjects-explain-each-change");
-    private static final Set<String> EPIC_STRUCTURE_PRACTICES =
-            Set.of("issue-scoped-to-single-concern", "issue-has-checkable-outcome");
-    private static final Map<String, String> CO_OCCURRENCE_REDUNDANT_TO_PREFERRED = Map.ofEntries(
-            Map.entry("ready-and-traceable-handoff", "ships-tests-with-the-change"),
-            // Both are negative on a merge that left the linked issue's checklist untouched; the one about
-            // the work itself carries the message, the bookkeeping one is the same fact said twice.
-            Map.entry("merge-confirms-the-linked-issue-outcome", "honours-linked-issue-acceptance-criteria"));
 
     private static String repoRelative(String path) {
         return path.startsWith(REPO_MOUNT_RELATIVE) ? path.substring(REPO_MOUNT_RELATIVE.length()) : path;
@@ -130,7 +121,7 @@ class DeliveryComposer {
 
         if (ArtifactKinds.ISSUE.equals(artifact)) {
             List<ValidatedObservation> before = negatives;
-            negatives = dedupEpicStructure(negatives);
+            negatives = dedupOverlappingPractices(negatives);
             dedupDropped.addAll(identityDiff(before, negatives));
         }
 
@@ -289,21 +280,13 @@ class DeliveryComposer {
         return key == null ? null : new PracticeDetectionResultParser.WithheldObservation(key, reason);
     }
 
-    private static List<ValidatedObservation> dedupEpicStructure(List<ValidatedObservation> negatives) {
-        long epicCount = negatives.stream()
-                .filter(f -> EPIC_STRUCTURE_PRACTICES.contains(f.practiceSlug()))
-                .count();
-        if (epicCount < 2) {
-            return negatives;
-        }
+    private static List<ValidatedObservation> dedupOverlappingPractices(List<ValidatedObservation> negatives) {
         List<ValidatedObservation> kept = new ArrayList<>(negatives.size());
-        boolean epicKept = false;
+        Set<String> seenGroups = new HashSet<>();
         for (ValidatedObservation f : negatives) {
-            if (EPIC_STRUCTURE_PRACTICES.contains(f.practiceSlug())) {
-                if (epicKept) {
-                    continue;
-                }
-                epicKept = true;
+            String group = f.deliveryBehavior().overlapGroup();
+            if (group != null && !seenGroups.add(group)) {
+                continue;
             }
             kept.add(f);
         }
@@ -313,10 +296,16 @@ class DeliveryComposer {
     private static List<ValidatedObservation> dedupCoOccurringNegatives(List<ValidatedObservation> negatives) {
         Set<String> present =
                 negatives.stream().map(ValidatedObservation::practiceSlug).collect(Collectors.toSet());
-        Set<String> toDrop = CO_OCCURRENCE_REDUNDANT_TO_PREFERRED.entrySet().stream()
-                .filter(e -> present.contains(e.getKey()) && present.contains(e.getValue()))
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toSet());
+        Set<String> toDrop = new HashSet<>();
+        for (ValidatedObservation observation : negatives) {
+            String preferred = observation.deliveryBehavior().redundantToSlug();
+            if (preferred != null
+                    && !preferred.equals(observation.practiceSlug())
+                    && present.contains(preferred)
+                    && !toDrop.contains(preferred)) {
+                toDrop.add(observation.practiceSlug());
+            }
+        }
         if (toDrop.isEmpty()) {
             return negatives;
         }
@@ -462,7 +451,7 @@ class DeliveryComposer {
     }
 
     private static boolean isNonInlinable(ValidatedObservation f) {
-        if (NON_INLINABLE_PRACTICES.contains(f.practiceSlug())) {
+        if (f.deliveryBehavior().summaryOnly()) {
             return true;
         }
         String location = extractPrimaryLocation(f);

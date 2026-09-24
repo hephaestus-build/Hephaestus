@@ -1,3 +1,4 @@
+import { contextFile } from "../lib/context.ts";
 import { text } from "../lib/practice-contract.ts";
 // Precompute FACTS for merge-confirms-the-linked-issue-outcome: every linked issue with a checkable
 // outcome, one row each — its task-list items as captured, ticked and unticked, its state, and how
@@ -33,7 +34,9 @@ export default async function mergeConfirmsTheLinkedIssueOutcome(
 	_repoPath: string,
 	_diffFiles: Map<string, DiffFile>,
 	metadata: PullRequestMetadata,
-	contextDir?: string,
+	contextDir: string | undefined,
+	_changeDir: string | undefined,
+	contextReference: string,
 ) {
 	const body = text(metadata.body);
 	const closing = new Set(closingReferences(body));
@@ -56,7 +59,7 @@ export default async function mergeConfirmsTheLinkedIssueOutcome(
 				? "closed by the provider's link"
 				: howLinked(item.number, closing, named);
 		hints.push({
-			file: `inputs/context/linked_work_items/${String(item.number)}.md`,
+			file: contextFile(contextReference, `linked_work_items/${String(item.number)}.md`),
 			line: items[0]?.line ?? 0,
 			pattern: checkable ? "checkable outcome" : "no checkable outcome",
 			context: `#${String(item.number)} ${item.title} — ${how}; ${String(items.length)} task-list item(s), ${String(ticked)} ticked${heading ? "; an outcome heading" : ""}${subIssues > 0 ? `; ${String(item.subIssuesCompleted ?? 0)}/${String(subIssues)} sub-issues done` : ""}; state ${item.state ?? "unknown"}`,

@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService.HistoryPage;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Duration;
@@ -84,6 +85,9 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
         lenient()
                 .when(monitoredChannelRepository.findConsentState(WS, CHANNEL))
                 .thenReturn(Optional.of(ConsentState.ACTIVE));
+        lenient()
+                .when(monitoredChannelRepository.advanceHistoryWatermark(eq(WS), eq(CHANNEL), any(), any()))
+                .thenReturn(1);
     }
 
     private SlackMonitoredChannel channel(@Nullable Instant announcedAt, @Nullable String watermark) {
@@ -169,6 +173,33 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
         verify(monitoredChannelRepository).advanceHistoryWatermark(eq(WS), eq(CHANNEL), latest.capture(), any());
         assertThat(SlackTs.toEpochMicros(latest.getValue())).isNotNull();
         assertThat(summary.synced()).isEqualTo(1);
+        verify(monitoredChannelRepository, never()).recordHistorySyncError(anyLong(), any(), any());
+    }
+
+    @Test
+    void shouldRecordChannelErrorWithoutAdvancingWatermarkWhenFetchFails() {
+        stubChannels(channel(ANNOUNCED, null));
+        when(slackMessageService.fetchHistoryPage(eq(WS), eq(CHANNEL), anyString(), anyString(), any(), anyInt()))
+                .thenThrow(new IllegalStateException("sensitive provider response"));
+
+        var summary = service.syncWorkspace(WS);
+
+        assertThat(summary.failed()).isEqualTo(1);
+        verify(monitoredChannelRepository)
+                .recordHistorySyncError(WS, CHANNEL, "History sync failed (IllegalStateException)");
+        verify(monitoredChannelRepository, never()).advanceHistoryWatermark(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void shouldNotPersistAnUntrustedSlackErrorMessage() {
+        stubChannels(channel(ANNOUNCED, null));
+        when(slackMessageService.fetchHistoryPage(eq(WS), eq(CHANNEL), anyString(), anyString(), any(), anyInt()))
+                .thenThrow(new SlackSendException(WS, CHANNEL, "token xoxb-secret"));
+
+        service.syncWorkspace(WS);
+
+        verify(monitoredChannelRepository)
+                .recordHistorySyncError(WS, CHANNEL, "History sync failed (SlackSendException)");
     }
 
     @Test
@@ -181,6 +212,21 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
         assertThat(summary.skipped()).isEqualTo(1);
         verify(slackMessageService, never()).fetchHistoryPage(anyLong(), any(), any(), any(), any(), anyInt());
         verify(monitoredChannelRepository, never()).advanceHistoryWatermark(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void shouldNotReportSuccessWhenConsentChangesBeforeWatermarkUpdate() {
+        stubChannels(channel(ANNOUNCED, null));
+        when(slackMessageService.fetchHistoryPage(eq(WS), eq(CHANNEL), anyString(), anyString(), any(), anyInt()))
+                .thenReturn(new HistoryPage(List.of(), null));
+        when(monitoredChannelRepository.advanceHistoryWatermark(eq(WS), eq(CHANNEL), any(), any()))
+                .thenReturn(0);
+
+        var summary = service.syncWorkspace(WS);
+
+        assertThat(summary.synced()).isZero();
+        assertThat(summary.skipped()).isEqualTo(1);
+        verify(monitoredChannelRepository, never()).recordHistorySyncError(anyLong(), any(), any());
     }
 
     @Test
