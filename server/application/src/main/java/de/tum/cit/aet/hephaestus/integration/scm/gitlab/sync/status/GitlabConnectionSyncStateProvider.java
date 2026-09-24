@@ -147,7 +147,7 @@ public class GitlabConnectionSyncStateProvider implements ConnectionSyncStatePro
                 // masking the older one.
                 counts == null ? List.of() : counts.toSyncResourceCounts(issuesSyncedAt, pullRequestsSyncedAt),
                 null,
-                null,
+                monitor.getSyncErrorSummary(),
                 null,
                 null);
     }

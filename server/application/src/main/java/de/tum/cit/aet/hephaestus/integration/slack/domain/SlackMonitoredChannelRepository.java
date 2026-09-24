@@ -49,7 +49,7 @@ public interface SlackMonitoredChannelRepository extends JpaRepository<SlackMoni
      */
     @Modifying
     @Transactional
-    @Query("UPDATE SlackMonitoredChannel c SET c.consentState = "
+    @Query("UPDATE SlackMonitoredChannel c SET c.lastSyncError = null, c.consentState = "
             + "de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState.REVOKED "
             + "WHERE c.workspaceId = :workspaceId AND c.slackChannelId = :slackChannelId")
     int revokeConsent(@Param("workspaceId") Long workspaceId, @Param("slackChannelId") String slackChannelId);
@@ -70,13 +70,25 @@ public interface SlackMonitoredChannelRepository extends JpaRepository<SlackMoni
      */
     @Modifying
     @Transactional
-    @Query("UPDATE SlackMonitoredChannel c SET c.lastHistorySyncedTs = :lastTs, c.historySyncedAt = :syncedAt "
-            + "WHERE c.workspaceId = :workspaceId AND c.slackChannelId = :slackChannelId")
+    @Query(
+            "UPDATE SlackMonitoredChannel c SET c.lastHistorySyncedTs = :lastTs, c.historySyncedAt = :syncedAt, c.lastSyncError = null "
+                    + "WHERE c.workspaceId = :workspaceId AND c.slackChannelId = :slackChannelId AND c.consentState = "
+                    + "de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState.ACTIVE")
     int advanceHistoryWatermark(
             @Param("workspaceId") Long workspaceId,
             @Param("slackChannelId") String slackChannelId,
             @Param("lastTs") String lastTs,
             @Param("syncedAt") Instant syncedAt);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE SlackMonitoredChannel c SET c.lastSyncError = :error "
+            + "WHERE c.workspaceId = :workspaceId AND c.slackChannelId = :slackChannelId AND c.consentState = "
+            + "de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState.ACTIVE")
+    int recordHistorySyncError(
+            @Param("workspaceId") Long workspaceId,
+            @Param("slackChannelId") String slackChannelId,
+            @Param("error") String error);
 
     /** Heal a stale channel name (Slack {@code channel_rename}, or the metadata refresh). */
     @Modifying
