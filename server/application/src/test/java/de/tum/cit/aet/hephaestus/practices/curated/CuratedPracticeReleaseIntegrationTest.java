@@ -92,6 +92,46 @@ class CuratedPracticeReleaseIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(() -> releases.practiceRelease(SLUG)).isInstanceOf(EntityNotFoundException.class);
     }
 
+    @Test
+    void movingACustomizedPracticeDoesNotAcknowledgeAPendingRelease() {
+        customizeFromOlderBundle();
+        PracticeReleaseProposalDTO pending = releases.practiceRelease(SLUG);
+        String destination = otherGroup();
+
+        catalog.placePractice(SLUG, matchCatalog(), destination, 0);
+
+        PracticeReleaseProposalDTO afterMove = releases.practiceRelease(SLUG);
+        assertThat(afterMove.base()).isEqualTo(pending.base());
+        assertThat(afterMove.offered()).isEqualTo(pending.offered());
+        assertThat(afterMove.current().groupSlug()).isEqualTo(destination);
+        assertThat(catalog.practice(SLUG).state()).isEqualTo(CatalogEntryState.UPDATE_WAITING);
+    }
+
+    @Test
+    void movingABundledPracticeFirstRecordsItsAdoptedBase() {
+        PracticeDefinition shipped = catalog.practice(SLUG).shipped();
+        assertThat(shipped).isNotNull();
+
+        catalog.placePractice(SLUG, matchCatalog(), otherGroup(), 0);
+
+        CuratedPracticeOverride saved = overrides.findBySlug(SLUG).orElseThrow();
+        assertThat(saved.getAdoptedBase()).isEqualTo(shipped);
+        assertThat(saved.getAcceptedBundledDigest()).isEqualTo(CuratedDefinitionDigest.of(SLUG, shipped));
+    }
+
+    private String otherGroup() {
+        String current = catalog.practice(SLUG).effective().groupSlug();
+        return catalog.catalog().groups().stream()
+                .map(CatalogEntry::slug)
+                .filter(group -> !group.equals(current))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private EntityTagPrecondition matchCatalog() {
+        return EntityTagPrecondition.parse("\"" + catalog.catalog().etag() + "\"");
+    }
+
     private void customizeFromOlderBundle() {
         PracticeDefinition shipped = catalog.practice(SLUG).effective();
         PracticeDefinition old = withCriteria(shipped, "Earlier criteria");

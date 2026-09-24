@@ -136,6 +136,15 @@ public class CuratedPracticeOverride {
         this.updatedAt = Objects.requireNonNull(now, "now");
     }
 
+    public void writeLocalChange(PracticeDefinition definition, @Nullable PracticeDefinition shipped, Instant now) {
+        if (definition() == null && shipped != null) {
+            adoptBundledBase(shipped);
+        } else {
+            backfillBase(shipped);
+        }
+        write(definition, acceptedBundledDigest, now);
+    }
+
     public void clearDefinition(Instant now) {
         this.name = null;
         this.artifactKind = null;
