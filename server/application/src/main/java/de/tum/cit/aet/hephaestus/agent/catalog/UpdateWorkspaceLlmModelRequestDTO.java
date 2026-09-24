@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -61,4 +62,10 @@ public record UpdateWorkspaceLlmModelRequestDTO(
         @Nullable
         @Size(max = 500)
         @Schema(description = "Note; required when the model is free (e.g. self-hosted, no cost)")
-        String priceNote) {}
+        String priceNote,
+
+        @Nullable @Schema(description = "Model brand declared by an admin; null keeps current")
+        AiModelBrand brand,
+
+        @Nullable @Schema(description = "Clear the declared model brand")
+        Boolean clearBrand) {}

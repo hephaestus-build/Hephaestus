@@ -135,4 +135,14 @@
             </sql>
         </rollback>
     </changeSet>
+    <changeSet id="1789038452155-19" author="hephaestus">
+        <addColumn tableName="llm_model">
+            <column name="brand" type="VARCHAR(16)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789038452155-20" author="hephaestus">
+        <addColumn tableName="workspace_llm_model">
+            <column name="brand" type="VARCHAR(16)"/>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>

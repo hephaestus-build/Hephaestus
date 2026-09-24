@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -26,6 +27,9 @@ public record LlmModelDTO(
 
         @NonNull @Schema(description = "Human-readable name")
         String displayName,
+
+        @Nullable @Schema(description = "Model brand declared by an admin; display only")
+        AiModelBrand brand,
 
         @NonNull @Schema(description = "Upstream provider model id")
         String upstreamModelId,
@@ -74,6 +78,7 @@ public record LlmModelDTO(
                 model.getConnection().getDisplayName(),
                 model.getSlug(),
                 model.getDisplayName(),
+                model.getBrand(),
                 model.getUpstreamModelId(),
                 model.getContextWindow(),
                 model.getMaxOutputTokens(),

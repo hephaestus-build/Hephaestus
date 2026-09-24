@@ -96,35 +96,17 @@ class WorkspaceOnboardingService {
     @Transactional(readOnly = true)
     public AccountAiChoiceDTO accountChoice(long accountId) {
         var row = choices.findById(accountId).orElse(null);
-        return new AccountAiChoiceDTO(
-                row == null ? null : row.getAiChoice(),
-                row == null ? null : row.getUpdatedAt(),
-                accountOptions(accountId));
+        return new AccountAiChoiceDTO(row == null ? null : row.getAiChoice(), row == null ? null : row.getUpdatedAt());
     }
 
     @Transactional
     public AccountAiChoiceDTO chooseForAccount(long accountId, MemberAiChoice choice) {
         var row = writeChoice(accountId, choice);
-        return new AccountAiChoiceDTO(row.getAiChoice(), row.getUpdatedAt(), accountOptions(accountId));
-    }
-
-    /** Each answer's models across the account's own workspaces, each model named once. */
-    private List<AccountAiChoiceDTO.AccountAiOptionDTO> accountOptions(long accountId) {
-        var byChoice = new java.util.LinkedHashMap<
-                MemberAiChoice, java.util.LinkedHashSet<WorkspaceOnboardingDTO.WorkspaceAiModelDTO>>();
-        for (var membership : memberships.membershipsForAccount(accountId)) {
-            for (var option : availability.options(membership.workspaceId())) {
-                var models = byChoice.computeIfAbsent(option.choice(), ignored -> new java.util.LinkedHashSet<>());
-                option.models().forEach(model -> models.add(toDTO(model)));
-            }
-        }
-        return byChoice.entrySet().stream()
-                .map(entry -> new AccountAiChoiceDTO.AccountAiOptionDTO(entry.getKey(), List.copyOf(entry.getValue())))
-                .toList();
+        return new AccountAiChoiceDTO(row.getAiChoice(), row.getUpdatedAt());
     }
 
     private static WorkspaceOnboardingDTO.WorkspaceAiModelDTO toDTO(WorkspaceAiAvailability.Model model) {
-        return new WorkspaceOnboardingDTO.WorkspaceAiModelDTO(model.name(), model.maker(), model.platform());
+        return new WorkspaceOnboardingDTO.WorkspaceAiModelDTO(model.name(), model.brand());
     }
 
     private AccountAiChoice writeChoice(long accountId, MemberAiChoice choice) {

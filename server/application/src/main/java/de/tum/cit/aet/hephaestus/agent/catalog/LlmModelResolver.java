@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -83,18 +84,15 @@ public class LlmModelResolver {
     }
 
     @Transactional(readOnly = true)
-    public DataHandlingTier dataHandlingTier(ConnectionRef ref) {
-        if (ref.modelId() == null || ref.workspaceId() == null) return DataHandlingTier.UNDECLARED;
+    public Optional<DataHandlingTier> dataHandlingTier(ConnectionRef ref) {
+        if (ref.modelId() == null || ref.workspaceId() == null) return Optional.empty();
         if (ref.scope() == FundingSource.INSTANCE) {
-            return llmModelRepository
-                    .findById(ref.modelId())
-                    .map(LlmModel::getDataHandlingTier)
-                    .orElse(DataHandlingTier.UNDECLARED);
+            return llmModelRepository.findById(ref.modelId()).map(LlmModel::getDataHandlingTier);
         }
+        if (ref.scope() != FundingSource.WORKSPACE) return Optional.empty();
         return workspaceLlmModelRepository
                 .findByIdAndWorkspaceId(ref.modelId(), ref.workspaceId())
-                .map(WorkspaceLlmModel::getDataHandlingTier)
-                .orElse(DataHandlingTier.UNDECLARED);
+                .map(WorkspaceLlmModel::getDataHandlingTier);
     }
 
     private boolean isUsable(LlmModel model, Long workspaceId) {

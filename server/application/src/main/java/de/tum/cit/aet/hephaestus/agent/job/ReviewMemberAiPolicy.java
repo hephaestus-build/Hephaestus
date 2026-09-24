@@ -53,7 +53,6 @@ public class ReviewMemberAiPolicy {
         var decision = preferences.forDeveloper(
                 job.getWorkspace().getId(), subject(job.getWorkspace().getId(), job.getJobType(), job.getMetadata()));
         if (!decision.permitsAi()) return false;
-        if (decision.choice() == null && !decision.choiceRequired()) return true;
         if (job.getConfigSnapshot() == null) return false;
         try {
             var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);

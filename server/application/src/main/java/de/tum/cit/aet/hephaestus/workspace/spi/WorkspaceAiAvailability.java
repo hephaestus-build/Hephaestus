@@ -10,7 +10,6 @@ public interface WorkspaceAiAvailability {
     /** {@code models} are the ones that would serve this answer today, practice reviews first. */
     record Option(MemberAiChoice choice, boolean practiceReviewsReady, boolean mentorReady, List<Model> models) {}
 
-    /** A model a developer may see by name, with the marks of who made it and where it runs. */
-    record Model(
-            String name, @Nullable AiVendor maker, @Nullable AiVendor platform) {}
+    /** A model a developer may see by name, with its declared brand when known. */
+    record Model(String name, @Nullable AiModelBrand brand) {}
 }

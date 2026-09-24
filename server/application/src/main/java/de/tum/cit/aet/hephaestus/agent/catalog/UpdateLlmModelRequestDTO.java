@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -38,4 +39,10 @@ public record UpdateLlmModelRequestDTO(
         String dataHandlingNote,
 
         @Nullable @Schema(description = "Active toggle (off = existing settings stop working)")
-        Boolean enabled) {}
+        Boolean enabled,
+
+        @Nullable @Schema(description = "Model brand declared by an admin; null keeps current")
+        AiModelBrand brand,
+
+        @Nullable @Schema(description = "Clear the declared model brand")
+        Boolean clearBrand) {}

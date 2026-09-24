@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
@@ -92,6 +93,11 @@ public class WorkspaceLlmModel {
     @Enumerated(EnumType.STRING)
     @Column(name = "reasoning_effort", length = ReasoningEffort.MAX_LENGTH)
     private ReasoningEffort reasoningEffort;
+
+    @Nullable
+    @Enumerated(EnumType.STRING)
+    @Column(name = "brand", length = 16)
+    private AiModelBrand brand;
 
     @Embedded
     private DataHandlingFacts dataHandling = new DataHandlingFacts();

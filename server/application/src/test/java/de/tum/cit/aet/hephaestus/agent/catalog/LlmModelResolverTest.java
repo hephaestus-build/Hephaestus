@@ -146,11 +146,11 @@ class LlmModelResolverTest extends BaseUnitTest {
     @Test
     void shouldReportTheModelsDerivedTierForAConnectionRef() {
         var ref = new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 10L, 20L, 30L);
-        assertThat(resolver.dataHandlingTier(ref)).isEqualTo(DataHandlingTier.UNDECLARED);
+        assertThat(resolver.dataHandlingTier(ref)).contains(DataHandlingTier.UNDECLARED);
         model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
-        assertThat(resolver.dataHandlingTier(ref)).isEqualTo(DataHandlingTier.CLOUD);
+        assertThat(resolver.dataHandlingTier(ref)).contains(DataHandlingTier.CLOUD);
         assertThat(resolver.dataHandlingTier(LlmModelResolver.ConnectionRef.NONE))
-                .isEqualTo(DataHandlingTier.UNDECLARED);
+                .isEmpty();
     }
 
     @Test

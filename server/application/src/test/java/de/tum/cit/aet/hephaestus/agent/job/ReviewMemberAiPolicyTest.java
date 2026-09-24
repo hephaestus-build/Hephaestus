@@ -5,7 +5,9 @@ import static org.mockito.Mockito.*;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
+import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -99,5 +101,50 @@ class ReviewMemberAiPolicyTest extends BaseUnitTest {
                 .thenReturn(new MemberAiPreferences.Decision(true, MemberAiChoice.IN_HOUSE_ONLY));
         assertThat(policy.allowsResult(job)).isFalse();
         verifyNoInteractions(routing);
+    }
+
+    @Test
+    void shouldRejectMissingSnapshotForUnansweredOptionalChoice() {
+        var workspace = new Workspace();
+        workspace.setId(1L);
+        var job = new AgentJob();
+        job.setWorkspace(workspace);
+        job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        job.setMetadata(mapper.createObjectNode().put("about_user_id", 20L));
+        when(preferences.forDeveloper(1L, 20L)).thenReturn(new MemberAiPreferences.Decision(false, null));
+        assertThat(policy.allowsResult(job)).isFalse();
+        verifyNoInteractions(routing);
+    }
+
+    @Test
+    void shouldRecheckSnapshotModelForUnansweredOptionalChoice() {
+        var workspace = new Workspace();
+        workspace.setId(1L);
+        var job = new AgentJob();
+        job.setWorkspace(workspace);
+        job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        job.setMetadata(mapper.createObjectNode().put("about_user_id", 20L));
+        job.setConfigSnapshot(new ConfigSnapshot(
+                        ConfigSnapshot.SCHEMA_VERSION,
+                        "OPENAI",
+                        "https://example.test/v1",
+                        "model",
+                        null,
+                        null,
+                        null,
+                        null,
+                        FundingSource.INSTANCE,
+                        2L,
+                        3L,
+                        1L,
+                        30,
+                        false,
+                        null,
+                        null)
+                .toJson(mapper));
+        when(preferences.forDeveloper(1L, 20L)).thenReturn(new MemberAiPreferences.Decision(false, null));
+
+        assertThat(policy.allowsResult(job)).isFalse();
+        verify(routing).allows(eq(1L), eq(20L), any());
     }
 }

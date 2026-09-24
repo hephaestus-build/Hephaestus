@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import java.math.BigDecimal;
 import org.jspecify.annotations.Nullable;
 
@@ -12,6 +13,7 @@ record WorkspaceLlmModelSnapshot(
         String slug,
         String displayName,
         String upstreamModelId,
+        @Nullable AiModelBrand brand,
         @Nullable Integer contextWindow,
         @Nullable Integer maxOutputTokens,
         @Nullable ReasoningEffort reasoningEffort,
@@ -31,6 +33,7 @@ record WorkspaceLlmModelSnapshot(
                 m.getSlug(),
                 m.getDisplayName(),
                 m.getUpstreamModelId(),
+                m.getBrand(),
                 m.getContextWindow(),
                 m.getMaxOutputTokens(),
                 m.getReasoningEffort(),

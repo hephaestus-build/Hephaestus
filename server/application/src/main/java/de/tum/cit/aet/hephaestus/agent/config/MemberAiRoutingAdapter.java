@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.config;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import de.tum.cit.aet.hephaestus.workspace.spi.AiVendor;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
@@ -39,7 +38,8 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
         if (choice == null) {
             return bindings.findByWorkspaceIdAndPurposeAndDataHandlingTier(
                             workspaceId, purpose, DataHandlingTier.UNDECLARED)
-                    .filter(this::ready);
+                    .filter(this::ready)
+                    .filter(binding -> currentTier(binding) == DataHandlingTier.UNDECLARED);
         }
         return choice.ceiling()
                 .flatMap(ceiling -> loosestWithin(bindings.findByWorkspaceIdAndPurpose(workspaceId, purpose), ceiling));
@@ -49,10 +49,14 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
     public boolean allows(long workspaceId, @Nullable Long developerId, LlmModelResolver.ConnectionRef model) {
         var decision = preferences.forDeveloper(workspaceId, developerId);
         if (!decision.permitsAi()) return false;
+        if (model.workspaceId() == null || model.workspaceId() != workspaceId) return false;
+        var tier = models.dataHandlingTier(model);
         var choice = decision.choice();
-        if (choice == null) return true;
+        if (choice == null)
+            return tier.filter(DataHandlingTier.UNDECLARED::equals).isPresent();
         return choice.ceiling()
-                .map(ceiling -> models.dataHandlingTier(model).isWithin(ceiling))
+                .map(ceiling ->
+                        tier.filter(current -> current.isWithin(ceiling)).isPresent())
                 .orElse(false);
     }
 
@@ -83,21 +87,15 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
         return List.copyOf(options);
     }
 
-    /** The name and marks a developer sees; the connection's URL stays on the server. */
+    /** The name and declared brand a developer sees; the connection URL stays on the server. */
     private static Optional<WorkspaceAiAvailability.Model> model(WorkspaceAgentBinding binding) {
         var instance = binding.getInstanceModel();
         if (instance != null) {
-            return Optional.of(new WorkspaceAiAvailability.Model(
-                    instance.getDisplayName(),
-                    AiVendor.ofModel(instance.getUpstreamModelId()),
-                    AiVendor.ofHost(instance.getConnection().getBaseUrl())));
+            return Optional.of(new WorkspaceAiAvailability.Model(instance.getDisplayName(), instance.getBrand()));
         }
         var own = binding.getWorkspaceModel();
         if (own != null) {
-            return Optional.of(new WorkspaceAiAvailability.Model(
-                    own.getDisplayName(),
-                    AiVendor.ofModel(own.getUpstreamModelId()),
-                    AiVendor.ofHost(own.getConnection().getBaseUrl())));
+            return Optional.of(new WorkspaceAiAvailability.Model(own.getDisplayName(), own.getBrand()));
         }
         return Optional.empty();
     }
@@ -118,5 +116,12 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
 
     private boolean ready(WorkspaceAgentBinding binding) {
         return binding.isEnabled() && models.isAvailable(binding);
+    }
+
+    private static DataHandlingTier currentTier(WorkspaceAgentBinding binding) {
+        var instance = binding.getInstanceModel();
+        if (instance != null) return instance.getDataHandlingTier();
+        var own = binding.getWorkspaceModel();
+        return own != null ? own.getDataHandlingTier() : DataHandlingTier.UNDECLARED;
     }
 }

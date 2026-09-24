@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
 import java.util.List;
@@ -90,7 +91,8 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
 
     private CreateWorkspaceLlmModelRequestDTO enabledUnpricedCreateRequest() {
         return new CreateWorkspaceLlmModelRequestDTO(
-                "gpt-5", "GPT-5", "gpt-5", null, null, null, null, null, true, null, null, null, null, null, null);
+                "gpt-5", "GPT-5", "gpt-5", null, null, null, null, null, true, null, null, null, null, null, null,
+                null);
     }
 
     private CreateWorkspaceLlmModelRequestDTO createRequest(
@@ -110,6 +112,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                 pricingMode,
                 per1mInputUsd,
                 per1mOutputUsd,
+                null,
                 null,
                 null,
                 null);
@@ -238,6 +241,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     new BigDecimal("6.00"),
                     null,
                     null,
+                    null,
                     null);
 
             assertThatThrownBy(() -> modelService.create(workspaceContext, 50L, pricedButOffline))
@@ -262,7 +266,22 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
             UpdateWorkspaceLlmModelRequestDTO request = new UpdateWorkspaceLlmModelRequestDTO(
-                    "New name", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    "New name",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
 
@@ -285,10 +304,52 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     workspaceContext,
                     7L,
                     new UpdateWorkspaceLlmModelRequestDTO(
-                            "New name", null, null, null, null, null, null, null, null, null, null, null, null, null));
+                            "New name",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null));
 
             assertThat(result.getDataHandlingTier()).isEqualTo(DataHandlingTier.UNDECLARED);
             assertThat(result.getDataHandling().getNote()).isNull();
+        }
+
+        @Test
+        void shouldKeepAndClearDeclaredBrandOnUpdate() {
+            WorkspaceLlmModel existing = new WorkspaceLlmModel();
+            existing.setId(7L);
+            existing.setWorkspace(connection().getWorkspace());
+            existing.setConnection(connection());
+            existing.setBrand(AiModelBrand.QWEN);
+            when(modelRepository.findByIdAndWorkspaceIdForUpdate(7L, 1L)).thenReturn(Optional.of(existing));
+            when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            modelService.update(
+                    workspaceContext,
+                    7L,
+                    new UpdateWorkspaceLlmModelRequestDTO(
+                            "Renamed", null, null, null, null, null, null, null, null, null, null, null, null, null,
+                            null, null));
+            assertThat(existing.getBrand()).isEqualTo(AiModelBrand.QWEN);
+
+            modelService.update(
+                    workspaceContext,
+                    7L,
+                    new UpdateWorkspaceLlmModelRequestDTO(
+                            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                            true));
+            assertThat(existing.getBrand()).isNull();
         }
     }
 
@@ -334,7 +395,8 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
             UpdateWorkspaceLlmModelRequestDTO request = new UpdateWorkspaceLlmModelRequestDTO(
-                    "Renamed", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    "Renamed", null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                    null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
 

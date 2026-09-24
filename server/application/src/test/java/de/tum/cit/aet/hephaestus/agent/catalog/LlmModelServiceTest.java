@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
 import java.util.List;
@@ -340,7 +341,7 @@ class LlmModelServiceTest extends BaseUnitTest {
 
         private CreateLlmModelRequestDTO createRequest(String upstreamModelId) {
             return new CreateLlmModelRequestDTO(
-                    "gpt-5-eu", "GPT-5 EU", upstreamModelId, null, null, null, null, null, null);
+                    "gpt-5-eu", "GPT-5 EU", upstreamModelId, null, null, null, null, null, null, null);
         }
 
         @Test
@@ -349,7 +350,7 @@ class LlmModelServiceTest extends BaseUnitTest {
             model.getConnection().setEnabled(true);
             when(priceRepository.findByModelIdAndEffectiveToIsNull(7L)).thenReturn(Optional.empty());
             UpdateLlmModelRequestDTO request =
-                    new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null);
+                    new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null, null, null);
 
             assertThatThrownBy(() -> modelService.update(7L, request))
                     .isInstanceOf(IllegalArgumentException.class)
@@ -376,7 +377,7 @@ class LlmModelServiceTest extends BaseUnitTest {
         void updateKeepsImmutableUpstreamModelIdAndAuditsTheModelAndConnectionItChanged() {
             stubModelSavePassthrough();
             UpdateLlmModelRequestDTO request =
-                    new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null);
+                    new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null, null, null);
 
             LlmModel result = modelService.update(7L, request);
 
@@ -393,13 +394,27 @@ class LlmModelServiceTest extends BaseUnitTest {
             LlmModel declared = modelService.update(
                     7L,
                     new UpdateLlmModelRequestDTO(
-                            null, null, null, null, null, LlmDataOperator.OWN_ORGANISATION, null, null));
+                            null, null, null, null, null, LlmDataOperator.OWN_ORGANISATION, null, null, null, null));
             assertThat(declared.getDataHandlingTier()).isEqualTo(DataHandlingTier.IN_HOUSE);
             assertThat(declared.getDataHandling().getNote()).isNull();
 
             LlmModel undeclared = modelService.update(
-                    7L, new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null));
+                    7L, new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null, null, null));
             assertThat(undeclared.getDataHandlingTier()).isEqualTo(DataHandlingTier.UNDECLARED);
+        }
+
+        @Test
+        void shouldKeepAndClearDeclaredBrandOnUpdate() {
+            stubModelSavePassthrough();
+            model.setBrand(AiModelBrand.QWEN);
+
+            modelService.update(
+                    7L, new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null, null, null));
+            assertThat(model.getBrand()).isEqualTo(AiModelBrand.QWEN);
+
+            modelService.update(
+                    7L, new UpdateLlmModelRequestDTO(null, null, null, null, null, null, null, null, null, true));
+            assertThat(model.getBrand()).isNull();
         }
 
         @Test
@@ -415,7 +430,7 @@ class LlmModelServiceTest extends BaseUnitTest {
             LlmModel result = modelService.create(
                     3L,
                     new CreateLlmModelRequestDTO(
-                            "gpt-5-eu", "GPT-5 EU", "gpt-5", null, null, ReasoningEffort.HIGH, null, null, null));
+                            "gpt-5-eu", "GPT-5 EU", "gpt-5", null, null, ReasoningEffort.HIGH, null, null, null, null));
 
             assertThat(result.getReasoningEffort()).isEqualTo(ReasoningEffort.HIGH);
         }
@@ -425,21 +440,25 @@ class LlmModelServiceTest extends BaseUnitTest {
             stubModelSavePassthrough();
             model.setReasoningEffort(ReasoningEffort.LOW);
 
-            modelService.update(7L, new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null));
+            modelService.update(
+                    7L, new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null, null, null));
             assertThat(model.getReasoningEffort()).isEqualTo(ReasoningEffort.LOW);
 
             modelService.update(
-                    7L, new UpdateLlmModelRequestDTO(null, null, null, ReasoningEffort.XHIGH, null, null, null, null));
+                    7L,
+                    new UpdateLlmModelRequestDTO(
+                            null, null, null, ReasoningEffort.XHIGH, null, null, null, null, null, null));
             assertThat(model.getReasoningEffort()).isEqualTo(ReasoningEffort.XHIGH);
 
-            modelService.update(7L, new UpdateLlmModelRequestDTO(null, null, null, null, true, null, null, null));
+            modelService.update(
+                    7L, new UpdateLlmModelRequestDTO(null, null, null, null, true, null, null, null, null, null));
             assertThat(model.getReasoningEffort()).isNull();
         }
 
         @Test
         void refusesToCreateAModelThatIsAlreadyActive() {
-            CreateLlmModelRequestDTO active =
-                    new CreateLlmModelRequestDTO("gpt-5-eu", "GPT-5 EU", "gpt-5", null, null, null, null, null, true);
+            CreateLlmModelRequestDTO active = new CreateLlmModelRequestDTO(
+                    "gpt-5-eu", "GPT-5 EU", "gpt-5", null, null, null, null, null, true, null);
 
             assertThatThrownBy(() -> modelService.create(3L, active))
                     .isInstanceOf(IllegalArgumentException.class)

@@ -13,9 +13,8 @@ import lombok.ToString;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The one fact an admin declares about a model's data handling, plus an admin-only note. Declaring
- * it is also the admin's assertion that the model's terms rule out training on what it receives.
- * {@link #tier()} is the only place the fact turns into a {@link DataHandlingTier}.
+ * The operator an admin declares for a model, plus an admin-only note. This does not assert
+ * provider training or retention terms. {@link #tier()} maps the declaration to a routing tier.
  */
 @Embeddable
 @Getter

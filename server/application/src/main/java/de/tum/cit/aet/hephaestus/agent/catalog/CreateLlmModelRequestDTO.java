@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -39,4 +40,7 @@ public record CreateLlmModelRequestDTO(
         String dataHandlingNote,
 
         @Nullable @Schema(description = "Whether the model is active (default false)")
-        Boolean enabled) {}
+        Boolean enabled,
+
+        @Nullable @Schema(description = "Model brand declared by an admin; display only")
+        AiModelBrand brand) {}

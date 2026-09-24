@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.time.Instant;
 import java.util.List;
@@ -85,7 +86,8 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 null,
                 null,
                 null,
-                "Test-owned model has no per-token charge");
+                "Test-owned model has no per-token charge",
+                null);
         return Objects.requireNonNull(webTestClient
                 .post()
                 .uri(
@@ -149,7 +151,22 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .isEqualTo(1);
 
         var updateRequest = new UpdateWorkspaceLlmModelRequestDTO(
-                "Renamed Model", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                "Renamed Model",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         webTestClient
                 .patch()
                 .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), created.id())
@@ -202,7 +219,8 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 null,
                 null,
                 null,
-                "Test-owned model has no per-token charge");
+                "Test-owned model has no per-token charge",
+                AiModelBrand.QWEN);
         WorkspaceLlmModelDTO created = Objects.requireNonNull(webTestClient
                 .post()
                 .uri(
@@ -221,6 +239,12 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(created.operatedBy()).isEqualTo(LlmDataOperator.PROVIDER);
         assertThat(created.dataHandlingNote()).isEqualTo("EU region, DPA renews next spring");
         assertThat(created.dataHandlingTier()).isEqualTo(DataHandlingTier.CLOUD);
+        assertThat(created.brand()).isEqualTo(AiModelBrand.QWEN);
+        assertThat(workspaceLlmModelRepository
+                        .findByIdAndWorkspaceId(created.id(), workspace.getId())
+                        .orElseThrow()
+                        .getBrand())
+                .isEqualTo(AiModelBrand.QWEN);
 
         DataHandlingFacts stored = workspaceLlmModelRepository
                 .findByIdAndWorkspaceId(created.id(), workspace.getId())
@@ -243,7 +267,9 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .jsonPath("$.dataHandlingNote")
                 .doesNotExist()
                 .jsonPath("$.dataHandlingTier")
-                .isEqualTo("CLOUD");
+                .isEqualTo("CLOUD")
+                .jsonPath("$.brand")
+                .isEqualTo("QWEN");
 
         webTestClient
                 .patch()
@@ -251,7 +277,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateWorkspaceLlmModelRequestDTO(
-                        null, null, null, null, null, null, null, null, null, null, null, null, null, null))
+                        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -371,7 +397,8 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateWorkspaceLlmModelRequestDTO(
-                        null, null, null, null, null, null, null, false, null, null, null, null, null, null))
+                        null, null, null, null, null, null, null, false, null, null, null, null, null, null, null,
+                        null))
                 .exchange()
                 .expectStatus()
                 .isOk()

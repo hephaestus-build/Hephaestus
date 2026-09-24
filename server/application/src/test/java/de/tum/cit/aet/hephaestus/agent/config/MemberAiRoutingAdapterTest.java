@@ -3,20 +3,23 @@ package de.tum.cit.aet.hephaestus.agent.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import de.tum.cit.aet.hephaestus.workspace.spi.AiVendor;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAiAvailability;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -135,7 +138,9 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         var model = new LlmModelResolver.ConnectionRef(FundingSource.WORKSPACE, 8L, 9L, 1L);
         chose(MemberAiChoice.IN_HOUSE_ONLY);
         when(models.dataHandlingTier(model))
-                .thenReturn(DataHandlingTier.IN_HOUSE, DataHandlingTier.CLOUD, DataHandlingTier.UNDECLARED);
+                .thenReturn(Optional.of(DataHandlingTier.IN_HOUSE))
+                .thenReturn(Optional.of(DataHandlingTier.CLOUD))
+                .thenReturn(Optional.empty());
         assertThat(routing.allows(1L, 20L, model)).isTrue();
         assertThat(routing.allows(1L, 20L, model)).isFalse();
         assertThat(routing.allows(1L, 20L, model)).isFalse();
@@ -145,11 +150,21 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
     void shouldServeTheUndeclaredSlotOnlyToMembersWhoNeverHadToChoose() {
         when(preferences.forDeveloper(1L, 20L)).thenReturn(new MemberAiPreferences.Decision(false, null));
         var binding = ready(DataHandlingTier.UNDECLARED);
+        var model = new LlmModel();
+        binding.setInstanceModel(model);
         when(bindings.findByWorkspaceIdAndPurposeAndDataHandlingTier(
                         1L, AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.of(binding));
         assertThat(routing.binding(1L, AgentPurpose.MENTOR, 20L)).contains(binding);
-        assertThat(routing.allows(1L, 20L, LlmModelResolver.ConnectionRef.NONE)).isTrue();
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
+        assertThat(routing.binding(1L, AgentPurpose.MENTOR, 20L)).isEmpty();
+        var ref = new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 8L, 9L, 1L);
+        when(models.dataHandlingTier(ref))
+                .thenReturn(Optional.of(DataHandlingTier.UNDECLARED))
+                .thenReturn(Optional.of(DataHandlingTier.CLOUD));
+        assertThat(routing.allows(1L, 20L, ref)).isTrue();
+        assertThat(routing.allows(1L, 20L, ref)).isFalse();
+        assertThat(routing.allows(1L, 20L, LlmModelResolver.ConnectionRef.NONE)).isFalse();
         verify(bindings, never()).findByWorkspaceIdAndPurpose(anyLong(), any());
     }
 
@@ -184,33 +199,47 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNameTheModelsAnAnswerWouldUseWithTheirVendorsButNoUrl() {
+    void shouldUseDeclaredBrandWithoutInferringHost() {
         var workspace = new Workspace();
         workspace.getFeatures().setMentorEnabled(true);
         workspace.getFeatures().setPracticesEnabled(true);
         when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
         var inHouse = ready(DataHandlingTier.IN_HOUSE);
-        inHouse.setInstanceModel(model("Llama 3.3", "meta-llama/Llama-3.3-70B", "http://ollama.internal:11434/v1"));
+        inHouse.setInstanceModel(
+                model("Llama 3.3", "meta-llama/Llama-3.3-70B", "http://ollama.internal:11434/v1", AiModelBrand.META));
         var cloud = ready(DataHandlingTier.CLOUD);
-        cloud.setInstanceModel(model("GPT-5", "gpt-5", "https://acme.openai.azure.com/openai"));
+        cloud.setInstanceModel(model("GPT-5", "gpt-5", "https://acme.openai.azure.com/openai", AiModelBrand.OPENAI));
         when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
                 .thenReturn(List.of(inHouse, cloud));
         when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(inHouse));
         var options = routing.options(1L);
         assertThat(options.get(0).models())
-                .containsExactly(new WorkspaceAiAvailability.Model("Llama 3.3", AiVendor.META, AiVendor.OLLAMA));
+                .containsExactly(new WorkspaceAiAvailability.Model("Llama 3.3", AiModelBrand.META));
         // Cloud serves reviews from the cloud row and Heph from the in-house row, each named once.
         assertThat(options.get(1).models())
                 .containsExactly(
-                        new WorkspaceAiAvailability.Model("GPT-5", AiVendor.OPENAI, AiVendor.AZURE),
-                        new WorkspaceAiAvailability.Model("Llama 3.3", AiVendor.META, AiVendor.OLLAMA));
+                        new WorkspaceAiAvailability.Model("GPT-5", AiModelBrand.OPENAI),
+                        new WorkspaceAiAvailability.Model("Llama 3.3", AiModelBrand.META));
     }
 
-    private static LlmModel model(String name, String upstreamId, String baseUrl) {
+    @Test
+    void shouldLeaveBrandUnknownWhenAdminDidNotDeclareIt() {
+        var workspace = new Workspace();
+        workspace.getFeatures().setMentorEnabled(true);
+        when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
+        var cloud = ready(DataHandlingTier.CLOUD);
+        cloud.setInstanceModel(model("Custom model", "gpt-5", "https://api.openai.com/v1", null));
+        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR)).thenReturn(List.of(cloud));
+        assertThat(routing.options(1L).get(1).models())
+                .containsExactly(new WorkspaceAiAvailability.Model("Custom model", null));
+    }
+
+    private static LlmModel model(String name, String upstreamId, String baseUrl, @Nullable AiModelBrand brand) {
         var connection = new LlmConnection();
         connection.setBaseUrl(baseUrl);
         var model = new LlmModel();
         model.setDisplayName(name);
+        model.setBrand(brand);
         model.setUpstreamModelId(upstreamId);
         model.setConnection(connection);
         return model;
