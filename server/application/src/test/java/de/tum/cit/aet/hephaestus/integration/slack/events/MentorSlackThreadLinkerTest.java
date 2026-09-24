@@ -20,11 +20,6 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 
-/**
- * Unit tests for the atomic Slack↔mentor thread linker. The two writes (mentor {@code chat_thread} provisioning +
- * mapping-row save) only run on the create path; an existing mapping short-circuits without touching the mentor
- * module.
- */
 class MentorSlackThreadLinkerTest extends BaseUnitTest {
 
     private static final long WORKSPACE = 42L;
@@ -50,7 +45,7 @@ class MentorSlackThreadLinkerTest extends BaseUnitTest {
         when(mentorSlackThreadRepository.findByWorkspaceIdAndSlackChannelIdAndSlackThreadTs(WORKSPACE, CHANNEL, THREAD))
                 .thenReturn(Optional.of(mapping));
 
-        UUID result = linker.findOrCreateThread(WORKSPACE, TEAM, CHANNEL, THREAD, USER, "alice");
+        UUID result = linker.findOrCreateThread(WORKSPACE, TEAM, CHANNEL, THREAD, USER, 314L);
 
         assertThat(result).isEqualTo(existing);
         verifyNoInteractions(mentorSlackThreadService);
@@ -62,10 +57,10 @@ class MentorSlackThreadLinkerTest extends BaseUnitTest {
         UUID created = UUID.randomUUID();
         when(mentorSlackThreadRepository.findByWorkspaceIdAndSlackChannelIdAndSlackThreadTs(WORKSPACE, CHANNEL, THREAD))
                 .thenReturn(Optional.empty());
-        when(mentorSlackThreadService.ensureSlackThread(eq(WORKSPACE), isNull(), eq("alice")))
+        when(mentorSlackThreadService.ensureSlackThread(eq(WORKSPACE), isNull(), eq(314L)))
                 .thenReturn(created);
 
-        UUID result = linker.findOrCreateThread(WORKSPACE, TEAM, CHANNEL, THREAD, USER, "alice");
+        UUID result = linker.findOrCreateThread(WORKSPACE, TEAM, CHANNEL, THREAD, USER, 314L);
 
         assertThat(result).isEqualTo(created);
         ArgumentCaptor<MentorSlackThread> saved = ArgumentCaptor.forClass(MentorSlackThread.class);

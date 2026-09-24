@@ -36,15 +36,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * Focused unit tests for the GDPR Art. 20 export service + bundle assembler:
- * <ul>
- *   <li>the assembled bundle contains the principal's own data and structurally <b>excludes</b>
- *       tokens / credentials / signing keys;</li>
- *   <li>the ownership-scoped reads return empty for a foreign export id (controller → 404),
- *       and the download is gated on READY + non-expired.</li>
- * </ul>
- */
 class AccountExportServiceTest extends BaseUnitTest {
 
     private static final Long ACCOUNT_ID = 42L;
@@ -85,9 +76,9 @@ class AccountExportServiceTest extends BaseUnitTest {
         when(accountService.activeIdentities(ACCOUNT_ID)).thenReturn(List.of(link));
         when(featureRepo.findFlagsByAccountId(ACCOUNT_ID)).thenReturn(List.of("mentor_access"));
         when(authEventRepo.findByAccountSince(eq(ACCOUNT_ID), any())).thenReturn(List.of());
-        when(membershipQuery.membershipsForLogins(any()))
+        when(membershipQuery.membershipsForAccount(ACCOUNT_ID))
                 .thenReturn(List.of(new WorkspaceMembershipView(7L, "tum-ase", "TUM ASE", "MEMBER", 314L)));
-        when(preferencesQuery.preferencesForLogin("ada"))
+        when(preferencesQuery.preferencesForAccount(ACCOUNT_ID))
                 .thenReturn(Optional.of(new AccountPreferencesQuery.PreferencesView(!participating, false)));
 
         ExportBundleAssembler assembler = new ExportBundleAssembler(
@@ -131,13 +122,12 @@ class AccountExportServiceTest extends BaseUnitTest {
                 .doesNotContain("password");
 
         when(accountService.activeIdentities(ACCOUNT_ID)).thenReturn(List.of());
+        when(preferencesQuery.preferencesForAccount(ACCOUNT_ID)).thenReturn(Optional.empty());
         var withoutScmPreferences = assembler.assemble(ACCOUNT_ID).preferences();
         assertNotNull(withoutScmPreferences);
         assertThat(withoutScmPreferences.participateInResearch()).isEqualTo(participating);
         assertThat(withoutScmPreferences.practiceFeedbackDeliveryEnabled()).isTrue();
     }
-
-    // ── Ownership / enumeration defense ────────────────────────────────────────────────────
 
     @Test
     void status_foreignId_returnsEmpty_soControllerAnswers404() {

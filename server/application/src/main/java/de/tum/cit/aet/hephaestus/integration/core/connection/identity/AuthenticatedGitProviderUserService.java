@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.identity;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery.IdentityLinkView;
+import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -15,26 +16,13 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Resolves / provisions the SCM {@code User} row for the JWT-authenticated principal from the
- * account's federated identities. Each {@link IdentityLinkView} supplies the IdP-stable numeric
- * {@code subject} (the {@code native_id}) and the {@code usernameAtSignup} (the {@code login});
- * the provider <em>type</em> / <em>server URL</em> is resolved here through
- * {@link IdentityProviderRepository} so {@code core.auth} stays vendor-neutral.
- *
- * <p>After the {@code User} is upserted, its id is wired back onto the {@code IdentityLink}'s
- * {@code externalActorId} (idempotent) so profile surfaces can resolve "your activity" without a
- * {@code (provider, subject) → (provider_id, native_id)} join.
- *
- * @see AccountIdentityQuery for the {@code sub → Account → IdentityLink} provisioning rationale
- *      (why the SCM mirror comes from IdentityLinks, not absent JWT claims).
+ * Resolves linked SCM identities by immutable provider subject. Missing actors are provisioned
+ * only when their saved signup metadata does not conflict with an existing actor.
  */
 @Service
 public class AuthenticatedGitProviderUserService {
@@ -54,40 +42,23 @@ public class AuthenticatedGitProviderUserService {
         this.accountIdentityQuery = accountIdentityQuery;
     }
 
-    /**
-     * Resolve the SCM {@code User} for the current principal, provisioning it from the account's
-     * federated identities on first sight. GitLab identities take precedence over GitHub when an
-     * account has both. The provider server
-     * URL comes from each {@code IdentityLink}'s own {@code git_provider} row, which is authoritative
-     * for the provider the user actually logged in with.
-     */
+    /** Resolves or provisions the first linked GitHub/GitLab identity. */
     @Transactional
     public Optional<User> resolveOrProvisionCurrentUser() {
-        var currentUser = userRepository.getCurrentUser();
-        if (currentUser.isPresent()) {
-            return currentUser;
-        }
-
-        List<IdentityLinkView> links = activeLinksForCurrentAccount();
-        if (links.isEmpty()) {
-            return Optional.empty();
-        }
-
-        IdentityLinkView gitLabLink = firstOfType(links, IdentityProviderType.GITLAB);
-        if (gitLabLink != null) {
-            return Optional.of(provisionUser(gitLabLink));
-        }
-        IdentityLinkView gitHubLink = firstOfType(links, IdentityProviderType.GITHUB);
-        if (gitHubLink != null) {
-            return Optional.of(provisionUser(gitHubLink));
+        for (IdentityLinkView link : activeLinksForCurrentAccount()) {
+            Optional<IdentityProvider> provider = gitProviderRepository.findById(link.gitProviderId());
+            if (provider.isPresent()
+                    && (provider.get().getType() == IdentityProviderType.GITHUB
+                            || provider.get().getType() == IdentityProviderType.GITLAB)) {
+                return Optional.of(resolveOrProvisionUser(link));
+            }
         }
         return Optional.empty();
     }
 
     /**
-     * Ensure a GitLab SCM {@code User} exists for the current principal (workspace-owner bootstrap).
-     * Succeeds for any account with an active GitLab {@code IdentityLink} — including a user who just
-     * logged in via GitLab. Throws {@code 409} only when the account genuinely has no GitLab identity.
+     * Ensures the account has a GitLab actor for workspace-owner bootstrap.
+     * Missing GitLab identity or conflicting saved profile data yields 409.
      */
     @Transactional
     public void ensureCurrentGitLabUserExists() {
@@ -95,7 +66,7 @@ public class AuthenticatedGitProviderUserService {
 
         IdentityLinkView gitLabLink = firstOfType(links, IdentityProviderType.GITLAB);
         if (gitLabLink != null) {
-            provisionUser(gitLabLink);
+            resolveOrProvisionUser(gitLabLink);
             return;
         }
 
@@ -111,18 +82,11 @@ public class AuthenticatedGitProviderUserService {
     }
 
     private List<IdentityLinkView> activeLinksForCurrentAccount() {
-        Long accountId = currentAccountId();
-        if (accountId == null) {
-            return List.of();
-        }
-        return accountIdentityQuery.activeLinksForAccount(accountId);
+        return SecurityUtils.getCurrentAccountId()
+                .map(accountIdentityQuery::activeLinksForAccount)
+                .orElseGet(List::of);
     }
 
-    /**
-     * The first active identity link whose {@code git_provider} row is of {@code type}. Links whose
-     * provider id no longer resolves are skipped (defensive — a dangling FK is a data bug, not a
-     * login condition).
-     */
     @Nullable
     private IdentityLinkView firstOfType(List<IdentityLinkView> links, IdentityProviderType type) {
         for (IdentityLinkView link : links) {
@@ -135,17 +99,18 @@ public class AuthenticatedGitProviderUserService {
         return null;
     }
 
-    /**
-     * Upsert the SCM {@code User} for an identity link and wire the link back to the resulting actor
-     * mirror. The {@code native_id} is the link's numeric {@code subject}; the {@code login} is its
-     * {@code usernameAtSignup}; the server URL / provider come from the link's {@code git_provider} row.
-     */
-    private User provisionUser(IdentityLinkView link) {
+    /** Returns the actor matching the verified provider subject, provisioning it only when absent. */
+    private User resolveOrProvisionUser(IdentityLinkView link) {
         IdentityProvider provider = gitProviderRepository
                 .findById(link.gitProviderId())
                 .orElseThrow(() -> new IllegalStateException(
                         "git_provider row missing for IdentityLink.gitProviderId=" + link.gitProviderId()));
         long nativeId = parseSubject(link.subject(), provider.getType());
+        Optional<User> existing = userRepository.findByNativeIdAndProviderId(nativeId, link.gitProviderId());
+        if (existing.isPresent()) {
+            // Signup profile fields are historical; never overwrite the provider-synced actor with them.
+            return existing.get();
+        }
         String login =
                 (link.usernameAtSignup() != null && !link.usernameAtSignup().isBlank())
                         ? link.usernameAtSignup()
@@ -167,9 +132,7 @@ public class AuthenticatedGitProviderUserService {
         try {
             return Long.parseLong(subject);
         } catch (NumberFormatException e) {
-            // IdentityLink.subject must be the IdP-stable numeric provider id (enforced for the
-            // env-default registrations via userNameAttributeName("id")). A non-numeric subject
-            // means a mis-configured registration mapped a mutable username as the subject.
+            // A mutable login cannot substitute for the provider's numeric actor id.
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Linked " + type
@@ -198,7 +161,13 @@ public class AuthenticatedGitProviderUserService {
         Long providerId = Objects.requireNonNull(provider.getId(), "Identity provider must be persisted");
 
         userRepository.acquireLoginLock(login, providerId);
-        userRepository.freeLoginConflicts(login, nativeId, providerId);
+        Optional<User> loginOwner = userRepository.findByLoginAndProviderId(login, providerId);
+        if (loginOwner.isPresent() && loginOwner.get().getNativeId() != nativeId) {
+            // Only current provider evidence can reassign a login; a signup snapshot cannot prove a rename.
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Your saved provider username belongs to a different identity. Refresh or synchronize your provider profile before using account settings.");
+        }
         userRepository.upsertUser(
                 nativeId,
                 providerId,
@@ -216,26 +185,8 @@ public class AuthenticatedGitProviderUserService {
                 nativeId,
                 provider.getType());
         return userRepository
-                .findByLoginAndProviderId(login, providerId)
+                .findByNativeIdAndProviderId(nativeId, providerId)
                 .map(User::getId)
-                .orElseThrow(() -> new IllegalStateException("User not found after upsert: login=" + login));
-    }
-
-    @Nullable
-    private Long currentAccountId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !(auth.getPrincipal() instanceof Jwt jwt)) {
-            return null;
-        }
-        String sub = jwt.getSubject();
-        if (sub == null || sub.isBlank()) {
-            return null;
-        }
-        try {
-            return Long.parseLong(sub);
-        } catch (NumberFormatException e) {
-            log.warn("auth: JWT sub is not a numeric account id: {}", LoggingUtils.sanitizeForLog(sub));
-            return null;
-        }
+                .orElseThrow(() -> new IllegalStateException("User not found after upsert: nativeId=" + nativeId));
     }
 }

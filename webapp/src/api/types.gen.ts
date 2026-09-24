@@ -10282,11 +10282,11 @@ export type ListMembersData = {
   };
   query?: {
     /**
-     * Page number (0-indexed)
+     * Zero-based page index
      */
     page?: number;
     /**
-     * Page size (default 50, max 100)
+     * Results per page, capped at 100
      */
     size?: number;
   };
@@ -10295,7 +10295,7 @@ export type ListMembersData = {
 
 export type ListMembersResponses = {
   /**
-   * List of workspace memberships
+   * OK
    */
   200: Array<WorkspaceMembership>;
 };
@@ -10303,9 +10303,6 @@ export type ListMembersResponses = {
 export type ListMembersResponse = ListMembersResponses[keyof ListMembersResponses];
 
 export type AssignRoleData = {
-  /**
-   * Role assignment request
-   */
   body: AssignRoleRequest;
   path: {
     /**
@@ -10319,7 +10316,7 @@ export type AssignRoleData = {
 
 export type AssignRoleResponses = {
   /**
-   * Updated membership
+   * OK
    */
   200: WorkspaceMembership;
 };
@@ -10340,7 +10337,7 @@ export type GetCurrentUserMembershipData = {
 
 export type GetCurrentUserMembershipResponses = {
   /**
-   * the current user's membership details with effective role
+   * OK
    */
   200: WorkspaceMembership;
 };
@@ -10354,9 +10351,6 @@ export type RemoveMemberData = {
      * Workspace slug
      */
     workspaceSlug: string;
-    /**
-     * User ID to remove
-     */
     userId: number;
   };
   query?: never;
@@ -10365,10 +10359,12 @@ export type RemoveMemberData = {
 
 export type RemoveMemberResponses = {
   /**
-   * 204 No Content on success
+   * Membership removed
    */
-  200: unknown;
+  204: void;
 };
+
+export type RemoveMemberResponse = RemoveMemberResponses[keyof RemoveMemberResponses];
 
 export type GetMemberData = {
   body?: never;
@@ -10377,9 +10373,6 @@ export type GetMemberData = {
      * Workspace slug
      */
     workspaceSlug: string;
-    /**
-     * User ID
-     */
     userId: number;
   };
   query?: never;
@@ -10388,7 +10381,7 @@ export type GetMemberData = {
 
 export type GetMemberResponses = {
   /**
-   * Workspace membership details
+   * OK
    */
   200: WorkspaceMembership;
 };
@@ -10402,14 +10395,11 @@ export type UpdateMemberVisibilityData = {
      * Workspace slug
      */
     workspaceSlug: string;
-    /**
-     * User ID
-     */
     userId: number;
   };
   query: {
     /**
-     * whether the member should be hidden
+     * Whether to exclude the member from leaderboard rankings
      */
     hidden: boolean;
   };
@@ -10418,7 +10408,7 @@ export type UpdateMemberVisibilityData = {
 
 export type UpdateMemberVisibilityResponses = {
   /**
-   * Updated membership
+   * OK
    */
   200: WorkspaceMembership;
 };
