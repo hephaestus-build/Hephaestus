@@ -21,7 +21,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -98,7 +100,9 @@ class DockerGatewayTransportTest extends BaseUnitTest {
             var spec = created.getLast();
             String url = spec.environment().get("SANDBOX_RUNTIME_URL");
             assertThat(url).isNotNull();
-            var session = sessions.require(UUID.fromString(url.substring(url.lastIndexOf('/') + 1)), "Bearer token");
+            UUID sessionId = UUID.fromString(url.substring(url.lastIndexOf('/') + 1));
+            assertThat(sessionId).isEqualTo(jobId);
+            var session = sessions.require(sessionId, "Bearer token");
             if (invocation.getArgument(0).equals("initializer")) {
                 if (initializerExit == 0) {
                     try (var input = session.download()) {
@@ -107,7 +111,13 @@ class DockerGatewayTransportTest extends BaseUnitTest {
                 }
                 return new SandboxContainerManager.WaitOutcome(initializerExit, false);
             }
-            session.upload(new ByteArrayInputStream(resultTar()));
+            byte[] result = resultTar();
+            session.upload(
+                    new ByteArrayInputStream(result),
+                    "sha-256=:"
+                            + Base64.getEncoder()
+                                    .encodeToString(
+                                            MessageDigest.getInstance("SHA-256").digest(result)) + ":");
             return new SandboxContainerManager.WaitOutcome(0, false);
         });
     }

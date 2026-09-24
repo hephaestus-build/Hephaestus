@@ -10,7 +10,9 @@ export default async function commitsAreAtomicAndCohesive(
 	_repoPath: string,
 	_diffFiles: Map<string, DiffFile>,
 	_metadata: PullRequestMetadata,
-	contextDir?: string,
+	contextDir: string | undefined,
+	_changeDir: string | undefined,
+	contextReference: string,
 ) {
 	const facts = subjectFacts(await readCommits(contextDir));
 	const authored = facts.filter((f) => !f.merge);
@@ -24,7 +26,7 @@ export default async function commitsAreAtomicAndCohesive(
 					"A subject that lists several concerns is the shape the criteria name; read it literally, beside the paths and kinds the commit touched, and judge whether the listed items are one step or several.",
 				];
 	return {
-		hints: commitRows(facts),
+		hints: commitRows(facts, contextReference),
 		metrics: {
 			authoredCommits: authored.length,
 			mergeCommits: facts.length - authored.length,

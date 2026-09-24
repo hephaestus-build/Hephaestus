@@ -15,16 +15,20 @@ export default async function mergesOnlyAfterApproval(
 	_repoPath: string,
 	_diffFiles: Map<string, DiffFile>,
 	metadata: PullRequestMetadata,
-	contextDir?: string,
+	contextDir: string | undefined,
+	_changeDir: string | undefined,
+	contextReference: string,
 ) {
 	const merge = mergeFacts(metadata);
 	const record = await readReviewThreads(contextDir);
 	const decisions = record?.decisions ?? [];
-	const rows = decisionRows(decisions, merge);
-	const last = decisionRows(lastDecisionPerReviewer(decisions), merge).map((row) => ({
-		...row,
-		pattern: "last decision by reviewer",
-	}));
+	const rows = decisionRows(decisions, merge, contextReference);
+	const last = decisionRows(lastDecisionPerReviewer(decisions), merge, contextReference).map(
+		(row) => ({
+			...row,
+			pattern: "last decision by reviewer",
+		}),
+	);
 	const approvalsBeforeMergeByOthers = rows.filter(
 		(r) =>
 			r.flags.state === "APPROVED" &&
@@ -46,7 +50,7 @@ export default async function mergesOnlyAfterApproval(
 		);
 	}
 	return {
-		hints: [mergeRow(metadata, merge), ...rows, ...last],
+		hints: [mergeRow(metadata, merge, contextReference), ...rows, ...last],
 		metrics: {
 			merged: merge.merged ? 1 : 0,
 			mergedByIsAuthor: merge.mergedByIsAuthor ? 1 : 0,

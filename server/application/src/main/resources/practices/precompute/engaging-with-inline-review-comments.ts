@@ -4,6 +4,7 @@
 // the authored commits that came after the comment, with those touching the same file counted
 // apart. The review decides for each row whether the author engaged; the script never does.
 import { readCommits } from "../lib/change.ts";
+import { contextFile } from "../lib/context.ts";
 import {
 	changeNear,
 	commitsAfter,
@@ -18,7 +19,9 @@ export default async function engagingWithInlineReviewComments(
 	_repoPath: string,
 	diffFiles: Map<string, DiffFile>,
 	metadata: PullRequestMetadata,
-	contextDir?: string,
+	contextDir: string | undefined,
+	_changeDir: string | undefined,
+	contextReference: string,
 ) {
 	const author = metadata.author ?? "";
 	const inline = await readReviewComments(contextDir);
@@ -64,7 +67,7 @@ export default async function engagingWithInlineReviewComments(
 	} else {
 		const bots = hints.length - byPeople.length;
 		directions.push(
-			`${String(byPeople.length)} reviewer comment(s)${bots > 0 ? ` (${String(bots)} more by bots)` : ""}; ${String(replied)} have a later author reply in the thread; ${String(committedAfter)} have a later authored commit touching the file. Commits are read from inputs/context/commits.json${commits.length === 0 ? ", which holds none here" : ""}.`,
+			`${String(byPeople.length)} reviewer comment(s)${bots > 0 ? ` (${String(bots)} more by bots)` : ""}; ${String(replied)} have a later author reply in the thread; ${String(committedAfter)} have a later authored commit touching the file. Commits are read from ${contextFile(contextReference, "commits.json")}${commits.length === 0 ? ", which holds none here" : ""}.`,
 			"A later commit touching the file says the file moved after the comment, not that the comment was taken up: read the comment and the changed lines. A RESOLVED mark says who clicked it.",
 		);
 	}

@@ -155,7 +155,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             Map<String, String> runnerEnv = buildRunnerEnvironment(spec, appServerIp);
 
             var attempt = launcher.open(
-                    spec.networkPolicy(), workspaceManager.createInputTar(spec.inputFiles(), Map.of()), labels);
+                    null, spec.networkPolicy(), workspaceManager.createInputTar(spec.inputFiles(), Map.of()), labels);
             // The previous sandbox for this session still owns its volumes until its close completes.
             if (resources.putIfAbsent(spec.sessionId(), attempt) != null) {
                 attempt.close();

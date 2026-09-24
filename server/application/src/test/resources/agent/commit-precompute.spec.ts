@@ -68,7 +68,18 @@ async function stage(slug: string, commits: unknown[]) {
 	if (!isPracticeModule(mod)) {
 		throw new Error("script does not export a default function");
 	}
-	return { root, script: mod.default, contextDir: path.join(root, "context") };
+	const script: typeof mod.default = async (repo, diff, metadata, contextDir, changeDir) => {
+		const result = await mod.default(
+			repo,
+			diff,
+			metadata,
+			contextDir,
+			changeDir,
+			"areas/changed-work",
+		);
+		return result;
+	};
+	return { root, script, contextDir: path.join(root, "context") };
 }
 
 const metadata = {
@@ -100,9 +111,9 @@ void test("both commit practices read the subjects from the commit record and st
 			assert.deepEqual(
 				result.hints.map((h) => [h.file, h.pattern, h.context, h.flags.conjoined]),
 				[
-					["inputs/context/commits.json", "commit", "1111111 Add button to start run", false],
+					["areas/changed-work/commits.json", "commit", "1111111 Add button to start run", false],
 					[
-						"inputs/context/commits.json",
+						"areas/changed-work/commits.json",
 						"commit",
 						"2222222 add location manager, SwiftData persistence, and UI color cleanup",
 						true,

@@ -10,7 +10,9 @@ export default async function commitSubjectsExplainEachChange(
 	_repoPath: string,
 	_diffFiles: Map<string, DiffFile>,
 	_metadata: PullRequestMetadata,
-	contextDir?: string,
+	contextDir: string | undefined,
+	_changeDir: string | undefined,
+	contextReference: string,
 ) {
 	const facts = subjectFacts(await readCommits(contextDir));
 	const authored = facts.filter((f) => !f.merge);
@@ -22,7 +24,7 @@ export default async function commitSubjectsExplainEachChange(
 					"Judge every subject on what it tells a reader about the files it touched; a flag names a shape to check, not a lapse.",
 				];
 	return {
-		hints: commitRows(facts),
+		hints: commitRows(facts, contextReference),
 		metrics: {
 			authoredCommits: authored.length,
 			mergeCommits: facts.length - authored.length,
