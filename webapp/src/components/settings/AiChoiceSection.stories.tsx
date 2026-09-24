@@ -39,6 +39,11 @@ export const Unanswered: Story = {
 		for (const name of [IN_HOUSE, CLOUD, NO_AI]) {
 			await expect(canvas.getByRole("radio", { name })).not.toBeChecked();
 		}
+		for (const header of canvas
+			.getAllByRole("radio")
+			.map((radio) => radio.closest("label")?.querySelector('[data-slot="ai-choice-header"]'))) {
+			await expect(header?.querySelector("img")).toBeNull();
+		}
 		const save = canvas.getByRole("button", { name: "Save" });
 		await expectGenuinelyDisabled(save);
 		await expect(save).toHaveAccessibleDescription(

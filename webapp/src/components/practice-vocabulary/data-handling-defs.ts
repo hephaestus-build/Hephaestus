@@ -5,6 +5,7 @@ import {
 	CloudIcon,
 	EyeIcon,
 	HandshakeIcon,
+	HouseIcon,
 	LockIcon,
 } from "lucide-react";
 
@@ -97,21 +98,33 @@ export const OPERATED_BY_DEFS: StatusDefs<OperatedBy> = {
 };
 
 export interface MemberAiChoiceDef extends StatusDef {
-	facts: readonly { tone: "pro" | "caveat" | "con" | "neutral"; text: string }[];
+	facts: readonly [MemberAiChoiceFact, MemberAiChoiceFact, MemberAiChoiceFact, MemberAiChoiceFact];
 	ceiling: DataHandlingTier | null;
 }
+
+export interface MemberAiChoiceFact {
+	tone: "pro" | "caveat" | "con" | "neutral";
+	text: string;
+}
+
+export const MEMBER_AI_CHOICE_DIMENSIONS = [
+	"AI help",
+	"Models",
+	"Capacity",
+	"New requests",
+] as const;
 
 export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = {
 	IN_HOUSE_ONLY: {
 		label: "In-house",
-		icon: Building2Icon,
+		icon: HouseIcon,
 		badgeVariant: "secondary",
-		description: "Use only models declared in-house.",
+		description: "Use models declared in-house.",
 		facts: [
-			{ tone: "pro", text: "Practice feedback and Heph can run." },
-			{ tone: "pro", text: "Only models declared in-house may serve you." },
-			{ tone: "pro", text: "New AI requests go only to those models." },
-			{ tone: "caveat", text: "If none is ready here, AI features wait." },
+			{ tone: "pro", text: "Feedback and Heph, when ready." },
+			{ tone: "caveat", text: "Only in-house models." },
+			{ tone: "caveat", text: "Hardware can limit model size and speed." },
+			{ tone: "pro", text: "Only in-house models receive them." },
 		],
 		ceiling: "IN_HOUSE",
 	},
@@ -119,12 +132,12 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		label: "Cloud",
 		icon: CloudIcon,
 		badgeVariant: "secondary",
-		description: "Also allow models run by providers.",
+		description: "Also use provider-operated models.",
 		facts: [
-			{ tone: "pro", text: "Practice feedback and Heph can run." },
-			{ tone: "pro", text: "In-house and provider-operated models may serve you." },
-			{ tone: "caveat", text: "A configured provider may receive new AI requests." },
-			{ tone: "neutral", text: "Its terms decide retention and access." },
+			{ tone: "pro", text: "Feedback and Heph, when ready." },
+			{ tone: "pro", text: "In-house and provider models." },
+			{ tone: "neutral", text: "Larger models or more capacity may be available." },
+			{ tone: "caveat", text: "A configured provider may receive them." },
 		],
 		ceiling: "CLOUD",
 	},
@@ -132,12 +145,12 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		label: "No AI",
 		icon: CircleOffIcon,
 		badgeVariant: "secondary",
-		description: "Use Hephaestus without new AI processing.",
+		description: "No new AI for your work. Sync and stored work stay.",
 		facts: [
-			{ tone: "con", text: "No new practice feedback or Heph replies." },
-			{ tone: "neutral", text: "No model may serve your work." },
-			{ tone: "pro", text: "No new AI requests for your work." },
-			{ tone: "neutral", text: "Sync, stored work, and earlier results remain." },
+			{ tone: "con", text: "No new feedback or Heph replies." },
+			{ tone: "con", text: "No model is used." },
+			{ tone: "neutral", text: "No model capacity needed." },
+			{ tone: "pro", text: "None sent for your work." },
 		],
 		ceiling: null,
 	},

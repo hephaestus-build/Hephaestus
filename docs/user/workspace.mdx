@@ -78,8 +78,8 @@ looser.
 
 | Answer | What you get | Trade-off |
 | --- | --- | --- |
-| **In-house** | Only models declared as operated by your organisation may handle new AI requests. | If none is ready in a workspace, its AI features wait. |
-| **Cloud** | Both in-house and provider-operated models may handle new AI requests. | A configured provider may receive work sent for AI. Its agreement determines retention and access. |
+| **In-house** | Only models declared as operated by your organisation may handle new AI requests. | If none is ready, AI waits. Available hardware may limit model size and speed. |
+| **Cloud** | Both in-house and provider-operated models may handle new AI requests. Larger models or more capacity may be available. | A configured provider may receive work sent for AI. Its agreement determines retention and access. |
 | **No AI** | No new AI requests for practice reviews or Heph. | No new AI feedback or Heph replies; sync and stored work continue. |
 
 Each workspace sets up its own models within these answers. When nothing in the workspace you are
@@ -93,6 +93,11 @@ example, an OpenAI model served by Azure is not automatically in-house because i
 private. The Logos mark names the Logos service, not who runs it; an organisation can run Logos
 itself or use a provider-operated Logos deployment. Ask a workspace owner who operates the
 deployment and what terms apply to your work.
+
+In a workspace, each answer's card shows one ready model and the service that receives its
+requests. If more models are ready, the card shows the count and the list below the cards shows
+them all. In user settings, the cards show no model or service: your answer applies to every
+workspace, and each workspace can use a different service.
 
 On your first visit, nothing is preselected. Choose an answer and select **Continue**; on a return
 visit the button reads **Save**. You can choose any answer, including one no workspace has set up yet.

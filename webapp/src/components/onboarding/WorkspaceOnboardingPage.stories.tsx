@@ -162,6 +162,14 @@ export const Default: Story = {
 		}
 		await expect(first.top).toBe(second.top);
 		await expect(second.top).toBe(third.top);
+		const capacityRows = canvas.getAllByText("Capacity");
+		await expect(capacityRows).toHaveLength(3);
+		await expect(capacityRows[0]?.getBoundingClientRect().top).toBe(
+			capacityRows[1]?.getBoundingClientRect().top,
+		);
+		await expect(capacityRows[1]?.getBoundingClientRect().top).toBe(
+			capacityRows[2]?.getBoundingClientRect().top,
+		);
 		const term = canvas.getByText("What AI does");
 		const detail = canvas.getByText(/Hephaestus reviews your work against/u);
 		await expect(detail.getBoundingClientRect().top).toBeGreaterThan(
@@ -207,7 +215,7 @@ export const NoAi: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
-			/No AI.*No new practice feedback or Heph replies.*No new AI requests for your work.*Sync, stored work, and earlier results remain/u,
+			/No AI.*Sync and stored work stay.*No new feedback or Heph replies.*None sent for your work/u,
 		);
 		await expect(canvas.queryByRole("region", { name: /Models for this answer/u })).toBeNull();
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
@@ -271,9 +279,12 @@ export const WorkspaceModels: Story = {
 		await expect(models).toHaveTextContent("Declared cloud");
 		await expect(models).toHaveTextContent("Team model");
 		await expect(models.querySelectorAll("img")).toHaveLength(4);
-		await expect(canvas.getByRole("radio", { name: CLOUD })).toHaveAccessibleName(
-			/gpt-6-luna.*Microsoft Azure/u,
-		);
+		const cloud = canvas.getByRole("radio", { name: CLOUD });
+		await expect(cloud).toHaveAccessibleName(/gpt-6-luna.*Microsoft Azure/u);
+		const header = cloud.closest("label")?.querySelector('[data-slot="ai-choice-header"]');
+		await expect(header).toHaveTextContent("gpt-6-luna");
+		await expect(header).toHaveTextContent("via Microsoft Azure");
+		await expect(header?.querySelectorAll("img")).toHaveLength(2);
 	},
 };
 
@@ -405,7 +416,7 @@ export const OptionUncovered: Story = {
 	},
 	play: async ({ canvas, userEvent, args }) => {
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
-		await expect(inHouse).toHaveAccessibleName(/If none is ready here, AI features wait/u);
+		await expect(inHouse).toHaveAccessibleName(/No model ready here/u);
 		await expect(canvas.queryByText(/is set up within this answer yet/u)).toBeNull();
 		await expect(inHouse).not.toHaveAttribute("aria-disabled");
 		await userEvent.click(inHouse);
