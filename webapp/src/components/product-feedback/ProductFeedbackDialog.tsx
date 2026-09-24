@@ -104,7 +104,7 @@ export function ProductFeedbackDialog({
 					<DialogHeader>
 						<DialogTitle>{copy.heading}</DialogTitle>
 						<DialogDescription>
-							Goes straight to {READERS}, with your name so they can follow up.
+							Goes straight to {READERS}, with your name and contact address so they can follow up.
 						</DialogDescription>
 					</DialogHeader>
 					<DialogBody className="flex flex-col gap-5 py-1">

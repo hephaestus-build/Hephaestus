@@ -3,7 +3,7 @@ import type { FeedbackRequest } from "@/api/types.gen";
 export type FeedbackKind = FeedbackRequest["kind"];
 
 /** Who a submission reaches, in the product's words; one home so every screen says the same. */
-export const READERS = "the Hephaestus team";
+export const READERS = "your instance administrators";
 
 interface KindCopy {
 	title: string;

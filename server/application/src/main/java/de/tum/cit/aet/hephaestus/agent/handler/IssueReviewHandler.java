@@ -125,6 +125,12 @@ public class IssueReviewHandler implements JobTypeHandler {
         metadata.put("title", r.title());
         metadata.put("body", r.body());
         metadata.put("state", r.state());
+        if (r.actorUserId() != null) {
+            metadata.put("actor_user_id", r.actorUserId());
+        }
+        if (r.reviewSnapshotId() != null) {
+            metadata.put("review_snapshot_id", r.reviewSnapshotId().toString());
+        }
         if (r.url() != null) {
             metadata.put("issue_url", r.url());
         }
@@ -253,7 +259,10 @@ public class IssueReviewHandler implements JobTypeHandler {
                 observation.getSeverity(),
                 observation.getEvidence(),
                 observation.getEvidenceRationale(),
-                new ObservationKeys(observation.getOccurrenceKey(), observation.getRecurrenceKey()));
+                new ObservationKeys(observation.getOccurrenceKey(), observation.getRecurrenceKey()),
+                observation.getPracticeRevision() == null
+                        ? observation.getPractice().getDeliveryBehavior()
+                        : observation.getPracticeRevision().getDeliveryBehavior());
     }
 
     @Override

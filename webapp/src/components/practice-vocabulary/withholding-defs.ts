@@ -41,6 +41,7 @@ export const WITHHOLDING_FAMILY_DEFS: StatusDefs<WithholdingFamily> = {
 const REASON_FAMILY: Record<WithholdingReason, WithholdingFamily> = {
 	ARTIFACT_GONE: "WORK_MOVED_ON",
 	ARTIFACT_CLOSED: "WORK_MOVED_ON",
+	ISSUE_SNAPSHOT_CHANGED: "WORK_MOVED_ON",
 	ARTIFACT_MERGED: "WORK_MOVED_ON",
 	ARTIFACT_DRAFT: "WORK_MOVED_ON",
 	VOLUME_CAPPED: "POLICY",
@@ -69,6 +70,7 @@ const REASON_FAMILY: Record<WithholdingReason, WithholdingFamily> = {
 export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 	ARTIFACT_GONE: "The work no longer exists.",
 	ARTIFACT_CLOSED: "The work was closed before the feedback could be posted.",
+	ISSUE_SNAPSHOT_CHANGED: "The issue changed before this feedback could be posted.",
 	ARTIFACT_MERGED: "The work was already merged, so a note on it would arrive too late.",
 	ARTIFACT_DRAFT: "The work was still a draft.",
 	VOLUME_CAPPED: "Over the limit on how much feedback one person gets from a single review.",

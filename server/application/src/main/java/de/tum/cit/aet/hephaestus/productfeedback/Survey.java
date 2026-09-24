@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,7 +19,9 @@ import tools.jackson.databind.JsonNode;
  * what an answer meant.
  */
 @Entity
-@Table(name = "product_survey")
+@Table(
+        name = "product_survey",
+        indexes = @Index(name = "idx_product_survey_summary", columnList = "summary_queued_at,ends_at"))
 @Getter
 @NoArgsConstructor
 public class Survey {
@@ -62,6 +65,9 @@ public class Survey {
     @Column(name = "created_at", nullable = false, updatable = false)
     private @Nullable Instant createdAt;
 
+    @Column(name = "summary_queued_at")
+    private @Nullable Instant summaryQueuedAt;
+
     public Survey(
             String title,
             String description,
@@ -83,6 +89,9 @@ public class Survey {
     }
 
     public void edit(String title, String description, Instant startsAt, @Nullable Instant endsAt, boolean active) {
+        if (!Objects.equals(this.endsAt, endsAt)) {
+            this.summaryQueuedAt = null;
+        }
         this.title = title;
         this.description = description;
         this.startsAt = startsAt;

@@ -169,6 +169,7 @@ function practiceFixture(
 		updatedAt: new Date("2026-06-01T00:00:00Z"),
 		bindings: [],
 		autonomy: { effective: autonomy, inherited: false, source: "PRACTICE" },
+		deliveryBehavior: { summaryOnly: false },
 		automatedReviewPolicy: {
 			automatedReview: {
 				evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",

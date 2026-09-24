@@ -9,6 +9,12 @@ import org.junit.jupiter.api.Test;
 class ReviewClaimCurrentnessTest {
 
     @Test
+    void shouldNotRestoreAnIssueClaimJustBecauseItsPracticeIsStillCurrent() {
+        assertThat(ReviewClaimCurrentness.of("same", "same", java.time.Instant.now()))
+                .isEqualTo(ReviewClaimCurrentness.STALE);
+    }
+
+    @Test
     void shouldDeriveCurrentnessFromDetectionSemantics() {
         assertThat(ReviewClaimCurrentness.of("v2:one", "v2:one")).isEqualTo(ReviewClaimCurrentness.CURRENT);
         assertThat(ReviewClaimCurrentness.of("v1:one", "v2:one")).isEqualTo(ReviewClaimCurrentness.STALE);

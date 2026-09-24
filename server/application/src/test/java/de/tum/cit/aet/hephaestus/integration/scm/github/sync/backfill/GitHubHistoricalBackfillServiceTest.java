@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
@@ -703,6 +704,24 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
     @Nested
     class RunBackfillBatch {
+
+        @Test
+        void shouldRecordBackfillFailureOnTheMonitoredRepository() {
+            service = createService(enabledSchedulerProperties);
+            SyncTarget target = createTargetWithBackfillInProgress(SYNC_TARGET_ID_A, "org/repo-a");
+            when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(1000);
+            when(repositoryRepository.findByNameWithOwner("org/repo-a"))
+                    .thenThrow(new IllegalStateException("sensitive database detail"));
+
+            assertThat(service.runBackfillBatch(target, 50, BackfillPageObserver.NOOP))
+                    .isFalse();
+
+            verify(syncTargetProvider)
+                    .updateSyncError(
+                            SYNC_TARGET_ID_A,
+                            SyncPass.HISTORICAL_BACKFILL,
+                            "Historical backfill failed (IllegalStateException)");
+        }
 
         @Test
         void alreadyComplete_returnsFalseWithoutCheckingRateLimit() {

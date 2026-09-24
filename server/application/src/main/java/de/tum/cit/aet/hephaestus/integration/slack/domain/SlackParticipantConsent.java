@@ -52,7 +52,7 @@ public class SlackParticipantConsent {
     @ColumnDefault("false")
     private boolean ingestionOptedOut;
 
-    /** Persisted research opt-out bit (written by the App Home toggle); research-eligibility semantics unchanged. */
+    /** Historical value retained for schema compatibility; current research consent lives in the native-account ledger. */
     @Column(name = "research_opted_out", nullable = false)
     @ColumnDefault("false")
     private boolean researchOptedOut;

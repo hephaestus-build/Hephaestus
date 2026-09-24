@@ -29,6 +29,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -176,9 +179,20 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         Map<String, String> environment = runtimeContainer.get().environment();
         String runtimeUrl = Objects.requireNonNull(environment.get("SANDBOX_RUNTIME_URL"));
         UUID sessionId = UUID.fromString(runtimeUrl.substring(runtimeUrl.lastIndexOf('/') + 1));
-        gatewaySessions
-                .require(sessionId, "Bearer " + environment.get("LLM_PROXY_TOKEN"))
-                .upload(new ByteArrayInputStream(resultTar(files)));
+        byte[] archive = resultTar(files);
+        try {
+            gatewaySessions
+                    .require(sessionId, "Bearer " + environment.get("LLM_PROXY_TOKEN"))
+                    .upload(
+                            new ByteArrayInputStream(archive),
+                            "sha-256=:"
+                                    + Base64.getEncoder()
+                                            .encodeToString(MessageDigest.getInstance("SHA-256")
+                                                    .digest(archive))
+                                    + ":");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private static byte[] resultTar(Map<String, byte[]> files) throws IOException {
@@ -215,7 +229,13 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             verify(containerManager, times(2)).createContainer(any());
             verify(workspaceManager).createInputTar(any(), any(), any());
             verify(containerManager).startContainer(CONTAINER_ID);
-            verify(containerManager).waitForCompletion(eq(CONTAINER_ID), any());
+            ArgumentCaptor<java.time.Duration> runtimeWait = ArgumentCaptor.forClass(java.time.Duration.class);
+            verify(containerManager).waitForCompletion(eq(CONTAINER_ID), runtimeWait.capture());
+            assertThat(runtimeWait.getValue()).isGreaterThan(java.time.Duration.ofMinutes(19));
+            Map<String, String> runtimeEnvironment = runtimeContainer.get().environment();
+            long workDeadline = Long.parseLong(runtimeEnvironment.get("SANDBOX_WORK_DEADLINE_MS"));
+            long uploadDeadline = Long.parseLong(runtimeEnvironment.get("SANDBOX_UPLOAD_DEADLINE_MS"));
+            assertThat(uploadDeadline - workDeadline).isEqualTo(10 * 60_000L);
             // 0 is every line: a Docker tail is applied by the daemon, so a persisted transcript that
             // asked for one would arrive already missing its beginning.
             verify(containerManager).getLogs(CONTAINER_ID, 0);
@@ -528,21 +548,21 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
     class FailureHandling {
 
         @ParameterizedTest
-        @CsvSource({"137,true", "42,false"})
-        void shouldPreserveTerminalFailureWhenTheSandboxUploadedNoResult(int exitCode, boolean timedOut)
-                throws Exception {
+        @CsvSource({"137,true,true", "42,false,false", "43,false,false", "124,false,true"})
+        void shouldPreserveTerminalFailureWhenTheSandboxUploadedNoResult(
+                int exitCode, boolean dockerTimedOut, boolean expectedTimedOut) throws Exception {
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
             stubContainers();
             when(containerManager.waitForCompletion(eq(CONTAINER_ID), any()))
-                    .thenReturn(new SandboxContainerManager.WaitOutcome(exitCode, timedOut));
+                    .thenReturn(new SandboxContainerManager.WaitOutcome(exitCode, dockerTimedOut));
             when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("");
 
             var result = sandboxAdapter.execute(createSpec());
 
-            assertThat(result.timedOut()).isEqualTo(timedOut);
+            assertThat(result.timedOut()).isEqualTo(expectedTimedOut);
             assertThat(result.exitCode()).isEqualTo(exitCode);
             assertThat(result.outputFiles()).isEmpty();
             verify(containerManager).forceRemove(CONTAINER_ID);

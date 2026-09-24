@@ -63,7 +63,8 @@ class GithubLifecycleListenerPurgeTest extends BaseUnitTest {
                 gitHubAppTokenService,
                 mock(),
                 connectionService,
-                workspaceLifecycleService);
+                workspaceLifecycleService,
+                mock());
     }
 
     @Test

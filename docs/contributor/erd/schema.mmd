@@ -122,6 +122,7 @@ erDiagram
         TIMESTAMPTZ state_changed_at "NOT NULL"
         TIMESTAMPTZ last_attempted_at
         BIGINT requested_by_user_id FK
+        BIGINT actor_user_id FK
     }
 
     AuthEvent {
@@ -139,6 +140,7 @@ erDiagram
         VARCHAR(512) user_agent
         JSONB details
         BOOLEAN elevated_via_instance_admin "NOT NULL"
+        BIGINT viewed_user_id FK
     }
 
     AuthRateLimitBucket {
@@ -240,6 +242,8 @@ erDiagram
         BIGINT version "NOT NULL"
         INTEGER credentials_key_version
         TIMESTAMPTZ credentials_rotation_failed_at
+        VARCHAR(32) attention_problem
+        BIGINT attention_revision "NOT NULL"
     }
 
     ConnectionActivity {
@@ -312,6 +316,9 @@ erDiagram
         TIMESTAMPTZ updated_at "NOT NULL"
         BIGINT version "NOT NULL"
         JSONB automated_review_policy
+        JSONB adopted_base
+        VARCHAR(32) adopted_base_source
+        JSONB delivery_behavior
     }
 
     DeliveryPolicyEvaluation {
@@ -390,6 +397,18 @@ erDiagram
     DiscussionLabel {
         BIGINT discussion_id PK,FK
         BIGINT label_id PK,FK
+    }
+
+    EventPublication {
+        UUID id PK
+        TEXT listener_id "NOT NULL"
+        TEXT event_type "NOT NULL"
+        TEXT serialized_event "NOT NULL"
+        TIMESTAMPTZ publication_date "NOT NULL"
+        TIMESTAMPTZ completion_date
+        TEXT status
+        INTEGER completion_attempts
+        TIMESTAMPTZ last_resubmission_date
     }
 
     Feedback {
@@ -600,6 +619,8 @@ erDiagram
         TIMESTAMPTZ deleted_at
         VARCHAR(40) head_check_sha
         VARCHAR(16) head_check_state
+        UUID review_snapshot_id
+        VARCHAR(128) review_snapshot_digest
     }
 
     IssueAssignee {
@@ -801,6 +822,16 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
     }
 
+    NotificationSubscription {
+        UUID id PK
+        BIGINT account_id FK,UK "NOT NULL"
+        BOOLEAN enabled "NOT NULL"
+        TIMESTAMPTZ enabled_since
+        VARCHAR(32) kind UK "NOT NULL"
+        UUID unsubscribe_token UK "NOT NULL"
+        BIGINT version "NOT NULL"
+    }
+
     OauthStateNonce {
         VARCHAR(32) nonce PK
         BIGINT workspace_id "NOT NULL"
@@ -829,6 +860,7 @@ erDiagram
         VARCHAR(16) origin "NOT NULL"
         BIGINT workspace_id FK "NOT NULL"
         VARCHAR(16) assessment_status "NOT NULL"
+        TIMESTAMPTZ superseded_at
     }
 
     Organization {
@@ -930,6 +962,10 @@ erDiagram
         VARCHAR(96) source_curated_fingerprint
         JSONB automated_review_policy "NOT NULL"
         VARCHAR(16) autonomy
+        JSONB adopted_base
+        VARCHAR(32) adopted_base_source
+        VARCHAR(96) declined_offered_digest
+        JSONB delivery_behavior "NOT NULL"
     }
 
     PracticeCatalogInstallation {
@@ -986,6 +1022,7 @@ erDiagram
         VARCHAR(32) group_color
         VARCHAR(96) review_rule_fingerprint
         JSONB automated_review_policy
+        JSONB delivery_behavior "NOT NULL"
     }
 
     ProductFeedback {
@@ -1015,6 +1052,23 @@ erDiagram
         BIGINT created_by_account_id FK
         TIMESTAMPTZ created_at "NOT NULL"
         VARCHAR(200) research_organization
+        TIMESTAMPTZ summary_queued_at
+    }
+
+    ProductSurveyEmailInvitation {
+        UUID id PK
+        TIMESTAMPTZ accepted_at
+        BIGINT account_id FK,UK "NOT NULL"
+        TIMESTAMPTZ cancelled_at
+        TIMESTAMPTZ expires_at "NOT NULL"
+        TIMESTAMPTZ reminder_accepted_at
+        BOOLEAN reminder_enabled "NOT NULL"
+        TIMESTAMPTZ reminder_requested_at
+        TIMESTAMPTZ requested_at "NOT NULL"
+        BIGINT requested_by_account_id FK
+        UUID survey_id FK,UK "NOT NULL"
+        BIGINT workspace_id FK
+        BIGINT request_generation "NOT NULL"
     }
 
     ProductSurveyParticipation {
@@ -1256,6 +1310,8 @@ erDiagram
         VARCHAR(255) discussion_sync_cursor
         TIMESTAMPTZ discussions_synced_at
         BIGINT native_id
+        VARCHAR(2048) historical_backfill_sync_error
+        VARCHAR(2048) recent_sync_error
     }
 
     ReviewBackfillRun {
@@ -1342,6 +1398,7 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         VARCHAR(32) last_history_synced_ts
         TIMESTAMPTZ history_synced_at
+        VARCHAR(2048) last_sync_error
     }
 
     SlackParticipantConsent {
@@ -1617,11 +1674,13 @@ erDiagram
     Workspace ||--o{ ActivityEvent : has
     Workspace ||--o{ AgentJob : has
     Workspace ||--o{ ArtifactSignal : has
-    User ||--o{ ArtifactSignal : has
+    User ||--o{ ArtifactSignal : actor_user_id
+    User ||--o{ ArtifactSignal : requested_by_user_id
     Account ||--o{ AuthEvent : account_id
     Account ||--o{ AuthEvent : acting_account_id
     IdentityProvider ||--o{ AuthEvent : references
     IdentityLink ||--o{ AuthEvent : has
+    User ||--o{ AuthEvent : has
     Workspace ||--o{ AuthEvent : has
     ChatThread ||--o{ ChatMessage : has
     ChatMessage ||--o{ ChatMessage : references
@@ -1687,6 +1746,7 @@ erDiagram
     IdentityProvider ||--o{ Milestone : references
     Repository ||--o{ Milestone : has
     User ||--o{ Milestone : created_by
+    Account ||--o{ NotificationSubscription : has
     Practice ||--o{ Observation : practice_id
     Practice ||--o{ Observation : practice_id
     PracticeRevision ||--o{ Observation : has
@@ -1709,6 +1769,10 @@ erDiagram
     Workspace ||--o{ ProductFeedback : has
     Account ||--o{ ProductSurvey : has
     Workspace ||--o{ ProductSurvey : has
+    Account ||--o{ ProductSurveyEmailInvitation : account_id
+    Account ||--o{ ProductSurveyEmailInvitation : requested_by_account_id
+    ProductSurvey ||--o{ ProductSurveyEmailInvitation : has
+    Workspace ||--o{ ProductSurveyEmailInvitation : has
     Account ||--o{ ProductSurveyParticipation : has
     ProductSurvey ||--o{ ProductSurveyParticipation : has
     Workspace ||--o{ ProductSurveyParticipation : has

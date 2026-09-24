@@ -9,6 +9,8 @@ import {
 	getConsentStatusOptions,
 	getConsentStatusQueryKey,
 	getCurrentUserQueryKey,
+	getNotificationPreferencesOptions,
+	getNotificationPreferencesQueryKey,
 	getSlackUserPreferencesOptions,
 	getSlackUserPreferencesQueryKey,
 	getUserSettingsOptions,
@@ -19,6 +21,7 @@ import {
 	unlinkIdentityMutation,
 	updateAccountAiChoiceMutation,
 	updateResearchConsentMutation,
+	updateNotificationPreferencesMutation,
 	updateSlackUserPreferencesMutation,
 	updateUserSettingsMutation,
 } from "@/api/@tanstack/react-query.gen";
@@ -29,12 +32,13 @@ import type {
 	UpdateUserSettingsResponse,
 	UserSettings,
 } from "@/api/types.gen";
+import type { EmailPreferencesSectionProps } from "@/components/settings/EmailPreferencesSection";
 import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAccountsSection";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
 import { memberOnboardingQueryScope } from "@/hooks/use-member-onboarding";
 import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
-import { problemDetailOf } from "@/lib/problem-detail";
+import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
@@ -44,7 +48,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 function RouteComponent() {
 	const queryClient = useQueryClient();
-	const { logout, linkAccount } = useAuth();
+	const { logout, linkAccount, isAppAdmin } = useAuth();
 	const userSettingsQueryKey = getUserSettingsQueryKey();
 	const consentQuery = useQuery(getConsentStatusOptions({}));
 	const accountConsent = consentQuery.data;
@@ -68,6 +72,57 @@ function RouteComponent() {
 		...getUserSettingsOptions({}),
 		retry: 1,
 	});
+
+	const emailPreferencesQuery = useQuery(getNotificationPreferencesOptions());
+	const emailPreferencesMutation = useMutation({
+		...updateNotificationPreferencesMutation(),
+		onMutate: async () => {
+			await queryClient.cancelQueries({ queryKey: getNotificationPreferencesQueryKey() });
+		},
+		onSuccess: async (preferences) => {
+			await queryClient.cancelQueries({ queryKey: getNotificationPreferencesQueryKey() });
+			queryClient.setQueryData(getNotificationPreferencesQueryKey(), preferences);
+		},
+		onError: async (error) => {
+			await queryClient.invalidateQueries({ queryKey: getNotificationPreferencesQueryKey() });
+			toast.error(
+				problemStatusOf(error) === 412
+					? "Email choices changed elsewhere. Review the updated choices and try again."
+					: problemDetailOf(error, "Could not update your email choices. Please try again."),
+			);
+		},
+	});
+	const preferences = emailPreferencesQuery.data;
+	let emailPreferencesState: EmailPreferencesSectionProps["state"] = { status: "loading" };
+	if (emailPreferencesQuery.isError) {
+		emailPreferencesState = {
+			status: "error",
+			error: emailPreferencesQuery.error,
+			onRetry: () => {
+				void emailPreferencesQuery.refetch();
+			},
+		};
+	} else if (preferences !== undefined) {
+		emailPreferencesState = {
+			status: "ready",
+			preferences,
+			isPending: emailPreferencesMutation.isPending,
+			onChange: (choices) => {
+				if (emailPreferencesMutation.isPending) {
+					return;
+				}
+				emailPreferencesMutation.mutate({
+					headers: { "If-Match": preferences.etag },
+					body: choices,
+				});
+			},
+		};
+	}
+	const emailPreferencesProps: EmailPreferencesSectionProps = {
+		researchAvailable: hasText(accountConsent?.researchOrganization),
+		isAppAdmin,
+		state: emailPreferencesState,
+	};
 
 	const linkedIdentitiesQuery = useQuery({
 		...listLinkedIdentitiesOptions({}),
@@ -280,6 +335,7 @@ function RouteComponent() {
 
 	return (
 		<SettingsPage
+			emailPreferencesProps={emailPreferencesProps}
 			isLoading={isLoading}
 			settingsError={settingsError}
 			onRetrySettings={() => {

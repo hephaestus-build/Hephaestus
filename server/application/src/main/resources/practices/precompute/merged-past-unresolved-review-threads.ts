@@ -9,12 +9,14 @@ export default async function mergedPastUnresolvedReviewThreads(
 	_repoPath: string,
 	_diffFiles: Map<string, DiffFile>,
 	metadata: PullRequestMetadata,
-	contextDir?: string,
+	contextDir: string | undefined,
+	_changeDir: string | undefined,
+	contextReference: string,
 ) {
 	const merge = mergeFacts(metadata);
 	const record = await readReviewThreads(contextDir);
 	const threads = record?.threads ?? [];
-	const unresolved = unresolvedThreadRows(threads, merge.mergedAt);
+	const unresolved = unresolvedThreadRows(threads, contextReference, merge.mergedAt);
 	const directions: string[] = [];
 	if (!merge.merged) {
 		directions.push("The pull request is not merged: the occasion did not arise.");
@@ -28,7 +30,7 @@ export default async function mergedPastUnresolvedReviewThreads(
 		);
 	}
 	return {
-		hints: [mergeRow(metadata, merge), ...unresolved],
+		hints: [mergeRow(metadata, merge, contextReference), ...unresolved],
 		metrics: {
 			merged: merge.merged ? 1 : 0,
 			mergedByIsAuthor: merge.mergedByIsAuthor ? 1 : 0,

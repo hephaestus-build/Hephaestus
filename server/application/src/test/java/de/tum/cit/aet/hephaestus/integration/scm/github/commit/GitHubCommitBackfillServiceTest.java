@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.commit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -157,16 +158,15 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("should return -1 when HEAD cannot be resolved")
-        void shouldReturnNegativeOneWhenHeadUnresolvable() {
+        @DisplayName("should fail when HEAD cannot be resolved")
+        void shouldFailWhenHeadUnresolvable() {
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(gitRepositoryManager.resolveBranchHead(KEY, "main")).thenReturn(null);
             Repository repo = createMockRepository(1L, "owner/repo", "main");
             SyncTarget target = createSyncTarget(AuthMode.INSTALLATION_APP);
 
-            int result = service.backfillCommits(target, repo, 100L);
-
-            assertThat(result).isEqualTo(-1);
+            assertThatThrownBy(() -> service.backfillCommits(target, repo, 100L))
+                    .isInstanceOf(IllegalStateException.class);
         }
     }
 
@@ -188,9 +188,8 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
         stubCommits(commits);
         Repository repo = createMockRepository(1L, "owner/repo", "main");
 
-        int result = service.backfillCommits(createSyncTarget(AuthMode.PERSONAL_ACCESS_TOKEN), repo, 100L);
-
-        assertThat(result).isEqualTo(2);
+        assertThatThrownBy(() -> service.backfillCommits(createSyncTarget(AuthMode.PERSONAL_ACCESS_TOKEN), repo, 100L))
+                .isInstanceOf(IllegalStateException.class);
         for (CommitDetails commit : commits) verify(persister).persist(eq(commit), eq(repo), any());
     }
 
@@ -280,7 +279,7 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
     class ErrorHandling {
 
         @Test
-        void shouldReturnNegativeOneOnGitOperationException() {
+        void shouldPropagateGitOperationException() {
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             doThrow(new GitRepositoryManager.GitOperationException("Clone failed", new RuntimeException()))
                     .when(gitRepositoryManager)
@@ -289,13 +288,12 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
             Repository repo = createMockRepository(1L, "owner/repo", "main");
             SyncTarget target = createSyncTarget(AuthMode.INSTALLATION_APP);
 
-            int result = service.backfillCommits(target, repo, 100L);
-
-            assertThat(result).isEqualTo(-1);
+            assertThatThrownBy(() -> service.backfillCommits(target, repo, 100L))
+                    .isInstanceOf(GitRepositoryManager.GitOperationException.class);
         }
 
         @Test
-        void shouldReturnNegativeOneOnUnexpectedException() {
+        void shouldPropagateUnexpectedException() {
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             doThrow(new RuntimeException("Unexpected error"))
                     .when(gitRepositoryManager)
@@ -304,26 +302,23 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
             Repository repo = createMockRepository(1L, "owner/repo", "main");
             SyncTarget target = createSyncTarget(AuthMode.INSTALLATION_APP);
 
-            int result = service.backfillCommits(target, repo, 100L);
-
-            assertThat(result).isEqualTo(-1);
+            assertThatThrownBy(() -> service.backfillCommits(target, repo, 100L))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessage("Unexpected error");
         }
 
         @Test
-        void shouldReturnNegativeOneWhenTokenServiceFails() {
-            stubWalkableRepository();
+        void shouldFailWhenTokenServiceFails() {
+            when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(tokenService.isConfigured()).thenReturn(true);
             when(tokenService.getInstallationToken(42L)).thenThrow(new RuntimeException("Token error"));
-            stubCommits(List.of());
 
             Repository repo = createMockRepository(1L, "owner/repo", "main");
             SyncTarget target = createSyncTarget(AuthMode.INSTALLATION_APP);
 
-            int result = service.backfillCommits(target, repo, 100L);
-
-            // A token failure is not fatal: the backfill proceeds with a null token.
-            assertThat(result).isEqualTo(0);
-            verify(gitRepositoryManager).ensureRepository(KEY, "https://github.com/owner/repo.git", null);
+            assertThatThrownBy(() -> service.backfillCommits(target, repo, 100L))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessage("Token error");
         }
     }
 }

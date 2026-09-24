@@ -4,9 +4,12 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Objects;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -26,9 +29,12 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
     private static final String UNKNOWN = "UNKNOWN";
 
     private final IdentityProviderRepository gitProviderRepository;
+    private final UserRepository userRepository;
 
-    public RegistrationToGitProviderResolver(IdentityProviderRepository gitProviderRepository) {
+    public RegistrationToGitProviderResolver(
+            IdentityProviderRepository gitProviderRepository, UserRepository userRepository) {
         this.gitProviderRepository = gitProviderRepository;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -75,6 +81,20 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
                 .findById(gitProviderId)
                 .map(IdentityProvider::getServerUrl)
                 .orElse(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Long> findActorId(long gitProviderId, String subject) {
+        final long nativeId;
+        try {
+            nativeId = Long.parseLong(subject);
+        } catch (NumberFormatException notAGitSubject) {
+            return Optional.empty();
+        }
+        return userRepository
+                .findByNativeIdAndProviderId(nativeId, gitProviderId)
+                .map(User::getId);
     }
 
     /**

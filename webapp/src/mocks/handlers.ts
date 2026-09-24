@@ -51,6 +51,18 @@ export const handlers = [
 	}),
 	// --- current user -------------------------------------------------------
 	http.get("*/user", () => HttpResponse.json(currentUser)),
+	http.get("*/user/notification-preferences", () =>
+		HttpResponse.json({
+			productFeedback: false,
+			workspaceAlerts: false,
+			surveySummaries: false,
+			productSurveys: false,
+			researchSurveys: false,
+			emailAvailable: true,
+			deliveryConfigured: true,
+			etag: '"0-0-0"',
+		}),
+	),
 	http.get("*/user/consent", () =>
 		HttpResponse.json({
 			completed: true,
@@ -110,11 +122,6 @@ export const handlers = [
 		}
 		return HttpResponse.json({ ...existing, appRole: body.appRole ?? existing.appRole });
 	}),
-
-	// --- impersonation -------------------------------------------------------
-	http.post("*/auth/impersonate", () => new HttpResponse(null, { status: 204 })),
-	// `:exit` is a literal colon-suffix on the path, not an MSW path param.
-	http.post(String.raw`*/auth/impersonate\:exit`, () => new HttpResponse(null, { status: 204 })),
 ];
 
 // ---------------------------------------------------------------------------
@@ -127,17 +134,6 @@ export const handlers = [
 export const unauthenticatedUser = http.get(
 	"*/user",
 	() => new HttpResponse(null, { status: 401 }),
-);
-
-/** `GET /user` reports the operator is currently impersonating another account. */
-export const impersonatingUser = http.get("*/user", () =>
-	HttpResponse.json({
-		...currentUser,
-		impersonating: true,
-		impersonatorId: 1,
-		displayName: "Ada Lovelace",
-		username: "ada",
-	}),
 );
 
 /** `GET /user/sessions` -> 500, for the sessions error state. */

@@ -1,6 +1,7 @@
 /** Commit-subject shapes are review hints, not practice verdicts. */
 
 import type { ChangeCommit, ChangedFile } from "./change.ts";
+import { contextFile } from "./context.ts";
 import type { Hint } from "./types.ts";
 
 export interface SubjectFacts {
@@ -78,13 +79,13 @@ function kindOf(path: string): string {
 }
 
 /** One record row per authored commit — its subject's shape and what it touched — for the model to read. */
-export function commitRows(facts: readonly SubjectFacts[]): Hint[] {
+export function commitRows(facts: readonly SubjectFacts[], contextReference: string): Hint[] {
 	return facts
 		.filter((f) => !f.merge)
 		.map((f) => {
 			const paths = f.files.map((file) => file.path);
 			return {
-				file: "inputs/context/commits.json",
+				file: contextFile(contextReference, "commits.json"),
 				line: f.line,
 				pattern: "commit",
 				context: `${f.sha} ${f.subject}`,

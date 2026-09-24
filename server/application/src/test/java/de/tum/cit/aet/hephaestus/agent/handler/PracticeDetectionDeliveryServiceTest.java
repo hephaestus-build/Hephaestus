@@ -1663,7 +1663,11 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             meta.put("repository_id", 123L);
             meta.put("repository_full_name", "owner/repo");
             meta.put("issue_number", 12);
+            UUID reviewSnapshotId = UUID.randomUUID();
+            meta.put("review_snapshot_id", reviewSnapshotId.toString());
             testJob.setMetadata(meta);
+            when(observationRepository.lockIssueSnapshotForReview(1L, testJob.getId(), 999L))
+                    .thenReturn(Optional.of(reviewSnapshotId));
 
             var observations = List.of(validObservation("pr-description-quality", Presence.ABSENT));
             var result = publishVerified(testJob, observations);

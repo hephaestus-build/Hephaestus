@@ -1,14 +1,21 @@
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import {
 	adminGetProductSurveyOptions,
+	adminPreviewSurveyEmailInvitationsOptions,
+	adminPreviewSurveyEmailInvitationsQueryKey,
+	adminSendSurveyEmailInvitationsMutation,
 	adminGetProductSurveySummaryOptions,
 	adminListProductSurveyResponsesOptions,
 } from "@/api/@tanstack/react-query.gen";
 import { adminExportProductSurveyResponses } from "@/api/sdk.gen";
 import type { Survey } from "@/api/types.gen";
+import {
+	AdminSurveyEmailInvitations,
+	type SurveyEmailInvitationsState,
+} from "@/components/admin/product-feedback/AdminSurveyEmailInvitations";
 import {
 	AdminSurveyResults,
 	type AdminSurveyResultsState,
@@ -37,7 +44,53 @@ export function AdminSurveyResultsLevel({
 	onDelete,
 }: AdminSurveyResultsLevelProps) {
 	const [page, setPage] = useState(0);
+	const queryClient = useQueryClient();
 	const path = { surveyId };
+	const emailQuery = useQuery(adminPreviewSurveyEmailInvitationsOptions({ path }));
+	const queueEmails = useMutation({
+		...adminSendSurveyEmailInvitationsMutation(),
+		onSuccess: async (summary) => {
+			queryClient.setQueryData(adminPreviewSurveyEmailInvitationsQueryKey({ path }), summary);
+			await queryClient.invalidateQueries({
+				queryKey: adminPreviewSurveyEmailInvitationsQueryKey({ path }),
+			});
+			toast.success(
+				`${summary.queued} invitations queued in this batch. Relay acceptance appears separately.`,
+			);
+		},
+		onError: async () => {
+			await queryClient.invalidateQueries({
+				queryKey: adminPreviewSurveyEmailInvitationsQueryKey({ path }),
+			});
+			toast.error("Could not confirm the invitation request. Refresh counts before trying again.");
+		},
+	});
+	let emailState: SurveyEmailInvitationsState;
+	if (emailQuery.isError) {
+		emailState = {
+			status: "error",
+			error: emailQuery.error,
+			onRetry: () => {
+				void emailQuery.refetch();
+			},
+		};
+	} else if (emailQuery.data === undefined) {
+		emailState = { status: "loading" };
+	} else {
+		emailState = {
+			status: "ready",
+			summary: emailQuery.data,
+			isPending: queueEmails.isPending,
+			onRefresh: () => {
+				void emailQuery.refetch();
+			},
+			onQueue: (sendReminder) => {
+				if (!queueEmails.isPending) {
+					queueEmails.mutate({ path, body: { sendReminder } });
+				}
+			},
+		};
+	}
 	const surveyQuery = useQuery(adminGetProductSurveyOptions({ path }));
 	const summaryQuery = useQuery(adminGetProductSurveySummaryOptions({ path }));
 	const responsesQuery = useQuery({
@@ -85,6 +138,7 @@ export function AdminSurveyResultsLevel({
 
 	return (
 		<AdminSurveyResults
+			emailInvitations={<AdminSurveyEmailInvitations state={emailState} />}
 			state={state}
 			now={now}
 			nested={nested}

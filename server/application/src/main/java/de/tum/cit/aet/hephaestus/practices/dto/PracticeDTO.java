@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewValidation;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
@@ -65,7 +66,8 @@ public record PracticeDTO(
         @NonNull @Schema(description = "Timestamp when the practice was last updated")
         Instant updatedAt,
 
-        @Nullable CatalogOriginDTO catalogOrigin) {
+        @Nullable CatalogOriginDTO catalogOrigin,
+        @NonNull PracticeDeliveryBehavior deliveryBehavior) {
     /**
      * @param workspaceDefault the workspace's effective default autonomy, the bottom of the inheritance chain.
      *     Passed in rather than looked up here so one response resolves it once, and so this stays a pure
@@ -91,6 +93,7 @@ public record PracticeDTO(
                         AutonomyResolver.resolvePractice(practice, workspaceDefault), practice.getAutonomy()),
                 practice.getCreatedAt(),
                 practice.getUpdatedAt(),
-                catalogOrigin);
+                catalogOrigin,
+                practice.getDeliveryBehavior());
     }
 }

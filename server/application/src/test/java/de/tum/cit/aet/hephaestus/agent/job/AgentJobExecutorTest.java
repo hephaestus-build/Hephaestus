@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
@@ -240,7 +241,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         lenient().when(transactionTemplate.getTransactionManager()).thenReturn(transactionManager);
         lenient().when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         lenient()
-                .when(workerJwtIssuer.issueForJob(any(), anyLong(), anyInt(), any()))
+                .when(workerJwtIssuer.issueForJobUntil(any(), anyLong(), anyInt(), any()))
                 .thenReturn("job-jwt");
 
         lenient()
@@ -403,6 +404,13 @@ class AgentJobExecutorTest extends BaseUnitTest {
             verify(jobRepository).save(captured.capture());
             assertThat(captured.getValue().getStatus()).isEqualTo(AgentJobStatus.RUNNING);
             assertThat(captured.getValue().getStartedAt()).isNotNull();
+            ArgumentCaptor<Instant> tokenExpiry = ArgumentCaptor.forClass(Instant.class);
+            verify(workerJwtIssuer).issueForJobUntil(eq(jobId), eq(99L), anyInt(), tokenExpiry.capture());
+            ArgumentCaptor<SandboxSpec> sandboxSpec = ArgumentCaptor.forClass(SandboxSpec.class);
+            verify(sandboxManager).execute(sandboxSpec.capture());
+            long deadline = Long.parseLong(sandboxSpec.getValue().environment().get("SANDBOX_WORK_DEADLINE_MS"));
+            assertThat(tokenExpiry.getValue())
+                    .isEqualTo(Instant.ofEpochMilli(deadline).plus(SandboxLayout.RESULT_UPLOAD_GRACE));
         }
 
         @Test

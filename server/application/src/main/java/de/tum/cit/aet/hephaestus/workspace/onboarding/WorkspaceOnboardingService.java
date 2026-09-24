@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
-import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -89,7 +88,6 @@ class WorkspaceOnboardingService {
     /** The choice is a boundary, not a pick from today's bindings: any of the four values is accepted. */
     @Transactional
     public WorkspaceOnboardingDTO choose(WorkspaceContext context, long accountId, MemberAiChoice choice) {
-        requireSelf();
         requireMember(context.id(), accountId);
         writeChoice(accountId, choice);
         return memberState(context, accountId);
@@ -106,7 +104,6 @@ class WorkspaceOnboardingService {
 
     @Transactional
     public AccountAiChoiceDTO chooseForAccount(long accountId, MemberAiChoice choice) {
-        requireSelf();
         var row = writeChoice(accountId, choice);
         return new AccountAiChoiceDTO(row.getAiChoice(), row.getUpdatedAt(), accountOptions(accountId));
     }
@@ -143,7 +140,6 @@ class WorkspaceOnboardingService {
 
     @Transactional
     public WorkspaceOnboardingDTO dismiss(WorkspaceContext context, long accountId) {
-        requireSelf();
         var workspace = lockWorkspace(context.id());
         requireMember(context.id(), accountId);
         var policy = settings.findByWorkspaceId(context.id()).orElse(null);
@@ -220,11 +216,6 @@ class WorkspaceOnboardingService {
         if (memberships.membershipsForAccount(accountId).stream()
                 .noneMatch(member -> member.workspaceId() == workspaceId))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Join this workspace before starting onboarding.");
-    }
-
-    private static void requireSelf() {
-        if (CurrentAccount.impersonatorId() != null)
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the account owner can make their AI choice.");
     }
 
     private Workspace lockWorkspace(long id) {

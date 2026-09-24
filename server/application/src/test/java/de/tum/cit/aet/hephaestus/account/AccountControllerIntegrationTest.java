@@ -72,7 +72,7 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
                 .jsonPath("$.practiceFeedbackDeliveryEnabled")
                 .isEqualTo(true)
                 .jsonPath("$.participateInResearch")
-                .isEqualTo(false);
+                .doesNotExist();
 
         var provisionedUser = userRepository.findByLogin(GITLAB_LOGIN).orElseThrow();
         assertThat(provisionedUser.getNativeId()).isEqualTo(GITLAB_NATIVE_ID);
@@ -99,8 +99,6 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
         var actorId = Objects.requireNonNull(actor.getId());
         var namesakeId = Objects.requireNonNull(namesake.getId());
         var namesakePreferences = new UserPreferences(namesake);
-        namesakePreferences.setParticipateInResearch(true);
-        namesakePreferences.setPracticeFeedbackDeliveryEnabled(false);
         preferencesRepository.save(namesakePreferences);
         preferencesRepository.save(new UserPreferences(actor));
 
@@ -112,8 +110,6 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.participateInResearch")
-                .isEqualTo(false)
                 .jsonPath("$.practiceFeedbackDeliveryEnabled")
                 .isEqualTo(true);
 
@@ -122,18 +118,16 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
                 .uri("/user/settings")
                 .headers(headers -> headers.setBearerAuth(seeded.token()))
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                .bodyValue(new UserSettingsDTO(true, true))
+                .bodyValue(new UserSettingsDTO(false))
                 .exchange()
                 .expectStatus()
                 .isOk();
 
         assertThat(preferencesRepository.findByUserId(actorId)).get().satisfies(preferences -> {
-            assertThat(preferences.isParticipateInResearch()).isTrue();
-            assertThat(preferences.isPracticeFeedbackDeliveryEnabled()).isTrue();
+            assertThat(preferences.isPracticeFeedbackDeliveryEnabled()).isFalse();
         });
         assertThat(preferencesRepository.findByUserId(namesakeId)).get().satisfies(preferences -> {
-            assertThat(preferences.isParticipateInResearch()).isTrue();
-            assertThat(preferences.isPracticeFeedbackDeliveryEnabled()).isFalse();
+            assertThat(preferences.isPracticeFeedbackDeliveryEnabled()).isTrue();
         });
         assertThat(userRepository.findById(actorId))
                 .get()

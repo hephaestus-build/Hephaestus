@@ -5,6 +5,7 @@ import { refLabel, workspaceLabel } from "@/components/admin/audit/ref-label";
 import { formatTimestamp } from "@/components/admin/audit/time-format";
 import { DetailRow } from "@/components/common/DetailRow";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
 	Sheet,
 	SheetContent,
@@ -88,18 +89,10 @@ export function AuditEventDetailSheet({
 								<span className="ml-2 text-xs text-muted-foreground">{ELEVATION_DESCRIPTION}</span>
 							</DetailRow>
 						)}
-						<DetailRow label="Impersonated by">
-							{hasText(actor) ? (
-								<span>
-									{actor}
-									{event.actingAccountId != null && (
-										<span className="ml-1 text-xs text-muted-foreground">(impersonating)</span>
-									)}
-								</span>
-							) : (
-								"—"
-							)}
-						</DetailRow>
+						<DetailRow label="Acting account">{actor ?? "—"}</DetailRow>
+						{event.viewedUserId != null && (
+							<DetailRow label="Viewed user">#{event.viewedUserId}</DetailRow>
+						)}
 						<DetailRow label="Workspace">
 							{event.workspaceId == null ? "—" : workspaceLabel(event.workspaceId, workspaceName)}
 						</DetailRow>
@@ -111,7 +104,9 @@ export function AuditEventDetailSheet({
 						</DetailRow>
 						<DetailRow label="Raw data">
 							{hasText(pretty) ? (
-								<pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs">{pretty}</pre>
+								<ScrollArea viewportClassName="max-h-48">
+									<pre className="rounded bg-muted p-2 text-xs">{pretty}</pre>
+								</ScrollArea>
 							) : (
 								"—"
 							)}

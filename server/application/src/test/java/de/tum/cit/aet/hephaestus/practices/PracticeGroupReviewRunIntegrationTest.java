@@ -249,7 +249,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
 
     @Test
     @WithUser
-    void shouldFillAPageAfterWithholdingANewerRun() {
+    void shouldPageHistoricalAndCurrentRunsWithoutLosingEither() {
         AgentJob olderJob = persistAgentJob(workspace);
         insertObservation(
                 practice,
@@ -267,7 +267,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
         insertObservation(
                 superseded,
                 newerJob,
-                "Withheld observation",
+                "Historical observation",
                 "PRESENT",
                 "GOOD",
                 null,
@@ -291,21 +291,46 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                 .isOk()
                 .expectBody()
                 .jsonPath("$.content[0].observations[0].title")
+                .isEqualTo("Historical observation")
+                .jsonPath("$.content[0].observations[0].claimCurrentness")
+                .isEqualTo("STALE")
+                .jsonPath("$.hasNext")
+                .isEqualTo(true);
+
+        webTestClient
+                .get()
+                .uri(uriBuilder -> uriBuilder
+                        .path(REVIEW_RUNS_URI)
+                        .queryParam("size", 1)
+                        .queryParam("page", 1)
+                        .build(workspace.getWorkspaceSlug(), group.getSlug()))
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].observations[0].title")
                 .isEqualTo("Visible observation")
+                .jsonPath("$.content[0].observations[0].claimCurrentness")
+                .isEqualTo("CURRENT")
                 .jsonPath("$.hasNext")
                 .isEqualTo(false);
     }
 
     @Test
     @WithUser
-    @DisplayName("a run whose observations the visibility gate withholds leaves the page entirely")
-    void shouldWithholdARunMeasuredAgainstSupersededReviewRules() {
+    @DisplayName("a run measured against older review rules stays in history")
+    void shouldKeepARunMeasuredAgainstSupersededReviewRulesAsHistorical() {
         insertObservation("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
         practice.setCriteria("Rewritten criteria, which is what makes the fingerprint differ");
         practice.setGroup(group);
         practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));
         practiceRepository.saveAndFlush(practice);
 
-        getHistory().jsonPath("$.content.length()").isEqualTo(0);
+        getHistory()
+                .jsonPath("$.content.length()")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].observations[0].claimCurrentness")
+                .isEqualTo("STALE");
     }
 }

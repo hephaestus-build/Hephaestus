@@ -159,7 +159,9 @@ public class AgentJobService {
                 issue.getHtmlUrl(),
                 issue.getUpdatedAt(),
                 triggerSignal,
-                ObservationOrigin.MANUAL);
+                ObservationOrigin.MANUAL,
+                null,
+                issue.getReviewSnapshotId());
     }
 
     /**

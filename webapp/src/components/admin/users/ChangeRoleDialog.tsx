@@ -61,7 +61,7 @@ export function ChangeRoleDialog({
 						{granting ? (
 							<>
 								This gives <strong>{name}</strong> full application-admin access, including managing
-								other users and impersonation. Continue?
+								other users and read-only user views. Continue?
 							</>
 						) : (
 							<>

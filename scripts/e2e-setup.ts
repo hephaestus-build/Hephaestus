@@ -2,6 +2,7 @@ import { Client } from "pg";
 
 import { isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
+import { researchConsentFields } from "./lib/research-consent.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -653,9 +654,7 @@ async function main(): Promise<void> {
 		await api("PUT", "/user/consent", {
 			noticeVersion: textField(consent, "noticeVersion", "consent status"),
 			termsAccepted: true,
-			// Only an instance that names a research organisation asks, and it rejects an answer to a
-			// question it never put.
-			...(typeof consent.researchOrganization === "string" && { participateInResearch: false }),
+			...researchConsentFields(consent.researchOrganization),
 		});
 	}
 	const accountId = idField(object(await api("GET", "/user"), "user"), "user");

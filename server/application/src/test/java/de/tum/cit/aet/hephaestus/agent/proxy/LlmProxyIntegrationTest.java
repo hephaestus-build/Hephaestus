@@ -178,17 +178,20 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"GET,''", "GET,/workspace", "GET,/frames", "POST,/result"})
-    void shouldAuthorizeRuntimeRoutesOnlyForThePersistedWorkerAndAttempt(String method, String suffix)
-            throws Exception {
+    @CsvSource({"GET,'',401", "GET,/workspace,401", "GET,/frames,401", "POST,/result,409"})
+    void shouldAuthorizeRuntimeRoutesOnlyForThePersistedWorkerAndAttempt(
+            String method, String suffix, int nonOwnerStatus) throws Exception {
         AgentJob job = runningJob(true);
         String token = tokenFor(job);
-        String path = "/internal/llm/runtime/" + java.util.UUID.randomUUID() + suffix;
+        String path = "/internal/llm/runtime/" + job.getId() + suffix;
         assertThat(authenticate(method, path, token).status()).isEqualTo(200);
+        assertThat(authenticate(method, "/internal/llm/runtime/" + java.util.UUID.randomUUID() + suffix, token)
+                        .status())
+                .isEqualTo(401);
 
         job.setWorkerId("another-worker");
         jobRepository.save(job);
-        assertThat(authenticate(method, path, token).status()).isEqualTo(401);
+        assertThat(authenticate(method, path, token).status()).isEqualTo(nonOwnerStatus);
 
         job.setWorkerId("worker-1");
         job.setRetryCount(job.getRetryCount() + 1);

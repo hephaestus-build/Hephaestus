@@ -60,6 +60,7 @@ const PRACTICE_FIELDS = {
 	precomputeScript: "Static analysis",
 	// The occasions and their evidence render under a heading of their own, which this must not repeat.
 	automatedReviewPolicy: "How it is reviewed",
+	deliveryBehavior: "Feedback delivery",
 } satisfies Record<
 	Exclude<keyof CuratedPracticeDefinition, "automatedReviewValidation" | "bindings">,
 	string

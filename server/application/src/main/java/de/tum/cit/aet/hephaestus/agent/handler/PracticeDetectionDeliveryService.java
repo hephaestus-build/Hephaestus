@@ -270,6 +270,15 @@ public class PracticeDetectionDeliveryService {
         // may have been withdrawn, erased or reassigned since.
         Admissible admissible = requireAdmissible(job, metadata);
         Target target = admissible.target();
+        if (target.type().equals(ArtifactKinds.ISSUE)) {
+            String admittedSnapshot = metadata.path("review_snapshot_id").asString("");
+            UUID currentSnapshot = observationRepository
+                    .lockIssueSnapshotForReview(workspaceId, job.getId(), target.id())
+                    .orElse(null);
+            if (currentSnapshot == null || !currentSnapshot.toString().equals(admittedSnapshot)) {
+                throw new JobDeliveryException("Issue changed after this review was submitted: jobId=" + job.getId());
+            }
+        }
         Map<String, PracticeRevision> revisionsBySlug = admissible.revisionsBySlug();
         List<ValidatedObservation> admittedObservations = prepared.observations;
         List<Integer> admittedIndexes = prepared.indexes;

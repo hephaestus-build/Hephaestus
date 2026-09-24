@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalog.BundledEntry;
 import java.io.IOException;
@@ -123,9 +124,25 @@ public class BundledPracticeCatalogLoader {
                 evidenceDefaults.policyFor(artifactKind),
                 whyItMatters,
                 whatGoodLooksLike,
-                groupSlug);
+                groupSlug,
+                deliveryBehavior(objectMapper, node, slug));
         definitionValidator.validate(definition);
         return definition;
+    }
+
+    private static PracticeDeliveryBehavior deliveryBehavior(JsonMapper mapper, JsonNode node, String slug) {
+        JsonNode value = node.get("deliveryBehavior");
+        if (value == null) {
+            return PracticeDeliveryBehavior.DEFAULT;
+        }
+        if (!value.isObject()) {
+            throw new IllegalStateException("invalid delivery behavior: " + slug);
+        }
+        try {
+            return mapper.treeToValue(value, PracticeDeliveryBehavior.class);
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("invalid delivery behavior: " + slug, exception);
+        }
     }
 
     /**

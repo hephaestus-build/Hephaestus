@@ -18,6 +18,7 @@ const runs: PracticeGroupReviewRun[] = [
 		observations: [
 			{
 				observationId: "00000000-0000-0000-0000-000000000102",
+				claimCurrentness: "CURRENT",
 				practiceSlug: "records-decisions",
 				practiceName: "Record significant decisions",
 				title: "The workspace trade-off is documented",
@@ -39,6 +40,7 @@ const runs: PracticeGroupReviewRun[] = [
 		observations: [
 			{
 				observationId: "00000000-0000-0000-0000-000000000202",
+				claimCurrentness: "CURRENT",
 				practiceSlug: "asks-answerable-questions",
 				practiceName: "Ask questions a teammate can answer",
 				title: "The question includes the attempted fix",

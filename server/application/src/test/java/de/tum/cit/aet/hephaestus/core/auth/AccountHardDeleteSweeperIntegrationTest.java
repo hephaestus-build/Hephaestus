@@ -227,6 +227,29 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
         });
     }
 
+    @Test
+    void shouldRedactAViewOfTheErasedUserWhenTheViewPredatesTheirSignIn() {
+        Long erasedId = persistedId(
+                newAccount("Viewed user", "viewed-erased@example.com").getId());
+        seedUserView(9012L, 77_777L, "{\"reason\":\"Before sign-in\"}");
+        seedUserView(9011L, 66_666L, "{\"reason\":\"Another user\"}");
+        IdentityLink linkedLater = new IdentityLink();
+        linkedLater.setAccount(accountRepository.findById(erasedId).orElseThrow());
+        linkedLater.setProviderId(1L);
+        linkedLater.setSubject("77777");
+        linkedLater.setExternalActorId(77_777L);
+        identityLinkRepository.save(linkedLater);
+        markDeleting(
+                erasedId, clock.instant().minus(authProperties.deleteCooldown()).minus(Duration.ofHours(1)));
+
+        sweeper.sweepNow();
+
+        assertThat(jdbcTemplate.queryForObject("SELECT details::text FROM auth_event WHERE id = 9012", String.class))
+                .isNull();
+        assertThat(jdbcTemplate.queryForObject("SELECT details::text FROM auth_event WHERE id = 9011", String.class))
+                .contains("Another user");
+    }
+
     // ── Case 6: product submissions the account owns are erased with it ───────────────────────
 
     @Test
@@ -294,9 +317,18 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
         return id;
     }
 
+    private void seedUserView(long id, long viewedUserId, String details) {
+        jdbcTemplate.update(
+                "INSERT INTO auth_event (id, occurred_at, acting_account_id, viewed_user_id, event_type, result, details) "
+                        + "VALUES (?, now(), 88888, ?, 'USER_VIEW', 'SUCCESS', CAST(? AS jsonb))",
+                id,
+                viewedUserId,
+                details);
+    }
+
     private void seedAuthEvent(
             long id,
-            Long accountId,
+            @Nullable Long accountId,
             @Nullable Long actingAccountId,
             String eventType,
             String ip,

@@ -8,7 +8,10 @@ import {
 	adminGetInstanceSettingsOptions,
 	adminGetInstanceSettingsQueryKey,
 	adminUpdateSilentModeMutation,
+	adminSendTestEmailMutation,
 } from "@/api/@tanstack/react-query.gen";
+import { EMAIL_TEST_OUTCOME_DEFS } from "@/components/admin/instance/email-test-outcome-defs";
+import { InstanceEmailCard } from "@/components/admin/instance/InstanceEmailCard";
 import { SilentModeCard } from "@/components/admin/instance/SilentModeCard";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -44,6 +47,21 @@ function WorkspaceSettingsPage() {
 			}
 			void queryClient.invalidateQueries({ queryKey: adminGetInstanceSettingsQueryKey() });
 			toast.error(problemDetailOf(error, "Could not update silent mode"));
+		},
+	});
+
+	const testEmailMutation = useMutation({
+		...adminSendTestEmailMutation(),
+		onSuccess: (data) => {
+			const def = EMAIL_TEST_OUTCOME_DEFS[data.outcome];
+			if (data.outcome === "SENT") {
+				toast.success(`Relay accepted test email to ${data.to ?? "your address"}`);
+			} else {
+				toast.warning(def.label, { description: def.description });
+			}
+		},
+		onError: (error) => {
+			toast.error(problemDetailOf(error, "Could not send the test email"));
 		},
 	});
 
@@ -97,7 +115,14 @@ function WorkspaceSettingsPage() {
 				description="Instance-wide operator controls. These apply across every workspace and override workspace settings while active."
 			/>
 
-			{body}
+			<div className="space-y-4">
+				{body}
+				<InstanceEmailCard
+					isPending={testEmailMutation.isPending}
+					result={testEmailMutation.data}
+					onSendTest={(to) => testEmailMutation.mutate({ body: { to } })}
+				/>
+			</div>
 		</PageLayout>
 	);
 }

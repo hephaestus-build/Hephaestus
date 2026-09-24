@@ -107,7 +107,7 @@ class AgentJobStaleReapIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("a genuinely stale RUNNING job reaches TIMED_OUT and its ledger event is committed with it")
     void staleRunningJobIsTimedOutAndBilled() {
-        // 20 minutes into a 600s timeout (+5min buffer = 15min) — past the cutoff.
+        // Past the work timeout, upload grace, and stale-job safety buffer.
         UUID jobId = staleRunningJob(readableSnapshot(), withProxyUsage());
 
         sweeper.reapStaleRunningJobs();
@@ -209,10 +209,10 @@ class AgentJobStaleReapIntegrationTest extends BaseIntegrationTest {
         job.setStatus(AgentJobStatus.RUNNING);
         job.setConfigSnapshot(configSnapshot);
         job.setWorkerId("dead-replica");
-        job.setStartedAt(Instant.now().minus(Duration.ofMinutes(20)));
+        job.setStartedAt(Instant.now().minus(Duration.ofMinutes(30)));
         // Non-null executionStartedAt is what makes this attempt billable: it got past preparation and
         // actually ran, so its spend has to be accounted for.
-        job.setExecutionStartedAt(Instant.now().minus(Duration.ofMinutes(19)));
+        job.setExecutionStartedAt(Instant.now().minus(Duration.ofMinutes(29)));
         job.setLlmTotalCalls(usage.getLlmTotalCalls());
         job.setLlmTotalInputTokens(usage.getLlmTotalInputTokens());
         job.setLlmTotalOutputTokens(usage.getLlmTotalOutputTokens());

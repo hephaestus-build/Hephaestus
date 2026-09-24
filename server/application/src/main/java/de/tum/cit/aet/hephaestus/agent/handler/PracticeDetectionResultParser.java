@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
@@ -303,7 +304,30 @@ public class PracticeDetectionResultParser {
             @Nullable Severity severity,
             @Nullable JsonNode evidence,
             @Nullable String evidenceRationale,
-            @Nullable ObservationKeys keys) {
+            @Nullable ObservationKeys keys,
+            PracticeDeliveryBehavior deliveryBehavior) {
+        public ValidatedObservation(
+                String practiceSlug,
+                String summary,
+                AssessmentStatus assessmentStatus,
+                @Nullable Presence presence,
+                @Nullable Assessment assessment,
+                @Nullable Severity severity,
+                @Nullable JsonNode evidence,
+                @Nullable String evidenceRationale,
+                @Nullable ObservationKeys keys) {
+            this(
+                    practiceSlug,
+                    summary,
+                    assessmentStatus,
+                    presence,
+                    assessment,
+                    severity,
+                    evidence,
+                    evidenceRationale,
+                    keys,
+                    PracticeDeliveryBehavior.DEFAULT);
+        }
         /** The parser's output shape: an observation not yet stamped with its persisted identities. */
         public ValidatedObservation(
                 String practiceSlug,
@@ -323,7 +347,8 @@ public class PracticeDetectionResultParser {
                     severity,
                     evidence,
                     evidenceRationale,
-                    null);
+                    null,
+                    PracticeDeliveryBehavior.DEFAULT);
         }
 
         public ValidatedObservation withKeys(@Nullable ObservationKeys keys) {
@@ -336,7 +361,8 @@ public class PracticeDetectionResultParser {
                     severity,
                     evidence,
                     evidenceRationale,
-                    keys);
+                    keys,
+                    deliveryBehavior);
         }
 
         public @Nullable Outcome outcome() {

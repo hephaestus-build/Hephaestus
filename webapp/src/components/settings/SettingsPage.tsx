@@ -9,6 +9,11 @@ import { optionalIntegrationsAvailable } from "@/runtime/consent";
 import { AiChoiceSection, type AiChoiceSectionProps } from "./AiChoiceSection";
 import { CookiePreferencesSection } from "./CookiePreferencesSection";
 import { DangerZoneSection } from "./DangerZoneSection";
+import {
+	EmailPreferencesSection,
+	hasEmailPreferences,
+	type EmailPreferencesSectionProps,
+} from "./EmailPreferencesSection";
 import { LinkedAccountsSection, type LinkedAccountsSectionProps } from "./LinkedAccountsSection";
 import {
 	PracticeFeedbackSection,
@@ -25,6 +30,7 @@ import {
 } from "./SlackPreferencesSection";
 
 export interface SettingsPageProps {
+	emailPreferencesProps: EmailPreferencesSectionProps;
 	practiceFeedbackProps: PracticeFeedbackSectionProps;
 	researchProps: ResearchParticipationSectionProps;
 	showResearchSection: boolean;
@@ -39,6 +45,7 @@ export interface SettingsPageProps {
 }
 
 export function SettingsPage({
+	emailPreferencesProps,
 	practiceFeedbackProps,
 	researchProps,
 	showResearchSection,
@@ -108,6 +115,13 @@ export function SettingsPage({
 				{/* Its own read, so a failed preferences load does not hide it. */}
 				<Separator />
 				<AiChoiceSection {...aiChoiceRest} isLoading={isLoading || aiChoiceLoading} />
+
+				{hasEmailPreferences(emailPreferencesProps.state) && (
+					<>
+						<Separator />
+						<EmailPreferencesSection {...emailPreferencesProps} />
+					</>
+				)}
 
 				<Separator />
 				<LinkedAccountsSection {...linkedRest} isLoading={isLoading || linkedLoading} />

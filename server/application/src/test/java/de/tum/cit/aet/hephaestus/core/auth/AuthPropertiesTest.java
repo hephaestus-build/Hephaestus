@@ -33,7 +33,6 @@ class AuthPropertiesTest extends BaseUnitTest {
         assertThat(properties.accessTtl()).isEqualTo(Duration.ofHours(24));
         assertThat(properties.sessionMaxLifetime()).isEqualTo(Duration.ofDays(7));
         assertThat(properties.stepUpMaxAge()).isEqualTo(Duration.ofMinutes(5));
-        assertThat(properties.impersonationMaxLifetime()).isEqualTo(Duration.ofHours(1));
         assertThat(properties.cookieSecure()).isTrue();
     }
 

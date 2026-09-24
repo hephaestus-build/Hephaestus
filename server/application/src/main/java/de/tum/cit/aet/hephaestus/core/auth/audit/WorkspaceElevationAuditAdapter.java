@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
  * a workspace visible in the audit viewer.
  *
  * <p>It records an access <em>window</em>, not a request: an admin browsing one workspace issues
- * dozens of requests, and a row per request would bury the impersonation and role-change events the
+ * dozens of requests, and a row per request would bury the user-view and role-change events the
  * viewer exists for. So the marker is de-duplicated per {@code (account, workspace)} for
  * {@link #DEDUP_WINDOW}. The cache is bounded and per-process, so eviction, concurrent requests and
  * a second replica may each produce an extra marker — over-reporting an access window is harmless,

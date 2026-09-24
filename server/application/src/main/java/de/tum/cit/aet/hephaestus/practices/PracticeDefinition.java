@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -14,14 +15,15 @@ import org.jspecify.annotations.Nullable;
  * it as a prefix, so there is nothing for a second statement of it to disagree with.
  */
 public record PracticeDefinition(
-        String name,
-        List<PracticeBinding> bindings,
-        String criteria,
+        @NonNull String name,
+        @NonNull List<PracticeBinding> bindings,
+        @NonNull String criteria,
         @Nullable String precomputeScript,
-        PracticeAutomatedReviewPolicy automatedReviewPolicy,
+        @NonNull PracticeAutomatedReviewPolicy automatedReviewPolicy,
         @Nullable String whyItMatters,
         @Nullable String whatGoodLooksLike,
-        @Nullable String groupSlug)
+        @Nullable String groupSlug,
+        @NonNull PracticeDeliveryBehavior deliveryBehavior)
         implements CatalogDefinition {
     public static final int MAX_PRECOMPUTE_SCRIPT_LENGTH = 100_000;
 
@@ -33,6 +35,7 @@ public record PracticeDefinition(
         rejectDuplicateSignals(bindings);
         Objects.requireNonNull(criteria, "criteria");
         Objects.requireNonNull(automatedReviewPolicy, "automatedReviewPolicy");
+        deliveryBehavior = deliveryBehavior == null ? PracticeDeliveryBehavior.DEFAULT : deliveryBehavior;
         boolean automatedReviewDisabled =
                 automatedReviewPolicy.automatedReview().mode() == PracticeAutomatedReviewMode.NONE;
         for (PracticeBinding binding : bindings) {
@@ -50,6 +53,27 @@ public record PracticeDefinition(
         whatGoodLooksLike = blankToNull(whatGoodLooksLike);
     }
 
+    public PracticeDefinition(
+            String name,
+            List<PracticeBinding> bindings,
+            String criteria,
+            @Nullable String precomputeScript,
+            PracticeAutomatedReviewPolicy automatedReviewPolicy,
+            @Nullable String whyItMatters,
+            @Nullable String whatGoodLooksLike,
+            @Nullable String groupSlug) {
+        this(
+                name,
+                bindings,
+                criteria,
+                precomputeScript,
+                automatedReviewPolicy,
+                whyItMatters,
+                whatGoodLooksLike,
+                groupSlug,
+                PracticeDeliveryBehavior.DEFAULT);
+    }
+
     public static PracticeDefinition from(Practice practice) {
         return new PracticeDefinition(
                 practice.getName(),
@@ -59,7 +83,8 @@ public record PracticeDefinition(
                 practice.getAutomatedReviewPolicy(),
                 practice.getWhyItMatters(),
                 practice.getWhatGoodLooksLike(),
-                practice.getGroup() == null ? null : practice.getGroup().getSlug());
+                practice.getGroup() == null ? null : practice.getGroup().getSlug(),
+                practice.getDeliveryBehavior());
     }
 
     public ArtifactKind artifactKind() {

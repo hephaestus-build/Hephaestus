@@ -21,15 +21,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.server.ResponseStatusException;
 
 class WorkspaceOnboardingServiceTest extends BaseUnitTest {
@@ -89,11 +85,6 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         lenient()
                 .when(choices.findById(anyLong()))
                 .thenAnswer(invocation -> Optional.ofNullable(savedChoices.get(invocation.<Long>getArgument(0))));
-    }
-
-    @AfterEach
-    void clearSecurityContext() {
-        SecurityContextHolder.clearContext();
     }
 
     private Workspace member() {
@@ -308,23 +299,5 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         assertThat(policy.isAiChoiceRequired()).isTrue();
         assertThat(result.aiChoiceRequired()).isTrue();
         verify(audit).record(any());
-    }
-
-    @Test
-    void shouldRejectChoicesAndDismissalWhileImpersonating() {
-        var jwt = Jwt.withTokenValue("test")
-                .header("alg", "none")
-                .subject("10")
-                .claim("act", Map.of("sub", "99"))
-                .build();
-        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
-        assertThatThrownBy(() -> service.choose(context, 10L, MemberAiChoice.IN_HOUSE_ONLY))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("account owner");
-        assertThatThrownBy(() -> service.chooseForAccount(10L, MemberAiChoice.IN_HOUSE_ONLY))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("account owner");
-        assertThatThrownBy(() -> service.dismiss(context, 10L)).isInstanceOf(ResponseStatusException.class);
-        verifyNoInteractions(members, choices, workspaces);
     }
 }

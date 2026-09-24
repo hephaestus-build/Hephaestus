@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus;
 
+import de.tum.cit.aet.hephaestus.account.userview.UserViewAuthorizationConfig;
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
-import de.tum.cit.aet.hephaestus.core.security.ImpersonationGuard;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
 import de.tum.cit.aet.hephaestus.feature.FeatureFlag;
@@ -261,13 +261,6 @@ public class SecurityConfig {
             http.addFilterBefore(authRateLimitFilter, AuthorizationFilter.class);
         }
 
-        // Read-only-by-default enforcement for impersonation sessions (JWT carries an `act`
-        // claim). Registered AFTER the AuthorizationFilter so the SecurityContext already holds
-        // the validated JwtAuthenticationToken — only then is the `act` claim resolvable. Without
-        // this registration the guard never runs and impersonation grants full write access as the
-        // target (the documented read-only model was dead code). See ImpersonationGuard.
-        http.addFilterAfter(new ImpersonationGuard(objectMapper), AuthorizationFilter.class);
-
         http.authorizeHttpRequests(requests -> {
             // CORS preflight requests must be permitted for cross-origin requests to work.
             // Without this, OPTIONS requests are rejected with 403 before CORS headers can be added.
@@ -277,6 +270,7 @@ public class SecurityConfig {
             // gets overwritten by a 401 when the anonymous /error forward is denied. Permit it so the
             // ORIGINAL status is preserved. The error view carries no sensitive data.
             requests.requestMatchers("/error").permitAll();
+            requests.requestMatchers(EMAIL_UNSUBSCRIBE_MATCHER).permitAll();
             // NOTE: /webhooks/**, /oauth/callback/**, /api/workers/** and /actuator/health|info are
             // claimed by higher-precedence chains and NEVER reach this fallback chain:
             //   - /webhooks/** + /oauth/callback/**  → workerHubSecurityFilterChain (the
@@ -361,9 +355,13 @@ public class SecurityConfig {
     static final RequestMatcher DEV_LOGIN_MATCHER =
             PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/dev-login");
 
+    // This capability only disables one subscription; RFC 8058 receivers have no session or CSRF token.
+    static final RequestMatcher EMAIL_UNSUBSCRIBE_MATCHER =
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/notifications/unsubscribe/{token}");
+
     /** Unsafe requests require CSRF unless they use only bearer auth or an enabled dev endpoint. */
     private boolean requiresCsrf(jakarta.servlet.http.HttpServletRequest request) {
-        if (SAFE_METHODS.contains(request.getMethod())) {
+        if (EMAIL_UNSUBSCRIBE_MATCHER.matches(request) || SAFE_METHODS.contains(request.getMethod())) {
             return false;
         }
         // The resolver prefers cookies, so adding a bearer header must not bypass their CSRF check.
@@ -407,7 +405,7 @@ public class SecurityConfig {
                 "X-Requested-With",
                 "Origin",
                 "X-XSRF-TOKEN",
-                "X-Impersonation-Allow-Writes"));
+                UserViewAuthorizationConfig.REASON_HEADER));
         configuration.setExposedHeaders(
                 List.of(ReplicaIdentityFilter.HEADER_NAME, RequestCorrelationFilter.HEADER_NAME));
         configuration.setAllowCredentials(true);

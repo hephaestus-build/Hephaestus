@@ -21,6 +21,7 @@ const { values } = parseArgs({
 		diff: { type: "string" },
 		metadata: { type: "string" },
 		context: { type: "string" },
+		"context-reference": { type: "string" },
 		change: { type: "string" },
 		practices: { type: "string" },
 		output: { type: "string", default: DEFAULT_OUTPUT_DIR },
@@ -48,6 +49,10 @@ if (!timeoutIsUsable) {
 }
 const timeoutMs = timeoutIsUsable ? requestedTimeoutMs : DEFAULT_TIMEOUT_MS;
 const contextDir = values.context ?? "";
+const contextReference = values["context-reference"] ?? "";
+if (contextDir !== "" && contextReference === "") {
+	throw new Error("--context-reference is required with --context");
+}
 const changeDir = values.change ?? "";
 
 let diffFiles = new Map<string, DiffFile>();
@@ -143,7 +148,7 @@ const results = await Promise.allSettled(
 				throw new Error(`Script ${slug} must export a default function`);
 			}
 			const rawResult: unknown = await withTimeout(
-				mod.default(repoPath, diffFiles, metadata, contextDir, changeDir),
+				mod.default(repoPath, diffFiles, metadata, contextDir, changeDir, contextReference),
 			);
 			const result = validateResult(rawResult, slug);
 			const elapsed = Date.now() - start;

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.runtime;
 
+import java.time.Duration;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -140,6 +141,14 @@ public final class SandboxLayout {
 
     /** Exit code emitted by the Pi runner on envelope/image drift (unsupported {@code schemaVersion} or {@code kind}). */
     public static final int EXIT_ENVELOPE_MISMATCH = 42;
+
+    /** The result was not acknowledged before the upload deadline. */
+    public static final int EXIT_UPLOAD_FAILED = 43;
+
+    /** The child was stopped at the work deadline; upload still had its own window. */
+    public static final int EXIT_WORK_TIMEOUT = 124;
+
+    public static final Duration RESULT_UPLOAD_GRACE = Duration.ofMinutes(10);
 
     /**
      * Exit code emitted by the Pi runner when the review finished but the call admitting it never

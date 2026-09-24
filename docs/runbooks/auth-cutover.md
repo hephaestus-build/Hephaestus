@@ -124,21 +124,13 @@ The Liquibase migration was validated against Postgres 16 in both directions: a 
 
 ## Revocation
 
-- Logout / "sign out everywhere" / admin-revoke / impersonation-exit set `issued_jwt.revoked_at`.
+- Logout / "sign out everywhere" / admin-revoke set `issued_jwt.revoked_at`.
   Because the decoder re-checks `issued_jwt(jti)` on every request (the cache is negative — REVOKED
   verdicts only), the revocation is effective on every pod within DB visibility lag, not the cache
-  TTL. A compromised account is killed cluster-wide at once by suspending it (the per-request
-  account-status gate, independent of this cache). Cross-pod sub-second propagation via a NATS
-  `auth.jwt.revoked` push is a tracked follow-up.
+  TTL. Revoke all sessions through instance administration to end a compromised account's
+  existing sessions; this does not prevent a new sign-in through its identity provider.
 - The `issued_jwt` table is swept of expired rows by a scheduled job; alert if its row count
   grows > 2× baseline (sweep broken).
-
-## Impersonation
-
-- Every `IMPERSONATION_BEGIN` is audited with `(account_id=target, acting_account_id=operator)`
-  and a mandatory reason. Alert on every begin during normal hours (not just failures).
-- Impersonation sessions are read-only unless the operator sends
-  `X-Impersonation-Allow-Writes: true` after a second confirmation.
 
 ## Key SLOs to dashboard
 

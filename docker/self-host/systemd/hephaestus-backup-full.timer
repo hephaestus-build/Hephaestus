@@ -1,0 +1,10 @@
+[Unit]
+Description=Schedule Hephaestus weekly PostgreSQL full backup
+
+[Timer]
+OnCalendar=Sun *-*-* 02:15:00 UTC
+Persistent=true
+Unit=hephaestus-backup@full.service
+
+[Install]
+WantedBy=timers.target

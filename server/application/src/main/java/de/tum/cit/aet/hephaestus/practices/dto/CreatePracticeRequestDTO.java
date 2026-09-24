@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.dto;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -76,4 +77,29 @@ public record CreatePracticeRequestDTO(
                 description = "Practice group to add the practice to. Omit or set to null for Unassigned.",
                 nullable = true)
         @Nullable
-        String groupSlug) {}
+        String groupSlug,
+
+        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior) {
+    public CreatePracticeRequestDTO(
+            @Nullable String slug,
+            @Nullable String name,
+            @Nullable List<PracticeBinding> bindings,
+            @Nullable String criteria,
+            @Nullable String precomputeScript,
+            @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy,
+            @Nullable String whyItMatters,
+            @Nullable String whatGoodLooksLike,
+            @Nullable String groupSlug) {
+        this(
+                slug,
+                name,
+                bindings,
+                criteria,
+                precomputeScript,
+                automatedReviewPolicy,
+                whyItMatters,
+                whatGoodLooksLike,
+                groupSlug,
+                null);
+    }
+}

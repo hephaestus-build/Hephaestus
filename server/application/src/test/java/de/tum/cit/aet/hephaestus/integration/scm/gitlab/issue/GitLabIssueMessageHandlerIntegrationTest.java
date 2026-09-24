@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookUser;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.dto.GitLabIssueEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
@@ -25,6 +26,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,6 +84,9 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
     private GitLabIssueMessageHandler handler;
 
     @Autowired
+    private GitLabIssueProcessor processor;
+
+    @Autowired
     private IssueRepository issueRepository;
 
     @Autowired
@@ -136,6 +141,49 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Nested
     class BasicLifecycleEvents {
+
+        @Test
+        void shouldAdvanceReviewSnapshotWhenSyncChangesAnOpenIssue() throws Exception {
+            handler.handleEvent(loadPayload("issue.open"));
+            Issue before = issueRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
+                    .orElseThrow();
+            var previousSnapshot = before.getReviewSnapshotId();
+            eventListener.clear();
+
+            processor.processFromSync(
+                    new GitLabIssueProcessor.SyncIssueData(
+                            "gid://gitlab/Issue/422296",
+                            "5",
+                            "Updated title",
+                            FIXTURE_ISSUE_BODY,
+                            "opened",
+                            false,
+                            FIXTURE_ISSUE_HTML_URL,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            0,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null),
+                    savedRepo,
+                    null);
+
+            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).hasSize(1);
+            Issue after = issueRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
+                    .orElseThrow();
+            assertThat(after.getTitle()).isEqualTo("Updated title");
+            assertThat(after.getReviewSnapshotId()).isNotNull().isNotEqualTo(previousSnapshot);
+        }
 
         @Test
         void shouldPersistIssueOnOpenEvent() throws Exception {
@@ -233,6 +281,70 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
                     .orElse(null);
             assertThat(issue).isNotNull();
+        }
+
+        @Test
+        void shouldPreserveAnEditorWhoIsNotTheIssueAuthor() throws Exception {
+            handler.handleEvent(loadPayload("issue.open"));
+            eventListener.clear();
+            GitLabIssueEventDTO edit = loadPayload("issue.update");
+            var editor = new GitLabWebhookUser(987654321L, "different-editor", "Different Editor", null, null);
+            handler.handleEvent(new GitLabIssueEventDTO(
+                    edit.objectKind(),
+                    edit.eventType(),
+                    editor,
+                    edit.project(),
+                    edit.objectAttributes(),
+                    edit.labels(),
+                    edit.assignees(),
+                    edit.changes()));
+
+            Issue issue = issueRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
+                    .orElseThrow();
+            var update = eventListener.ofType(ScmDomainEvent.IssueUpdated.class).getFirst();
+            var context = Objects.requireNonNull(update.context());
+            assertThat(context.actorUserId())
+                    .isNotNull()
+                    .isNotEqualTo(Objects.requireNonNull(issue.getAuthor()).getId());
+            assertThat(userRepository.findByNativeIdAndProviderId(
+                            987654321L, Objects.requireNonNull(savedProvider.getId())))
+                    .map(user -> user.getId())
+                    .contains(context.actorUserId());
+        }
+
+        @Test
+        void shouldPreserveTheActorOnReopen() throws Exception {
+            handler.handleEvent(loadPayload("issue.open"));
+            handler.handleEvent(loadPayload("issue.close"));
+            eventListener.clear();
+            GitLabIssueEventDTO reopened = loadPayload("issue.reopen");
+            var editor = new GitLabWebhookUser(987654321L, "different-editor", "Different Editor", null, null);
+            handler.handleEvent(new GitLabIssueEventDTO(
+                    reopened.objectKind(),
+                    reopened.eventType(),
+                    editor,
+                    reopened.project(),
+                    reopened.objectAttributes(),
+                    reopened.labels(),
+                    reopened.assignees(),
+                    reopened.changes()));
+
+            var context = Objects.requireNonNull(eventListener
+                    .ofType(ScmDomainEvent.IssueUpdated.class)
+                    .getFirst()
+                    .context());
+            assertThat(context.actorUserId())
+                    .isEqualTo(userRepository
+                            .findByNativeIdAndProviderId(987654321L, Objects.requireNonNull(savedProvider.getId()))
+                            .orElseThrow()
+                            .getId());
+            assertThat(Objects.requireNonNull(issueRepository
+                                    .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
+                                    .orElseThrow()
+                                    .getAuthor())
+                            .getId())
+                    .isNotEqualTo(context.actorUserId());
         }
     }
 

@@ -72,15 +72,16 @@ public interface ArtifactSignalRepository extends JpaRepository<ArtifactSignal, 
     @Query(value = """
         INSERT INTO artifact_signal (
             id, workspace_id, artifact_kind, artifact_id, signal_name, revision,
-            occurred_at, discovered_via, state, state_changed_at
+            occurred_at, discovered_via, state, state_changed_at, actor_user_id
         ) VALUES (
             :id, :#{#key.workspaceId()}, :#{#key.artifactKind().value()}, :#{#key.artifactId()},
             :#{#key.signalName().value()}, :#{#key.revision().value()},
-            :occurredAt, 'EVENT', 'DEFERRED', :now
+            :occurredAt, 'EVENT', 'DEFERRED', :now, :actorUserId
         ) ON CONFLICT (workspace_id, artifact_kind, artifact_id, signal_name, revision) DO UPDATE
         SET discovered_via = 'EVENT', occurred_at = EXCLUDED.occurred_at,
             state = 'DEFERRED', state_reason = NULL, last_attempted_at = NULL,
-            state_changed_at = EXCLUDED.state_changed_at
+            state_changed_at = EXCLUDED.state_changed_at,
+            actor_user_id = EXCLUDED.actor_user_id
         WHERE (artifact_signal.state = 'RECORDED' AND artifact_signal.discovered_via = 'SYNC')
            OR (artifact_signal.state = 'SUPPRESSED' AND artifact_signal.state_reason = 'COALESCED')
         """, nativeQuery = true)
@@ -88,7 +89,8 @@ public interface ArtifactSignalRepository extends JpaRepository<ArtifactSignal, 
             @Param("key") SignalKey key,
             @Param("id") UUID id,
             @Param("occurredAt") Instant occurredAt,
-            @Param("now") Instant now);
+            @Param("now") Instant now,
+            @Param("actorUserId") @Nullable Long actorUserId);
 
     /** Candidates only: consumers must lock each group and recheck eligibility. */
     @WorkspaceAgnostic("Discovers deferred occasions across the instance; settlement is workspace-scoped")

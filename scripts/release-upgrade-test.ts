@@ -5,6 +5,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { asArray, asRecord, asString } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
+import { researchConsentFields } from "./lib/research-consent.ts";
 
 const [previousImage = "", candidateImage = "", postgresImage = ""] = process.argv.slice(2);
 
@@ -192,10 +193,9 @@ async function completeTransparencyNotice(port: number, session: Session): Promi
 		body: JSON.stringify({
 			noticeVersion: statusBody.noticeVersion,
 			termsAccepted: true,
-			// Only an instance that names a research organisation asks, and it rejects an answer to a
-			// question it never put.
-			...("researchOrganization" in statusBody &&
-				typeof statusBody.researchOrganization === "string" && { participateInResearch: false }),
+			...researchConsentFields(
+				"researchOrganization" in statusBody ? statusBody.researchOrganization : undefined,
+			),
 		}),
 	});
 	if (!completed.ok) {

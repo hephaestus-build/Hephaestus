@@ -1,0 +1,60 @@
+import { useMutation } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+
+import { unsubscribeEmailMutation } from "@/api/@tanstack/react-query.gen";
+import { createClient } from "@/api/client";
+import { EmailUnsubscribePage } from "@/components/settings/EmailUnsubscribePage";
+import environment from "@/environment";
+
+// This capability must work independently of stale sessions, CSRF cookies and impersonation.
+const anonymousClient = createClient({
+	baseUrl: environment.serverUrl,
+	credentials: "omit",
+	referrerPolicy: "no-referrer",
+});
+
+export const Route = createFileRoute("/unsubscribe")({
+	staticData: { surface: "auth" },
+	head: () => ({
+		meta: [{ title: "Unsubscribe — Hephaestus" }, { name: "robots", content: "noindex, nofollow" }],
+	}),
+	validateSearch: (search): { token?: string } => ({
+		token: typeof search.token === "string" && search.token.length > 0 ? search.token : undefined,
+	}),
+	component: UnsubscribeRoute,
+});
+
+function UnsubscribeRoute() {
+	const { token } = Route.useSearch();
+	return token !== undefined && token.length > 0 ? (
+		<UnsubscribeConfirmation key={token} token={token} />
+	) : (
+		<EmailUnsubscribePage state={{ status: "invalid" }} />
+	);
+}
+
+function UnsubscribeConfirmation({ token }: { token: string }) {
+	const unsubscribe = useMutation(unsubscribeEmailMutation({ client: anonymousClient }));
+	if (unsubscribe.isSuccess) {
+		return <EmailUnsubscribePage state={{ status: "complete" }} />;
+	}
+	let status: "confirm" | "pending" | "error" = "confirm";
+	if (unsubscribe.isPending) {
+		status = "pending";
+	} else if (unsubscribe.isError) {
+		status = "error";
+	}
+	return (
+		<EmailUnsubscribePage
+			state={{
+				status,
+				onConfirm: () => {
+					if (unsubscribe.isPending) {
+						return;
+					}
+					unsubscribe.mutate({ path: { token }, body: { "List-Unsubscribe": "One-Click" } });
+				},
+			}}
+		/>
+	);
+}

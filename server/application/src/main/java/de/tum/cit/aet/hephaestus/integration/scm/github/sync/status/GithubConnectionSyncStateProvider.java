@@ -160,8 +160,7 @@ public class GithubConnectionSyncStateProvider implements ConnectionSyncStatePro
                         : counts.toSyncResourceCounts(monitor.getIssuesSyncedAt(), monitor.getPullRequestsSyncedAt()),
                 // upstreamCount: would require a live vendor call — the SPI forbids that in resources().
                 null,
-                // Per-resource errors are not persisted yet.
-                null,
+                monitor.getSyncErrorSummary(),
                 // backfillCompletedThrough: GitHub's backfill horizon is issue/PR-NUMBER based
                 // (highWaterMark/checkpoint), not date-based — no per-item timestamp to report here
                 // without an extra vendor call.

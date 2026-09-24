@@ -18,10 +18,13 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAiChoiceExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery.WorkspaceMembershipView;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.auth.spi.NotificationPreferencesExportQuery;
+import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Instant;
@@ -29,6 +32,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
@@ -40,14 +45,19 @@ class AccountExportServiceTest extends BaseUnitTest {
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-05-29T12:00:00Z"), ZoneOffset.UTC);
 
-    @Test
-    void assemble_includesOwnData_andExcludesTokensAndOtherUsers() {
+    // ── Bundle assembly ────────────────────────────────────────────────────────────────────
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void assemble_includesAuthoritativeConsent_andExcludesTokensAndOtherUsers(boolean participating) {
         AccountService accountService = mock(AccountService.class);
         AccountFeatureRepository featureRepo = mock(AccountFeatureRepository.class);
         AuthEventRepository authEventRepo = mock(AuthEventRepository.class);
         AccountWorkspaceMembershipQuery membershipQuery = mock(AccountWorkspaceMembershipQuery.class);
         AccountPreferencesQuery preferencesQuery = mock(AccountPreferencesQuery.class);
         GitProviderRegistry gitProviderRegistry = mock(GitProviderRegistry.class);
+        ResearchParticipationQuery research = mock(ResearchParticipationQuery.class);
+        when(research.participates(ACCOUNT_ID)).thenReturn(participating);
 
         Account account = new Account("Ada Lovelace");
         setId(account, ACCOUNT_ID);
@@ -71,7 +81,7 @@ class AccountExportServiceTest extends BaseUnitTest {
         when(membershipQuery.membershipsForAccount(ACCOUNT_ID))
                 .thenReturn(List.of(new WorkspaceMembershipView(7L, "tum-ase", "TUM ASE", "MEMBER", 314L)));
         when(preferencesQuery.preferencesForAccount(ACCOUNT_ID))
-                .thenReturn(Optional.of(new AccountPreferencesQuery.PreferencesView(true, false)));
+                .thenReturn(Optional.of(new AccountPreferencesQuery.PreferencesView(!participating, false)));
 
         ExportBundleAssembler assembler = new ExportBundleAssembler(
                 accountService,
@@ -81,7 +91,9 @@ class AccountExportServiceTest extends BaseUnitTest {
                 preferencesQuery,
                 gitProviderRegistry,
                 clock,
-                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.core.auth.spi.AccountAiChoiceExport.class));
+                accountId -> new AccountAiChoiceExport.Choice("NO_AI", clock.instant()),
+                accountId -> new NotificationPreferencesExportQuery.Preferences(false, false, false, false, false),
+                research);
 
         ExportBundle bundle = assembler.assemble(ACCOUNT_ID);
 
@@ -98,8 +110,12 @@ class AccountExportServiceTest extends BaseUnitTest {
         });
         assertThat(bundle.featureFlags()).containsExactly("mentor_access");
         assertNotNull(bundle.preferences());
-        assertThat(bundle.preferences().participateInResearch()).isTrue();
+        assertThat(bundle.preferences().participateInResearch()).isEqualTo(participating);
         assertThat(bundle.preferences().practiceFeedbackDeliveryEnabled()).isFalse();
+        var aiChoice = bundle.aiChoice();
+        assertNotNull(aiChoice);
+        assertThat(aiChoice.aiChoice()).isEqualTo("NO_AI");
+        assertThat(bundle.notificationPreferences()).isNotNull();
 
         String json = new ObjectMapper().writeValueAsString(bundle);
         assertThat(json).contains("\"ada@example.com\"", "tum-ase", "mentor_access");
@@ -110,6 +126,13 @@ class AccountExportServiceTest extends BaseUnitTest {
                 .doesNotContain("private_key")
                 .doesNotContain("client_secret")
                 .doesNotContain("password");
+
+        when(accountService.activeIdentities(ACCOUNT_ID)).thenReturn(List.of());
+        when(preferencesQuery.preferencesForAccount(ACCOUNT_ID)).thenReturn(Optional.empty());
+        var withoutScmPreferences = assembler.assemble(ACCOUNT_ID).preferences();
+        assertNotNull(withoutScmPreferences);
+        assertThat(withoutScmPreferences.participateInResearch()).isEqualTo(participating);
+        assertThat(withoutScmPreferences.practiceFeedbackDeliveryEnabled()).isTrue();
     }
 
     @Test

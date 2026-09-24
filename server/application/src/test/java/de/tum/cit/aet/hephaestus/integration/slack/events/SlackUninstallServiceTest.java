@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -67,7 +68,9 @@ class SlackUninstallServiceTest extends BaseUnitTest {
                 purgeAdapter,
                 mentorSlackThreadService,
                 conversationFeedbackErasure,
-                messageService);
+                messageService,
+                org.mockito.Mockito.mock(
+                        de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService.class));
     }
 
     private static Stream<Arguments> eventTypeMapping() {
@@ -82,6 +85,9 @@ class SlackUninstallServiceTest extends BaseUnitTest {
             String slackEventType, String eventId, String expectedEventType, String expectedCorrelationId) {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
         when(connectionService.findActive(WORKSPACE, IntegrationKind.SLACK)).thenReturn(Optional.of(connection));
+        org.mockito.Mockito.lenient()
+                .when(connectionService.transition(eq(connection), any()))
+                .thenReturn(connection);
 
         service().onUninstall(TEAM, slackEventType, eventId);
 
@@ -97,6 +103,9 @@ class SlackUninstallServiceTest extends BaseUnitTest {
     void appUninstalled_purgesWorkspaceDataInOrder() {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
         when(connectionService.findActive(WORKSPACE, IntegrationKind.SLACK)).thenReturn(Optional.of(connection));
+        org.mockito.Mockito.lenient()
+                .when(connectionService.transition(eq(connection), any()))
+                .thenReturn(connection);
 
         service().onUninstall(TEAM, "app_uninstalled", "Ev1");
 

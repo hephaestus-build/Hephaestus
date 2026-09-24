@@ -75,10 +75,7 @@ public class IdentityLink {
     @Nullable
     private String teamId;
 
-    /**
-     * FK to the corresponding git-provider actor mirror, if known. Lets profile UIs display
-     * "your GitHub activity here" without a (provider, subject) → (provider_id, native_id) join.
-     */
+    /** Cached actor mirror, if known. It is not proof of ownership or authorization. */
     @Column(name = "external_actor_id")
     @Nullable
     private Long externalActorId;

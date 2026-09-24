@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -18,7 +19,8 @@ class AccountWorkspaceMembershipQueryAdapterTest extends BaseUnitTest {
         var memberships = mock(WorkspaceMembershipRepository.class);
         when(accounts.resolve(42L)).thenReturn(List.of());
 
-        assertThat(new AccountWorkspaceMembershipQueryAdapter(memberships, accounts).membershipsForAccount(42L))
+        assertThat(new AccountWorkspaceMembershipQueryAdapter(memberships, accounts, mock(AccountIdentityQuery.class))
+                        .membershipsForAccount(42L))
                 .isEmpty();
         verifyNoInteractions(memberships);
     }
@@ -33,8 +35,9 @@ class AccountWorkspaceMembershipQueryAdapterTest extends BaseUnitTest {
         when(memberships.findAllWithWorkspaceByUserIdIn(List.of(7L)))
                 .thenThrow(new IllegalStateException("Database unavailable"));
 
-        assertThatThrownBy(() ->
-                        new AccountWorkspaceMembershipQueryAdapter(memberships, accounts).membershipsForAccount(42L))
+        assertThatThrownBy(() -> new AccountWorkspaceMembershipQueryAdapter(
+                                memberships, accounts, mock(AccountIdentityQuery.class))
+                        .membershipsForAccount(42L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Database unavailable");
     }

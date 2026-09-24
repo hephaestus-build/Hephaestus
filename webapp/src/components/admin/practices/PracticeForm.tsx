@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import deepEqual from "fast-deep-equal";
 
 import { cn } from "cn";
 import type {
@@ -9,7 +10,7 @@ import type {
 	PracticeGroup,
 	UpdatePracticeRequest,
 } from "@/api/types.gen";
-import { soleBinding } from "@/components/admin/practice-editor/bindings";
+import { normalizeBinding, soleBinding } from "@/components/admin/practice-editor/bindings";
 import {
 	PracticeDefinitionForm,
 	type PracticeDefinitionValue,
@@ -68,6 +69,7 @@ function asDefinitionValue(practice: Practice): PracticeDefinitionValue {
 			: {}),
 		...(hasText(practice.precomputeScript) ? { precomputeScript: practice.precomputeScript } : {}),
 		automatedReviewPolicy: practice.automatedReviewPolicy,
+		deliveryBehavior: practice.deliveryBehavior,
 	};
 }
 
@@ -76,11 +78,15 @@ export function PracticeForm(props: PracticeFormProps) {
 	// Passes the host's return through untouched: a `void` from `onSubmit` must stay `void`, because
 	// the unsaved-changes guard reads only a promise as a save it can wait for.
 	const submit = (value: PracticeDefinitionValue): void | Promise<void> => {
-		const { groupSlug, ...definition } = value;
+		const { groupSlug, bindingChanges, ...definition } = value;
 		if (props.mode === "create") {
 			return props.onSubmit(definition, groupSlug ?? null);
 		}
 
+		const bindingsChanged = !deepEqual(
+			definition.bindings[0],
+			normalizeBinding(soleBinding(props.initialData.bindings)),
+		);
 		const clear: NonNullable<UpdatePracticeRequest["clear"]> = [];
 		if (!hasText(definition.precomputeScript)) {
 			clear.push("PRECOMPUTE_SCRIPT");
@@ -96,11 +102,13 @@ export function PracticeForm(props: PracticeFormProps) {
 			{
 				name: definition.name,
 				criteria: definition.criteria,
-				bindings: definition.bindings,
+				bindings: bindingsChanged ? definition.bindings : undefined,
+				bindingChanges: bindingsChanged ? bindingChanges : undefined,
 				whyItMatters: definition.whyItMatters,
 				whatGoodLooksLike: definition.whatGoodLooksLike,
 				precomputeScript: definition.precomputeScript,
 				automatedReviewPolicy: definition.automatedReviewPolicy,
+				deliveryBehavior: definition.deliveryBehavior,
 				clear: clear.length > 0 ? clear : undefined,
 			},
 			groupSlug ?? null,

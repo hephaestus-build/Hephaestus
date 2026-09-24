@@ -11,6 +11,7 @@ public enum FeedbackSuppressionReason {
     CONVERSATION_EXPIRED,
     ARTIFACT_GONE,
     ARTIFACT_CLOSED,
+    ISSUE_SNAPSHOT_CHANGED,
     ARTIFACT_MERGED,
     /** @deprecated Read compatibility only; no current policy emits this reason. */
     @Deprecated

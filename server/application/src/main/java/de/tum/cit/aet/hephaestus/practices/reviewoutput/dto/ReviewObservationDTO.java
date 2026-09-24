@@ -89,7 +89,9 @@ public record ReviewObservationDTO(
                 row.getRecurrenceKey(),
                 row.getOrigin(),
                 ReviewClaimCurrentness.of(
-                        row.getPracticeRevisionFingerprint(), row.getCurrentPracticeRevisionFingerprint()),
+                        row.getPracticeRevisionFingerprint(),
+                        row.getCurrentPracticeRevisionFingerprint(),
+                        row.getSupersededAt()),
                 row.getObservedAt(),
                 disposition == null
                         ? ReviewFeedbackDispositionDTO.empty()

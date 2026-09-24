@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 @Entity
 @Table(
         name = "product_feedback",
+        indexes = @Index(name = "idx_product_feedback_created_at", columnList = "created_at"),
         uniqueConstraints =
                 @UniqueConstraint(
                         name = "uk_product_feedback_rate_limit",
