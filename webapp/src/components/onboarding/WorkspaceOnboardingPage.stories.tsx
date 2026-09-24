@@ -162,14 +162,12 @@ export const Default: Story = {
 		}
 		await expect(first.top).toBe(second.top);
 		await expect(second.top).toBe(third.top);
-		const capacityRows = canvas.getAllByText("Capacity");
-		await expect(capacityRows).toHaveLength(3);
-		await expect(capacityRows[0]?.getBoundingClientRect().top).toBe(
-			capacityRows[1]?.getBoundingClientRect().top,
-		);
-		await expect(capacityRows[1]?.getBoundingClientRect().top).toBe(
-			capacityRows[2]?.getBoundingClientRect().top,
-		);
+		for (const dimension of ["AI help", "Models", "Capacity", "New requests"]) {
+			const rows = canvas.getAllByText(dimension);
+			await expect(rows).toHaveLength(3);
+			await expect(rows[0]?.getBoundingClientRect().top).toBe(rows[1]?.getBoundingClientRect().top);
+			await expect(rows[1]?.getBoundingClientRect().top).toBe(rows[2]?.getBoundingClientRect().top);
+		}
 		const term = canvas.getByText("What AI does");
 		const detail = canvas.getByText(/Hephaestus reviews your work against/u);
 		await expect(detail.getBoundingClientRect().top).toBeGreaterThan(

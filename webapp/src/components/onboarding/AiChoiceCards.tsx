@@ -28,9 +28,15 @@ import {
 export const AI_CHOICES = statusValues(MEMBER_AI_CHOICE_DEFS);
 
 const CHOICE_VISUALS: Record<MemberAiChoice, string> = {
-	IN_HOUSE_ONLY: "bg-mentor/10 text-mentor",
-	CLOUD: "bg-accent text-accent-foreground",
-	NO_AI: "bg-muted text-muted-foreground",
+	IN_HOUSE_ONLY: "bg-background ring-1 ring-inset ring-mentor/25",
+	CLOUD: "bg-accent",
+	NO_AI: "bg-muted",
+};
+
+const CHOICE_ICON_COLORS: Record<MemberAiChoice, string> = {
+	IN_HOUSE_ONLY: "text-mentor",
+	CLOUD: "text-foreground",
+	NO_AI: "text-muted-foreground",
 };
 
 const FACT_ICONS = {
@@ -89,7 +95,10 @@ export function AiChoiceCards({ choice, saved, onChoice, modelsByChoice }: AiCho
 							)}
 						>
 							<span className="flex items-center gap-2 text-base font-semibold text-foreground">
-								<Icon aria-hidden="true" className="size-5 shrink-0" />
+								<Icon
+									aria-hidden="true"
+									className={cn("size-5 shrink-0", CHOICE_ICON_COLORS[value])}
+								/>
 								{label}{" "}
 								{saved === value && (
 									<Badge variant="secondary" className="ml-auto">
@@ -148,7 +157,7 @@ export function AiChoiceCards({ choice, saved, onChoice, modelsByChoice }: AiCho
 								return (
 									<span
 										key={MEMBER_AI_CHOICE_DIMENSIONS[index]}
-										className="grid content-center gap-1.5 border-b border-border py-2.5 last:border-b-0 md:min-h-24"
+										className="grid content-center gap-1.5 border-b border-border py-2.5 last:border-b-0 md:min-h-27"
 									>
 										<span className="text-xs font-medium text-muted-foreground">
 											{MEMBER_AI_CHOICE_DIMENSIONS[index]}
