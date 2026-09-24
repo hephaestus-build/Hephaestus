@@ -271,8 +271,8 @@ export const WorkspaceModels: Story = {
 		await expect(models).toHaveTextContent("Declared cloud");
 		await expect(models).toHaveTextContent("Team model");
 		await expect(models.querySelectorAll("img")).toHaveLength(4);
-		await expect(canvas.getByRole("radio", { name: CLOUD })).toHaveTextContent(
-			"gpt-6-luna via Microsoft Azure",
+		await expect(canvas.getByRole("radio", { name: CLOUD })).toHaveAccessibleName(
+			/gpt-6-luna.*Microsoft Azure/u,
 		);
 	},
 };
