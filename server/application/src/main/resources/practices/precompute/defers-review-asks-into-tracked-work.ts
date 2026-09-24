@@ -1,3 +1,4 @@
+import { contextFile } from "../lib/context.ts";
 // Precompute FACTS for defers-review-asks-into-tracked-work: every ask a reviewer made, one row
 // each, with what the record shows beside it — whether the change touches the file the ask is on,
 // whether the author replied and what the reply names, whether the reviewer had a later word on it
@@ -30,7 +31,9 @@ export default async function defersReviewAsksIntoTrackedWork(
 	_repoPath: string,
 	diffFiles: Map<string, DiffFile>,
 	metadata: PullRequestMetadata,
-	contextDir?: string,
+	contextDir: string | undefined,
+	_changeDir: string | undefined,
+	contextReference: string,
 ) {
 	const author = metadata.author ?? "";
 	const inline = await readReviewComments(contextDir);
@@ -52,7 +55,7 @@ export default async function defersReviewAsksIntoTrackedWork(
 	);
 	for (const ask of inlineAsks) {
 		hints.push(
-			row(ask.comment, ask.replies, ask.followUps, diffFiles, {
+			row(ask.comment, ask.replies, ask.followUps, diffFiles, contextReference, {
 				threadResolved: ask.thread?.state === "RESOLVED",
 				approvedAfterAsk: approvedAfter(ask.comment.createdAt),
 			}),
@@ -66,7 +69,7 @@ export default async function defersReviewAsksIntoTrackedWork(
 		const replies = (general ?? []).filter((c) => c.author === author && afterAsk(c));
 		const followUps = (general ?? []).filter((c) => byOthers(c) && afterAsk(c));
 		hints.push(
-			row({ ...ask, path: "", outdated: false }, replies, followUps, diffFiles, {
+			row({ ...ask, path: "", outdated: false }, replies, followUps, diffFiles, contextReference, {
 				threadResolved: false,
 				approvedAfterAsk: approvedAfter(ask.createdAt),
 			}),
@@ -107,6 +110,7 @@ function row(
 	replies: readonly { body: string }[],
 	followUps: readonly { body: string }[],
 	diffFiles: Map<string, DiffFile>,
+	contextReference: string,
 	record: { threadResolved: boolean; approvedAfterAsk: boolean },
 ): Hint {
 	const replyText = replies.map((r) => r.body).join("\n");
@@ -130,7 +134,7 @@ function row(
 		flags.outdated = ask.outdated;
 	}
 	return {
-		file: ask.path === "" ? "inputs/context/general_comments.json" : ask.path,
+		file: ask.path === "" ? contextFile(contextReference, "general_comments.json") : ask.path,
 		line: line ?? 0,
 		pattern: ask.path === "" ? "conversation ask" : "inline ask",
 		context: excerpt(ask.body),

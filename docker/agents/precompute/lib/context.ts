@@ -4,6 +4,11 @@ import { readFile } from "node:fs/promises";
 
 import { isJsonObject } from "./practice-contract.ts";
 
+/** A citation path inside the context root declared by task.json. */
+export function contextFile(contextReference: string, name: string): string {
+	return `${contextReference}/${name}`;
+}
+
 /** Returns null for absent, unreadable or invalid JSON; callers validate the shape. */
 export async function readContextJson(
 	contextDir: string | undefined,

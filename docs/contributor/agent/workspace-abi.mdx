@@ -241,6 +241,8 @@ ownership or prevent symlink traversal.
 A declared location does not guarantee content exists there. For example, a review without a
 repository has no repository tree, and feedback composition runs only when its request is present.
 The runner and precompute resolve input locations from these fields, not from the layout shown above.
+Precompute receives the relative `contextRoot` for record citations as well as its absolute path
+for file reads, so a relocated job folder does not leave stale citation paths.
 Scratch and output locations remain fixed by this ABI.
 
 ## Output archive validation

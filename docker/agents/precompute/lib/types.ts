@@ -34,8 +34,9 @@ export interface PracticeResult extends PracticeFindings {
 /**
  * Injected scripts are untrusted; the runner validates their results with parseFindings.
  *
- * @param contextDir the context the server projected (`inputs/context`), read with `lib/context.ts`
+ * @param contextDir the task-declared context directory, read with `lib/context.ts`
  * @param changeDir the change view this container derived (`work/change`), read with `lib/change.ts`
+ * @param contextReference the task-declared workspace-relative context path for citations
  */
 export type PracticeScript = (
 	repoPath: string,
@@ -43,6 +44,7 @@ export type PracticeScript = (
 	metadata: ArtifactMetadata,
 	contextDir?: string,
 	changeDir?: string,
+	contextReference?: string,
 ) => PracticeFindings | Promise<PracticeFindings>;
 
 export interface DiffFile {

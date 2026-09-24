@@ -68,7 +68,17 @@ async function stage(
 	}
 	return {
 		root,
-		script: mod.default,
+		script: (async (repo, diff, metadata, contextDir, changeDir) => {
+			const result = await mod.default(
+				repo,
+				diff,
+				metadata,
+				contextDir,
+				changeDir,
+				"areas/changed-work",
+			);
+			return result;
+		}) satisfies typeof mod.default,
 		contextDir: nodePath.join(root, "context"),
 		changeDir: nodePath.join(root, "work/change"),
 	};
@@ -324,7 +334,7 @@ void test("every authored commit is one record row, however many there are", asy
 			const first = result.hints[0];
 			const bare = result.hints[3];
 			assert.ok(first && bare);
-			assert.equal(first.file, "inputs/context/commits.json");
+			assert.equal(first.file, "areas/changed-work/commits.json");
 			assert.equal(first.pattern, "commit");
 			assert.equal(first.context, "0000000 Add step 0 and wire it");
 			// The row cites the line of commits.json that carries the commit's sha.
@@ -368,7 +378,7 @@ void test("an issue reference is resolved against the inventory and the linked i
 		const byNumber = new Map(result.hints.toReversed().map((h) => [h.flags.number, h.flags]));
 		assert.deepEqual(byNumber.get(18), {
 			number: 18,
-			where: "inputs/context/metadata.json (title)",
+			where: "areas/changed-work/metadata.json (title)",
 			inInventory: true,
 			title: "Add ingredients",
 			state: "OPEN",
