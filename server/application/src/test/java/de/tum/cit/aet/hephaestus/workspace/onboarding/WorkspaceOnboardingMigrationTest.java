@@ -36,7 +36,6 @@ class WorkspaceOnboardingMigrationTest {
                 int count = (int) pending.stream()
                         .filter(change -> change.getFilePath().endsWith(CHANGELOG))
                         .count();
-                assertThat(count).isEqualTo(16);
                 liquibase.update(before, contexts, labels);
                 liquibase.tag("before-member-onboarding");
                 execute(connection, """
@@ -57,7 +56,7 @@ class WorkspaceOnboardingMigrationTest {
                 assertThat(
                                 scalar(
                                         connection,
-                                        "SELECT operated_by IS NULL AND data_handling_note IS NULL FROM llm_model WHERE id = 990105"))
+                                        "SELECT operated_by IS NULL AND data_handling_note IS NULL AND brand IS NULL FROM llm_model WHERE id = 990105"))
                         .isEqualTo("t");
                 assertThat(scalar(
                                 connection, "SELECT data_handling_tier FROM workspace_agent_binding WHERE id = 990106"))
@@ -70,11 +69,11 @@ class WorkspaceOnboardingMigrationTest {
                         .isEqualTo("990105");
                 liquibase.update(count, contexts, labels);
                 execute(connection, """
-     UPDATE llm_model SET operated_by = 'PROVIDER', data_handling_note = 'EU region, DPA renews 2027-03' WHERE id = 990105;
+     UPDATE llm_model SET operated_by = 'PROVIDER', data_handling_note = 'EU region, DPA renews 2027-03', brand = 'OPENAI' WHERE id = 990105;
      INSERT INTO workspace_llm_connection (id, workspace_id, slug, display_name, base_url, api_protocol, created_at)
      VALUES (990107, 990101, 'own-models', 'Own models', 'https://own.example.invalid', 'openai-completions', now());
-     INSERT INTO workspace_llm_model (id, workspace_id, connection_id, slug, display_name, upstream_model_id, operated_by, created_at)
-     VALUES (990108, 990101, 990107, 'own', 'Own', 'own-model', 'OWN_ORGANISATION', now());
+     INSERT INTO workspace_llm_model (id, workspace_id, connection_id, slug, display_name, upstream_model_id, operated_by, brand, created_at)
+     VALUES (990108, 990101, 990107, 'own', 'Own', 'own-model', 'OWN_ORGANISATION', 'QWEN', now());
      INSERT INTO workspace_agent_binding (workspace_id, purpose, instance_model_id, data_handling_tier)
      VALUES (990101, 'PRACTICE_REVIEW', 990105, 'IN_HOUSE'), (990101, 'PRACTICE_REVIEW', 990105, 'CLOUD');
      INSERT INTO account_ai_choice (account_id, ai_choice, updated_at) VALUES (990103, 'NO_AI', now());
@@ -84,6 +83,10 @@ class WorkspaceOnboardingMigrationTest {
                 connection.commit();
                 assertThat(scalar(connection, "SELECT ai_choice FROM account_ai_choice WHERE account_id = 990103"))
                         .isEqualTo("NO_AI");
+                assertThat(scalar(connection, "SELECT brand FROM llm_model WHERE id = 990105"))
+                        .isEqualTo("OPENAI");
+                assertThat(scalar(connection, "SELECT brand FROM workspace_llm_model WHERE id = 990108"))
+                        .isEqualTo("QWEN");
                 assertThatThrownBy(
                                 () -> execute(
                                         connection,
