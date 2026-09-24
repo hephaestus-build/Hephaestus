@@ -15,6 +15,7 @@ import { toast } from "sonner";
 
 import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstack/react-query.gen";
 import type { SurveyInvitation } from "@/api/types.gen";
+import { UserViewBanner } from "@/components/admin/users/UserViewBanner";
 import { LoginDialog } from "@/components/auth/LoginDialog";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { CookieConsentBanner } from "@/components/layout/CookieConsentBanner";
@@ -58,6 +59,7 @@ import { type AuthContextType, useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/guard";
 import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools";
 import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
+import { exitUserView, getUserViewSession } from "@/runtime/user-view/session";
 import { isCopilotExcludedRoute } from "./-copilot-route";
 
 const GlobalCopilot = lazy(async () => import("./-GlobalCopilot"));
@@ -74,6 +76,7 @@ declare module "@tanstack/react-router" {
 }
 
 function RootLayout() {
+	const viewed = getUserViewSession();
 	const { login: loginOpen } = Route.useSearch();
 	const { pathname } = useLocation();
 	const surface = useMatches({
@@ -90,7 +93,11 @@ function RootLayout() {
 	const { isAuthenticated, isLoading } = useAuth();
 	const { enabled: hasMentorAccess } = useFeatureFlag("MENTOR_ACCESS");
 	const showCopilot =
-		!isLoading && isAuthenticated && hasMentorAccess && !isCopilotExcludedRoute(pathname);
+		!viewed &&
+		!isLoading &&
+		isAuthenticated &&
+		hasMentorAccess &&
+		!isCopilotExcludedRoute(pathname);
 
 	if (surface === "auth") {
 		return (
@@ -115,6 +122,14 @@ function RootLayout() {
 					<AppSidebarContainer />
 					<SidebarInset className="mr-[var(--right-sidebar-width,0)] min-w-0">
 						<HeaderContainer />
+						{viewed && (
+							<UserViewBanner
+								name={viewed.name}
+								workspace={viewed.workspaceSlug}
+								hasAccount={viewed.hasAccount}
+								onExit={exitUserView}
+							/>
+						)}
 						<main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
 							{surface === "standard" ? (
 								<StandardPageSurface className="flex-1">
@@ -148,7 +163,7 @@ function RootLayout() {
 					</Suspense>
 				</ErrorBoundary>
 			)}
-			<FeatureFlagDevTools />
+			{!viewed && <FeatureFlagDevTools />}
 		</>
 	);
 }
@@ -319,6 +334,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 });
 
 function HeaderContainer() {
+	const viewed = getUserViewSession();
 	const openLogin = useLoginNavigation();
 	const {
 		isAuthenticated,
@@ -335,9 +351,11 @@ function HeaderContainer() {
 		userName: workspaceUserName,
 	} = useWorkspaceAccess();
 
-	const effectiveUsername = workspaceUserLogin ?? username;
+	const effectiveUsername = viewed?.login ?? workspaceUserLogin ?? username;
 	const effectiveName =
-		workspaceUserName ?? (userProfile && `${userProfile.firstName} ${userProfile.lastName}`);
+		viewed?.name ??
+		workspaceUserName ??
+		(userProfile && `${userProfile.firstName} ${userProfile.lastName}`);
 
 	return (
 		<Header
@@ -352,8 +370,9 @@ function HeaderContainer() {
 			username={effectiveUsername}
 			avatarUrl={getUserProfilePictureUrl()}
 			workspaceSlug={chromeWorkspaceSlug}
+			readOnly={Boolean(viewed)}
 			feedbackDialog={
-				!isLoading && isAuthenticated ? (
+				!viewed && !isLoading && isAuthenticated ? (
 					<ProductFeedbackControls
 						key={`${getUserId()}:${chromeWorkspaceSlug}`}
 						workspaceSlug={chromeWorkspaceSlug}
@@ -392,6 +411,7 @@ function sidebarContextOf(pathname: string): SidebarContext {
 }
 
 function AppSidebarContainer() {
+	const viewed = getUserViewSession();
 	const { pathname } = useLocation();
 	const { isAuthenticated, username, isAppAdmin } = useAuth();
 	const { enabled: hasMentorAccess } = useFeatureFlag("MENTOR_ACCESS");
@@ -446,9 +466,10 @@ function AppSidebarContainer() {
 	return (
 		<AppSidebar
 			username={username}
-			isAdmin={workspaceAccess.isAdmin}
+			isAdmin={!viewed && workspaceAccess.isAdmin}
 			isAppAdmin={isAppAdmin}
-			hasMentorAccess={hasMentorAccess}
+			hasMentorAccess={Boolean(viewed) || hasMentorAccess}
+			readOnly={Boolean(viewed)}
 			integrationKinds={integrationKinds}
 			context={sidebarContext}
 			workspaces={workspaces}

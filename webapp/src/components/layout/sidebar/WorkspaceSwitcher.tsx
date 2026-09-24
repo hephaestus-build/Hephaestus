@@ -194,13 +194,17 @@ export function WorkspaceSwitcher({
 								</DropdownMenuShortcut>
 							</DropdownMenuItem>
 						))}
-						<DropdownMenuSeparator />
-						<DropdownMenuItem className="gap-2 p-2" onClick={() => onAddWorkspace?.()}>
-							<div className="flex size-6 items-center justify-center rounded-md border bg-background">
-								<Plus className="size-4" />
-							</div>
-							<div className="font-medium text-muted-foreground">Add workspace</div>
-						</DropdownMenuItem>
+						{onAddWorkspace && (
+							<>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem className="gap-2 p-2" onClick={onAddWorkspace}>
+									<div className="flex size-6 items-center justify-center rounded-md border bg-background">
+										<Plus className="size-4" />
+									</div>
+									<div className="font-medium text-muted-foreground">Add workspace</div>
+								</DropdownMenuItem>
+							</>
+						)}
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</SidebarMenuItem>

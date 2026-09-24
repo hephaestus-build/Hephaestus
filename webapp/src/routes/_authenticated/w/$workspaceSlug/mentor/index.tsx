@@ -9,12 +9,14 @@ import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { Greeting } from "@/components/mentor/Greeting";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { hasText } from "@/lib/text";
+import { getUserViewSession } from "@/runtime/user-view/session";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/")({
 	component: MentorContainer,
 });
 
 function MentorContainer() {
+	const readOnly = getUserViewSession() !== undefined;
 	const queryClient = useQueryClient();
 	const navigate = useNavigate({ from: Route.fullPath });
 	const { workspaceSlug } = useActiveWorkspaceSlug();
@@ -28,7 +30,7 @@ function MentorContainer() {
 	// Once per mount, guarded by a ref rather than by the dependency list, which cannot promise it:
 	// a second run would mint a second id and strand an empty "New chat" in the list.
 	useEffect(() => {
-		if (!hasText(workspaceSlug) || hasStartedRef.current) {
+		if (readOnly || !hasText(workspaceSlug) || hasStartedRef.current) {
 			return;
 		}
 		hasStartedRef.current = true;
@@ -64,10 +66,17 @@ function MentorContainer() {
 			params: { workspaceSlug: slug, threadId },
 			replace: true,
 		});
-	}, [workspaceSlug, slug, queryClient, navigate]);
+	}, [readOnly, workspaceSlug, slug, queryClient, navigate]);
 
 	if (!hasText(workspaceSlug)) {
 		return <NoWorkspace />;
+	}
+	if (readOnly) {
+		return (
+			<div className="flex h-full items-center justify-center p-6 text-muted-foreground">
+				Choose a saved conversation from the sidebar.
+			</div>
+		);
 	}
 
 	return (

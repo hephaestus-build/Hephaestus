@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus;
 
 import de.tum.cit.aet.hephaestus.account.userview.UserViewAuthorizationConfig;
+import de.tum.cit.aet.hephaestus.account.userview.UserViewSessionFilter;
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
@@ -405,7 +406,9 @@ public class SecurityConfig {
                 "X-Requested-With",
                 "Origin",
                 "X-XSRF-TOKEN",
-                UserViewAuthorizationConfig.REASON_HEADER));
+                UserViewAuthorizationConfig.REASON_HEADER,
+                UserViewSessionFilter.WORKSPACE_HEADER,
+                UserViewSessionFilter.USER_HEADER));
         configuration.setExposedHeaders(
                 List.of(ReplicaIdentityFilter.HEADER_NAME, RequestCorrelationFilter.HEADER_NAME));
         configuration.setAllowCredentials(true);

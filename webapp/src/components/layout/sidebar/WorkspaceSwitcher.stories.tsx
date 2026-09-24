@@ -57,6 +57,10 @@ type Story = StoryObj<typeof meta>;
 
 export const SingleWorkspace: Story = {};
 
+export const ReadOnly: Story = {
+	args: { onAddWorkspace: undefined },
+};
+
 export const MultipleWorkspaces: Story = {
 	args: {
 		workspaces: [

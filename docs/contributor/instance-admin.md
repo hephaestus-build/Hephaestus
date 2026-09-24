@@ -110,20 +110,26 @@ would want the confirmation to unlock.
 
 ## Read-only user views
 
-**Instance admin → Workspaces → View users → View as user** discloses a workspace member's private
-practice pages and existing conversations to an instance administrator, whose own authentication is
-untouched ([authentication architecture](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/auth-architecture.md)). The viewed user is the synced
-SCM user behind a human workspace membership ([auth glossary](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/auth-glossary.md)); **Linked account** in the
-list reads `identity_link.external_actor_id`. The SPA takes the workspace's name and
-feature flags from `GET /workspaces/{slug}`, reached under
-[elevated access](#elevated-workspace-access).
+**Instance admin → Workspaces → View users → View as user** opens the normal workspace app as a
+human workspace member, including one without a Hephaestus account. The instance administrator
+remains authenticated as themselves. The viewed person is the synced SCM user behind a workspace
+membership ([auth glossary](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/auth-glossary.md));
+**Linked account** reads `identity_link.external_actor_id`.
 
-The endpoints are the `User view` tag in `server/openapi.yaml`, all `GET` under
+The browser stores the selected workspace, user ID and access reason in this tab's session storage.
+Starting or exiting the view reloads the app, so cached data from another identity cannot carry
+over. The normal workspace, profile, practice and saved-conversation routes use the selected SCM
+user. A persistent banner identifies the viewed user and provides an exit. Account settings and
+onboarding are not simulated. `/user` reads the administrator's account outside the viewed-user
+context; the browser shows
+the selected SCM user's display identity only while the view is active.
+
+The selection endpoints are the `User view` tag in `server/openapi.yaml`, all `GET` under
 `/workspaces/{slug}/user-view/users` and all `@PreAuthorize("hasAuthority('app_admin')")` like every
 instance-administrator controller. Each request checks the token's authority and session revocation;
 demotion and deletion revoke sessions.
 
-Every handler addressed at a `{userId}` carries `@UserViewRead` (`@RequiresRecentSignIn` +
+Every selection handler addressed at a `{userId}` carries `@UserViewRead` (`@RequiresRecentSignIn` +
 `@Audited(AUTH_EVENT, "USER_VIEW")`); `UserViewArchitectureTest` fails the build for a `/user-view`
 handler that is not a `GET` or names `{userId}` without it. `UserViewAuthorizationConfig` advises
 that annotation, ordered after the [recent sign-in gate](#recent-sign-in-gate) so a refused
@@ -134,9 +140,19 @@ characters without control or format characters), resolves the viewed member thr
 `OpenAPIConfiguration.userViewReasonHeader` declares the header on every such operation, so the
 generated client requires it.
 
-This view reads saved content, not a simulated login: it does not enter onboarding, change personal
-choices or apply account-level navigation gates. Disabled workspace features may hide that content
-on the user's own page; the view displays a notice in that case.
+Normal app reads in this mode carry `X-User-View-Workspace`, `X-User-View-User` and the same reason
+header. `UserViewSessionFilter` checks the administrator's authority, recent sign-in, active
+workspace and human membership on every request. It records a `USER_VIEW` event before a read and
+returns 503 if the audit write fails. The request then uses the selected member's workspace roles
+and verified SCM actor ID. Only the listed read routes are available; writes and account-only
+settings return 403. The in-app feedback read does not mark feedback delivered in this mode.
+When the recent-sign-in window expires, the administrator exits and starts a new view.
+
+This is a view of existing content, not a user login. It does not enter onboarding, choose personal
+settings or create an account. Account-only features remain unavailable, so it cannot reproduce
+the selected person's complete first-login experience.
+Saved conversations remain readable without a linked account or the administrator's own mentor
+access when the workspace has mentor enabled.
 
 A successful `USER_VIEW` row records authorization to attempt a read, not proof that the handler returned
 content: a missing observation or conversation can still produce a 404 after the row commits.
@@ -145,8 +161,8 @@ viewed user's linked account or null, `viewed_user_id` = the viewed user, `works
 `details` = `{"reason": …, "read": "<request path?query>"}`. `AccountPurger` nulls `ip_inet`,
 `user_agent` and `details` where the erased account is either account or the one behind
 `viewed_user_id`, so it runs before that account's identity links are deleted. The read budget is
-a [setting](/admin/configuration-readiness#session-deadlines). Why this is a read projection
-and not Spring Security's `SwitchUserFilter` is explained in
+a [setting](/admin/configuration-readiness#session-deadlines). Why this does not use Spring Security's
+`SwitchUserFilter` is explained in
 [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md#update--2026-09-11).
 
 ## Elevated workspace access

@@ -2646,25 +2646,6 @@ export type PageResponseDtoAuthEventView = {
  *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
  *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
  */
-export type PageResponseDtoChatThreadSummary = {
-  content?: Array<ChatThreadSummary>;
-  empty?: boolean;
-  first?: boolean;
-  last?: boolean;
-  number?: number;
-  numberOfElements?: number;
-  pageable?: Pageable;
-  size?: number;
-  sort?: Sort;
-  totalElements?: number;
-  totalPages?: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
 export type PageResponseDtoConfigAuditEntryView = {
   content?: Array<ConfigAuditEntryView>;
   empty?: boolean;
@@ -5929,13 +5910,6 @@ export type UserInfo = {
   name: string;
 };
 
-export type UserPracticeSummary = {
-  groupStandings: Array<PracticeGroupStanding>;
-  groups: Array<PracticeGroup>;
-  practices: Array<ReviewedPractice>;
-  standings: Array<PracticeStanding>;
-};
-
 /**
  * User preferences and settings
  */
@@ -6991,13 +6965,6 @@ export type ReviewObservationDetailWritable = {
    */
   subject?: ReviewSubject;
   summary: string;
-};
-
-export type UserPracticeSummaryWritable = {
-  groupStandings: Array<PracticeGroupStandingWritable>;
-  groups: Array<PracticeGroup>;
-  practices: Array<ReviewedPractice>;
-  standings: Array<PracticeStandingWritable>;
 };
 
 export type GetJwksData = {
@@ -13525,67 +13492,7 @@ export type ListUserViewUsersResponses = {
 
 export type ListUserViewUsersResponse = ListUserViewUsersResponses[keyof ListUserViewUsersResponses];
 
-export type ListUserViewConversationsData = {
-  body?: never;
-  headers: {
-    /**
-     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
-     */
-    'X-User-View-Reason': string;
-  };
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    userId: number;
-  };
-  query?: {
-    page?: number;
-    size?: number;
-  };
-  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/conversations';
-};
-
-export type ListUserViewConversationsResponses = {
-  /**
-   * OK
-   */
-  200: PageResponseDtoChatThreadSummary;
-};
-
-export type ListUserViewConversationsResponse = ListUserViewConversationsResponses[keyof ListUserViewConversationsResponses];
-
-export type GetUserViewConversationData = {
-  body?: never;
-  headers: {
-    /**
-     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
-     */
-    'X-User-View-Reason': string;
-  };
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    userId: number;
-    threadId: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/conversations/{threadId}';
-};
-
-export type GetUserViewConversationResponses = {
-  /**
-   * OK
-   */
-  200: ChatThreadDetail;
-};
-
-export type GetUserViewConversationResponse = GetUserViewConversationResponses[keyof GetUserViewConversationResponses];
-
-export type GetUserPracticeViewData = {
+export type GetUserViewUserData = {
   body?: never;
   headers: {
     /**
@@ -13601,119 +13508,17 @@ export type GetUserPracticeViewData = {
     userId: number;
   };
   query?: never;
-  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices';
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}';
 };
 
-export type GetUserPracticeViewResponses = {
+export type GetUserViewUserResponses = {
   /**
    * OK
    */
-  200: UserPracticeSummary;
+  200: UserViewUser;
 };
 
-export type GetUserPracticeViewResponse = GetUserPracticeViewResponses[keyof GetUserPracticeViewResponses];
-
-export type ListUserViewRunsData = {
-  body?: never;
-  headers: {
-    /**
-     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
-     */
-    'X-User-View-Reason': string;
-  };
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    userId: number;
-    groupSlug: string;
-  };
-  query?: {
-    practiceSlug?: string;
-    /**
-     * Only reviews of these artifact kinds, e.g. scm.pull_request (repeatable)
-     */
-    artifactKinds?: Array<string>;
-    severities?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
-    /**
-     * Zero-based page, at most 100
-     */
-    page?: number;
-    /**
-     * Page size from 1 to 50
-     */
-    size?: number;
-  };
-  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/runs';
-};
-
-export type ListUserViewRunsResponses = {
-  /**
-   * OK
-   */
-  200: PracticeGroupReviewRunsPage;
-};
-
-export type ListUserViewRunsResponse = ListUserViewRunsResponses[keyof ListUserViewRunsResponses];
-
-export type GetUserViewTrendData = {
-  body?: never;
-  headers: {
-    /**
-     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
-     */
-    'X-User-View-Reason': string;
-  };
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    userId: number;
-    groupSlug: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/trend';
-};
-
-export type GetUserViewTrendResponses = {
-  /**
-   * OK
-   */
-  200: PracticeGroupTrend;
-};
-
-export type GetUserViewTrendResponse = GetUserViewTrendResponses[keyof GetUserViewTrendResponses];
-
-export type GetUserViewObservationData = {
-  body?: never;
-  headers: {
-    /**
-     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
-     */
-    'X-User-View-Reason': string;
-  };
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    userId: number;
-    observationId: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices/observations/{observationId}';
-};
-
-export type GetUserViewObservationResponses = {
-  /**
-   * OK
-   */
-  200: ObservationDetail;
-};
-
-export type GetUserViewObservationResponse = GetUserViewObservationResponses[keyof GetUserViewObservationResponses];
+export type GetUserViewUserResponse = GetUserViewUserResponses[keyof GetUserViewUserResponses];
 
 export type GetUsersWithTeamsData = {
   body?: never;

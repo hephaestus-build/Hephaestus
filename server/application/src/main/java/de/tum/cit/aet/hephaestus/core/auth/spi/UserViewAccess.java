@@ -3,9 +3,12 @@ package de.tum.cit.aet.hephaestus.core.auth.spi;
 import java.util.Collection;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
+import org.springframework.security.core.Authentication;
 
 /** Durable attribution for read-only user views, keyed on verified provider identity. */
 public interface UserViewAccess {
+    void requireRecentSignIn(@Nullable Authentication authentication, long actingAccountId);
+
     Map<Long, LinkedAccount> linkedAccounts(Collection<ActorIdentity> actors);
 
     /**

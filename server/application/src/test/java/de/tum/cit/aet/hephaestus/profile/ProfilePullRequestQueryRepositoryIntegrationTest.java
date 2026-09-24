@@ -26,16 +26,16 @@ class ProfilePullRequestQueryRepositoryIntegrationTest extends BaseIntegrationTe
     @DisplayName("null since/until executes on Postgres")
     void nullDateBoundsExecute() {
         assertThatNoException()
-                .isThrownBy(() ->
-                        repository.findAuthoredByLoginAndStates("octocat", Set.of(Issue.State.OPEN), 1L, null, null));
+                .isThrownBy(
+                        () -> repository.findAuthoredByUserIdAndStates(1L, Set.of(Issue.State.OPEN), 1L, null, null));
     }
 
     @Test
     @DisplayName("bounded since/until executes on Postgres")
     void boundedDateBoundsExecute() {
         assertThatNoException()
-                .isThrownBy(() -> repository.findAuthoredByLoginAndStates(
-                        "octocat",
+                .isThrownBy(() -> repository.findAuthoredByUserIdAndStates(
+                        1L,
                         Set.of(Issue.State.OPEN),
                         1L,
                         Instant.parse("2020-01-01T00:00:00Z"),

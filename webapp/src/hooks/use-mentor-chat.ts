@@ -19,6 +19,7 @@ import { extractVotesFromThreadDetail, parseThreadMessages } from "@/lib/chat-va
 import { hasText } from "@/lib/text";
 import type { ChatMessage } from "@/lib/types";
 import { csrfHeaders } from "@/runtime/auth/auth-client";
+import { userViewHeaders } from "@/runtime/user-view/session";
 
 interface UseMentorChatOptions {
 	threadId?: string;
@@ -131,7 +132,7 @@ export function useMentorChat({
 				// Cookie-session auth (ADR 0017): session cookie rides credentials:include;
 				// CSRF double-submit header for this state-changing POST.
 				credentials: "include",
-				headers: { ...csrfHeaders() },
+				headers: { ...csrfHeaders(), ...userViewHeaders() },
 			};
 		},
 	});

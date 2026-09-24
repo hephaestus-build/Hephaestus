@@ -4,6 +4,7 @@ import { Chat } from "@/components/mentor/Chat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { copyToClipboard } from "@/lib/clipboard";
+import { getUserViewSession } from "@/runtime/user-view/session";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/$threadId")({
 	component: ThreadContainer,
@@ -11,6 +12,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/$t
 
 function ThreadContainer() {
 	const { threadId } = Route.useParams();
+	const readOnly = getUserViewSession() !== undefined;
 
 	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
 	// already is, rather than as a toast away from the conversation that failed.
@@ -119,19 +121,23 @@ function ThreadContainer() {
 				messages={mentorChat.messages}
 				votes={mentorChat.votes}
 				status={mentorChat.status}
-				readonly={false}
+				readonly={readOnly}
 				attachments={[]}
 				onMessageSubmit={handleMessageSubmit}
-				onMessageEdit={handleMessageEdit}
+				onMessageEdit={readOnly ? undefined : handleMessageEdit}
 				onStop={() => {
 					void mentorChat.stop();
 				}}
-				onReload={() => {
-					mentorChat.clearError();
-					void mentorChat.regenerate();
-				}}
+				onReload={
+					readOnly
+						? undefined
+						: () => {
+								mentorChat.clearError();
+								void mentorChat.regenerate();
+							}
+				}
 				onCopy={copyToClipboard}
-				onVote={handleVote}
+				onVote={readOnly ? undefined : handleVote}
 				inputPlaceholder="Continue the conversation..."
 				className="h-full"
 			/>

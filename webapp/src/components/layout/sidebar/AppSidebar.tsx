@@ -39,6 +39,7 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	isAdmin: boolean;
 	isAppAdmin: boolean;
 	hasMentorAccess: boolean;
+	readOnly?: boolean;
 	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
 	context: SidebarContext;
 	workspaces: WorkspaceListItem[];
@@ -56,6 +57,7 @@ export function AppSidebar({
 	isAdmin,
 	isAppAdmin,
 	hasMentorAccess,
+	readOnly = false,
 	integrationKinds,
 	context,
 	workspaces,
@@ -107,17 +109,19 @@ export function AppSidebar({
 					<Link to="/w/$workspaceSlug" params={{ workspaceSlug: activeWorkspace.workspaceSlug }} />
 				}
 			>
-				<SidebarMenuButton
-					render={
-						<Link
-							to="/w/$workspaceSlug/mentor"
-							params={{ workspaceSlug: activeWorkspace.workspaceSlug }}
-						/>
-					}
-				>
-					<SquarePen />
-					New chat
-				</SidebarMenuButton>
+				{!readOnly && (
+					<SidebarMenuButton
+						render={
+							<Link
+								to="/w/$workspaceSlug/mentor"
+								params={{ workspaceSlug: activeWorkspace.workspaceSlug }}
+							/>
+						}
+					>
+						<SquarePen />
+						New chat
+					</SidebarMenuButton>
+				)}
 			</NavContextHeader>
 		);
 		sidebarContent = (
@@ -161,7 +165,7 @@ export function AppSidebar({
 						workspaces={workspaces}
 						activeWorkspace={activeWorkspace}
 						onWorkspaceChange={onWorkspaceChange}
-						onAddWorkspace={onAddWorkspace}
+						onAddWorkspace={readOnly ? undefined : onAddWorkspace}
 						isAppAdmin={isAppAdmin}
 					/>
 				)}
@@ -169,7 +173,7 @@ export function AppSidebar({
 			</SidebarHeader>
 			<SidebarContent onClick={handleSectionClick}>{sidebarContent}</SidebarContent>
 			<SidebarFooter onClick={handleSectionClick}>
-				<NavFooter isAppAdmin={isAppAdmin} />
+				{!readOnly && <NavFooter isAppAdmin={isAppAdmin} />}
 			</SidebarFooter>
 			<SidebarRail />
 		</Sidebar>

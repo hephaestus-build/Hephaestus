@@ -41,6 +41,7 @@ export interface HeaderProps {
 	username?: string;
 	avatarUrl?: string;
 	workspaceSlug?: string;
+	readOnly?: boolean;
 	feedbackDialog?: React.ReactNode;
 	onLogin: () => void;
 	onLogout: () => void;
@@ -57,6 +58,7 @@ export default function Header({
 	name,
 	username,
 	workspaceSlug,
+	readOnly = false,
 	feedbackDialog,
 	avatarUrl,
 	onLogin,
@@ -185,12 +187,14 @@ export default function Header({
 												<span>My Profile</span>
 											</DropdownMenuItem>
 										)}
-										<Link to="/settings" className="[&]:no-underline">
-											<DropdownMenuItem>
-												<Settings />
-												<span>Settings</span>
-											</DropdownMenuItem>
-										</Link>
+										{!readOnly && (
+											<Link to="/settings" className="[&]:no-underline">
+												<DropdownMenuItem>
+													<Settings />
+													<span>Settings</span>
+												</DropdownMenuItem>
+											</Link>
+										)}
 									</DropdownMenuGroup>
 									<DropdownMenuSeparator />
 									<DropdownMenuItem onClick={onLogout}>

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.inapp;
 
+import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -53,10 +54,8 @@ public class InAppFeedbackService {
     /**
      * The current developer's practice pages.
      *
-     * <p>Not {@code readOnly}: opening a card is what delivers it, and the flip is recorded here. This
-     * lane is the only one whose delivery we can observe rather than infer, because we own the surface;
-     * marking a unit delivered when it was written would enter text nobody opened into the ledger as
-     * received.
+     * <p>Opening a card marks it delivered for the recipient. An administrator's read-only user view
+     * must not claim that the recipient opened it.
      *
      * @return empty when the caller is not a synced developer, exactly as the sibling read models do —
      *     a first login before any work has been mirrored is not an error
@@ -86,7 +85,7 @@ public class InAppFeedbackService {
                 continue;
             }
             cards.add(toCard(unit, evidence));
-            if (unit.getDeliveryState() == FeedbackDeliveryState.PREPARED) {
+            if (UserViewContextHolder.get() == null && unit.getDeliveryState() == FeedbackDeliveryState.PREPARED) {
                 toMarkDelivered.add(unit.getId());
             }
         }

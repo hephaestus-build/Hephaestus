@@ -111,7 +111,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .jsonPath("$.content[1].accountId")
                 .isEqualTo(viewedAccount.getId());
 
-        request(viewedPath() + "/practices").exchange().expectStatus().isOk().expectBody(Void.class);
+        request(viewedPath()).exchange().expectStatus().isOk().expectBody(Void.class);
         var audit = jdbc.queryForMap(
                 "SELECT account_id, acting_account_id FROM auth_event WHERE event_type = 'USER_VIEW' AND viewed_user_id = ?",
                 viewed.getId());
@@ -142,15 +142,15 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldRecordTheAdministratorAndTheViewedUserWhenPracticesAreDisclosed() {
-        request(viewedPath() + "/practices")
+        request(viewedPath())
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectHeader()
                 .cacheControl(CacheControl.noStore())
                 .expectBody()
-                .jsonPath("$.groups")
-                .isArray();
+                .jsonPath("$.userId")
+                .isEqualTo(viewed.getId());
         var audit = jdbc.queryForMap(
                 "SELECT account_id, acting_account_id, workspace_id, details::text AS details FROM auth_event "
                         + "WHERE event_type = 'USER_VIEW' AND viewed_user_id = ?",
@@ -159,14 +159,13 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .containsEntry("account_id", null)
                 .containsEntry("acting_account_id", administrator.getId())
                 .containsEntry("workspace_id", workspace.getId());
-        assertThat(String.valueOf(audit.get("details")))
-                .contains("/workspaces/acme/user-view/users/" + viewed.getId() + "/practices");
+        assertThat(String.valueOf(audit.get("details"))).contains("/workspaces/acme/user-view/users/" + viewed.getId());
     }
 
     @Test
     void shouldHideAUserAndRecordNothingWhenTheyAreNotAMemberOfTheWorkspace() {
         User outsider = persistUser("outside-view");
-        request("/user-view/users/" + outsider.getId() + "/practices")
+        request("/user-view/users/" + outsider.getId())
                 .exchange()
                 .expectStatus()
                 .isNotFound()
@@ -182,14 +181,14 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         thread(workspace, other, "Other private conversation");
         Workspace elsewhere = createWorkspace("other-view", "Other view", other.getLogin(), AccountType.USER, other);
         thread(elsewhere, viewed, "Other workspace conversation");
-        request(viewedPath() + "/conversations")
+        sessionRequest("/workspaces/acme/mentor/threads")
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.content.length()")
+                .jsonPath("$.length()")
                 .isEqualTo(1)
-                .jsonPath("$.content[0].id")
+                .jsonPath("$[0].id")
                 .isEqualTo(own.getId().toString());
     }
 
@@ -198,7 +197,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         User other = persistUser("another-view-user");
         ensureWorkspaceMembership(workspace, other, WorkspaceMembership.WorkspaceRole.MEMBER);
         ChatThread foreign = thread(workspace, other, "Other private conversation");
-        request(viewedPath() + "/conversations/" + foreign.getId())
+        sessionRequest("/workspaces/acme/mentor/threads/" + foreign.getId())
                 .exchange()
                 .expectStatus()
                 .isNotFound()
@@ -210,7 +209,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         User other = persistUser("another-view-user");
         Workspace elsewhere = createWorkspace("other-view", "Other view", other.getLogin(), AccountType.USER, other);
         ChatThread foreignWorkspace = thread(elsewhere, viewed, "Other workspace conversation");
-        request(viewedPath() + "/conversations/" + foreignWorkspace.getId())
+        sessionRequest("/workspaces/acme/mentor/threads/" + foreignWorkspace.getId())
                 .exchange()
                 .expectStatus()
                 .isNotFound()
@@ -220,7 +219,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldRejectAViewAndRecordNothingWhenTheReasonIsMissing() {
         client.get()
-                .uri("/workspaces/acme" + viewedPath() + "/practices")
+                .uri("/workspaces/acme" + viewedPath())
                 .headers(h -> h.setBearerAuth(token()))
                 .exchange()
                 .expectStatus()
@@ -240,7 +239,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         identityLinks.save(link);
 
         client.get()
-                .uri("/workspaces/acme" + viewedPath() + "/practices")
+                .uri("/workspaces/acme" + viewedPath())
                 .headers(h -> h.setBearerAuth("mock-jwt-member-" + member.getId()))
                 .header("X-User-View-Reason", "Support")
                 .exchange()
@@ -256,18 +255,107 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         jdbc.execute("ALTER TABLE auth_event ADD CONSTRAINT reject_user_view_test "
                 + "CHECK (event_type <> 'USER_VIEW' OR viewed_user_id <> " + viewed.getId() + ") NOT VALID");
         try {
-            request(viewedPath() + "/practices")
+            request(viewedPath())
                     .exchange()
                     .expectStatus()
                     .isEqualTo(503)
                     .expectBody()
-                    .jsonPath("$.groups")
+                    .jsonPath("$.userId")
                     .doesNotExist()
                     .jsonPath("$.status")
                     .isEqualTo(503);
             assertThat(userViewRowsFor(viewed)).isZero();
         } finally {
             jdbc.execute("ALTER TABLE auth_event DROP CONSTRAINT reject_user_view_test");
+        }
+    }
+
+    @Test
+    void shouldReadTheNormalMentorRouteAsAnAccountlessUserWithoutSwitchingAuthentication() {
+        ChatThread own = thread(workspace, viewed, "Viewed conversation");
+        User other = persistUser("other-member");
+        ensureWorkspaceMembership(workspace, other, WorkspaceMembership.WorkspaceRole.MEMBER);
+        thread(workspace, other, "Other conversation");
+
+        sessionRequest("/workspaces/acme/mentor/threads")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.length()")
+                .isEqualTo(1)
+                .jsonPath("$[0].id")
+                .isEqualTo(own.getId().toString());
+        client.get()
+                .uri("/user")
+                .headers(headers -> headers.setBearerAuth(token()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.id")
+                .isEqualTo(administrator.getId());
+        assertThat(userViewRowsFor(viewed)).isEqualTo(1);
+    }
+
+    @Test
+    void shouldReadTheNormalProfileAsTheSelectedAccountlessUser() {
+        sessionRequest("/workspaces/acme/profile/" + viewed.getLogin())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.userInfo.id")
+                .isEqualTo(viewed.getId());
+        assertThat(userViewRowsFor(viewed)).isEqualTo(1);
+    }
+
+    @Test
+    void shouldRestrictTheNormalWorkspaceListToTheViewedWorkspace() {
+        User other = persistUser("other-workspace-member");
+        createWorkspace("other-view", "Other view", other.getLogin(), AccountType.USER, other);
+
+        sessionRequest("/workspaces")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.length()")
+                .isEqualTo(1)
+                .jsonPath("$[0].workspaceSlug")
+                .isEqualTo("acme");
+        sessionRequest("/workspaces/other-view").exchange().expectStatus().isNotFound();
+    }
+
+    @Test
+    void shouldRejectWritesAndUnsupportedReadsInTheNormalApp() {
+        client.post()
+                .uri("/workspaces/acme/mentor/chat")
+                .headers(h -> h.setBearerAuth(token()))
+                .header(UserViewSessionFilter.WORKSPACE_HEADER, "acme")
+                .header(UserViewSessionFilter.USER_HEADER, viewed.getId().toString())
+                .header(UserViewSessionFilter.REASON_HEADER, "Support")
+                .exchange()
+                .expectStatus()
+                .isForbidden();
+        sessionRequest("/user/settings").exchange().expectStatus().isForbidden();
+        assertThat(userViewRowsFor(viewed)).isZero();
+    }
+
+    @Test
+    void shouldNotReadTheNormalAppWhenItsAuditCannotCommit() {
+        jdbc.execute("ALTER TABLE auth_event ADD CONSTRAINT reject_session_view_test "
+                + "CHECK (event_type <> 'USER_VIEW' OR viewed_user_id <> " + viewed.getId() + ") NOT VALID");
+        try {
+            sessionRequest("/workspaces/acme/mentor/threads")
+                    .exchange()
+                    .expectStatus()
+                    .isEqualTo(503)
+                    .expectBody()
+                    .jsonPath("$.status")
+                    .isEqualTo(503);
+        } finally {
+            jdbc.execute("ALTER TABLE auth_event DROP CONSTRAINT reject_session_view_test");
         }
     }
 
@@ -292,6 +380,15 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .uri("/workspaces/acme" + path)
                 .headers(h -> h.setBearerAuth(token()))
                 .header("X-User-View-Reason", "Investigate missing feedback");
+    }
+
+    private WebTestClient.RequestHeadersSpec<?> sessionRequest(String path) {
+        return client.get()
+                .uri(path)
+                .headers(h -> h.setBearerAuth(token()))
+                .header(UserViewSessionFilter.WORKSPACE_HEADER, "acme")
+                .header(UserViewSessionFilter.USER_HEADER, viewed.getId().toString())
+                .header(UserViewSessionFilter.REASON_HEADER, "Support");
     }
 
     private ChatThread thread(Workspace ownerWorkspace, User owner, String title) {

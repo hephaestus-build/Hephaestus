@@ -156,3 +156,13 @@ Corrects § Decision "Data-model split", "JWT format" and "GDPR" against the sch
 - The issuer is `hephaestus.auth.issuer` (`${HEPHAESTUS_AUTH_ISSUER:http://localhost:8080}` in
   `application.yml`), not a fixed `https://hephaestus.aet.cit.tum.de`;
   `core.auth.web.WellKnownController` serves the public keys at `/.well-known/jwks.json`.
+
+## Update — 2026-09-24
+
+The separate user-view practice and conversation pages did not let an administrator inspect the
+normal app. The view now opens the normal workspace routes in a read-only browser context. The
+administrator's authentication stays unchanged; each supported read checks the selected SCM user
+and workspace, requires a recent sign-in, and commits a `USER_VIEW` audit event before disclosure.
+The selected user's verified actor ID supplies workspace membership and self-facing reads. Writes
+and account-only pages are unavailable. In-app feedback reads do not mark delivery. The browser
+reloads when entering or leaving the view to separate cached results.

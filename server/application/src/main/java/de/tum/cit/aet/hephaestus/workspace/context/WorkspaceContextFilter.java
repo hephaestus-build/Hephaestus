@@ -5,10 +5,12 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceElevationAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
+import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.security.WorkspaceElevationContext;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.workspace.CurrentAccountUsers;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
@@ -61,6 +63,7 @@ public class WorkspaceContextFilter implements Filter {
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceMembershipRepository workspaceMembershipRepository;
     private final CurrentAccountUsers currentAccountUsers;
+    private final UserRepository userRepository;
     private final WorkspaceMembershipAutoSeeder membershipAutoSeeder;
     private final WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository;
     private final ConnectionService connectionService;
@@ -71,6 +74,7 @@ public class WorkspaceContextFilter implements Filter {
             WorkspaceRepository workspaceRepository,
             WorkspaceMembershipRepository workspaceMembershipRepository,
             CurrentAccountUsers currentAccountUsers,
+            UserRepository userRepository,
             WorkspaceMembershipAutoSeeder membershipAutoSeeder,
             WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository,
             ConnectionService connectionService,
@@ -79,6 +83,7 @@ public class WorkspaceContextFilter implements Filter {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.currentAccountUsers = currentAccountUsers;
+        this.userRepository = userRepository;
         this.membershipAutoSeeder = membershipAutoSeeder;
         this.workspaceSlugHistoryRepository = workspaceSlugHistoryRepository;
         this.connectionService = connectionService;
@@ -138,6 +143,13 @@ public class WorkspaceContextFilter implements Filter {
             }
 
             var workspace = workspaceOpt.get();
+            var viewed = UserViewContextHolder.get();
+            if (viewed != null
+                    && (viewed.workspaceId() != workspace.getId()
+                            || !viewed.workspaceSlug().equals(slug))) {
+                sendWorkspaceNotFoundError(httpResponse, slug);
+                return;
+            }
 
             boolean isReadRequest = "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method);
             boolean allowLifecycleDelete = isBasePath && "DELETE".equalsIgnoreCase(method);
@@ -152,8 +164,10 @@ public class WorkspaceContextFilter implements Filter {
                 return;
             }
 
-            var currentUsers = currentAccountUsers.resolve();
-            MembershipResolution membership = fetchUserRoles(workspace, currentUsers);
+            var currentUsers = viewed == null
+                    ? currentAccountUsers.resolve()
+                    : userRepository.findById(viewed.userId()).stream().toList();
+            MembershipResolution membership = fetchUserRoles(workspace, currentUsers, viewed == null);
             Set<WorkspaceRole> roles = membership.roles();
 
             // Instance admins may enter without membership, but elevation never grants ownership.
@@ -227,7 +241,7 @@ public class WorkspaceContextFilter implements Filter {
                 .findFirst();
     }
 
-    private MembershipResolution fetchUserRoles(Workspace workspace, Collection<User> users) {
+    private MembershipResolution fetchUserRoles(Workspace workspace, Collection<User> users, boolean maySeed) {
         try {
             Set<Long> userIds = users.stream()
                     .filter(u -> u != null && u.getId() != null)
@@ -250,6 +264,10 @@ public class WorkspaceContextFilter implements Filter {
             if (!roles.isEmpty()) {
                 log.debug("Resolved user roles: roles={}", roles);
                 return new MembershipResolution(roles, memberUserIds);
+            }
+
+            if (!maySeed) {
+                return MembershipResolution.EMPTY;
             }
 
             try {

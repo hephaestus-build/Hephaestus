@@ -87,6 +87,9 @@ public final class SecurityUtils {
      * @return true if the current user has the {@code app_admin} authority
      */
     public static boolean isSuperAdmin() {
+        if (UserViewContextHolder.get() != null) {
+            return false;
+        }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
             return false;

@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,16 +70,6 @@ public class ChatThreadService {
     public ThreadDetail loadOwnedThreadDetail(Long workspaceId, UUID threadId) {
         ChatThread thread = requireOwnedThread(workspaceId, threadId);
         return detail(thread);
-    }
-
-    @Transactional(readOnly = true)
-    public Page<ChatThreadSummaryDTO> listSummariesForUser(Long workspaceId, Long userId, Pageable pageable) {
-        return chatThreadRepository.findSummariesByWorkspaceAndUser(workspaceId, userId, pageable);
-    }
-
-    @Transactional(readOnly = true)
-    public ThreadDetail loadUserThreadDetail(Long workspaceId, Long userId, UUID threadId) {
-        return detail(requireUserThread(workspaceId, userId, threadId));
     }
 
     private ThreadDetail detail(ChatThread thread) {

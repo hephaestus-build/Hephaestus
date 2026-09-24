@@ -2,9 +2,11 @@ package de.tum.cit.aet.hephaestus.practices.feedback.inapp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.account.userview.UserViewSessionFilter;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -165,6 +167,39 @@ class InAppFeedbackControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .get()
                 .extracting(Feedback::getDeliveredAt)
                 .isEqualTo(afterFirstRead.getDeliveredAt());
+    }
+
+    @Test
+    void administratorViewDoesNotDeliverTheViewedDevelopersFeedback() {
+        Account administrator = persistInstanceAdmin("Feedback inspector");
+        Feedback unit = persistInAppUnit(
+                workspace,
+                job,
+                developer,
+                7000,
+                FeedbackDeliveryState.PREPARED,
+                "A practice headline",
+                "A practice body");
+        bind(unit, persistObservation(practice, job, developer, 101L, "No test touched"));
+
+        webTestClient
+                .get()
+                .uri(IN_APP, workspace.getWorkspaceSlug())
+                .headers(headers -> headers.setBearerAuth("mock-jwt-sub-" + administrator.getId()))
+                .header(UserViewSessionFilter.WORKSPACE_HEADER, workspace.getWorkspaceSlug())
+                .header(UserViewSessionFilter.USER_HEADER, developer.getId().toString())
+                .header(UserViewSessionFilter.REASON_HEADER, "Check feedback")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.length()")
+                .isEqualTo(1);
+
+        assertThat(feedbackRepository.findById(unit.getId()))
+                .get()
+                .extracting(Feedback::getDeliveryState)
+                .isEqualTo(FeedbackDeliveryState.PREPARED);
     }
 
     /**

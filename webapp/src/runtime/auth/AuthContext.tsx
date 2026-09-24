@@ -6,6 +6,7 @@ import { authClient, toUserProfile, type UserProfile } from "./auth-client";
 import { isAppAdmin as computeIsAppAdmin, currentUserQueryOptions } from "./guard";
 
 import { hasText } from "@/lib/text";
+import { clearUserView, getUserViewSession } from "@/runtime/user-view/session";
 
 export type { UserProfile } from "./auth-client";
 
@@ -51,6 +52,9 @@ function linkAccount(providerAlias: string, returnTo?: string) {
 
 async function logout() {
 	try {
+		if (getUserViewSession()) {
+			clearUserView();
+		}
 		await authClient.logout();
 	} catch {
 		toast.error("Could not confirm sign-out. Please try again.");
@@ -65,24 +69,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
 	const userQuery = useQuery(currentUserQueryOptions());
 
 	const user = userQuery.data ?? null;
+	const storedView = getUserViewSession();
+	const viewed = storedView?.operatorAccountId === user?.id ? storedView : undefined;
 	const isLoading = userQuery.isPending;
 	const { isError } = userQuery;
 
 	const userProfile = user ? toUserProfile(user) : undefined;
 
-	const isAppAdmin = computeIsAppAdmin(user);
+	const isAppAdmin = !viewed && computeIsAppAdmin(user);
 
-	const hasRole = (role: string) => (user?.roles ?? []).includes(role);
+	const hasRole = (role: string) => !viewed && (user?.roles ?? []).includes(role);
 
 	const isCurrentUser = (candidateLogin?: string) =>
 		hasText(candidateLogin) &&
-		hasText(user?.username) &&
-		user.username.toLowerCase() === candidateLogin.toLowerCase();
-	const getUserId = () => (user?.id == null ? undefined : String(user.id));
+		hasText(viewed?.login ?? user?.username) &&
+		(viewed?.login ?? user?.username)?.toLowerCase() === candidateLogin.toLowerCase();
+	const getUserId = () => (viewed !== undefined || user?.id == null ? undefined : String(user.id));
 
-	const getGitProviderId = () => user?.gitProviderId ?? undefined;
+	const getGitProviderId = () => (viewed ? undefined : (user?.gitProviderId ?? undefined));
 
 	const getUserProfilePictureUrl = () => {
+		if (viewed) {
+			return "";
+		}
 		if (hasText(user?.avatarUrl)) {
 			return user.avatarUrl;
 		}
@@ -96,8 +105,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		isAuthenticated: user !== null,
 		isLoading,
 		isError,
-		username: user?.username ?? undefined,
-		userRoles: user?.roles ?? [],
+		username: viewed?.login ?? user?.username ?? undefined,
+		userRoles: viewed ? [] : (user?.roles ?? []),
 		isAppAdmin,
 		userProfile,
 		login,
@@ -108,8 +117,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		getUserId,
 		getGitProviderId,
 		getUserProfilePictureUrl,
-		hasGitLabIdentity: user?.hasGitLabIdentity ?? false,
-		linkedProviders: userProfile?.linkedProviders ?? [],
+		hasGitLabIdentity: viewed ? false : (user?.hasGitLabIdentity ?? false),
+		linkedProviders: viewed ? [] : (userProfile?.linkedProviders ?? []),
 	};
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

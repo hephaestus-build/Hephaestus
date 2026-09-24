@@ -23,7 +23,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Token-bucket rate limiter for sensitive and resource-intensive endpoints. Sits on the
- * resource-server chain (covers {@code /auth/refresh}, {@code /workspaces/{slug}/user-view/users/**},
+ * resource-server chain (covers {@code /auth/refresh}, read-only user views,
  * {@code DELETE /user}) and the oauth2Login chain (covers {@code GET /oauth2/authorization/*}); registered after
  * authentication so the account principal is resolvable from the {@link SecurityContextHolder}.
  *
@@ -61,7 +61,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
     private enum Endpoint {
         OAUTH_AUTHORIZATION("oauth-authz", false, true),
         REFRESH("refresh", true, true),
-        USER_VIEW("user-view", true, true),
+        USER_VIEW("user-view", true, false),
         DELETE_USER("delete-user", true, true),
         // GDPR Art. 20 export: cap POST /user/exports (the async assembly). Account-scoped (JWT sub)
         // with IP fallback — the route requires isAuthenticated(), so sub is normally present.
@@ -145,8 +145,10 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.equals("/auth/refresh")) {
             return Endpoint.REFRESH;
         }
-        // Keyed on the administrator, not the viewed user, so switching users does not reset the budget.
-        if ("GET".equals(method) && path.matches("/workspaces/[^/]+/user-view/users(?:/.*)?")) {
+        // The same administrator budget covers selection and every normal-app read in view mode.
+        if (("GET".equals(method) || "HEAD".equals(method))
+                && (path.matches("/workspaces/[^/]+/user-view/users(?:/.*)?")
+                        || request.getHeader("X-User-View-User") != null)) {
             return Endpoint.USER_VIEW;
         }
         if ("DELETE".equals(method) && path.equals("/user")) {

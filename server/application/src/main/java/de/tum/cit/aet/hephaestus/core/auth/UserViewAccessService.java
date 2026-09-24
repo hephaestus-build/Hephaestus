@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.UserViewAccess;
+import de.tum.cit.aet.hephaestus.core.auth.stepup.RecentSignInPolicy;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import java.nio.charset.StandardCharsets;
@@ -16,6 +17,7 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -30,6 +32,12 @@ public class UserViewAccessService implements UserViewAccess {
     private final IdentityLinkRepository identityLinks;
     private final AuthEventLogger audit;
     private final ObjectMapper mapper;
+    private final RecentSignInPolicy recentSignIn;
+
+    @Override
+    public void requireRecentSignIn(@Nullable Authentication authentication, long actingAccountId) {
+        recentSignIn.require(authentication, AuthEvent.EventType.USER_VIEW, actingAccountId);
+    }
 
     @Override
     @Transactional(readOnly = true)

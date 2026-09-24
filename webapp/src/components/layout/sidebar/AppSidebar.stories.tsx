@@ -92,6 +92,20 @@ export const AdminUser: Story = {
 	},
 };
 
+export const ReadOnlyUserView: Story = {
+	args: {
+		username: "alex",
+		isAdmin: true,
+		isAppAdmin: false,
+		hasMentorAccess: true,
+		readOnly: true,
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByText("Administration")).not.toBeInTheDocument();
+		await expect(canvas.queryByText("User settings")).not.toBeInTheDocument();
+	},
+};
+
 export const AdminContext: Story = {
 	args: {
 		username: "admin",
